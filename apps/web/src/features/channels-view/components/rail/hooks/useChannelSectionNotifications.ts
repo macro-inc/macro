@@ -1,7 +1,9 @@
 import { t } from '@app/lib/i18n';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { Telemetry } from '@macro-inc/observability';
+import { markChannelsAsRead } from '@notifications/notification-helpers';
 import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
 import { useBulkNotificationPreferencesMutation } from '@queries/notification/unsubscribes';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
@@ -22,6 +24,7 @@ export function useChannelSectionNotifications(
   options: SectionNotificationOptions
 ) {
   const userId = useUserId();
+  const notificationSource = useGlobalNotificationSource();
   const notificationPreferences = useBulkNotificationPreferencesMutation();
   const [pending, setPending] = createSignal<{ actorId: string }>();
   const requests = new Set<AbortController>();
@@ -92,7 +95,8 @@ export function useChannelSectionNotifications(
 
   const updateSectionNotifications = async (
     section: ChannelSectionKey,
-    action: 'mute' | 'unmute' | 'snooze'
+    action: 'mute' | 'unmute' | 'snooze' | 'read',
+    until?: Date
   ) => {
     const actorId = userId();
     const owner = options.dialogOwner();
@@ -128,7 +132,12 @@ export function useChannelSectionNotifications(
         span.setAttr('channel.ids', channelIds);
         span.setAttr('notification.count', channelIds.length);
 
-        if (action === 'snooze') {
+        if (action === 'read') {
+          await markChannelsAsRead(notificationSource, channelIds, isCurrent);
+          return;
+        }
+
+        if (action === 'snooze' && !until) {
           openSnoozeNotifications(
             channelIds.map((id) => ({ item_type: 'channel', item_id: id })),
             { owner }
@@ -136,7 +145,7 @@ export function useChannelSectionNotifications(
           return;
         }
 
-        const muted = action === 'mute';
+        const muted = action !== 'unmute';
         const result = await notificationPreferences.mutateAsync({
           actorId,
           items: channelIds.map((id) => ({
@@ -144,6 +153,7 @@ export function useChannelSectionNotifications(
             item_id: id,
           })),
           muted,
+          snoozedUntil: until?.toISOString(),
         });
         const failed = result.failed.length;
         const succeeded = result.succeeded.length;
@@ -193,9 +203,11 @@ export function useChannelSectionNotifications(
 
   return {
     sectionNotificationsDisabled,
+    markSectionRead: (section: ChannelSectionKey) =>
+      updateSectionNotifications(section, 'read'),
     muteSection: (section: ChannelSectionKey, muted: boolean) =>
       updateSectionNotifications(section, muted ? 'mute' : 'unmute'),
-    snoozeSection: (section: ChannelSectionKey) =>
-      updateSectionNotifications(section, 'snooze'),
+    snoozeSection: (section: ChannelSectionKey, until?: Date) =>
+      updateSectionNotifications(section, 'snooze', until),
   };
 }

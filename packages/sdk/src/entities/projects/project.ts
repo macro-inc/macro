@@ -4,6 +4,8 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { PropertiedEntity } from '../entity';
 import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
@@ -67,6 +69,18 @@ export class Project extends PropertiedEntity<ProjectDetail> {
 
   /** Favorites identify projects as `project`. */
   readonly entityType = 'project';
+
+  /**
+   * Share this project with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * project; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'project', this.id);
+  }
 
   /** The properties service identifies projects as `PROJECT`. */
   protected readonly propertyEntityType = 'PROJECT';

@@ -7,7 +7,7 @@ use crate::domain::{
         UpdateAgentRequest,
     },
     ports::{BotError, BotService, McpAppCatalog},
-    service::BotServiceImpl,
+    service::{BotServiceImpl, test::TeamAgentHarnesses},
 };
 use entity_access::domain::models::{
     Entity, EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
@@ -21,6 +21,7 @@ use std::sync::{Arc, Mutex};
 
 mod agent_dm;
 mod agent_enabled;
+mod profile_fanout;
 
 const USER_OWNER: &str = "macro|bot-owner@example.com";
 const USER_OTHER: &str = "macro|bot-other@example.com";
@@ -111,8 +112,12 @@ fn update_agent_req(handle: &str, channel_scope: AgentChannelScope) -> UpdateAge
     }
 }
 
-fn service(pool: &PgPool) -> BotServiceImpl<PgBotsRepo, NoopMacroEventBroker> {
-    BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker)
+fn service(pool: &PgPool) -> BotServiceImpl<PgBotsRepo, NoopMacroEventBroker, TeamAgentHarnesses> {
+    BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        TeamAgentHarnesses::default(),
+    )
 }
 
 /// A directory that knows only the slugs it is given.
@@ -180,8 +185,12 @@ impl MacroEventBroker for RecordingEventBroker {
 fn recording_service(
     pool: &PgPool,
     broker: RecordingEventBroker,
-) -> BotServiceImpl<PgBotsRepo, RecordingEventBroker> {
-    BotServiceImpl::new(PgBotsRepo::new(pool.clone()), broker)
+) -> BotServiceImpl<PgBotsRepo, RecordingEventBroker, TeamAgentHarnesses> {
+    BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        broker,
+        TeamAgentHarnesses::default(),
+    )
 }
 
 fn assert_event(event: &PublishedEvent, bot_id: BotId, event_type: &str, metadata: Value) {
@@ -2085,19 +2094,38 @@ async fn insert_harness(
     owner_user_id: Option<&str>,
     team_id: Option<Uuid>,
 ) -> anyhow::Result<HarnessId> {
+    let owner = if let Some(owner) = owner_user_id {
+        owner.to_owned()
+    } else if let Some(team) = team_id {
+        sqlx::query_scalar!("SELECT owner_id FROM team WHERE id = $1", team)
+            .fetch_one(pool)
+            .await?
+    } else {
+        anyhow::bail!("test harness requires an owner or team");
+    };
     let harness_id = Uuid::new_v4();
     sqlx::query!(
         r#"
         INSERT INTO harnesses (id, name, owner_user_id, team_id, created_by)
-        VALUES ($1, 'test harness', $2, $3, $4)
+        VALUES ($1, 'test harness', $2, NULL, $2)
         "#,
         harness_id,
-        owner_user_id,
-        team_id,
-        owner_user_id.unwrap_or(USER_OWNER),
+        owner,
     )
     .execute(pool)
     .await?;
+    if let Some(team) = team_id {
+        sqlx::query!(
+            r#"
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            VALUES ($1, 'harness', $2, 'team', 'edit')
+            "#,
+            harness_id,
+            team.to_string(),
+        )
+        .execute(pool)
+        .await?;
+    }
     Ok(HarnessId::new_from_uuid(harness_id))
 }
 
@@ -2173,6 +2201,56 @@ async fn macrod_agents_require_a_registered_usable_harness(pool: PgPool) -> anyh
         .await;
     assert!(matches!(stranger, Err(BotError::Unauthorized)));
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn no_agent_is_bound_to_an_agent_teammates_computer(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, USER_OWNER).await?;
+    let agent_computer = insert_harness(&pool, Some(USER_OWNER), None).await?;
+    let own_machine = insert_harness(&pool, Some(USER_OWNER), None).await?;
+    let service = BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        TeamAgentHarnesses(vec![agent_computer]),
+    );
+
+    let created = service
+        .create_agent(
+            user_id(USER_OWNER),
+            macrod_agent_req("on-ada", Some(agent_computer)),
+        )
+        .await;
+    assert!(matches!(created, Err(BotError::AgentTeammateComputer)));
+
+    let agent = service
+        .create_agent(
+            user_id(USER_OWNER),
+            macrod_agent_req("on-my-machine", Some(own_machine)),
+        )
+        .await?;
+    let moved = service
+        .patch_agent(
+            user_id(USER_OWNER),
+            agent.bot.id,
+            PatchAgentRequest {
+                harness: Some(AgentHarnessSelection {
+                    harness: "macrod".to_string(),
+                    harness_id: Some(agent_computer),
+                }),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await;
+    assert!(matches!(moved, Err(BotError::AgentTeammateComputer)));
+    assert_eq!(
+        PgBotsRepo::new(pool.clone())
+            .get_agent(agent.bot.id)
+            .await?
+            .expect("the agent stays")
+            .harness_id,
+        Some(own_machine)
+    );
     Ok(())
 }
 

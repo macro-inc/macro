@@ -513,7 +513,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
         email_service: email_service_for_tools.clone(),
-        activity_tool_context: ai_tools::build_activity_tool_context(
+        activity_service: ai_tools::build_activity_read_service(
             pool.clone(),
             properties_service.clone(),
             entity_access_service.clone(),
@@ -635,6 +635,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         let mcp_selector: Arc<ai_tools::ToolMcpSelector> =
             Arc::new(mcp_select::McpToolSelector::new(
                 Arc::new(mcp_repo.clone()),
+                local_mcp_http(),
                 pipedream_connections.clone(),
                 Arc::new(None),
             ));
@@ -675,31 +676,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         .with_enforcement(enforcement),
     );
 
-    let projection_generator =
-        ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
-            tool_service_context.clone(),
-            ai_tools::tools_for(ai_tools::AiHost::Chat),
-        );
-
-    let projection_notifier =
-        ai_projections::outbound::gateway_notifier::GatewayProjectionNotifier::new(Arc::new(
-            connection_gateway_client::ConnectionGatewayClient::new(
-                "testing".to_string(),
-                "http://localhost".to_string(),
-            ),
-        ));
-
-    let ai_projections_service = Arc::new(
-        ai_projections::domain::ai_projection_service::AiProjectionServiceImpl::new(
-            ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
-                pool.clone(),
-            ),
-            sqs_client.clone(),
-            projection_generator,
-            projection_notifier,
-        ),
-    );
-
     let authorization_state =
         MacroAuthorizationState::new(Arc::new(MacroAuthorizationServiceImpl::new(
             MacroAuthJwtValidator::new(
@@ -715,7 +691,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
 
     let user_permissions_service = Arc::new(
         roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
-            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
             roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
         ),
     );
@@ -773,7 +748,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         document_tool_context: document_tool_context.clone(),
         memory_service,
         usage_service,
-        ai_projections_service,
         properties_tool_context,
         email_tool_context,
         call_tool_context,
@@ -851,6 +825,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 mcp_repo.clone(),
                 mcp_state_store,
                 client_metadata.clone(),
+                local_mcp_http(),
                 mcp_client::domain::provider_registry::PreRegisteredProviders::empty(),
             );
             mcp_client::inbound::McpRouterState::new(
@@ -865,4 +840,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         macro_event_broker,
     };
     Arc::new(api_context)
+}
+
+fn local_mcp_http() -> mcp_client::outbound::guarded_http::McpHttp {
+    mcp_client::outbound::guarded_http::McpHttp::new(
+        mcp_client::outbound::guarded_http::AddressPolicy::AnyAddress,
+    )
+    .unwrap()
 }

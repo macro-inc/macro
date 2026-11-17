@@ -79,6 +79,7 @@ impl SendingInboxResolver for Fake {
         }
         Ok(ResolvedSendingInbox {
             link: link(&requested),
+            sender_address: None,
             accessible_inboxes: self.inboxes.iter().map(|inbox| link(inbox)).collect(),
         })
     }

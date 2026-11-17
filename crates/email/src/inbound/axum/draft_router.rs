@@ -90,7 +90,10 @@ impl From<EmailErr> for CreateDraftError {
             | EmailErr::MessageDeliveryConflict(_)
             | EmailErr::CannotReplyToDraft
             | EmailErr::Base64DecodeError(_)
-            | EmailErr::Utf8Error(_) => CreateDraftError::Validation(err.to_string()),
+            | EmailErr::Utf8Error(_)
+            | EmailErr::InvalidSender
+            | EmailErr::UnverifiedSendingAlias { .. }
+            | EmailErr::SendAsPermissionRequired => CreateDraftError::Validation(err.to_string()),
             _ => CreateDraftError::Internal(err),
         }
     }
@@ -120,7 +123,7 @@ pub async fn create_draft_handler<T: EmailService, Auth: MacroAuthorizationServi
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
     Json(body): Json<CreateDraftRequest>,
 ) -> Result<impl IntoResponse, CreateDraftError> {
-    let mut input = body.into_domain();
+    let mut input = body.into_domain()?;
     input.actor = Some(authorization.authorization.user.macro_user_id.clone());
     let draft = state
         .inner

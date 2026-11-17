@@ -29,6 +29,9 @@ mod reattach;
 mod session_mcp;
 mod warm;
 
+pub use idle::IDLE_RELEASE_NO_RETRY_FLAG;
+
+use feature_flags::FeatureFlags;
 use futures::FutureExt as _;
 use std::sync::Arc;
 
@@ -211,6 +214,9 @@ struct AgentHarnessInner<
     /// How long a session's command worker waits for its next command before
     /// it releases the quiet session and exits.
     worker_idle_timeout: std::time::Duration,
+    /// Whether an idle release that kept its session is tried again; `None`
+    /// always retries.
+    idle_release_retry: Option<Arc<dyn idle::IdleReleaseRetry>>,
 }
 
 /// One handle on the orchestrator's state, shared by the service's clones
@@ -409,6 +415,7 @@ where
                 typing_phases: DashMap::new(),
                 presented_shapes: DashMap::new(),
                 worker_idle_timeout: queue::WORKER_IDLE_TIMEOUT,
+                idle_release_retry: None,
             }),
             workers: Arc::new(DashMap::new()),
             repositories: None,
@@ -436,6 +443,21 @@ where
         Arc::get_mut(&mut self.inner)
             .expect("configure the idle timeout before cloning the harness")
             .worker_idle_timeout = timeout;
+        self
+    }
+
+    /// Read [`IDLE_RELEASE_NO_RETRY_FLAG`] for each session owner before an
+    /// idle release that kept the session is tried again; without flags it
+    /// always is. Set before cloning the harness.
+    pub fn with_idle_release_flags<Flags: FeatureFlags + 'static>(
+        mut self,
+        flags: Option<Flags>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure idle release flags before cloning the harness")
+            .idle_release_retry = flags.map(|flags| {
+            Arc::new(idle::FlaggedIdleReleaseRetry(flags)) as Arc<dyn idle::IdleReleaseRetry>
+        });
         self
     }
 

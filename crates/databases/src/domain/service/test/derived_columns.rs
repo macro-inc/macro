@@ -70,6 +70,7 @@ async fn a_derived_column_is_created_with_a_number_definition_and_its_formula() 
         column.config,
         Some(ColumnConfig::Derived {
             formula: plus_ones_times(&seeded, 2.0),
+            percentage: false,
         })
     );
     let definition = &world.definitions[&column.property_definition_id].definition;
@@ -421,4 +422,83 @@ async fn a_formula_cell_is_derived_on_creation_on_a_new_formula_and_on_each_inpu
         "{outcome:?}"
     );
     assert_eq!(seats_cell(&seeded), Some(PropertyValue::Num(10.0)));
+}
+
+#[tokio::test]
+async fn a_derived_number_column_can_become_percentage() {
+    let seeded = seeded().await;
+    let seats = ColumnId::new();
+    apply(
+        &seeded,
+        vec![DatabaseOp::Column {
+            table: seeded.table_id,
+            column: seats,
+            change: ColumnChange::Create {
+                definition: NewColumn::Derived {
+                    name: "Seats".into(),
+                    formula: plus_ones_times(&seeded, 2.0),
+                },
+                after: None,
+            },
+        }],
+    )
+    .await
+    .unwrap();
+    let definition = seeded
+        .world
+        .lock()
+        .unwrap()
+        .columns
+        .iter()
+        .find(|column| column.id == seats)
+        .unwrap()
+        .property_definition_id;
+
+    apply(
+        &seeded,
+        vec![DatabaseOp::Column {
+            table: seeded.table_id,
+            column: seats,
+            change: ColumnChange::ChangeType {
+                to: ColumnKind::Percentage,
+            },
+        }],
+    )
+    .await
+    .unwrap();
+
+    {
+        let world = seeded.world.lock().unwrap();
+        let column = world
+            .columns
+            .iter()
+            .find(|column| column.id == seats)
+            .unwrap();
+        assert_eq!(column.property_definition_id, definition);
+        assert_eq!(
+            column.config,
+            Some(ColumnConfig::Derived {
+                formula: plus_ones_times(&seeded, 2.0),
+                percentage: true,
+            })
+        );
+    }
+
+    let text = refusal(
+        apply(
+            &seeded,
+            vec![DatabaseOp::Column {
+                table: seeded.table_id,
+                column: seats,
+                change: ColumnChange::ChangeType {
+                    to: ColumnKind::Text,
+                },
+            }],
+        )
+        .await,
+    );
+    assert_eq!(
+        text,
+        "a derived column's type follows its formula; change the formula instead"
+    );
 }

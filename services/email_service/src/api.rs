@@ -31,14 +31,8 @@ const GATEWAY_PATH_PREFIX: &str = "/email";
 
 pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let env = state.config.environment;
-    let correlation =
-        agent_correlation::inbound::CorrelationState::new(state.db.clone(), state.jwt_args.clone());
     let port = state.config.port;
-    let traced_api = traced(api_router(state.clone()).with_state(state).layer(
-        axum::middleware::from_fn_with_state(correlation, agent_correlation::inbound::propagate),
-    ));
-    let health = health::router();
-    let app = mount_at_root_and_prefix(traced_api.merge(health)).merge(swagger_ui());
+    let app = app(state);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
@@ -52,6 +46,16 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
         .await
         .context("error starting service")
+}
+
+/// Builds the complete production HTTP surface without opening a listener.
+pub(crate) fn app(state: ApiContext) -> Router {
+    let correlation = state.correlation.clone();
+    let traced_api = traced(api_router(state.clone()).with_state(state).layer(
+        axum::middleware::from_fn_with_state(correlation, agent_correlation::inbound::propagate),
+    ));
+    let health = health::router();
+    mount_at_root_and_prefix(traced_api.merge(health)).merge(swagger_ui())
 }
 
 /// Wraps the API in the request id, server span, CORS and compression layers.

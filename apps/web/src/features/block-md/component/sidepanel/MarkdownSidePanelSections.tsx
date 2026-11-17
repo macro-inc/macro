@@ -1,12 +1,10 @@
 import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
-import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   GithubPullRequestDetailsRows,
   SidePanel,
@@ -25,13 +23,12 @@ import {
   enableProjects,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
-import { isMobile } from '@core/mobile/isMobile';
 import type { Entity } from '@core/types';
 import type { DateValue } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
-import { useNotificationsForEntity } from '@notifications';
+import { useOpenEntityNotifications } from '@notifications';
 import {
   getBuiltinPropertyIds,
   getDefaultPinnedProperties,
@@ -50,11 +47,10 @@ import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { useMarkdownDocument } from '../../context/markdown-document-context';
 import { createPinnedProperties } from '../../primitives/create-pinned-properties';
-import { DispatchAgentButton } from '../DispatchAgentMenu';
 import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
-/** Registers markdown header actions, panel sections, and shared metadata. */
+/** Registers markdown panel sections and shared metadata. */
 export function MarkdownSidePanelSections() {
   const { documentId, kind, permissions } = useMarkdownDocument();
   const canEdit = permissions.canEdit;
@@ -69,24 +65,6 @@ export function MarkdownSidePanelSections() {
 
   return (
     <>
-      <SidePanel.HeaderActions>
-        <div class="flex shrink-0 items-center gap-1">
-          <Show when={isTask() && !isMobile()}>
-            <DispatchAgentButton showPrimaryLabel />
-          </Show>
-          <HeaderActionGroup label="Actions">
-            <AskMacroButton
-              grouped
-              entity={{
-                type: 'document',
-                id: documentId(),
-                name: displayName() ?? '',
-                fileType: 'md',
-              }}
-            />
-          </HeaderActionGroup>
-        </div>
-      </SidePanel.HeaderActions>
       <SidePanel.Footer>
         <DetailsSectionContent documentId={documentId()} />
         <Show when={!isTask()}>
@@ -291,7 +269,7 @@ function StatsSectionContent() {
 
 function NotificationsSectionConditional(props: { entity: Entity }) {
   const notificationSource = useGlobalNotificationSource();
-  const notifications = useNotificationsForEntity(
+  const notifications = useOpenEntityNotifications(
     notificationSource,
     props.entity
   );
@@ -310,10 +288,7 @@ function NotificationsSectionConditional(props: { entity: Entity }) {
         order={40}
       >
         <div class="text-xs">
-          <Notifications
-            entity={props.entity}
-            notificationSource={notificationSource}
-          />
+          <Notifications notifications={notifications()} />
         </div>
       </SidePanel.Section>
     </Show>

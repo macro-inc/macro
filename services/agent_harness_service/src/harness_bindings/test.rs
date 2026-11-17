@@ -1,4 +1,5 @@
 use super::*;
+use agent_session::domain::model::AgentSessionId;
 use harnesses::domain::ports::HarnessRepo as _;
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -92,7 +93,13 @@ async fn live_sessions_resolve_only_on_the_harness_their_bot_is_bound_to(pool: P
         .await
         .unwrap();
 
-    assert_eq!(found, [mine]);
+    assert_eq!(
+        found,
+        ListedSessions {
+            live: vec![mine],
+            dormant: 0,
+        }
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -113,95 +120,73 @@ async fn a_deleted_harness_reattaches_nothing(pool: PgPool) {
         .await
         .unwrap();
 
-    assert!(found.is_empty());
+    assert_eq!(found, ListedSessions::default());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_resident_runs_on_its_owners_access_and_a_coding_agent_on_the_prompters(pool: PgPool) {
+async fn an_archived_session_is_not_reattached(pool: PgPool) {
     let laptop = insert_harness(&pool).await;
-    let coding = BotId::new_from_uuid(insert_bot(&pool, laptop).await);
-    let resident = BotId::new_from_uuid(insert_bot(&pool, laptop).await);
+    let bot = insert_bot(&pool, laptop).await;
+    let archived = insert_session(&pool, bot, "acp-archived").await;
+    let live = insert_session(&pool, bot, "acp-live").await;
     sqlx::query!(
-        "UPDATE agent_configs SET is_coding = false WHERE bot_id = $1",
-        resident.as_uuid(),
+        "UPDATE agent_session SET archived_by = 'user', archived_at = now() WHERE id = $1",
+        archived.as_uuid()
     )
     .execute(&pool)
     .await
     .unwrap();
-    let stranger = MacroUserIdStr::try_from("macro|stranger@example.com".to_owned()).unwrap();
-    let bindings = PgHarnessBindings::new(pool.clone());
 
-    let facts = bindings
-        .access_facts(resident, Some(&stranger))
+    let found = PgHarnessBindings::new(pool.clone())
+        .sessions_on_harness(
+            laptop,
+            &[SessionId::new("acp-archived"), SessionId::new("acp-live")],
+        )
         .await
-        .unwrap()
         .unwrap();
-    assert!(facts.resident);
-    assert_eq!(facts.actor_may_use, Some(false));
-    assert!(
-        facts.may_run(),
-        "anyone who can reach a resident can talk to it"
-    );
 
-    let facts = bindings
-        .access_facts(coding, Some(&stranger))
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(!facts.resident);
-    assert!(
-        !facts.may_run(),
-        "a coding agent runs its prompter's instructions"
+    assert_eq!(
+        found,
+        ListedSessions {
+            live: vec![live],
+            dormant: 0,
+        }
     );
-
-    let facts = bindings.access_facts(coding, None).await.unwrap().unwrap();
-    assert_eq!(facts.actor_may_use, None);
-    assert!(facts.may_run(), "its owner's own agent runs unprompted");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_reader_cannot_prompt_a_coding_agent(pool: PgPool) {
+async fn a_session_untouched_for_a_week_with_nothing_waiting_is_dormant(pool: PgPool) {
     let laptop = insert_harness(&pool).await;
-    let coding = BotId::new_from_uuid(insert_bot(&pool, laptop).await);
-    let reader = MacroUserIdStr::try_from("macro|reader@example.com".to_owned()).unwrap();
-    let team_id = macro_uuid::generate_uuid_v7();
-    for (id, email) in [
-        (OWNER, "bindings@example.com"),
-        (reader.as_ref(), "reader@example.com"),
-    ] {
-        let macro_user = macro_uuid::generate_uuid_v7();
+    let bot = insert_bot(&pool, laptop).await;
+    let dormant = insert_session(&pool, bot, "acp-dormant").await;
+    let fresh = insert_session(&pool, bot, "acp-fresh").await;
+    let recent_log = insert_session(&pool, bot, "acp-recent-log").await;
+    let starting = insert_session(&pool, bot, "acp-starting").await;
+    let running = insert_session(&pool, bot, "acp-running").await;
+    let blocked = insert_session(&pool, bot, "acp-blocked").await;
+    let stopping = insert_session(&pool, bot, "acp-stopping").await;
+    let interrupted = insert_session(&pool, bot, "acp-interrupted").await;
+    let queued = insert_session(&pool, bot, "acp-queued").await;
+    let approval = insert_session(&pool, bot, "acp-approval").await;
+    let notified = insert_session(&pool, bot, "acp-notified").await;
+    let answering = insert_session(&pool, bot, "acp-answering").await;
+    let old = [
+        dormant,
+        recent_log,
+        starting,
+        running,
+        blocked,
+        stopping,
+        interrupted,
+        queued,
+        approval,
+        notified,
+        answering,
+    ];
+    for session in old {
         sqlx::query!(
-            "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $3)",
-            macro_user,
-            email,
-            format!("stripe_{macro_user}"),
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        sqlx::query!(
-            r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $2, $3)"#,
-            id,
-            email,
-            macro_user,
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-    }
-    sqlx::query!(
-        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Team', $2)",
-        team_id,
-        OWNER,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    for id in [OWNER, reader.as_ref()] {
-        sqlx::query!(
-            "INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'member'::team_role)",
-            id,
-            team_id,
+            "UPDATE agent_session SET modified_at = now() - interval '8 days', turn_state = 'idle' WHERE id = $1",
+            session.as_uuid()
         )
         .execute(&pool)
         .await
@@ -209,23 +194,132 @@ async fn a_reader_cannot_prompt_a_coding_agent(pool: PgPool) {
     }
     sqlx::query!(
         r#"
-        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-        VALUES ($1, 'harness', $2, 'user', 'view')
+        INSERT INTO agent_session_log (id, agent_session_id, direction, content, created_at)
+        VALUES ($1, $2, 'to_server', '{}', now() - interval '9 days'),
+               ($3, $2, 'to_server', '{}', now() - interval '1 day'),
+               ($4, $5, 'to_server', '{}', now() - interval '9 days')
         "#,
-        laptop.as_uuid(),
-        reader.as_ref(),
+        macro_uuid::generate_uuid_v7(),
+        recent_log.as_uuid(),
+        macro_uuid::generate_uuid_v7(),
+        macro_uuid::generate_uuid_v7(),
+        dormant.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (session, state) in [
+        (starting, "starting"),
+        (running, "running"),
+        (blocked, "blocked"),
+        (stopping, "stopping"),
+    ] {
+        sqlx::query!(
+            "UPDATE agent_session SET turn_state = $2 WHERE id = $1",
+            session.as_uuid(),
+            state
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        "UPDATE agent_session SET turn_state = 'disconnected', turn_interrupted = true WHERE id = $1",
+        interrupted.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO agent_session_queue (agent_session_id, entries) VALUES ($1, '[{"id": "queued"}]')"#,
+        queued.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session_tool_approval
+            (id, agent_session_id, turn_action_id, request_id, owner_id, server_slug,
+             server_name, tool_name, arguments)
+        VALUES ($1, $2, $3, '1', $4, 'macro', 'Macro', 'ReadDocument', '{}')
+        "#,
+        macro_uuid::generate_uuid_v7(),
+        approval.as_uuid(),
+        macro_uuid::generate_uuid_v7(),
+        OWNER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session_notification
+            (id, session_id, kind, subject_id, payload, dedupe_key, wake)
+        VALUES ($1, $2, 'test', 'subject', '{}', 'dedupe', true)
+        "#,
+        macro_uuid::generate_uuid_v7(),
+        notified.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let channel = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'direct_message', $2)",
+        channel,
+        OWNER
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO agent_conversation_sessions (session_id, channel_id, bot_id) VALUES ($1, $2, $3)",
+        answering.as_uuid(),
+        channel,
+        bot
     )
     .execute(&pool)
     .await
     .unwrap();
 
-    let facts = PgHarnessBindings::new(pool)
-        .access_facts(coding, Some(&reader))
+    let mut found = PgHarnessBindings::new(pool.clone())
+        .sessions_on_harness(
+            laptop,
+            &[
+                SessionId::new("acp-dormant"),
+                SessionId::new("acp-fresh"),
+                SessionId::new("acp-recent-log"),
+                SessionId::new("acp-starting"),
+                SessionId::new("acp-running"),
+                SessionId::new("acp-blocked"),
+                SessionId::new("acp-stopping"),
+                SessionId::new("acp-interrupted"),
+                SessionId::new("acp-queued"),
+                SessionId::new("acp-approval"),
+                SessionId::new("acp-notified"),
+                SessionId::new("acp-answering"),
+            ],
+        )
         .await
-        .unwrap()
         .unwrap();
-    assert_eq!(facts.actor_may_use, Some(false));
-    assert!(!facts.may_run());
+    found.live.sort_by_key(|session| session.as_uuid());
+
+    let mut live = vec![
+        fresh,
+        recent_log,
+        starting,
+        running,
+        blocked,
+        stopping,
+        interrupted,
+        queued,
+        approval,
+        notified,
+        answering,
+    ];
+    live.sort_by_key(|session| session.as_uuid());
+    assert_eq!(found, ListedSessions { live, dormant: 1 });
 }
 
 fn presence_on_a_replica(pool: &PgPool) -> Arc<PgHarnessPresence> {
@@ -359,4 +453,116 @@ async fn simultaneous_final_closes_leave_a_harness_offline(pool: PgPool) {
 
         assert!(!reads_connected(&pool, harness).await);
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_resident_runs_on_its_owners_access_and_a_coding_agent_on_the_prompters(pool: PgPool) {
+    let laptop = insert_harness(&pool).await;
+    let coding = BotId::new_from_uuid(insert_bot(&pool, laptop).await);
+    let resident = BotId::new_from_uuid(insert_bot(&pool, laptop).await);
+    sqlx::query!(
+        "UPDATE agent_configs SET is_coding = false WHERE bot_id = $1",
+        resident.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let stranger = MacroUserIdStr::try_from("macro|stranger@example.com".to_owned()).unwrap();
+    let bindings = PgHarnessBindings::new(pool.clone());
+
+    let facts = bindings
+        .access_facts(resident, Some(&stranger))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(facts.resident);
+    assert_eq!(facts.actor_may_use, Some(false));
+    assert!(
+        facts.may_run(),
+        "anyone who can reach a resident can talk to it"
+    );
+
+    let facts = bindings
+        .access_facts(coding, Some(&stranger))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!facts.resident);
+    assert!(
+        !facts.may_run(),
+        "a coding agent runs its prompter's instructions"
+    );
+
+    let facts = bindings.access_facts(coding, None).await.unwrap().unwrap();
+    assert_eq!(facts.actor_may_use, None);
+    assert!(facts.may_run(), "its owner's own agent runs unprompted");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reader_cannot_prompt_a_coding_agent(pool: PgPool) {
+    let laptop = insert_harness(&pool).await;
+    let coding = BotId::new_from_uuid(insert_bot(&pool, laptop).await);
+    let reader = MacroUserIdStr::try_from("macro|reader@example.com".to_owned()).unwrap();
+    let team_id = macro_uuid::generate_uuid_v7();
+    for (id, email) in [
+        (OWNER, "bindings@example.com"),
+        (reader.as_ref(), "reader@example.com"),
+    ] {
+        let macro_user = macro_uuid::generate_uuid_v7();
+        sqlx::query!(
+            "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $3)",
+            macro_user,
+            email,
+            format!("stripe_{macro_user}"),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $2, $3)"#,
+            id,
+            email,
+            macro_user,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Team', $2)",
+        team_id,
+        OWNER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for id in [OWNER, reader.as_ref()] {
+        sqlx::query!(
+            "INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'member'::team_role)",
+            id,
+            team_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'user', 'view')
+        "#,
+        laptop.as_uuid(),
+        reader.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let facts = PgHarnessBindings::new(pool)
+        .access_facts(coding, Some(&reader))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(facts.actor_may_use, Some(false));
+    assert!(!facts.may_run());
 }

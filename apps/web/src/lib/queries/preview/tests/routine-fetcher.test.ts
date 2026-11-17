@@ -25,13 +25,14 @@ it('previews a routine the viewer can read, a deleted one as gone, and a hidden 
       name: 'Daily standup',
       owner: 'macro|wolf@macro.com',
       updated_at: '2026-10-01T09:00:00Z',
+      appearance: { icon: null, color: 'blue' },
     })
   );
   const readable = await fetchRestPreviewBatch([
     { type: 'routine', id: 'standup' },
   ]);
   expect(getRoutine).toHaveBeenCalledWith('standup');
-  expect(readable.get('standup')).toEqual({
+  expect(readable.previews.get('standup')).toEqual({
     id: 'standup',
     type: 'routine',
     access: 'access',
@@ -40,6 +41,7 @@ it('previews a routine the viewer can read, a deleted one as gone, and a hidden 
     name: 'Daily standup',
     owner: 'macro|wolf@macro.com',
     updatedAt: '2026-10-01T09:00:00Z',
+    appearance: { icon: null, color: 'blue' },
   });
 
   getRoutine.mockReturnValueOnce(
@@ -48,7 +50,7 @@ it('previews a routine the viewer can read, a deleted one as gone, and a hidden 
   const gone = await fetchRestPreviewBatch([
     { type: 'routine', id: 'deleted' },
   ]);
-  expect(gone.get('deleted')).toEqual({
+  expect(gone.previews.get('deleted')).toEqual({
     id: 'deleted',
     type: 'routine',
     access: 'does_not_exist',
@@ -61,7 +63,7 @@ it('previews a routine the viewer can read, a deleted one as gone, and a hidden 
   const hidden = await fetchRestPreviewBatch([
     { type: 'routine', id: 'private' },
   ]);
-  expect(hidden.get('private')).toEqual({
+  expect(hidden.previews.get('private')).toEqual({
     id: 'private',
     type: 'routine',
     access: 'no_access',

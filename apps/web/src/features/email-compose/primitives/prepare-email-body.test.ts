@@ -52,6 +52,33 @@ function quotedImageSources(html: string) {
 }
 
 describe('prepareEmailBodyFromHtml', () => {
+  it.each([
+    { body: '<p><br></p><h1>Agenda</h1>', written: true },
+    { body: '<p><br></p><ul><li>First point</li></ul>', written: true },
+    { body: '<p><img src="https://example.com/chart.png"></p>', written: true },
+    { body: '<p><br></p>', written: false },
+    {
+      body: '<p><br></p><div class="macro_quote"><p>Shown quote</p></div>',
+      written: false,
+    },
+    {
+      body: '<p><br></p><span class="macro-watermark-node">-- Sent with Macro</span>',
+      written: false,
+    },
+    {
+      body: '<p><br></p><div><span class="macro-watermark-node">-- Sent with Macro</span></div>',
+      written: false,
+    },
+  ])('finds written content in $body', ({ body, written }) => {
+    expect(prepareEmailBodyFromHtml(body).hasWrittenContent).toBe(written);
+  });
+  it('does not count the quote it appends to a reply as written content', () => {
+    const prepared = prepareEmailBodyFromHtml('<p><br></p>', {
+      replyType: 'reply',
+      replyingTo,
+    });
+    expect(prepared.hasWrittenContent).toBe(false);
+  });
   it.each(['reply', 'forward'] as const)(
     'keeps quoted Macro document links re-importable as rich mentions in a %s',
     (replyType) => {

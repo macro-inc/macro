@@ -32,7 +32,58 @@ pub(super) fn page() -> MailboxChangePage {
             ProviderId::new("moved").unwrap(),
         ],
         position: StreamPosition::Checkpoint(StreamToken::new("opaque-checkpoint".into())),
+        reader_revision: 1,
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_round_records_the_reader_revision_it_started_at(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    let first = repo
+        .claim_stream(macro_uuid::generate_uuid_v7())
+        .await
+        .unwrap()
+        .unwrap();
+    repo.commit_page(
+        &first,
+        &MailboxChangePage {
+            changed: vec![ProviderId::new("a").unwrap()],
+            removed: vec![],
+            position: StreamPosition::Continue(StreamToken::new("page-2".into())),
+            reader_revision: 1,
+        },
+    )
+    .await
+    .unwrap();
+    let next = repo
+        .claim_stream(macro_uuid::generate_uuid_v7())
+        .await
+        .unwrap()
+        .unwrap();
+    repo.commit_page(
+        &next,
+        &MailboxChangePage {
+            changed: vec![ProviderId::new("b").unwrap()],
+            removed: vec![],
+            position: StreamPosition::Checkpoint(StreamToken::new("delta".into())),
+            reader_revision: 2,
+        },
+    )
+    .await
+    .unwrap();
+
+    let revision = sqlx::query_scalar!(
+        "SELECT reader_revision FROM email_sync_streams WHERE link_id = $1 AND kind = 'mail_folder'",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        revision,
+        Some(1),
+        "only a round's first page records its revision"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -209,6 +260,7 @@ async fn complete_catalog_resolves_roles_and_creates_folder_streams(db: PgPool) 
             name: "Boîte de réception".into(),
             role: FolderRole::Inbox,
             has_children: false,
+            total_items: Some(250),
         }],
     )
     .await
@@ -216,6 +268,7 @@ async fn complete_catalog_resolves_roles_and_creates_folder_streams(db: PgPool) 
     let folders = repo.folders(lease.mailbox).await.unwrap();
     assert_eq!(folders.len(), 1);
     assert_eq!(folders[0].role, FolderRole::Inbox);
+    assert_eq!(folders[0].total_items, Some(250));
     let count = sqlx::query_scalar!("SELECT count(*) FROM email_sync_streams WHERE link_id = $1 AND kind = 'mail_folder' AND scope_id = 'inbox-id'",link).fetch_one(&db).await.unwrap();
     assert_eq!(count, Some(1));
     assert!(matches!(
@@ -223,6 +276,28 @@ async fn complete_catalog_resolves_roles_and_creates_folder_streams(db: PgPool) 
         Err(MailboxError::Stale)
     ));
     assert_eq!(repo.folders(lease.mailbox).await.unwrap().len(), 1);
+
+    sqlx::query!("UPDATE email_sync_streams SET next_run_at = now() WHERE link_id = $1 AND kind = 'folder_catalog'",link).execute(&db).await.unwrap();
+    let rediscovery = repo
+        .claim_catalog(macro_uuid::generate_uuid_v7())
+        .await
+        .unwrap()
+        .unwrap();
+    repo.commit_catalog(
+        &rediscovery,
+        &[MailFolder {
+            id: ProviderId::new("inbox-id").unwrap(),
+            parent_id: None,
+            name: "Boîte de réception".into(),
+            role: FolderRole::Inbox,
+            has_children: false,
+            total_items: Some(251),
+        }],
+    )
+    .await
+    .unwrap();
+    let folders = repo.folders(rediscovery.mailbox).await.unwrap();
+    assert_eq!(folders[0].total_items, Some(251));
 }
 
 pub(super) fn snapshot(
@@ -562,6 +637,7 @@ async fn folder_delete_and_restore_reprojects_unchanged_message_etags(db: PgPool
             name: "Trash".into(),
             role: FolderRole::Trash,
             has_children: true,
+            total_items: None,
         },
         MailFolder {
             id: ProviderId::new("parent").unwrap(),
@@ -569,6 +645,7 @@ async fn folder_delete_and_restore_reprojects_unchanged_message_etags(db: PgPool
             name: "Projects".into(),
             role: FolderRole::Other,
             has_children: true,
+            total_items: None,
         },
         MailFolder {
             id: ProviderId::new("folder").unwrap(),
@@ -576,6 +653,7 @@ async fn folder_delete_and_restore_reprojects_unchanged_message_etags(db: PgPool
             name: "Invoices".into(),
             role: FolderRole::Other,
             has_children: false,
+            total_items: None,
         },
     ];
     let catalog = repo.claim_catalog(Uuid::new_v4()).await.unwrap().unwrap();
@@ -637,6 +715,7 @@ async fn completed_import_rechecks_attachments_after_later_sent_correspondence(d
             ],
             removed: vec![],
             position: StreamPosition::Checkpoint(StreamToken::new("finished".into())),
+            reader_revision: 1,
         },
     )
     .await

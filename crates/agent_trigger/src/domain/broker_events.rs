@@ -121,6 +121,11 @@ pub struct AgentSessionRequestedEvent {
     /// events from producers that predate it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<TriggerContext>,
+    /// Who the bot's runtime authenticates as (its harness's owner), so its
+    /// event stream receives a request any teammate made. Absent on events
+    /// from producers that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_user: Option<String>,
 }
 
 /// A message in a channel where an agent persona converses. The session
@@ -414,6 +419,9 @@ pub enum TriggerDecision {
         session_id: AgentSessionId,
         /// How the message was attributed to the session.
         kind: ThreadMessageKind,
+        /// For an inferred message, the judge's confidence, as a whole
+        /// percentage, that it is addressed to this agent; `None` otherwise.
+        confidence: Option<u8>,
         /// The message.
         message: MessagePostedMetadata,
     },
@@ -519,6 +527,7 @@ impl AgentSessionMacroEvent {
                 session_id,
                 kind,
                 message,
+                confidence: _,
             } => match channel {
                 Some((channel_id, channel_type)) => Self::existing_event(
                     ExistingAgentSessionEvent::Channel(ChannelEventMetadata {

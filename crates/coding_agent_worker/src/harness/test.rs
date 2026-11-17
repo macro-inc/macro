@@ -36,6 +36,7 @@ async fn unspawnable_harness_reports_failure() {
         &ActiveTurns::default(),
         None,
         &mut Handoffs::channel().0,
+        None,
     )
     .await
     .expect_err("a harness that cannot be spawned must not look like success");
@@ -64,6 +65,7 @@ async fn harness_that_exits_immediately_disconnects() {
         &ActiveTurns::default(),
         None,
         &mut Handoffs::channel().0,
+        None,
     )
     .await;
 
@@ -89,6 +91,7 @@ async fn dropped_service_channel_does_not_panic_the_bridge() {
         &ActiveTurns::default(),
         None,
         &mut Handoffs::channel().0,
+        None,
     )
     .await
     .expect_err("announcing into a closed channel must fail");
@@ -161,6 +164,7 @@ for line in sys.stdin:
         &turns,
         None,
         &mut handoffs,
+        None,
     );
     let conversation = async {
         let mut next_answer = async || loop {

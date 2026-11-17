@@ -4,7 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { Audience } from './audience';
+import type { FormAppearance } from './formAppearance';
 import type { FormBranding } from './formBranding';
 import type { FormClosesAt } from './formClosesAt';
 import type { FormProjectId } from './formProjectId';
@@ -20,6 +22,7 @@ export interface Form {
 Who responded is kept apart from the responses, only so nobody
 responds twice. Fixed once anyone has responded. */
   anonymous: boolean;
+  appearance?: FormAppearance;
   /** Who may respond. */
   audience: Audience;
   /** Its logo, cover image and accent color. */

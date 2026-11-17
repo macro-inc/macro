@@ -4,18 +4,20 @@ use crate::domain::{
     ports::{Calendars, Directory},
 };
 use calendar_events::domain::{
+    labels::{CalendarLabels, attends_meeting},
     meeting_links::{create_event_with_macro_call, first_macro_call_url},
     models::{
-        CalendarAttendeeInput, CalendarEventDraft, CalendarSyncStatus, ConferenceChange, EventTime,
-        EventTransparency, OccurrenceRange,
+        CalendarAttendeeInput, CalendarEvent, CalendarEventDraft, ConferenceChange, EventTime,
+        EventTransparency, OccurrenceRange, VisibleCalendar,
     },
     ports::{
         CalendarCreationRecoveryService, CalendarDeletionScope, CalendarOccurrenceService,
-        MeetingLinkProvider, UnavailableMeetingLinks,
+        CalendarSyncHealthReader, MeetingLinkProvider, UnavailableMeetingLinks,
     },
 };
 use chrono::{DateTime, Duration, Utc};
 use std::sync::Arc;
+use sync_health::HostCalendars;
 use teams::domain::{model::TeamRole, team_repo::TeamRepository};
 use uuid::Uuid;
 
@@ -51,6 +53,32 @@ impl<O, M, L> MacroCalendars<O, M, L> {
             meeting_links,
             management_origin,
         }
+    }
+}
+impl<O: CalendarSyncHealthReader, M, L> MacroCalendars<O, M, L> {
+    /// Check that `calendars`, the host's, are current enough to offer their
+    /// free time.
+    async fn check_availability(
+        &self,
+        host: &str,
+        calendars: &[VisibleCalendar],
+    ) -> Result<sync_health::Served, Error> {
+        let health = self
+            .occurrences
+            .calendar_sync_health(host)
+            .await
+            .map_err(|_| Error::CalendarUnavailable)?;
+        HostCalendars {
+            calendars,
+            health: &health,
+        }
+        .check_availability(Utc::now())
+        .map_err(|refusal| {
+            let span = tracing::Span::current();
+            span.record("outcome", "refused");
+            span.record("reason", refusal.as_str());
+            Error::CalendarUnavailable
+        })
     }
 }
 impl<O, M, L> MacroCalendars<O, M, L>
@@ -109,19 +137,43 @@ where
         Ok((created.event.id, url))
     }
 }
-impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService, L: MeetingLinkProvider>
-    Calendars for MacroCalendars<O, M, L>
+impl<O, M, L> Calendars for MacroCalendars<O, M, L>
+where
+    O: CalendarOccurrenceService + CalendarSyncHealthReader,
+    M: CalendarCreationRecoveryService,
+    L: MeetingLinkProvider,
 {
     async fn creation_calendar(&self, host: &str) -> Result<Uuid, Error> {
-        self.mutations
+        let calendars = self
+            .mutations
             .list_visible_calendars(host)
             .await
-            .map_err(|_| Error::CalendarUnavailable)?
-            .into_iter()
-            .find(|c| c.is_primary && c.is_writable && c.sync_error.is_none())
+            .map_err(|_| Error::CalendarUnavailable)?;
+        let health = self
+            .occurrences
+            .calendar_sync_health(host)
+            .await
+            .map_err(|_| Error::CalendarUnavailable)?;
+        let host_calendars = HostCalendars {
+            calendars: &calendars,
+            health: &health,
+        };
+        calendars
+            .iter()
+            .find(|c| host_calendars.can_take_bookings(c))
             .map(|c| c.id)
             .ok_or(Error::CalendarUnavailable)
     }
+    #[tracing::instrument(
+        name = "scheduling.busy_time",
+        skip_all,
+        fields(
+            host_count = hosts.len(),
+            outcome = tracing::field::Empty,
+            reason = tracing::field::Empty,
+        ),
+        err(level = tracing::Level::DEBUG)
+    )]
     async fn busy(
         &self,
         hosts: &[String],
@@ -130,24 +182,19 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService, L: Meetin
         exclude_event: Option<Uuid>,
     ) -> Result<Vec<BusyRange>, Error> {
         let mut events = vec![];
+        let mut served = sync_health::Served::Current;
         for host in hosts {
+            // Read in process, never through the calendar service's HTTP
+            // listing: a host on an older build would answer with an older
+            // default for the availability setting and free busy time.
             let calendars = self
-                .mutations
+                .occurrences
                 .list_visible_calendars(host)
                 .await
                 .map_err(|_| Error::CalendarUnavailable)?;
-            if calendars.iter().any(|c| c.sync_error.is_some())
-                || !calendars
-                    .iter()
-                    .any(|c| c.is_primary && c.is_writable && c.sync_error.is_none())
-                || self
-                    .occurrences
-                    .sync_status(host)
-                    .await
-                    .map_err(|_| Error::CalendarUnavailable)?
-                    != CalendarSyncStatus::Ready
+            if self.check_availability(host, &calendars).await? == sync_health::Served::WithinWindow
             {
-                return Err(Error::CalendarUnavailable);
+                served = sync_health::Served::WithinWindow;
             }
             let range = OccurrenceRange {
                 starts_at: start,
@@ -164,17 +211,19 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService, L: Meetin
             if rows.len() > 2000 {
                 return Err(Error::CalendarUnavailable);
             }
+            let labels = Arc::new(CalendarLabels::from_calendars(calendars));
             events.extend(rows.into_iter().map(|listing| {
                 let (event, occurrence) = listing.into_occurrence_event();
-                (host.clone(), event, occurrence)
+                (host.clone(), labels.clone(), event, occurrence)
             }));
         }
+        tracing::Span::current().record("outcome", served.as_str());
         let excluded_uid = events
             .iter()
-            .find(|(_, event, _)| Some(event.id) == exclude_event)
-            .map(|(_, event, _)| event.ical_uid.clone());
+            .find(|(_, _, event, _)| Some(event.id) == exclude_event)
+            .map(|(_, _, event, _)| event.ical_uid.clone());
         let mut busy = vec![];
-        for (host, event, occurrence) in events {
+        for (host, labels, event, occurrence) in events {
             let mut owned = event.attendees.iter().filter(|a| a.is_self).peekable();
             let declined = owned.peek().is_some()
                 && owned.all(|a| {
@@ -188,6 +237,7 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService, L: Meetin
                     .is_some_and(|uid| !uid.is_empty() && *uid == event.ical_uid)
                 || event.transparency == EventTransparency::Transparent
                 || declined
+                || !occupies_host(&labels, &event)
             {
                 continue;
             }
@@ -415,29 +465,50 @@ impl<T: TeamRepository> Directory for MacroDirectory<T> {
 
 impl<O, M, L> crate::domain::ports::AttachmentReadiness for MacroCalendars<O, M, L>
 where
-    O: CalendarOccurrenceService,
+    O: CalendarSyncHealthReader,
     M: calendar_events::domain::ports::CalendarMutationService,
     L: Send + Sync + 'static,
 {
+    #[tracing::instrument(
+        name = "scheduling.attachment_readiness",
+        skip_all,
+        fields(
+            outcome = tracing::field::Empty,
+            reason = tracing::field::Empty,
+        ),
+        err(level = tracing::Level::DEBUG)
+    )]
     async fn ready(&self, host: &str) -> Result<(), Error> {
         let calendars = self
             .mutations
             .list_visible_calendars(host)
             .await
             .map_err(|_| Error::CalendarUnavailable)?;
-        if calendars.iter().any(|c| c.sync_error.is_some())
-            || !calendars.iter().any(|c| c.is_primary && c.is_writable)
-            || self
-                .occurrences
-                .sync_status(host)
-                .await
-                .map_err(|_| Error::CalendarUnavailable)?
-                != CalendarSyncStatus::Ready
-        {
-            return Err(Error::CalendarUnavailable);
-        }
+        let served = self.check_availability(host, &calendars).await?;
+        tracing::Span::current().record("outcome", served.as_str());
         Ok(())
     }
+}
+
+/// Whether an occurrence takes the host's time: a calendar holding it counts
+/// toward their availability (one such copy is enough, and a copy on a
+/// calendar the listing does not know counts, as does an event naming no
+/// calendar), or they are in the meeting, as team availability reads it.
+fn occupies_host(labels: &CalendarLabels, event: &CalendarEvent) -> bool {
+    let mut calendars = event
+        .calendar_id
+        .into_iter()
+        .chain(event.sources.iter().map(|copy| copy.calendar_id))
+        .peekable();
+    let counted = calendars.peek().is_none()
+        || calendars.any(|id| labels.counts_toward_availability(id) != Some(false));
+    counted
+        || attends_meeting(
+            &event.attendees,
+            event.is_read_only,
+            event.is_snapshot,
+            |attendee| attendee.is_self,
+        )
 }
 
 fn carries_url(location: Option<&str>, description: Option<&str>, url: &str) -> bool {
@@ -445,5 +516,6 @@ fn carries_url(location: Option<&str>, description: Option<&str>, url: &str) -> 
         || description.is_some_and(|value| value.contains(url))
 }
 
+mod sync_health;
 #[cfg(test)]
 mod test;

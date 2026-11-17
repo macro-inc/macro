@@ -1,13 +1,49 @@
 #[cfg(not(test))]
 use cached::proc_macro::cached;
 
+use std::sync::{Arc, LazyLock};
+
 use model::item::UserAccessibleItem;
-use sqlx::{Pool, Postgres};
+use single_flight::{DatabaseKey, SingleFlight};
+use sqlx::{PgConnection, Pool, Postgres};
+
+type AccessibleItemsKey = (DatabaseKey, String, Option<String>, bool);
+type AccessibleItems = Result<Arc<Vec<UserAccessibleItem>>, Arc<sqlx::Error>>;
+
+static RUNNING_LOOKUPS: LazyLock<SingleFlight<AccessibleItemsKey, AccessibleItems>> =
+    LazyLock::new(SingleFlight::new);
 
 /// Gets all accessible items for a user by querying entity_access with the user's source IDs
 /// (user ID, team memberships, and channel participations). Soft-deleted items and grants
 /// whose item row no longer exists are excluded.
-#[tracing::instrument(skip(db))]
+///
+/// Callers that miss the cache at the same time for the same database, user and
+/// filters share one run of the queries. A failure reaches all of them as an
+/// `Arc<sqlx::Error>`.
+pub async fn get_user_accessible_items(
+    db: &Pool<Postgres>,
+    user_id: &str,
+    item_type_filter: Option<String>,
+    exclude_owned: bool,
+) -> anyhow::Result<Vec<UserAccessibleItem>> {
+    let items = shared_accessible_items(db, user_id, item_type_filter, exclude_owned).await?;
+
+    // The caller's own copy is made here, after the cache lock is released.
+    Ok(Arc::unwrap_or_clone(items))
+}
+
+/// The list every caller of one lookup shares. The cache keeps it behind a
+/// pointer because it has one lock for all users, and a hit or a store that
+/// copied the list would hold that lock for the length of the list.
+///
+/// The span keeps the public function's name and, sitting above the cache,
+/// is opened only when the cache misses.
+#[tracing::instrument(
+    name = "get_user_accessible_items",
+    skip(db),
+    err,
+    fields(coalesced = tracing::field::Empty)
+)]
 #[cfg_attr(
     not(test),
     cached(
@@ -17,14 +53,45 @@ use sqlx::{Pool, Postgres};
         convert = r#"{ format!("{}-{}-{}", user_id, item_type_filter.as_deref().unwrap_or("all"), exclude_owned) }"#
     )
 )]
-pub async fn get_user_accessible_items(
+async fn shared_accessible_items(
     db: &Pool<Postgres>,
     user_id: &str,
     item_type_filter: Option<String>,
     exclude_owned: bool,
-) -> anyhow::Result<Vec<UserAccessibleItem>> {
+) -> anyhow::Result<Arc<Vec<UserAccessibleItem>>> {
+    let key = (
+        DatabaseKey::of(db),
+        user_id.to_string(),
+        item_type_filter.clone(),
+        exclude_owned,
+    );
+    let lookup = || {
+        let db = db.clone();
+        let user_id = user_id.to_string();
+        let item_type_filter = item_type_filter.clone();
+
+        async move {
+            query_accessible_items(&db, &user_id, item_type_filter.as_deref(), exclude_owned)
+                .await
+                .map(Arc::new)
+                .map_err(Arc::new)
+        }
+    };
+
+    // Boxed so the lookup adds one pointer, not its whole state machine, to
+    // the future of every caller up the stack: services near rustc's layout
+    // depth limit stop compiling otherwise.
+    Ok(Box::pin(RUNNING_LOOKUPS.run(key, lookup)).await?)
+}
+
+async fn query_accessible_items(
+    db: &Pool<Postgres>,
+    user_id: &str,
+    item_type_filter: Option<&str>,
+    exclude_owned: bool,
+) -> sqlx::Result<Vec<UserAccessibleItem>> {
     let source_ids = user_source_ids(db, user_id).await?;
-    match item_type_filter.as_deref() {
+    match item_type_filter {
         Some("document") => accessible_documents(db, user_id, &source_ids, exclude_owned).await,
         Some("chat") => accessible_chats(db, user_id, &source_ids, exclude_owned).await,
         Some("project") => accessible_projects(db, user_id, &source_ids, exclude_owned).await,
@@ -58,6 +125,9 @@ fn to_items(ids: Vec<String>, item_type: &str) -> Vec<UserAccessibleItem> {
 /// join for them. The per-type queries run as unnamed statements because a
 /// cached prepared statement switches every user to one generic plan after
 /// five calls.
+///
+/// Those statistics list only the largest sources and give every other one
+/// the table's average, which `accessible_documents` corrects for.
 async fn user_source_ids(db: &Pool<Postgres>, user_id: &str) -> sqlx::Result<Vec<String>> {
     let source_ids = sqlx::query_scalar!(
         r#"
@@ -77,13 +147,80 @@ async fn user_source_ids(db: &Pool<Postgres>, user_id: &str) -> sqlx::Result<Vec
     Ok(source_ids.into_iter().flatten().collect())
 }
 
+/// Callers holding at most this many document grants get their documents
+/// looked up one granted id at a time: about a third of a second of lookups
+/// at the limit when the pages are cached. Above it, one scan of the live
+/// documents can be cheaper than that many random reads, so the planner
+/// chooses. The limit sits above what callers with hundreds of sources hold,
+/// the callers the planner's estimate is most wrong for.
+const DOCUMENT_GRANTS_LOOKED_UP_BY_ID: i64 = 50_000;
+
+/// The planner cannot be left to choose for every caller. It estimates each
+/// source it has no statistics for at the table's average grant count, so a
+/// caller with a few hundred sources (every direct message is one) looks like
+/// a holder of hundreds of thousands of grants and gets a hash join over a scan
+/// of every live document: seconds of work that grows with the table, for a
+/// caller holding a few thousand grants. Counting the grants first, up to the
+/// limit, replaces that estimate with a fact.
+#[tracing::instrument(
+    skip_all,
+    err,
+    fields(looked_up_by_grant = tracing::field::Empty)
+)]
 async fn accessible_documents(
     db: &Pool<Postgres>,
     user_id: &str,
     source_ids: &[String],
     exclude_owned: bool,
-) -> anyhow::Result<Vec<UserAccessibleItem>> {
-    let ids = sqlx::query_scalar!(
+) -> sqlx::Result<Vec<UserAccessibleItem>> {
+    // One connection for the count and the lookup: a second checkout would
+    // double this lookup's share of the pool.
+    let mut connection = db.acquire().await?;
+
+    let grants_counted = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "count!"
+        FROM (
+            SELECT 1
+            FROM entity_access ea
+            WHERE ea.source_id = ANY($1)
+                AND ea.entity_type = 'document'
+            LIMIT $2
+        ) held
+        "#,
+        source_ids,
+        DOCUMENT_GRANTS_LOOKED_UP_BY_ID + 1
+    )
+    .persistent(false)
+    .fetch_one(&mut *connection)
+    .await?;
+    let looked_up_by_grant = grants_counted <= DOCUMENT_GRANTS_LOOKED_UP_BY_ID;
+    tracing::Span::current().record("looked_up_by_grant", looked_up_by_grant);
+
+    let ids = if looked_up_by_grant {
+        sqlx::query_file_scalar!(
+            "src/item_access/get_accessible_items/documents_by_grant.sql",
+            user_id,
+            source_ids,
+            exclude_owned
+        )
+        .persistent(false)
+        .fetch_all(&mut *connection)
+        .await?
+    } else {
+        documents_by_planner_choice(&mut connection, user_id, source_ids, exclude_owned).await?
+    };
+
+    Ok(to_items(ids, "document"))
+}
+
+async fn documents_by_planner_choice(
+    connection: &mut PgConnection,
+    user_id: &str,
+    source_ids: &[String],
+    exclude_owned: bool,
+) -> sqlx::Result<Vec<String>> {
+    sqlx::query_scalar!(
         r#"
         SELECT d.id
         FROM "Document" d
@@ -101,10 +238,8 @@ async fn accessible_documents(
         exclude_owned
     )
     .persistent(false)
-    .fetch_all(db)
-    .await?;
-
-    Ok(to_items(ids, "document"))
+    .fetch_all(connection)
+    .await
 }
 
 async fn accessible_chats(
@@ -112,7 +247,7 @@ async fn accessible_chats(
     user_id: &str,
     source_ids: &[String],
     exclude_owned: bool,
-) -> anyhow::Result<Vec<UserAccessibleItem>> {
+) -> sqlx::Result<Vec<UserAccessibleItem>> {
     let ids = sqlx::query_scalar!(
         r#"
         SELECT c.id
@@ -142,7 +277,7 @@ async fn accessible_projects(
     user_id: &str,
     source_ids: &[String],
     exclude_owned: bool,
-) -> anyhow::Result<Vec<UserAccessibleItem>> {
+) -> sqlx::Result<Vec<UserAccessibleItem>> {
     let ids = sqlx::query_scalar!(
         r#"
         SELECT p.id
@@ -166,6 +301,9 @@ async fn accessible_projects(
 
     Ok(to_items(ids, "project"))
 }
+
+#[cfg(test)]
+mod test;
 
 #[cfg(test)]
 mod tests {

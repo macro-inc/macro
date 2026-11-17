@@ -3,7 +3,12 @@ import * as pulumi from '@pulumi/pulumi';
 import { Lambda } from '../../packages/lambda';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 
-export const UPLOAD_EXTRACTOR_LAMBDA_TIMEOUT_SECONDS = 300;
+// The Lambda maximum, so the largest folder the web app allows (10,000 files,
+// 3 GB) is extracted in one run.
+export const UPLOAD_EXTRACTOR_LAMBDA_TIMEOUT_SECONDS = 900;
+// /tmp holds the uploaded zip and its extracted copy at once, up to twice the
+// web app's 3 GB folder limit; 10,240 MB is the Lambda maximum.
+const UPLOAD_EXTRACTOR_EPHEMERAL_STORAGE_MB = 10_240;
 const LAMBDA_BASE_NAME = 'upload_extractor_lambda_handler';
 const REPO_ROOT = '../../..';
 const HANDLER_BASE = `${REPO_ROOT}/services/${LAMBDA_BASE_NAME}`;
@@ -123,6 +128,7 @@ export class UploadExtractorLambdaHandler extends pulumi.ComponentResource {
           role: role,
           timeout: UPLOAD_EXTRACTOR_LAMBDA_TIMEOUT_SECONDS,
           memorySize: stack === 'prod' ? 2048 : 1024,
+          ephemeralStorageSize: UPLOAD_EXTRACTOR_EPHEMERAL_STORAGE_MB,
           tags: this.tags,
         },
         { parent: this }

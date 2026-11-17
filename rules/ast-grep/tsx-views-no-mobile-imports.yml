@@ -1,0 +1,21 @@
+id: tsx-views-no-mobile-imports
+language: tsx
+severity: error
+message: Only a view's entry renders its mobile view. A desktop view or a shared part never imports from views/mobile/.
+note: |-
+  Rule FE-70 in .agents/rules/web/mobile.md. A view has a desktop
+  composition in `views/<name>.tsx` and a mobile one in
+  `views/mobile/<name>.tsx`, and its entry picks one with `isTouchDevice()`.
+  A desktop view or a `views/shared/` part that reaches into `views/mobile/`
+  ties the two together again. Share the code from `views/shared/` instead.
+files:
+  - apps/web/src/**/views/*.tsx
+  - apps/web/src/**/views/shared/**/*.tsx
+ignores:
+  - '**/*.test.tsx'
+rule:
+  kind: string
+  regex: ^['"](\./mobile/|\.\./mobile/|.*/views/mobile/)
+  inside:
+    kind: import_statement
+    field: source

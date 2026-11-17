@@ -184,6 +184,17 @@ export type AppEvents = {
   hotkey_use: Record<string, unknown>;
   mentions_menu_use: { itemType: string };
   snippets_menu_use: Record<string, unknown>;
+  /**
+   * An agent's `macro.ui.open` reached this tab: `opened` a new pane,
+   * `shown` one already open, `no_room`, `cancelled`, or
+   * `not_allowed_route` (refused here). `route` is the route id, never the path.
+   */
+  agent_ui_command: { kind: 'open'; outcome: string; route?: string };
+  /**
+   * The person pressed Undo on a pane an agent opened: `undone`, or `kept`
+   * when a leave guard (unsaved edits) or a newer navigation kept the pane.
+   */
+  agent_ui_command_undone: { route: string; outcome: 'undone' | 'kept' };
   /** `side` is where a split opened beside another; absent, it opened at the end. */
   split_created: { from: string; side?: 'left' | 'right' | 'above' | 'below' };
 
@@ -397,13 +408,12 @@ export type AppEvents = {
   // --- Notifications -------------------------------------------------------
   /**
    * A notification was opened: from the app's lists and stacks (`in_app`), a
-   * browser notification, a native iOS, Android or macOS notification tap
+   * browser notification, or a native iOS, Android or macOS notification tap
    * (`native_push`, counted once its navigation applies; `macro_device` tells
-   * the platforms apart), or a home recommendation that opens through its
-   * notification (`home_recommendation`, not a notification-driven open).
+   * the platforms apart).
    */
   notification_opened: {
-    source: 'in_app' | 'browser_push' | 'native_push' | 'home_recommendation';
+    source: 'in_app' | 'browser_push' | 'native_push';
     notificationType: string;
     entityType: string;
   };
@@ -500,7 +510,7 @@ type RoutineSuggestionEvent = {
   suggestionId: string;
   /** The sidebar's surface, or the suggestion's main one on the Routines page. */
   surface: string;
-  placement: 'sidebar' | 'routines';
+  placement: 'sidebar' | 'routines' | 'forYou';
   /** `for_you` from AI, `macro` for Macro's templates. */
   from: 'for_you' | 'macro';
   /** A catalog routine with AI's values, or a routine AI drafted. */

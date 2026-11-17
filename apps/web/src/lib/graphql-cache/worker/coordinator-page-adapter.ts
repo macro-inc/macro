@@ -4,9 +4,10 @@ import { APP_BUILD_TIME } from '../app-build';
 import type { CacheRequest, WorkerMessage } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
-  classifyCacheError,
+  describeCacheError,
   isolateCacheTelemetry,
 } from '../telemetry';
+import { offerCompiledEngine } from './compiled-engine';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CacheReadState,
@@ -67,7 +68,9 @@ export interface CacheCoordinatorPageAdapterOptions {
   ) => void;
   onOwnerChanged?: (ownerEpoch: number | undefined) => void;
   /** Another context holds the database, so the cache stays off until reload. */
-  onCacheUnavailable?: (reason: string) => void;
+  /** `superseded`: a newer build took the database over, so this build never
+   * gets it back. */
+  onCacheUnavailable?: (reason: string, superseded: boolean) => void;
   /** A newer app build took the database over; this page should reload. */
   onCacheSuperseded?: (reason: string) => void;
   /** When this page's app build was made, in ms since the epoch. Defaults to
@@ -169,6 +172,7 @@ export class CacheCoordinatorPageAdapter {
   };
   private coordinatorConnection: CoordinatorConnection | undefined;
   private engineWorker: DedicatedWorkerLike | undefined;
+  private compiledEnginePort: MessagePort | undefined;
   private ownerEpoch: number | undefined;
   private registered = false;
   private startPromise: Promise<void> | undefined;
@@ -448,7 +452,7 @@ export class CacheCoordinatorPageAdapter {
         name: 'graphql_cache.lock_wait',
         operationCategory: 'lifecycle',
         outcome: 'error',
-        errorCode: classifyCacheError(error),
+        ...describeCacheError(error),
         durationMs: this.now() - lockStartedAt,
       });
       throw error;
@@ -686,7 +690,10 @@ export class CacheCoordinatorPageAdapter {
         );
         break;
       case 'cache-unavailable':
-        this.options.onCacheUnavailable?.(message.reason);
+        this.options.onCacheUnavailable?.(
+          message.reason,
+          message.superseded === true
+        );
         break;
       case 'cache-superseded':
         this.options.onCacheSuperseded?.(message.reason);
@@ -862,6 +869,7 @@ export class CacheCoordinatorPageAdapter {
       this.closePort(directChannel.port2);
       return;
     }
+    const compiledEngineChannel = new MessageChannel();
     try {
       worker.postMessage(
         withVersion<PageToEngineEnvelope>({
@@ -873,10 +881,14 @@ export class CacheCoordinatorPageAdapter {
           ownerLockName: election.ownerLockName,
           hotCapacity: election.hotCapacity,
         }),
-        [directChannel.port2]
+        [directChannel.port2, compiledEngineChannel.port2]
       );
+      this.compiledEnginePort = compiledEngineChannel.port1;
+      offerCompiledEngine(compiledEngineChannel.port1);
     } catch (error) {
       this.closePort(directChannel.port2);
+      this.closePort(compiledEngineChannel.port1);
+      this.closePort(compiledEngineChannel.port2);
       this.failTerminal(
         error instanceof Error ? error : new Error(String(error))
       );
@@ -908,6 +920,8 @@ export class CacheCoordinatorPageAdapter {
       cleanupError ??=
         error instanceof Error ? error : new Error(String(error));
     }
+    if (this.compiledEnginePort) this.closePort(this.compiledEnginePort);
+    this.compiledEnginePort = undefined;
     this.terminatedOwnerEpochs.add(ownerEpoch);
     this.engineWorker = undefined;
     this.ownerEpoch = undefined;

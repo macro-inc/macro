@@ -1,3 +1,4 @@
+import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 /**
  * The vocabulary of Macro Forms: a form is a view of one database table. Its
  * questions are the table's columns; the form owns only presentation
@@ -89,6 +90,8 @@ export type FormColumn = {
   name: string;
   kind: FormColumnKind;
   options: FormOption[];
+  /** A Percentage column: Number storage, answered in percentage points. */
+  percentage?: boolean;
 };
 
 /** A select option, by id; the respond page only ever names options by id. */
@@ -211,6 +214,7 @@ export type FormBranding = {
 export type FormMetadata = {
   id: string;
   name: string;
+  appearance?: EntityAppearance | null;
   description: string;
   ownerId: string;
   databaseId: string;

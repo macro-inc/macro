@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::artifacts::LocalServer;
+use crate::computer::Computer;
 use crate::config::Harness;
 use crate::outbound::acp_probe::{ProbeError, ProbeSubprocess, probe_subprocess};
 use crate::outbound::acp_process::{AcpProcess, AgentEvent, AttachedAgent, RunningAgent};
@@ -82,6 +83,7 @@ pub async fn bridge(
     turns: &ActiveTurns,
     adopted: Option<RunningAgent>,
     handoff: &mut Handoffs,
+    computer: Option<Arc<Computer>>,
 ) -> Result<BridgeEnd, BridgeError> {
     let probes = HarnessModelProbes {
         process: probe_process(harness, cwd),
@@ -104,10 +106,9 @@ pub async fn bridge(
         .map_err(|_| BridgeError::Announce(ConnectionError::Closed))?;
 
     let line_turns = turns.clone();
-    // The wire tap: every ndjson line crossing the child's stdio, plus its
-    // stderr. Enable with RUST_LOG=coding_agent_worker=trace.
+    // Observe protocol traffic without logging credentials in session-start env.
     let debug = Arc::new(move |line: &str, direction: LineDirection| {
-        tracing::trace!(?direction, line, "acp line");
+        tracing::trace!(?direction, bytes = line.len() as i64, "acp line");
         line_turns.observe(line, direction);
         if let Some(tap) = &tap {
             tap(line, direction);
@@ -128,6 +129,7 @@ pub async fn bridge(
                 &probes,
                 turns,
                 handoff,
+                computer.as_ref(),
             )
             .await
         }
@@ -210,6 +212,7 @@ async fn relay(
     probes: &HarnessModelProbes,
     turns: &ActiveTurns,
     handoff: &mut Handoffs,
+    computer: Option<&Arc<Computer>>,
 ) -> Result<Relayed, BridgeError> {
     let to_service = to_service_slot
         .clone()
@@ -262,7 +265,7 @@ async fn relay(
             message = from_service.recv() => {
                 match message {
                     Some(ToRuntimeMessage::Acp(AcpMessage(frame))) => {
-                        if let Some(line) = encode(&teach(&mut self_knowledge, frame))
+                        if let Some(line) = encode(&teach(&mut self_knowledge, frame, computer)?)
                             && agent.send_line(line).is_err()
                         {
                             return Ok(Relayed::Closed);
@@ -290,7 +293,7 @@ async fn relay(
                     probe_tasks.shutdown().await;
                     // Every sender must go for the socket to close.
                     to_service_slot.take();
-                    let handed = hand_off(agent, to_service, from_service, turns, &mut self_knowledge).await;
+                    let handed = hand_off(agent, to_service, from_service, turns, &mut self_knowledge, computer).await;
                     let _ = request.send(handed);
                     return Ok(Relayed::HandedOff(()));
                 }
@@ -312,6 +315,7 @@ async fn hand_off(
     from_service: &mut tokio::sync::mpsc::UnboundedReceiver<ToRuntimeMessage>,
     turns: &ActiveTurns,
     self_knowledge: &mut SelfKnowledge,
+    computer: Option<&Arc<Computer>>,
 ) -> Option<crate::handoff::HandedOffAgent> {
     let span = tracing::info_span!("macrod.update.handoff");
     let _entered = span.enter();
@@ -328,7 +332,8 @@ async fn hand_off(
     let drained = tokio::time::timeout(HANDOFF_TIMEOUT, async {
         while let Some(message) = from_service.recv().await {
             if let ToRuntimeMessage::Acp(AcpMessage(frame)) = message
-                && let Some(line) = encode(&teach(self_knowledge, frame))
+                && let Ok(frame) = teach(self_knowledge, frame, computer)
+                && let Some(line) = encode(&frame)
             {
                 let _ = agent.send_line(line);
             }
@@ -383,13 +388,23 @@ fn encode(frame: &RawJsonRpcMessage) -> Option<String> {
         .ok()
 }
 
-/// Teach a new session's agent about this runtime on its first prompt.
-fn teach(self_knowledge: &mut SelfKnowledge, message: RawJsonRpcMessage) -> RawJsonRpcMessage {
+/// Teach a new session's agent about this runtime on its first prompt, and
+/// on a Macro computer give each Claude Code session its account or gateway.
+fn teach(
+    self_knowledge: &mut SelfKnowledge,
+    message: RawJsonRpcMessage,
+    computer: Option<&Arc<Computer>>,
+) -> Result<RawJsonRpcMessage, BridgeError> {
     let Ok(mut value) = serde_json::to_value(&message) else {
-        return message;
+        return Ok(message);
     };
     self_knowledge.outbound(&mut value);
-    serde_json::from_value(value).unwrap_or(message)
+    if let Some(computer) = computer {
+        computer
+            .prepare_session(&mut value)
+            .map_err(|error| BridgeError::Harness(format!("{error}")))?;
+    }
+    serde_json::from_value(value).map_err(|error| BridgeError::Harness(error.to_string()))
 }
 
 fn probe_process(harness: &Harness, cwd: &Path) -> ProbeSubprocess {

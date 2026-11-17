@@ -49,7 +49,7 @@ DMs, and the shared message store other domains discuss things on.
 ## Tool contracts
 
 - `ShareWithChannel` exposes agent sessions and omits legacy chat targets; the domain retains historical entity support.
-  `POST /channels/{channel_id}/shares` is its HTTP twin (the SDK's `CalendarEvent.shareWithChannel`); both take `ChannelShareEntityType` from `domain/models.rs`.
+  `POST /channels/{channel_id}/shares` is its HTTP twin (the SDK's `shareWithChannel(channel)` on every shareable handle, through `packages/sdk/src/entities/channels/share.ts`); both take `ChannelShareEntityType` from `domain/models.rs`.
 - The channel read tools return `senderName` beside `senderId`: the name the app shows (imported author, bot, call guest, or the person's profile name from `get_user_display_names`). One lookup per call; a failed lookup omits names instead of failing the read.
 
 ## Checks
@@ -71,6 +71,9 @@ DMs, and the shared message store other domains discuss things on.
   timeline entry keeps its outcome. Approval adds the member in the request's
   transaction, then dispatches `ParticipantsAdded`; the announcement reaches the
   timeline through `macro.channels` and the activity consumer.
+  The announcement stores the requester's profile name as it was when they asked
+  (`requester_name`, optional), so the timeline entry mounts at its final height;
+  the web app swaps in the current name once it loads.
   Withdrawal starts the one-minute retry cooldown at `resolved_at`, even when
   the request has been pending longer than a minute.
   Completing a resolved request's notification attempts every recipient before
@@ -111,3 +114,5 @@ DMs, and the shared message store other domains discuss things on.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
 
 - Capture agent correlation when spawning mutation side effects and restore it when team events create direct-message channels.
+
+- CRM attachment-reference lookups authorize the referenced company/contact/pipeline through the comment-parent access port before reading references; a missing adapter or denied target returns no references.

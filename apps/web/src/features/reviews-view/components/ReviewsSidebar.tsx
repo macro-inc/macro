@@ -18,10 +18,15 @@ import {
 } from '@block-pr/data/queries';
 import { prDisplayName } from '@block-pr/util/prKey';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  canOpenInNewTab,
+  openInNewTab,
+} from '@components/app/tab-layout/open-in-new-tab';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { githubLabelColor } from '@entity/components/GithubLabelPill';
 import type { GithubPullRequestLabel } from '@entity/types/entity';
+import BrowserTabIcon from '@icon/system/regular/arrow-square-out.svg';
 import SplitIcon from '@icon/system/regular/columns.svg';
 import EyeIcon from '@icon/system/regular/eye.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
@@ -100,6 +105,17 @@ function ReviewFavoriteRow(props: {
                 props.onOpenReview(props.favorite.entityId, true);
             }}
           />
+          <Show when={canOpenInNewTab()}>
+            <MenuItem
+              icon={BrowserTabIcon}
+              text={t('entityActions.openInNewTab')}
+              onClick={() =>
+                openInNewTab(() =>
+                  props.onOpenReview(props.favorite.entityId, false)
+                )
+              }
+            />
+          </Show>
           <MenuItem
             icon={StarIcon}
             text={t('entityActions.removeFromFavorites')}
@@ -295,19 +311,7 @@ export function ReviewsSidebar(props: {
 
   return (
     <ViewSidebar.Root aria-label="Reviews navigation">
-      <ViewSidebar.Header
-        searchLabel="Search reviews"
-        search={() => (
-          <SearchBar
-            label="Search reviews"
-            placeholder="Search reviews"
-            autocomplete="off"
-            value={props.search}
-            onValueChange={props.onSearchChange}
-            onEscape={() => props.onSearchChange('')}
-          />
-        )}
-      >
+      <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Reviews</ViewSidebar.Title>

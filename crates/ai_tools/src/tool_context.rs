@@ -169,6 +169,10 @@ impl MacroEventBroker for MaybeToolEventBroker {
 pub type ToolBotService = BotServiceImpl<
     PgBotsRepo,
     MaybeToolEventBroker,
+    harnesses::domain::service::HarnessServiceImpl<
+        harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+        hosted_runtimes::outbound::pg::PgComputerAgents,
+    >,
     crate::mcp_app_catalog::PipedreamMcpAppCatalog,
 >;
 
@@ -186,9 +190,17 @@ pub fn build_bot_tool_context(
 ) -> ToolBotToolContext {
     BotToolContext {
         service: Arc::new(
-            BotServiceImpl::new(PgBotsRepo::new(pool), event_broker).with_mcp_apps(
-                crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(pipedream),
-            ),
+            BotServiceImpl::new(
+                PgBotsRepo::new(pool.clone()),
+                event_broker,
+                harnesses::domain::service::HarnessServiceImpl::new(
+                    harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(pool.clone()),
+                    hosted_runtimes::outbound::pg::PgComputerAgents::new(pool),
+                ),
+            )
+            .with_mcp_apps(crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(
+                pipedream,
+            )),
         ),
         entity_access_service,
         document_storage_service_url: document_storage_service_url
@@ -1949,7 +1961,57 @@ impl ToolEntityCreator {
     }
 }
 
+/// The entity-access type an import from `source` is recorded as. Linear
+/// and Jira issues become tasks, which are documents.
+fn imported_entity_type(source: import::domain::models::ImportSource) -> model_entity::EntityType {
+    use import::domain::models::ImportSource;
+    match source {
+        ImportSource::Linear | ImportSource::Jira | ImportSource::Notion => {
+            model_entity::EntityType::Document
+        }
+        ImportSource::Slack => model_entity::EntityType::Channel,
+    }
+}
+
+/// Whether an access-check failure means the caller cannot see the entity,
+/// as opposed to the check itself failing. A malformed id names nothing the
+/// caller can see, so it is refused too.
+fn refuses_view(error: &entity_access::domain::models::AccessError) -> bool {
+    use entity_access::domain::models::AccessError;
+    matches!(
+        error,
+        AccessError::Unauthorized
+            | AccessError::UnauthorizedWithMessage(_)
+            | AccessError::NotFound(_)
+            | AccessError::BadRequest(_)
+    )
+}
+
 impl import::domain::ports::EntityCreator for ToolEntityCreator {
+    async fn can_view(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: import::domain::models::ImportSource,
+        entity_id: &str,
+    ) -> anyhow::Result<bool> {
+        match self
+            .entity_access_service
+            .generate_entity_access_receipt::<ViewAccessLevel>(
+                user,
+                None,
+                entity_id,
+                imported_entity_type(source),
+            )
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(error) if refuses_view(&error) => Ok(false),
+            Err(error) => Err(anyhow::Error::new(error).context(format!(
+                "could not check access to imported entity {entity_id}"
+            ))),
+        }
+    }
+
     async fn create_task(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -2047,28 +2109,35 @@ pub type ToolMcpServerToolContext =
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
-pub type ToolActivityToolContext = activity::inbound::toolset::ActivityToolContext<
-    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+/// The acting user's own activity, as `GET /activity` serves it.
+pub type ToolActivityReadService = activity::ActivityReadService<
+    activity::domain::visible_reads::VisibleActivityReads<
         activity::outbound::pg_activity_repo::PgActivityRepo,
-        ToolEntityAccessService,
+        activity::outbound::entity_access_audience::EntityAccessActivityAudience<
+            ToolEntityAccessService,
+        >,
     >,
 >;
 
-pub fn build_activity_tool_context(
+pub fn build_activity_read_service(
     pool: sqlx::PgPool,
     properties: Arc<ToolPropertiesService>,
     entity_access_service: Arc<ToolEntityAccessService>,
-) -> ToolActivityToolContext {
-    activity::inbound::toolset::ActivityToolContext::new(
-        initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
-            activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
-            entity_access_service.clone(),
-        ),
+) -> Arc<ToolActivityReadService> {
+    Arc::new(
+        activity::ActivityReadService::new(
+            activity::domain::visible_reads::VisibleActivityReads::new(
+                activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
+                activity::outbound::entity_access_audience::EntityAccessActivityAudience::new(
+                    entity_access_service.clone(),
+                ),
+            ),
+        )
+        .with_metadata_resolver(ToolActivityMetadataResolver::new(
+            properties,
+            entity_access_service,
+        )),
     )
-    .with_metadata_resolver(ToolActivityMetadataResolver::new(
-        properties,
-        entity_access_service,
-    ))
 }
 
 pub use routines::inbound::RoutineToolContext;
@@ -2100,7 +2169,8 @@ pub struct ToolServiceContext {
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
-    pub activity_tool_context: ToolActivityToolContext,
+    #[from_ref(skip)]
+    pub activity_service: Arc<ToolActivityReadService>,
     #[from_ref(skip)]
     pub document_tool_context: ToolDocumentToolContext,
     #[from_ref(skip)]
@@ -2167,7 +2237,7 @@ pub struct ToolServiceContext {
     pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
     /// The usage context (feature/user/entity) of the request currently using
     /// this context. Set per-session by the caller so AI calls made by tools
-    /// (e.g. subagents) are attributed to the feature that spawned them.
+    /// (e.g. GenerateObject) are attributed to the feature that spawned them.
     pub usage_context: ai_usage::UsageContext,
 }
 
@@ -2344,3 +2414,6 @@ fn self_chat_id(ctx: &ToolServiceContext) -> Option<uuid::Uuid> {
         .then_some(ctx.usage_context.entity)
         .flatten()
 }
+
+#[cfg(test)]
+mod test;

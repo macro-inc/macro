@@ -211,13 +211,16 @@ it('keeps still-matching people listed while the next read is pending', async ()
     expect.objectContaining({ query: 'jac' })
   );
 
-  // A contact change re-reads the page without emptying it.
+  // A contact change re-reads the page without emptying it, and a re-read
+  // that finds the same people keeps the listed rows.
+  const listed = list?.items();
   changed?.(parseCacheRevision('2'), { searchChangedBuckets: ['person'] });
   await vi.advanceTimersByTimeAsync(0);
   expect(names()).toEqual(['Jacob Adams', 'Jacob Baker']);
   await vi.advanceTimersByTimeAsync(1000);
   expect(names()).toEqual(['Jacob Adams', 'Jacob Baker']);
   expect(search.mock.calls.length).toBeGreaterThan(2);
+  expect(list?.items()).toBe(listed);
 
   mounted.unmount();
   await vi.runOnlyPendingTimersAsync();

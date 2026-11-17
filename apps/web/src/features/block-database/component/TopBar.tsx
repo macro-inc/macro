@@ -1,5 +1,7 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { toastMovedToFolder } from '@app/features/entity/bulk-edit/moved-to-folder-toast';
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { EntityAppearanceTrigger } from '@app/features/entity-appearance/entity-appearance';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
@@ -89,8 +91,8 @@ export function TopBar(props: {
     };
   });
   const favoriteAction = makeFavoriteAction();
-  const copyLinkAction = makeCopyLinkAction();
-  const copyEntityIdAction = makeCopyEntityIdAction();
+  const copyLinkAction = makeCopyLinkAction({ silent: true });
+  const copyEntityIdAction = makeCopyEntityIdAction({ silent: true });
   const itemOperations = useItemOperations();
   const { replaceOrInsertSplit } = useSplitLayout();
   // One copy at a time: the menu can reopen while a copy is being written.
@@ -117,6 +119,7 @@ export function TopBar(props: {
     name: detail.database.name,
     ownerId: detail.database.owner_id,
     grant: detail.grant,
+    appearance: readEntityAppearance(detail.database.appearance),
     projectId: detail.database.project_id ?? undefined,
   });
   const entityActions = (detail: DatabaseDetail): DatabaseEntityActions => ({
@@ -126,16 +129,8 @@ export function TopBar(props: {
         favoriteAction.execute([entity(detail)]),
         'database-actions'
       ),
-    onCopyLink: () =>
-      fireAndForget(
-        copyLinkAction.execute([entity(detail)]),
-        'database-actions'
-      ),
-    onCopyId: () =>
-      fireAndForget(
-        copyEntityIdAction.executeById(databaseId),
-        'database-actions'
-      ),
+    onCopyLink: () => copyLinkAction.execute([entity(detail)]),
+    onCopyId: () => copyEntityIdAction.executeById(databaseId),
     duplicating: duplicating(),
     onDuplicate: () => fireAndForget(duplicate(detail), 'database-actions'),
     onMoveToFolder:
@@ -161,6 +156,16 @@ export function TopBar(props: {
       <SplitHeaderLeft>
         <BlockItemSplitLabel
           name={name}
+          icon={
+            <Show when={props.detail}>
+              {(detail) => (
+                <EntityAppearanceTrigger
+                  entity={entity(detail())}
+                  editable={props.canEdit}
+                />
+              )}
+            </Show>
+          }
           title={
             <Show when={props.detail}>
               <DatabaseTitle

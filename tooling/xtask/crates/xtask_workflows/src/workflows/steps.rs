@@ -7,7 +7,7 @@
 use gh_workflow::{Env, Expression, Job, Run, Step, Use};
 use xtask_paths::{RepoDir, RuntimePath};
 
-use crate::workflows::vars;
+use crate::workflows::{runners, vars};
 
 #[cfg(test)]
 mod test;
@@ -398,25 +398,12 @@ pub fn mount_web_test_cache_volume() -> Step<Use> {
         ))
 }
 
-/// [`mount_web_cache_volume`] for jobs that compile the browser wasm packages
-/// (`just build-*`). Cargo registry/git feed wasm-pack; `.wasm-pack` is the
-/// downloaded `wasm-opt` the same way [`mount_wasm_cache_volume`] keeps the
-/// worker build warm. Compiled objects use Namespace remote sccache.
-pub fn mount_web_build_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume")
-        .add_with(("cache", "nix"))
-        .add_with((
-            "path",
-            format!(
-                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}",
-                vars::BUN_CACHE_VOLUME_DIR,
-                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
-            ),
-        ))
-}
-
-/// [`mount_web_build_cache_volume`] plus [`vars::WASM_PKG_CACHE_DIR`], for the PR
-/// build that reuses unchanged wasm packages. Deploy builds always rebuild them.
+/// [`mount_web_cache_volume`] for the PR build, which compiles the browser wasm
+/// packages (`just build-*`). Cargo registry/git feed wasm-pack; `.wasm-pack`
+/// is the downloaded `wasm-opt` the same way [`mount_wasm_cache_volume`] keeps
+/// the worker build warm; [`vars::WASM_PKG_CACHE_DIR`] holds the unchanged
+/// packages it reuses. Deploy builds keep theirs in an Actions cache instead
+/// (`build_web_app`) and mount none of these, since PR jobs write this volume.
 pub fn mount_web_build_check_cache_volume() -> Step<Use> {
     nscloud_cache_action("Mount Namespace cache volume")
         .add_with(("cache", "nix"))
@@ -499,6 +486,28 @@ pub fn checkout_v4() -> Step<Use> {
             "de0fac2e4500dabe0009e67214ff5f5447ce83dd",
         ) // v4
         .add_with(("persist-credentials", false))
+}
+
+/// A deploy that ships code built from this commit is blocked until every
+/// migration in the commit is applied to the environment it deploys to:
+/// single-service deploys apply none, and code running against a schema it is
+/// ahead of fails at runtime. `ships_code` is the `setup` job's expression for
+/// whether the deploy carries binaries or Lambdas; the deploy job must list
+/// this job in its `needs`.
+pub fn check_macro_db_migrations_job(name: &str, ships_code: &str) -> Job {
+    Job::default()
+        .name(name)
+        .needs(vec!["setup".to_string()])
+        .cond(Expression::new(format!("${{{{ {ships_code} }}}}")))
+        .runs_on(runners::DB_MIGRATOR)
+        .add_step(checkout_v4().add_with(("sparse-checkout", ".github/")))
+        .add_step(
+            uses_local(
+                "Check migrations",
+                xtask_paths::repo_dir!(".github/actions/check-macro-db-migrations"),
+            )
+            .add_with(("environment", "${{ inputs.environment }}")),
+        )
 }
 
 /// Build Nix targets using Namespace's mounted `/nix` cache volume.

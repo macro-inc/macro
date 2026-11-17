@@ -1,5 +1,5 @@
 import ShieldCheck from '@icon/system/regular/shield-check.svg';
-import { Button } from '@ui';
+import { Button, Card, Item } from '@ui';
 import { Show } from 'solid-js';
 
 export type ToolApprovalCardProps = {
@@ -12,6 +12,8 @@ export type ToolApprovalCardProps = {
   standing?: string;
   /** Who prompted the turn; absent for a bot on nobody's behalf. */
   requester?: string;
+  /** The owner prompted the turn: a call they confirm even in their own. */
+  ownTurn?: boolean;
   /** The session's owner, whose access the call spends. */
   owner: string;
   /** The viewer is the owner. */
@@ -31,36 +33,44 @@ export type ToolApprovalCardProps = {
  * "waiting for the owner" with a way out for everyone else.
  */
 export function ToolApprovalCard(props: ToolApprovalCardProps) {
-  const asker = () => props.requester ?? 'A bot';
+  const asker = () =>
+    props.ownTurn ? 'the agent' : (props.requester ?? 'A bot');
   return (
-    <section
+    <Card
+      variant="filled"
+      depth={3}
+      role="region"
       aria-label="Tool approval request"
-      class="min-w-0 overflow-hidden rounded-xl border border-edge-muted bg-panel text-ink"
+      class="overflow-hidden text-ink"
     >
-      <div class="flex items-start gap-3 px-4 pt-4">
-        <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-bg text-accent">
-          <ShieldCheck class="size-4" />
-        </div>
-        <div class="min-w-0 flex-1">
-          <div class="text-sm font-medium">
-            {props.canApprove
-              ? 'Approval needed'
-              : `Waiting for ${props.owner} to approve`}
-          </div>
-          <p class="mt-0.5 text-sm leading-5 text-ink-muted [overflow-wrap:anywhere]">
-            {asker()} asked the agent to {props.action}.
-          </p>
-          <Show when={props.canApprove && props.standing}>
-            {(standing) => (
-              <p class="mt-1 text-xs leading-4 text-ink-muted [overflow-wrap:anywhere]">
-                Always allow lets {asker()} {standing()} in this session without
-                asking you.
-              </p>
-            )}
-          </Show>
-        </div>
-      </div>
-      <div class="flex min-w-0 flex-wrap items-center justify-end gap-2 p-3">
+      <Card.Header class="pb-2">
+        <Item class="items-start gap-3 border-0 p-0">
+          <Item.Media>
+            <ShieldCheck />
+          </Item.Media>
+          <Item.Content class="gap-0.5">
+            <Card.Title>
+              {props.canApprove
+                ? 'Approval needed'
+                : `Waiting for ${props.owner} to approve`}
+            </Card.Title>
+            <Card.Description class="leading-5 [overflow-wrap:anywhere]">
+              {props.ownTurn
+                ? `The agent wants to ${props.action}.`
+                : `${asker()} asked the agent to ${props.action}.`}
+            </Card.Description>
+            <Show when={props.canApprove && props.standing}>
+              {(standing) => (
+                <Card.Metadata class="mt-0.5 leading-4 [overflow-wrap:anywhere]">
+                  Always allow lets {asker()} {standing()} in this session
+                  without asking you.
+                </Card.Metadata>
+              )}
+            </Show>
+          </Item.Content>
+        </Item>
+      </Card.Header>
+      <Card.Footer class="border-0 pt-0">
         <Show
           when={props.canApprove}
           fallback={
@@ -69,6 +79,7 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
                 type="button"
                 size="md"
                 variant="secondary"
+                class="ml-auto"
                 disabled={props.disabled}
                 onClick={() => props.onCancel()}
               >
@@ -81,34 +92,35 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
             type="button"
             size="md"
             variant="ghost"
-            class="mr-auto"
             disabled={props.disabled}
             onClick={() => props.onDeny()}
           >
             Decline
           </Button>
-          <Show when={props.standing}>
+          <Card.Actions class="ml-auto">
+            <Show when={props.standing}>
+              <Button
+                type="button"
+                size="md"
+                variant="ghost"
+                disabled={props.disabled}
+                onClick={() => props.onApproveAlways()}
+              >
+                Always allow
+              </Button>
+            </Show>
             <Button
               type="button"
               size="md"
               variant="secondary"
               disabled={props.disabled}
-              onClick={() => props.onApproveAlways()}
+              onClick={() => props.onApprove()}
             >
-              Always allow
+              Approve
             </Button>
-          </Show>
-          <Button
-            type="button"
-            size="md"
-            variant="primary"
-            disabled={props.disabled}
-            onClick={() => props.onApprove()}
-          >
-            Approve
-          </Button>
+          </Card.Actions>
         </Show>
-      </div>
-    </section>
+      </Card.Footer>
+    </Card>
   );
 }

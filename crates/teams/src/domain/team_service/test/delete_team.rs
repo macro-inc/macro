@@ -18,6 +18,7 @@ const SUBSCRIPTION: &str = "sub_team";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Step {
     Purge(Uuid),
+    ReleaseComputers(Uuid),
     CancelSubscription(String),
     DeleteTeam { team_id: Uuid, bot_ids: Vec<BotId> },
     Published(String),
@@ -47,6 +48,7 @@ struct FakeWorld {
     registry: BTreeMap<Uuid, OwnedEntityRef>,
     /// Entities a listing returns for an owner that does not own them.
     misfiled: Vec<(TeamDeletionOwner, OwnedEntityRef)>,
+    fail_prepare: bool,
     fail_purge_of: Option<Uuid>,
     /// How many more purges register a fresh entity for the purged one's owner.
     respawns_left: usize,
@@ -144,6 +146,17 @@ impl RecordingOwnedEntityCleanup {
 impl OwnedEntityCleanup for RecordingOwnedEntityCleanup {
     type Err = std::io::Error;
 
+    async fn prepare_team_deletion(
+        &self,
+        _: Uuid,
+    ) -> Result<Option<Box<dyn crate::domain::owned_entity_cleanup::TeamDeletionGuard>>, Self::Err>
+    {
+        if self.world.lock().unwrap().fail_prepare {
+            return Err(std::io::Error::other("namespace cleanup unavailable"));
+        }
+        Ok(None)
+    }
+
     async fn team_bots(&self, team_id: Uuid) -> Result<Vec<BotId>, Self::Err> {
         let world = self.world.lock().unwrap();
         Ok(world
@@ -184,6 +197,11 @@ impl OwnedEntityCleanup for RecordingOwnedEntityCleanup {
         }
         Ok(())
     }
+
+    async fn release_computers(&self, team_id: Uuid) -> Result<(), Self::Err> {
+        self.journal.record(Step::ReleaseComputers(team_id));
+        Ok(())
+    }
 }
 
 fn scheduled_action(id: u128) -> (RegisteredEntityType, Uuid) {
@@ -212,6 +230,10 @@ fn bot(id: u128) -> BotId {
 
 fn purge(id: u128) -> Step {
     Step::Purge(Uuid::from_u128(id))
+}
+
+fn release_computers() -> Step {
+    Step::ReleaseComputers(TEAM_ID)
 }
 
 fn cancel_subscription() -> Step {
@@ -308,6 +330,7 @@ async fn delete_team_purges_what_the_team_owns_directly() {
             purge(1),
             purge(2),
             purge(3),
+            release_computers(),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -333,6 +356,7 @@ async fn delete_team_purges_what_the_teams_bots_own() {
         vec![
             purge(1),
             purge(2),
+            release_computers(),
             cancel_subscription(),
             delete_team(vec![bot(0xb01)]),
             published_team_deleted(),
@@ -359,6 +383,7 @@ async fn delete_team_purges_what_soft_deleted_team_bots_own() {
         vec![
             purge(1),
             purge(2),
+            release_computers(),
             cancel_subscription(),
             delete_team(vec![bot(0xb01), bot(0xb02)]),
             published_team_deleted(),
@@ -389,6 +414,7 @@ async fn delete_team_purges_in_rank_order_before_billing_the_row_and_the_event()
             purge(3),
             purge(6),
             purge(1),
+            release_computers(),
             cancel_subscription(),
             delete_team(vec![bot(0xb01)]),
             published_team_deleted(),
@@ -411,6 +437,7 @@ async fn delete_team_purges_content_created_while_it_purges() {
         vec![
             purge(1),
             purge(0x1000),
+            release_computers(),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -466,6 +493,7 @@ async fn delete_team_keeps_the_team_when_a_purge_fails_and_a_retry_resumes() {
             purge(3),
             purge(4),
             purge(5),
+            release_computers(),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -540,8 +568,8 @@ async fn delete_team_without_a_cleanup_refuses_before_billing_or_the_row() {
 
     let error = cleanup_failure(service.delete_team(owner_receipt()).await);
 
-    let OwnedEntityCleanupError::ListBots { source } = &error else {
-        panic!("expected the bot listing to fail, got {error:?}");
+    let OwnedEntityCleanupError::Prepare { source } = &error else {
+        panic!("expected preflight to fail, got {error:?}");
     };
     assert_eq!(
         source.downcast_ref::<OwnedEntityCleanupUnwired>(),
@@ -611,5 +639,30 @@ async fn team_deleted_event_lists_the_bots_and_each_purged_entity_with_its_owner
                 "owner": "00000000-0000-0000-0000-000000000900",
             },
         ])
+    );
+}
+
+#[tokio::test]
+async fn namespace_preflight_failure_stops_before_any_team_side_effect_and_retry_resumes() {
+    let journal = Journal::default();
+    let cleanup = RecordingOwnedEntityCleanup::new(&journal)
+        .owning(TeamDeletionOwner::Team(TEAM_ID), [session(1), document(2)]);
+    cleanup.world.lock().unwrap().fail_prepare = true;
+    let (service, broker) = deleting_service(&journal, &cleanup);
+    assert!(matches!(
+        cleanup_failure(service.delete_team(owner_receipt()).await),
+        OwnedEntityCleanupError::Prepare { .. }
+    ));
+    assert!(journal.steps().is_empty());
+    assert!(broker.events().is_empty());
+    assert_eq!(cleanup.world.lock().unwrap().registry.len(), 2);
+    cleanup.world.lock().unwrap().fail_prepare = false;
+    service.delete_team(owner_receipt()).await.unwrap();
+    assert!(cleanup.world.lock().unwrap().registry.is_empty());
+    assert!(
+        journal
+            .steps()
+            .iter()
+            .any(|step| matches!(step, Step::DeleteTeam { .. }))
     );
 }

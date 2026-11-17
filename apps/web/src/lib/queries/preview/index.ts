@@ -3,8 +3,10 @@ export { defaultNameTransform } from './fetchers';
 export {
   getItemPreview,
   invalidatePreview,
+  setPreviewAppearance,
   setPreviewFileType,
   setPreviewName,
+  useItemIdentity,
   useItemPreview,
   useItemRawName,
 } from './preview';
