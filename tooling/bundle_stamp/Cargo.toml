@@ -1,0 +1,19 @@
+[package]
+edition = "2024"
+name = "bundle_stamp"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "bundle-stamp"
+path = "src/main.rs"
+
+[dependencies]
+bundle_identity = { path = "../../crates/bundle_identity" }
+clap = { workspace = true, features = ["derive", "env"] }
+rootcause = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

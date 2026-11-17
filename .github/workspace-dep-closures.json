@@ -2862,6 +2862,13 @@
       "crates/broadcast",
       "crates/workspace-hack"
     ],
+    "bundle_identity": [
+      "crates/bundle_identity"
+    ],
+    "bundle_stamp": [
+      "crates/bundle_identity",
+      "tooling/bundle_stamp"
+    ],
     "cache-core": [
       "crates/bot_id",
       "crates/client/cache-core",
