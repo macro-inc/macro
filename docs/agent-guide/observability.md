@@ -373,6 +373,29 @@ flow node and carry `traceparent` to the backend. They hang under the flow
 watches the query. A refetch after the flow settled, and global background
 queries (pending sends, Command-K sources), start their own traces.
 
+### Request and response body timing
+
+HTTP client spans (`http <METHOD> <path>`, from `safeFetch`) end when the
+response headers arrive (`http.timing_scope=until_response_headers`), timed by
+`http.response_headers_ms`. `graphql.transport` ends there too, timed by
+`graphql.response_headers_ms`, except that a projection request's ends after
+the projection check (`graphql.response_inspection_ms`, which includes its
+body) and a legacy retry's after the retry's headers. The body is timed on its
+own, because on native it can take far longer than the headers: the Tauri HTTP
+plugin hands it to the WebView in chunks over IPC.
+
+| Attribute | Meaning |
+| --- | --- |
+| `http.body_ms`, `graphql.body_ms` | From the headers of the response the client returned (a legacy retry's, after one) until the first read of its body (`json()`, `text()`, `arrayBuffer()`, ...) settled. `safeFetch` reads JSON with `json()`, so this includes parsing; urql reads `text()` and parses afterwards. Only on `complete`, `error` and `aborted`. |
+| `http.body_outcome`, `graphql.body_outcome` | `complete`; `error` (the connection broke mid-body, or invalid JSON); `aborted` (the request's signal); `unread` (released without a read: an error status or a `HEAD` request `safeFetch` did not read, a response read only through a clone or its `body` stream, such as the presence coalescer's shared original); `incomplete` (a read still running 60 seconds after the headers); `stream` (`text/event-stream`, `multipart/*`, NDJSON: never timed, and the span is not held open); `empty` (a status without a body: 204, 304, ...). |
+
+The span keeps its end time and is exported once the body settles, at most 60
+seconds after the headers; its `<attribute>.end` copies (such as
+`frontend_instance_id.end`) are taken then. Only the first read is counted,
+never a clone's. Chart it from the `macro.web.http.body_ms` and
+`macro.web.graphql.body_ms` span-based metrics (`@http.body_outcome:complete`)
+or aggregate the indexed spans; the `perf-investigation` skill has the query.
+
 ### Boot (`app.boot`)
 
 Search `{ resource.service.name="web-app" && name="app.boot" }` after a cold
