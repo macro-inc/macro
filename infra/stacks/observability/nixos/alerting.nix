@@ -161,7 +161,8 @@ let
       title = "[PROD] ${check.title} (${severity})";
       condition = "C";
       for = "0s";
-      # The worker publishes only what happened; an idle minute has no data.
+      # Every counter is published each minute, so no data means the worker
+      # isn't publishing, or no samples for a percentile: nothing to judge.
       noDataState = "OK";
       execErrState = "Error";
       isPaused = false;
@@ -179,19 +180,52 @@ let
         __dashboardUid__ = emailFocus.dashboardUid;
         __panelId__ = toString check.panelId;
       };
+      # Each input queried alone and reduced to its one value (see
+      # email-focus.nix), then the check's value (B) and its threshold (C).
       data =
-        map (query: {
-          inherit (query) refId;
+        map (input: {
+          refId = "${input.id}_query";
           datasourceUid = "cloudwatch";
           relativeTimeRange = {
-            from = check.window;
+            from = check.window - 60;
             to = 0;
           };
-          model = removeAttrs query [ "hide" ];
-        }) check.queries
-        ++ expressions check.reducer condition;
+          model = emailFocus.query "prod" check.window input // {
+            refId = "${input.id}_query";
+          };
+        }) check.inputs
+        ++ map (input: {
+          refId = input.id;
+          datasourceUid = "__expr__";
+          relativeTimeRange = {
+            from = 0;
+            to = 0;
+          };
+          model = {
+            refId = input.id;
+            type = "reduce";
+            expression = "${input.id}_query";
+            reducer = "last";
+          };
+        }) check.inputs
+        ++ [
+          {
+            refId = "B";
+            datasourceUid = "__expr__";
+            relativeTimeRange = {
+              from = 0;
+              to = 0;
+            };
+            model = {
+              refId = "B";
+              type = "math";
+              expression = check.value;
+            };
+          }
+          (lib.last (expressions "last" condition))
+        ];
     };
-  focusRules = lib.concatMap (check: prodRulePairWith focusRule check) (emailFocus.checks "prod");
+  focusRules = lib.concatMap (prodRulePairWith focusRule) emailFocus.checks;
   dss = [
     (lokiQuery ''sum(count_over_time({service_name="cloud-storage-service",deployment_environment="dev"} |~ "(?i)\\berror\\w*" [5m]))'')
   ];

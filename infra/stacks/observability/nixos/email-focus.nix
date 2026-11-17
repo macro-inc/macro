@@ -3,88 +3,115 @@
 # graph cannot drift apart.
 #
 # The worker publishes the metrics to CloudWatch as `Macro/EmailFocus`, by
-# `Environment` (services/email_focus_worker/src/metrics.rs). Each check becomes
-# a critical and a warning rule (`<uid>-crit`, `<uid>-warn`) in the "Email
-# Focus" group and one panel. The rules notify through GoAlert and never page:
-# they tell whoever runs the rollout to hold the next step. There are no Datadog
+# `Environment` (services/email_focus_worker/src/metrics.rs), once a minute;
+# every counter goes out each minute, 0 when idle. Each check becomes a
+# critical and a warning rule (`<uid>-crit`, `<uid>-warn`) in the "Email Focus"
+# group and one panel. The rules notify through GoAlert and never page: they
+# tell whoever runs the rollout to hold the next step. There are no Datadog
 # copies; Grafana is where the rollout is watched.
 #
-# `queries` are CloudWatch queries; the one with refId "A" is what the rule
-# reduces and the panel draws, and the others are its inputs. `firesWhen`,
-# `warning`, `critical`, `window` (seconds) and `reducer` work as in
-# prod-alerts.nix.
+# A check reads its `inputs` over its last `window` seconds, one value each,
+# and combines them:
+# - A rule queries each input on its own (Grafana sends each alert query to
+#   CloudWatch separately, so CloudWatch metric math can't refer across them),
+#   reduces it, and computes `value`, a Grafana math expression over `$<id>`.
+#   Each query's period is the window and its range a minute shorter, so
+#   CloudWatch returns one datapoint covering the window: a longer range would
+#   add a partial bucket for the current minute.
+# - A panel draws `expression`, the same value in CloudWatch metric math over
+#   the inputs' ids, one point per window. A one-input check draws the input.
 let
   namespace = "Macro/EmailFocus";
 
-  # A worker metric over `period` seconds, as an input to metric math.
-  input = env: id: metricName: statistic: period: {
-    refId = id;
-    inherit
-      id
-      namespace
-      metricName
-      statistic
-      ;
-    region = "us-east-1";
-    dimensions.Environment = [ env ];
-    period = toString period;
-    matchExact = true;
-    metricQueryType = 0;
-    metricEditorMode = 0;
-    queryMode = "Metrics";
-    hide = true;
-  };
-  # The value a check reads: metric math over its inputs.
-  math = expression: period: {
-    refId = "A";
-    id = "a";
-    inherit expression;
-    region = "us-east-1";
-    period = toString period;
-    metricQueryType = 0;
-    metricEditorMode = 1;
-    queryMode = "Metrics";
-  };
-  # The value a check reads: one worker metric.
-  metric =
-    env: metricName: statistic: period:
-    input env "a" metricName statistic period
-    // {
-      refId = "A";
-      hide = false;
+  # One worker metric over `period` seconds. `id` names it in expressions, and
+  # starts lower case as CloudWatch requires.
+  query =
+    env: period:
+    {
+      id,
+      metricName,
+      statistic,
+    }:
+    {
+      refId = id;
+      inherit
+        id
+        namespace
+        metricName
+        statistic
+        ;
+      region = "us-east-1";
+      dimensions.Environment = [ env ];
+      period = toString period;
+      matchExact = true;
+      metricQueryType = 0;
+      metricEditorMode = 0;
+      queryMode = "Metrics";
     };
 
-  # A share of `calls`, in percent, and 0 when nothing was called. `failures`
-  # maps a query id (lower case first, as CloudWatch requires) to its metric.
-  failurePercent =
-    env: calls: failures: period:
-    let
-      ids = builtins.attrNames failures;
-    in
-    map (id: input env id failures.${id} "Sum" period) ids
-    ++ [
-      (input env "calls" calls "Sum" period)
-      (math "IF(calls > 0, 100 * (${builtins.concatStringsSep " + " (map (id: "FILL(${id}, 0)") ids)}) / calls, 0)" period)
-    ];
+  # The CloudWatch queries a panel draws for `check` in `env`.
+  panelQueries =
+    env: check:
+    if check ? expression then
+      map (input: query env check.window input // { hide = true; }) check.inputs
+      ++ [
+        {
+          refId = "A";
+          id = "value";
+          inherit (check) expression;
+          # Grafana's CloudWatch queries carry a statistic even for math.
+          statistic = "Sum";
+          region = "us-east-1";
+          period = toString check.window;
+          metricQueryType = 0;
+          metricEditorMode = 1;
+          queryMode = "Metrics";
+        }
+      ]
+    else
+      [ (query env check.window (builtins.head check.inputs) // { refId = "A"; }) ];
 
-  checks = env: [
+  # A worker metric for a context panel, every `period` seconds.
+  metric =
+    env: metricName: statistic: period:
+    query env period {
+      id = "a";
+      inherit metricName statistic;
+    }
+    // {
+      refId = "A";
+    };
+
+  checks = [
     {
       panelId = 1;
       uid = "email-focus-cost";
       title = "Email Focus cost per enrolled inbox per day";
       unit = "currencyUSD";
       window = 86400;
-      reducer = "last";
       firesWhen = "above";
       warning = 0.02;
       critical = 0.03;
-      queries = [
-        (input env "jev" "JevCostUsd" "Sum" 86400)
-        (input env "due" "DueDateCostUsd" "Sum" 86400)
-        (input env "enrolled" "EnrolledInboxes" "Maximum" 86400)
-        (math "IF(enrolled > 0, (FILL(jev, 0) + FILL(due, 0)) / enrolled, 0)" 86400)
+      inputs = [
+        {
+          id = "jev";
+          metricName = "JevCostUsd";
+          statistic = "Sum";
+        }
+        {
+          id = "due";
+          metricName = "DueDateCostUsd";
+          statistic = "Sum";
+        }
+        {
+          id = "enrolled";
+          metricName = "EnrolledInboxes";
+          statistic = "Maximum";
+        }
       ];
-      description = "Jev and the due date cost {{ humanize $values.B.Value }} dollars per enrolled inbox over the last day. The go/stop number is at most 0.03.";
+      value = "($jev + $due) / ($enrolled + ($enrolled == 0))";
+      expression = "(jev + due) / IF(enrolled > 0, enrolled, 1)";
+      description = "Jev and the due date cost {{ humanize $values.B.Value }} dollars per enrolled inbox over the last day. The go/stop number is at most 0.03. The day a rollout step's inboxes are backfilled costs more.";
     }
     {
       panelId = 2;
@@ -92,14 +119,28 @@ let
       title = "Email Focus classifier unavailable or rejecting";
       unit = "percent";
       window = 3600;
-      reducer = "last";
       firesWhen = "above";
       warning = 0.5;
       critical = 1;
-      queries = failurePercent env "ClassifierCalls" {
-        unavailable = "ClassifierUnavailable";
-        rejected = "ClassifierRejected";
-      } 3600;
+      inputs = [
+        {
+          id = "unavailable";
+          metricName = "ClassifierUnavailable";
+          statistic = "Sum";
+        }
+        {
+          id = "rejected";
+          metricName = "ClassifierRejected";
+          statistic = "Sum";
+        }
+        {
+          id = "calls";
+          metricName = "ClassifierCalls";
+          statistic = "Sum";
+        }
+      ];
+      value = "100 * ($unavailable + $rejected) / ($calls + ($calls == 0))";
+      expression = "IF(calls > 0, 100 * (unavailable + rejected) / calls, 0)";
       description = "{{ humanize $values.B.Value }}% of classifier calls in the last hour found it unavailable or were rejected. The go/stop number is under 1%. Unavailable threads are retried by the next sweep.";
     }
     {
@@ -108,11 +149,23 @@ let
       title = "Email Focus due dates failing";
       unit = "percent";
       window = 3600;
-      reducer = "last";
       firesWhen = "above";
       warning = 2.5;
       critical = 5;
-      queries = failurePercent env "DueDateCalls" { failures = "DueDateFailures"; } 3600;
+      inputs = [
+        {
+          id = "failures";
+          metricName = "DueDateFailures";
+          statistic = "Sum";
+        }
+        {
+          id = "calls";
+          metricName = "DueDateCalls";
+          statistic = "Sum";
+        }
+      ];
+      value = "100 * $failures / ($calls + ($calls == 0))";
+      expression = "IF(calls > 0, 100 * failures / calls, 0)";
       description = "{{ humanize $values.B.Value }}% of due date asks to the agent harness failed or timed out in the last hour. The go/stop number is under 5%. A thread whose ask failed is stored without a date.";
     }
     {
@@ -121,11 +174,17 @@ let
       title = "Email Focus mail waiting to be classified (p95)";
       unit = "s";
       window = 900;
-      reducer = "last";
       firesWhen = "above";
       warning = 60;
       critical = 120;
-      queries = [ (metric env "EventToClassifiedSeconds" "p95" 900) ];
+      inputs = [
+        {
+          id = "wait";
+          metricName = "EventToClassifiedSeconds";
+          statistic = "p95";
+        }
+      ];
+      value = "$wait";
       description = "The 95th percentile from an email event to its thread's classification was {{ humanize $values.B.Value }} s over 15 minutes. The go/stop number is under 2 minutes.";
     }
     {
@@ -134,12 +193,18 @@ let
       title = "Email Focus sweep running long";
       unit = "s";
       window = 7200;
-      reducer = "max";
       firesWhen = "above";
       warning = 900;
       critical = 1800;
-      queries = [ (metric env "SweepSeconds" "Maximum" 3600) ];
-      description = "A sweep took {{ humanize $values.B.Value }} s. The go/stop number is under 30 minutes; sweeps run hourly.";
+      inputs = [
+        {
+          id = "sweep";
+          metricName = "SweepSeconds";
+          statistic = "Maximum";
+        }
+      ];
+      value = "$sweep";
+      description = "A sweep in the last 2 hours took {{ humanize $values.B.Value }} s. The go/stop number is under 30 minutes; sweeps run hourly.";
     }
     {
       panelId = 6;
@@ -147,11 +212,17 @@ let
       title = "Email Focus sweeps failing";
       unit = "short";
       window = 7200;
-      reducer = "last";
       firesWhen = "above";
       warning = 0;
       critical = 1;
-      queries = [ (metric env "SweepFailures" "Sum" 7200) ];
+      inputs = [
+        {
+          id = "failures";
+          metricName = "SweepFailures";
+          statistic = "Sum";
+        }
+      ];
+      value = "$failures";
       description = "{{ humanize $values.B.Value }} sweeps failed in the last 2 hours. The go/stop number is none.";
     }
     {
@@ -160,12 +231,18 @@ let
       title = "Email Focus new inbox backfill time (p95)";
       unit = "s";
       window = 3600;
-      reducer = "last";
       firesWhen = "above";
       warning = 600;
       critical = 900;
-      queries = [ (metric env "BackfillFilledSeconds" "p95" 3600) ];
-      description = "The 95th percentile from an inbox being found in the rollout to its whole window filled was {{ humanize $values.B.Value }} s over the last hour. The go/stop number is under 15 minutes.";
+      inputs = [
+        {
+          id = "filled";
+          metricName = "BackfillFilledSeconds";
+          statistic = "p95";
+        }
+      ];
+      value = "$filled";
+      description = "The 95th percentile from an inbox joining the rollout to its whole window filled was {{ humanize $values.B.Value }} s over the last hour. The go/stop number is under 15 minutes. Inboxes the worker finds at its start are not timed.";
     }
     {
       panelId = 8;
@@ -173,11 +250,17 @@ let
       title = "Email Focus stale-thread read slow (p95)";
       unit = "s";
       window = 3600;
-      reducer = "last";
       firesWhen = "above";
       warning = 0.3;
       critical = 0.5;
-      queries = [ (metric env "StaleThreadsSeconds" "p95" 3600) ];
+      inputs = [
+        {
+          id = "read";
+          metricName = "StaleThreadsSeconds";
+          statistic = "p95";
+        }
+      ];
+      value = "$read";
       description = "The 95th percentile of one stale-thread page read was {{ humanize $values.B.Value }} s over the last hour. The go/stop number is under 500 ms; a slower read means the sweep and backfill load MacroDB.";
     }
     {
@@ -186,19 +269,25 @@ let
       title = "Email Focus worker restarting";
       unit = "short";
       window = 1800;
-      reducer = "last";
       firesWhen = "above";
       warning = 2;
       critical = 3;
-      queries = [ (metric env "WorkerStarts" "Sum" 1800) ];
-      description = "The worker started {{ humanize $values.B.Value }} times in 30 minutes: a crash loop. Deploys start it once or twice.";
+      inputs = [
+        {
+          id = "starts";
+          metricName = "WorkerStarts";
+          statistic = "Sum";
+        }
+      ];
+      value = "$starts";
+      description = "The worker started {{ humanize $values.B.Value }} times in 30 minutes: a crash loop. A deploy starts it once or twice.";
     }
   ];
 in
 {
   inherit
-    namespace
-    input
+    query
+    panelQueries
     metric
     checks
     ;

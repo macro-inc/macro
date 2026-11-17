@@ -46,9 +46,9 @@ let
     check: gridPos:
     lib.recursiveUpdate
       (timeseries check.panelId check.title
-        "${check.description} Rules ${check.uid}-warn (orange) and ${check.uid}-crit (red) read prod, on the ${check.reducer} over ${toString (check.window / 60)} minutes."
+        "${check.description} Each point covers ${toString (check.window / 60)} minutes, as rules ${check.uid}-warn (orange) and ${check.uid}-crit (red) read it in prod."
         check.unit
-        check.queries
+        (emailFocus.panelQueries env check)
         gridPos
       )
       {
@@ -81,7 +81,7 @@ let
     };
   };
 
-  checks = emailFocus.checks env;
+  inherit (emailFocus) checks;
   checksHeight = (builtins.length checks + 1) / 2 * 8;
   contextY = 1 + checksHeight + 1;
 
@@ -237,7 +237,7 @@ let
     timezone = "browser";
     refresh = "1m";
     time = {
-      from = "now-24h";
+      from = "now-2d";
       to = "now";
     };
     description = "The Email Focus rollout's go/stop numbers, from the worker's CloudWatch metrics (Macro/EmailFocus) in us-east-1. Hold the next rollout step while any is orange or red. Runbook: docs/runbooks/email-focus.md.";
