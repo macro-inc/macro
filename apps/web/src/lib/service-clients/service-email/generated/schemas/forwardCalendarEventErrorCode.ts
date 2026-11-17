@@ -17,4 +17,5 @@ export const ForwardCalendarEventErrorCode = {
   invalid_recipients: 'invalid_recipients',
   inbox_unavailable: 'inbox_unavailable',
   send_failed: 'send_failed',
+  confirmation_required: 'confirmation_required',
 } as const;

@@ -187,7 +187,10 @@ where
         )
         .route(
             "/record/{call_id}/link",
-            post(meetings::share::<S, Svc, Auth>),
+            post(meetings::share::<S, Svc, Auth>).layer(axum::middleware::from_fn_with_state(
+                state.authorization_state.clone(),
+                refuse_program_link::<Auth>,
+            )),
         )
         .route(
             "/{channel_id}",
@@ -486,6 +489,44 @@ fn credential_is_program(origin: &CredentialOrigin) -> bool {
             | CredentialOrigin::MacroApiJwt
             | CredentialOrigin::ScopedMacroApiJwt
     )
+}
+
+/// A new meeting link for a call lets anyone holding it join as a guest, so
+/// an agent's program (a credential signed for an agent or a routine run, or
+/// the code-mode header) or a bot never mints one; a person shares the call
+/// from Macro. A credential that does not verify is rejected here.
+async fn refuse_program_link<Auth: MacroAuthorizationService>(
+    State(authorization): State<MacroAuthorizationState<Auth>>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::extract::FromRequestParts as _;
+    let (mut parts, body) = request.into_parts();
+    let principal = match macro_authorization::OptionalMacroAuthorizationExtractor::<
+        Auth,
+        macro_authorization::AnyPrincipal,
+    >::from_request_parts(&mut parts, &authorization)
+    .await
+    {
+        Ok(extractor) => extractor.authorization,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let program = match &principal {
+        Some(macro_authorization::MacroAuthorization::User(user)) => {
+            macro_authorization::is_program_run(user.attribution(), &parts.headers)
+        }
+        Some(macro_authorization::MacroAuthorization::Bot(_)) => true,
+        _ => parts.headers.contains_key(CODE_EXECUTION_HEADER),
+    };
+    if program {
+        tracing::warn!("refused a meeting link to a program");
+        return CallError::Forbidden(
+            "An agent's program cannot make a meeting link for a call: anyone holding it can join as a guest. Tell the user to share the call from Macro.".to_string(),
+        )
+        .into_response();
+    }
+    next.run(axum::extract::Request::from_parts(parts, body))
+        .await
 }
 
 /// Start or join a channel call explicitly.

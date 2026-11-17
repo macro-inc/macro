@@ -126,24 +126,6 @@ for (const provider of PROVIDERS) {
       await expect.poll(read('Budget')).toBe(true);
     });
 
-    // Known bug (row-menu-dialogs-close-at-once), in some runs: a row's menu
-    // opened again while the entry picked before is still being saved is
-    // closed by that entry's own dismissal, so Unfavorite cannot be picked.
-    // Seen in two of three runs of the whole suite, and in none of sixteen
-    // runs of this test alone: `@sometimes`.
-    test("known bug: row-menu-dialogs-close-at-once: Unfavorite in a row's menu, right after Favorite @known-bug", {
-      tag: ['@known-bug', '@sometimes'],
-    }, async ({ page, mailbox }) => {
-      const ids = await deliverAll(mailbox, ['Agenda']);
-      await mailbox.open();
-      await expect.poll(() => rowIds(page)).toEqual([ids.Agenda]);
-      await rowMenu(page, ids.Agenda, /^Favorite/);
-      await expect.poll(() => favorites(mailbox)).toEqual([ids.Agenda]);
-      await rowMenu(page, ids.Agenda, /^Unfavorite/);
-      did('AL-080', 'F-074');
-      await expect.poll(() => favorites(mailbox)).toEqual([]);
-    });
-
     // When this fails, Favorite in the row's menu, in the command menu of a
     // selection or in the menu after an open thread's subject does not put
     // the thread among the user's favorites, or cannot take it out again;
@@ -154,10 +136,6 @@ for (const provider of PROVIDERS) {
     }) => {
       const ids = await deliverAll(mailbox, ['Agenda', 'Minutes', 'Budget']);
       const selected = page.getByText('1 selected', { exact: true });
-      // Agenda stays a favorite: taking it out again in the row's menu is
-      // the known bug above.
-      const besidesAgenda = async () =>
-        (await favorites(mailbox)).filter((id) => id !== ids.Agenda);
 
       await mailbox.open();
       await expect
@@ -166,6 +144,9 @@ for (const provider of PROVIDERS) {
       await rowMenu(page, ids.Agenda, /^Favorite/);
       did('AL-080', 'F-073');
       await expect.poll(() => favorites(mailbox)).toEqual([ids.Agenda]);
+      await rowMenu(page, ids.Agenda, /^Unfavorite/);
+      did('AL-080', 'F-074');
+      await expect.poll(() => favorites(mailbox)).toEqual([]);
 
       // Favoriting leaves the selection as it was, so the same selection
       // takes the thread out again.
@@ -173,12 +154,12 @@ for (const provider of PROVIDERS) {
       await page.getByRole('button', { name: /^Actions/ }).click();
       await commandAction(page, 'favorite', /^Favorite/);
       did('AL-608', 'F-073');
-      await expect.poll(besidesAgenda).toEqual([ids.Minutes]);
+      await expect.poll(() => favorites(mailbox)).toEqual([ids.Minutes]);
       await expect(selected).toBeVisible();
       await page.getByRole('button', { name: /^Actions/ }).click();
       await commandAction(page, 'favorite', /^Unfavorite/);
       did('AL-608', 'F-074');
-      await expect.poll(besidesAgenda).toEqual([]);
+      await expect.poll(() => favorites(mailbox)).toEqual([]);
 
       await toolbarButton(page, CLEAR).click();
       did('AL-407');
@@ -190,11 +171,10 @@ for (const provider of PROVIDERS) {
       await openFromList(page, ids.Budget, 'About Budget.');
       await titleMenu(page, 'Budget', 'Favorite');
       did('AL-613', 'F-073');
-      await expect.poll(besidesAgenda).toEqual([ids.Budget]);
+      await expect.poll(() => favorites(mailbox)).toEqual([ids.Budget]);
       await titleMenu(page, 'Budget', 'Unfavorite');
       did('AL-613', 'F-074');
-      await expect.poll(besidesAgenda).toEqual([]);
-      expect(await favorites(mailbox)).toEqual([ids.Agenda]);
+      await expect.poll(() => favorites(mailbox)).toEqual([]);
     });
   });
 }

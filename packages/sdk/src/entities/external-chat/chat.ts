@@ -207,7 +207,11 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     return ExternalChatUpload.from(this, record);
   }
 
-  /** Personal sessions and owner API credentials can send. Bots never send.
+  /** Send to the chat; an agent's program must quote the user's reply approving this send in `userConfirmation`, or it is refused (403).
+   *
+   * Write the message out, ask, and send only after the user says yes; the
+   * request that asked for the message is not the approval. Personal sessions
+   * and owner API credentials can send. Bots never send.
    * Preserve the idempotency key; uncertain outcomes are never automatically resent.
    * The server enforces one request per second per user.
    *
@@ -216,7 +220,12 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
    */
   async send(
     content: ExternalChatContent,
-    options: { idempotencyKey: string; replyTo?: ExternalChatMessage },
+    options: {
+      idempotencyKey: string;
+      replyTo?: ExternalChatMessage;
+      /** The user's own reply approving this send, quoted verbatim. Required from an agent's program. */
+      userConfirmation?: string;
+    },
   ): Promise<ExternalChatSend> {
     if (options.replyTo) this.assertChat(options.replyTo.chat);
     const message = match(content)
@@ -255,6 +264,7 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
           idempotencyKey: options.idempotencyKey,
           message,
           replyTo: options.replyTo?.id,
+          userConfirmation: options.userConfirmation,
         },
       }),
     );
