@@ -24,7 +24,8 @@ names, and routes calls back to the right server.
 
 ## Boundaries
 
-- Depends on: `ai_toolset`, `rmcp` (client feature).
+- Depends on: `ai_toolset`, `rmcp` (client feature), `genai_telemetry`
+  (trace context in `_meta`).
 - Used by: `agent_inmem`, `pipedream_mcp`.
 
 ## Recipes
@@ -47,6 +48,10 @@ names, and routes calls back to the right server.
 - `dispatch_tool_call` races the call against `request_context.cancel`: the
   agent loop waits for running tools on cancel, and a server may hold a call
   (owner approval). Dropping the rmcp call sends `notifications/cancelled`.
+- `ListedServer::trace_context`: `TraceContext::Propagate` puts the caller's
+  W3C context in each call's `_meta` (SEP-414 keys); only for a server we run
+  (`agent_inmem` marks the harness's `macro_internal`). Third-party servers
+  and every `ConnectedServer` get `Withhold`.
 
 ## Related
 
