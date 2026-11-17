@@ -549,7 +549,9 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    - **3c: own-member and agent APIs.** Add validation, CAS/idempotency, verified
      audit provenance, direct activation and bounded asynchronous count preview.
      Keep private controls independent of CRM viewing. Regenerate OpenAPI/storage
-     SDK outputs and record SDK coverage deferrals. Refuse activation on a false
+     SDK outputs and record SDK coverage deferrals. Replace the dormant
+     `PopulateCrmPolicy` email E2E deferral with a full-stack generation/retry
+     scenario before activation. Refuse activation on a false
      or unavailable flag; stored restrictions, inspection and withdrawal remain.
      Close the first-activation/bulk-deletion race before exposing activation:
      lock and revalidate live targets, and make teardown observe references

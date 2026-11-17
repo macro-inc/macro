@@ -305,6 +305,9 @@ shared with the web app's suite) and backend entry points second.
   `--known-bugs <dir>` (the results of the known-bug jobs), a scenario kept
   for a known bug that passes and is not under `[[intermittent_bug]]`.
   Without `--enforce` the same list is only reported.
+- `PopulateCrmPolicy` is listed for both providers but deferred until the
+  member-rule API initializes consent generations. Replace that deferral with a
+  full-stack generation/retry scenario before enabling selective contribution.
 - A new route, resolver, message type or provider method therefore needs,
   in the same change, a scenario that reaches it or an entry in
   `coverage/waivers.toml`; a new function needs a scenario, a row in
