@@ -34,6 +34,11 @@ pub struct OutlookCalendarLease {
     pub page_loaded: bool,
     /// Opaque current-page URL.
     pub page_cursor: Option<String>,
+    /// Whether the current page chain lists only this month and next
+    /// ([`OccurrenceRange::near_window`]): a calendar's first import reads
+    /// them before its whole window, so what the user looks at first arrives
+    /// first. Nothing counts as synced until the whole window is read.
+    pub near_window: bool,
     /// [`OutlookCalendarReader::READER_REVISION`] of the worker holding the
     /// lease, which every event it reads is stamped with.
     pub reader_revision: i16,
@@ -139,12 +144,14 @@ pub trait OutlookCalendarReader: Send + Sync + 'static {
         token: &str,
         binding: CalendarGrantBinding,
     ) -> impl Future<Output = Result<OutlookDiscovery, CalendarProviderError>> + Send;
-    /// Fetch one provider page without advancing any checkpoint.
+    /// Fetch one provider page without advancing any checkpoint. A `delta`
+    /// round reads the primary calendar's changes; any other lists every event
+    /// in the target's range.
     fn calendar_page(
         &self,
         token: &str,
         target: &ProviderCalendarTarget,
-        primary: bool,
+        delta: bool,
         cursor: Option<&str>,
     ) -> impl Future<Output = Result<OutlookCalendarPage, CalendarProviderError>> + Send;
     /// Refresh one event or complete recurring series, bounded to the target window.
@@ -265,6 +272,7 @@ impl<
             account_id = %lease.account_id,
             calendar_id = lease.target.as_ref().map(|target| tracing::field::display(target.calendar_id)),
             step = tracing::field::Empty,
+            near_window = tracing::field::Empty,
             provider_event_id = tracing::field::Empty,
             outcome = tracing::field::Empty,
             rejected_field = tracing::field::Empty,
@@ -356,14 +364,20 @@ impl<
                     OutlookCalendarProgress::Finish
                 } else {
                     span.record("step", "page");
+                    span.record("near_window", lease.near_window);
+                    let near;
+                    let (listed, delta) = if lease.near_window {
+                        near = ProviderCalendarTarget {
+                            range: OccurrenceRange::near_window(chrono::Utc::now()),
+                            ..target.clone()
+                        };
+                        (&near, false)
+                    } else {
+                        (target, lease.is_primary)
+                    };
                     match self
                         .provider
-                        .calendar_page(
-                            &token,
-                            target,
-                            lease.is_primary,
-                            lease.page_cursor.as_deref(),
-                        )
+                        .calendar_page(&token, listed, delta, lease.page_cursor.as_deref())
                         .await
                     {
                         Ok(page) => OutlookCalendarProgress::Page(page),

@@ -211,6 +211,14 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                 }
                 if let Some(next) = state.next_page {
                     sqlx::query!("UPDATE calendar_outlook_work SET page_cursor=$2,next_page=NULL,page_loaded=false WHERE id=$1",lease.id,next).execute(&mut *tx).await.map_err(report)?;
+                } else if lease.near_window {
+                    // This month and next are imported. The whole window is
+                    // listed next in a scan of its own, so an event deleted
+                    // since its near-window read is retired at the end. The
+                    // calendar stays unsynced, and its account syncing, until
+                    // that scan finishes.
+                    sqlx::query!("UPDATE calendar_outlook_work SET page_cursor=NULL,next_page=NULL,terminal_cursor=NULL,page_loaded=false,visited_pages='{}',scan_id=$2,whole_window_scan_id=$2 WHERE id=$1",
+                        lease.id,Uuid::now_v7()).execute(&mut *tx).await.map_err(report)?;
                 } else {
                     if lease.is_primary && state.terminal_cursor.is_none() {
                         return Err(rootcause::report!(
@@ -322,7 +330,8 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             ORDER BY due.next_run_at,due.calendar_id NULLS FIRST LIMIT 1 FOR UPDATE OF w SKIP LOCKED)
             UPDATE calendar_outlook_work w SET lease_id=$1,lease_until=now()+interval '3 minutes'
             FROM candidate,calendar_accounts a,email_links l WHERE w.id=candidate.id AND a.id=w.account_id AND l.id=a.email_link_id
-            RETURNING w.id,w.account_id,w.calendar_id,w.sync_generation,w.grant_generation,w.cursor,w.starts_at,w.ends_at,w.pending_ids,w.page_loaded,w.page_cursor,a.owner_id,l.id AS link_id,l.email_address::text AS "email_address!",l.fusionauth_user_id"#,lease_id).fetch_optional(&mut *tx).await.map_err(report)?;
+            RETURNING w.id,w.account_id,w.calendar_id,w.sync_generation,w.grant_generation,w.cursor,w.starts_at,w.ends_at,w.pending_ids,w.page_loaded,w.page_cursor,
+                w.full_scan AND w.whole_window_scan_id IS DISTINCT FROM w.scan_id AS "near_window_pending!",a.owner_id,l.id AS link_id,l.email_address::text AS "email_address!",l.fusionauth_user_id"#,lease_id).fetch_optional(&mut *tx).await.map_err(report)?;
         let Some(row) = row else {
             log.commit(tx).await?;
             return Ok(None);
@@ -338,9 +347,9 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             email_address: row.email_address,
             provider: CalendarProvider::Outlook,
         };
-        let (target, is_primary) = if let Some(id) = row.calendar_id {
+        let (target, is_primary, near_window) = if let Some(id) = row.calendar_id {
             let c = sqlx::query!(
-                "SELECT provider_calendar_id,access_role,is_primary FROM calendars WHERE id=$1",
+                r#"SELECT provider_calendar_id,access_role,is_primary,synced_at IS NULL AS "unsynced!" FROM calendars WHERE id=$1"#,
                 id
             )
             .fetch_one(&mut *tx)
@@ -365,9 +374,13 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                     },
                 }),
                 c.is_primary,
+                // A first import lists this month and next before the whole
+                // window: a calendar never synced, in a scan from scratch
+                // that has not listed them yet.
+                c.unsynced && row.near_window_pending,
             )
         } else {
-            (None, false)
+            (None, false, false)
         };
         sqlx::query!("UPDATE calendar_accounts SET sync_status=CASE WHEN last_synced_at IS NULL OR sync_status='reauth_required' THEN 'syncing' ELSE sync_status END WHERE id=$1",row.account_id).execute(&mut *tx).await.map_err(report)?;
         log.commit(tx).await?;
@@ -384,6 +397,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             pending_ids: row.pending_ids,
             page_loaded: row.page_loaded,
             page_cursor: row.page_cursor,
+            near_window,
             reader_revision,
         }))
     }
