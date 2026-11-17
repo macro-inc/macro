@@ -144,10 +144,12 @@ export const organise = {
       surface: 'SL-25',
       fn: ['F-084'],
       action: 'Add tag (tag picker)',
-      trigger: 'context menu item (single row)',
+      trigger:
+        'context menu item (single row): opens a submenu with the tag picker',
       source: [
         'src/features/soup/createSoupEntityActions.ts',
         'src/features/soup/SoupEntityContextMenu.tsx',
+        'src/features/property/tags/EntityTagSubmenu.tsx',
       ],
       viewports: ['desktop'],
       note: 'the tag picker is only given to the context menu, not the phone drawer',
@@ -639,9 +641,12 @@ export const organise = {
       id: 'AL-615',
       surface: 'SL-31',
       fn: ['F-084'],
-      action: 'Add tag',
-      trigger: 'title menu',
-      source: ['src/components/app/split-layout/components/SplitFileMenu.tsx'],
+      action: 'Add tag (tag picker)',
+      trigger: 'title menu: opens a submenu with the tag picker',
+      source: [
+        'src/components/app/split-layout/components/SplitFileMenu.tsx',
+        'src/features/property/tags/EntityTagSubmenu.tsx',
+      ],
     },
     {
       id: 'AL-616',

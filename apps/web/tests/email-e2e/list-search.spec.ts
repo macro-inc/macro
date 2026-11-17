@@ -63,6 +63,13 @@ for (const provider of PROVIDERS) {
       await page.keyboard.press('Escape');
       did('AL-017');
       await expect(field).not.toBeFocused();
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => document.activeElement?.hasAttribute('data-split-id') ?? false
+          )
+        )
+        .toBe(true);
       await expect(field).toHaveValue('zeppelin');
       await expect(page.getByText('No results for "zeppelin"')).toBeVisible();
 

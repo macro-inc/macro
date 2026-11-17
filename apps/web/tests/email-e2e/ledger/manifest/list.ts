@@ -359,9 +359,12 @@ export const list = {
       id: 'AL-017',
       surface: 'SL-18',
       fn: ['F-050'],
-      action: 'leave search field back to list',
+      action: 'leave search field back to list, with the search kept',
       trigger: 'Escape in search field',
-      source: ['src/features/email-view/components/EmailHeader.tsx'],
+      source: [
+        'src/features/email-view/components/EmailHeader.tsx',
+        'src/components/view-shell/list-search-keys.ts',
+      ],
     },
     {
       id: 'AL-018',

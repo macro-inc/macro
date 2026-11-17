@@ -114,6 +114,7 @@ for (const provider of PROVIDERS) {
         .toEqual(expect.arrayContaining(Object.values(ids)));
       await openFromList(page, ids.Agenda, 'About Agenda.');
       await titleMenu(page, 'Agenda', /^Move to folder/);
+      did('AL-155');
       await pickFolder(page, 'Receipts', /^New folder/);
       await expect.poll(folder(ids.Agenda)).toBe('Receipts');
 
@@ -121,7 +122,6 @@ for (const provider of PROVIDERS) {
       await backToList(page);
       await openFromList(page, ids.Minutes, 'About Minutes.');
       await titleMenu(page, 'Minutes', /^Move to folder/);
-      did('AL-155');
       await pickFolder(page, 'Receipts', /^Receipts/);
       await expect.poll(folder(ids.Minutes)).toBe('Receipts');
       // Both went to the one folder: the second picked it, not a new one.
