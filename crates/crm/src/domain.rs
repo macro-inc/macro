@@ -9,6 +9,10 @@ pub mod email_privacy;
 #[cfg(feature = "ports")]
 pub mod email_rules;
 
+/// Consent-generation storage for policy APIs and background work.
+#[cfg(feature = "ports")]
+pub mod email_policy;
+
 /// Static list of generic/personal email-provider domains to exclude
 /// from CRM populate
 #[cfg(feature = "ports")]

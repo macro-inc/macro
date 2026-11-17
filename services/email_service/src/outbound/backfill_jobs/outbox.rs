@@ -129,7 +129,7 @@ impl CrmOutboxTransaction for PgOutboxTransaction {
         Ok(sqlx::query_scalar!(
             r#"SELECT EXISTS (SELECT 1 FROM crm_email_consent c
                JOIN email_links l ON l.id = c.link_id AND l.macro_id = c.user_id AND l.is_primary AND l.deleting_at IS NULL
-               WHERE c.team_id = $1 AND c.user_id = $2 AND c.enabled) AS "enabled!""#,
+               WHERE c.team_id = $1 AND c.user_id = $2 AND (c.enabled OR c.selected_enabled)) AS "enabled!""#,
             row.team_id,
             row.user_id
         )

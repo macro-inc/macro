@@ -28,6 +28,8 @@ pub mod s3_upload_url;
 #[cfg(feature = "outbound")]
 pub mod s3_utf8_object_reader;
 #[cfg(feature = "outbound")]
+pub mod scan_state_file;
+#[cfg(feature = "outbound")]
 pub mod sync_service_probe;
 
 #[cfg(feature = "purge")]
