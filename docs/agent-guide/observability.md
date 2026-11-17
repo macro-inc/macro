@@ -202,6 +202,15 @@ trace covers an email event from its Kafka publish to the browser's read:
 | `connection_gateway.websocket_send` | The frame leaving the gateway. |
 | `email.focus.refresh` | The browser's read after a push, joined through the push's `traceparent`. A read after a reconnect starts its own trace. `email.focus.threads` is the list's size. |
 
+Backfills have their own traces. Every minute `email_focus.enrollment_scan`
+reads each connected inbox's place in the rollout (`inboxes`, `enrolled`,
+`unknown`). An enrolled inbox the worker hasn't filled since it started gets
+`email_focus.backfill` (`link_id`, `candidates`, `classified`,
+`stopped_early`) twice: its last 3 days, then the window, with a
+`classify_thread` child per thread (its mail reads, `jev.evaluate` and `save`). The log line
+"focus backfill pass finished" carries `pass`, `waited_secs` (found to started),
+`took_secs` and `since_found_secs`, the time from being found to the pass's end.
+
 ## Agent sessions
 
 A session's lifetime is reconstructable from these spans. All of them carry
