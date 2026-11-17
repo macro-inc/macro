@@ -29,6 +29,9 @@ export function createContactRecipientSource(
       excluded: exclusions.native(),
       senderDomain: input.senderDomain(),
     }),
+    // Roster members beyond the native budget never count toward the bound.
+    eligible: (user) =>
+      !exclusions.ids().has(user.id) && !isSecondaryInbox(user.id),
   });
   return {
     items: createMemo(() =>

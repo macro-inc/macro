@@ -54,7 +54,10 @@ function overlappingPage(
   };
 }
 
-function mountList(reader: typeof readContactDirectory) {
+function mountList(
+  reader: typeof readContactDirectory,
+  eligible?: (user: { id: string }) => boolean
+) {
   const client = new QueryClient();
   const [search, setSearch] = createSignal('');
   let list: ReturnType<typeof createContactDirectoryList> | undefined;
@@ -63,7 +66,7 @@ function mountList(reader: typeof readContactDirectory) {
       () => ({ userId: VIEWER }),
       reader,
       () => true,
-      { search, debounceMs: 0 }
+      { search, debounceMs: 0, eligible }
     );
     return null;
   }
@@ -200,5 +203,44 @@ it('keeps listed rows without a continuation while a contact change re-reads pag
     person(4).id,
   ]);
   expect(list().data()?.nextCursor).not.toBeNull();
+  client.clear();
+});
+
+it('starts at page one when the search returns to an earlier input before the other lands', async () => {
+  vi.useFakeTimers();
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) => {
+      // The other search never answers, as a slow read would not in time.
+      if (request.query === 'person') await new Promise(() => {});
+      return overlappingPage(request);
+    });
+  const { client, list, setSearch } = mountList(reader);
+  await vi.advanceTimersByTimeAsync(0);
+  await list().loadNext();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ids(list())).toHaveLength(5);
+
+  setSearch('person');
+  await vi.advanceTimersByTimeAsync(0);
+  setSearch('');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ids(list())).toEqual([person(0).id, person(1).id, person(2).id]);
+  client.clear();
+});
+
+it('lists only eligible rows, so dropped rows never count toward the bound', async () => {
+  vi.useFakeTimers();
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) =>
+      overlappingPage(request)
+    );
+  const { client, list } = mountList(
+    reader,
+    (user) => user.id !== person(1).id
+  );
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ids(list())).toEqual([person(0).id, person(2).id]);
   client.clear();
 });

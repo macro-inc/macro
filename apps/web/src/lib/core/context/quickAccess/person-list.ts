@@ -39,6 +39,7 @@ export function createPersonList(options: {
       search: options.search,
       policy: options.policy,
       resetKey: options.resetKey,
+      eligible: (user) => !options.excluded(user.id),
       // Menus debounce their own query. Waiting again lands people after
       // every other source and moves the rows under the highlight.
       debounceMs: untrack(options.policy).mode === 'property' ? 200 : 0,

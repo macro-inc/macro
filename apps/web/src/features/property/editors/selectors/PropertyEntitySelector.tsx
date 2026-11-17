@@ -8,6 +8,7 @@ import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch } from '@core/util/freshSort';
 import { preserveOrderedWindow } from '@core/util/ordered-window';
+import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import {
@@ -527,6 +528,15 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const resultCount = () => sortedEntities().length + (customEmail() ? 1 : 0);
 
+  // Hold the row the user moved to by identity while pages are added around
+  // it; a new search releases it.
+  const highlight = createSelectionAnchor({
+    items: sortedEntities,
+    key: (entity) => entity.id,
+    scope: search,
+    selectedIndex,
+    setSelectedIndex,
+  });
   // A new search moves the highlight and the list to the top; a further page
   // listed below keeps both where the user put them.
   createEffect(
@@ -551,11 +561,24 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     })
   );
   const loadNext = () => fireAndForget(loadNextPages(), 'property-picker');
-  // A failed contact page is read again; a failed email page is the next
-  // page still to fetch.
+  // Read each failed source again: a failed later email page is the next one
+  // still to fetch, and a failed first page is read from the start.
+  const retryEmailPages = (query: {
+    data?: unknown[];
+    error: unknown;
+    fetchNextPage: () => Promise<unknown>;
+    refetch: () => Promise<unknown>;
+  }) => {
+    if (!query.error) return undefined;
+    return query.data?.length ? query.fetchNextPage() : query.refetch();
+  };
   const retryPages = () =>
     fireAndForget(
-      quickAccess.error() ? quickAccess.retry() : loadNextPages(),
+      Promise.all([
+        quickAccess.error() ? quickAccess.retry() : undefined,
+        needsEmailSearch() ? retryEmailPages(emailsQuery) : undefined,
+        emailSearchEnabled() ? retryEmailPages(emailSearchQuery) : undefined,
+      ]),
       'property-picker'
     );
   // Further pages load as the end of the list scrolls into view. With no rows
@@ -601,11 +624,13 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
       e.preventDefault();
       setSelectedIndex((prev) => (Math.min(prev, total - 1) + 1) % total);
+      highlight.hold();
     } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
       e.preventDefault();
       setSelectedIndex(
         (prev) => (Math.min(prev, total - 1) - 1 + total) % total
       );
+      highlight.hold();
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const idx = Math.min(selectedIndex(), total - 1);
@@ -701,6 +726,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                         onMouseEnter={() => {
                           if (!keyboardMode()) {
                             setSelectedIndex(index());
+                            highlight.hold();
                           }
                         }}
                       >

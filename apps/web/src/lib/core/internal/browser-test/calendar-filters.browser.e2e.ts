@@ -30,10 +30,10 @@ test('keeps selected emails and resolved labels across bounded pages, search and
   await scrollList(contacts);
   const nextPage = page.getByRole('menuitemcheckbox', { name: /Person 50$/ });
   await expect(nextPage).toBeAttached();
-  await scrollList(contacts, 150);
-  await expect(nextPage).toBeVisible();
+  await nextPage.scrollIntoViewIfNeeded();
+  await expect(nextPage).toBeInViewport();
   // The earlier contacts, selections included, stay listed above.
-  await scrollList(contacts, -5000);
+  await scrollList(nextPage, -5000);
   await expect(
     page.getByRole('menuitem', { name: 'Next contacts' })
   ).toHaveCount(0);
