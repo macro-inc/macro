@@ -159,7 +159,7 @@ async fn save_record(
     let grants = serde_json::to_value(&record.grants).map_err(|_| Error::Invalid)?;
     let totp_key_id = record.totp_key_id.map(|key| key.0);
     let changed=if let Some(expected_version)=expected_version {
-        sqlx::query!("UPDATE password_item_entities SET metadata=$3,version=$4,grants=$5,deleting=$7,revision=revision+1,totp_key_id=$8,cleanup_due_at=CASE WHEN $7 THEN COALESCE(cleanup_due_at,now()+interval '180 seconds') ELSE cleanup_due_at END WHERE team_id=$1 AND id=$2 AND version=$6 AND revision=$9 AND deleted_at IS NULL",record.metadata.team_id.0,record.metadata.id.0,metadata,record.metadata.version,grants,expected_version,record.deleting,totp_key_id,record.revision).execute(&mut **transaction).await
+        sqlx::query_file!("src/outbound/postgres/update_record.sql",record.metadata.team_id.0,record.metadata.id.0,metadata,record.metadata.version,grants,expected_version,record.deleting,totp_key_id,record.revision).execute(&mut **transaction).await
     }else{
         sqlx::query!("INSERT INTO password_item_entities(team_id,id,user_id,metadata,version,grants,deleting,totp_key_id,cleanup_due_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $7 THEN now()+interval '180 seconds' ELSE NULL END) ON CONFLICT(team_id,id) DO NOTHING",record.metadata.team_id.0,record.metadata.id.0,record.user_id.as_ref(),metadata,record.metadata.version,grants,record.deleting,totp_key_id).execute(&mut **transaction).await
     }.map_err(|_|Error::Unavailable)?;
