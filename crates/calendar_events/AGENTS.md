@@ -313,13 +313,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   word, until `inbox` names the addressed copy's inbox. The route cannot tell
   an inbox the user chose from one the agent picked, so the wording is the
   only guard against a guess. UpdateCalendarEvent and DeleteCalendarEvent check
-  every call; the update, invite-guests and delete routes check agent runs and
-  any request naming `inbox` through `CalendarCopyConfirmation`, answering 409
-  `copy_choice_required`. An agent run (`macro_authorization::is_agent_run`)
-  is a token with `agent_id` (in-app code mode) or a request carrying
-  `x-macro-code-execution`, which
-  `code_execution`'s bootstrap sets on every code-mode program's SDK requests,
-  public MCP clients' included. Code-mode agents never see the calendar tools
+  every call; the update, invite-guests and delete routes check every program
+  run (`macro_authorization::is_program_run`: a token signed for an agent or a
+  routine, owner routine steps included, or a request carrying
+  `x-macro-code-execution`, which `code_execution`'s bootstrap sets on every
+  code-mode program's SDK requests) and any request naming `inbox` through
+  `CalendarCopyConfirmation`, answering 409 `copy_choice_required`. The create
+  route refuses only agent runs (`is_agent_run`), so an owner routine step
+  creates events. Code-mode agents never see the calendar tools
   (`agent_code_mode::covered_by_code_sdk`), so the routes and the SDK docs are
   what reach them; the web, which opens one copy, sends no `inbox` and is not
   checked.
