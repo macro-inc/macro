@@ -156,7 +156,8 @@ for (const size of WIDTHS) {
               box = box.parentElement as HTMLElement;
             const style = getComputedStyle(box);
             return {
-              cut: box.scrollWidth > box.clientWidth,
+              // A box squeezed to nothing shows no text, cut or not.
+              cut: box.clientWidth > 0 && box.scrollWidth > box.clientWidth,
               ellipsis:
                 style.textOverflow === 'ellipsis' &&
                 !style.display.includes('flex') &&
