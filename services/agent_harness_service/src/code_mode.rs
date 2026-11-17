@@ -6,12 +6,46 @@ use agent_correlation::domain::{CorrelationRepository, SessionScope};
 use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, SignedCorrelation};
 use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use async_trait::async_trait;
-use code_execution::domain::{RunEnvironment, SdkEndpoints};
+use code_execution::domain::{Egress, RunEnvironment, SdkEndpoints};
+use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::{collections::BTreeMap, sync::Arc};
 use tokio_util::sync::CancellationToken;
 
+/// The flag that sends a user's runs through the host's forwarder.
+pub const EGRESS_PROXY_FLAG: &str = "enable-code-execution-egress-proxy";
+
+/// How a user's runs reach the SDK hosts: through the host's forwarder when
+/// [`EGRESS_PROXY_FLAG`] is on for them, else directly. Fail-closed: with no
+/// flag client, or when their flags can't be read, runs go directly, as
+/// before.
+#[derive(Clone)]
+pub struct EgressRollout<Flags = feature_flags::outbound::posthog::PostHogFeatureFlags>(
+    pub Option<Flags>,
+);
+
+impl<Flags: FeatureFlags> EgressRollout<Flags> {
+    /// The egress for runs acting as `user`.
+    pub async fn egress(&self, user: &MacroUserIdStr<'_>) -> Egress {
+        let Some(flags) = &self.0 else {
+            return Egress::Direct;
+        };
+        match flags.load(user).await {
+            Ok(snapshot) if snapshot.is_enabled(EGRESS_PROXY_FLAG) => Egress::Proxied,
+            Ok(_) => Egress::Direct,
+            Err(error) => {
+                tracing::warn!(
+                    ?error,
+                    "could not read the egress flag; the run goes direct"
+                );
+                Egress::Direct
+            }
+        }
+    }
+}
+
 pub struct RunCredentials {
+    pub egress: EgressRollout,
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub gate: Arc<dyn NativeToolGate>,
@@ -160,6 +194,7 @@ impl ExecutionCredentials for RunCredentials {
                 session_id: Some(identity.session.as_uuid()),
                 execution_id: Some(identity.execution.as_uuid()),
                 unattended: None,
+                egress: self.egress.egress(&actor).await,
             },
             acting_user: actor,
         })
@@ -173,6 +208,7 @@ impl ExecutionCredentials for RunCredentials {
 /// tools give. The MCP client asks the user before each tool call, so there is
 /// no owner gate.
 pub struct UserRunCredentials {
+    pub egress: EgressRollout,
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub endpoints: SdkEndpoints,
@@ -231,6 +267,7 @@ impl UserExecutionCredentials for UserRunCredentials {
             session_id: None,
             execution_id: None,
             unattended: None,
+            egress: self.egress.egress(user).await,
         })
     }
 }

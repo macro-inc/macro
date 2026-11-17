@@ -618,6 +618,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         (None, None),
     ] {
         let run = RunCredentials {
+            egress: EgressRollout(None),
             signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
             correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
             gate: Arc::new(Gate {
@@ -636,6 +637,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             "session run {scope:?}"
         );
         let run = UserRunCredentials {
+            egress: EgressRollout(None),
             signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
             correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
             endpoints: SdkEndpoints::default(),
@@ -650,4 +652,31 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         .unwrap();
         assert_eq!(signed(&run.token).as_deref(), name, "MCP run {scope:?}");
     }
+}
+
+/// Runs go through the forwarder only where the egress flag is on for the
+/// user they act as; with no flag client, the flag off, or the flags
+/// unreadable, they go directly.
+#[tokio::test]
+async fn the_egress_flag_fails_closed_to_direct() {
+    use code_execution::domain::Egress;
+    use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
+    let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let flags = |result: Result<FlagSnapshot, String>| {
+        let mut flags = FakeFeatureFlags::default();
+        flags.set(user.clone(), result);
+        EgressRollout(Some(flags))
+    };
+    let flag =
+        |on: bool| FlagSnapshot::new([(EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(on))]);
+    assert_eq!(flags(Ok(flag(true))).egress(&user).await, Egress::Proxied);
+    assert_eq!(flags(Ok(flag(false))).egress(&user).await, Egress::Direct);
+    assert_eq!(
+        flags(Err("PostHog is down".into())).egress(&user).await,
+        Egress::Direct
+    );
+    assert_eq!(
+        EgressRollout::<FakeFeatureFlags>(None).egress(&user).await,
+        Egress::Direct
+    );
 }

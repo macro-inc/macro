@@ -131,6 +131,12 @@ try {
   const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
+  // A proxied run reaches only its forwarder: a request to a host's base is
+  // sent to that service under the forwarder, longest base first. The
+  // forwarder, not this, marks it.
+  const forwarded = Object.entries(context.forwarder ?? {})
+    .map(([service, local]) => [context.hosts[service].replace(/\/$/, ""), local])
+    .sort(([left], [right]) => right.length - left.length);
   globalThis.fetch = (input, init) => {
     const request = new Request(input, init);
     // Every request to an SDK origin, whatever credential it carries.
@@ -147,6 +153,12 @@ try {
         const path = new URL(request.url).pathname;
         const read = routes.some(route => route.method === request.method && route.pattern.test(path) && !route.write);
         if (!read) return Promise.reject(new Error("A dry run doesn't send changes."));
+      }
+    }
+    for (const [base, local] of forwarded) {
+      const url = request.url;
+      if (url === base || url.startsWith(`${base}/`) || url.startsWith(`${base}?`)) {
+        return originalFetch(new Request(`${local}${url.slice(base.length)}`, request));
       }
     }
     return originalFetch(request);

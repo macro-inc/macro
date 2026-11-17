@@ -8,7 +8,7 @@ fn a_code_mode_program_or_an_agent_token_counts_as_an_agent_run() {
 
     assert!(
         is_agent_run(CredentialAttribution::Person, &program),
-        "a public MCP code-mode run"
+        "a request code mode marked, whatever its credential"
     );
     assert!(
         is_agent_run(CredentialAttribution::Agent, &browser),
