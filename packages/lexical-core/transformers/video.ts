@@ -1,5 +1,5 @@
 import type { ElementTransformer } from '@lexical/markdown';
-import type { ElementNode, LexicalNode } from 'lexical';
+import { $isParagraphNode, type ElementNode, type LexicalNode } from 'lexical';
 import { $createVideoNode, $isVideoNode, VideoNode } from '../nodes/VideoNode';
 import {
   replaceElementWithUnknownMention,
@@ -84,7 +84,13 @@ export const I_VIDEO: ElementTransformer = {
   dependencies: [VideoNode, UnknownMentionNode],
   type: 'element',
   regExp: /^<m-video>(.*?)<\/m-video>\s*$/,
-  export: (node: LexicalNode) => {
+  export: (block: LexicalNode) => {
+    // Import appends the video to its line's paragraph, and element
+    // transformers see only that paragraph.
+    const node =
+      $isParagraphNode(block) && block.getChildrenSize() === 1
+        ? block.getFirstChild()
+        : block;
     if (!$isVideoNode(node)) return null;
     if (node.getSrcType() === 'local') return null;
     if (!node.getUrl()) return null;

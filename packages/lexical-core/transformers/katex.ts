@@ -1,4 +1,5 @@
 import type {
+  ElementTransformer,
   MultilineElementTransformer,
   TextMatchTransformer,
 } from '@lexical/markdown';
@@ -53,6 +54,27 @@ export const I_EQUATION_NODE: TextMatchTransformer = {
       replaceTextWithUnknownMention(node, 'Unknown Equation');
     }
   },
+};
+
+/**
+ * A display equation at the top level of the document, as a `$$` block
+ * imports. Text-match transformers see only an element's children, so without
+ * this it exports as its bare LaTeX. It writes the same tag as
+ * `I_EQUATION_NODE`, which imports it back; this transformer imports nothing.
+ */
+export const I_BLOCK_EQUATION_NODE: ElementTransformer = {
+  dependencies: [EquationNode],
+  type: 'element',
+  regExp: /(?!)/,
+  export: (node) => {
+    if (!$isEquationNode(node)) return null;
+    const data = JSON.stringify({
+      equation: node.getEquation(),
+      inline: node.getInline(),
+    });
+    return `<${TAG_KATEX_EQUATION}>${data}</${TAG_KATEX_EQUATION}>`;
+  },
+  replace: () => false,
 };
 
 // External Inline Equation Node
