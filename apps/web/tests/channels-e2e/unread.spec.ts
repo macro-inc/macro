@@ -234,12 +234,15 @@ test('UNR-06 a muted channel shows a crossed bell and is not marked unread by ne
   await expect(row).toBeVisible();
   await expect(mutedBell(row)).toHaveCount(0);
 
-  await chooseFromRowMenu(
-    page,
-    row,
-    'Mute notifications',
-    'Until I turn it off'
-  );
+  // The submenu's entries are sometimes made again while it is open; the one
+  // with the keyboard is then gone, and Enter chooses nothing.
+  const mute = () =>
+    chooseFromRowMenu(page, row, 'Mute notifications', 'Until I turn it off');
+  await failsSometimes(async () => {
+    await mute();
+    await expect(mutedBell(row)).toBeVisible({ timeout: 5_000 });
+  });
+  if ((await mutedBell(row).count()) === 0) await mute();
   await expect(mutedBell(row)).toBeVisible();
 
   await ben.post(made.muted, 'while muted');
