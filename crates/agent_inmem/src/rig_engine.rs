@@ -167,26 +167,12 @@ where
             // the web, Macro's help) takes no account and waits for nobody,
             // but still asks the gate: a scoped session's gate refuses it.
             let spends_owner_access =
-                native && agent_egress::domain::approval::spends_owner_access("macro", tool_name);
-            if native && !spends_owner_access {
-                let verdict = check_unless_cancelled(
-                    self.gate.as_ref(),
-                    &request_context.cancel,
-                    self.session,
-                    tool_name,
-                    json,
-                )
-                .await;
-                if let NativeToolVerdict::Refuse(reason) = verdict {
-                    return Ok(Err(ai_toolset::ToolCallError {
-                        internal_error: anyhow::anyhow!("{tool_name} was not approved"),
-                        description: reason,
-                    }));
-                }
-            }
-            let arguments = if spends_owner_access {
-                let _waiting = self.awaiting.begin();
-                let verdict = if self.reviewed_tools.iter().any(|name| name == tool_name) {
+                agent_egress::domain::approval::spends_owner_access("macro", tool_name);
+            let arguments = if native {
+                let _waiting = spends_owner_access.then(|| self.awaiting.begin());
+                let verdict = if spends_owner_access
+                    && self.reviewed_tools.iter().any(|name| name == tool_name)
+                {
                     NativeToolVerdict::Run
                 } else {
                     check_unless_cancelled(
@@ -208,13 +194,17 @@ where
                         }));
                     }
                 }
-                match ai_toolset::actor::ToolActor::take(json) {
-                    Ok((_, arguments)) => arguments,
-                    Err(error) => {
-                        return Ok(Err(ai_toolset::ToolCallError {
-                            description: error.to_string(),
-                            internal_error: error.into(),
-                        }));
+                if !spends_owner_access {
+                    json.clone()
+                } else {
+                    match ai_toolset::actor::ToolActor::take(json) {
+                        Ok((_, arguments)) => arguments,
+                        Err(error) => {
+                            return Ok(Err(ai_toolset::ToolCallError {
+                                description: error.to_string(),
+                                internal_error: error.into(),
+                            }));
+                        }
                     }
                 }
             } else {

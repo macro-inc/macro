@@ -19,7 +19,8 @@ code, not in its prompt. The harness also signs the scope into the credential
 - `src/scope.rs`: session scopes and the requests each allows. `generation`:
   reads by method, its own writes, and `POST_READS`; `no_send` (a background
   run that sends nothing): anything but `SENDS`, the requests that reach
-  someone else or start work with the person's full access (agent sessions,
+  someone else, carry data out (web fetch and search), or start work with the
+  person's full access (agent sessions,
   session control, tool approvals, review decisions, running or rewriting
   chat tool calls, and agents, bots, the computers they run on and their
   credentials). The harness tests

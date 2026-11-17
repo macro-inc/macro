@@ -156,7 +156,8 @@ async fn a_generation_session_uses_only_code_and_finding_tools() {
 }
 
 /// The tools that use nobody's access (the web, Macro's help) are outside
-/// every scope too: a run that sends nothing could send data out in a URL.
+/// every scope, `NoSend` included: a run that sends nothing could send data
+/// out in a URL. The engine asks this gate about them (`GatedToolSet`).
 #[tokio::test]
 async fn a_scoped_session_uses_no_web_or_help_tool() {
     let gate = |scope| ScopedToolGate {
@@ -419,6 +420,7 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
             "agent-sessions",
             "harness",
             "/tool",
+            "/web/",
         ]
         .iter()
         .any(|word| text.contains(word))
