@@ -351,8 +351,9 @@ switches between a desktop `views/*-header.tsx` and a
 files are still in the baseline. A hook above the switch
 (`useAgentSessionHeader`) can hold the header's state and actions so both
 views list from the same source. The file blocks (image, video, code, PDF,
-canvas, slides, Word and the rest) and the chat block are at the same stage:
-each has `views/<block>-header.tsx`, `views/mobile/<block>-header.tsx`, and
+canvas, slides, Word and the rest), chat, project, call recording, spreadsheet
+and form are at the same stage: each has `views/<block>-header.tsx`,
+`views/mobile/<block>-header.tsx`, and
 `views/shared/<block>-header-parts.tsx`, which returns the header's actions by
 name. The entries of the split views are listed in
 `rules/ast-grep/tsx-no-device-composition.yml`.
