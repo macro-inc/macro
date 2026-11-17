@@ -51,3 +51,27 @@ fn policy_findings_become_located_errors() {
     );
     assert!(matches!(policy_diagnostics(b""), CompileError::Internal));
 }
+
+#[test]
+fn only_the_runtimes_own_fatal_lines_mean_out_of_memory() {
+    assert!(out_of_memory(b"Fatal error: exception Out_of_memory\n"));
+    assert!(out_of_memory(
+        b"some progress\nterminate called after throwing an instance of 'std::bad_alloc'\n  what():  std::bad_alloc\n"
+    ));
+    assert!(out_of_memory(
+        b"Fatal error: allocation failure during minor GC\n"
+    ));
+    // A type error on a line that holds the markers keeps its own error.
+    let type_error = b"File \"main.ml\", line 1, characters 14-29:\n1 | let x : int = \"Out of memory\"\n                  ^^^^^^^^^^^^^^^\nError: This constant has type string but an expression was expected of type int\n";
+    assert!(!out_of_memory(type_error));
+    let failwith = b"File \"main.ml\", line 2, characters 0-30:\n2 | failwith \"Fatal error: allocation failure std::bad_alloc\" + 1\nError: This expression has type 'a but an expression was expected of type int\n";
+    assert!(!out_of_memory(failwith));
+    assert_eq!(
+        diagnostics(compiler_diagnostics(
+            type_error,
+            Path::new("/nix/store/bundle")
+        ))[0]
+            .file,
+        Some("main.ml".into())
+    );
+}
