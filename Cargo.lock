@@ -6853,6 +6853,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "model_owner",
+ "model_user",
  "models_databases",
  "models_dcs",
  "models_email",
