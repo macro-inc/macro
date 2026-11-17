@@ -141,6 +141,14 @@ impl NativeToolGate for RecordingGate {
             }
         })
     }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
+    }
 }
 
 #[tokio::test]
@@ -585,6 +593,14 @@ impl NativeToolGate for SelectedActor {
     ) -> std::pin::Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
         Box::pin(async { NativeToolVerdict::RunAs(self.0.clone()) })
     }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
+    }
 }
 
 #[tokio::test]
@@ -636,6 +652,14 @@ impl NativeToolGate for HeldForOwner {
             self.held.notify_one();
             answer.await.unwrap()
         })
+    }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
     }
 }
 

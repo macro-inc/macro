@@ -37,14 +37,13 @@ pub trait NativeToolGate: Send + Sync + 'static {
     /// internal one (connected apps, custom servers, previews), at all? The
     /// egress proxy still resolves its account and approvals; this only
     /// refuses calls the session's scope never makes. `Some` is the refusal
-    /// the model is told.
+    /// the model is told. Required, so a gate that wraps another decides it
+    /// rather than letting every call through.
     fn refuse_remote_mcp<'a>(
         &'a self,
-        _session: AgentSessionId,
-        _tool: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
-        Box::pin(async { None })
-    }
+        session: AgentSessionId,
+        tool: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>>;
 }
 
 /// Lets every call through: tests, and tooling with no owner to ask.
@@ -59,5 +58,13 @@ impl NativeToolGate for UngatedNativeTools {
         _arguments: &'a serde_json::Value,
     ) -> Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
         Box::pin(async { NativeToolVerdict::Run })
+    }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _session: AgentSessionId,
+        _tool: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
     }
 }

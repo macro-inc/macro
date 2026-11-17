@@ -23,6 +23,14 @@ impl NativeToolGate for Gate {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async { self.verdict.clone() })
     }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
+    }
 }
 #[tokio::test]
 async fn owner_approval_is_required_before_credentials_and_cancel_skips_gate() {
@@ -107,6 +115,14 @@ impl NativeToolGate for Open {
         _: &'a serde_json::Value,
     ) -> Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
         Box::pin(async { NativeToolVerdict::Run })
+    }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
     }
 }
 
