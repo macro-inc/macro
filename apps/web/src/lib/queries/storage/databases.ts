@@ -1,7 +1,5 @@
 /** Database schemas and the typed ops that change them and their rows; row reads run in `@queries/database-sql`. */
 import { analytics } from '@app/lib/analytics';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableDatabases } from '@core/constant/featureFlags';
 import type { DatabaseOp } from '@core/database-sql/generated/types';
 import { traceDatabaseOps } from '@core/database-sql/trace';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -33,19 +31,16 @@ const databaseListQueryOptions = {
 };
 
 export function useDatabasesQuery() {
-  const flag = useFeatureFlag(enableDatabases);
   return useQuery(() => ({
     ...databaseListQueryOptions,
-    enabled: flag().enabled,
   }));
 }
 
 /** Re-read discovery when its surface opens, including databases created by AI or other clients. */
 export function useDatabaseDiscoverySync(isActive: Accessor<boolean>) {
-  const flag = useFeatureFlag(enableDatabases);
   createEffect(
     on(
-      () => isActive() && flag().enabled,
+      () => isActive(),
       (active) => {
         if (!active) return;
         queryClient.invalidateQueries({

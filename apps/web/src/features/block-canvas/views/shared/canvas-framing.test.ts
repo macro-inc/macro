@@ -156,22 +156,45 @@ it('pans the text being typed up from behind the keyboard', () => {
   expect(editor.getCamera()).toEqual({ ...before, y: before.y - 186 });
 });
 
-/** Put the caret at this box on screen, inside `text`. */
-function caretAt(
-  text: ReturnType<typeof box>,
-  rect: { x: number; y: number; width: number; height: number }
-) {
-  const caret = new DOMRect(rect.x, rect.y, rect.width, rect.height);
+type Box = { x: number; y: number; width: number; height: number };
+
+/**
+ * Put a selection inside `text`: its moving end at `focus` on screen and,
+ * when it is not collapsed, the end it was dragged from at `anchor`, later in
+ * the text. The test DOM lays nothing out, so the boxes are given.
+ */
+function selectionAt(text: ReturnType<typeof box>, focus: Box, anchor?: Box) {
+  const rect = (at: Box) => new DOMRect(at.x, at.y, at.width, at.height);
+  const boxes = [rect(focus), ...(anchor ? [rect(anchor)] : [])];
+  const range = () => {
+    let from = 0;
+    let collapsed = false;
+    return {
+      endContainer: text.element,
+      setStart(_node: Node, offset: number) {
+        from = offset;
+      },
+      collapse() {
+        collapsed = true;
+      },
+      // A range's boxes run in the text's order, whichever way it was dragged.
+      getClientRects: () => (collapsed ? [boxes[from]] : boxes.slice(from)),
+      getBoundingClientRect: () => boxes[from],
+    };
+  };
   vi.spyOn(document, 'getSelection').mockReturnValue({
     rangeCount: 1,
-    getRangeAt: () => ({
-      endContainer: text.element,
-      getClientRects: () => [caret],
-      getBoundingClientRect: () => caret,
-    }),
+    focusNode: text.element,
+    focusOffset: 0,
+    getRangeAt: () => range(),
   } as unknown as Selection);
+  vi.spyOn(document, 'createRange').mockImplementation(
+    () => range() as unknown as Range
+  );
   cleanups.push(() => vi.restoreAllMocks());
 }
+const caretAt = (text: ReturnType<typeof box>, at: Box) =>
+  selectionAt(text, at);
 
 it('follows the caret of a line that grows past the right edge', () => {
   const { editor, typing } = setup();
@@ -199,6 +222,25 @@ it('leaves a long text where it is when the caret is already in view', () => {
   expect(editor.getCamera()).toEqual(before);
 
   caretAt(text, { x: 60, y: 200, width: 1, height: 30 });
+  document.dispatchEvent(new Event('selectionchange'));
+
+  expect(editor.getCamera()).toEqual(before);
+});
+
+it('follows the end of a selection that moves, not the end it was dragged from', () => {
+  const { editor, typing } = setup();
+  const before = editor.getCamera();
+  // A text far wider than the frame, selected backward from beyond its edge.
+  const text = box({ x: 20, y: 200, width: 900, height: 30 });
+  const grew = typing(text);
+  grew();
+  expect(editor.getCamera()).toEqual(before);
+
+  selectionAt(
+    text,
+    { x: 60, y: 200, width: 1, height: 30 },
+    { x: 800, y: 200, width: 1, height: 30 }
+  );
   document.dispatchEvent(new Event('selectionchange'));
 
   expect(editor.getCamera()).toEqual(before);

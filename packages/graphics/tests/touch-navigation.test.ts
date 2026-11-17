@@ -69,6 +69,14 @@ function setup(options: GraphicsInputOptions) {
     viewport.remove();
   });
   let now = 0;
+  // Events that arrive between two frames: the frame runs once, after them.
+  let batching = false;
+  const sameFrame = (events: () => void) => {
+    batching = true;
+    events();
+    batching = false;
+    runFrame();
+  };
   type PointerEventType =
     | 'pointerdown'
     | 'pointermove'
@@ -96,6 +104,7 @@ function setup(options: GraphicsInputOptions) {
     });
     Object.defineProperty(event, 'timeStamp', { value: now });
     viewport.dispatchEvent(event);
+    if (batching) return;
     runFrame();
     // With the timers faked, the frame after a move is theirs to run.
     if (type === 'pointermove' && vi.isFakeTimers())
@@ -111,7 +120,7 @@ function setup(options: GraphicsInputOptions) {
   ) => pointer('touch', id, type, x, y, elapsed);
   const pen = (type: PointerEventType, x: number, y: number) =>
     pointer('pen', 9, type, x, y, 10);
-  return { editor, viewport, finger, pen, detach };
+  return { editor, viewport, finger, pen, detach, sameFrame };
 }
 
 it('zooms around the midpoint of two fingers and leaves the selection alone', () => {
@@ -183,6 +192,25 @@ it('drops a marquee and restores what it had deselected', () => {
   finger(2, 'pointerdown', 400, 300);
   expect(editor.getSession().box).toBeUndefined();
   expect(editor.getSession().selectedIds).toEqual(['shape']);
+});
+
+it('keeps what the pair moved when a third finger lifts before the frame', () => {
+  const { editor, finger, sameFrame } = setup({ tool: () => 'select' });
+
+  finger(1, 'pointerdown', 100, 100);
+  finger(2, 'pointerdown', 200, 100);
+  finger(3, 'pointerdown', 300, 300);
+  const camera = editor.getCamera();
+
+  // The pair's move waits for the next frame. A finger that is not of the
+  // pair lifting meanwhile must not take that frame away.
+  sameFrame(() => {
+    finger(1, 'pointermove', 100, 140);
+    finger(2, 'pointermove', 200, 140);
+    finger(3, 'pointerup', 300, 300);
+  });
+
+  expect(editor.getCamera()).toEqual({ ...camera, y: camera.y + 40 });
 });
 
 it('ignores a finger left behind until every finger has lifted', () => {

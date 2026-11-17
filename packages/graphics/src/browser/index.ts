@@ -312,7 +312,10 @@ export function attachCameraControls(
       pressesAnotherItem(frame, point)
     )
       return drawn;
-    return touchHandle(frame, event) ?? drawn;
+    // Where the reach finds no handle there is none for a finger, whatever is
+    // drawn under it: the strips along a thin shape's edges cover its middle,
+    // which moves it.
+    return touchHandle(frame, event);
   };
   /**
    * A finger resizes or rotates once it moves. One that only taps near a handle

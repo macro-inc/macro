@@ -110,7 +110,6 @@ function mount(
       },
     },
   ];
-  context.presentation.signaturesEnabled = () => true;
   context.presentation.scheduleEnabled = false;
   context.presentation.isTouch = () => layout === 'mobile';
   context.presentation.isMobile = () => layout === 'mobile';

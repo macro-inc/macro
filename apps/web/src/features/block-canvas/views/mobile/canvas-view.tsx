@@ -275,10 +275,6 @@ function MobileCanvasLayout() {
   // A sheet takes the keyboard's focus with it, so each way out of the Attach
   // sheets hands it back to the canvas.
   const thenFocus = focusingAfter(view.focus);
-  const insertArtifact = () => {
-    const artifact = view.insert.artifact();
-    return artifact && thenFocus(artifact);
-  };
 
   return (
     <>
@@ -287,7 +283,7 @@ function MobileCanvasLayout() {
         location={view.insert.location()}
         onSelect={thenFocus(view.insert.select)}
         onUpload={thenFocus(view.insert.upload)}
-        onArtifact={insertArtifact()}
+        onArtifact={thenFocus(view.insert.artifact)}
         onClose={thenFocus(view.insert.close)}
       />
       <Show when={panelOpen()}>

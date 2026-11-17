@@ -5,6 +5,7 @@ use axum::extract::FromRef;
 use axum::extract::Request;
 use axum::http::Method;
 use axum::middleware::Next;
+use axum::response::IntoResponse as _;
 use github::inbound::github_sync_router::GithubSyncRouterState;
 use macro_axum_utils::compose_layers;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
@@ -115,8 +116,58 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 pub(crate) const ITEMS_PATH: &str = "/items";
 
 fn items_router(state: ApiContext) -> Router<ApiContext> {
-    soup::inbound::axum_router::soup_router(state.soup_router_state.clone())
-        .merge(graphql_soup::router())
+    hide_sign_in_emails_from_programs(
+        soup::inbound::axum_router::soup_router(state.soup_router_state.clone()),
+        &state,
+    )
+    .merge(refuse_programs(graphql_soup::router(), &state))
+}
+
+/// GraphQL lets a client pick its fields and aliases, so no response
+/// rewrite can find a sign-in email in it; programs use the SDK's REST item
+/// routes instead, which nothing program-side ever stops doing.
+fn refuse_programs<S: Clone + Send + Sync + 'static>(
+    router: Router<S>,
+    state: &ApiContext,
+) -> Router<S> {
+    let authorization = state.authorization_state.clone();
+    router.layer(axum::middleware::from_fn(
+        move |request: axum::extract::Request, next: axum::middleware::Next| {
+            let authorization = authorization.clone();
+            async move {
+                let (request, program) =
+                    macro_authorization::request_is_program(request, &authorization).await;
+                if program {
+                    tracing::warn!("refused GraphQL to a program");
+                    return (
+                        axum::http::StatusCode::FORBIDDEN,
+                        axum::Json(model::response::ErrorResponse {
+                            message: "GraphQL is not available to programs; use the SDK's workspace and search methods.".into(),
+                        }),
+                    )
+                        .into_response();
+                }
+                next.run(request).await
+            }
+        },
+    ))
+}
+
+/// A program reads Macro's own sign-in emails in workspace items and search
+/// results only redacted: one that read the code could sign in as the user.
+fn hide_sign_in_emails_from_programs<S: Clone + Send + Sync + 'static>(
+    router: Router<S>,
+    state: &ApiContext,
+) -> Router<S> {
+    let authorization = state.authorization_state.clone();
+    router.layer(axum::middleware::from_fn(move |request, next| {
+        macro_authorization::rewrite_program_json(
+            authorization.clone(),
+            request,
+            next,
+            models_email::sign_in_email::hide_sign_in_emails,
+        )
+    }))
 }
 
 fn api_router(state: ApiContext) -> Router {
@@ -241,7 +292,10 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/search",
-            search_service::search_router().with_state(SearchHandlerState::from_ref(&state)),
+            hide_sign_in_emails_from_programs(
+                search_service::search_router().with_state(SearchHandlerState::from_ref(&state)),
+                &state,
+            ),
         )
         .nest(
             "/sync_service",
@@ -442,8 +496,11 @@ fn api_router(state: ApiContext) -> Router {
                 )
                 .nest(
                     "/search",
-                    search_service::search_router()
-                        .with_state(SearchHandlerState::from_ref(&state)),
+                    hide_sign_in_emails_from_programs(
+                        search_service::search_router()
+                            .with_state(SearchHandlerState::from_ref(&state)),
+                        &state,
+                    ),
                 )
                 .nest(
                     "/sync_service",

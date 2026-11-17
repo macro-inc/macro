@@ -394,7 +394,6 @@ export interface EmailComposePresentation {
   isTouch: Accessor<boolean>;
   isMobile: Accessor<boolean>;
   scheduleEnabled: boolean;
-  signaturesEnabled: Accessor<boolean>;
 }
 
 /** A file stored as a Macro document, as a body link names it. */
@@ -423,7 +422,6 @@ export interface EmailEditorFiles {
 
 /** Opens a calendar event drafted from an email. */
 export interface EmailCalendarEvents {
-  enabled: Accessor<boolean>;
   open(email: { subject: string; guests: string[]; text: string }): boolean;
 }
 
