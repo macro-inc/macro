@@ -53,8 +53,15 @@ export function TaskBoardView(props: {
   ) => JSX.Element;
   ref?: (element: HTMLDivElement) => void;
 }) {
-  const { state, source, showTaskProject, setFacets, setState, calendar } =
-    useTasksView();
+  const {
+    state,
+    source,
+    showTaskProject,
+    setFacets,
+    setState,
+    calendar,
+    filterByAssignee,
+  } = useTasksView();
   const grouping = () => toTaskBoardGrouping(state.groupBy);
   const scope = () =>
     JSON.stringify([
@@ -136,6 +143,11 @@ export function TaskBoardView(props: {
               taskId={task().id}
               canEdit={!readOnly() && props.data.canEditProperty(task().id, id)}
               iconOnly={iconOnly}
+              onFilterByUser={
+                id === SYSTEM_PROPERTY_IDS.ASSIGNEES
+                  ? filterByAssignee
+                  : undefined
+              }
               dueDateUrgency={
                 id === SYSTEM_PROPERTY_IDS.DUE_DATE
                   ? taskDueDateUrgency(
