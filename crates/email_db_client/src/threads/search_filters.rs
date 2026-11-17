@@ -216,8 +216,8 @@ pub async fn calendar_thread_ids(
 
 /// Threads with a sent message in the given inboxes, newest first per inbox,
 /// at most `limit` of them. Each inbox is read in the order of the partial
-/// `idx_email_threads_sent_view` index, as the Email list's Sent view reads
-/// it, so the read stops at the limit.
+/// `idx_email_threads_sent_view_link_ts_id` index, as the Email list's Sent
+/// view reads it, so the read stops at the limit.
 #[tracing::instrument(skip(pool, link_ids), fields(link_count = link_ids.len()), err)]
 pub async fn sent_thread_ids(
     pool: &PgPool,

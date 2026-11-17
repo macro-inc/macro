@@ -121,7 +121,7 @@ per-entity-type search plus a unified search across them — mounted into
   inboxes, and searched by id (at most `MAX_SHARED_THREADS`); `email_thread_ids`
   narrow by id. Calendar only and `view` (Sent, Drafts) are `ThreadSet`
   allowlists read from the partial index each view reads
-  (`idx_email_threads_calendar_view`, `idx_email_threads_sent_view`,
+  (`idx_email_threads_calendar_view`, `idx_email_threads_sent_view_link_ts_id`,
   `idx_email_messages_drafts_view`), at most `MAX_THREAD_SET_ALLOWLIST` per set,
   past which the set is checked per hit; two sets intersect. Read, done
   (`inbox_visible`), notification state and attachment kinds can each cover
