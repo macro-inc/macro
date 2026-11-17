@@ -381,7 +381,7 @@ livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
-loro = "1.16.2"
+loro = "=1.17.1"
 lru = "0.16"
 md-5 = "0.10.6"
 mimalloc = { version = "0.1", default-features = false }

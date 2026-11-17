@@ -33,14 +33,16 @@ teammate's mailbox and restricts to threads involving any of these
 fully-qualified addresses. Each address is authorized against
 `crm_contacts` + `crm_companies` (contact must not be hidden, company
 must not be hidden, `email_sync` must be true).
-Mutually exclusive with `crm_domains`. */
+Mutually exclusive with `crm_domains`. Listing email only: search
+rejects a request that sets it with a 400. */
   crm_addresses?: string[];
   /** CRM-scoped domain filter. When non-empty, expands visibility to every
 teammate's mailbox and restricts to threads involving any of these
 domains (in any of sender/cc/bcc/recipient). Each domain is authorized
 against `crm_domains` + `crm_companies` (must exist for the caller's
 team, company must not be hidden, `email_sync` must be true).
-Mutually exclusive with `crm_addresses`. */
+Mutually exclusive with `crm_addresses`. Listing email only: search
+rejects a request that sets it with a 400. */
   crm_domains?: string[];
   /** Filter by whether the thread is done: true for threads out of the
 inbox (archived), false for threads still in it. This is the mailbox
@@ -65,7 +67,14 @@ caller can access" (soup expands to the full set at the router edge). */
   link_ids?: string[];
   /** Filter by email notification state. */
   notification_filters?: NotificationFilters;
-  /** A list of project ids to search within. Empty to ignore project filtering. */
+  /** Drive folder (project) ids to search within: threads filed in any of
+these folders. Besides the caller's own threads, it reaches every
+thread in a folder shared with the caller, whoever's inbox holds it,
+as the folder's list does. Search takes at most 50 folders and
+rejects more with a 400, and matches the query against at most 10,000
+of their threads in all; threads past that are not searched, unless
+`email_thread_ids` names them, and at most 10,000 named threads are
+searched in all. Empty to ignore project filtering. */
   project_ids?: string[];
   /** Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient. */
   recipients?: string[];
