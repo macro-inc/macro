@@ -46,6 +46,13 @@ Traces: see "Email Focus live updates" in `docs/agent-guide/observability.md`.
 ## Stopping the rollout
 
 Lower the `enable-email-focus` rollout percentage in PostHog; the same flag
-shows the tab. The worker remembers an owner in the rollout for up to an hour
-(`flag_enrollment.rs`), so it keeps classifying a removed owner's new mail for
-at most that long. Stored classifications stay.
+shows the tab. The worker evaluates the flag locally from definitions it
+fetches from PostHog every 5 minutes (`feature_flags::outbound::posthog_local`),
+so it keeps classifying a removed owner's new mail for at most about 5
+minutes. Stored classifications stay.
+
+If the worker can't fetch the definitions for an hour, or the flag gains a
+condition it can't evaluate locally (a cohort, variants, an unknown field),
+every owner reads as unknown and nothing is classified: the backfill's
+`EnrollmentUnknown` count rises and the worker logs the reason
+(`feature_flags.definitions_poll` spans, "can't be evaluated locally").
