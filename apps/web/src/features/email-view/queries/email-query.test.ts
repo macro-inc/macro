@@ -341,7 +341,7 @@ describe('buildEmailQuery', () => {
         makeGraphqlSoupInput(args).initial?.filters?.emailFilter
       );
 
-      expect(args.transport).toBe('graphql');
+      expect(args.transport).toBeUndefined();
       expect(args.body.emailView).toBe('all');
       for (const direction of ['recipient', 'cc']) {
         expect(tree).toContain(

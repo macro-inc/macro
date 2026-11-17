@@ -67,12 +67,13 @@ function setup(initialNotifiedSort = false) {
   mocks.client.mockReturnValue(client);
   const root = createRoot((dispose) => {
     cleanups.push(dispose, () => disposeChannelNotificationRefresh(client));
-    const [enabled, setEnabled] = createSignal(false);
     const [notifiedSort, setNotifiedSort] = createSignal(initialNotifiedSort);
     mocks.notifiedSort.mockImplementation(notifiedSort);
     const [state, setState] = createSignal<'unseen' | 'seen' | 'done'>();
     const [pending, setPending] = createSignal(false);
-    const [userId, setUserId] = createSignal<string | undefined>('viewer');
+    const [userId, setUserId] = createSignal<string | undefined>();
+    // GraphQL reads Home for a signed-in viewer; signed out, the REST list.
+    const setEnabled = (on: boolean) => setUserId(on ? 'viewer' : undefined);
     mocks.userId.mockImplementation(userId);
     mocks.legacyUnread.mockReturnValue(true);
     mocks.legacy.mockReturnValue({
@@ -83,7 +84,7 @@ function setup(initialNotifiedSort = false) {
         },
         get data() {
           if (pending()) throw new Error('Read paused initial Soup query');
-          if (enabled()) throw new Error('Read inactive full Soup query');
+          if (userId()) throw new Error('Read inactive full Soup query');
           return { entities: [] };
         },
       },
@@ -107,7 +108,7 @@ function setup(initialNotifiedSort = false) {
         },
       }),
     });
-    const unread = useHomeUnreadQuery(enabled);
+    const unread = useHomeUnreadQuery();
     return {
       unread,
       setEnabled,
@@ -187,7 +188,7 @@ describe('Home unread presence query', () => {
     expect(print(HomeUnreadPresenceDocument)).not.toContain('SoupItemFields');
   });
 
-  it('switches rollout paths without enabling or reading full GraphQL Soup', async () => {
+  it('switches between REST signed out and GraphQL signed in without reading full GraphQL Soup', async () => {
     const f = setup();
     expect(f.unread()).toBe(true);
     expect(f.queries()).toHaveLength(0);
@@ -219,10 +220,8 @@ describe('Home unread presence query', () => {
 
   it('waits for the viewer before querying GraphQL', async () => {
     const f = setup();
-    f.setUserId(undefined);
     // The legacy query waits for the viewer too, so it has no page yet.
     f.setPending(true);
-    f.setEnabled(true);
     expect(f.unread()).toBe(false);
     expect(f.queries()).toHaveLength(0);
     f.setPending(false);
@@ -233,7 +232,7 @@ describe('Home unread presence query', () => {
     );
   });
 
-  it('reads the updated-at GraphQL witness under notified-at sorting, and REST only without GraphQL', async () => {
+  it('reads the updated-at GraphQL witness under notified-at sorting, and REST only when signed out', async () => {
     const f = setup(true);
     expect(f.unread()).toBe(true);
     expect(mocks.legacyUnread).toHaveBeenCalledOnce();
