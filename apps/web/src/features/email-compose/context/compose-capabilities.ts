@@ -466,6 +466,8 @@ export interface ComposeNoticeOptions {
     kind?: 'undo' | 'open' | 'save';
     variant?: 'primary' | 'secondary';
   }[];
+  /** Runs once the notice closes, however it closes. */
+  onDismiss?: () => void;
 }
 export interface EmailComposeHost {
   focusSibling?: (direction: 'next' | 'prev') => boolean | void;

@@ -679,6 +679,75 @@ it('retires the scheduled notice when the thread view cancels the schedule', asy
   threadView.dispose();
 });
 
+/** Schedules a new message, which then shows its thread. */
+async function scheduleAndShowThread(
+  composeContext: ReturnType<typeof createComposeContext>,
+  sendTime: Date
+) {
+  const host = { showThread: vi.fn(), showDraft: vi.fn() };
+  const root = mountEmailComposer(composeContext, host);
+  root.edit('Schedule from the thread');
+  root.state.context.schedule.onSelect(sendTime);
+  root.state.context.onSend();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(host.showThread).toHaveBeenCalledExactlyOnceWith('thread');
+  root.dispose();
+  const scheduledNotice = vi
+    .mocked(composeContext.notices.feedback.success)
+    .mock.calls.find(([text]) => text === 'Email scheduled');
+  return { host, options: scheduledNotice?.[1] };
+}
+
+it('keeps its own schedule when the thread view reads the draft from before it', async () => {
+  const composeContext = createComposeContext();
+  const sendTime = new Date('2026-12-01T12:00:00Z');
+  const { host, options } = await scheduleAndShowThread(
+    composeContext,
+    sendTime
+  );
+
+  // The thread's read can predate the schedule this tab just made.
+  const threadView = mountEmailComposer(composeContext, host, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(threadView.state.context.schedule.confirmedTime()).toEqual(sendTime);
+  expect(threadView.state.context.deliveryState?.()).toBe('scheduled');
+  composeContext.setDraftLifecycle({
+    type: 'scheduled',
+    draftId: 'draft',
+    threadId: 'thread',
+    inboxId: 'inbox',
+    sendTime: sendTime.toISOString(),
+    observedAt: Date.now(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(composeContext.notices.feedback.alert).not.toHaveBeenCalled();
+  expect(composeContext.notices.feedback.dismiss).not.toHaveBeenCalled();
+
+  options?.actions?.find(({ kind }) => kind === 'undo')?.onClick();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.delivery.unschedule).toHaveBeenCalledOnce();
+  threadView.dispose();
+});
+
+it('reads the draft afresh once the scheduled notice has closed', async () => {
+  const composeContext = createComposeContext();
+  const { host, options } = await scheduleAndShowThread(
+    composeContext,
+    new Date('2026-12-01T12:00:00Z')
+  );
+  options?.onDismiss?.();
+
+  const threadView = mountEmailComposer(composeContext, host, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(threadView.state.context.schedule.state()).toEqual({
+    type: 'editing',
+    intent: { type: 'immediate' },
+  });
+  threadView.dispose();
+});
+
 it('preserves local intent on schedule failure without falling back to send', async () => {
   const composeContext = createComposeContext();
   const root = mountEmailComposer(composeContext);

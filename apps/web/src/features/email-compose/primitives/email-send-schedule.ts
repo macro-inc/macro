@@ -68,7 +68,10 @@ const sameTime = (left: Date, right: Date) =>
 
 // A schedule's notice outlives the composer that made it: showing the thread
 // mounts another composer for the same draft, which may cancel or deliver it.
-const scheduledNotices = new Map<string, { toastId: number | undefined }>();
+// That composer can read the draft from before the schedule, so while the
+// notice is open it starts from the time this tab scheduled.
+type ScheduledNotice = { toastId: number | undefined; sendTime: Date };
+const scheduledNotices = new Map<string, ScheduledNotice>();
 
 export function createEmailSendSchedule(options: {
   delivery: Pick<EmailDelivery, 'schedule' | 'unschedule' | 'archive'>;
@@ -109,11 +112,17 @@ export function createEmailSendSchedule(options: {
   }) => void;
 }) {
   const { delivery, notices } = options;
+  const initialDraftId = options.draftId() ?? undefined;
+  const initialScheduledTime =
+    options.initialScheduledTime ??
+    (initialDraftId
+      ? scheduledNotices.get(initialDraftId)?.sendTime
+      : undefined);
   const [state, setState] = createSignal<EmailScheduleState>(
-    options.initialScheduledTime
+    initialScheduledTime
       ? {
           type: 'scheduled',
-          confirmedTime: options.initialScheduledTime,
+          confirmedTime: initialScheduledTime,
           deliveryStatus: options.initialDeliveryStatus,
         }
       : { type: 'editing', intent: { type: 'immediate' } }
@@ -126,9 +135,7 @@ export function createEmailSendSchedule(options: {
   let deferredLifecycleObservation: EmailDraftLifecycleState | undefined;
   // The "Email scheduled" notice offers Undo only while that schedule stands.
   // Remember the draft it belongs to past a composer's session reset.
-  let scheduledDraftId = options.initialScheduledTime
-    ? (options.draftId() ?? undefined)
-    : undefined;
+  let scheduledDraftId = initialScheduledTime ? initialDraftId : undefined;
   const dismissScheduledNotice = () => {
     const draftId = scheduledDraftId ?? options.draftId();
     const notice = draftId ? scheduledNotices.get(draftId) : undefined;
@@ -415,7 +422,7 @@ export function createEmailSendSchedule(options: {
       try {
         // The title stays terse so it never truncates; the time is the subtext.
         let toastId: number | undefined;
-        let notice: { toastId: number | undefined } | undefined;
+        let notice: ScheduledNotice | undefined;
         let undoStarted = false;
         const onViewScheduled = options.onViewScheduled;
         const viewAction = onViewScheduled
@@ -481,9 +488,14 @@ export function createEmailSendSchedule(options: {
                 : "EEE, MMM d, yyyy 'at' h:mm a"
             )}`,
             ...(actions.length > 0 ? { actions, duration: 8_000 } : {}),
+            // A composer mounted after the notice closes reads the draft afresh.
+            onDismiss: () => {
+              if (notice && scheduledNotices.get(draftId) === notice)
+                scheduledNotices.delete(draftId);
+            },
           }
         );
-        notice = { toastId };
+        notice = { toastId, sendTime: requested };
         scheduledNotices.set(draftId, notice);
       } catch (error) {
         // Toast rendering is post-commit UI and cannot make a successful
