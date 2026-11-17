@@ -20,7 +20,6 @@ const host = vi.hoisted(() => ({
   createCanvasFile: vi.fn(async () => ({ error: 'offline' })),
   createCodeFileFromText: vi.fn(async () => err('offline')),
   toastFailure: vi.fn(),
-  projectFlag: (): boolean | undefined => true,
   carouselFlag: (): boolean | undefined => undefined,
 }));
 
@@ -50,18 +49,13 @@ vi.mock('@app/features/reminders/reminder-composer', () => ({}));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
     enabled:
-      flag.key === 'enable-carousel-create-menu'
-        ? host.carouselFlag() === true
-        : flag.key === 'enable-projects' && host.projectFlag() === true,
-    loading: flag.key === 'enable-projects' && host.projectFlag() === undefined,
+      flag.key === 'enable-carousel-create-menu' &&
+      host.carouselFlag() === true,
   }),
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  isFeatureEnabled: (flag: { key: string }) =>
-    flag.key === 'enable-databases' ||
-    flag.key === 'enable-forms' ||
-    (flag.key === 'enable-projects' && host.projectFlag() === true),
+  isFeatureEnabled: () => false,
 }));
 vi.mock('@block-md/observability', () => ({}));
 vi.mock('@channel/CreateChannelModal', () => ({}));
@@ -115,7 +109,6 @@ import {
 } from './Launcher';
 
 beforeEach(() => {
-  host.projectFlag = () => true;
   host.carouselFlag = () => undefined;
 });
 
