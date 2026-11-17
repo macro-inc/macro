@@ -21,7 +21,10 @@ something selected, **Style**, **Duplicate**, **Delete** and **More**. The
 page's **New** button is hidden while a canvas is open. On an upright phone
 Rectangle/Ellipse and Arrow/Line/Connector each share a button: tap it again
 while it is selected to choose another. **Style** opens the inspector in a
-bottom sheet on a phone and toggles the side panel on a tablet. **More**, or a
+bottom sheet on a phone and toggles the side panel on a tablet. In the phone
+sheet Fill and Stroke each list their palette and canvas colours as a row of
+swatches, so a colour can be tried with the shape still in view; the swatch
+beside the hex field still opens the full picker. **More**, or a
 long press on the canvas with Select or Hand, opens the sheet of clipboard,
 group, arrange, select-all and delete actions; the long press selects what is
 under the finger first. **Attach** opens a sheet with Media, Upload media and

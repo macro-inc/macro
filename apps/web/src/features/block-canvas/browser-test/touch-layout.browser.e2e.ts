@@ -415,3 +415,40 @@ test('turning the device keeps what was in the middle in the middle', async ({
     .toBeLessThan(48);
   expect((await middleOfView(page)).scale).toBe(before.scale);
 });
+
+test('a fill is picked from swatches in the sheet, with the shape still in view', async ({
+  page,
+}) => {
+  const shape = await filledShape(page);
+  await page.touchscreen.tap(shape.x, shape.y);
+  await page.getByRole('button', { name: 'Style' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Canvas inspector' });
+  await settle(sheet);
+
+  const swatches = sheet.getByRole('group', { name: 'Fill colors' });
+  const accent = swatches.getByRole('button', { name: 'Fill: Accent' });
+  await accent.scrollIntoViewIfNeeded();
+  const box = await accent.boundingBox();
+  expect(box?.width).toBeGreaterThanOrEqual(44);
+  expect(box?.height).toBeGreaterThanOrEqual(44);
+  await accent.tap();
+
+  // The colour is on the shape, and nothing opened over it.
+  await expect(accent).toHaveAttribute('aria-pressed', 'true');
+  const fill = await page.evaluate(() => {
+    const item = window.canvasTouchFixture.editor.document.items.filled;
+    return item?.type === 'rectangle' ? item.appearance.fill : undefined;
+  });
+  expect(fill).toBe('var(--color-accent)');
+  await expect(sheet).toBeVisible();
+  const [sheetBox, bounds] = await Promise.all([
+    sheet.boundingBox(),
+    page.locator('[data-graphics-selection-bounds]').boundingBox(),
+  ]);
+  if (!sheetBox || !bounds) throw new Error('Nothing is selected');
+  expect(bounds.y + bounds.height).toBeLessThan(sheetBox.y);
+
+  // A custom colour is still one tap away.
+  await sheet.getByRole('button', { name: 'Fill color picker' }).tap();
+  await expect(page.getByRole('textbox', { name: 'hex' })).toBeVisible();
+});
