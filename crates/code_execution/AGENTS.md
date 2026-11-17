@@ -34,13 +34,13 @@ Every request to an SDK origin carries `x-macro-code-execution: 1`, whatever
 credential it carries. A program can drop it with a raw `fetch`, so a refusal
 that must hold reads the credential's signed claims too: every code-mode
 credential, public MCP's included, signs an agent or a routine
-(`macro_authorization::is_program_run`). APIs that ask a program to
-confirm what a person picks by opening something read it; the calendar
-mutation routes demand the copy's `inbox` from such requests, the calendar
-create route refuses them, and the email send and schedule routes refuse
-them unless the schedule quotes the user's approval
-(`macro_authorization::is_agent_run`). The email sign-in and the MCP OAuth
-broker take no credential, so the header is what refuses a program there.
+(`macro_authorization::is_program_run`), and the header never overrides a
+signed claim. The calendar mutation routes demand the copy's `inbox` from
+every program run; the calendar create route and the email send and schedule
+routes refuse agent runs (`macro_authorization::is_agent_run`) unless the send
+quotes the user's approval, so an owner routine step (signed `routine_id`, no
+agent) sends and creates. The email sign-in and the MCP OAuth broker take no
+credential, so the header is what refuses a program there.
 
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
 host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
