@@ -42,18 +42,14 @@ import { TAB_ICONS } from './task-view-icons';
 function TasksNavigation(props: {
   items: readonly TaskTabItem[];
   label: string;
+  onSelect(id: TasksTab): void;
 }) {
-  const { state, setTab } = useTasksView();
+  const { state } = useTasksView();
   const projectViews = useProjectSavedViews();
   const isActive = (id: TasksTab) =>
     !state.savedViewActive &&
     state.tab === id &&
     (!isProjectTab(id) || !projectViews?.selectedId());
-  const select = (id: TasksTab) => {
-    if (isProjectTab(id) && projectViews)
-      projectViews.selectScope(projectScopeForTab(id));
-    else setTab(id);
-  };
 
   return (
     <ViewSidebar.Nav aria-label={props.label}>
@@ -61,7 +57,7 @@ function TasksNavigation(props: {
         {(item) => (
           <ViewSidebar.Item
             active={isActive(item.id)}
-            onClick={() => select(item.id)}
+            onClick={() => props.onSelect(item.id)}
           >
             <ViewSidebar.Icon>
               <Dynamic component={TAB_ICONS[item.id]} class="size-4" />
@@ -163,13 +159,22 @@ export function TasksSidebar() {
     setSidebarSectionOpen,
   } = useTasksView();
   const params = useParams<{ projectId?: string }>();
+  const projectViews = useProjectSavedViews();
+  const selectTab = (id: TasksTab) => {
+    if (isProjectTab(id) && projectViews)
+      projectViews.selectScope(projectScopeForTab(id));
+    else setTab(id);
+  };
 
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
     ids: () => TASK_TABS.map((tab) => tab.id),
     activeId: () => state.tab,
-    setActiveId: (id) => setTab(id as TasksTab),
+    setActiveId: (id) => {
+      const tab = TASK_TABS.find((tab) => tab.id === id);
+      if (tab) selectTab(tab.id);
+    },
     // Tab cycles these tabs over a list and is focus order over an open project
     // or task. A pane's own override can't hold this: the sidebar remounts after
     // it whenever the view crosses its layout breakpoint.
@@ -199,6 +204,7 @@ export function TasksSidebar() {
         <TasksNavigation
           items={BUILT_IN_TASK_TABS}
           label={t('viewMenus.taskViews')}
+          onSelect={selectTab}
         />
         <CollapsibleSection.Root
           open={isSidebarSectionOpen('projects')}
@@ -225,6 +231,7 @@ export function TasksSidebar() {
             <TasksNavigation
               items={PROJECT_TABS}
               label={t('viewMenus.projectViews')}
+              onSelect={selectTab}
             />
             <ProjectSavedViewRows />
           </CollapsibleSection.Content>
