@@ -185,11 +185,11 @@ class TurnContext(unittest.TestCase):
         self.assertEqual(context["tools"]["eager"]["names"],
                          ["SearchTools", "ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"])
         self.assertEqual(context["tools"]["loaded"],
-                         [{"name": "mcp__GitHub__search_code", "step": 1, "via": "SearchTools"}])
+                         [{"name": "mcp__GitHub__search_code", "step": 1, "tool": 1, "via": "SearchTools"}])
         self.assertEqual(context["tools"]["deferred"], ["mcp__GitHub__get_me"])
         self.assertEqual([found["id"] for found in context["flags"]],
                          ["no-sdk-index", "guessed-sdk-methods", "failing-code"])
-        self.assertIn("steps 2, 3, 4", context["flags"][1]["text"])
+        self.assertEqual(context["flags"][1]["tools"], [2, 3, 4])
 
     def test_describing_the_sdk_clears_the_guessed_methods_flag(self):
         export = {"session": {"id": "s"}, "spans": spans_for_turn(2), "frames": [

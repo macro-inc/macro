@@ -82,7 +82,7 @@ def loaded_tools(steps):
         matches = result.get("results") if name == "SearchTools" else result.get("loaded")
         for match in matches or []:
             if isinstance(match, dict) and match.get("name"):
-                loaded.append({"name": match["name"], "step": step.number, "via": name})
+                loaded.append({"name": match["name"], "step": step.number, "tool": step.tool_number, "via": name})
     return loaded
 
 
@@ -177,22 +177,22 @@ def flags(turn, context, with_spans):
     if guessed and not described:
         found.append({
             "id": "guessed-sdk-methods", "level": "warn",
-            "text": f"DescribeCodeTools never called while {len(guessed)} ExecuteCode runs hit "
-                    f"`is not a function` (steps {', '.join(str(step.number) for step in guessed)})",
+            "text": f"DescribeCodeTools never called while {len(guessed)} ExecuteCode runs hit `is not a function`",
+            **where(guessed),
         })
 
     failures = {}
     for step in tools:
         if step.error:
-            failures.setdefault((step.name, step.error[:80]), []).append(step.number)
+            failures.setdefault((step.name, step.error[:80]), []).append(step)
     for (name, error), steps in failures.items():
         if len(steps) >= REPEATED_FAILURES:
             found.append({"id": "repeated-failure", "level": "warn",
-                          "text": f"{bare(name)} failed {len(steps)} times the same way: {error}"})
+                          "text": f"{bare(name)} failed {len(steps)} times the same way: {error}", **where(steps)})
     failed_code = [step for step in code_runs if step.error]
     if len(failed_code) >= REPEATED_FAILURES:
         found.append({"id": "failing-code", "level": "warn",
-                      "text": f"{len(failed_code)} of {len(code_runs)} ExecuteCode runs failed"})
+                      "text": f"{len(failed_code)} of {len(code_runs)} ExecuteCode runs failed", **where(failed_code)})
 
     sizes = [result_bytes(step) for step in tools]
     huge = [size for size in sizes if size >= HUGE_RESULT_BYTES]
@@ -217,6 +217,12 @@ def flags(turn, context, with_spans):
                           "text": f"{len(eager['names'])} eager tools named from source, "
                                   f"{count(eager['count'])} per span"})
     return found
+
+
+def where(steps):
+    """The steps a flag points at: step numbers (the markdown's) and tool
+    call numbers (the viewer's)."""
+    return {"steps": [step.number for step in steps], "tools": [step.tool_number for step in steps]}
 
 
 def count(value):

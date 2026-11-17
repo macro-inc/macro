@@ -129,6 +129,8 @@ class Step:
         self.arguments = None
         self.result = None
         self.span = None
+        # Its number among the turn's tool calls, the viewer's `#n`.
+        self.tool_number = None
 
     @property
     def duration(self):
@@ -181,6 +183,7 @@ def parse(frames, tool_spans=None):
             started = span["start_ms"] / 1000 if span else t
             step = Step(len(turn.steps) + 1, "tool", started, started - previous, tool_name(update))
             step.span = span
+            step.tool_number = sum(1 for each in turn.steps if each.kind == "tool") + 1
             raw = dict(update.get("rawInput") or {})
             step.code = raw.pop("source", None)
             step.arguments = raw
@@ -280,7 +283,7 @@ def render(export, eager_source=None):
     flagged = [(context["turn"], found) for context in contexts for found in context["flags"]]
     if flagged:
         out += ["", "## Flags", ""]
-        out += [f"- turn {number} `{found['id']}` ({found['level']}): {found['text']}" for number, found in flagged]
+        out += [f"- turn {number} `{found['id']}` ({found['level']}): {flag_text(found)}" for number, found in flagged]
     if totals.failed:
         out += ["", "## Failures", ""]
         for turn in turns:
@@ -388,8 +391,13 @@ def context_lines(context):
         ]
         lines.append(f"- largest prompt of {context['prompt']['calls']} model calls: {', '.join(parts)}")
     for found in context["flags"]:
-        lines.append(f"- **flag** `{found['id']}` ({found['level']}): {found['text']}")
+        lines.append(f"- **flag** `{found['id']}` ({found['level']}): {flag_text(found)}")
     return lines
+
+
+def flag_text(found):
+    steps = found.get("steps")
+    return found["text"] + (f" (steps {', '.join(str(step) for step in steps)})" if steps else "")
 
 
 def kilobytes(size):
