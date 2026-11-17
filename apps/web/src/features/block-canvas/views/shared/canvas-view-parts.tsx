@@ -55,6 +55,7 @@ import { ConnectorTargets } from '../connector-targets';
 import { CanvasDocumentView, CanvasMediaView } from '../embedded-items';
 import { CanvasTextContent } from '../text-content';
 import { TextEditingView } from '../text-editing-view';
+import { createCanvasFraming } from './canvas-framing';
 
 export type CanvasViewProps = {
   state: CanvasState;
@@ -76,10 +77,7 @@ function createCanvasView(props: CanvasViewProps) {
   const editor = state.editor;
   let host: HTMLDivElement | undefined;
 
-  const viewportSize = () => ({
-    width: host?.clientWidth ?? 0,
-    height: host?.clientHeight ?? 0,
-  });
+  const framing = createCanvasFraming(editor, () => host);
   /** The scene position under a point on the screen. */
   const worldPoint = (clientX: number, clientY: number) => {
     const rect = host?.getBoundingClientRect();
@@ -92,14 +90,9 @@ function createCanvasView(props: CanvasViewProps) {
     host
       ?.querySelector<HTMLElement>('[aria-label="Graphics canvas"]')
       ?.focus({ preventScroll: true });
-  const fit = () => editor.fitScene(viewportSize());
-  const fitSelection = () => editor.fitSelection(viewportSize());
+  const { fit, fitSelection } = framing;
   const zoom = (factor: number) => {
-    const { width, height } = viewportSize();
-    editor.zoomAt(
-      { x: width / 2, y: height / 2 },
-      editor.getCamera().scale * factor
-    );
+    editor.zoomAt(framing.centre(), editor.getCamera().scale * factor);
   };
 
   const selectedItem = () =>
@@ -184,12 +177,15 @@ function createCanvasView(props: CanvasViewProps) {
     editor,
     setHost(element: HTMLDivElement) {
       host = element;
+      framing.watchPresses(element);
     },
     host: () => host,
     worldPoint,
     focus,
     fit,
     fitSelection,
+    frameWithin: framing.frameWithin,
+    keepInFrame: framing.keepInFrame,
     zoom,
     selectedItem,
     selectedImage,
@@ -526,6 +522,7 @@ function Surface(props: {
               editor={editor}
               camera={state.camera}
               onFinish={view.finishText}
+              ref={view.keepInFrame}
             />
           )}
         </Show>

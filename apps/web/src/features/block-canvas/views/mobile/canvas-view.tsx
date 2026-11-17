@@ -5,6 +5,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { selectAllCommand } from '@macro-inc/graphics';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, type JSX, Show } from 'solid-js';
+import { onKeyboardClosed } from '../../primitives/on-keyboard-closed';
 import {
   CanvasViewParts,
   type CanvasViewProps,
@@ -18,6 +19,7 @@ import {
 import { MobileCanvasChrome } from './canvas-chrome';
 import { MobileCanvasInsertMenu } from './canvas-insert';
 import {
+  INSPECTOR_PANEL_CLEARANCE,
   MobileCanvasInspectorPanel,
   MobileCanvasInspectorSheet,
 } from './canvas-inspector';
@@ -63,6 +65,8 @@ const LONG_PRESS_REACH = 10;
  */
 function MobileCanvasBottomBar(props: {
   groupFaces: CanvasToolGroupFaces;
+  /** The side panel is showing, and takes its share of the canvas's width. */
+  panelOpen: boolean;
   styleOpen: boolean;
   onStyle: () => void;
   onView: () => void;
@@ -122,7 +126,10 @@ function MobileCanvasBottomBar(props: {
   );
 
   return (
-    <MobileCanvasChrome>
+    <MobileCanvasChrome
+      frame={view.frameWithin}
+      clearRight={props.panelOpen ? INSPECTOR_PANEL_CLEARANCE : undefined}
+    >
       <div
         ref={setBar}
         class="flex w-full flex-col items-center gap-(--mobile-chrome-gutter)"
@@ -189,6 +196,7 @@ function MobileCanvasLayout() {
   const groupFaces = createToolGroupFaces(state.tool);
   const hasSelection = () => state.selection().length > 0;
   const styleOpen = () => (isMobile() ? sheetOpen() : !panelCollapsed());
+  const panelOpen = () => !isMobile() && hasSelection() && !panelCollapsed();
   const toggleStyle = () => {
     if (isMobile())
       setSheetSelection(sheetOpen() ? undefined : state.selection());
@@ -207,6 +215,42 @@ function MobileCanvasLayout() {
     };
   };
 
+  // Closing the keyboard ends a text edit: nothing else would, and the text
+  // would sit there half-open until the next tap. The edit is committed and
+  // its text selected, as after a tap elsewhere.
+  const commitText = () => {
+    const draft = state.text.draft();
+    if (!draft) return;
+    state.text.finish();
+    state.chooseTool('select');
+    if (editor.document.items[draft.id]) editor.select(draft.id);
+  };
+  // A phone's Done button takes the focus from the text, to nowhere. Focus
+  // that moves to the canvas or to a control is that press's business, and it
+  // commits the text itself.
+  const commitTextLeftByKeyboard = (event: FocusEvent) => {
+    // A window that lost the focus (another app in front) takes it from the
+    // text too, and that is not the keyboard being closed.
+    if (event.relatedTarget || !document.hasFocus()) return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest('[data-canvas-text-editor]')
+    )
+      commitText();
+  };
+  // A tablet's hide key leaves the focus where it was, so there the keyboard
+  // going away is the only sign. It also goes away when the focus moves to one
+  // of the editor's own menus, which must stay open over the text.
+  onKeyboardClosed(() => {
+    const focused = document.activeElement;
+    if (
+      !focused ||
+      focused === document.body ||
+      focused.closest('[data-canvas-text-editor]')
+    )
+      commitText();
+  });
+
   // A sheet takes the keyboard's focus with it, so each way out of the Attach
   // sheets hands it back to the canvas.
   const thenFocus = focusingAfter(view.focus);
@@ -221,7 +265,7 @@ function MobileCanvasLayout() {
         onArtifact={thenFocus(view.insert.artifact)}
         onClose={thenFocus(view.insert.close)}
       />
-      <Show when={!isMobile() && hasSelection() && !panelCollapsed()}>
+      <Show when={panelOpen()}>
         <MobileCanvasInspectorPanel />
       </Show>
       {/* The browser's own long-press menu and callout have nothing to offer
@@ -232,12 +276,14 @@ function MobileCanvasLayout() {
           if (state.embeds.active() || state.text.draft()) return;
           event.preventDefault();
         }}
+        on:focusout={commitTextLeftByKeyboard}
       >
         <CanvasViewParts.Surface longPress={longPress} touchHandles />
       </div>
       <CanvasViewParts.EmptyState />
       <MobileCanvasBottomBar
         groupFaces={groupFaces()}
+        panelOpen={panelOpen()}
         styleOpen={styleOpen()}
         onStyle={toggleStyle}
         onView={() => setViewOpen(true)}

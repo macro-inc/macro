@@ -446,3 +446,92 @@ test('Attach starts from its rows again after a picker was dismissed', async ({
   await expect(rows).toBeVisible();
   await expect(picker).toBeHidden();
 });
+
+/** The box around every item of the scene, on screen. */
+const sceneBox = (page: Page) =>
+  page.evaluate(() => {
+    const boxes = [...document.querySelectorAll('[data-graphics-item]')].map(
+      (item) => item.getBoundingClientRect()
+    );
+    return {
+      left: Math.min(...boxes.map((box) => box.left)),
+      top: Math.min(...boxes.map((box) => box.top)),
+      right: Math.max(...boxes.map((box) => box.right)),
+      bottom: Math.max(...boxes.map((box) => box.bottom)),
+    };
+  });
+
+/**
+ * The scene point in the middle of the canvas that no chrome covers, and that
+ * middle on screen.
+ */
+const middleOfView = (page: Page) =>
+  page.evaluate(() => {
+    const covered = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue(
+        '--mobile-content-inset-bottom'
+      )
+    );
+    const screen = { x: innerWidth / 2, y: (innerHeight - covered) / 2 };
+    const { x, y, scale } = window.canvasTouchFixture.editor.getCamera();
+    return {
+      screen,
+      scene: { x: (screen.x - x) / scale, y: (screen.y - y) / scale },
+      scale,
+    };
+  });
+
+test('Zoom to fit shows the whole scene clear of the bottom chrome', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Zoom options' }).tap();
+  await page.getByRole('button', { name: 'Zoom to fit' }).tap();
+
+  const viewport = page.viewportSize();
+  const chrome = await page
+    .getByRole('button', { name: 'Zoom options' })
+    .boundingBox();
+  if (!viewport || !chrome) throw new Error('The chrome is not rendered');
+  // The fit leaves 24px clear all round and fills the room one way or the
+  // other; strokes reach a little past their shapes.
+  const room = (await middleOfView(page)).screen.y * 2;
+  await expect
+    .poll(async () => {
+      const scene = await sceneBox(page);
+      return (
+        scene.right - scene.left > viewport.width - 48 - 12 ||
+        scene.bottom - scene.top > room - 48 - 12
+      );
+    })
+    .toBe(true);
+  const scene = await sceneBox(page);
+  expect(scene.left).toBeGreaterThanOrEqual(24 - 4);
+  expect(scene.right).toBeLessThanOrEqual(viewport.width - 24 + 4);
+  expect(scene.top).toBeGreaterThanOrEqual(24 - 4);
+  expect(scene.bottom).toBeLessThanOrEqual(chrome.y - 24 + 4);
+});
+
+test('turning the device keeps what was in the middle in the middle', async ({
+  page,
+}) => {
+  const before = await middleOfView(page);
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('No viewport');
+
+  await page.setViewportSize({
+    width: viewport.height,
+    height: viewport.width,
+  });
+
+  // The chrome is laid out again after the turn, so allow for its change.
+  await expect
+    .poll(async () => {
+      const after = await middleOfView(page);
+      return Math.hypot(
+        (after.scene.x - before.scene.x) * after.scale,
+        (after.scene.y - before.scene.y) * after.scale
+      );
+    })
+    .toBeLessThan(48);
+  expect((await middleOfView(page)).scale).toBe(before.scale);
+});

@@ -152,9 +152,20 @@ The floating top toolbar uses the shared `Toolbar` and Phosphor icons for drawin
 and inserting media, document cards, and embeds. Tooltips show each tool's shortcut.
 Zoom, reset-to-100%, fit, undo, and redo live at the bottom-left. Adjacent controls
 toggle floating properties and layers panels.
-Fit Scene and menu/keyboard zoom use the full canvas viewport without subtracting
-floating panels. Fit Scene centers all scene geometry and
+On desktop, Fit Scene and menu/keyboard zoom use the full canvas viewport without
+subtracting floating panels. Fit Scene centers all scene geometry and
 zooms in or out to leave 100 screen pixels per side on the first axis to fill.
+The touch views fit into the part of the canvas their chrome leaves clear, with
+24px around the content: `MobileCanvasChrome` lays a frame between the header and
+the bottom chrome (and left of the side panel when it is open) and hands it to
+`frameWithin` (`views/shared/canvas-framing.ts`). Sheet zoom levels zoom about the
+middle of that frame. The view follows the frame: until the person has moved the
+canvas, the last fit is redone when the frame changes (the chrome is measured
+after the first paint, and a rotation changes everything); once they have, a
+rotation keeps what was in the middle in the middle, and chrome that grows or
+shrinks, or a keyboard that makes the view shorter, moves nothing. A fit of an
+empty canvas is not kept up, and neither is any fit once a press lands on the
+canvas or text is being typed.
 Camera zoom limits still apply; padding decreases for small embedded viewports.
 Ctrl/Meta-wheel zoom is pointer-anchored, with a continuous 0.01 exponential rate
 per normalized wheel pixel and an exponent cap of 0.6 per event (about 82% zoom-in).
@@ -405,6 +416,20 @@ the pen cannot take the press, and a pen takes it from a palm already resting.
 Double-click an existing text shape, or select it and press Enter, to edit.
 Double-click empty canvas also creates text. Escape, Cmd/Ctrl+Enter, or a click
 outside commits the edit. Empty drafts disappear without an undo entry.
+On touch the on-screen keyboard going away also commits it, returns to Select and
+selects the text: a phone's Done button takes the focus from the text to nowhere
+(`focusout` without a `relatedTarget`), and a tablet's hide key leaves the focus
+in place, so there `onKeyboardClosed` watches the app's keyboard state and the
+visual viewport growing back. While text is typed the touch views keep it inside
+the frame and the visual viewport (`keepInFrame` in `views/shared/canvas-framing.ts`):
+the canvas pans as the keyboard comes up and as the text grows, and the page
+itself is put back if the browser scrolled it to reveal the caret, so the
+header stays on screen. Text that fits is kept whole; text larger than the
+frame follows its caret and is otherwise left where the person put it. The
+keyboard closing because the focus moved to one of the editor's own menus, or
+the window losing focus, does not commit. On every device a scroll the browser gives the canvas
+surface (a caret typed past its edge) is turned into the same pan and undone, so
+presses keep landing where they are aimed.
 
 The editing toolbar supports bold, italic, underline, strike, code, highlight,
 links, headings, quotes, and nested bulleted/numbered lists.
