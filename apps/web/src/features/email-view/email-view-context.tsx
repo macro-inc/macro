@@ -423,9 +423,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         return 'scope' in filters ? filters.scope : undefined;
       },
       enabled: savedViewQueryReady,
-      // Desktop only: the phone list has no search of its own to wait on.
-      keepRowsWhileSearching: () =>
-        !isTouchDevice() && isFeatureEnabled(enableEmailWideSearch),
+      keepRowsWhileSearching: () => isFeatureEnabled(enableEmailWideSearch),
     })
   );
   withSplitPanelOwner(listOwnedSlotName('navigation-source'), () =>
