@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT l.provider = 'OUTLOOK' AS \"outlook!\", l.is_sync_active AND NOT l.needs_reauth AS \"active!\",\n                l.sync_generation, l.grant_generation,\n                EXISTS(SELECT 1 FROM email_sync_streams s WHERE s.link_id = l.id AND s.generation = l.sync_generation\n                        AND s.kind IN ('folder_catalog','mail_folder') AND NOT s.initial_complete)\n                    OR EXISTS(SELECT 1 FROM email_message_reconciliation q WHERE q.link_id = l.id AND q.generation = l.sync_generation\n                        AND q.is_import AND q.available_at <> 'infinity') AS \"importing!\",\n                due.inbox_and_sent AS \"inbox_and_sent!\", due.other_folders AS \"other_folders!\",\n                (SELECT sum(f.total_item_count) FROM email_mailbox_folders f WHERE f.link_id = l.id AND f.deleted_at IS NULL)::bigint AS provider_items\n            FROM email_links l\n            CROSS JOIN LATERAL (\n                SELECT count(*) FILTER (WHERE f.role IN ('inbox','sent')) AS inbox_and_sent,\n                    count(*) FILTER (WHERE f.role NOT IN ('inbox','sent')) AS other_folders\n                FROM email_sync_streams s JOIN email_mailbox_folders f ON f.link_id = s.link_id AND f.provider_id = s.scope_id\n                WHERE s.link_id = l.id AND s.generation = l.sync_generation AND s.kind = 'mail_folder' AND f.deleted_at IS NULL\n                    AND (s.reader_revision IS NULL OR s.reader_revision < $2)\n            ) due\n            WHERE l.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "outlook!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "active!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "importing!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "inbox_and_sent!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "other_folders!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "provider_items",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "64e0a5aa0723e39380759959bd367f32c2c2b891558df83dc46978d0be53ffc8"
+}

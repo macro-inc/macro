@@ -3,6 +3,7 @@
 mod invite_link;
 #[cfg(feature = "ports")]
 pub mod invite_reminders;
+mod subscription_items;
 #[cfg(test)]
 mod test;
 
@@ -37,6 +38,7 @@ use notification::domain::{models::SendNotificationRequestBuilder, service::Noti
 use crate::domain::{
     contacts_enqueuer::{ContactsEnqueuer, NoOpContactsEnqueuer},
     crm_enqueuer::CrmEnqueuer,
+    crm_member_access::{CrmAccessRollout, DisabledCrmAccessRollout},
     customer_repo::CustomerRepository,
     events::{
         OwnedEntityMetadata, TeamAutoJoinDomainToggledMetadata, TeamCreatedMetadata,
@@ -49,13 +51,15 @@ use crate::domain::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError,
         JoinTeamDirectlyError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
-        RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
-        SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember,
-        TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain,
-        team_slug_from_name,
+        RemovedTeamMember, RestorePermissionsForTeamMembersError,
+        RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
+        TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamRole, TeamWithMembers,
+        ToggleAutoJoinDomainError, is_generic_email_domain, team_slug_from_name,
     },
     open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease, SeatPlanChange, SubscriptionStart},
-    owned_entity_cleanup::{OwnedEntityCleanup, UnwiredOwnedEntityCleanup, clear_team},
+    owned_entity_cleanup::{
+        OwnedEntityCleanup, OwnedEntityCleanupError, UnwiredOwnedEntityCleanup, clear_team,
+    },
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
     team_repo::{TeamMembersService, TeamRepository, TeamService},
@@ -91,6 +95,15 @@ fn team_member_roles_to_remove() -> Vec<RoleId> {
 enum TeamBillingRoleUpdate {
     RestorePermissions,
     PreservePermissions,
+}
+
+/// Whether a direct join's seat goes on the team subscription.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SeatBilling {
+    /// The join adds a seat to the team subscription.
+    Billed,
+    /// The seat is included: the join never reads or changes the subscription.
+    Included,
 }
 
 /// Implementation of the TeamService using a TeamRepository
@@ -152,6 +165,8 @@ pub struct TeamServiceImpl<
     owned_entity_cleanup: OEC,
     /// Rewards whoever brought a new member onto the team.
     invite_rewarder: Arc<dyn InviteRewarder>,
+    /// Gates preference changes until every membership writer is upgraded.
+    crm_access_rollout: Arc<dyn CrmAccessRollout>,
 }
 
 fn channel_error_to_team_error(error: ChannelMutationErr) -> TeamError {
@@ -189,6 +204,7 @@ where
             open_seat_release: self.open_seat_release.clone(),
             owned_entity_cleanup: self.owned_entity_cleanup.clone(),
             invite_rewarder: self.invite_rewarder.clone(),
+            crm_access_rollout: self.crm_access_rollout.clone(),
         }
     }
 }
@@ -294,6 +310,7 @@ where
             open_seat_release: NoOpOpenSeatRelease,
             owned_entity_cleanup: UnwiredOwnedEntityCleanup,
             invite_rewarder: Arc::new(NoOpInviteRewarder),
+            crm_access_rollout: Arc::new(DisabledCrmAccessRollout),
         }
     }
 }
@@ -324,6 +341,7 @@ where
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
         join_method: TeamJoinMethod,
+        seat_billing: SeatBilling,
     ) -> Result<Option<TeamMember<'static>>, JoinTeamDirectlyError> {
         let team_id = *team_id;
 
@@ -332,19 +350,38 @@ where
             .get_team_enterprise_status(&team_id)
             .await?;
 
+        // An included seat still gets the premium roles of a paying team, but
+        // only reads whether the team pays: it never touches the subscription.
+        let included_on_paying_team = match seat_billing {
+            SeatBilling::Included if !enterprise => {
+                let paying = self
+                    .team_repository
+                    .get_team_payment_status(&team_id)
+                    .await?;
+                let subscribed = self
+                    .team_repository
+                    .get_team_subscription_id(&team_id)
+                    .await?
+                    .is_some();
+                paying && subscribed
+            }
+            SeatBilling::Included | SeatBilling::Billed => false,
+        };
+
         // Add the user to the team directly (no invite), then run the same
         // billing / roles / channels side effects as join_team, rolling
         // the membership back if any of them fail.
         let Some(team_member) = self
             .team_repository
-            .add_user_to_team(&team_id, user_id)
+            .add_user_to_team(&team_id, user_id, seat_billing == SeatBilling::Included)
             .await?
         else {
             tracing::info!(%team_id, %user_id, "skipping direct team join: user is already a member");
             return Ok(None);
         };
 
-        let subscription_id = if enterprise {
+        // The subscription the join added a seat to, if any.
+        let subscription_id = if enterprise || seat_billing == SeatBilling::Included {
             None
         } else {
             let team_payment_status =
@@ -435,7 +472,7 @@ where
 
         // Premium roles come with a paid or enterprise team; free-team
         // members keep their existing (free) entitlements.
-        let grants_premium = enterprise || subscription_id.is_some();
+        let grants_premium = enterprise || subscription_id.is_some() || included_on_paying_team;
         let roles_to_add = team_member_roles_to_add(team_member.plan);
 
         if grants_premium {
@@ -661,6 +698,7 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            crm_access_rollout: self.crm_access_rollout,
         }
     }
 
@@ -686,6 +724,7 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            crm_access_rollout: self.crm_access_rollout,
         }
     }
 
@@ -711,7 +750,14 @@ where
             open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            crm_access_rollout: self.crm_access_rollout,
         }
+    }
+
+    /// Supply the rollout gate for CRM preference writes. Read enforcement is unconditional.
+    pub fn with_crm_access_rollout(mut self, rollout: Arc<dyn CrmAccessRollout>) -> Self {
+        self.crm_access_rollout = rollout;
+        self
     }
 
     /// Replaces the rewarder for whoever brought a new member onto a team.
@@ -767,12 +813,14 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            crm_access_rollout: self.crm_access_rollout,
         }
     }
 
     async fn restore_after_channels_left(
         &self,
-        removed_member: &TeamMember<'_>,
+        removed_member: &RemovedTeamMember<'_>,
+        seat_included: bool,
         subscription_id: Option<&stripe::SubscriptionId>,
         user_id: &MacroUserIdStr<'_>,
         left_channel_ids: &[uuid::Uuid],
@@ -791,7 +839,7 @@ where
             .ok();
         if let Some(subscription_id) = subscription_id {
             self.customer_repository
-                .increment_seat_count(subscription_id, removed_member.plan, 1)
+                .increment_seat_count(subscription_id, removed_member.member.plan, 1)
                 .await
                 .inspect_err(|rollback_err| {
                     tracing::error!(
@@ -803,7 +851,7 @@ where
                 .ok();
         }
         self.team_repository
-            .rollback_remove_user_from_team(removed_member)
+            .rollback_remove_user_from_team(removed_member, seat_included)
             .await
             .inspect_err(|rollback_err| {
                 tracing::error!(
@@ -858,6 +906,16 @@ where
         let cleared = clear_team(&self.owned_entity_cleanup, team_id)
             .await
             .map_err(DeleteTeamError::OwnedEntityCleanup)?;
+        // Computers outlive the team row: release them first so their billing
+        // items, guests and harnesses go through their own lifecycle.
+        self.owned_entity_cleanup
+            .release_computers(team_id)
+            .await
+            .map_err(|source| {
+                DeleteTeamError::OwnedEntityCleanup(OwnedEntityCleanupError::ReleaseComputers {
+                    source: Box::new(source),
+                })
+            })?;
 
         let subscription_id = self
             .team_repository
@@ -922,7 +980,13 @@ where
             .await?;
 
         let _billing = self.customer_repository.lock_team_billing(&team_id).await?;
-        let subscription_id = if enterprise {
+        // An included seat was never on the subscription, so removing it
+        // leaves billing alone.
+        let seat_included = self
+            .team_repository
+            .is_seat_included(&team_id, user_id)
+            .await?;
+        let subscription_id = if enterprise || seat_included {
             None
         } else {
             self.team_repository
@@ -988,13 +1052,13 @@ where
                     .schedule_seat_plan(subscription_id, user_id, None)
                     .await?;
                 self.customer_repository
-                    .decrement_seat_count(subscription_id, removed_member.plan, 1)
+                    .decrement_seat_count(subscription_id, removed_member.member.plan, 1)
                     .await
             }
             .await
         {
             self.team_repository
-                .rollback_remove_user_from_team(&removed_member)
+                .rollback_remove_user_from_team(&removed_member, seat_included)
                 .await
                 .inspect_err(|rollback_err| {
                     tracing::error!(
@@ -1017,7 +1081,7 @@ where
             Err(error) => {
                 if let Some(subscription_id) = subscription_id.as_ref() {
                     self.customer_repository
-                        .increment_seat_count(subscription_id, removed_member.plan, 1)
+                        .increment_seat_count(subscription_id, removed_member.member.plan, 1)
                         .await
                         .inspect_err(|rollback_err| {
                             tracing::error!(
@@ -1028,7 +1092,7 @@ where
                         .ok();
                 }
                 self.team_repository
-                    .rollback_remove_user_from_team(&removed_member)
+                    .rollback_remove_user_from_team(&removed_member, seat_included)
                     .await
                     .inspect_err(|rollback_err| {
                         tracing::error!(
@@ -1054,6 +1118,7 @@ where
         {
             self.restore_after_channels_left(
                 &removed_member,
+                seat_included,
                 subscription_id.as_ref(),
                 user_id,
                 &left_channel_ids,
@@ -1080,6 +1145,7 @@ where
             }
             self.restore_after_channels_left(
                 &removed_member,
+                seat_included,
                 subscription_id.as_ref(),
                 user_id,
                 &left_channel_ids,
@@ -1114,16 +1180,16 @@ where
 
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamLeft {
             team_id,
-            member_id: removed_member.user_id.clone().into_owned(),
+            member_id: removed_member.member.user_id.clone().into_owned(),
             removed_by_id: removed_by_id.clone(),
-            role: removed_member.role,
+            role: removed_member.member.role,
         })
         .await;
         self.publish_team_event(&TeamMacroEvent::member_removed(TeamMemberRemovedMetadata {
             team_id,
-            member_id: removed_member.user_id.into_owned(),
+            member_id: removed_member.member.user_id.into_owned(),
             removed_by: removed_by_id,
-            role: removed_member.role,
+            role: removed_member.member.role,
         }));
 
         Ok(())
@@ -1718,7 +1784,34 @@ where
             .clone()
             .into_owned();
 
+        // Only agent teammates hold an included seat.
+        if self
+            .team_repository
+            .is_seat_included(&team_id, user_id)
+            .await?
+        {
+            return Err(RemoveUserFromTeamError::AgentTeammate);
+        }
+
         self.remove_member(team_id, user_id, removed_by_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn remove_team_agent(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), RemoveUserFromTeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+        let removed_by_id = entity_access_receipt
+            .get_authenticated_user()
+            .map_err(|e| RemoveUserFromTeamError::TeamError(TeamError::AccessError(e)))?
+            .clone()
+            .into_owned();
+
+        self.remove_member(team_id, agent_user_id, removed_by_id)
+            .await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -2234,6 +2327,13 @@ where
             .get_team_member(&team_id, user_id)
             .await?
             .into_owned();
+        if self
+            .team_repository
+            .is_seat_included(&team_id, user_id)
+            .await?
+        {
+            return Err(SetTeamMemberPlanError::SeatIncluded);
+        }
         if !SeatPlan::PURCHASABLE.contains(&plan) {
             return Err(CustomerError::PlanUnavailable(plan).into());
         }
@@ -2427,6 +2527,14 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn team_subscription_id(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<Option<stripe::SubscriptionId>, TeamError> {
+        self.team_repository.get_team_subscription_id(team_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn patch_team_subscription_id(
         &self,
         team_id: &uuid::Uuid,
@@ -2530,7 +2638,7 @@ where
         self.team_repository.get_team_invites(&team_id).await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, fields(team_id = %entity_access_receipt.entity().entity_id), err)]
     async fn patch_team(
         &self,
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -2543,6 +2651,22 @@ where
             .into_owned();
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        if let Some(change) = &req.member_crm_access {
+            self.crm_access_rollout.require_enabled().await?;
+            if req
+                .user_role_updates
+                .as_ref()
+                .is_some_and(|updates| !updates.is_empty())
+            {
+                return Err(TeamError::BadRequest(
+                    "change roles and CRM access in separate requests".into(),
+                ));
+            }
+            self.team_repository
+                .set_member_crm_access(team_id, &actor_user_id, &change.user_id, change.enabled)
+                .await?;
+        }
 
         if let Some(user_role_updates) = req.user_role_updates.as_ref() {
             if user_role_updates.iter().any(|u| u.role == TeamRole::Owner) {
@@ -2619,7 +2743,7 @@ where
         let _ = (entity_access_receipt, backfill);
         if !enabled {
             return Err(TeamError::BadRequest(
-                "CRM is available to every team member; manage individual email contribution in CRM settings".into(),
+                "Manage member CRM access separately from mailbox contribution consent".into(),
             ));
         }
         Ok(PatchTeamCrmSettingsResponse {
@@ -2680,7 +2804,73 @@ where
             return Ok(None);
         };
 
-        self.join_team_directly(&team_id, user_id, TeamJoinMethod::DomainAutoJoin)
-            .await
+        self.join_team_directly(
+            &team_id,
+            user_id,
+            TeamJoinMethod::DomainAutoJoin,
+            SeatBilling::Billed,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self, entity_access_receipt), err)]
+    async fn add_team_agent(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<TeamMember<'static>, JoinTeamDirectlyError> {
+        let team_id = macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id)
+            .map_err(|_| TeamError::TeamDoesNotExist)?;
+        let added_by = entity_access_receipt
+            .get_authenticated_user()
+            .map_err(TeamError::AccessError)?
+            .clone()
+            .into_owned();
+
+        self.join_team_directly(
+            &team_id,
+            agent_user_id,
+            TeamJoinMethod::TeamAgent { added_by },
+            SeatBilling::Included,
+        )
+        .await?
+        .ok_or(JoinTeamDirectlyError::AlreadyMember)
+    }
+
+    #[tracing::instrument(skip(self, entity_access_receipt), err)]
+    async fn undo_team_agent_join(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), RemoveUserFromTeamError> {
+        let team_id = macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id)
+            .map_err(|_| RemoveUserFromTeamError::TeamDoesNotExist)?;
+
+        // A billed seat leaves through `remove_user_from_team`, which takes it
+        // off the subscription; removing it here would keep charging for it.
+        if !self
+            .team_repository
+            .is_seat_included(&team_id, agent_user_id)
+            .await?
+        {
+            let is_member = self
+                .team_repository
+                .get_all_team_members(&team_id)
+                .await?
+                .iter()
+                .any(|member| member.user_id.as_ref() == agent_user_id.as_ref());
+
+            return Err(if is_member {
+                RemoveUserFromTeamError::SeatNotIncluded
+            } else {
+                RemoveUserFromTeamError::UserNotInTeam
+            });
+        }
+
+        self.team_repository
+            .remove_user_from_team(&team_id, agent_user_id)
+            .await?;
+
+        Ok(())
     }
 }

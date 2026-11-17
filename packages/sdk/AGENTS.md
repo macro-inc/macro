@@ -48,27 +48,48 @@ enforced by the ordinary backend APIs.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves. `routines.create` takes
-  either the single agent task or `steps` (generated `CodeStep`s, agent steps
-  with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
-  restricts to an explicit user request; `routineBody` maps both onto the
-  scheduler's `RoutineTask`. `routines.check` sends the same body to
+  `steps` (generated `CodeStep`s, agent steps with `Agent` handles) and
+  `dangerouslyOperateAsUser`, which its TSDoc restricts to an explicit user
+  request, or the older single agent task. Its examples use steps only:
+  agents copy them, and a routine draft hands back steps, converting a single
+  agent task when it can (`scheduled_action` drafts). `routineBody` maps both onto the
+  scheduler's `RoutineTask`. `routines.create(options, { key })` passes
+  `?key=`; inside a routine's run the server makes the new routine a
+  sub-routine of the running routine, from the credential alone, and a
+  repeated key updates it. `routines.list()` returns top-level routines;
+  `{ includeChildren }` adds active sub-routines and `{ parent }` returns one
+  routine's. `Routine.parent()`, `createdByRun()` (a `RoutineRun`), `key()`,
+  `children()` and `keepAsOwn()` read and change the link, and
+  `RoutineExecution.created` holds the routines a run created. The rules an
+  agent needs are in the `@agent` block on `RoutineNamespace`, which the
+  routine drafter also reads; code mode follows it with the Compose Routines
+  skill (`crates/system_skills`), how a session writes one from a chat.
+  `routines.check` sends the same body to
   `POST /scheduled-actions/check` (as `{routine, created}`), which runs
   saving's checks and saves nothing; code mode's catalog lists it as a read.
   `created` takes handles with an `entityType` (`CreatedEntity`) and is kept
   with a routine draft for its review.
-- `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
-  names and returns seeded User handles; it is not a global directory. Empty
-  contact sets are 404, but authorization/service errors must propagate.
+- `users.search(nameOrEmail)` is one `GET /contacts/search`: the server
+  ranks the caller's contacts and current team (teammates first, at most 20)
+  and the SDK seeds User handles with each name and agent flag, keeping that
+  order. It is not a global directory, and the full `GET /contacts` list stays
+  out of the SDK.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
-- `Contact.setEmail(address)` adds a missing address; `setCompany(company)`
-  links or switches a known personal-provider contact. Neither accepts clearing.
+- `Contact.addEmail` / `removeEmail` / `setEmail` (choose the primary) edit a
+  contact's addresses; `setCompany(company)` links or switches a contact with a
+  personal-provider primary and `unlinkCompany()` removes the link. The server
+  refuses to unlink or move a company-domain contact (`companyDomain`).
 - `src/entities/databases/saved-query.ts`: `database.saveQuery()` / `table.saveQuery()`
-  save a checked `SELECT` server-side and return a `SavedQuery` whose `toBlock()` is the
+  (or `databases.saveQuery()` for a question that spans databases, sent with no
+  `databaseId`) save a checked `SELECT` server-side and return a `SavedQuery` whose `toBlock()` is the
   document's `<m-db-query>` block. The block format must match lexical-core's
   `parseDatabaseQueryData`; `withView()` follows the AI editor's `setDatabaseQueryView` rules.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
+- `crm.pipelines.listWithFields()` returns every pipeline with its fields
+  (Stage's options are its stages) and version in one
+  `GET /crm/pipelines/details`; `list()` stays the plain pipeline list.
 - `src/entities/crm/pipeline-entry.ts`: `PipelineEntry` handles from the
   name-based pipeline methods (`find`, `addRecords`, `updateEntries`,
   `removeRecords`, `edit`, `importCsv`/`exportCsv`), which call
@@ -85,6 +106,11 @@ enforced by the ordinary backend APIs.
   someone else prompted for the owner's approval. `discover(execution, name)`
   and `Connector.inspect()` mirror `DiscoverConnectors`; `addServer` mirrors
   `ConnectMcpServer`. Only works inside a running execution.
+- `src/entities/ui/`: `macro.ui.open(execution, item)` opens an item (a handle
+  with `webUrl()`, or `macro.ui.link(url)`, which refuses non-Macro links) in a
+  new pane of the tab the user prompted from, through the harness's
+  `ui-commands` route; it resolves `sent`, `no_client` or `declined` with the
+  item's `url` to link instead. Only works inside a running execution.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
   returns an `ExternalChat`.
 - `src/entities/me/`: `macro.me.update()` sets the caller's name and profile
@@ -121,8 +147,15 @@ enforced by the ordinary backend APIs.
 - `src/entities/bots/`: `macro.bots` manages bots (`Bot`: profile, channel
   grants, webhook URLs, `BotToken`s) with user auth, and reads the
   authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
-  bot-management tools in its favour; `IssueBotCredential` stays, because its
-  chat card mints a token the model never reads.
+  bot-management tools in its favour, `IssueBotCredential` too: a program
+  presents a `botCredential` view, whose card mints a token the model never
+  reads.
+- `src/entities/imports/`: `macro.imports`, the import ledger (cognition
+  `/import/entities`, `/import/notion/pages`): `list`, `track`,
+  `recordImported`, `importNotionPage` and `ImportEntry.decline()`; code mode
+  hides the matching ledger tools. `ImportEntry.item()` maps the row's
+  `entity_type` (`md`, `task`, `channel`, `database`, `project`,
+  `initiative`) to a handle.
 - `src/entities/memory/`, `activity/`: `macro.memory.read()`/`edit()` (cognition
   `/memory/explicit`) and `macro.activity.mine()` (cognition `/activity`);
   `User.activity()` reads `/memory/activity` and `Initiative.activity()` DSS
@@ -136,12 +169,26 @@ enforced by the ordinary backend APIs.
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
+- Keep the human-session-only Passwords vault endpoints, including batch import
+  and name matching and the human review of agent access requests, in coverage
+  exclusions; normal human-session authorization and secret disclosure are
+  outside v1 agent capabilities.
+- `src/entities/passwords/`: `macro.passwords.forAgent(team, { wake })` is the
+  agent vault for the agent's own API key; every call sends that wake's
+  `X-Macro-Agent-Session-Id`. Its classes are `@mcp-exclude` and stay out of the
+  code-mode catalog: disclosed values and codes go to the agent's secrets
+  capability, never to model context.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
+- Keep hosted-computer management, Claude sign-in and internal provisioning
+  routes in app-only coverage exclusions.
+
 - Use POST to start channel calls and call-id scoped joins/leaves; the legacy GET starts a call as a side effect.
 - One item's mute, snooze and unmute are `muteNotifications`/`unmuteNotifications` on every favoritable handle; keep mute-all, email unsubscribe and bulk item preferences in the app-only coverage exclusions.
+- Keep additive `/channel-sections` endpoints app-only; the public channel-label API retains its legacy membership semantics.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
+- `appearance()` / `setAppearance()` live on supported entity handles; writes replace icon/color together, carry the `edited` SDK verb and idempotent `@write` hint, and invalidate cached detail only after success.
 - `../sdk-docs/` generates the public TypeDoc reference and static docs Worker.
   Consumer application bundles belong to their consumer. The calls entry points
   are built separately from core, with LiveKit and OpenTelemetry external.
@@ -151,7 +198,8 @@ enforced by the ordinary backend APIs.
 Run from this directory: `bun test`, `bun run check`, `bun run coverage`, and
 `bun run lint`. After building, run `bun run check:pack` to verify isolated
 consumer imports, types, and bundle separation. Coverage requires each generated
-endpoint to be wrapped or explicitly classified in `src/coverage/skipped.ts`. Build output in `dist/` is
+endpoint to be wrapped or explicitly classified in `src/coverage/skipped.ts`, and
+every wrapped method to have a verb in `src/utils/verbs.ts`. Build output in `dist/` is
 excluded from source linting.
 
 ## Local agent APIs
@@ -162,11 +210,13 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- The SDK is a root Bun workspace member: its dependencies resolve from the
+  root `bun.lock`, and there is no `bun.lock` here.
 - Dependency changes require refreshing both platform hashes in
   `nix-support/node_modules-hashes.json`; use
   `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
   generation otherwise restores dependencies from the old SDK snapshot.
-- Every public method carries one MCP hint tag (`@readonly`, `@write` or
+- Every public method carries one MCP hint tag (`@readonly`, `@write`, `@send` or
   `@destructive`, plus `@openworld`/`@idempotent` when true) or
   `@mcp-exclude <reason>`; `../sdk-mcp` turns methods into ChatGPT MCP tools
   by them and fails on an untagged method. A new or changed public method
@@ -199,6 +249,10 @@ the existing gateway prefixes.
   in step.
 - Regenerate Rust OpenAPI and web service clients before `bun run sync-specs &&
   bun run generate`; do not copy deployed schemas over a local API change.
+  When a merge conflicts in `generated/`, first run them on the merged specs,
+  since `code_mode_assets` (built by the OpenAPI exporters) type-checks the
+  handwritten SDK against these clients; then regenerate the clients, and run
+  them again on the exported specs.
 - Run `bun run generate` to regenerate SDK clients and normalize whitespace-only
   lines; do not hand-edit generated output to satisfy whitespace checks.
 - The SDK reference (`../sdk-docs`) and the code-mode bundle and documentation
@@ -213,6 +267,9 @@ the existing gateway prefixes.
   keep its phased serialization types and stored JSON shape aligned.
 - Workspace advanced filters use the server's serialized AST names, not Rust
   enum variant names. Validate new filter examples against the real local API.
+- Code-mode programs are untyped JavaScript, so a mistyped option key is
+  dropped silently. Create-style methods call `rejectUnknownOptions`
+  (`src/utils/options.ts`) so it throws instead; the documents and tasks namespaces do.
 - Async iterators are lazy; `limit` is page size. Preserve filters on every page
   and do not fetch another page after the caller breaks the loop.
 - Handles must serialize identity or loaded detail, never authenticated clients.
@@ -277,3 +334,5 @@ the existing gateway prefixes.
 - Keep LiveKit and OpenTelemetry external in the calls build so room objects and
   tracing use the consumer's runtime instances. Do not re-export calls helpers
   or their runtime types from `src/macro.ts`.
+
+- `Team.members()` includes effective `crmAccess`; `Team.setMemberCrmAccess(user, enabled)` changes it through the existing team API. `crm.access()` reads current viewer authority even when denied. Backend permission checks apply equally to SDK and generated MCP operations.

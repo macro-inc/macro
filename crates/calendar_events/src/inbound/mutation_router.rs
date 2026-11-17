@@ -17,8 +17,8 @@ use axum::{
     routing::{get, patch, post, put},
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal, is_agent_run,
+    CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, UserOrInternal, is_agent_run,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -27,7 +27,8 @@ use crate::domain::{
     copies::{CopyChange, CopyRefusal},
     join_requests::CalendarJoinRequest,
     meeting_links::{
-        CreateEventWithMacroCallError, MeetingLinkError, create_event_with_macro_call,
+        MacroCallEventError, MeetingLinkError, create_event_with_macro_call,
+        update_event_with_macro_call,
     },
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
@@ -35,8 +36,9 @@ use crate::domain::{
         EventVisibility, GuestPolicy, OutOfOfficeProperties, VisibleCalendar,
     },
     ports::{
-        CalendarCopyConfirmation, CalendarDeletionScope, CalendarMutationError,
-        CalendarMutationService, CalendarRsvpScope, CalendarUpdateScope, MeetingLinkProvider,
+        CalendarCopyConfirmation, CalendarDeletionScope, CalendarEventDetailsReader,
+        CalendarMutationError, CalendarMutationService, CalendarRsvpScope, CalendarUpdateScope,
+        MeetingLinkProvider,
     },
 };
 
@@ -87,7 +89,7 @@ pub fn calendar_mutation_router<S, L, Auth, T>(
     state: CalendarMutationRouterState<S, L, Auth>,
 ) -> Router<T>
 where
-    S: CalendarMutationService + CalendarCopyConfirmation,
+    S: CalendarMutationService + CalendarCopyConfirmation + CalendarEventDetailsReader,
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
     T: Send + Sync + 'static,
@@ -220,6 +222,12 @@ pub struct UpdateCalendarEventRequest {
     /// A third-party conference is replaced or detached like any other, since
     /// the request is explicit. Omit the field to leave it alone.
     pub conference: Option<ConferenceChange>,
+    /// Switch the event to a Macro call in this write: mint one, write its
+    /// join link into the description and location, and detach any provider
+    /// conference. An event already holding a Macro call keeps it. Cannot be
+    /// combined with `conference`.
+    #[serde(default)]
+    pub macro_call: bool,
     /// Replacement out-of-office properties, applied only to an event that is
     /// already out-of-office — the provider event type is immutable. Omit to
     /// leave them untouched.
@@ -470,10 +478,10 @@ const PROGRAM_CREATE_REFUSAL: &str = "An agent's program cannot create a calenda
 /// Refuse an agent run's create (see [`is_agent_run`]); a person in the app
 /// creates from the composer, which is their confirmation.
 fn refuse_program_create(
-    agent_attributed: bool,
+    attribution: CredentialAttribution,
     headers: &HeaderMap,
 ) -> Result<(), CalendarMutationApiError> {
-    if is_agent_run(agent_attributed, headers) {
+    if is_agent_run(attribution, headers) {
         return Err(CalendarMutationApiError {
             code: CalendarMutationErrorCode::ConfirmationRequired,
             message: PROGRAM_CREATE_REFUSAL.to_owned(),
@@ -621,18 +629,16 @@ impl From<CalendarMutationError> for CalendarMutationApiError {
     }
 }
 
-impl From<CreateEventWithMacroCallError> for CalendarMutationApiError {
-    fn from(error: CreateEventWithMacroCallError) -> Self {
+impl From<MacroCallEventError> for CalendarMutationApiError {
+    fn from(error: MacroCallEventError) -> Self {
         match error {
-            CreateEventWithMacroCallError::Calendar(error) => error.into(),
-            CreateEventWithMacroCallError::MeetingLink(MeetingLinkError::InvalidInput(message)) => {
-                Self {
-                    code: CalendarMutationErrorCode::InvalidInput,
-                    message,
-                    status: StatusCode::BAD_REQUEST,
-                }
-            }
-            CreateEventWithMacroCallError::MeetingLink(error) => {
+            MacroCallEventError::Calendar(error) => error.into(),
+            MacroCallEventError::MeetingLink(MeetingLinkError::InvalidInput(message)) => Self {
+                code: CalendarMutationErrorCode::InvalidInput,
+                message,
+                status: StatusCode::BAD_REQUEST,
+            },
+            MacroCallEventError::MeetingLink(error) => {
                 tracing::error!(error = ?error, "calendar event macro call creation failed");
                 Self {
                     code: CalendarMutationErrorCode::MacroCallFailed,
@@ -673,7 +679,7 @@ where
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
 {
-    refuse_program_create(user.authorization.user.agent_id.is_some(), &headers)?;
+    refuse_program_create(user.authorization.user.attribution(), &headers)?;
     let draft = CalendarEventDraft {
         idempotency_key: request.idempotency_key,
         title: request.title,
@@ -791,7 +797,7 @@ fn update_scope(
         (status = 403, description = "Calendar is read-only or needs reauthorization, or the event is a snapshot of a shared meeting", body = CalendarMutationApiError),
         (status = 404, description = "Event or targeted occurrence not found", body = CalendarMutationApiError),
         (status = 409, description = "The provider rejected the update", body = CalendarMutationApiError),
-        (status = 503, description = "Transient provider failure", body = CalendarMutationApiError),
+        (status = 503, description = "Transient provider failure, or the Macro call could not be created", body = CalendarMutationApiError),
     )
 )]
 pub async fn update_calendar_event<S, L, Auth>(
@@ -802,7 +808,7 @@ pub async fn update_calendar_event<S, L, Auth>(
     Json(request): Json<UpdateCalendarEventRequest>,
 ) -> Result<Json<CalendarEvent>, CalendarMutationApiError>
 where
-    S: CalendarMutationService + CalendarCopyConfirmation,
+    S: CalendarMutationService + CalendarCopyConfirmation + CalendarEventDetailsReader,
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
 {
@@ -826,11 +832,11 @@ where
     let requester_id = user.authorization.user.macro_user_id.as_ref();
     // Reminders and availability belong to one copy, so only a change that
     // reaches the meeting needs the copy named.
-    if patch.reaches_meeting() || request.inbox.is_some() {
+    if patch.reaches_meeting() || request.macro_call || request.inbox.is_some() {
         confirm_copy(
             &*state.service,
             requester_id,
-            is_agent_run(user.authorization.user.agent_id.is_some(), &headers),
+            is_agent_run(user.authorization.user.attribution(), &headers),
             event_id,
             request.inbox.as_deref(),
             CopyChange::Update {
@@ -839,10 +845,23 @@ where
         )
         .await?;
     }
-    let event = state
-        .service
-        .update_event(requester_id, event_id, request.calendar_id, patch, scope)
-        .await?;
+    let event = if request.macro_call {
+        update_event_with_macro_call(
+            &*state.service,
+            &*state.meeting_links,
+            requester_id,
+            event_id,
+            request.calendar_id,
+            patch,
+            scope,
+        )
+        .await?
+    } else {
+        state
+            .service
+            .update_event(requester_id, event_id, request.calendar_id, patch, scope)
+            .await?
+    };
     Ok(Json(event))
 }
 
@@ -897,7 +916,7 @@ where
     confirm_copy(
         &*state.service,
         requester_id,
-        is_agent_run(user.authorization.user.agent_id.is_some(), &headers),
+        is_agent_run(user.authorization.user.attribution(), &headers),
         event_id,
         query.inbox.as_deref(),
         CopyChange::Delete,
@@ -1012,7 +1031,7 @@ where
     confirm_copy(
         &*state.service,
         requester_id,
-        is_agent_run(user.authorization.user.agent_id.is_some(), &headers),
+        is_agent_run(user.authorization.user.attribution(), &headers),
         event_id,
         request.inbox.as_deref(),
         CopyChange::InviteGuests,

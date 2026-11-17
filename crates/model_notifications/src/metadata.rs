@@ -1,12 +1,18 @@
 mod access_request;
+mod agent_sign_in;
 mod calendar_join_request;
 mod channel_push;
+mod computer_setup;
+mod password_access_request;
 pub use access_request::{
     ChannelAccessRequestedMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
     RequestedAccessLevel, RuntimeAccessRemovedMetadata, StoppedAgent,
 };
+pub use agent_sign_in::{AgentSignInExpiryMetadata, AgentSignInExpiryStage};
 pub use calendar_join_request::CalendarEventJoinRequestMetadata;
 use chrono::{DateTime, NaiveDate, Utc};
+pub use computer_setup::{ComputerSetupAgent, ComputerSetupMetadata, ComputerSetupOutcome};
+pub use harnessd_protocol::AgentProvider;
 pub use invite_email::{
     ChannelInviteMetadata, ColleagueJoinedMacro, InviteToTeamMetadata, InviteePlan,
 };
@@ -23,6 +29,7 @@ use notification::domain::models::{
         APNSPushNotification, Alert, AlertDictionary, Aps, InterruptionLevel, PushNotificationData,
     },
 };
+pub use password_access_request::PasswordAccessRequestedMetadata;
 use rootcause::Report;
 use rootcause::report;
 use serde::{Deserialize, Serialize};

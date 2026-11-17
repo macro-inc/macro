@@ -79,6 +79,9 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
     .with({ type: 'harness' }, () => {
       throw new Error('runtimes are not openable as attachments');
     })
+    .with({ type: 'team' }, () => {
+      throw new Error('teams are not openable as attachments');
+    })
     .with({ type: 'form' }, (e) => ({ type: 'form' as const, id: e.id }))
     .exhaustive();
 }

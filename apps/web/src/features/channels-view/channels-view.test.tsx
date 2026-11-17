@@ -67,6 +67,10 @@ vi.mock('@channel/ChannelAccessDenied', () => ({
 vi.mock('./queries/channel-list-search-pool', () => ({
   useChannelListSearchPool: () => () => [],
 }));
+vi.mock('./components/rail/next/channel-discovery-source', () => ({
+  createSectionSearchSource: (options: { recent: () => ChannelsDataSource }) =>
+    options.recent(),
+}));
 vi.mock('@queries/favorites/favorites', () => ({
   useFavoritesData: () => () => ({
     favorites: mocks.favoriteIds().map((entityId) => ({
@@ -83,7 +87,8 @@ vi.mock('@app/features/command/mobile/mobileSearchState', () => ({
 }));
 vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: () => ({ isSuccess: false, isLoading: false }),
-  validateSearchServiceText: (text: string) => text.length >= 3,
+  validateSearchServiceText: (text: string) =>
+    text.replaceAll('"', '').trim().length > 0,
 }));
 vi.mock('@app/lib/split-router', () => ({
   SplitRouter: {
@@ -177,6 +182,23 @@ vi.mock('./components/ChannelsMobileView', () => ({
       data-pinned={props.pinned.map((channel) => channel.id).join(',')}
     >
       <For each={props.source.items()}>
+        {(channel) => <div>{channel.name}</div>}
+      </For>
+    </div>
+  ),
+}));
+vi.mock('./components/rail/next/mobile/MobileSectionsView', () => ({
+  MobileSectionsView: (props: {
+    sources: { recents: ChannelsDataSource };
+    pinned: readonly ChannelEntity[];
+  }) => (
+    <div
+      data-testid="mobile-channels"
+      data-sections="true"
+      data-query=""
+      data-pinned={props.pinned.map((channel) => channel.id).join(',')}
+    >
+      <For each={props.sources.recents.items()}>
         {(channel) => <div>{channel.name}</div>}
       </For>
     </div>
@@ -377,18 +399,33 @@ describe('Chat rollout source activation', () => {
     expect(mocks.sourceEnabled('channels')).toBe(true);
   });
 
-  it('keeps the mobile recent feed active while the desktop rollout is unresolved', () => {
+  it('waits for the mobile rollout result without mounting the legacy feed', () => {
     mocks.mobileLayout = () => true;
     mocks.sectionsLoading = () => true;
     render(() => <ChannelsView />);
-    expect(screen.getByTestId('mobile-channels')).toBeTruthy();
+    expect(screen.queryByTestId('mobile-channels')).toBeNull();
+    expect(screen.getByLabelText('Loading channels')).toBeTruthy();
     expect(mocks.sourceEnabled('recents')).toBe(true);
     expect(mocks.sourceEnabled('channels')).toBe(false);
   });
 });
 describe('mobile dock search wiring', () => {
-  it('shows only recent conversations independently of the dock search session', () => {
+  it('mounts phone sections and their direct-message source only when enabled', () => {
     mocks.mobileLayout = () => true;
+    const [enabled, setEnabled] = createSignal(true);
+    mocks.sectionsEnabled = enabled;
+    render(() => <ChannelsView />);
+    expect(screen.getByTestId('mobile-channels').dataset.sections).toBe('true');
+    expect(mocks.sourceEnabled('direct_messages')).toBe(true);
+    setEnabled(false);
+    expect(
+      screen.getByTestId('mobile-channels').dataset.sections
+    ).toBeUndefined();
+    expect(mocks.sourceEnabled('direct_messages')).toBe(false);
+  });
+  it('keeps legacy recent conversations independent of the dock search session', () => {
+    mocks.mobileLayout = () => true;
+    mocks.sectionsEnabled = () => false;
     const [open, setOpen] = createSignal(true);
     const [text, setText] = createSignal('');
     const [active, setActive] = createSignal(true);
@@ -421,15 +458,29 @@ describe('mobile dock search wiring', () => {
     expect(screen.getByTestId('mobile-channels').dataset.query).toBe('');
   });
 
-  it('pins the first six loaded channel favorites in favorite order', () => {
-    mocks.mobileLayout = () => true;
-    setRows(['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id) => row(id)));
-    mocks.favoriteIds = () => ['g', 'missing', 'f', 'e', 'd', 'c', 'b', 'a'];
-    render(() => <ChannelsView />);
-    expect(screen.getByTestId('mobile-channels').dataset.pinned).toBe(
-      'g,f,e,d,c,b'
-    );
-  });
+  it.each([
+    { sectionsEnabled: true, expected: 'g,f,e,d,c,b,a' },
+    { sectionsEnabled: false, expected: 'g,f,e,d,c,b' },
+  ])(
+    'preserves favorite order with sections enabled: $sectionsEnabled',
+    ({ sectionsEnabled, expected }) => {
+      mocks.mobileLayout = () => true;
+      mocks.sectionsEnabled = () => sectionsEnabled;
+      setRows(['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id) => row(id)));
+      mocks.favoriteIds = () => ['g', 'missing', 'f', 'e', 'd', 'c', 'b', 'a'];
+      render(() => <ChannelsView />);
+      expect(screen.getByTestId('mobile-channels').dataset.pinned).toBe(
+        expected
+      );
+
+      setRows(
+        ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'missing'].map((id) => row(id))
+      );
+      expect(screen.getByTestId('mobile-channels').dataset.pinned).toBe(
+        sectionsEnabled ? 'g,missing,f,e,d,c,b,a' : 'g,missing,f,e,d,c'
+      );
+    }
+  );
 });
 
 describe('channel selection loading and recovery', () => {

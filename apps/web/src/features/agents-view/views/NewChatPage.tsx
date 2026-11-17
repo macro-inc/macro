@@ -3,13 +3,12 @@ import { createRecentAgentSelections } from '@app/features/block-agent/context/r
 import { requestRuntimeAccess } from '@app/features/runtime-sharing/core/request-access';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import {
-  createInputAttachmentTracker,
   type InputAttachmentData,
   uploadInputAttachments,
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import { catalogModelLabel } from '@core/component/AI/constant/model-label';
 import {
   acceleratedSpeed,
   speedForModel,
@@ -32,7 +31,14 @@ import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createMemo, createSignal, type JSX, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  type JSX,
+  on,
+  Show,
+} from 'solid-js';
 import { AgentUpdatesStack } from '../../agent-updates/views/AgentUpdatesStack';
 import { EffortSelector } from '../../block-agent/component/EffortSelector';
 import {
@@ -50,6 +56,7 @@ import {
 import { defaultBranchFor, sameRepository } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import {
+  createPersistedComposerAttachments,
   createPersistedComposerDraft,
   NEW_CONVERSATION_ATTACHMENTS_KEY,
 } from '../primitives/composer-draft';
@@ -64,6 +71,9 @@ import { createRepositoryBranches } from '../queries/repository-branches';
 import { AGENTS_TOUR } from '../tour';
 import { AgentPicker } from './AgentPicker';
 import { RepositoryPicker } from './RepositoryPicker';
+
+/** Another surface asking the composer to select an agent. */
+export type AgentRequest = { agentId: string; request: string };
 
 /** What the composer hands the workspace to start a session with. */
 export type StartConversation = {
@@ -100,6 +110,12 @@ export function NewChatPage(props: {
    */
   mode?: ComposerMode;
   onModeChange?: (mode: ComposerMode) => void;
+  /**
+   * An agent to select, e.g. one just set up on a Macro computer. Each
+   * request selects it again, also after the user picked another; one not in
+   * the roster yet is selected once it arrives.
+   */
+  requestedAgent?: AgentRequest;
   rosterLoading: boolean;
   /** Agents are listed but whether they can start is still unknown. */
   availabilityLoading?: boolean;
@@ -128,6 +144,14 @@ export function NewChatPage(props: {
     props.roster.filter((agent) => agent.kind === kindForMode(kind));
   const options = () => optionsFor(agentsMode());
   const [agentId, setAgentId] = createSignal<string>();
+  createEffect(
+    on(
+      () => props.requestedAgent,
+      (requested) => {
+        if (requested) setAgentId(requested.agentId);
+      }
+    )
+  );
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
   const [effortPickerOpen, setEffortPickerOpen] = createSignal(false);
@@ -301,17 +325,13 @@ export function NewChatPage(props: {
     }
   };
 
-  const attachmentTracker = createMemo(() => {
-    const identity = userId();
-    const key = props.attachmentsKey ?? NEW_CONVERSATION_ATTACHMENTS_KEY;
-    return createInputAttachmentTracker({
-      // Unknown identities never read shared storage. Parents may own the
-      // text draft without owning files; those still persist here.
-      persistenceKey: identity
-        ? `${key}:${encodeURIComponent(identity)}`
-        : undefined,
-    });
-  });
+  // Parents may own the text draft without owning files; those still persist here.
+  const attachmentTracker = createMemo(() =>
+    createPersistedComposerAttachments(
+      props.attachmentsKey ?? NEW_CONVERSATION_ATTACHMENTS_KEY,
+      userId()
+    )
+  );
   const attachFiles = (files: File[]) =>
     fireAndForget(
       uploadInputAttachments({
@@ -567,11 +587,9 @@ export function NewChatPage(props: {
       drawerOpen
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
-      modelName={modelLabel(
+      modelName={catalogModelLabel(
         composerModelOverride(),
-        selectedCatalog
-          .models()
-          .find((model) => model.id === composerModelOverride())?.name
+        selectedCatalog.models()
       )}
       supportsImages={
         selectedCatalog

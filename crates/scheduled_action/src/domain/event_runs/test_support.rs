@@ -326,8 +326,10 @@ impl EventRunRepository for Repo {
                 claimed: Some(started_at),
                 run_visibility: RunVisibility::Unlisted,
                 template_id: None,
+                appearance: model_entity::EntityAppearance::default(),
                 suggestion_id: None,
                 description: String::new(),
+                sub_routine: None,
             },
         }))
     }
@@ -465,4 +467,17 @@ pub fn setup() -> (Arc<Repo>, Arc<Access>, Arc<Executor>, PendingEventRun) {
     repo.0.lock().unwrap().configurations.push(config);
     repo.0.lock().unwrap().pending.push(pending.clone());
     (repo, Arc::default(), Arc::default(), pending)
+}
+
+/// A rollout answering the same for every owner, or failing to load.
+#[derive(Clone, Copy)]
+pub struct Rollout(pub Option<bool>);
+
+pub const ROLLED_OUT: Rollout = Rollout(Some(true));
+
+impl crate::domain::event_rollout::EventRoutineRollout for Rollout {
+    async fn enabled_for(&self, _user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
+        self.0
+            .ok_or_else(|| rootcause::report!("flags unavailable"))
+    }
 }

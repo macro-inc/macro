@@ -130,10 +130,15 @@ vi.mock('@app/features/changes/changes', () => ({
 }));
 vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
+    FLOATING_CLEARANCE_PX: 344,
     Layout: (props: { children: JSX.Element }) => props.children,
     Root: (props: { children: JSX.Element }) => props.children,
     Toggle: () => null,
   },
+  useSidePanel: () => null,
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false }),
 }));
 vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
   SplitFileMenu: () => null,
@@ -145,10 +150,15 @@ vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
 vi.mock('./AgentComposer', () => ({ AgentComposer: () => null }));
 vi.mock('./AgentPullRequestChip', () => ({ AgentPullRequestChip: () => null }));
 vi.mock('./AgentTaskChip', () => ({ AgentTaskChip: () => null }));
-vi.mock('./AgentSplitHeader', () => ({
-  AgentSplitHeader: () => null,
+vi.mock('./agent-session-header', () => ({
+  useAgentSessionHeader: () => ({}),
   agentSessionTitle: () => 'Agent session',
-  sessionRepositoryUrl: () => undefined,
+}));
+vi.mock('../views/agent-session-header', () => ({
+  AgentSessionHeader: () => null,
+}));
+vi.mock('../views/mobile/agent-session-header', () => ({
+  MobileAgentSessionHeader: () => null,
 }));
 vi.mock('./sidepanel/AgentSidePanelSections', () => ({
   AgentSidePanelSections: () => null,

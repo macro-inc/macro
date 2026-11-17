@@ -7,9 +7,19 @@
 //! `macro.routines.check`, which runs saving's checks and saves nothing,
 //! naming what it created. Each check is kept on the draft's row
 //! ([`DraftHandBacks`]), so the session and this drafter may run on any
-//! replicas. The drafter waits for the session's turn to end, reads the last
-//! check, then stops and deletes the session and the row. The session's
+//! replicas. A check that passes ends the draft: the drafter stops the
+//! session there and takes the last passing check (or the last check when
+//! the turn ends first), then deletes the session and the row. The session's
 //! usage is agent session usage, admitted and metered as any session's.
+//!
+//! With [`finding::DraftFinding`], the drafter looks the items up itself
+//! before the session starts and gives the session what it found and the SDK
+//! reference it needs ([`finding`]), so the session writes one program and
+//! searches for nothing.
+//!
+//! A draft runs in the request that waits for it ([`RoutineDraftService`]),
+//! or in the background ([`jobs`]), where its row also keeps its progress and
+//! result for its owner to open later.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -35,8 +45,15 @@ use super::models::{CreatedItem, RoutineCheck};
 use super::ports::{
     DraftHandBacks, NoSessionCreations, RoutineCode, RoutineDraftService, SessionCreations,
 };
+use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
+use self::finding::{DraftFinding, FindingPrompts};
+use self::progress::{CheckSummary, DraftMilestone, DraftProgress, Unreported};
+
+pub mod finding;
+pub mod jobs;
+pub mod progress;
 #[cfg(test)]
 mod test;
 
@@ -46,14 +63,15 @@ pub const DRAFT_TIMEOUT: Duration = Duration::from_secs(120);
 pub const STALE_DRAFT: Duration = Duration::from_secs(10 * 60);
 /// Drafts the sweep cleans up at a time.
 const SWEEP_BATCH: u16 = 64;
-/// How soon, then at most how often, the drafter reads the session's turn.
-const FIRST_POLL: Duration = Duration::from_millis(500);
-const MAX_POLL: Duration = Duration::from_secs(2);
-/// How long a session that has checked a passing routine gets to finish its
-/// turn before it is stopped and its last check taken.
-const CHECKED_GRACE: Duration = Duration::from_secs(15);
-/// How long the drafter waits, once the session has stopped, for the
-/// activity its last creations wrote, which is recorded asynchronously.
+/// How often the drafter reads the draft's row for a check that passes.
+const POLL: Duration = Duration::from_millis(250);
+/// Row reads per read of the session's turn, which reads its whole log: a
+/// turn read every 2 s, only to notice a turn that ends without a passing
+/// check.
+const ROW_READS_PER_TURN_READ: u32 = 8;
+/// How long the drafter waits, once a session that handed back no passing
+/// check has stopped, for the activity its last creations wrote, which is
+/// recorded asynchronously.
 const ACTIVITY_SETTLE: Duration = Duration::from_secs(2);
 /// Turn reads that may fail in a row before the draft gives up.
 const MAX_STATUS_FAILURES: u8 = 5;
@@ -62,6 +80,8 @@ const ROUTINE_FAILED: &str = "Couldn’t draft that routine. Please try again.";
 const STEP_FAILED: &str = "Couldn’t write that step. Please try again.";
 const CHANGE_FAILED: &str = "Couldn’t change that step. Please try again.";
 const TIMED_OUT: &str = "Drafting took too long. Try again, or describe the routine more simply.";
+/// A background draft whose host stopped before it finished.
+const INTERRUPTED: &str = "Drafting stopped before it finished. Please try again.";
 const HAS_AGENT: &str = "This routine already has its Ask AI step. Change that one instead.";
 const NO_CODE: &str = "Code steps can’t be written here right now.";
 
@@ -133,7 +153,7 @@ pub struct DraftContext {
 }
 
 /// What AI drafted, or why it couldn't.
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum Draft {
     /// A routine to review before saving.
@@ -150,7 +170,7 @@ pub enum Draft {
 }
 
 /// A drafted routine.
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DraftedRoutine {
     pub name: String,
@@ -169,7 +189,7 @@ pub struct DraftedRoutine {
 
 /// Something a draft's session created. It exists whether or not the draft
 /// is saved.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DraftCreated {
     /// What kind of item.
@@ -183,7 +203,7 @@ pub struct DraftCreated {
 }
 
 /// A drafted step.
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DraftedStep {
     /// The step, in the shape a routine's task holds it.
@@ -200,7 +220,7 @@ pub struct DraftedStep {
 }
 
 /// A drafted step whose code still fails the type checker.
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct StepProblem {
     /// Its place among the steps, from zero.
     pub index: usize,
@@ -233,6 +253,24 @@ pub struct RoutineDrafts<Code, Sessions> {
     agent: DraftAgent,
     /// Whether this host can answer trigger conditions.
     conditions_enabled: bool,
+    /// What drafts find before their session starts.
+    finding: Option<Arc<Finding>>,
+}
+
+/// What finding a draft's items uses, and the prompts it builds once.
+struct Finding {
+    drafting: DraftFinding,
+    prompts: FindingPrompts,
+}
+
+impl<Code: RoutineCode, Sessions> RoutineDrafts<Code, Sessions> {
+    /// Find the items every draft's words name with `drafting` before its
+    /// session starts, and give the session what it found.
+    pub fn with_finding(mut self, drafting: DraftFinding) -> Self {
+        let prompts = FindingPrompts::new(self.code.as_ref());
+        self.finding = Some(Arc::new(Finding { drafting, prompts }));
+        self
+    }
 }
 
 impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
@@ -251,6 +289,7 @@ impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
             creations: Arc::new(NoSessionCreations),
             agent,
             conditions_enabled: false,
+            finding: None,
         }
     }
 
@@ -272,25 +311,59 @@ impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
 enum Ending {
     /// Its turn ended, well or not.
     Finished,
-    /// It handed back a routine that passes its check and then kept going
-    /// past [`CHECKED_GRACE`], so it is stopped and its last check taken.
+    /// It handed back a routine that passes its check: its answer.
     Checked,
     /// It ran past [`DRAFT_TIMEOUT`].
     TimedOut,
     /// It couldn't start or be followed.
     Failed,
+    /// Its host is stopping: a background draft ends with what it has.
+    Interrupted,
+    /// Its owner cancelled it: no one reads its answer.
+    Cancelled,
 }
 
-impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
-    for RoutineDrafts<Code, Sessions>
-{
-    // The span records how the draft went, never the person's words, the
-    // code or the names the agent looked up.
-    #[tracing::instrument(name = "routine.draft", skip_all, fields(
+/// How one draft runs: in the request that waits for it, or in the
+/// background.
+struct Drafting<'a> {
+    /// Its hidden session, whose row was begun.
+    session: AgentSessionId,
+    progress: &'a dyn DraftProgress,
+    /// Ends it early, with what it has: its host is stopping.
+    interrupt: CancellationToken,
+    /// Whether its session and row stay once it is done, holding its result
+    /// until its owner discards it: a background draft's.
+    keeps: bool,
+}
+
+impl Drafting<'_> {
+    /// A draft its request waits for: nothing reports or interrupts it, and
+    /// it leaves nothing behind.
+    fn waited(session: AgentSessionId) -> Self {
+        Self {
+            session,
+            progress: &Unreported,
+            interrupt: CancellationToken::new(),
+            keeps: false,
+        }
+    }
+}
+
+/// The span a draft runs in. It records how the draft went, never the
+/// person's words, the code or the names the agent looked up.
+fn draft_span(request: &DraftRequest) -> tracing::Span {
+    tracing::info_span!(
+        "routine.draft",
         routine.draft.kind = request.kind_name(),
+        routine.draft.background = tracing::field::Empty,
         routine.draft.requested_step = tracing::field::Empty,
+        routine.draft.drafter = tracing::field::Empty,
         routine.draft.code_available = tracing::field::Empty,
         agent.session.id = tracing::field::Empty,
+        routine.draft.found = tracing::field::Empty,
+        routine.draft.left = tracing::field::Empty,
+        routine.draft.unsearched = tracing::field::Empty,
+        routine.draft.find_failed = tracing::field::Empty,
         routine.draft.checks = tracing::field::Empty,
         routine.draft.created = tracing::field::Empty,
         routine.draft.created_unused = tracing::field::Empty,
@@ -299,41 +372,57 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
         routine.draft.status_reads = tracing::field::Empty,
         routine.draft.ended = tracing::field::Empty,
         routine.draft.code_failing = tracing::field::Empty,
+        routine.draft.agent_task = tracing::field::Empty,
         routine.draft.steps = tracing::field::Empty,
         routine.draft.step = tracing::field::Empty,
         routine.draft.outcome = tracing::field::Empty,
-    ))]
+    )
+}
+
+impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
+    for RoutineDrafts<Code, Sessions>
+{
     async fn draft(
         &self,
         owner: MacroUserIdStr<'static>,
         request: DraftRequest,
-        mut context: DraftContext,
+        context: DraftContext,
     ) -> Result<Draft> {
-        validate(&request, &context)?;
-        context.conditions &= self.conditions_enabled;
-        let span = tracing::Span::current();
-        let program = match &request {
-            DraftRequest::Routine { .. } => Vec::new(),
-            DraftRequest::AddStep { routine, .. } | DraftRequest::ChangeStep { routine, .. } => {
-                program_steps(&routine.steps)?
+        let span = draft_span(&request);
+        async {
+            let (program, context) = self.read_request(&request, context)?;
+            let brief = match self
+                .briefed(&owner, &request, &program, &context, &Unreported)
+                .await?
+            {
+                Ok(brief) => brief,
+                Err(message) => return Ok(finish(failed(message))),
+            };
+            let session = AgentSessionId::new();
+            if let Err(error) = self
+                .hand_backs
+                .begin(session.as_uuid(), &owner, self.agent.bot)
+                .await
+            {
+                tracing::error!(error = ?error, "could not start a routine draft");
+                return Ok(finish(failed(request.failed())));
             }
-        };
-        if let DraftRequest::ChangeStep { index, .. } = &request
-            && !matches!(program.get(*index), Some(Step::Code(_)))
-        {
-            anyhow::bail!(InvalidDraft(format!("step {index} isn't a code step")));
+            let draft = self
+                .drafted(
+                    &owner,
+                    &request,
+                    &program,
+                    &context,
+                    brief,
+                    Drafting::waited(session),
+                )
+                .await?
+                // Only a background draft can be cancelled.
+                .unwrap_or_else(|| failed(request.failed()));
+            Ok(finish(draft))
         }
-        let code = context.code && self.code.sdk().is_some()
-            || matches!(request, DraftRequest::ChangeStep { .. }) && self.code.sdk().is_some();
-        span.record("routine.draft.code_available", code);
-        let brief = match brief(&request, &program, &context, code, &owner, self.agent.guide) {
-            Ok(brief) => brief,
-            Err(message) => return Ok(finish(failed(message))),
-        };
-        let draft = self
-            .drafted(&owner, &request, &program, &context, brief)
-            .await?;
-        Ok(finish(draft))
+        .instrument(span)
+        .await
     }
 }
 
@@ -343,6 +432,7 @@ fn finish(draft: Draft) -> Draft {
         "routine.draft.outcome",
         match &draft {
             Draft::Failed { message, .. } if message == TIMED_OUT => "timeout",
+            Draft::Failed { message, .. } if message == INTERRUPTED => "interrupted",
             Draft::Failed { .. } => "failed",
             _ => "drafted",
         },
@@ -351,34 +441,122 @@ fn finish(draft: Draft) -> Draft {
 }
 
 impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions> {
-    /// Run `brief` in a fresh hidden session and turn its last check into
-    /// the draft `request` asks for. The session and its row are gone
-    /// whatever happens; only a refused admission is an error.
+    /// The steps of the routine `request` edits, and the context it drafts
+    /// in, or why it can't be drafted at all.
+    fn read_request(
+        &self,
+        request: &DraftRequest,
+        mut context: DraftContext,
+    ) -> Result<(Vec<Step>, DraftContext)> {
+        validate(request, &context)?;
+        context.conditions &= self.conditions_enabled;
+        let program = match request {
+            DraftRequest::Routine { .. } => Vec::new(),
+            DraftRequest::AddStep { routine, .. } | DraftRequest::ChangeStep { routine, .. } => {
+                program_steps(&routine.steps)?
+            }
+        };
+        if let DraftRequest::ChangeStep { index, .. } = request
+            && !matches!(program.get(*index), Some(Step::Code(_)))
+        {
+            anyhow::bail!(InvalidDraft(format!("step {index} isn't a code step")));
+        }
+        Ok((program, context))
+    }
+
+    /// The brief of the draft's session, reporting as it goes, or why it
+    /// can't be drafted, for the person. With finding, the items the words
+    /// name are looked up first ([`DraftMilestone::Found`]). Only a refused
+    /// admission is an error.
+    async fn briefed(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        request: &DraftRequest,
+        program: &[Step],
+        context: &DraftContext,
+        progress: &dyn DraftProgress,
+    ) -> Result<Result<Brief, &'static str>> {
+        if let Some(finding) = &self.finding {
+            return self
+                .found_brief(finding, owner, request, program, context, progress)
+                .await;
+        }
+        tracing::Span::current().record("routine.draft.drafter", "session");
+        let code = self.code_available(request, context);
+        Ok(brief(request, program, context, code, owner, self.agent.guide).map(Brief::from))
+    }
+
+    /// Whether `request` may be written with code steps here.
+    fn code_available(&self, request: &DraftRequest, context: &DraftContext) -> bool {
+        let code = self.code.sdk().is_some()
+            && (context.code || matches!(request, DraftRequest::ChangeStep { .. }));
+        tracing::Span::current().record("routine.draft.code_available", code);
+        code
+    }
+
+    /// Returns once background draft `session`'s owner cancels it, read from
+    /// its row every [`POLL`].
+    async fn cancelled(&self, session: AgentSessionId) {
+        loop {
+            tokio::time::sleep(POLL).await;
+            if self
+                .hand_backs
+                .handed_back(session.as_uuid())
+                .await
+                .is_ok_and(|row| row.cancelled)
+            {
+                return;
+            }
+        }
+    }
+
+    /// Delete a draft's session, unless it was `stopped`, and its row.
+    async fn forget_draft(&self, action: &RoutineSessionAction, stopped: bool) {
+        clean_up(
+            self.sessions.as_ref(),
+            self.hand_backs.as_ref(),
+            action,
+            stopped,
+        )
+        .await;
+    }
+
+    /// Stop a draft's session.
+    async fn stop_draft(&self, action: &RoutineSessionAction) {
+        stop(self.sessions.as_ref(), action).await;
+    }
+
+    /// Who a draft's session belongs to, for the session operations.
+    fn action(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        session: AgentSessionId,
+    ) -> RoutineSessionAction {
+        RoutineSessionAction {
+            owner: owner.clone(),
+            bot_id: self.agent.bot,
+            session_id: session,
+            action_id: AgentActionId::mint(),
+        }
+    }
+
+    /// Run `brief` in `drafting`'s fresh hidden session and turn its last
+    /// check into the draft `request` asks for. Only a refused admission is
+    /// an error; a cancelled draft is none. The session and its row are gone
+    /// whatever happens, unless `drafting` keeps them.
     async fn drafted(
         &self,
         owner: &MacroUserIdStr<'static>,
         request: &DraftRequest,
         program: &[Step],
         context: &DraftContext,
-        brief: String,
-    ) -> Result<Draft> {
+        brief: Brief,
+        drafting: Drafting<'_>,
+    ) -> Result<Option<Draft>> {
         let span = tracing::Span::current();
-        let session = AgentSessionId::new();
+        let session = drafting.session;
         span.record("agent.session.id", session.to_string());
-        let action = RoutineSessionAction {
-            owner: owner.clone(),
-            bot_id: self.agent.bot,
-            session_id: session,
-            action_id: AgentActionId::mint(),
-        };
-        if let Err(error) = self
-            .hand_backs
-            .begin(session.as_uuid(), owner, self.agent.bot)
-            .await
-        {
-            tracing::error!(error = ?error, "could not start a routine draft");
-            return Ok(failed(request.failed()));
-        }
+        let action = self.action(owner, session);
         // A request dropped mid-draft (the person left, or the connection
         // went) still stops and deletes its session.
         let mut cleanup = Cleanup {
@@ -386,16 +564,29 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             hand_backs: Arc::clone(&self.hand_backs),
             action: Some(action.clone()),
             stopped: false,
+            keeps: drafting.keeps,
         };
-        let ending = tokio::time::timeout(
-            DRAFT_TIMEOUT - ACTIVITY_SETTLE,
-            self.run(&action, &context.agent_model, brief),
-        )
-        .await;
+        let ending = tokio::select! {
+            ending = tokio::time::timeout(
+                DRAFT_TIMEOUT - ACTIVITY_SETTLE,
+                self.run(&action, &context.agent_model, brief, drafting.progress),
+            ) => ending,
+            () = drafting.interrupt.cancelled() => Ok(Ok(Ending::Interrupted)),
+        };
         // Stop the turn before reading what it made, so nothing it creates
         // afterwards goes unseen.
         cleanup.stop().await;
-        tokio::time::sleep(ACTIVITY_SETTLE).await;
+        if matches!(ending, Ok(Ok(Ending::Cancelled))) {
+            span.record("routine.draft.outcome", "cancelled");
+            cleanup.forget().await;
+            return Ok(None);
+        }
+        // A passing check names what the session created and ends the draft
+        // at once; only a session that ended without one waits for the
+        // activity of creations it may not have named.
+        if !matches!(ending, Ok(Ok(Ending::Checked))) {
+            tokio::time::sleep(ACTIVITY_SETTLE).await;
+        }
         let recorded = self
             .creations
             .created_by(session.as_uuid())
@@ -431,26 +622,29 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             "routine.draft.created_unused",
             created.iter().filter(|item| !item.used).count(),
         );
-        Ok(match (check, ending) {
+        Ok(Some(match (check, ending) {
             (Some(check), _) => drafted(request, program, check, created),
             (None, Ending::TimedOut) => failed_with(TIMED_OUT, created),
-            (None, Ending::Finished | Ending::Checked | Ending::Failed) => {
+            (None, Ending::Interrupted) => failed_with(INTERRUPTED, created),
+            (None, Ending::Finished | Ending::Checked | Ending::Failed | Ending::Cancelled) => {
                 failed_with(request.failed(), created)
             }
-        })
+        }))
     }
 
-    /// Open the hidden session, prompt it once and wait for its turn to end,
-    /// or for [`CHECKED_GRACE`] after a check that passes.
+    /// Open the hidden session, prompt it once and wait for a check that
+    /// passes, or for its turn to end.
     async fn run(
         &self,
         action: &RoutineSessionAction,
         model: &str,
-        brief: String,
+        brief: Brief,
+        progress: &dyn DraftProgress,
     ) -> Result<Ending, RoutineSessionError> {
         self.sessions
             .prepare(PrepareRoutineSession {
                 billing: Default::default(),
+                instructions: brief.instructions,
                 selection: ValidateRoutineSession {
                     owner: action.owner.clone(),
                     bot_id: action.bot_id,
@@ -471,60 +665,100 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         self.sessions
             .prompt(PromptRoutineSession {
                 action: action.clone(),
-                prompt: brief,
+                prompt: brief.prompt,
                 context: None,
             })
             .await?;
+        progress.report(DraftMilestone::Writing);
         let span = tracing::Span::current();
-        let mut delay = FIRST_POLL;
         let mut failures = 0;
-        let mut reads = 0_u32;
-        let mut clean_since: Option<tokio::time::Instant> = None;
-        loop {
-            tokio::time::sleep(delay).await;
-            delay = (delay * 2).min(MAX_POLL);
-            reads += 1;
-            span.record("routine.draft.status_reads", reads);
+        let mut polls = 0_u32;
+        let mut checks = 0_u32;
+        let ending = loop {
+            tokio::time::sleep(POLL).await;
+            polls += 1;
+            match self.read_row(action, &mut checks, progress).await {
+                RowRead::Passed => break Ok(Ending::Checked),
+                RowRead::Cancelled => break Ok(Ending::Cancelled),
+                RowRead::Waiting => {}
+            }
+            if !polls.is_multiple_of(ROW_READS_PER_TURN_READ) {
+                continue;
+            }
+            // Recorded as it goes, so a draft that times out keeps it.
+            span.record(
+                "routine.draft.status_reads",
+                polls / ROW_READS_PER_TURN_READ,
+            );
             match self.sessions.status(action.clone()).await {
                 Ok(RoutineActionStatus::Succeeded | RoutineActionStatus::Failed(_)) => {
-                    span.record("routine.draft.ended", "turn_ended");
-                    return Ok(Ending::Finished);
+                    break Ok(Ending::Finished);
                 }
-                Ok(RoutineActionStatus::Pending(_)) => {
-                    failures = 0;
-                    match clean_since {
-                        Some(since) if since.elapsed() >= CHECKED_GRACE => {
-                            span.record("routine.draft.ended", "checked");
-                            return Ok(Ending::Checked);
-                        }
-                        Some(_) => {}
-                        None => {
-                            if self.checked_clean(action).await {
-                                clean_since = Some(tokio::time::Instant::now());
-                            }
-                        }
-                    }
-                }
+                Ok(RoutineActionStatus::Pending(_)) => failures = 0,
                 Err(error) => {
                     failures += 1;
                     if failures >= MAX_STATUS_FAILURES {
-                        return Err(error);
+                        break Err(error);
                     }
                 }
             }
+        };
+        match &ending {
+            Ok(Ending::Checked) => {
+                span.record("routine.draft.ended", "checked");
+            }
+            Ok(Ending::Finished) => {
+                span.record("routine.draft.ended", "turn_ended");
+            }
+            Ok(Ending::Cancelled) => {
+                span.record("routine.draft.ended", "cancelled");
+            }
+            _ => {}
+        }
+        ending
+    }
+
+    /// What the draft's row says now: whether the session handed back a
+    /// routine that passes its check, or its owner cancelled it. Reports
+    /// each check the session made since the `checks` already seen.
+    async fn read_row(
+        &self,
+        action: &RoutineSessionAction,
+        checks: &mut u32,
+        progress: &dyn DraftProgress,
+    ) -> RowRead {
+        let Ok(handed_back) = self
+            .hand_backs
+            .handed_back(action.session_id.as_uuid())
+            .await
+        else {
+            return RowRead::Waiting;
+        };
+        if handed_back.cancelled {
+            return RowRead::Cancelled;
+        }
+        if handed_back.checks > *checks {
+            *checks = handed_back.checks;
+            if let Some(check) = handed_back.passed.as_ref().or(handed_back.check.as_ref()) {
+                progress.report(DraftMilestone::Checked(CheckSummary::of(
+                    check,
+                    handed_back.checks,
+                )));
+                if !check.ok {
+                    progress.report(DraftMilestone::Fixing);
+                }
+            }
+        }
+        if handed_back.passed.is_some() {
+            RowRead::Passed
+        } else {
+            RowRead::Waiting
         }
     }
 
-    /// Whether the session has handed back a routine that passes its check.
-    async fn checked_clean(&self, action: &RoutineSessionAction) -> bool {
-        self.hand_backs
-            .handed_back(action.session_id.as_uuid())
-            .await
-            .is_ok_and(|handed_back| handed_back.check.is_some_and(|check| check.ok))
-    }
-
     /// Delete the sessions and rows of drafts left behind by a process that
-    /// stopped mid-draft, oldest first. How many it cleaned up.
+    /// stopped mid-draft, oldest first. How many it cleaned up. Background
+    /// drafts are [`jobs::DraftJobs::sweep`]'s.
     #[tracing::instrument(name = "routine.draft.sweep", skip_all, fields(
         routine.draft.swept = tracing::field::Empty,
     ), err)]
@@ -535,18 +769,33 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             clean_up(
                 self.sessions.as_ref(),
                 self.hand_backs.as_ref(),
-                &RoutineSessionAction {
-                    owner: draft.owner.clone(),
-                    bot_id: draft.agent,
-                    session_id: AgentSessionId::new_from_uuid(draft.session),
-                    action_id: AgentActionId::mint(),
-                },
+                &stale_action(draft),
                 false,
             )
             .await;
         }
         tracing::Span::current().record("routine.draft.swept", stale.len());
         Ok(stale.len())
+    }
+}
+
+/// What a draft's row says, read while its session works.
+enum RowRead {
+    /// It handed back a routine that passes its check.
+    Passed,
+    /// Its owner cancelled it.
+    Cancelled,
+    /// Neither, yet.
+    Waiting,
+}
+
+/// The session operations' handle on a draft left behind.
+fn stale_action(draft: &super::ports::StaleDraft) -> RoutineSessionAction {
+    RoutineSessionAction {
+        owner: draft.owner.clone(),
+        bot_id: draft.agent,
+        session_id: AgentSessionId::new_from_uuid(draft.session),
+        action_id: AgentActionId::mint(),
     }
 }
 
@@ -581,14 +830,37 @@ async fn clean_up(
     }
 }
 
+/// Stop a background draft's session unless it was `stopped` already, or
+/// delete it when it won't stop, so it works on no further. Its row stays.
+async fn stop_or_delete(
+    sessions: &impl RoutineSessions,
+    action: RoutineSessionAction,
+    stopped: bool,
+) {
+    if stopped || stop(sessions, &action).await {
+        return;
+    }
+    if let Err(error) = sessions.delete(action).await {
+        tracing::warn!(
+            error = ?error,
+            "could not delete a routine draft's session that won't stop"
+        );
+    }
+}
+
 /// Cleans up a draft's session: now, when the draft is done, or on drop,
-/// when its request was dropped first.
+/// when its request was dropped first. A background draft's session is only
+/// stopped: it and its row go when its owner discards the draft. One that
+/// won't stop is deleted at once, so it works on no further; its row stays
+/// for the draft.
 struct Cleanup<Sessions: RoutineSessions> {
     sessions: Arc<Sessions>,
     hand_backs: Arc<dyn DraftHandBacks>,
     action: Option<RoutineSessionAction>,
     /// Whether the session was stopped already.
     stopped: bool,
+    /// Whether the session and its row stay: a background draft's.
+    keeps: bool,
 }
 
 impl<Sessions: RoutineSessions> Cleanup<Sessions> {
@@ -601,6 +873,10 @@ impl<Sessions: RoutineSessions> Cleanup<Sessions> {
 
     async fn now(&mut self) {
         if let Some(action) = self.action.take() {
+            if self.keeps {
+                stop_or_delete(self.sessions.as_ref(), action, self.stopped).await;
+                return;
+            }
             clean_up(
                 self.sessions.as_ref(),
                 self.hand_backs.as_ref(),
@@ -610,6 +886,13 @@ impl<Sessions: RoutineSessions> Cleanup<Sessions> {
             .await;
         }
     }
+
+    /// Delete the session and its row now, even a background draft's: no
+    /// one reads it.
+    async fn forget(&mut self) {
+        self.keeps = false;
+        self.now().await;
+    }
 }
 
 impl<Sessions: RoutineSessions> Drop for Cleanup<Sessions> {
@@ -618,11 +901,19 @@ impl<Sessions: RoutineSessions> Drop for Cleanup<Sessions> {
             return;
         };
         let (sessions, hand_backs) = (Arc::clone(&self.sessions), Arc::clone(&self.hand_backs));
-        let stopped = self.stopped;
+        let (stopped, keeps) = (self.stopped, self.keeps);
         tracing::info!("a routine draft's request was dropped; cleaning up its session");
         tokio::spawn(
-            async move { clean_up(sessions.as_ref(), hand_backs.as_ref(), &action, stopped).await }
-                .instrument(tracing::Span::current()),
+            async move {
+                if keeps {
+                    // Its row stays: a job cut off fails it as timed out, and the
+                    // sweep fails one dropped with its job.
+                    stop_or_delete(sessions.as_ref(), action, stopped).await;
+                    return;
+                }
+                clean_up(sessions.as_ref(), hand_backs.as_ref(), &action, stopped).await
+            }
+            .instrument(tracing::Span::current()),
         );
     }
 }
@@ -718,6 +1009,23 @@ fn created_items(
         .collect()
 }
 
+/// What a draft's hidden session is given: the instructions it keeps, the
+/// same for every draft of its kind so the prompt cache reads them back
+/// across drafts, and its one prompt, with what is particular to the request.
+struct Brief {
+    instructions: Option<String>,
+    prompt: String,
+}
+
+impl From<String> for Brief {
+    fn from(prompt: String) -> Self {
+        Self {
+            instructions: None,
+            prompt,
+        }
+    }
+}
+
 /// The draft's first prompt: what to draft, from what words, and how to hand
 /// it back. Says why when it can't be drafted at all.
 fn brief(
@@ -728,49 +1036,7 @@ fn brief(
     owner: &MacroUserIdStr<'static>,
     guide: &str,
 ) -> Result<String, &'static str> {
-    let task = match request {
-        DraftRequest::Routine { description } => format!(
-            "Draft a routine that does what this person describes:\n<description>\n{}\n</description>",
-            description.trim()
-        ),
-        DraftRequest::AddStep {
-            description,
-            routine,
-            kind,
-        } => {
-            let has_agent = program.iter().any(|step| matches!(step, Step::Agent(_)));
-            let only = match (kind, has_agent, code) {
-                (Some(StepKind::Agent), true, _) | (None, true, false) => return Err(HAS_AGENT),
-                (Some(StepKind::Code), _, false) => return Err(NO_CODE),
-                (Some(StepKind::Code), _, true) | (None, true, true) => "It must be a code step.",
-                (Some(StepKind::Agent), false, _) | (None, false, false) => {
-                    "It must be an Ask AI step."
-                }
-                (None, false, true) => {
-                    "Make it code whenever code can do it; make it Ask AI only for open-ended work whose actions depend on what it finds."
-                }
-            };
-            format!(
-                "Add ONE step at the end of this routine that does what this person describes. {only} Keep its trigger and its other steps exactly as they are.\n<description>\n{}\n</description>\n{}",
-                description.trim(),
-                routine_data(routine),
-            )
-        }
-        DraftRequest::ChangeStep {
-            instruction,
-            routine,
-            index,
-        } => {
-            if !code {
-                return Err("Code steps can’t be changed here right now.");
-            }
-            format!(
-                "Change step {index} (counting from 0) of this routine as this person asks, and nothing else. Keep its id, its title unless the change makes it wrong, and its knobs unless the change is about them. Keep the trigger and the other steps exactly as they are.\n<instruction>\n{}\n</instruction>\n{}",
-                instruction.trim(),
-                routine_data(routine),
-            )
-        }
-    };
+    let task = task(request, program, code)?;
     let now = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let timezone = &context.timezone;
     let model = &context.agent_model;
@@ -812,6 +1078,54 @@ For this draft:
 
 4. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created for it (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
     ))
+}
+
+/// What `request` asks to draft, with the routine it changes, or why it
+/// can't be drafted at all, for the person.
+fn task(request: &DraftRequest, program: &[Step], code: bool) -> Result<String, &'static str> {
+    Ok(match request {
+        DraftRequest::Routine { description } => format!(
+            "Draft a routine that does what this person describes:\n<description>\n{}\n</description>",
+            description.trim()
+        ),
+        DraftRequest::AddStep {
+            description,
+            routine,
+            kind,
+        } => {
+            let has_agent = program.iter().any(|step| matches!(step, Step::Agent(_)));
+            let only = match (kind, has_agent, code) {
+                (Some(StepKind::Agent), true, _) | (None, true, false) => return Err(HAS_AGENT),
+                (Some(StepKind::Code), _, false) => return Err(NO_CODE),
+                (Some(StepKind::Code), _, true) | (None, true, true) => "It must be a code step.",
+                (Some(StepKind::Agent), false, _) | (None, false, false) => {
+                    "It must be an Ask AI step."
+                }
+                (None, false, true) => {
+                    "Make it code whenever code can do it; make it Ask AI only for open-ended work whose actions depend on what it finds."
+                }
+            };
+            format!(
+                "Add ONE step at the end of this routine that does what this person describes. {only} Keep its trigger and its other steps exactly as they are.\n<description>\n{}\n</description>\n{}",
+                description.trim(),
+                routine_data(routine),
+            )
+        }
+        DraftRequest::ChangeStep {
+            instruction,
+            routine,
+            index,
+        } => {
+            if !code {
+                return Err("Code steps can’t be changed here right now.");
+            }
+            format!(
+                "Change step {index} (counting from 0) of this routine as this person asks, and nothing else. Keep its id, its title unless the change makes it wrong, and its knobs unless the change is about them. Keep the trigger and the other steps exactly as they are.\n<instruction>\n{}\n</instruction>\n{}",
+                instruction.trim(),
+                routine_data(routine),
+            )
+        }
+    })
 }
 
 /// Macro's catalog routines that are code, as worked examples of whole
@@ -863,6 +1177,38 @@ fn routine_data(routine: &RoutineSoFar) -> String {
     )
 }
 
+/// The steps of a checked routine's task. A single agent task, which the
+/// SDK still accepts and a draft's session sometimes checks, becomes one
+/// agent step holding its prompt and user prompt, if it declares no apps and
+/// that step passes a program's rules: the editor saves the draft as steps.
+/// `None` for anything else.
+fn task_steps(task: &Value) -> Option<Vec<Value>> {
+    if let Some(steps) = task.get("steps").and_then(Value::as_array) {
+        return Some(steps.clone());
+    }
+    let steps = agent_task_steps(task);
+    tracing::Span::current().record("routine.draft.agent_task", steps.is_some());
+    steps
+}
+
+/// A single agent task as a program's one agent step, if it is one, declares
+/// no apps (a draft holds only steps, so they would be lost) and the step
+/// passes a program's rules.
+fn agent_task_steps(task: &Value) -> Option<Vec<Value>> {
+    let task = RoutineProgram::from_task(task).ok()?;
+    if !task.mcp_servers.is_empty() {
+        return None;
+    }
+    let program = RoutineProgram::new(task.steps);
+    program.validate().ok()?;
+    program
+        .steps
+        .iter()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()
+        .ok()
+}
+
 /// The draft `request` asks for, from the session's last check.
 fn drafted(
     request: &DraftRequest,
@@ -872,9 +1218,8 @@ fn drafted(
 ) -> Draft {
     let span = tracing::Span::current();
     span.record("routine.draft.code_failing", check.steps.len());
-    let steps = match check.routine.task.get("steps").and_then(Value::as_array) {
-        Some(steps) => steps.clone(),
-        None => return failed(request.failed()),
+    let Some(steps) = task_steps(&check.routine.task) else {
+        return failed_with(request.failed(), created);
     };
     let problems_at = |index: usize| -> Vec<String> {
         check

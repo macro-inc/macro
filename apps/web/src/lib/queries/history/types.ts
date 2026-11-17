@@ -1,3 +1,4 @@
+import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import type { DateValue } from '@core/util/date';
 import type { Item } from '@service-storage/generated/schemas/item';
 
@@ -10,6 +11,7 @@ type BaseHistoryItem = Pick<Item, 'id' | 'name'> & {
   rawName?: string;
   // Normalized owner field: BasicDocument.owner, Chat.userId, Project.userId
   ownerId: string;
+  appearance?: EntityAppearance | null;
 };
 
 export type DocumentHistoryItem = BaseHistoryItem &

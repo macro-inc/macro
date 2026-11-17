@@ -1,4 +1,4 @@
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import {
   createSignal,
@@ -361,7 +361,7 @@ export function NorthwindSession(props: {
           <Switch>
             <Match when={item() === 'northwind-call'}>
               <ViewShell.TopBar>
-                <span class="text-sm font-semibold">
+                <span class="text-sm font-medium">
                   Northwind rollout decision
                 </span>
               </ViewShell.TopBar>

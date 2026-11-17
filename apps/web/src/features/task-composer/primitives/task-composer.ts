@@ -87,7 +87,7 @@ export type TaskComposerHost = {
 
 /**
  * Draft, property, and submission state for one task composer, shared by the
- * desktop and mobile views through the `TaskComposer` parts.
+ * desktop and mobile views through `TaskComposerParts`.
  */
 export function createTaskComposer(
   props: ComposeTaskProps,
@@ -616,7 +616,7 @@ export function createTaskComposer(
     /**
      * Whether the title takes focus as the composer opens. Always on touch,
      * where the opening tap raised the keyboard for it
-     * (`raiseKeyboardForNewTaskTitle`); elsewhere a title that already has
+     * (`NEW_TASK_TITLE_SELECTOR`); elsewhere a title that already has
      * text (a task started from an email) waits for the user.
      */
     autofocusTitle: isTouchDevice() || !title().trim(),

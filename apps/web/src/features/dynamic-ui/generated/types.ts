@@ -24,6 +24,25 @@ export type AgendaEvent_Serialize = {
   occurrenceKey?: string;
 };
 
+export type AgentSessionRef = {
+  id: string;
+};
+
+/**  One item of macro.agentSessions.updates(); its other fields are ignored. */
+export type AgentUpdateItem = {
+  session: AgentSessionRef;
+  sessionName: string;
+  harness: string;
+  kind: AgentUpdateKind;
+  since: string;
+};
+
+export type AgentUpdateKind =
+  | 'permission'
+  | 'elicitation'
+  | 'tool_approval'
+  | 'stalled';
+
 /**  How a container aligns its children across its axis. */
 export type Align = 'start' | 'center' | 'end' | 'stretch';
 
@@ -36,7 +55,7 @@ export type CardItem = {
   /**
    *  The item's id exactly as a tool returned it: a document id (documents
    *  and spreadsheets), an email thread id, a calendar eventId, or a
-   *  project, channel, routine, form or initiative id.
+   *  database, project, channel, routine, form or initiative id.
    */
   id: string;
 };
@@ -44,6 +63,7 @@ export type CardItem = {
 /**  The kinds of workspace item a card shows. */
 export type CardItemType =
   | 'document'
+  | 'database'
   | 'email_thread'
   | 'calendar_event'
   | 'project'
@@ -412,14 +432,20 @@ export type ListSource = ListSource_Serialize | ListSource_Deserialize;
 export type ListSource_Deserialize =
   /**  The items a filter matches, fetched by the list itself. */
   | ({ kind: 'query'; query: Query_Deserialize } & { entities?: never })
-  /**  A fixed set of items. */
+  /**
+   *  A fixed set of items. Each one shows, even one the list's query
+   *  cannot return; a kind no card loads shows as an unavailable row.
+   */
   | ({ kind: 'items'; entities: EntityRef[] } & { query?: never });
 
 /**  Where a list's items come from. */
 export type ListSource_Serialize =
   /**  The items a filter matches, fetched by the list itself. */
   | ({ kind: 'query'; query: Query_Serialize } & { entities?: never })
-  /**  A fixed set of items. */
+  /**
+   *  A fixed set of items. Each one shows, even one the list's query
+   *  cannot return; a kind no card loads shows as an unavailable row.
+   */
   | ({ kind: 'items'; entities: EntityRef[] } & { query?: never });
 
 /**  One value of one property. */
@@ -579,14 +605,17 @@ export type Widget_Deserialize =
    */
   | ({ type: 'md'; markdown: string } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       messageId?: never;
       source?: never;
@@ -601,13 +630,16 @@ export type Widget_Deserialize =
       events: TimelineEvent_Deserialize[];
     } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -629,13 +661,16 @@ export type Widget_Deserialize =
       limit?: number;
     } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       items?: never;
       justify?: never;
+      label?: never;
       markdown?: never;
       messageId?: never;
       tags?: never;
@@ -650,13 +685,16 @@ export type Widget_Deserialize =
       messageId: string;
     } & {
       align?: never;
+      botId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       source?: never;
@@ -671,13 +709,16 @@ export type Widget_Deserialize =
    */
   | ({ type: 'events'; title?: string; events: AgendaEvent_Deserialize[] } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -687,20 +728,23 @@ export type Widget_Deserialize =
     })
   /**
    *  Rich cards for the one to four specific items the answer is about: a
-   *  document or spreadsheet, an email thread, a calendar event, a project,
-   *  a channel, a routine, a form or an initiative. Each card opens its
+   *  document or spreadsheet, a database, an email thread, a calendar event,
+   *  a project, a channel, a routine, a form or an initiative. Each card opens its
    *  item, and a routine's card can pause it or run it now. Use a list
    *  widget for longer sets.
    */
   | ({ type: 'cards'; title?: string; items: CardItem[] } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -716,6 +760,64 @@ export type Widget_Deserialize =
    */
   | ({ type: 'tags'; title?: string; tags: TagNode_Deserialize[] } & {
       align?: never;
+      botId?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      expiresAt?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      wrap?: never;
+    })
+  /**
+   *  Live cards on which the user answers coding agents' waiting
+   *  permission requests and questions, and sees stalled sessions. Pass the
+   *  items macro.agentSessions.updates() returned, unchanged, whenever it
+   *  returns any: these cards are the only place the user can answer them.
+   */
+  | ({ type: 'agentUpdates'; items: AgentUpdateItem[] } & {
+      align?: never;
+      botId?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      expiresAt?: never;
+      gap?: never;
+      groupBy?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      tags?: never;
+      title?: never;
+      wrap?: never;
+    })
+  /**
+   *  A card on which the user mints a new token for a bot they manage and
+   *  sees its secret, which never reaches you. Present it whenever the user
+   *  asks for a bot token or credential.
+   */
+  | ({
+      type: 'botCredential';
+      /**  The bot's id. */
+      botId: string;
+      /**  Where the token will be used, such as "github-webhook". */
+      label?: string;
+      /**  RFC 3339 expiry; omit for a token that does not expire. */
+      expiresAt?: string;
+    } & {
+      align?: never;
       channelId?: never;
       children?: never;
       direction?: never;
@@ -728,6 +830,8 @@ export type Widget_Deserialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      tags?: never;
+      title?: never;
       wrap?: never;
     })
   /**  A nestable flex container of widgets. */
@@ -742,10 +846,13 @@ export type Widget_Deserialize =
       title?: string;
       children: Widget_Deserialize[];
     } & {
+      botId?: never;
       channelId?: never;
       events?: never;
+      expiresAt?: never;
       groupBy?: never;
       items?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -764,14 +871,17 @@ export type Widget_Serialize =
    */
   | ({ type: 'md'; markdown: string } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       messageId?: never;
       source?: never;
@@ -782,13 +892,16 @@ export type Widget_Serialize =
   /**  A chronological sequence of events. Great for "what happened" answers. */
   | ({ type: 'timeline'; title?: string; events: TimelineEvent_Serialize[] } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -810,13 +923,16 @@ export type Widget_Serialize =
       limit?: number;
     } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       items?: never;
       justify?: never;
+      label?: never;
       markdown?: never;
       messageId?: never;
       tags?: never;
@@ -831,13 +947,16 @@ export type Widget_Serialize =
       messageId: string;
     } & {
       align?: never;
+      botId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       source?: never;
@@ -852,13 +971,16 @@ export type Widget_Serialize =
    */
   | ({ type: 'events'; title?: string; events: AgendaEvent_Serialize[] } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -868,20 +990,23 @@ export type Widget_Serialize =
     })
   /**
    *  Rich cards for the one to four specific items the answer is about: a
-   *  document or spreadsheet, an email thread, a calendar event, a project,
-   *  a channel, a routine, a form or an initiative. Each card opens its
+   *  document or spreadsheet, a database, an email thread, a calendar event,
+   *  a project, a channel, a routine, a form or an initiative. Each card opens its
    *  item, and a routine's card can pause it or run it now. Use a list
    *  widget for longer sets.
    */
   | ({ type: 'cards'; title?: string; items: CardItem[] } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -897,6 +1022,64 @@ export type Widget_Serialize =
    */
   | ({ type: 'tags'; title?: string; tags: TagNode_Serialize[] } & {
       align?: never;
+      botId?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      expiresAt?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      wrap?: never;
+    })
+  /**
+   *  Live cards on which the user answers coding agents' waiting
+   *  permission requests and questions, and sees stalled sessions. Pass the
+   *  items macro.agentSessions.updates() returned, unchanged, whenever it
+   *  returns any: these cards are the only place the user can answer them.
+   */
+  | ({ type: 'agentUpdates'; items: AgentUpdateItem[] } & {
+      align?: never;
+      botId?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      expiresAt?: never;
+      gap?: never;
+      groupBy?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      tags?: never;
+      title?: never;
+      wrap?: never;
+    })
+  /**
+   *  A card on which the user mints a new token for a bot they manage and
+   *  sees its secret, which never reaches you. Present it whenever the user
+   *  asks for a bot token or credential.
+   */
+  | ({
+      type: 'botCredential';
+      /**  The bot's id. */
+      botId: string;
+      /**  Where the token will be used, such as "github-webhook". */
+      label?: string;
+      /**  RFC 3339 expiry; omit for a token that does not expire. */
+      expiresAt?: string;
+    } & {
+      align?: never;
       channelId?: never;
       children?: never;
       direction?: never;
@@ -909,6 +1092,8 @@ export type Widget_Serialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      tags?: never;
+      title?: never;
       wrap?: never;
     })
   /**  A nestable flex container of widgets. */
@@ -923,10 +1108,13 @@ export type Widget_Serialize =
       title?: string;
       children: Widget_Serialize[];
     } & {
+      botId?: never;
       channelId?: never;
       events?: never;
+      expiresAt?: never;
       groupBy?: never;
       items?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;

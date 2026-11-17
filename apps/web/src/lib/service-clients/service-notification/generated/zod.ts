@@ -2276,6 +2276,29 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          itemId: zod.uuid().describe('Requested item.'),
+                          itemName: zod
+                            .string()
+                            .describe(
+                              'Item display name when the request was made.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe('Request under review.'),
+                          teamId: zod.uuid().describe('Team owning the item.'),
+                        })
+                        .describe(
+                          "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values."
+                        ),
+                      tag: zod.enum(['password_access_requested']),
+                    })
+                    .describe(
+                      'An agent asked for access to a vault item the user manages.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -2295,6 +2318,114 @@ export const listTypedNotificationsResponse = zod
                     })
                     .describe(
                       "One of the user's routines finished a run, successfully or not."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agent: zod
+                            .enum(['claude'])
+                            .describe(
+                              'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
+                            ),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          expiresAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the sign-in expires or expired; absent when the agent rejected it.'
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .describe(
+                              "The computer's harness, whose runtime row holds the sign-in."
+                            ),
+                          stage: zod
+                            .enum(['expires_soon', 'expires_today', 'expired'])
+                            .describe(
+                              "How close a computer's agent sign-in is to no longer working."
+                            ),
+                        })
+                        .describe(
+                          "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                        ),
+                      tag: zod.enum(['agent_sign_in_expiry']),
+                    })
+                    .describe(
+                      "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's name."),
+                                  userId: zod
+                                    .string()
+                                    .describe(
+                                      "The agent's Macro user id, to open a DM with it."
+                                    ),
+                                })
+                                .describe(
+                                  'The agent teammate a computer was bought for, so its inviter hears about\nthe agent rather than the machine.'
+                                ),
+                            ])
+                            .optional(),
+                          computerId: zod
+                            .uuid()
+                            .describe('The computer that was set up.'),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              "The computer's harness, once macrod has connected."
+                            ),
+                          outcome: zod
+                            .union([
+                              zod
+                                .object({
+                                  kind: zod.enum(['ready']),
+                                })
+                                .describe(
+                                  'macrod connected for the first time: the computer is ready.'
+                                ),
+                              zod
+                                .object({
+                                  failureReason: zod
+                                    .string()
+                                    .describe(
+                                      "Why, in the words the computer's status shows."
+                                    ),
+                                  kind: zod.enum(['failed']),
+                                })
+                                .describe(
+                                  'Setup gave up before the computer was ready.'
+                                ),
+                            ])
+                            .describe("How a computer's first setup ended."),
+                        })
+                        .describe(
+                          "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow."
+                        ),
+                      tag: zod.enum(['computer_setup']),
+                    })
+                    .describe(
+                      'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
                     ),
                   zod
                     .object({
@@ -4454,6 +4585,29 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          itemId: zod.uuid().describe('Requested item.'),
+                          itemName: zod
+                            .string()
+                            .describe(
+                              'Item display name when the request was made.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe('Request under review.'),
+                          teamId: zod.uuid().describe('Team owning the item.'),
+                        })
+                        .describe(
+                          "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values."
+                        ),
+                      tag: zod.enum(['password_access_requested']),
+                    })
+                    .describe(
+                      'An agent asked for access to a vault item the user manages.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -4473,6 +4627,114 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     })
                     .describe(
                       "One of the user's routines finished a run, successfully or not."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agent: zod
+                            .enum(['claude'])
+                            .describe(
+                              'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
+                            ),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          expiresAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the sign-in expires or expired; absent when the agent rejected it.'
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .describe(
+                              "The computer's harness, whose runtime row holds the sign-in."
+                            ),
+                          stage: zod
+                            .enum(['expires_soon', 'expires_today', 'expired'])
+                            .describe(
+                              "How close a computer's agent sign-in is to no longer working."
+                            ),
+                        })
+                        .describe(
+                          "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                        ),
+                      tag: zod.enum(['agent_sign_in_expiry']),
+                    })
+                    .describe(
+                      "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's name."),
+                                  userId: zod
+                                    .string()
+                                    .describe(
+                                      "The agent's Macro user id, to open a DM with it."
+                                    ),
+                                })
+                                .describe(
+                                  'The agent teammate a computer was bought for, so its inviter hears about\nthe agent rather than the machine.'
+                                ),
+                            ])
+                            .optional(),
+                          computerId: zod
+                            .uuid()
+                            .describe('The computer that was set up.'),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              "The computer's harness, once macrod has connected."
+                            ),
+                          outcome: zod
+                            .union([
+                              zod
+                                .object({
+                                  kind: zod.enum(['ready']),
+                                })
+                                .describe(
+                                  'macrod connected for the first time: the computer is ready.'
+                                ),
+                              zod
+                                .object({
+                                  failureReason: zod
+                                    .string()
+                                    .describe(
+                                      "Why, in the words the computer's status shows."
+                                    ),
+                                  kind: zod.enum(['failed']),
+                                })
+                                .describe(
+                                  'Setup gave up before the computer was ready.'
+                                ),
+                            ])
+                            .describe("How a computer's first setup ended."),
+                        })
+                        .describe(
+                          "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow."
+                        ),
+                      tag: zod.enum(['computer_setup']),
+                    })
+                    .describe(
+                      'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
                     ),
                   zod
                     .object({
@@ -6582,6 +6844,29 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          itemId: zod.uuid().describe('Requested item.'),
+                          itemName: zod
+                            .string()
+                            .describe(
+                              'Item display name when the request was made.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe('Request under review.'),
+                          teamId: zod.uuid().describe('Team owning the item.'),
+                        })
+                        .describe(
+                          "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values."
+                        ),
+                      tag: zod.enum(['password_access_requested']),
+                    })
+                    .describe(
+                      'An agent asked for access to a vault item the user manages.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -6601,6 +6886,114 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     })
                     .describe(
                       "One of the user's routines finished a run, successfully or not."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agent: zod
+                            .enum(['claude'])
+                            .describe(
+                              'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
+                            ),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          expiresAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the sign-in expires or expired; absent when the agent rejected it.'
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .describe(
+                              "The computer's harness, whose runtime row holds the sign-in."
+                            ),
+                          stage: zod
+                            .enum(['expires_soon', 'expires_today', 'expired'])
+                            .describe(
+                              "How close a computer's agent sign-in is to no longer working."
+                            ),
+                        })
+                        .describe(
+                          "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                        ),
+                      tag: zod.enum(['agent_sign_in_expiry']),
+                    })
+                    .describe(
+                      "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's name."),
+                                  userId: zod
+                                    .string()
+                                    .describe(
+                                      "The agent's Macro user id, to open a DM with it."
+                                    ),
+                                })
+                                .describe(
+                                  'The agent teammate a computer was bought for, so its inviter hears about\nthe agent rather than the machine.'
+                                ),
+                            ])
+                            .optional(),
+                          computerId: zod
+                            .uuid()
+                            .describe('The computer that was set up.'),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              "The computer's harness, once macrod has connected."
+                            ),
+                          outcome: zod
+                            .union([
+                              zod
+                                .object({
+                                  kind: zod.enum(['ready']),
+                                })
+                                .describe(
+                                  'macrod connected for the first time: the computer is ready.'
+                                ),
+                              zod
+                                .object({
+                                  failureReason: zod
+                                    .string()
+                                    .describe(
+                                      "Why, in the words the computer's status shows."
+                                    ),
+                                  kind: zod.enum(['failed']),
+                                })
+                                .describe(
+                                  'Setup gave up before the computer was ready.'
+                                ),
+                            ])
+                            .describe("How a computer's first setup ended."),
+                        })
+                        .describe(
+                          "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow."
+                        ),
+                      tag: zod.enum(['computer_setup']),
+                    })
+                    .describe(
+                      'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
                     ),
                   zod
                     .object({
@@ -8554,6 +8947,25 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
+                  itemId: zod.uuid().describe('Requested item.'),
+                  itemName: zod
+                    .string()
+                    .describe('Item display name when the request was made.'),
+                  requestId: zod.uuid().describe('Request under review.'),
+                  teamId: zod.uuid().describe('Team owning the item.'),
+                })
+                .describe(
+                  "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values."
+                ),
+              tag: zod.enum(['password_access_requested']),
+            })
+            .describe(
+              'An agent asked for access to a vault item the user manages.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
                   outcome: zod
                     .enum(['succeeded', 'failed'])
                     .describe(
@@ -8571,6 +8983,108 @@ export const getTypedNotificationByIdResponse = zod
             })
             .describe(
               "One of the user's routines finished a run, successfully or not."
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  agent: zod
+                    .enum(['claude'])
+                    .describe(
+                      'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
+                    ),
+                  computerName: zod
+                    .string()
+                    .describe("The computer's name when the notice was sent."),
+                  expiresAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      'When the sign-in expires or expired; absent when the agent rejected it.'
+                    ),
+                  harnessId: zod
+                    .uuid()
+                    .describe(
+                      "The computer's harness, whose runtime row holds the sign-in."
+                    ),
+                  stage: zod
+                    .enum(['expires_soon', 'expires_today', 'expired'])
+                    .describe(
+                      "How close a computer's agent sign-in is to no longer working."
+                    ),
+                })
+                .describe(
+                  "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                ),
+              tag: zod.enum(['agent_sign_in_expiry']),
+            })
+            .describe(
+              "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  agent: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          name: zod.string().describe("The agent's name."),
+                          userId: zod
+                            .string()
+                            .describe(
+                              "The agent's Macro user id, to open a DM with it."
+                            ),
+                        })
+                        .describe(
+                          'The agent teammate a computer was bought for, so its inviter hears about\nthe agent rather than the machine.'
+                        ),
+                    ])
+                    .optional(),
+                  computerId: zod
+                    .uuid()
+                    .describe('The computer that was set up.'),
+                  computerName: zod
+                    .string()
+                    .describe("The computer's name when the notice was sent."),
+                  harnessId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      "The computer's harness, once macrod has connected."
+                    ),
+                  outcome: zod
+                    .union([
+                      zod
+                        .object({
+                          kind: zod.enum(['ready']),
+                        })
+                        .describe(
+                          'macrod connected for the first time: the computer is ready.'
+                        ),
+                      zod
+                        .object({
+                          failureReason: zod
+                            .string()
+                            .describe(
+                              "Why, in the words the computer's status shows."
+                            ),
+                          kind: zod.enum(['failed']),
+                        })
+                        .describe(
+                          'Setup gave up before the computer was ready.'
+                        ),
+                    ])
+                    .describe("How a computer's first setup ended."),
+                })
+                .describe(
+                  "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow."
+                ),
+              tag: zod.enum(['computer_setup']),
+            })
+            .describe(
+              'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
             ),
           zod
             .object({

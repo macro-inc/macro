@@ -25,7 +25,7 @@ and the traps. To add a whole service, follow the
 
 Stacks are `macro-inc/dev` and `macro-inc/prod`; a few are prod-only
 (`monitoring`, `doppler-projects`) or dev-only (`github-runners`,
-`web-app-preview`). The project name is usually the directory name. It matters:
+`web-app-preview`, `openbao`). The project name is usually the directory name. It matters:
 Doppler, `services-config.json`, and the nix `serviceName` all key on it.
 
 ### Stack references
@@ -185,8 +185,11 @@ Both deploy-all and single-service workflows use this helper. Download paths and
 build/deployment failure gates remain attempt-scoped.
 
 - Only stacks listed in `services-config.json` deploy automatically. `gateway`,
-  `macrodb`, `doppler-projects`, `monitoring`, `observability` and a few
-  others are manual.
+  `macrodb`, `doppler-projects`, `monitoring`, `observability`, `openbao` and a
+  few others are manual.
+- `openbao` (dev only) is a deliberate exception to the gateway pattern: the
+  vault API must never be gateway-reachable, so it has its own internal ALB.
+  Don't copy it for ordinary services.
 - Dev MacroDB's primary and replica are both configured as `db.t4g.large`
   (8 GiB). Replica resizing requires a separate `macrodb` deployment; dev's
   `applyImmediately` setting makes that resize interrupt replica connections.
@@ -198,6 +201,12 @@ build/deployment failure gates remain attempt-scoped.
 - Services marked `bootstrap_pending` or `deploy_enabled: false` are skipped.
 - **Migrations deploy before services** and must work with the code already
   running ([database guide](database.md)).
+- **Manual deploys apply no migrations.** `deploy-service-generic.yml` and
+  `deploy-pulumi-stack.yml` refuse to deploy a service with binaries or
+  Lambdas while the deployed commit has a migration that is unapplied to the
+  target environment or differs from what was applied there
+  (`.github/actions/check-macro-db-migrations`). Run `migrate-macro-db.yml`
+  for that environment first, or deploy a commit without the migration.
 - `continueBeforeSteadyState` means a green deploy job does not prove old tasks
   stopped. The circuit breaker rolls back failed deployments; otherwise roll
   forward or redeploy an older ref.
@@ -224,9 +233,9 @@ and receives `APP_SECRETS_JSON` now), `fusion-auth/README.md`.
 
 `agent-harness-service` is the only ECS agent service. Its process also owns
 chat/completions, workspace MCP/OAuth, preview SSH/HTTP/control, routine cron
-and event workers, and projection refresh sweeps. `preview-gateway` retains
-only networking, and `document-cognition` retains the projection queue and
-public DNS record. `mcp-server` retains its public DNS record. Both hostnames
+and event workers. `preview-gateway` retains
+only networking, and `document-cognition` retains the retired projection queue
+and public DNS record. `mcp-server` retains its public DNS record. Both hostnames
 point at the shared gateway, preserving public URLs and OAuth callbacks. The
 retired MCP and schedule stack programs contain no compute resources. Follow
 [the cutover guide](../guides/consolidate-agent-services.md) before deployment;

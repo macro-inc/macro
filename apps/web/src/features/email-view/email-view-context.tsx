@@ -36,6 +36,10 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
+import {
+  enableEmailWideSearch,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -138,11 +142,6 @@ export type EmailViewContext = {
   filtersChanged: Accessor<boolean>;
   clearFilters: () => void;
   setFocusSort: (sort: EmailFocusSort) => void;
-  /**
-   * Shows the given tags across the whole mailbox: a non-empty selection
-   * lands on the All tab. Clearing keeps the current tab.
-   */
-  showTags: (tagIds: string[]) => void;
   /**
    * Filters by a single tag without changing tabs. Used by the inline
    * "filter by tag" button on entity rows.
@@ -424,6 +423,9 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         return 'scope' in filters ? filters.scope : undefined;
       },
       enabled: savedViewQueryReady,
+      // Desktop only: the phone list has no search of its own to wait on.
+      keepRowsWhileSearching: () =>
+        !isTouchDevice() && isFeatureEnabled(enableEmailWideSearch),
     })
   );
   withSplitPanelOwner(listOwnedSlotName('navigation-source'), () =>
@@ -707,34 +709,6 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
 
   const setFocusSort = (sort: EmailFocusSort) => setState('focusSort', sort);
 
-  // A tag reaches across every mailbox slice, so choosing one from a narrower
-  // tab moves to All; as with `setTab`, that move drops the tab's other filters.
-  const showTags = (tagIds: string[]) => {
-    if (savedViewActive() && tagIds.length > 0) {
-      batch(() => {
-        setSavedViewNavigation({});
-        clearSavedViewState('all');
-        setState('facets', normalizeFacetSelection({ tags: tagIds }));
-        navigateToList(undefined);
-      });
-      return;
-    }
-    setState(
-      produce((draft) => {
-        const movesToAll = tagIds.length > 0 && draft.tab !== 'all';
-        if (movesToAll) {
-          draft.tab = 'all';
-          Object.assign(draft, emailTabFilterState('all'));
-        }
-        draft.facets = normalizeFacetSelection({
-          ...draft.facets,
-          tags: tagIds,
-        });
-      })
-    );
-    closeThread();
-  };
-
   // Filters by a single tag without changing tabs. Used by the inline
   // "filter by tag" button on entity rows.
   const filterByTag = (optionId: string) => {
@@ -785,7 +759,6 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     filtersChanged,
     clearFilters,
     setFocusSort,
-    showTags,
     filterByTag,
     tagViewTitle,
     source,

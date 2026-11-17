@@ -15,7 +15,7 @@ inbound = [
   "entity_access/inbound",
 ]
 # Postgres persistence, and receipts minted through entity access.
-postgres = ["dep:sqlx"]
+postgres = ["dep:sqlx", "databases/outbound"]
 
 [dependencies]
 axum = { workspace = true, optional = true }

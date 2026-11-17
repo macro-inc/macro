@@ -4,6 +4,12 @@
  */
 export const AGENT_SESSION_LOG_EVENT = 'agent_session_log';
 
+/**
+ * The Connection Gateway event type carrying a running session's live
+ * one-line activity summary, or its clearing when the turn ends.
+ */
+export const AGENT_SESSION_ACTIVITY_EVENT = 'agent_session_activity';
+
 /** The Connection Gateway event type for a persisted session-name change. */
 export const AGENT_SESSION_RENAMED_EVENT = 'agent_session_renamed';
 
@@ -29,6 +35,12 @@ import type {
 export type AgentSessionLogEvent = {
   agentSessionId: string;
   entries: AgentSessionLogEntryDto[];
+};
+
+/** Mirrors `AgentSessionActivityEvent` in the backend realtime adapter. */
+export type AgentSessionActivityEvent = {
+  agentSessionId: string;
+  text: string | null;
 };
 
 /** Mirrors `AgentSessionRenamedEvent` in the backend realtime adapter. */

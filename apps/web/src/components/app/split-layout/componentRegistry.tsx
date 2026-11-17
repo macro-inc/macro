@@ -36,6 +36,14 @@ import {
 } from './split-router/app-route-shell';
 
 // Views load as their own chunks the first time a split opens them.
+const ForYouRouteView = lazyNamed(
+  () => import('@app/features/suggestions/route-views'),
+  'ForYouRouteView'
+);
+const PasswordsRouteView = lazyNamed(
+  () => import('@app/features/passwords/route-views'),
+  'PasswordsRouteView'
+);
 const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
@@ -325,7 +333,17 @@ registerComponent(
 );
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
+registerComponent(
+  'for-you',
+  () => <ForYouRouteView />,
+  () => composableLayout()
+);
 registerComponent('activity', () => <ActivityRouteView />);
+registerComponent(
+  'passwords',
+  () => <PasswordsRouteView />,
+  () => composableLayout()
+);
 registerComponent(
   'notifications',
   () => <NotificationsRouteView />,
@@ -624,13 +642,6 @@ if (DEV_MODE_ENV) {
       lazy(
         () => import('@app/features/next-soup/debug/DocumentWherePlayground')
       )
-    )
-  );
-
-  registerComponent(
-    'projection-playground',
-    withAuth(
-      lazy(() => import('@app/features/devtools/debug/ProjectionPlayground'))
     )
   );
 

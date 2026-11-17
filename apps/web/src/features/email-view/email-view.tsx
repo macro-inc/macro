@@ -16,15 +16,20 @@ import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHe
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { enableEmailSavedViews } from '@core/constant/featureFlags';
+import {
+  enableEmailSavedViews,
+  enableEmailWideSearch,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import {
+  createEffect,
   createSignal,
   type JSX,
   Match,
+  on,
   onMount,
   type ParentProps,
   Show,
@@ -35,13 +40,16 @@ import { EmailFilterDrawer } from './components/EmailFilterDrawer';
 import { EmailHeader, EmailViewBreadcrumbItem } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailReader } from './components/EmailReader';
+import { EmailRecentSearches } from './components/EmailRecentSearches';
 import { EmailSidebar } from './components/EmailSidebar';
-import { EMAIL_TABS } from './constants';
+import { canSearchEmailTab, EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
 import type { EmailListPane } from './reader-pane';
+import { createEmailSearchSuggestions } from './search/create-email-search-suggestions';
 import { emailTour } from './tour';
 import type { EmailTab, EmailViewStateOptions } from './types';
+import { useEmailSearchHotkeys } from './use-email-search-hotkeys';
 import { useEmailViewHotkeys } from './use-email-view-hotkeys';
 import { useReadingPaneHotkey } from './use-reading-pane-hotkey';
 import {
@@ -98,14 +106,61 @@ function EmailPanes(props: {
   setListPane: (pane: EmailListPane | undefined) => void;
   onListWidthChange: (width: number) => void;
 }) {
+  const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
+  const { state, setState, closeThread, list, source } = useEmailView();
+  const userId = useUserId();
+  const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
+  const recentSearches = createEmailSearchSuggestions({
+    userId,
+    search: () => state.search,
+    setSearch: (query) => setState('search', query),
+  });
+  const pickedResultsArrived = () =>
+    recentSearches.awaitsPickedResults() &&
+    !source.isLoading() &&
+    !source.isFetching() &&
+    !(source.showsPreviousRows?.() ?? false);
+  // The list is driven imperatively, so the arrival is an effect.
+  createEffect(
+    on(pickedResultsArrived, (arrived) => {
+      if (!arrived) return;
+
+      recentSearches.pickedResultsTaken();
+      list.navigate.toFirst();
+    })
+  );
+  // A loading flag is not on: the compact field stays until it answers.
+  const searchSuggestions = () =>
+    wideSearchFlag().enabled ? recentSearches : undefined;
+
+  const search = useEmailSearchHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    canSearch: () => canSearchEmailTab(state.tab),
+    showList: closeThread,
+  });
+
   const listColumn = (beside?: 'reader') => (
     <>
       <EmailHeader
         tabOnly={beside === 'reader'}
-        onSearchEscape={props.focusList}
+        focusSearchResults={props.focusList}
+        registerSearch={search.registerListSearch}
+        searchSuggestions={searchSuggestions()}
       />
       <ViewTour tour={emailTour} />
+      <Show when={searchSuggestions()}>
+        {(suggestions) => (
+          <EmailRecentSearches
+            suggestions={suggestions()}
+            onPick={(index) => {
+              suggestions().pick(index);
+              props.focusList();
+            }}
+          />
+        )}
+      </Show>
       <ViewShell.Content>{props.list}</ViewShell.Content>
     </>
   );
@@ -269,6 +324,8 @@ function EmailViewRoot() {
       return selectedThread() === undefined && !composing();
     },
     hasSelection: () => listController.selection.count() > 0,
+    hasSearch: () =>
+      canSearchEmailTab(state.tab) && state.search.trim().length > 0,
   });
 
   const savedViewKind = () => savedViews?.view().kind;

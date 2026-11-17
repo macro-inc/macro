@@ -85,6 +85,7 @@ document_create_adapters = [
 inbound = ["axum", "document_create_adapters", "ports"]
 markdown_init = ["dep:lexical_client"]
 outbound = [
+  "activity/outbound",
   "dep:aws-sdk-s3",
   "dep:base64",
   "dep:entity_access_db_utils",

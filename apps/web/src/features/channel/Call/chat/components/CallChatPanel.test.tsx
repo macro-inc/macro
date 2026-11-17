@@ -229,7 +229,7 @@ it.each([false, true])(
   }
 );
 
-it('moves the same sidebar and editor between docked and overlay hosts', () => {
+it('keeps the sidebar and editor attached while docking changes', () => {
   const [docked, setDocked] = createSignal(true);
   let sidebar!: HTMLDivElement;
   let overlay!: HTMLDivElement;
@@ -252,12 +252,12 @@ it('moves the same sidebar and editor between docked and overlay hosts', () => {
   const panel = screen.getByRole('complementary', { name: 'Call sidebar' });
   const input = screen.getByRole('textbox') as HTMLInputElement;
   fireEvent.input(input, { target: { value: 'Keep during resize' } });
-  expect(panel.parentElement).toBe(sidebar);
+  expect(panel.parentElement).toBe(overlay);
   setDocked(false);
   expect(panel.parentElement).toBe(overlay);
   expect(screen.getByRole('textbox')).toBe(input);
   setDocked(true);
-  expect(panel.parentElement).toBe(sidebar);
+  expect(panel.parentElement).toBe(overlay);
   expect(screen.getByRole('textbox')).toBe(input);
   expect(input.value).toBe('Keep during resize');
 });

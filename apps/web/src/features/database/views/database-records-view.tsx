@@ -5,6 +5,7 @@ import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
+  createMemo,
   type JSX,
   Match,
   onCleanup,
@@ -128,6 +129,7 @@ export type DatabaseRecordsViewProps = {
   onComposeRecord?: (values: Record<string, DatabaseCellValue>) => void;
   renderTextEditor?: GridCellProps['renderTextEditor'];
   renderTextValue?: GridCellProps['renderTextValue'];
+  renderLinkValue?: GridCellProps['renderLinkValue'];
   renderMentionPicker?: GridCellProps['renderMentionPicker'];
   renderMentionValue?: GridCellProps['renderMentionValue'];
   /** Opens a record someone clicks somewhere else, in place of the record panel, as a view in a document opens its database; returns whether it did, else the panel opens. */
@@ -198,6 +200,16 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
     withTable((controls) => controls.renameColumn(columnId));
     return true;
   }
+
+  // The button is built again only when its label changes. Renaming a column
+  // changes `columns()`, and a button rebuilt then, as the blur that saves the
+  // name runs, takes the pointer press from under the user: no click follows.
+  const addColumnLabel = createMemo(() =>
+    columns().length ? undefined : 'Add first column'
+  );
+  const addColumn = createMemo(() =>
+    props.addColumn?.(addColumnLabel(), focusColumn)
+  );
 
   const columnLayout = createColumnLayout({
     view: () => props.view,
@@ -355,11 +367,13 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
           <GridCell
             {...options}
             column={column()}
+            rowCells={row().cells}
             emptyLabel={options?.emptyLabel ?? ''}
             value={rowValue(row(), column().id)}
             canEdit={props.canEdit}
             renderTextEditor={props.renderTextEditor}
             renderTextValue={props.renderTextValue}
+            renderLinkValue={props.renderLinkValue}
             renderMentionPicker={props.renderMentionPicker}
             renderMentionValue={props.renderMentionValue}
             onOpenMention={
@@ -555,6 +569,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               }
               renderCell={renderCell}
               renderTextValue={props.renderTextValue}
+              renderLinkValue={props.renderLinkValue}
               renderMentionValue={props.renderMentionValue}
               rowPending={controller.rowPending}
               createPending={controller.createPending}
@@ -604,7 +619,10 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                         .filter((id): id is string => id !== undefined);
                       const writable = columnIds.filter((id) =>
                         columns().some(
-                          (column) => column.id === id && canEditCell(column)
+                          (column) =>
+                            column.id === id &&
+                            canEditCell(column) &&
+                            column.nullable !== false
                         )
                       );
                       if (!savedRows.length || !writable.length) return true;
@@ -650,15 +668,13 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               }
               canEdit={props.canEdit}
               pending={controller.pending()}
-              addColumn={props.addColumn?.(
-                columns().length ? undefined : 'Add first column',
-                focusColumn
-              )}
+              addColumn={addColumn()}
               renderCell={renderCell}
               renderCellPreview={(row, column) => (
                 <GridCellPreview
                   column={column()}
                   value={rowValue(row(), column().id)}
+                  rowCells={row().cells}
                   canEdit={props.canEdit}
                 />
               )}

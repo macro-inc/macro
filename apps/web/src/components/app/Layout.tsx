@@ -85,6 +85,7 @@ import { installGlassPress } from './mobile/glassPress';
 import { MobileDockRow } from './mobile/MobileDockRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { SessionExpiredRedirect } from './SessionExpiredRedirect';
+import { useCloseTabShortcut } from './tab-layout/close-tab-shortcut';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
 const StarterDatabase = lazy(async () => {
@@ -149,6 +150,7 @@ export function RootFrame(props: ParentProps) {
   // Here rather than in GlobalShortcuts so zoom also works on the pages that
   // render without app chrome (login, booking, meetings).
   useDesktopZoom();
+  useCloseTabShortcut();
 
   // save last_path to cookie
   createEffect(() => {
@@ -255,6 +257,11 @@ function useNewOnboardingRedirect() {
  * and the mobile dock — around a page. Route shells supply the providers and
  * content; auth, booking, and meeting pages render without this chrome.
  */
+const MobileCallIsland = lazyNamed(
+  () => import('../../features/channel/Call/views/MobileCallIsland'),
+  'MobileCallIsland'
+);
+
 export function AppChrome(props: ParentProps) {
   const isAuthenticated = useIsAuthenticated();
   // A login cookie shows the rail while sign-in is confirmed; a stale one
@@ -360,6 +367,9 @@ export function AppChrome(props: ParentProps) {
       </div>
       <Show when={isTouchDevice() && isAuthenticated()}>
         <FloatRegionHost />
+        <Suspense>
+          <MobileCallIsland />
+        </Suspense>
         <Suspense>
           <UserCardDrawer />
         </Suspense>

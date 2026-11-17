@@ -3089,3 +3089,76 @@ async fn a_fenced_turn_flushes_complete_and_in_order() {
             .collect::<Vec<_>>(),
     );
 }
+
+#[tokio::test]
+async fn shared_ready_restores_session_credentials_before_loading_and_closure_revokes_them() {
+    use crate::domain::credentials::authenticate_session;
+    use crate::domain::model::SessionStatus;
+    use crate::domain::session::{
+        CloseReason, InitializationContext, Input, SessionRestoreSupport,
+    };
+    use agent_client_protocol::{RawJsonRpcMessage, schema::v1::RequestId};
+
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = AgentSessionId::new();
+    let mut row = test_agent_session(session);
+    row.status = SessionStatus::Disconnected;
+    repo.insert_session(row);
+    repo.set_egress_token_hash(session, "resumed-token-hash")
+        .await
+        .unwrap();
+    assert!(matches!(
+        authenticate_session(&repo, "resumed-token-hash").await,
+        Err(AgentSessionError::Disconnected(_))
+    ));
+    let claim = claim_for_test(&repo, session).await;
+    let (handshake, _) = watch::channel(HandshakeStatus::Pending);
+    let (send, mut received) = mpsc::channel(8);
+    let (_inbound, inbound) = mpsc::channel(8);
+    let (_commands, command_rx) = mpsc::channel(8);
+    let mut actor = SessionActor::new(
+        session,
+        Some("restored-acp".into()),
+        "/workspace".into(),
+        vec![],
+        PermissionPolicy::Prompt,
+        RecordingTransport {
+            outbound: send,
+            inbound,
+        },
+        LiveSessionLogWriter::fenced(repo.clone(), NoOpRealtime, claim),
+        command_rx,
+        handshake,
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
+    );
+    let init_id = RequestId::Str("shared-initialize".into());
+    actor.dispatch(Input::SharedReady {
+        restore: SessionRestoreSupport { resume: false, load: true },
+        context: Arc::new(InitializationContext {
+            request: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::request(
+                "initialize".into(), serde_json::json!({"protocolVersion":1}), init_id.clone(),
+            ).unwrap())),
+            response: ToServerMessage::Acp(AcpMessage(RawJsonRpcMessage::response(init_id, Ok(serde_json::json!({"protocolVersion":1,"agentCapabilities":{"loadSession":true}}))))),
+        }),
+    }).await;
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(load))) =
+        received.try_recv().unwrap()
+    else {
+        panic!("load request")
+    };
+    assert_eq!(load.method.as_ref(), "session/load");
+    assert!(
+        authenticate_session(&repo, "resumed-token-hash")
+            .await
+            .is_ok(),
+        "the runtime must be able to use MCP and the model gateway during session/load"
+    );
+    actor
+        .dispatch(Input::Closed(CloseReason::TransportClosed))
+        .await;
+    assert!(matches!(
+        authenticate_session(&repo, "resumed-token-hash").await,
+        Err(AgentSessionError::Disconnected(_))
+    ));
+}
