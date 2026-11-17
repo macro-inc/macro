@@ -331,12 +331,12 @@ export function attachCameraControls(
           : undefined;
       // A finger near the frame takes the handle it is nearest, which can be a
       // corner while it covers the strip drawn along an edge. Only paint that
-      // belongs to something else ends that reach.
-      const reached =
-        touch && !isRadiusHandle(drawn) && !pressesAnotherItem(frame, point)
-          ? touchHandle(frame, event)
-          : undefined;
-      const transformHandle = reached ?? drawn;
+      // belongs to something else ends that reach. Where the reach finds no
+      // handle there is none for a finger, whatever is drawn under it: the
+      // strips along a thin shape's edges cover its middle, which moves it.
+      const reaches =
+        touch && !isRadiusHandle(drawn) && !pressesAnotherItem(frame, point);
+      const transformHandle = reaches ? touchHandle(frame, event) : drawn;
       const { scale } = editor.getCamera();
       const pick = (handle: boolean) =>
         selectionTarget(

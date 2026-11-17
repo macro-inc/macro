@@ -103,12 +103,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 
 import { queryClient } from '@queries/client';
-import {
-  type ProjectsContext,
-  useProjectsContext,
-} from './context/projects-context';
 import { ProjectBreadcrumb } from './project-breadcrumb';
-import { Projects } from './projects';
 import { createProjectSources } from './queries/project-sources';
 
 const project = {
@@ -191,76 +186,6 @@ afterEach(() => {
   queryClient.clear();
   vi.useRealTimers();
   vi.clearAllMocks();
-});
-
-it('keeps retained query sources gated after their view owner is disposed', async () => {
-  vi.useFakeTimers();
-  const [enabled, setEnabled] = createSignal(true);
-  mocks.enabled = enabled;
-  setupGraphql();
-
-  // The context belongs to a view, but split-owned queries are constructed
-  // under a separate owner that survives view unmount.
-  let context: ProjectsContext | undefined;
-  function CaptureContext() {
-    context = useProjectsContext();
-    return null;
-  }
-  const view = render(() => (
-    <Projects>
-      <CaptureContext />
-    </Projects>
-  ));
-  if (!context) throw new Error('Projects provider did not mount');
-  const retainedContext = context;
-  view.unmount();
-  setEnabled(false);
-  const sources = createRoot((dispose) => {
-    disposeSource = dispose;
-    return {
-      collection: retainedContext.createCollectionSource(),
-      detail: retainedContext.createProjectSource(() => 'launch'),
-    };
-  });
-  await vi.advanceTimersByTimeAsync(60_000);
-  expect(mocks.get).not.toHaveBeenCalled();
-
-  setEnabled(true);
-  await vi.waitFor(() => expect(sources.detail.project()?.name).toBe('Launch'));
-  await vi.waitFor(() => expect(sources.collection.rows()).toHaveLength(1));
-  expect(sources.detail.project()).toMatchObject({
-    taskCount: 1,
-    completedTaskCount: 0,
-  });
-  expect(sources.collection.rows()?.[0].project).toMatchObject({
-    taskCount: 1,
-    completedTaskCount: 0,
-  });
-  expect(mocks.page).not.toHaveBeenCalled();
-  expect(mocks.soup).toHaveBeenCalledTimes(2);
-  // Nothing reads an open project again on a timer.
-  await vi.advanceTimersByTimeAsync(30_000);
-  expect(callsFor('Initiative')).toHaveLength(1);
-
-  setEnabled(false);
-  const soupRequests = mocks.soup.mock.calls.length;
-  expect(sources.collection.rows()).toBeUndefined();
-  expect(sources.detail.project()).toBeUndefined();
-  await Promise.all([
-    sources.collection.loadMore(),
-    sources.collection.refresh(),
-    sources.detail.refresh(),
-    queryClient.invalidateQueries(),
-  ]);
-  await vi.advanceTimersByTimeAsync(60_000);
-  expect(callsFor('Initiative')).toHaveLength(1);
-
-  expect(mocks.soup).toHaveBeenCalledTimes(soupRequests);
-  setEnabled(true);
-  await vi.waitFor(() =>
-    expect(mocks.soup.mock.calls.length).toBeGreaterThan(soupRequests)
-  );
-  expect(sources.detail.project()?.name).toBe('Launch');
 });
 
 it("names a route's project without the project's full read", async () => {

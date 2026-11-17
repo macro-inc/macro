@@ -324,7 +324,6 @@ describe('saved views', () => {
     render(() => (
       <EmailViewProvider
         initialState={{ inboxIds: ['saved-inbox'] }}
-        savedViewsEnabled={() => true}
         savedViewSource={(id) => ({
           data: () => {
             if (!id()) return undefined;

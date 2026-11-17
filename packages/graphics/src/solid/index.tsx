@@ -97,6 +97,7 @@ function ConnectorEndTarget(props: ConnectorEndProps) {
     <circle
       data-graphics-connector-end={props.end}
       data-graphics-connector-id={props.connectorId}
+      data-graphics-connector-reach=""
       cx={props.point.x}
       cy={props.point.y}
       r={TOUCH_ENDPOINT_REACH}

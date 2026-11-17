@@ -288,7 +288,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/routines` | Routines list in the Agents workspace |
 | `/app/routines/new` | A new routine's page, saved only by **Create routine** |
 | `/app/routines/<uuid>` | Routine settings, triggers, and run history in the Agents workspace |
-| `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
+| `/app/agent/<uuid>` | An agent session (opened from `@macro`, `@coder` or `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
@@ -392,12 +392,6 @@ buttons. Mobile content panes retain their back button; Scheduling omits it in
 favor of its owner and view-navigation islands, except while creating or editing
 a schedule: a separate **Back to availability** pill sits beside the editor
 title, matching other mobile routes.
-
-Projects are enabled by default in development; production uses the PostHog
-`enable-projects` flag. `VITE_ENABLE_PROJECTS` overrides either environment.
-When disabled, project navigation,
-creation, assignment, chips, and Cmd+K results are hidden; direct project links
-return to Tasks after flags resolve. Existing Files folders stay available.
 
 Projects open as native detail views within Tasks, preserving its sidebar and
 shared breadcrumb navigation. The Projects breadcrumb returns to the same list,
@@ -1152,8 +1146,7 @@ The labeled glass button one row above Search opens the current page's creation
 flow directly: **+ Task** on Tasks, **+ Email** on Email, **+ Message** on Channels,
 **+ Document** on Files, and **+ Event** on Calendar. On Notifications,
 **+ New** opens a blurred backdrop and a stack of glass actions: Email, Message,
-Document, Event, Task, More. Event follows the calendar UI flag; unavailable
-launcher actions are omitted. The plus rotates into an X; tap it or the backdrop,
+Document, Event, Task, More. Unavailable launcher actions are omitted. The plus rotates into an X; tap it or the backdrop,
 or press Escape, to dismiss. More opens the full create menu as a glass bottom
 sheet on mobile, with broad, screen-scaled corners and an even 8px outer inset;
 home-indicator clearance is inside the glass. The mobile full menu is a scrollable
@@ -1191,7 +1184,7 @@ Filter sheets have a visible heading and Close filters button. Sort and filter
 options use rounded rows with trailing checkmarks; accordion sections retain
 their selection counts. Clear all resets selections without dismissing the sheet.
 In Soup-based list toolbars, Assignee and Created by menus and filter chips load
-suggestions only while open. Next options replaces the page; selected and unavailable
+suggestions only while open, and list further pages as they scroll; selected and unavailable
 saved IDs remain selected across searches. Me remains available, Assignee also has
 Unassigned, and Only changes its own filter group. Clearing a creator refinement on Owned
 restores the Owned constraint. Chip labels resolve separately while menus are closed.
@@ -1284,8 +1277,7 @@ the catalog's first four available template cards (icon, name, one line and its 
 **New email → Label with AI**) with **All templates** at the right, which opens
 New routine's start screen. A card opens New routine already filled in from that
 template. The strip hides while searching and on **On**; on phones the cards
-scroll sideways. With `enable-routine-suggestions` and
-`enable-routine-code-steps` on (not on touch devices), suggestions take the
+scroll sideways. With `enable-routine-suggestions` on (not on touch devices), suggestions take the
 strip's place: **Suggested for you** above the rows on **All** shows one row
 of Discover's cards, as many as fit, and after them a narrow **N more · In
 Discover** column, which opens a third tab, **Discover**. Discover
@@ -1359,8 +1351,7 @@ enabled, for its trigger condition, then **Chase stuck tasks**, **Tag new
 email**, **Tag new documents**, **Tasks from my calls**, **Weekly pipeline
 review**, **Catch up on mentions**, **Sum up new pull requests** and **Weekly
 agent digest**; each shows its icon, what it does and its trigger → first
-step. Routines with code start with it when `enable-routine-code-steps` is on
-and the scheduler can save code, otherwise with an Ask AI step; schedules are
+step. Routines with code start with it when the scheduler can save code, otherwise with an Ask AI step; schedules are
 in the browser's zone), and
 **Start fresh** beside the
 close button. Each choice closes it and opens the new routine's page at
@@ -1445,7 +1436,7 @@ Macro activity triggers by surface:
 
 For messages, mentions, deletion, and task changes, use **Applies to** in the
 same panel to choose any accessible item or specific channels/documents/tasks.
-Specific-item pickers use Next options/PageDown to append later loaded pages.
+Specific-item pickers append later loaded pages as they scroll (or on PageDown).
 Creation triggers cover newly created accessible items; email covers the owner's inbox;
 **Call started** shows **Calls you start** and **Call ended** shows **Calls you
 join** — neither has an item picker. Calls the owner did not start never trigger
@@ -1481,7 +1472,7 @@ a controlled repository's delivery and matching routine history. Wildcard
 routines can run more often, and manually redelivering a webhook from GitHub
 can run a routine again.
 
-When `enable-routine-conditions` is on, every activity trigger can take one
+Every activity trigger can take one
 **Only if** check, a yes/no question about each event, such as **Is this email
 an invoice or a receipt?** (**+ Filter** on the page, **Only run if AI says
 yes** in the trigger panel). Before a run starts, the event's content (the email,

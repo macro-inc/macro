@@ -1554,6 +1554,7 @@ export * from './externalChatSendProgressErrorCode';
 export * from './externalChatSendProgressMessageId';
 export * from './externalChatSendReply';
 export * from './externalChatSendReplyReplyTo';
+export * from './externalChatSendReplyUserConfirmation';
 export * from './externalChatSummary';
 export * from './externalChatSummaryBackfill';
 export * from './externalChatSummaryCommunity';

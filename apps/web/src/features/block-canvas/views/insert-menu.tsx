@@ -54,8 +54,7 @@ export function CanvasInsertMenu(props: {
   onFiles: (files: File[]) => void;
   /** Ask the device for images or videos; the menu closes as it opens. */
   onUpload: () => void;
-  /** Absent while artifacts are off for this user. */
-  onArtifact?: () => void;
+  onArtifact: () => void;
   onClose: () => void;
   onRestoreFocus: () => void;
 }) {
@@ -131,13 +130,9 @@ export function CanvasInsertMenu(props: {
                 <Dropdown.Item onSelect={() => setMode('reference')}>
                   <LinkIcon class="size-4" /> Reference
                 </Dropdown.Item>
-                <Show when={props.onArtifact}>
-                  {(onArtifact) => (
-                    <Dropdown.Item onSelect={onArtifact()}>
-                      <CodeIcon class="size-4" /> Artifact
-                    </Dropdown.Item>
-                  )}
-                </Show>
+                <Dropdown.Item onSelect={props.onArtifact}>
+                  <CodeIcon class="size-4" /> Artifact
+                </Dropdown.Item>
               </Dropdown.Group>
             </Dropdown.Content>
           </Dropdown>

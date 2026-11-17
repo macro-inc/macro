@@ -1,7 +1,5 @@
 import { TutorialPill } from '@app/features/video-tutorials';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createImageActions } from '@core/component/ImageActions';
-import { enableCanvasArtifacts } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type DocumentGeometry,
@@ -122,7 +120,6 @@ function createCanvasView(props: CanvasViewProps) {
   const imageActionsDisabled = () =>
     !imageSource.url() || imageActions.isPrefetching() || imageActions.isBusy();
 
-  const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
   let disposed = false;
   onCleanup(() => {
     disposed = true;
@@ -175,11 +172,7 @@ function createCanvasView(props: CanvasViewProps) {
           'canvas-assets'
         )
       ),
-    /** Absent while artifacts are off for this user. */
-    artifact: () =>
-      artifactsFlag().enabled
-        ? () => insertAt(props.assets.artifact)
-        : undefined,
+    artifact: () => insertAt(props.assets.artifact),
   };
   const [presenting, setPresenting] = createSignal<string>();
   // Outlives the inspector, which unmounts whenever nothing is selected.
@@ -217,7 +210,6 @@ function createCanvasView(props: CanvasViewProps) {
               ),
           }
         : undefined,
-    artifactsEnabled: () => artifactsFlag().enabled,
     insert,
     presenting,
     setPresenting,
@@ -568,7 +560,7 @@ function Surface(props: {
 function Presentation() {
   const view = useCanvasView();
   return (
-    <Show when={view.artifactsEnabled() ? view.presenting() : undefined} keyed>
+    <Show when={view.presenting()} keyed>
       {(startId) => (
         <ArtifactPresentation
           editor={view.editor}
