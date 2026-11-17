@@ -251,16 +251,15 @@ impl IntoResponse for CorrelationRejection {
     }
 }
 
-impl IntoResponse for SharingRefused {
-    fn into_response(self) -> Response {
-        (
-            StatusCode::FORBIDDEN,
-            Json(ErrorBody {
-                message: self.to_string(),
-            }),
-        )
-            .into_response()
-    }
+/// The 403 a request that refused a sharing change answers with.
+fn sharing_refused_response() -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        Json(ErrorBody {
+            message: SharingRefused.to_string(),
+        }),
+    )
+        .into_response()
 }
 
 /// Run a request's handling, and answer [`SharingRefused`] (403) when it
@@ -272,7 +271,7 @@ pub async fn answer_sharing_refusals<F: Future<Output = Response>>(handling: F) 
     let (response, refused) = crate::context::recording_sharing_refusals(handling).await;
     let status = response.status();
     if refused && (status.is_client_error() || status.is_server_error()) {
-        return SharingRefused.into_response();
+        return sharing_refused_response();
     }
     response
 }

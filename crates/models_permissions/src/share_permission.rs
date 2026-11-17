@@ -58,7 +58,7 @@ impl SharePermissionV2 {
     /// Every new item's permission starts here. An agent session held to a
     /// scope that may not share creates items with link sharing off.
     fn new(link_share: Option<LinkShare>, link_share_access_level: Option<AccessLevel>) -> Self {
-        let (link_share, link_share_access_level) = if agent_correlation::context::may_share() {
+        let (link_share, link_share_access_level) = if agent_attribution::context::may_share() {
             (link_share, link_share_access_level)
         } else {
             (None, None)

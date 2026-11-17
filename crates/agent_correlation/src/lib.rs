@@ -5,13 +5,13 @@
 //! This context grants no access. HTTP validates the signed claim once, before
 //! application work; durable events retain the accepted ID independently of the
 //! lifetime of the originating request or session.
+//!
+//! The task-local context itself lives in `agent_attribution`, re-exported
+//! here as `context`, `scope` and `verb`.
 
-pub mod context;
+pub use agent_attribution::{AgentVerb, context, scope, verb};
 pub mod domain;
-pub mod verb;
-pub use verb::AgentVerb;
 #[cfg(feature = "http")]
 pub mod inbound;
 #[cfg(feature = "postgres")]
 pub mod outbound;
-pub mod scope;
