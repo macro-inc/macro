@@ -786,8 +786,7 @@ export const enableCursorAgents = defineFlag({
   default: onInDev,
 });
 
-// Codex composer choices also require enableChatV3Agents.
-// Override with VITE_ENABLE_CODEX_AGENTS.
+// Codex composer choices. Override with VITE_ENABLE_CODEX_AGENTS.
 export const enableCodexAgents = defineFlag({
   key: 'enable-codex-agents',
   env: 'ENABLE_CODEX_AGENTS',
@@ -805,8 +804,7 @@ export const enableRoutineStarterTemplates = defineFlag({
 // Routines AI picks for the user from the catalog: sidebar cards, the
 // Routines page and onboarding's last step. The scheduler checks the same
 // PostHog flag before it reads mail or generates, so with it off there are
-// none to show. Suggestions are built on code-step routines and ship with
-// enable-routine-code-steps; both must be on.
+// none to show.
 export const enableRoutineSuggestions = defineFlag({
   key: 'enable-routine-suggestions',
   env: 'ENABLE_ROUTINE_SUGGESTIONS',
