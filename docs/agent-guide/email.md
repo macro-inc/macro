@@ -317,9 +317,12 @@ Search within a tab or facet finds the threads the list would show: Shared finds
 threads shared with you through a grant to you, a channel or a team, and none of
 your own; Calendar finds only threads with an invitation; Read status and Done
 filter by the thread's read and inbox state, as the list does (Done is not the
-notification's state). Check each with a search term that also matches threads
-the tab leaves out. Drafts and Sent still search all your mail and trim on the
-client.
+notification's state); Sent finds threads with a message you sent and Drafts
+threads holding a draft; the attachment filters find threads with an attachment
+of any selected kind on any message. Check each with a search term that also
+matches threads the tab leaves out. A draft that never synced to the provider
+is not in the search index, so Drafts finds it only by its subject among the
+drafts this browser holds.
 
 A thread carrying a sent file shows a muted paperclip immediately before its
 date, in every list layout. Inline images (an image with a Content-ID, such as

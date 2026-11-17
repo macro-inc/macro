@@ -8,12 +8,16 @@ struct Thread {
     read: bool,
     done: bool,
     calendar: bool,
+    sent: bool,
+    draft: bool,
 }
 
 #[derive(Default)]
 struct Source {
     shared: Vec<SharedThread>,
     own_calendar: Vec<Uuid>,
+    own_sent: Vec<Uuid>,
+    own_drafts: Vec<Uuid>,
     threads: HashMap<Uuid, Thread>,
     shared_requests: Mutex<Vec<Vec<Uuid>>>,
 }
@@ -40,8 +44,18 @@ impl EmailSearchSource for Source {
             .collect())
     }
 
-    async fn calendar_threads(&self, _: &[Uuid], limit: usize) -> Result<Vec<Uuid>, Report> {
-        Ok(self.own_calendar.iter().take(limit).copied().collect())
+    async fn threads_in_set(
+        &self,
+        _: &[Uuid],
+        set: ThreadSet,
+        limit: usize,
+    ) -> Result<Vec<Uuid>, Report> {
+        let own = match set {
+            ThreadSet::Calendar => &self.own_calendar,
+            ThreadSet::Sent => &self.own_sent,
+            ThreadSet::Drafts => &self.own_drafts,
+        };
+        Ok(own.iter().take(limit).copied().collect())
     }
 
     async fn threads_in_states(
@@ -57,6 +71,8 @@ impl EmailSearchSource for Source {
                 states.is_read.is_none_or(|read| read == thread.read)
                     && states.done.is_none_or(|done| done == thread.done)
                     && (!states.calendar_only || thread.calendar)
+                    && (!states.sent || thread.sent)
+                    && (!states.has_draft || thread.draft)
             })
             .copied()
             .collect())
@@ -230,7 +246,7 @@ async fn calendar_only_without_invitations_searches_no_email() {
 #[tokio::test]
 async fn calendar_only_past_the_allowlist_limit_is_checked_hit_by_hit() {
     let service = EmailSearchService(Source {
-        own_calendar: (0..=MAX_CALENDAR_ALLOWLIST as u128)
+        own_calendar: (0..=MAX_THREAD_SET_ALLOWLIST as u128)
             .map(|n| Uuid::from_u128(1_000 + n))
             .collect(),
         ..Default::default()
@@ -335,8 +351,167 @@ fn thread_states_carry_every_thread_level_filter() {
             done: Some(true),
             calendar_only: false,
             notification_states: vec![NotificationState::Unseen, NotificationState::Seen],
+            ..Default::default()
         }
     );
     assert!(!states.is_empty());
     assert!(ThreadStates::from_filters(&EmailFilters::default()).is_empty());
+}
+
+#[test]
+fn thread_states_carry_the_view_and_attachment_kinds() {
+    let states = ThreadStates::from_filters(&EmailFilters {
+        view: Some(EmailSearchView::Drafts),
+        attachments: vec![
+            AttachmentKind::Pdf,
+            AttachmentKind::Image,
+            AttachmentKind::Pdf,
+        ],
+        ..Default::default()
+    });
+
+    assert!(states.has_draft);
+    assert!(!states.sent);
+    assert_eq!(
+        states.attachments,
+        vec![AttachmentKind::Pdf, AttachmentKind::Image]
+    );
+    assert!(!states.is_empty());
+    assert!(
+        ThreadStates::from_filters(&EmailFilters {
+            view: Some(EmailSearchView::Sent),
+            ..Default::default()
+        })
+        .sent
+    );
+}
+
+#[tokio::test]
+async fn sent_becomes_an_allowlist_of_threads_with_a_sent_message() {
+    let mut source = Source {
+        shared: vec![shared(10), shared(11)],
+        own_sent: vec![Uuid::from_u128(20), Uuid::from_u128(21)],
+        ..Default::default()
+    };
+    source.threads.insert(
+        Uuid::from_u128(11),
+        Thread {
+            sent: true,
+            ..Default::default()
+        },
+    );
+    let service = EmailSearchService(source);
+    let filters = EmailFilters {
+        view: Some(EmailSearchView::Sent),
+        shared: SharedEmailFilter::Include,
+        ..Default::default()
+    };
+
+    let scope = threads(
+        service
+            .scope(&viewer(), &filters, &inboxes())
+            .await
+            .unwrap(),
+    );
+
+    assert!(scope.ids_only);
+    assert_eq!(
+        scope.thread_ids,
+        vec![
+            Uuid::from_u128(20),
+            Uuid::from_u128(21),
+            Uuid::from_u128(11)
+        ]
+    );
+    assert!(scope.hit_states.is_empty());
+}
+
+#[tokio::test]
+async fn drafts_without_drafts_search_no_email() {
+    let service = EmailSearchService(Source {
+        own_sent: vec![Uuid::from_u128(20)],
+        ..Default::default()
+    });
+    let filters = EmailFilters {
+        view: Some(EmailSearchView::Drafts),
+        ..Default::default()
+    };
+
+    let scope = service
+        .scope(&viewer(), &filters, &inboxes())
+        .await
+        .unwrap();
+
+    assert_eq!(scope, EmailScope::Nothing);
+}
+
+#[tokio::test]
+async fn two_thread_sets_search_only_the_threads_in_both() {
+    let service = EmailSearchService(Source {
+        own_calendar: vec![Uuid::from_u128(20), Uuid::from_u128(21)],
+        own_drafts: vec![Uuid::from_u128(21), Uuid::from_u128(22)],
+        ..Default::default()
+    });
+    let filters = EmailFilters {
+        calendar_only: Some(true),
+        view: Some(EmailSearchView::Drafts),
+        ..Default::default()
+    };
+
+    let scope = threads(
+        service
+            .scope(&viewer(), &filters, &inboxes())
+            .await
+            .unwrap(),
+    );
+
+    assert!(scope.ids_only);
+    assert_eq!(scope.thread_ids, vec![Uuid::from_u128(21)]);
+    assert!(scope.hit_states.is_empty());
+}
+
+#[tokio::test]
+async fn sent_past_the_allowlist_limit_is_checked_hit_by_hit() {
+    let service = EmailSearchService(Source {
+        own_sent: (0..=MAX_THREAD_SET_ALLOWLIST as u128)
+            .map(|n| Uuid::from_u128(1_000 + n))
+            .collect(),
+        own_drafts: vec![Uuid::from_u128(5)],
+        ..Default::default()
+    });
+    let filters = EmailFilters {
+        view: Some(EmailSearchView::Sent),
+        ..Default::default()
+    };
+
+    let scope = threads(
+        service
+            .scope(&viewer(), &filters, &inboxes())
+            .await
+            .unwrap(),
+    );
+
+    assert!(!scope.ids_only);
+    assert!(scope.thread_ids.is_empty());
+    assert!(scope.hit_states.sent);
+}
+
+#[tokio::test]
+async fn attachment_kinds_are_checked_hit_by_hit() {
+    let service = EmailSearchService(Source::default());
+    let filters = EmailFilters {
+        attachments: vec![AttachmentKind::Document],
+        ..Default::default()
+    };
+
+    let scope = threads(
+        service
+            .scope(&viewer(), &filters, &inboxes())
+            .await
+            .unwrap(),
+    );
+
+    assert!(!scope.ids_only);
+    assert_eq!(scope.user_ids, inboxes().user_ids);
+    assert_eq!(scope.hit_states.attachments, vec![AttachmentKind::Document]);
 }

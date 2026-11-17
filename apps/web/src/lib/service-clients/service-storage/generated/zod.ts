@@ -54750,6 +54750,18 @@ export const postItemsSoupBody = zod
       ),
     email_filters: zod
       .object({
+        attachments: zod
+          .array(
+            zod
+              .enum(['pdf', 'image', 'document'])
+              .describe(
+                "A kind of attachment a thread's messages carry, by MIME type."
+              )
+          )
+          .optional()
+          .describe(
+            'Only threads with at least one attachment of one of these kinds, by\nMIME type, on any of their messages. Empty applies no constraint.'
+          ),
         bcc: zod
           .array(zod.string())
           .optional()
@@ -54863,6 +54875,16 @@ export const postItemsSoupBody = zod
           .describe(
             'Controls whether shared email threads are included in results.'
           ),
+        view: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['sent', 'drafts'])
+              .describe(
+                'A mailbox view the Email list scopes a search to, as its tabs do.'
+              ),
+          ])
+          .optional(),
       })
       .optional()
       .describe(
