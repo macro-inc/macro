@@ -145,6 +145,18 @@ it.each([undefined, new Date('2026-01-01')])(
           lastInteraction: new Date(),
         },
         {
+          id: 'macro|first@example.com',
+          name: 'Alex First',
+          email: 'first@example.com',
+          lastInteraction: new Date(),
+        },
+        {
+          id: 'macro|other@example.com',
+          name: 'Alex Other',
+          email: 'other@example.com',
+          lastInteraction: new Date(),
+        },
+        {
           id: 'macro|alex@example.com',
           name: 'Alex Rowan',
           email: 'alex@example.com',
@@ -156,14 +168,25 @@ it.each([undefined, new Date('2026-01-01')])(
         users: () => users,
       });
       expect(mention.users().map((item) => item.id)).toEqual([
+        'macro|first@example.com',
+        'macro|other@example.com',
         'macro|alex@example.com',
         'macro|alexandra@example.com',
         'macro|sam@example.com',
         'macro|alina@example.com',
       ]);
       expect(
-        sortMobileMentions(mention.users(), 'alex', mention.users())[0].id
-      ).toBe('macro|alex@example.com');
+        sortMobileMentions(mention.users(), 'alex', mention.users()).map(
+          (item) => item.id
+        )
+      ).toEqual([
+        'macro|first@example.com',
+        'macro|other@example.com',
+        'macro|alex@example.com',
+        'macro|alexandra@example.com',
+        'macro|sam@example.com',
+        'macro|alina@example.com',
+      ]);
       dispose();
     });
   }
