@@ -24,6 +24,7 @@ import {
   ToDoRow,
 } from '../components/suggestion-row';
 import type { SuggestionItemParts } from '../context/suggestions-source';
+import { doneWhenTakenUp } from '../core/suggestion';
 import type { FeedEntry, SuggestionsFeed } from '../primitives/feed';
 import type { Refresh } from '../primitives/refresh';
 
@@ -209,7 +210,11 @@ export function ForYouView(props: {
             changed={entry().changed}
             parts={props.parts}
             onOpen={() => props.feed.accept(entry().suggestion)}
-            onMarkDone={() => props.feed.markDone(entry().suggestion)}
+            onMarkDone={
+              doneWhenTakenUp(entry().suggestion)
+                ? () => props.feed.markDone(entry().suggestion)
+                : undefined
+            }
             onDismiss={() => props.feed.dismiss(entry().suggestion)}
           />
         </Match>

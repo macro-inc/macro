@@ -14,7 +14,7 @@ for (const theme of ['dark', 'light']) {
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(`/?theme=${theme}`);
 
-    await expect(page.locator('[data-suggestion]')).toHaveCount(9);
+    await expect(page.locator('[data-suggestion]')).toHaveCount(10);
     await expect(row(page, 'suggestion-done')).toHaveAttribute(
       'data-suggestion-status',
       'done'
@@ -61,7 +61,7 @@ test('the page is four cards: Suggestions, To do, Running, Done today', async ({
   const names = ['Suggestions', 'To do', 'Running', 'Done today'];
   // Work Macro can do that still waits; the person's own mail and documents;
   // what was started, a failed run included; what finished.
-  const counts = [4, 2, 2, 1];
+  const counts = [4, 3, 2, 1];
   let bottom = 0;
   for (const [index, name] of names.entries()) {
     const card = list(page, name);
@@ -247,8 +247,8 @@ test('a to-do opens its draft, and one without a draft opens its thread', async 
   await drafted.hover();
   await drafted.getByRole('button', { name: 'Open draft' }).click();
   await expect(requests(page)).toContainText('draft draft-1');
-  // Opening it takes it up, so it moves to Done today.
-  await expect(drafted).toHaveAttribute('data-suggestion-status', 'done');
+  // Opening a reply's draft isn't replying: it stays in To do.
+  await expect(drafted).toHaveAttribute('data-suggestion-status', 'open');
 
   // Pressing a row's text opens it too.
   await row(page, 'suggestion-reply')
@@ -302,7 +302,7 @@ test('a dismissal is sent at once, and the row stays in its card with Undo', asy
   await expect(requests(page).getByRole('listitem')).toHaveText([
     'dismiss suggestion-composer',
   ]);
-  await expect(page.locator('[data-suggestion]')).toHaveCount(8);
+  await expect(page.locator('[data-suggestion]')).toHaveCount(9);
 
   const dismissed = list(page, 'Suggestions').locator(
     '[data-suggestion-dismissed="suggestion-composer"]'
@@ -369,7 +369,7 @@ test('dismissing a running suggestion says its run is stopped', async ({
 
 test('leaving the page records that the feed was viewed', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('[data-suggestion]')).toHaveCount(9);
+  await expect(page.locator('[data-suggestion]')).toHaveCount(10);
   await expect(requests(page).getByText('viewed')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Leave page' }).click();
@@ -381,16 +381,30 @@ test('the circle marks a to-do done without opening anything', async ({
 }) => {
   await page.goto('/');
   await page
-    .getByRole('button', { name: 'Mark “Reply about the invoice” done' })
+    .getByRole('button', { name: 'Mark “Review the vendor contract” done' })
     .click();
 
-  await expect(row(page, 'suggestion-reply')).toHaveAttribute(
+  await expect(row(page, 'suggestion-review')).toHaveAttribute(
     'data-suggestion-status',
     'done'
   );
   await expect(requests(page).getByRole('listitem')).toHaveText([
-    'accept suggestion-reply',
+    'accept suggestion-review',
   ]);
+});
+
+test('a reply’s circle is a mark that says the reply finishes it', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const reply = row(page, 'suggestion-reply');
+  await expect(
+    page.getByRole('button', { name: 'Mark “Reply about the invoice” done' })
+  ).toHaveCount(0);
+
+  await reply.locator('[data-suggestion-waits]').hover();
+  await expect(page.getByRole('tooltip')).toHaveText('Done once you reply');
+  await expect(requests(page).getByRole('listitem')).toHaveCount(0);
 });
 
 test('earlier finished suggestions fold behind the card’s last row', async ({
@@ -398,11 +412,11 @@ test('earlier finished suggestions fold behind the card’s last row', async ({
 }) => {
   await page.goto('/');
   await page
-    .getByRole('button', { name: 'Mark “Reply about the invoice” done' })
+    .getByRole('button', { name: 'Mark “Review the vendor contract” done' })
     .click();
   const done = list(page, 'Done today');
   await expect(done).toContainText('1 earlier today');
-  await expect(row(page, 'suggestion-reply')).toBeVisible();
+  await expect(row(page, 'suggestion-review')).toBeVisible();
   await expect(row(page, 'suggestion-done')).toHaveCount(0);
 
   await done.getByRole('button', { name: '1 earlier today' }).click();
@@ -475,6 +489,34 @@ test('Run on a suggestion that changed shows the new text and starts nothing unt
   await expect(suggestion.locator('[data-suggestion-changed]')).toHaveCount(0);
 });
 
+test('an opened reply stays in To do until the reply is sent', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const reply = row(page, 'suggestion-reply');
+  await reply.hover();
+  await reply.getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(requests(page)).toContainText('open email_thread thread-1');
+
+  // Opening the thread isn't replying: the row stays open and opens again.
+  await expect(reply).toHaveAttribute('data-suggestion-status', 'open');
+  await expect(list(page, 'To do').locator('[data-suggestion]')).toHaveCount(3);
+  await reply.getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(
+    requests(page).getByText('open email_thread thread-1')
+  ).toHaveCount(2);
+
+  // The reply on its thread makes it done, under Done today.
+  await page.getByRole('button', { name: 'Send replies' }).click();
+  await expect(reply).toHaveAttribute('data-suggestion-status', 'done');
+  await expect(
+    list(page, 'Done today').locator('[data-suggestion="suggestion-reply"]')
+  ).toBeVisible();
+  await expect(requests(page).getByText('accept suggestion-reply')).toHaveCount(
+    2
+  );
+});
+
 test('loading, and failure with retry', async ({ page }) => {
   await page.goto('/?scenario=loading');
   await expect(page.getByRole('status')).toBeVisible();
@@ -485,7 +527,7 @@ test('loading, and failure with retry', async ({ page }) => {
     'Your suggestions couldn’t be loaded.'
   );
   await page.getByRole('button', { name: 'Try again' }).click();
-  await expect(page.locator('[data-suggestion]')).toHaveCount(9);
+  await expect(page.locator('[data-suggestion]')).toHaveCount(10);
 });
 
 test('a row keeps its place and focus when the feed updates under it', async ({

@@ -99,6 +99,17 @@ export type SuggestionFeed = {
   counts: FeedCounts;
 };
 
+/**
+ * Whether taking a suggestion up is what finishes it. Not a background
+ * prompt, which starts its run, a routine, which is saved, or a reply, which
+ * the server keeps open until the person replies on its item.
+ */
+export function doneWhenTakenUp(suggestion: Suggestion): boolean {
+  if (suggestion.kind === 'entity') return suggestion.action !== 'reply';
+
+  return suggestion.kind === 'prompt' && suggestion.runMode === 'composer';
+}
+
 /** Where a saved reply draft came from: its thread, and what else its suggestion cites. */
 export type DraftOrigin = {
   thread: SuggestionTarget;

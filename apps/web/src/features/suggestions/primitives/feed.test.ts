@@ -17,6 +17,7 @@ import {
   failedSuggestion,
   quietBackgroundSuggestion as quietSuggestion,
   replySuggestion,
+  reviewSuggestion,
   routineSuggestion,
   runningSuggestion,
 } from '../tests/fixtures';
@@ -243,6 +244,17 @@ describe('suggestions feed', () => {
     );
   });
 
+  it('keeps an opened reply suggestion open while the server does, and accepts it again on the next open', async () => {
+    await withFeed([replySuggestion], async (feed, { source, actions }) => {
+      await feed.accept(replySuggestion);
+      await feed.accept(replySuggestion);
+
+      expect(source.accept).toHaveBeenCalledTimes(2);
+      expect(actions.openItem).toHaveBeenCalledTimes(2);
+      expect(shownIds(feed)).toEqual(['suggestion-reply']);
+    });
+  });
+
   it('opens nothing when the account changed while the accept was out', async () => {
     const deps = host([composerSuggestion]);
     const [viewer, setViewer] = createSignal('user-1');
@@ -334,12 +346,20 @@ describe('suggestions feed', () => {
     });
   });
 
-  it('marks a reply done by taking it up, without opening anything', async () => {
-    await withFeed([replySuggestion], async (feed, { source, actions }) => {
+  it('marks a review done by taking it up, without opening anything', async () => {
+    await withFeed([reviewSuggestion], async (feed, { source, actions }) => {
+      await feed.markDone(reviewSuggestion);
+
+      expect(source.accept).toHaveBeenCalledWith(reviewSuggestion);
+      expect(actions.openItem).not.toHaveBeenCalled();
+    });
+  });
+
+  it('never marks a reply done, since only the person’s reply finishes it', async () => {
+    await withFeed([replySuggestion], async (feed, { source }) => {
       await feed.markDone(replySuggestion);
 
-      expect(source.accept).toHaveBeenCalledWith(replySuggestion);
-      expect(actions.openItem).not.toHaveBeenCalled();
+      expect(source.accept).not.toHaveBeenCalled();
     });
   });
 

@@ -327,7 +327,9 @@ text does the same. **To do**
 is the person's own mail and documents: each row names the item it is about,
 who wrote, whether a reply is drafted, and how long it has waited. Its circle
 marks it done without opening anything; pressing its text, or **Open** /
-**Open draft**, opens the item. **Open draft** opens
+**Open draft**, opens the item. A reply is the exception: it stays in **To
+do** until the person replies on its thread, however often it is opened, and
+its circle is a mark, not a button. **Open draft** opens
 the thread with the draft in its reply composer and a footer under it that
 reads **Drafted by Macro**, links what else the suggestion cites, and offers
 **Rewrite**, which opens the agent composer with the thread mentioned and the

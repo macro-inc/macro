@@ -24,9 +24,11 @@ only, behind `enable-suggestions`.
 - `primitives/feed.ts` decides what a row's action does for its kind: a
   composer prompt accepts, then opens the composer; a background prompt only
   accepts, which starts its run; an entity suggestion accepts, then opens its item
-  or draft; a routine suggestion saves its drafted routine. `look` opens what
-  a prompt or routine would do without accepting it, and `open` what a
-  finished one left.
+  or draft; a routine suggestion saves its drafted routine. Whether a row is
+  then done is the server's: a reply suggestion stays open until the person
+  replies on its thread (the browser fixture's Send replies plays that).
+  `look` opens what a prompt or routine would do without accepting it, and
+  `open` what a finished one left.
 - `suggestion-actions.ts` is the only place that knows the app's splits, composer
   and routine suggestions.
 - `draft-origin.tsx` is the footer the email thread draws under a reply
@@ -117,7 +119,9 @@ only, behind `enable-suggestions`.
   under way opens its session, and a prompt opens in the composer.
 - A To do row (`ToDoRow`) leads with a circle that marks it done without
   opening anything (`feed.markDone`; the server counts that as taken up,
-  like Open). Its line names the item it is about (`SuggestionItemParts`'
+  like Open). On a reply the circle is a plain mark with a tooltip, not a
+  button: taking a reply up doesn't finish it (`doneWhenTakenUp`), only the
+  person's reply does. Its line names the item it is about (`SuggestionItemParts`'
   `Source`, supplied by `suggestion-items.tsx`, the one part that reads the
   app's items; the summary where the viewer can't read the item), who wrote,
   and that a reply is drafted. Its button is Open or Open draft; pressing

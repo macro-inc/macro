@@ -4,7 +4,11 @@ import type {
   SuggestionActions,
   SuggestionsSource,
 } from '../context/suggestions-source';
-import type { Suggestion, SuggestionStatus } from '../core/suggestion';
+import {
+  doneWhenTakenUp,
+  type Suggestion,
+  type SuggestionStatus,
+} from '../core/suggestion';
 
 /** One row in the feed. */
 export type FeedEntry = {
@@ -143,15 +147,13 @@ export function createSuggestionsFeed(
     accept,
     /**
      * Take a suggestion up without opening anything: the person has dealt
-     * with it. Only for a suggestion that taking up finishes: a background
-     * prompt would start its run, and a routine suggestion be saved.
+     * with it. Only for a suggestion that taking up finishes
+     * (`doneWhenTakenUp`): a background prompt would start its run, a routine
+     * suggestion be saved, and a reply stay open until the person replies.
      */
     markDone: (suggestion: Suggestion) =>
       act(suggestion, 'done', async () => {
-        const finishes =
-          suggestion.kind === 'entity' ||
-          (suggestion.kind === 'prompt' && suggestion.runMode === 'composer');
-        if (!finishes) return;
+        if (!doneWhenTakenUp(suggestion)) return;
 
         const answer = await source.accept(suggestion);
         if (answer === 'changed') {

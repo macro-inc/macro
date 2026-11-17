@@ -17,6 +17,7 @@ export default {
   review: 'Review',
   markDone: 'Mark done',
   markDoneSuggestion: 'Mark “{{title}}” done',
+  doneOnReply: 'Done once you reply',
   dismiss: 'Dismiss',
   dismissSuggestion: 'Dismiss “{{title}}”',
   undoFailed: 'Couldn’t undo. It may be too late to bring this back.',

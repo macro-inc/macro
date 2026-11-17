@@ -36,8 +36,11 @@ export type ToDoRowProps = RowState & {
   parts: SuggestionItemParts;
   /** Take it up and open its item or its draft. */
   onOpen(): void;
-  /** Take it up without opening anything: the person has dealt with it. */
-  onMarkDone(): void;
+  /**
+   * Take it up without opening anything: the person has dealt with it.
+   * Absent for a reply, which is done once the person replies.
+   */
+  onMarkDone?: () => void;
 };
 
 /**
@@ -385,8 +388,9 @@ export function MacroRow(props: MacroRowProps) {
 }
 
 /**
- * Something waiting on the person, as a row: a circle that marks it done,
- * what to do, the item it is about, and how long it has waited. Pointing at
+ * Something waiting on the person, as a row: a circle that marks it done
+ * (a plain mark on a reply, which is done once the person replies), what to
+ * do, the item it is about, and how long it has waited. Pointing at
  * the row or focusing in it swaps the age for Open and dismiss.
  */
 export function ToDoRow(props: ToDoRowProps) {
@@ -407,19 +411,32 @@ export function ToDoRow(props: ToDoRowProps) {
       class="group/suggestion border-0 has-focus-visible:bg-hover not-touch:hover:bg-hover"
     >
       <Item.Icon>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          class="-m-1"
-          disabled={props.busy}
-          aria-label={t('suggestions.markDoneSuggestion', {
-            title: props.suggestion.title,
-          })}
-          tooltip={t('suggestions.markDone')}
-          onClick={props.onMarkDone}
+        <Show
+          when={props.onMarkDone}
+          fallback={
+            <Tooltip label={t('suggestions.doneOnReply')}>
+              <span class="flex" data-suggestion-waits>
+                <CircleIcon class="size-4 text-ink-placeholder" />
+              </span>
+            </Tooltip>
+          }
         >
-          <CircleIcon class="size-4 text-ink-placeholder" />
-        </Button>
+          {(markDone) => (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              class="-m-1"
+              disabled={props.busy}
+              aria-label={t('suggestions.markDoneSuggestion', {
+                title: props.suggestion.title,
+              })}
+              tooltip={t('suggestions.markDone')}
+              onClick={markDone()}
+            >
+              <CircleIcon class="size-4 text-ink-placeholder" />
+            </Button>
+          )}
+        </Show>
       </Item.Icon>
       <Item.Content class="gap-0.5">
         <RowText
