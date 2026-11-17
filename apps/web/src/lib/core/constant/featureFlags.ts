@@ -1119,12 +1119,6 @@ export const enableAiEditor = defineFlag({
   default: onInDev,
 });
 
-// PostHog controls the internal pilot and team targeting in every environment.
-export const enableSpreadsheets = defineFlag({
-  key: 'enable-spreadsheets',
-  env: 'ENABLE_SPREADSHEETS',
-});
-
 /**
  * Speech-to-text in the channel, agent, and AI chat composers. Recordings go
  * to OpenAI Whisper through DSS and are billed per audio minute, so this

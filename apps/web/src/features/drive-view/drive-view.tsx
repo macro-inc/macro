@@ -1,5 +1,4 @@
 import { listOwnedSlotName } from '@app/components/list';
-import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import {
   type FacetSelection,
@@ -68,12 +67,10 @@ function DriveComposition(props: { route: DriveRouteState }) {
   const userId = useUserId();
   const databasesFlag = useFeatureFlag(enableDatabases);
   const formsFlag = useFeatureFlag(enableForms);
-  const spreadsheetsEnabled = useSpreadsheetAccess();
   // Docs, and the Blocks listed in Drive that are rolled out to this person.
   const tutorials = () => {
-    const ids: TutorialId[] = ['docs'];
+    const ids: TutorialId[] = ['docs', 'spreadsheets'];
 
-    if (spreadsheetsEnabled()) ids.push('spreadsheets');
     if (databasesFlag().enabled) ids.push('databases');
 
     return ids;

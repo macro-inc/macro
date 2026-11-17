@@ -39,19 +39,12 @@ vi.mock('@queries/storage/forms', () => ({ createForm: host.createForm }));
 vi.mock('@app/features/agents-view/primitives/open-composer', () => ({}));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({}));
 vi.mock('@app/features/block-agent/ui/AgentInput', () => ({}));
-vi.mock(
-  '@app/features/block-spreadsheet/primitives/use-spreadsheet-access',
-  () => ({ useSpreadsheetAccess: () => () => false })
-);
 vi.mock('@app/features/block-spreadsheet/queries/create-spreadsheet', () => ({
   createSpreadsheetDocument: host.createSpreadsheet,
 }));
 vi.mock('@app/features/block-ai/queries/create-ai', () => ({}));
 vi.mock('@app/features/block-psd/queries/create-psd', () => ({}));
 vi.mock('@app/features/block-fig/queries/create-fig', () => ({}));
-vi.mock('@app/features/block-spreadsheet/queries/spreadsheet-access', () => ({
-  isSpreadsheetEnabledForCurrentUser: () => true,
-}));
 vi.mock('@app/features/email-compose/core/constants', () => ({}));
 vi.mock('@app/features/reminders/reminder-composer', () => ({}));
 vi.mock('@app/lib/analytics/posthog', () => ({

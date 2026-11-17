@@ -1,5 +1,4 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
-import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
 import type { CalendarEvent } from '@app/features/calendar/types';
@@ -613,20 +612,9 @@ if (LOCAL_ONLY) {
 if (import.meta.env.DEV) {
   registerComponent(
     'spreadsheet-demo',
-    withAuth(() => {
-      const enabled = useSpreadsheetAccess();
-      const Demo = lazy(
-        () => import('@app/features/block-spreadsheet/SpreadsheetDemo')
-      );
-      return (
-        <Show
-          when={enabled()}
-          fallback={<RedirectSplit to={{ type: 'component', id: 'home' }} />}
-        >
-          <Demo />
-        </Show>
-      );
-    })
+    withAuth(
+      lazy(() => import('@app/features/block-spreadsheet/SpreadsheetDemo'))
+    )
   );
 }
 

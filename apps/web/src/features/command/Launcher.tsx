@@ -2,9 +2,7 @@ import { openAgentComposer } from '@app/features/agents-view/primitives/open-com
 import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
-import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
-import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { NEW_TASK_TITLE_SELECTOR } from '@app/features/task-composer/new-task-title-focus';
@@ -308,7 +306,6 @@ export function runCreateAction(
       return;
     }
     case 'spreadsheet':
-      if (!isSpreadsheetEnabledForCurrentUser()) return;
       fireAndForget(
         createBlock({
           blockName: 'spreadsheet',
@@ -857,7 +854,6 @@ const createBlocks = (
     get label() {
       return t('create.spreadsheetLabel');
     },
-    enabled: isSpreadsheetEnabledForCurrentUser,
     icon: getIconConfig('spreadsheet').icon,
     description: () => t('create.spreadsheetDescription'),
     get launcherHint() {
@@ -938,7 +934,6 @@ export function useCreateMenuBlocks(
   source: () => CreatableBlock[] | undefined = () => undefined
 ): Accessor<CreatableBlock[]> {
   const commands = useCreateCommands();
-  const spreadsheets = useSpreadsheetAccess();
   const snippetsFlag = useFeatureFlag(enableSnippets);
   const projectsFlag = useFeatureFlag(enableProjects);
   // Subscribed to rather than left to the block's own `enabled`, which reads
@@ -956,7 +951,6 @@ export function useCreateMenuBlocks(
     aiFlag();
     formsFlag();
     return (source() ?? commands).filter((block) => {
-      if (block.blockName === 'spreadsheet') return spreadsheets();
       if (block.blockName === 'snippet') return snippetsFlag().enabled;
       if (block.blockName === 'initiative') return projectsFlag().enabled;
       return block.enabled?.() ?? true;
