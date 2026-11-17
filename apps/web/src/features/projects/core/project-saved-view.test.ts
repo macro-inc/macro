@@ -52,6 +52,20 @@ describe('project saved views', () => {
     ).toBe(true);
   });
 
+  it('rejects unknown restrictions inside project settings', () => {
+    const input = {
+      kind: 'projects',
+      version: 1,
+      scope: 'all',
+      settings: {
+        ...DEFAULT_PROJECT_SETTINGS,
+        futureRestriction: 'restricted',
+      },
+    };
+    expect(decodeProjectSavedView(input).isErr()).toBe(true);
+    expect(readProjectSavedView(input).issues).toHaveLength(1);
+    expect(input.settings.futureRestriction).toBe('restricted');
+  });
   it('diagnoses other kinds and future definitions without rewriting them', () => {
     const input = {
       kind: 'projects',

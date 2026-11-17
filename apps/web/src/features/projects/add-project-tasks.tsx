@@ -7,7 +7,7 @@ import { Button } from '@ui';
 import { createMemo, type JSX, onCleanup, Show, Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useProjectsContext } from './context/projects-context';
-import type { ProjectDetail } from './core/project';
+import { canEditProject, type ProjectDetail } from './core/project';
 import { AddProjectTasksView } from './views/add-project-tasks';
 import { MobileAddProjectTasks } from './views/mobile/add-project-tasks';
 
@@ -35,6 +35,8 @@ export function AddProjectTasks(props: {
   let generation = 0;
   onCleanup(() => generation++);
   const excludedIds = createMemo(() => new Set(props.project.taskIds));
+  const eligibleSelection = () =>
+    state.selected.filter((id) => !excludedIds().has(id));
   const isSaving = () =>
     state.saving && state.savingProjectId === props.project.id;
   const setOpen = (open: boolean) => {
@@ -59,13 +61,14 @@ export function AddProjectTasks(props: {
     chooseExisting();
   };
   const createTask = () => {
+    if (!canEditProject(props.project)) return;
     close();
     props.onCreateTask?.();
   };
   const add = async () => {
     const projectId = props.project.id;
-    const taskIds = state.selected.filter((id) => !excludedIds().has(id));
-    if (isSaving() || !taskIds.length) return;
+    const taskIds = eligibleSelection();
+    if (!canEditProject(props.project) || isSaving() || !taskIds.length) return;
     const request = generation;
     setState({ saving: true, savingProjectId: projectId, error: undefined });
     try {
@@ -94,15 +97,16 @@ export function AddProjectTasks(props: {
       );
       setState(
         'error',
-        `${failed.length} ${failed.length === 1 ? 'task could' : 'tasks could'} not be added. ${failed[0].error}`
+        t('viewMenus.someTasksFailed', {
+          count: failed.length,
+          error: failed[0].error ?? '',
+        })
       );
     } catch (error) {
       if (request !== generation || props.project.id !== projectId) return;
       setState(
         'error',
-        error instanceof Error
-          ? error.message
-          : 'Could not add tasks. Try again.'
+        error instanceof Error ? error.message : t('viewMenus.addTasksFailed')
       );
     } finally {
       if (request === generation) setState('saving', false);
@@ -117,13 +121,13 @@ export function AddProjectTasks(props: {
           'flex min-h-0 flex-1 flex-col': presentation === 'sheet',
         }}
       >
-        <Suspense fallback={<p role="status">Loading tasks…</p>}>
+        <Suspense fallback={<p role="status">{t('viewMenus.loadingTasks')}</p>}>
           <PropertyEntitySelector
             presentation={presentation}
             config={{
               specificEntityType: 'TASK',
               isMultiSelect: true,
-              placeholder: 'Search tasks…',
+              placeholder: t('viewMenus.searchTasks'),
               excludedIds,
               fillHeight: presentation === 'sheet',
               visibleCheckboxes: presentation === 'sheet',
@@ -169,12 +173,12 @@ export function AddProjectTasks(props: {
       <Button
         size={presentation === 'sheet' ? 'md' : 'sm'}
         variant="primary"
-        disabled={state.saving || !state.selected.length}
+        disabled={state.saving || !eligibleSelection().length}
         onClick={() => fireAndForget(add(), 'projects')}
       >
         {state.saving
           ? t('common.addingTasks')
-          : t('common.addTasks', { count: state.selected.length })}
+          : t('common.addTasks', { count: eligibleSelection().length })}
       </Button>
     </div>
   );
@@ -208,8 +212,10 @@ export function AddProjectTasks(props: {
     pickerFooter,
   };
   return (
-    <Show when={isTouchDevice()} fallback={<AddProjectTasksView {...view} />}>
-      <MobileAddProjectTasks {...view} />
+    <Show when={canEditProject(props.project)}>
+      <Show when={isTouchDevice()} fallback={<AddProjectTasksView {...view} />}>
+        <MobileAddProjectTasks {...view} />
+      </Show>
     </Show>
   );
 }

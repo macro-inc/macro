@@ -1,4 +1,5 @@
 import { MobileDiscussion } from '@app/components/discussion/mobile-discussion';
+import { useTouchTopBarsFloat } from '@app/components/view-shell';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
 import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
@@ -71,6 +72,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   );
   const commands = context.createCommands();
   const openShare = useProjectShareModal(source.project, commands);
+  const barFloats = useTouchTopBarsFloat();
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const navigate = useNavigate();
@@ -129,7 +131,10 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       >
         <MobileProjectDetailHeader {...header} />
       </Show>
-      <div class="relative min-h-0 min-w-0 flex-1 touch:[--mobile-content-inset-top:0px]">
+      <div
+        class="relative min-h-0 min-w-0 flex-1"
+        classList={{ 'touch:[--mobile-content-inset-top:0px]': !barFloats() }}
+      >
         <Suspense
           fallback={<ProjectContentSkeleton section={props.route.section} />}
         >

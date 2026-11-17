@@ -168,6 +168,7 @@ it('keeps phone picker actions reachable and confirms the draft selection', asyn
   const sheet = await screen.findByRole('dialog', {
     name: 'Add existing tasks',
   });
+  fireEvent.transitionEnd(sheet);
   sheet.scrollTo = vi.fn();
   const add = screen.getByRole('button', { name: 'Add 0 tasks' });
   expect(add).toHaveProperty('disabled', true);

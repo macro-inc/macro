@@ -145,21 +145,27 @@ export function createSavedViewDraft<Config, Issue>(options: {
     const detailViewer = options.source.viewerId();
     const currentViewer =
       detailViewer === undefined || detailViewer === options.viewerId();
-    if (
-      currentViewer &&
-      (options.source.error() || options.source.data() === null)
-    )
+    if (currentViewer && options.source.data() === null)
       return {
         kind: 'unavailable',
         message: 'This saved view is unavailable or you no longer have access.',
       };
     const snapshot = state.confirmed;
-    if (options.viewerId() && snapshot?.record.id === id)
+    if (
+      options.viewerId() &&
+      snapshot?.record.id === id &&
+      snapshot.viewerId === options.viewerId()
+    )
       return {
         kind: 'saved',
         record: snapshot.record,
         dirty: dirty(),
         issues: snapshot.issues,
+      };
+    if (currentViewer && options.source.error())
+      return {
+        kind: 'unavailable',
+        message: 'This saved view could not be loaded. Try again.',
       };
     return { kind: 'loading' };
   });

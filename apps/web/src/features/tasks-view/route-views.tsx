@@ -2,7 +2,6 @@ import { ProjectBreadcrumb } from '@app/features/projects/project-breadcrumb';
 import { ProjectDetail } from '@app/features/projects/project-detail';
 import { ProjectTasksProvider } from '@app/features/projects/project-tasks-provider';
 import { Projects } from '@app/features/projects/projects';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   createSearchParams,
   SplitRouter,
@@ -25,11 +24,9 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { viewRestorationKey } from '@components/app/split-layout/view-restoration-key';
-import { LoadingBlock } from '@core/component/LoadingBlock';
-import { enableProjects } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { onMount, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { TasksDetailView } from './components/TasksDetailView';
 import { projectDetailSearch } from './project-detail-search';
 import { TasksView } from './tasks-view';
@@ -54,7 +51,7 @@ export const TasksRouteView = withAuth(() => {
   return (
     <AppView
       id="tasks"
-      detailDesktopOnly
+      detailInlineOnly
       detailRequested={() =>
         typeof params.taskId === 'string' && !params.projectId
       }
@@ -67,14 +64,6 @@ export const TasksRouteView = withAuth(() => {
     </AppView>
   );
 }, TasksViewSkeleton);
-
-function DisabledProjectRoute() {
-  const navigate = useNavigate();
-  onMount(() =>
-    navigate({ route: tasksSplitRoute, params: {} }, { replace: true })
-  );
-  return null;
-}
 
 export function ProjectTaskRouteView() {
   const params = useParams<{
@@ -129,17 +118,9 @@ export function ProjectTaskRouteView() {
 export function ProjectDetailRouteView() {
   const params = useRouteParams(projectDetailRoute);
   const [search] = createSearchParams(projectDetailSearch);
-  const flag = useFeatureFlag(enableProjects);
   const navigate = useNavigate();
   return (
-    <Show
-      when={flag().enabled}
-      fallback={
-        <Show when={!flag().loading} fallback={<LoadingBlock />}>
-          <DisabledProjectRoute />
-        </Show>
-      }
-    >
+    <>
       <ProjectBreadcrumb
         entry={{
           value: `initiative:${params.projectId}`,
@@ -165,6 +146,6 @@ export function ProjectDetailRouteView() {
           </SidePanel.Root>
         )}
       />
-    </Show>
+    </>
   );
 }

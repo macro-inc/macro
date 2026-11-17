@@ -83,7 +83,7 @@ export function createCallPlayback(duration: number) {
 }
 export type CallPlayback = ReturnType<typeof createCallPlayback>;
 
-/** CallRecordingSplitHeader: label, Call Again, Ask Macro, Share. */
+/** The call recording block header: label, Call Again, Ask Macro, Share. */
 export function CallRecordTopBar(props: {
   title: string;
   onBack?: () => void;

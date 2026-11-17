@@ -21,6 +21,7 @@ import {
 import { AgentsSidebar } from './AgentsSidebar';
 
 const openWithSplit = vi.fn();
+const openExternalUrl = vi.hoisted(() => vi.fn());
 const unreadFilter = vi.hoisted(() => vi.fn(() => false));
 const sidebarState = vi.hoisted(() => ({ agentUpdates: false, touch: false }));
 vi.mock('@app/lib/analytics/posthog', async (importOriginal) => ({
@@ -35,6 +36,10 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit }),
+}));
+vi.mock('@core/util/url', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/util/url')>()),
+  openExternalUrl,
 }));
 vi.mock('@core/util/openInNewSplit', () => ({
   openInNewSplitForMention: () => true,
@@ -854,7 +859,7 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     ).toBeNull();
   });
 
-  it('opens a synced PR in Macro without activating its session', () => {
+  it('opens a synced PR on GitHub without activating its session', () => {
     const { setEntity, open } = setup();
     setEntity({
       ...conversation,
@@ -862,13 +867,16 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
       pullRequestId: 'pr-entity',
       pullRequestState: 'merged',
     });
+    openWithSplit.mockClear();
     fireEvent.click(
-      screen.getByRole('link', { name: 'Open pull request #42, Merged' })
+      screen.getByRole('link', {
+        name: 'Open pull request #42, Merged on GitHub',
+      })
     );
     expect(open).not.toHaveBeenCalled();
-    expect(openWithSplit).toHaveBeenLastCalledWith(
-      { type: 'pr', id: 'pr-entity' },
-      { preferNewSplit: true }
+    expect(openExternalUrl).toHaveBeenLastCalledWith(
+      'https://github.com/macro-inc/macro/pull/42'
     );
+    expect(openWithSplit).not.toHaveBeenCalled();
   });
 });

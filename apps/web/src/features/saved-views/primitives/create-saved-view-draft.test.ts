@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow';
 import { createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -15,6 +16,50 @@ const disposers: (() => void)[] = [];
 afterEach(() => disposers.splice(0).forEach((dispose) => dispose()));
 
 describe('shared saved-view draft', () => {
+  it('retains confirmed data on a transient failure but clears unavailable or foreign-viewer data', () => {
+    const fixture = createRoot((dispose) => {
+      disposers.push(dispose);
+      const record: SavedView = {
+        id: 'view',
+        ownerId: 'viewer',
+        name: 'Saved view',
+        revision: 1,
+        sharedTeamId: null,
+        config: { value: 1 },
+      };
+      const [data, setData] = createSignal<SavedView | null>(record);
+      const [error, setError] = createSignal<unknown>();
+      const [viewer, setViewer] = createSignal('viewer');
+      const draft = createSavedViewDraft({
+        source: {
+          data,
+          error,
+          viewerId: () => 'viewer',
+          loading: () => false,
+          refresh: async () => {},
+        },
+        selectedId: () => 'view',
+        viewerId: viewer,
+        creating: () => false,
+        capture: () => ok(1),
+        defaults: () => ok(1),
+        read: () => ({ config: 1, issues: [] }),
+        decode: () => ok(1),
+        equal: Object.is,
+        apply: () => {},
+        resetNew: () => {},
+      });
+      return { draft, record, setData, setError, setViewer };
+    });
+    expect(fixture.draft.view().kind).toBe('saved');
+    fixture.setError(new Error('Network unavailable'));
+    expect(fixture.draft.view().kind).toBe('saved');
+    fixture.setData(null);
+    expect(fixture.draft.view().kind).toBe('unavailable');
+    fixture.setData(fixture.record);
+    fixture.setViewer('another-viewer');
+    expect(fixture.draft.view().kind).toBe('loading');
+  });
   it('retains concurrent edits and rejects older confirmations for project definitions', () => {
     const fixture = createRoot((dispose) => {
       disposers.push(dispose);

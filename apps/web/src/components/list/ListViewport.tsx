@@ -17,11 +17,15 @@ export function ListViewport<T>(props: {
   stickyInset?: number;
   /** Scrolls above the rows, outside them, so list focus skips it. */
   start?: JSX.Element;
+  /** Reserve floating touch chrome inside the scroller. */
+  touchInset?: boolean;
   children: (item: T) => JSX.Element;
 }) {
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const [start, setStart] = createSignal<HTMLDivElement>();
   const startSize = createElementSize(start);
+  const [inset, setInset] = createSignal<HTMLDivElement>();
+  const insetSize = createElementSize(inset);
   return (
     <div
       ref={(element) => {
@@ -34,7 +38,18 @@ export function ListViewport<T>(props: {
           : 'min-h-0 flex-1 overflow-auto overscroll-none'
       }
     >
-      <div ref={setStart}>{props.start}</div>
+      <div ref={setStart}>
+        <div
+          ref={setInset}
+          aria-hidden
+          class={
+            props.touchInset
+              ? 'h-0 touch:h-(--mobile-content-inset-top)'
+              : 'h-0'
+          }
+        />
+        {props.start}
+      </div>
       <Suspense>
         <StickyVirtualizer
           ref={props.ref}
@@ -42,7 +57,7 @@ export function ListViewport<T>(props: {
           isSticky={props.isSticky}
           scrollRef={props.scrollContainer ?? viewport()}
           startMargin={(props.scrollStart ?? 0) + (startSize.height ?? 0)}
-          stickyInset={props.stickyInset}
+          stickyInset={props.stickyInset ?? insetSize.height ?? 0}
           bufferSize={240}
           itemSize={44}
           keepMounted={

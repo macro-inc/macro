@@ -7,7 +7,6 @@ import {
   makeCopyLinkAction,
   makeFavoriteAction,
 } from '@app/features/next-soup/actions';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { ResponsivePermissionsBadge } from '@components/app/ResponsiveBlockToolbar';
@@ -22,7 +21,6 @@ import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import { enableForms } from '@core/constant/featureFlags';
 import { useGetPermissions } from '@core/signal/permissions';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { DatabaseEntity } from '@entity';
@@ -67,7 +65,6 @@ export function TopBar(props: {
 }) {
   const databaseId = props.databaseId;
   const permissions = useGetPermissions();
-  const formsFlag = useFeatureFlag(enableForms);
   let editTitle: (() => void) | undefined;
   const name = () => props.detail?.database.name ?? 'Database';
   const openShare = useShareModal(() => {
@@ -81,13 +78,11 @@ export function TopBar(props: {
       owner: detail.database.owner_id,
       userPermissions: permissions(),
       // Form editors hold Edit here through their form: say so, and where.
-      audience: formsFlag().enabled
-        ? () => (
-            <Suspense>
-              <DatabaseFormEditors databaseId={databaseId} />
-            </Suspense>
-          )
-        : undefined,
+      audience: () => (
+        <Suspense>
+          <DatabaseFormEditors databaseId={databaseId} />
+        </Suspense>
+      ),
     };
   });
   const favoriteAction = makeFavoriteAction();
@@ -196,7 +191,7 @@ export function TopBar(props: {
                   canEdit={props.canEdit}
                   onSelect={props.onSelectTable}
                   menuItems={
-                    formsFlag().enabled && props.activeTable
+                    props.activeTable
                       ? () => (
                           <Suspense>
                             <DatabaseFormsEntry

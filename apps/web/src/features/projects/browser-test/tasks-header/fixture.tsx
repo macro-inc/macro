@@ -1,5 +1,6 @@
 import '@app/index.css';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
+import { mountGlobalFocusListener } from '@app/signal/focus';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createSignal } from 'solid-js';
@@ -26,7 +27,10 @@ const unavailable = (): never => {
   throw new Error('Capability unavailable in the tasks header fixture');
 };
 
+const readOnly = new URLSearchParams(location.search).has('readOnly');
+
 function Fixture() {
+  mountGlobalFocusListener();
   const [creates, setCreates] = createSignal(0);
   const [assignments, setAssignments] = createSignal(0);
   const context: ProjectsContext = {
@@ -54,22 +58,26 @@ function Fixture() {
 
   return (
     <ProjectsProvider context={context}>
-      <main class="flex h-dvh min-h-0 flex-col bg-page text-ink">
+      <main class="relative flex h-dvh min-h-0 flex-col bg-page text-ink">
         <ProjectTasksList
           projectId={project.id}
           project={project}
           onOpenTask={() => true}
-          onCreateTask={() => {
-            setCreates((count) => count + 1);
-          }}
+          onCreateTask={
+            readOnly
+              ? undefined
+              : () => {
+                  setCreates((count) => count + 1);
+                }
+          }
         />
+        <FloatRegionHost />
         <output hidden data-testid="creates">
           {creates()}
         </output>
         <output hidden data-testid="assignments">
           {assignments()}
         </output>
-        <FloatRegionHost />
       </main>
     </ProjectsProvider>
   );

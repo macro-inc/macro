@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import ListPlusIcon from '@icon/system/regular/list-plus.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
@@ -18,13 +19,15 @@ export function AddProjectTasksView(props: AddProjectTasksViewProps) {
         fallback={
           <Dropdown.Trigger variant="secondary" size="md">
             <PlusIcon class="size-4" />
-            {props.canCreate ? 'Add task' : 'Add existing tasks'}
+            {props.canCreate
+              ? t('viewMenus.addTask')
+              : t('viewMenus.addExistingTasks')}
             <CaretDownIcon class="size-4" />
           </Dropdown.Trigger>
         }
       >
         <Dropdown.Trigger as={PillButton} tone="cta" icon={PlusIcon}>
-          Add task <CaretDownIcon class="size-4" />
+          {t('viewMenus.addTask')} <CaretDownIcon class="size-4" />
         </Dropdown.Trigger>
       </Show>
       <Show when={props.open}>
@@ -46,15 +49,19 @@ export function AddProjectTasksView(props: AddProjectTasksViewProps) {
             }}
           >
             <Dropdown.Group>
-              <Dropdown.Item aria-label="New task" onSelect={props.createTask}>
-                <PlusIcon class="size-4" /> New task
+              <Dropdown.Item
+                aria-label={t('viewMenus.newTask')}
+                onSelect={props.createTask}
+              >
+                <PlusIcon class="size-4" /> {t('viewMenus.newTask')}
                 <Hotkey shortcut="c" theme="clear" class="ml-auto" />
               </Dropdown.Item>
               <Dropdown.Item
                 closeOnSelect={false}
                 onSelect={props.chooseExisting}
               >
-                <ListPlusIcon class="size-4" /> Add existing tasks
+                <ListPlusIcon class="size-4" />{' '}
+                {t('viewMenus.addExistingTasks')}
               </Dropdown.Item>
             </Dropdown.Group>
           </Dropdown.Content>

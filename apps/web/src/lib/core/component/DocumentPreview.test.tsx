@@ -66,7 +66,7 @@ vi.mock('@app/features/calendar-view/components/SharedEventActions', () => ({
   ),
 }));
 
-import { DocumentPreviewContent } from './DocumentPreview';
+import { DocumentPreviewContent, PopupPreview } from './DocumentPreview';
 import { DocumentPreviewSheet } from './DocumentPreviewSheet';
 
 function calendarItem(event: Partial<CalendarMentionEvent>): PreviewItem {
@@ -350,10 +350,12 @@ describe('calendar mention card for a meeting the viewer holds', () => {
     mocks.item = calendarItem({ viewerCopy: 'snapshot' });
     mocks.openCalendarEventSplit.mockResolvedValueOnce(true);
     const onOpenChange = vi.fn();
+    const onOpened = vi.fn();
     render(() => (
       <DocumentPreviewSheet
         open
         onOpenChange={onOpenChange}
+        onOpened={onOpened}
         documentInfo={{
           id: 'mentioned-event',
           type: 'calendar',
@@ -369,16 +371,19 @@ describe('calendar mention card for a meeting the viewer holds', () => {
       expect.objectContaining({ eventId: 'viewer-copy' })
     );
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(onOpened).toHaveBeenCalledOnce();
   });
 
   it('keeps the phone sheet up when nothing could open', async () => {
     mocks.item = calendarItem({ viewerCopy: 'snapshot' });
     mocks.openCalendarEventSplit.mockResolvedValueOnce(false);
     const onOpenChange = vi.fn();
+    const onOpened = vi.fn();
     render(() => (
       <DocumentPreviewSheet
         open
         onOpenChange={onOpenChange}
+        onOpened={onOpened}
         documentInfo={{
           id: 'mentioned-event',
           type: 'calendar',
@@ -395,6 +400,31 @@ describe('calendar mention card for a meeting the viewer holds', () => {
     );
     await Promise.resolve();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(onOpened).not.toHaveBeenCalled();
+  });
+
+  it('forwards a successful hover-preview open to its host', async () => {
+    mocks.item = calendarItem({ viewerCopy: 'snapshot' });
+    mocks.openCalendarEventSplit.mockResolvedValueOnce(true);
+    const onOpened = vi.fn();
+    render(() => (
+      <PopupPreview
+        mouseEnter={() => {}}
+        mouseLeave={() => {}}
+        onOpened={onOpened}
+        documentInfo={{
+          id: 'mentioned-event',
+          type: 'calendar',
+          params: {},
+          isOpenable: true,
+        }}
+      />
+    ));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+
+    await waitFor(() => expect(onOpened).toHaveBeenCalledOnce());
+    expect(mocks.openCalendarEventSplit).toHaveBeenCalledOnce();
   });
 
   it('adds nothing to a mention of the viewer’s own copy', () => {

@@ -27,7 +27,12 @@ import {
 import { createProjectCollection } from '../primitives/project-collection';
 import { ProjectSavedViewRows } from '../views/project-saved-views';
 import { ProjectsCollection } from '../views/projects-collection';
-import { priority, rows, status } from './collection-data';
+import {
+  filterProjectFixtureRows,
+  priority,
+  rows,
+  status,
+} from './collection-data';
 import { savedRecords, seedUnsupported } from './saved-view-transport';
 
 const unavailable = (): never => {
@@ -127,6 +132,9 @@ export function CollectionFixture() {
     },
     selectScope: (next: ProjectScope) =>
       batch(() => {
+        if (selectedId() || next !== scope()) {
+          setState('settings', { ...DEFAULT_PROJECT_SETTINGS });
+        }
         select();
         setScope(next);
       }),
@@ -160,7 +168,7 @@ export function CollectionFixture() {
       rows: createMemo(() => {
         if (enabled && !enabled()) return undefined;
         const selected: ProjectFilters = filters?.() ?? {};
-        return projectRows().filter(
+        return filterProjectFixtureRows(projectRows(), selected).filter(
           (row) =>
             (!selected.status ||
               row.properties.some(

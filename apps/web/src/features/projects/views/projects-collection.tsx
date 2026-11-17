@@ -102,6 +102,7 @@ export function ProjectsCollection(props: {
   isActive: Accessor<boolean>;
   collection: ReturnType<typeof createProjectCollection>;
   title?: string;
+  mobileNavigation?: JSX.Element;
   ganttEnabled: boolean;
   /** Whether the layout has room to open a project beside the list. */
   canOpenInNewSplit: Accessor<boolean>;
@@ -638,6 +639,18 @@ export function ProjectsCollection(props: {
         <ViewShell.Header>
           <div class="flex min-w-0 flex-col gap-2">
             <ProjectsMobileTabs
+              navigation={props.mobileNavigation}
+              search={
+                <ListHeaderSearch
+                  label="Search projects"
+                  value={collection.search()}
+                  onValueChange={collection.setSearch}
+                  focusResults={focusList}
+                  registerFocus={(focus) => {
+                    focusSearch = focus;
+                  }}
+                />
+              }
               filters={
                 <ProjectsFilterDrawer
                   collection={collection}

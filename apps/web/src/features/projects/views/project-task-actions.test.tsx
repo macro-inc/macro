@@ -118,7 +118,7 @@ it('assigns only unlinked selected tasks from the menu', async () => {
   );
   expect(screen.getByTestId('excluded').textContent).toBe('linked');
   fireEvent.click(screen.getByRole('button', { name: 'Select tasks' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Add 2 tasks' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add 1 task' }));
   expect(mock.assignTasks).toHaveBeenCalledWith('project', ['one']);
   await vi.waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
 });
@@ -138,7 +138,7 @@ it('ignores an assignment result after the project changes', async () => {
     { key: 'Enter' }
   );
   fireEvent.click(screen.getByRole('button', { name: 'Select tasks' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Add 2 tasks' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add 1 task' }));
   setCurrent({ ...project, id: 'another', taskIds: [] });
   pending.resolve([{ taskId: 'one', error: 'Old project failed' }]);
   await vi.waitFor(() =>
@@ -149,6 +149,26 @@ it('ignores an assignment result after the project changes', async () => {
   );
   expect(screen.queryByRole('alert')).toBeNull();
   expect(screen.getByTestId('excluded').textContent).toBe('');
+});
+
+it('disables assignment when selected tasks become linked while the picker is open', () => {
+  const [current, setCurrent] = createSignal(project);
+  render(() => (
+    <ProjectTaskActions project={current()} onCreateTask={vi.fn()} />
+  ));
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Add task' }), {
+    key: 'Enter',
+  });
+  fireEvent.keyDown(
+    screen.getByRole('menuitem', { name: 'Add existing tasks' }),
+    { key: 'Enter' }
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Select tasks' }));
+  setCurrent({ ...project, taskIds: ['linked', 'one'] });
+  const add = screen.getByRole('button', { name: 'Add 0 tasks' });
+  expect(add.hasAttribute('disabled')).toBe(true);
+  fireEvent.click(add);
+  expect(mock.assignTasks).not.toHaveBeenCalled();
 });
 
 it('shows both actions in the empty state and hides them without edit access', () => {
@@ -173,6 +193,7 @@ it('shows both actions in the empty state and hides them without edit access', (
   render(() => (
     <ProjectTasksEmptyState
       project={{ ...project, access: 'view', taskIds: [] }}
+      onCreateTask={create}
     />
   ));
   expect(screen.queryByRole('button', { name: 'Add task' })).toBeNull();
@@ -181,7 +202,7 @@ it('shows both actions in the empty state and hides them without edit access', (
   ).toBeNull();
 });
 
-it('keeps the phone stacked create menu before choosing existing tasks', () => {
+it('keeps the phone stacked create menu before choosing existing tasks', async () => {
   mock.mobile = true;
   const create = vi.fn();
   render(() => <ProjectTaskActions project={project} onCreateTask={create} />);
@@ -190,5 +211,9 @@ it('keeps the phone stacked create menu before choosing existing tasks', () => {
   expect(create).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole('button', { name: 'Task' }));
   fireEvent.click(screen.getByRole('button', { name: 'Add existing tasks' }));
+  const sheet = await screen.findByRole('dialog', {
+    name: 'Add existing tasks',
+  });
+  fireEvent.transitionEnd(sheet);
   expect(screen.getByTestId('excluded').textContent).toBe('linked');
 });

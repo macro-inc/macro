@@ -1,4 +1,5 @@
 import { SidePanel } from '@components/app/side-panel';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import {
@@ -38,19 +39,23 @@ export function EntityDetailTopBar(
         props.navigation && 'gap-3'
       )}
     >
-      <ViewBreadcrumbs.Outlet
-        aria-label="Task location"
-        activeItem={titleMenu()}
-        fallback={<EntityDetailBreadcrumbSkeleton />}
-      />
+      <ViewShell.TopBarTitle>
+        <ViewBreadcrumbs.Outlet
+          aria-label="Task location"
+          activeItem={titleMenu()}
+          fallback={<EntityDetailBreadcrumbSkeleton />}
+        />
+      </ViewShell.TopBarTitle>
       <Show when={props.navigation}>
-        {(navigation) => <div class="shrink-0">{navigation()(compact)}</div>}
+        {(navigation) => (
+          <HeaderIsland class="px-1">{navigation()(compact)}</HeaderIsland>
+        )}
       </Show>
-      <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
+      <ViewShell.TopBarActions class="not-touch:gap-2">
         <SidePanel.HeaderActionsOutlet />
         {props.children}
         <SidePanel.Toggle />
-      </div>
+      </ViewShell.TopBarActions>
     </ViewShell.TopBar>
   );
 }

@@ -26,6 +26,12 @@ vi.mock('../view-shell', async () => ({
     TopBar: (props: { children?: JSX.Element }) => (
       <header>{props.children}</header>
     ),
+    TopBarTitle: (props: { children?: JSX.Element }) => (
+      <div>{props.children}</div>
+    ),
+    TopBarActions: (props: { children?: JSX.Element }) => (
+      <div>{props.children}</div>
+    ),
   },
 }));
 

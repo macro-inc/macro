@@ -7,7 +7,7 @@ import {
 } from './project';
 
 const calendarDate = z.union([z.literal(''), z.iso.date()]);
-const settingsSchema = z.object({
+const settingsSchema = z.strictObject({
   layout: z.enum(['list', 'gantt']),
   status: z.string().max(200),
   priority: z.string().max(200),

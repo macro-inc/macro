@@ -4,6 +4,7 @@ import {
 } from '@property/identifiers';
 import type { Property } from '@property/types';
 import type { ProjectRow } from '../context/projects-context';
+import type { ProjectFilters } from '../core/project';
 
 export const status: Property = {
   propertyId: 'status-value',
@@ -67,6 +68,13 @@ export const rows: ProjectRow[] = [
     properties: [
       { ...status, value: ['open'] },
       { ...priority, value: [PROPERTY_OPTION_IDS.PRIORITY.LOW] },
+      {
+        ...status,
+        propertyDefinitionId: SYSTEM_PROPERTY_IDS.DUE_DATE,
+        displayName: 'Due date',
+        valueType: 'DATE',
+        value: new Date('2026-01-10T00:00:00Z'),
+      },
     ],
   },
   {
@@ -81,6 +89,44 @@ export const rows: ProjectRow[] = [
     properties: [
       { ...status, value: ['done'] },
       { ...priority, value: [PROPERTY_OPTION_IDS.PRIORITY.HIGH] },
+      {
+        ...status,
+        propertyDefinitionId: SYSTEM_PROPERTY_IDS.DUE_DATE,
+        displayName: 'Due date',
+        valueType: 'DATE',
+        value: new Date('2026-01-20T00:00:00Z'),
+      },
     ],
   },
 ];
+
+/** Keep fixture priority and inclusive calendar bounds aligned with the project source. */
+export function filterProjectFixtureRows(
+  rows: ProjectRow[],
+  filters: ProjectFilters
+) {
+  const priority = filters.priority;
+  return rows.filter((row) => {
+    if (
+      priority &&
+      !row.properties.some(
+        (property) =>
+          property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY &&
+          property.valueType === 'SELECT_STRING' &&
+          property.value?.includes(priority)
+      )
+    )
+      return false;
+    const due = row.properties.find(
+      (property) =>
+        property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.DUE_DATE
+    );
+    const date =
+      due?.valueType === 'DATE' && due.value
+        ? due.value.toISOString().slice(0, 10)
+        : undefined;
+    if (filters.dueAfter && (!date || date < filters.dueAfter)) return false;
+    if (filters.dueBefore && (!date || date > filters.dueBefore)) return false;
+    return true;
+  });
+}

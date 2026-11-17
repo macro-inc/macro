@@ -22,25 +22,23 @@ function setup(inPane: boolean, paneBack = true) {
   const gesture = createRoot((dispose) => {
     disposers.push(dispose);
     return createMobileSwipeBackGesture({
-      animationMs: 88,
-      bgPeekOffset: 110,
-      edgeThreshold: 40,
-      velocityThreshold: 0.3,
-      distanceThreshold: 0.5,
-      canStart: () => true,
+      canGoBack: () => available || paneBack,
+      completeGoBack: closePane,
       inPaneBack: { canGoBack: () => available, goBack: routeBack },
-      stack: {
-        front: () => undefined,
-        behind: () => undefined,
-        canGoBack: () => paneBack,
-        goBack: closePane,
-        completeGoBack: closePane,
-        setAnimatedTrigger: () => {},
-        setForwardTrigger: () => {},
-      },
     });
   });
   const target = document.createElement('div');
+  vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({
+    left: 0,
+    width: 390,
+    top: 0,
+    right: 390,
+    bottom: 844,
+    height: 844,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
   target.addEventListener('touchstart', gesture.handleTouchStart);
   target.addEventListener('touchmove', gesture.handleTouchMove);
   target.addEventListener('touchend', gesture.handleTouchEnd);

@@ -1,4 +1,5 @@
 import { PROJECTS_DOCS_URL } from '@app/constants/docs-links';
+import { t } from '@app/lib/i18n';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import BookOpenIcon from '@icon/system/regular/book-open.svg';
 import { EmptyStatePanel } from '@ui';
@@ -13,8 +14,8 @@ export function ProjectTasksEmptyState(props: {
     <EmptyStatePanel
       centered
       graphic={EmptyStateTasksGraphic}
-      title="No tasks yet"
-      description="Add tasks to plan and track this project's work."
+      title={t('viewMenus.noTasksYet')}
+      description={t('viewMenus.emptyProjectTasks')}
       documentationUrl={PROJECTS_DOCS_URL}
       documentationIcon={BookOpenIcon}
       primaryActionContent={

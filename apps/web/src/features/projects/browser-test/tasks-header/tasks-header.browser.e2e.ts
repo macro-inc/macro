@@ -2,14 +2,14 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const GUTTER = 16;
 
-async function open(page: Page) {
+async function open(page: Page, path = '/') {
   await page.route('**/*', (route) => {
     if (new URL(route.request().url()).hostname === '127.0.0.1')
       return route.continue();
     return route.abort();
   });
   await page.routeWebSocket('**/*', (socket) => socket.close());
-  await page.goto('/');
+  await page.goto(path);
   await expect(page.getByTestId('creates')).toBeAttached();
 }
 
@@ -86,9 +86,22 @@ test('Add existing tasks opens its picker and cancels without adding', async ({
   await expect(page.getByTestId('assignments')).toHaveText('0');
 });
 
-test('New task starts a task', async ({ page }, info) => {
+test('the one New task control creates the task in the project', async ({
+  page,
+}, info) => {
   await open(page);
   await taskAction(page, info.project.name).click();
   await page.getByText('New task', { exact: true }).click();
   await expect(page.getByTestId('creates')).toHaveText('1');
+  await expect(taskAction(page, info.project.name)).toHaveCount(1);
+});
+
+test('without edit access, nothing creates a task outside the project', async ({
+  page,
+}) => {
+  await open(page, '/?readOnly');
+  await expect(
+    page.getByRole('button', { name: 'Search in Launch' })
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New task' })).toHaveCount(0);
 });

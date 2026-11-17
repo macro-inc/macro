@@ -6,9 +6,20 @@ import { ProjectSavedViewsPicker } from './project-saved-views';
 import { PROJECT_VIEW_OPTIONS } from './project-view-options';
 
 /** Keep project navigation in the same filter, saved-view, tabs order as other views. */
-export function ProjectsMobileTabs(props: { filters: JSX.Element }) {
+export function ProjectsMobileTabs(props: {
+  filters: JSX.Element;
+  search?: JSX.Element;
+  navigation?: JSX.Element;
+}) {
   const views = useProjectSavedViews();
-  if (!views) return <>{props.filters}</>;
+  if (!views)
+    return (
+      <>
+        {props.navigation}
+        {props.filters}
+        {props.search}
+      </>
+    );
   return (
     <nav
       aria-label={t('viewMenus.projectViews')}
@@ -20,10 +31,14 @@ export function ProjectsMobileTabs(props: { filters: JSX.Element }) {
         contentClass="px-(--mobile-chrome-gutter)"
         leading={
           <>
+            {props.navigation && (
+              <span class="shrink-0">{props.navigation}</span>
+            )}
             {props.filters}
             <ProjectSavedViewsPicker />
           </>
         }
+        trailing={props.search}
         items={PROJECT_VIEW_OPTIONS}
         value={
           views.selectedId() || views.creating() ? undefined : views.scope()

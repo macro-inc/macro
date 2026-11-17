@@ -1,5 +1,6 @@
 import type { ListFilterGroup } from '@app/components/view-shell/ListDropdowns';
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
+import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { Input } from '@ui';
 import { createSignal, createUniqueId, For } from 'solid-js';
@@ -7,14 +8,44 @@ import type { createProjectCollection } from '../primitives/project-collection';
 
 export type ProjectFilterGroup = 'status' | 'priority' | 'assignee';
 export const PROJECT_SORT_OPTIONS = [
-  { id: 'updated', label: 'Updated' },
-  { id: 'created', label: 'Created' },
+  {
+    id: 'updated',
+    get label() {
+      return t('viewMenus.updated');
+    },
+  },
+  {
+    id: 'created',
+    get label() {
+      return t('viewMenus.created');
+    },
+  },
 ] as const;
 export const PROJECT_GROUP_OPTIONS = [
-  { id: 'none', label: 'None' },
-  { id: 'status', label: 'Status' },
-  { id: 'priority', label: 'Priority' },
-  { id: 'assignee', label: 'Assignee' },
+  {
+    id: 'none',
+    get label() {
+      return t('viewMenus.groupNone');
+    },
+  },
+  {
+    id: 'status',
+    get label() {
+      return t('viewMenus.status');
+    },
+  },
+  {
+    id: 'priority',
+    get label() {
+      return t('viewMenus.priority');
+    },
+  },
+  {
+    id: 'assignee',
+    get label() {
+      return t('viewMenus.assignee');
+    },
+  },
 ] as const;
 
 export function ProjectsFilterDrawer(props: {
@@ -35,13 +66,13 @@ export function ProjectsFilterDrawer(props: {
     <MobileFilterDrawer
       open={open()}
       onOpenChange={setOpen}
-      triggerLabel="Open project filters"
-      label="Project list controls"
+      triggerLabel={t('viewMenus.openProjectFilters')}
+      label={t('viewMenus.projectListControls')}
       activeCount={props.activeCount}
       onClear={props.onClear}
     >
       <MobileDrawer.Label id={`${prefix}-sort`} class="pt-4">
-        Sort
+        {t('viewMenus.sort')}
       </MobileDrawer.Label>
       <MobileDrawer.Section
         role="radiogroup"
@@ -60,7 +91,7 @@ export function ProjectsFilterDrawer(props: {
         </For>
       </MobileDrawer.Section>
       <MobileDrawer.Label id={`${prefix}-group`} class="pt-4">
-        Group
+        {t('viewMenus.group')}
       </MobileDrawer.Label>
       <MobileDrawer.Section
         role="radiogroup"
@@ -109,10 +140,12 @@ export function ProjectsFilterDrawer(props: {
           </>
         )}
       </For>
-      <MobileDrawer.Label class="pt-4">Due date</MobileDrawer.Label>
+      <MobileDrawer.Label class="pt-4">
+        {t('viewMenus.dueDate')}
+      </MobileDrawer.Label>
       <div class="grid grid-cols-2 gap-3 px-3 pb-4">
         <label class="flex min-w-0 flex-col gap-1 text-sm">
-          From
+          {t('viewMenus.from')}
           <Input
             type="date"
             value={props.collection.dueAfter()}
@@ -122,7 +155,7 @@ export function ProjectsFilterDrawer(props: {
           />
         </label>
         <label class="flex min-w-0 flex-col gap-1 text-sm">
-          Through
+          {t('viewMenus.through')}
           <Input
             type="date"
             value={props.collection.dueBefore()}

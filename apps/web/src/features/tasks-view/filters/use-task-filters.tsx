@@ -7,6 +7,7 @@ import {
   AssigneePickerStatus,
   useAssigneePicker,
 } from '@app/features/soup/assignee-picker';
+import { t } from '@app/lib/i18n';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { beginInteraction } from '@app/observability/flow';
 import { useUserId } from '@core/context/user';
@@ -61,7 +62,6 @@ export function useTaskFilters() {
     savedViews,
     savedViewScope,
     showProjectFilter,
-    projectsEnabled,
   } = useTasksView();
   const currentUserId = useUserId();
   const tagGroup = useTagFilterGroup();
@@ -88,9 +88,9 @@ export function useTaskFilters() {
   const createPeopleSource = taskPeopleSource(!!savedViews);
   const projectOptions = useTaskProjectLabels(
     () => state.facets.project ?? [],
-    projectsEnabled
+    () => true
   );
-  const createProjectSource = taskProjectSource(projectsEnabled);
+  const createProjectSource = taskProjectSource();
   const peopleOptions = (group: 'assignees' | 'created-by') =>
     (state.facets[group] ?? []).flatMap((id) => {
       const option =
@@ -129,7 +129,10 @@ export function useTaskFilters() {
       .filter((selected) => !options.some((option) => option.id === selected))
       .map((selected) => ({
         id: selected,
-        label: `Unavailable ${id === 'tags' ? 'tag' : 'option'}`,
+        label:
+          id === 'tags'
+            ? t('viewMenus.unavailableTag')
+            : t('viewMenus.unavailableOption'),
       })),
   ];
 
@@ -137,7 +140,7 @@ export function useTaskFilters() {
     (): ListFilterGroup<TaskFilterGroupId, string>[] => [
       {
         id: 'status',
-        label: 'Status',
+        label: t('viewMenus.status'),
         options: withUnavailable(
           'status',
           TASK_STATUS_OPTIONS.map((option) => ({
@@ -153,7 +156,7 @@ export function useTaskFilters() {
       },
       {
         id: 'priority',
-        label: 'Priority',
+        label: t('viewMenus.priority'),
         options: withUnavailable(
           'priority',
           TASK_PRIORITY_OPTIONS.map((option) => ({
@@ -169,25 +172,28 @@ export function useTaskFilters() {
       },
       {
         id: 'due_date',
-        label: 'Due date',
+        label: t('viewMenus.dueDate'),
         selectionMode: 'single',
         defaultOptionId: 'any',
         options: [
-          { id: 'any', label: 'Any due date' },
+          { id: 'any', label: t('viewMenus.anyDueDate') },
           ...TASK_DUE_DATE_BUCKETS,
-          { id: 'has_due_date', label: 'Has due date' },
+          { id: 'has_due_date', label: t('viewMenus.hasDueDate') },
           {
             id: 'range',
             label:
               state.dueDate?.type === 'range'
-                ? `Custom range (${state.dueDate.start ?? 'Any'} – ${state.dueDate.end ?? 'Any'})`
-                : 'Custom range…',
+                ? t('viewMenus.customRangeSummary', {
+                    start: state.dueDate.start ?? t('viewMenus.any'),
+                    end: state.dueDate.end ?? t('viewMenus.any'),
+                  })
+                : t('viewMenus.customRange'),
           },
         ],
       },
       {
         id: 'assignees',
-        label: 'Assignee',
+        label: t('viewMenus.assignee'),
         searchPlaceholder: assigneePicker.placeholder(),
         options: assigneeOptions(),
         footer: <AssigneePickerStatus picker={assigneePicker} />,
@@ -195,8 +201,8 @@ export function useTaskFilters() {
       },
       {
         id: 'created-by',
-        label: 'Created by',
-        searchPlaceholder: 'Search creators...',
+        label: t('viewMenus.createdBy'),
+        searchPlaceholder: t('viewMenus.searchCreators'),
         options: peopleOptions('created-by'),
         createSource: createPeopleSource,
       },
@@ -204,8 +210,8 @@ export function useTaskFilters() {
         ? [
             {
               id: 'project' as const,
-              label: 'Project',
-              searchPlaceholder: 'Search projects...',
+              label: t('viewMenus.project'),
+              searchPlaceholder: t('viewMenus.searchProjects'),
               options: projectOptions(),
               createSource: createProjectSource,
             },

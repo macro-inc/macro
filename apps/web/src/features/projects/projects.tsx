@@ -4,7 +4,7 @@ import {
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
 import { TasksCreateAction } from '@app/features/tasks-view/tasks-create-action';
-import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSearchParams } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -16,7 +16,6 @@ import {
 import {
   enableEntityAppearance,
   enableGantt,
-  enableProjects,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -32,6 +31,7 @@ import {
   createEffect,
   createSignal,
   ErrorBoundary,
+  type JSX,
   on,
   onCleanup,
   type ParentProps,
@@ -56,12 +56,6 @@ import { createProjectSources } from './queries/project-sources';
 import { ProjectAssignment } from './views/project-assignment';
 import { ProjectsCollection } from './views/projects-collection';
 
-function createProjectReadGate() {
-  // Each source invokes this under its own owner, which can outlive this view.
-  const flag = useFeatureFlag(enableProjects);
-  return () => flag().enabled;
-}
-
 /** The production capabilities, for hosts outside the Projects view. */
 export function createProjectsContext() {
   const userId = useUserId();
@@ -69,17 +63,12 @@ export function createProjectsContext() {
     initiativeClient,
     { client: getGraphqlSoupClient, cacheHost: getGraphqlSoupCacheHost },
     queryClient,
-    userId,
-    createProjectReadGate
+    userId
   );
 }
 
 export function Projects(props: ParentProps) {
-  return (
-    <ShowFeatureFlag flag={enableProjects}>
-      <ProjectsContent>{props.children}</ProjectsContent>
-    </ShowFeatureFlag>
-  );
+  return <ProjectsContent>{props.children}</ProjectsContent>;
 }
 
 function ProjectsContent(props: ParentProps) {
@@ -113,6 +102,7 @@ type ProjectsTabProps = {
   search?: Parameters<typeof createProjectCollection>[0]['search'];
   scope?: () => ProjectScope;
   title?: string;
+  mobileNavigation?: JSX.Element;
 };
 
 export function ProjectsTab(props: ProjectsTabProps) {
@@ -207,12 +197,13 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
       <ProjectsCollection
         createAction={
           <Show when={!isTouchDevice()}>
-            <TasksCreateAction presentation="toolbar" projectsEnabled />
+            <TasksCreateAction presentation="toolbar" />
           </Show>
         }
         onOpen={open}
         collection={displayCollection}
         title={props.title}
+        mobileNavigation={props.mobileNavigation}
         ganttEnabled={ganttFlag().enabled}
         createAssigneeName={(id) => usePropertyUserDisplay(id).name}
         onCreate={(initialDraft) =>

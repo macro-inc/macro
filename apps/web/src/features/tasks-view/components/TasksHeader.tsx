@@ -1,7 +1,6 @@
 import {
   useViewControlHotkeys,
   ViewBreadcrumbs,
-  ViewShell,
   ViewSwitchTrigger,
 } from '@app/components/view-shell';
 import {
@@ -9,6 +8,7 @@ import {
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
 import { useProjectSavedViews } from '@app/features/projects/context/project-saved-views-context';
+import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
@@ -23,7 +23,6 @@ import {
   TaskSaveViewButton,
 } from '../views/task-saved-views';
 import { TasksControls } from './TasksControls';
-import { TasksMobileTabs } from './TasksMobileTabs';
 
 export type TasksHeaderProps = {
   /** Moves the keyboard from the search field into the list. */
@@ -40,10 +39,12 @@ export function TaskViewBreadcrumbItem() {
   const tabTitle = () => {
     const projectView = projectSavedView();
     if (projectView?.kind === 'saved') return projectView.record.name;
-    if (projectView?.kind === 'new') return 'New view';
+    if (projectView?.kind === 'new') return t('viewMenus.newView');
     if (state.savedViewActive && savedViews)
       return taskSavedViewTitle(savedViews.view());
-    return TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
+    return (
+      TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? t('nav.tasks')
+    );
   };
 
   return (
@@ -84,7 +85,7 @@ export function TaskViewBreadcrumbItem() {
 
 export function TasksHeader(props: TasksHeaderProps) {
   const panel = useSplitPanelOrThrow();
-  const { state, setState, projectsEnabled } = useTasksView();
+  const { state, setState } = useTasksView();
   let focusSearch: (() => void) | undefined;
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -99,41 +100,29 @@ export function TasksHeader(props: TasksHeaderProps) {
   });
 
   return (
-    <Show
-      when={isTouchDevice()}
-      fallback={
-        <ListHeader
-          title={
-            <div class="flex min-w-0 items-center gap-1">
-              <ViewBreadcrumbs.Outlet aria-label="Task location" />
-              <TaskSavedViewMenu />
-            </div>
-          }
-        >
-          <TaskSaveViewButton />
-          <TaskSavedViewActions />
-          <TasksControls />
-          <TasksCreateAction
-            presentation="toolbar"
-            projectsEnabled={projectsEnabled()}
-          />
-          <ListHeaderSearch
-            label="Search tasks"
-            value={state.search}
-            onValueChange={(search) => setState('search', search)}
-            focusResults={props.focusSearchResults}
-            registerFocus={(focus) => {
-              focusSearch = focus;
-            }}
-          />
-        </ListHeader>
-      }
-    >
-      <ViewShell.Header>
-        <div class="flex min-w-0 flex-col">
-          <TasksMobileTabs />
-        </div>
-      </ViewShell.Header>
+    <Show when={!isTouchDevice()}>
+      <ListHeader
+        title={
+          <div class="flex min-w-0 items-center gap-1">
+            <ViewBreadcrumbs.Outlet aria-label="Task location" />
+            <TaskSavedViewMenu />
+          </div>
+        }
+      >
+        <TaskSaveViewButton />
+        <TaskSavedViewActions />
+        <TasksControls />
+        <TasksCreateAction presentation="toolbar" />
+        <ListHeaderSearch
+          label="Search tasks"
+          value={state.search}
+          onValueChange={(search) => setState('search', search)}
+          focusResults={props.focusSearchResults}
+          registerFocus={(focus) => {
+            focusSearch = focus;
+          }}
+        />
+      </ListHeader>
     </Show>
   );
 }

@@ -61,6 +61,72 @@ fn a_template_matches_the_whole_path_under_at_most_one_service_prefix() {
     assert!(!matches("/scheduled-actionx/suggestions", "/suggestions"));
 }
 
+/// Document storage, cognition and notification serve every route under an
+/// API version too, so a template matches its versioned path, under a
+/// service prefix or alone.
+#[test]
+fn a_template_matches_its_path_under_an_api_version() {
+    assert!(matches(
+        "/cognition/v1/email/send-confirmed",
+        "/email/send-confirmed"
+    ));
+    assert!(matches(
+        "/dss/v1/documents/1/comments/text",
+        "/documents/{id}/comments/text"
+    ));
+    assert!(matches("/v2/web/fetch", "/web/fetch"));
+    assert!(!matches("/cognition/v1/v1/web/fetch", "/web/fetch"));
+    assert!(!matches("/cognition/vx/web/fetch", "/web/fetch"));
+    assert!(!matches("/v1/cognition/web/fetch", "/web/fetch"));
+}
+
+/// Routers percent-decode the parameters they match (`/{version}`), so a
+/// path is compared decoded: an encoded version, prefix or literal still
+/// matches.
+#[test]
+fn a_template_matches_its_percent_encoded_path() {
+    assert!(matches(
+        "/dss/%76%31/items/soup/graphql",
+        "/items/soup/graphql"
+    ));
+    assert!(matches(
+        "/%64ss/v1/items/soup/graphql",
+        "/items/soup/graphql"
+    ));
+    assert!(matches("/cognition/web/%66etch", "/web/fetch"));
+    assert!(!SessionScope::NoSend.allows("POST", "/dss/%76%31/items/soup/graphql"));
+    assert!(!SessionScope::NoSend.allows("POST", "/cognition/%76%31/email/send-confirmed"));
+    assert!(!matches("/cognition/web%2Ffetch", "/web/fetch"));
+}
+
+/// A run that sends nothing is refused each of its sends under every service
+/// prefix and API version.
+#[test]
+fn a_run_that_sends_nothing_is_refused_every_send_under_any_version() {
+    for (method, template) in SessionScope::sends() {
+        let path: String = template
+            .split('/')
+            .map(|segment| {
+                if segment.starts_with('{') {
+                    "x"
+                } else {
+                    segment
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("/");
+        for prefix in std::iter::once("").chain(SERVICE_PREFIXES.iter().copied()) {
+            for version in ["", "/v1", "/v2"] {
+                let sent = format!("{prefix}{version}{path}");
+                assert!(
+                    !SessionScope::NoSend.allows(method, &sent),
+                    "{method} {sent}"
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn a_scope_is_stored_by_name() {
     assert_eq!(
@@ -93,6 +159,16 @@ fn a_run_that_sends_nothing_reaches_nobody() {
     for (method, path) in [
         ("POST", "/email/messages"),
         ("POST", "/cognition/email/send-confirmed"),
+        // Booking changes the guest or host hears of.
+        ("POST", "/calendar/scheduling/bookings/01a1/approve"),
+        ("POST", "/calendar/scheduling/bookings/01a1/attendance"),
+        ("POST", "/calendar/scheduling/bookings/01a1/cancel"),
+        ("POST", "/calendar/scheduling/public/someone/intro/book"),
+        ("POST", "/calendar/scheduling/public/bookings/01a1/cancel"),
+        (
+            "POST",
+            "/calendar/scheduling/public/bookings/01a1/reschedule",
+        ),
         // Work that runs with the person's full access.
         ("POST", "/agent-harness/agent-sessions"),
         ("POST", "/agent-sessions/01a1/control"),
@@ -195,16 +271,18 @@ fn no_scope_reaches_graphql() {
         SignedScope::Unknown,
     ] {
         for (method, path) in [
-            ("POST", "/soup/graphql"),
-            ("POST", "/dss/soup/graphql"),
-            ("GET", "/soup/graphql/ws"),
-            ("GET", "/dss/soup/graphql/ws"),
+            ("POST", "/items/soup/graphql"),
+            ("POST", "/dss/items/soup/graphql"),
+            ("POST", "/dss/v1/items/soup/graphql"),
+            ("GET", "/items/soup/graphql/ws"),
+            ("GET", "/dss/items/soup/graphql/ws"),
+            ("GET", "/dss/v1/items/soup/graphql/ws"),
         ] {
             assert!(!scope.allows(method, path), "{scope:?} {method} {path}");
         }
         assert!(scope.allows("GET", "/dss/documents/01a1"), "{scope:?}");
     }
-    assert!(SignedScope::Unscoped.allows("POST", "/dss/soup/graphql"));
+    assert!(SignedScope::Unscoped.allows("POST", "/dss/items/soup/graphql"));
 }
 
 /// A dry run reads, including the reads the SDK sends as POST, and writes

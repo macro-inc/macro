@@ -41,39 +41,66 @@ function ProjectViewSummary(props: {
     <div class="space-y-1 text-sm text-ink-muted">
       <Show when={props.omitted}>
         <p role="alert" class="text-failure">
-          Unsupported settings will not be copied. The original view stays
-          unchanged.
+          {t('viewMenus.unsupportedCopy')}
         </p>
       </Show>
       <p>
-        Projects:{' '}
-        {
-          {
-            all: 'All',
-            'assigned-to-me': 'Assigned to me',
-            'created-by-me': 'Created by me',
-          }[props.config.scope]
-        }
+        {t('viewMenus.projectScopeSummary', {
+          scope: {
+            all: t('viewMenus.all'),
+            'assigned-to-me': t('viewMenus.assignedToMe'),
+            'created-by-me': t('viewMenus.createdByMe'),
+          }[props.config.scope],
+        })}
       </p>
       <p>
-        Layout: {props.config.settings.layout === 'list' ? 'List' : 'Gantt'}
+        {t('viewMenus.projectLayoutSummary', {
+          layout:
+            props.config.settings.layout === 'list'
+              ? t('viewMenus.layoutList')
+              : t('viewMenus.layoutGantt'),
+        })}
       </p>
-      <p>Group by: {props.config.settings.groupBy}</p>
-      <p>Sort: {props.config.settings.sort} (newest first)</p>
+      <p>
+        {t('viewMenus.projectGroupSummary', {
+          group: {
+            none: t('viewMenus.groupNone'),
+            status: t('viewMenus.status'),
+            priority: t('viewMenus.priority'),
+            assignee: t('viewMenus.assignee'),
+          }[props.config.settings.groupBy],
+        })}
+      </p>
+      <p>
+        {t('viewMenus.projectSortSummary', {
+          sort:
+            props.config.settings.sort === 'updated'
+              ? t('viewMenus.updated')
+              : t('viewMenus.created'),
+        })}
+      </p>
       <Show when={props.config.settings.status}>
-        <p>Status filter applied</p>
+        <p>{t('viewMenus.statusFilterApplied')}</p>
       </Show>
       <Show when={props.config.settings.priority}>
-        <p>Priority filter applied</p>
+        <p>{t('viewMenus.priorityFilterApplied')}</p>
       </Show>
       <Show when={props.config.settings.mine}>
-        <p>Assigned to me</p>
+        <p>{t('viewMenus.assignedToMe')}</p>
       </Show>
       <Show when={props.config.settings.dueAfter}>
-        <p>Due from: {props.config.settings.dueAfter}</p>
+        <p>
+          {t('viewMenus.dueFromSummary', {
+            date: props.config.settings.dueAfter,
+          })}
+        </p>
       </Show>
       <Show when={props.config.settings.dueBefore}>
-        <p>Due through: {props.config.settings.dueBefore}</p>
+        <p>
+          {t('viewMenus.dueThroughSummary', {
+            date: props.config.settings.dueBefore,
+          })}
+        </p>
       </Show>
     </div>
   );
@@ -92,10 +119,14 @@ function createProjectViewDialogs(views: ProjectViews, owner = getOwner()) {
       () => ({
         mode: 'create' as const,
         id,
-        name: record ? `${record.name.slice(0, 113)} (copy)` : 'New view',
+        name: record
+          ? t('viewMenus.copyName', { name: record.name.slice(0, 113) })
+          : t('viewMenus.newView'),
         config,
-        title: record ? 'Duplicate saved view' : 'Save view',
-        submitLabel: record ? 'Duplicate' : 'Save view',
+        title: record ? t('viewMenus.duplicateView') : t('viewMenus.saveView'),
+        submitLabel: record
+          ? t('viewMenus.duplicate')
+          : t('viewMenus.saveView'),
         summary: (
           <ProjectViewSummary
             config={config}
@@ -136,7 +167,7 @@ function createProjectViewDialogs(views: ProjectViews, owner = getOwner()) {
         viewerId: views.viewerId,
         refresh: views.list.refresh,
         isCurrent: request.isCurrent,
-        description: 'Deleting this view does not delete its projects.',
+        description: t('viewMenus.deleteProjectViewDescription'),
         onDeleted: (deleted, viewer) => {
           if (viewer === views.viewerId() && deleted.id === views.selectedId())
             views.select();
@@ -176,7 +207,10 @@ export function ProjectSavedViewRows(props: {
   };
   return (
     <>
-      <SavedViewList.Items label="Saved project views" mobile={props.mobile}>
+      <SavedViewList.Items
+        label={t('viewMenus.savedProjectViews')}
+        mobile={props.mobile}
+      >
         <Show when={views.creating()}>
           <SavedViewList.Draft
             mobile={props.mobile}
@@ -193,8 +227,8 @@ export function ProjectSavedViewRows(props: {
               onSelect={() => run(() => views.select(record.id))}
               menu={(defer) => (
                 <SavedViewMenuItems
-                  editLabel="Rename"
-                  deleteLabel="Delete"
+                  editLabel={t('common.rename')}
+                  deleteLabel={t('common.delete')}
                   owned={record.ownerId === views.viewerId()}
                   onEdit={() =>
                     defer(() =>
@@ -225,7 +259,7 @@ export function ProjectSavedViewRows(props: {
       </SavedViewList.Items>
       <Show when={views.list.loading() && !items()}>
         <p role="status" class="px-3 py-2 text-xs text-ink-muted">
-          Loading views…
+          {t('viewMenus.loadingViews')}
         </p>
       </Show>
       <Show
@@ -262,7 +296,7 @@ export function ProjectSavedViewRows(props: {
           size="sm"
           onClick={() => fireAndForget(views.list.refresh(), 'project-views')}
         >
-          Retry loading views
+          {t('viewMenus.retryLoadingViews')}
         </Button>
       </Show>
       <Show when={views.list.hasMore()}>
@@ -272,7 +306,7 @@ export function ProjectSavedViewRows(props: {
           disabled={views.list.loadingMore()}
           onClick={() => fireAndForget(views.list.loadMore(), 'project-views')}
         >
-          Load more views
+          {t('viewMenus.loadMoreViews')}
         </Button>
       </Show>
     </>
@@ -353,7 +387,7 @@ export function ProjectSavedViewActions() {
       if (!request.isCurrent()) return;
       if (result.error)
         return toast.failure(
-          savedViewErrorMessage(result.error) ?? 'Could not save view'
+          savedViewErrorMessage(result.error) ?? t('viewMenus.saveViewFailed')
         );
       if (result.data?.updateSavedView)
         views.draft.acceptConfirmed(toSavedView(result.data.updateSavedView));
@@ -370,11 +404,11 @@ export function ProjectSavedViewActions() {
             dialogs.create();
           }}
         >
-          Save view
+          {t('viewMenus.saveView')}
         </Button>
         <Show when={views.creating()}>
           <Button variant="ghost" onClick={() => views.select()}>
-            Cancel
+            {t('common.cancel')}
           </Button>
         </Show>
       </Show>
@@ -385,7 +419,7 @@ export function ProjectSavedViewActions() {
             disabled={update.isPending || Boolean(selected()?.issues.length)}
             onClick={() => fireAndForget(save(), 'project-views')}
           >
-            Save changes
+            {t('viewMenus.saveChanges')}
           </Button>
         </Show>
         <Button
@@ -393,7 +427,7 @@ export function ProjectSavedViewActions() {
           disabled={update.isPending}
           onClick={() => views.draft.reset()}
         >
-          Reset
+          {t('viewMenus.reset')}
         </Button>
       </Show>
     </>
@@ -407,7 +441,7 @@ export function ProjectSavedViewStatus() {
     const view = views.draft.view();
     if (view.kind === 'unavailable') return view.message;
     if (view.kind === 'saved' && view.issues.length)
-      return 'This project view contains unsupported settings. Its original definition is unchanged.';
+      return t('viewMenus.unsupportedProjectView');
   };
   return (
     <Show when={message()}>

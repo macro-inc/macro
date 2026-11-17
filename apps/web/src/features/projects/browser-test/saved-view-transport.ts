@@ -88,12 +88,12 @@ export function useDeleteSavedView() {
     error: null,
     mutateAsync: async (input: { id: string; expectedRevision: number }) => {
       setPending(true);
-      setRecords((items) =>
-        items.filter(
-          (item) =>
-            item.id !== input.id || item.revision !== input.expectedRevision
-        )
-      );
+      const current = records().find((item) => item.id === input.id);
+      if (!current || current.revision !== input.expectedRevision) {
+        setPending(false);
+        return { error: { message: 'Revision conflict' }, data: undefined };
+      }
+      setRecords((items) => items.filter((item) => item.id !== input.id));
       setPending(false);
       return { error: null, data: { deleteSavedView: true } };
     },

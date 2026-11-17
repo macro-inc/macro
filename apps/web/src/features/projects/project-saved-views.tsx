@@ -112,10 +112,11 @@ export function createProjectSavedViews(props: {
   // Route/account transitions discard temporary settings, not confirmed definitions.
   createEffect(
     on(
-      () => [selectedId(), viewerId(), props.scope()] as const,
-      ([id], previous) => {
+      () => [selectedId(), viewerId(), props.scope(), props.active()] as const,
+      ([id, viewer, , active], previous) => {
         if (!previous) return;
-        if (createNavigationPending && !id && props.active()) {
+        const sameViewer = viewer === previous[1];
+        if (createNavigationPending && sameViewer && !id && active) {
           createNavigationPending = false;
           return;
         }

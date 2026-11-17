@@ -6,12 +6,15 @@ import { DEFAULT_PROJECT_SETTINGS } from './core/project';
 const fixture = vi.hoisted(() => ({
   touch: false,
   savedView: (): string | undefined => 'view',
+  viewerId: (): string => 'viewer',
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: true, loading: false }),
   ShowFeatureFlag: (props: ParentProps) => props.children,
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => fixture.viewerId(),
+}));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => fixture.touch,
 }));
@@ -137,10 +140,14 @@ vi.mock('./views/projects-collection', async () => {
   };
 });
 
+import { useProjectSavedViews } from './context/project-saved-views-context';
 import { ProjectSavedViewsProvider } from './project-saved-views';
 import { ProjectsTab } from './projects';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  fixture.viewerId = () => 'viewer';
+});
 it.each([
   [false, false],
   [false, true],
@@ -180,5 +187,39 @@ it.each([
     expect(
       JSON.parse(screen.getByLabelText('Draft state').textContent ?? '{}')
     ).toMatchObject({ kind: 'default' });
+  }
+);
+
+it.each(['account', 'navigation'] as const)(
+  'discards pending project-view creation after %s changes',
+  (change) => {
+    const [viewer, setViewer] = createSignal('viewer');
+    const [active, setActive] = createSignal(true);
+    fixture.viewerId = viewer;
+    fixture.savedView = () => undefined;
+    let views: ReturnType<typeof useProjectSavedViews>;
+    function Capture() {
+      views = useProjectSavedViews();
+      return null;
+    }
+    render(() => (
+      <ProjectSavedViewsProvider
+        active={active}
+        enabled={() => true}
+        scope={() => 'all'}
+        location={() => 'projects'}
+        onSelect={() => {}}
+      >
+        <Capture />
+      </ProjectSavedViewsProvider>
+    ));
+    if (!views) throw new Error('Missing project saved-view context');
+    views.start();
+    views.updateSettings({ status: 'draft-status' });
+    expect(views.creating()).toBe(true);
+    if (change === 'account') setViewer('another-viewer');
+    else setActive(false);
+    expect(views.creating()).toBe(false);
+    expect(views.settings().status).toBe('');
   }
 );
