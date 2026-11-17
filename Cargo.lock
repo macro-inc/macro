@@ -8375,8 +8375,10 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "sha1 0.10.6",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
  "wiremock",
  "workspace-hack",
 ]
