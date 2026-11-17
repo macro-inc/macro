@@ -9,6 +9,7 @@ from unittest import mock
 
 import datadog_spans
 import markdown_export
+import turn_context
 
 HERE = pathlib.Path(__file__).resolve().parent
 _loader = importlib.machinery.SourceFileLoader("agent_session_view", str(HERE / "agent-session-view"))
@@ -110,6 +111,116 @@ class Spans(unittest.TestCase):
         with mock.patch("urllib.request.urlopen", side_effect=failed):
             with self.assertRaises(urllib.error.HTTPError):
                 datadog_spans.send(mock.Mock())
+
+
+class DocumentationAndTools(unittest.TestCase):
+    def test_a_documentation_selection_reads_its_entities_and_bytes(self):
+        span = {"trace_id": "t1", "start_timestamp": "2026-11-09T10:00:00Z",
+                "custom": {"selection_status": "selected", "selected": "2", "selected_entities": "channels,users",
+                           "bytes": "20111", "guidance": "Inline", "batches": "2"}}
+        self.assertEqual(datadog_spans.documentation(span), {
+            "trace_id": "t1", "start_ms": 1794218400000.0, "status": "selected", "selected": 2,
+            "entities": ["channels", "users"], "bytes": 20111, "guidance": "Inline", "batches": 2,
+        })
+
+    def test_a_cut_tool_listing_keeps_every_whole_name_and_no_descriptions(self):
+        definitions = ('[{"type":"function","name":"ExecuteCode","description":"Run \\"name\\":\\"x\\""},'
+                       '{"type":"function","name":"mcp__GitHub__get_me","description":"Who'
+                       '{"type":"function","name":"ExecuteCode","descr')
+        span = {"start_timestamp": "2026-11-09T10:00:00Z", "end_timestamp": "2026-11-09T10:00:09Z",
+                "custom": {"gen_ai": {"tool": {"definitions": definitions}},
+                           "macro": {"genai": {"content_truncated": "true"}}}}
+        offer = datadog_spans.tool_offer(span)
+        self.assertEqual(offer["names"], ["ExecuteCode", "mcp__GitHub__get_me"])
+        self.assertTrue(offer["cut"])
+
+    def test_the_eager_lists_are_read_from_the_source(self):
+        names = turn_context.eager_names_from_source()
+        self.assertIn("SearchTools", names)
+        self.assertIn("DescribeCodeTools", names)
+
+    def test_an_unreadable_eager_list_is_unknown_not_guessed(self):
+        self.assertIsNone(turn_context.eager_names_from_source(pathlib.Path("/nonexistent")))
+
+
+def tool_result(t, call_id, name, raw):
+    return [call(t, call_id, name), done(t + 0.5, call_id, raw)]
+
+
+def code_failure(t, call_id, message):
+    return [call(t, call_id, "mcp__macro_internal__ExecuteCode"),
+            done(t + 0.5, call_id, {"status": "failed", "error": message})]
+
+
+def spans_for_turn(selected):
+    return {
+        "tools": {},
+        "model_calls": [
+            {"start_ms": seconds(0.5) * 1000, "end_ms": seconds(1) * 1000, "eager_tools": 0, "prompt_bytes": {}},
+            {"start_ms": seconds(1) * 1000, "end_ms": seconds(2) * 1000, "eager_tools": 4, "loaded_tools": 1,
+             "input_tokens": 900, "prompt_bytes": {"sdk_docs": 8068, "tools.eager": 7000, "history": 300}},
+        ],
+        "documentation": [{"start_ms": seconds(0.2) * 1000, "status": "selected", "selected": selected,
+                           "entities": [], "bytes": 8055, "guidance": "Inline", "batches": 2}],
+        "tool_offers": [{"start_ms": seconds(0) * 1000, "end_ms": seconds(30) * 1000, "cut": False,
+                         "names": ["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs", "mcp__GitHub__get_me",
+                                   "mcp__GitHub__search_code"]}],
+    }
+
+
+class TurnContext(unittest.TestCase):
+    def test_the_acceptance_shape_raises_both_flags(self):
+        export = {"session": {"id": "s"}, "spans": spans_for_turn(0), "frames": [
+            prompt(0),
+            *tool_result(1, "s1", "SearchTools", {"results": [{"name": "mcp__GitHub__search_code"}],
+                                                  "additional_matches": [{"name": "mcp__GitHub__get_me"}]}),
+            *code_failure(2, "c1", "TypeError: msg.sender is not a function"),
+            *code_failure(3, "c2", "TypeError: macro.users.byEmail is not a function"),
+            *code_failure(4, "c3", "TypeError: channel.members(...) is not a function or its return value "
+                                   "is not async iterable"),
+            end(5),
+        ]}
+        source = ["SearchTools", "LoadTools", "ExecuteCode", "DescribeCodeTools", "ReadCodeDocs", "PresentReview"]
+        context = turn_context.for_session(export, source)[0]
+        self.assertEqual(context["tools"]["eager"]["names"],
+                         ["SearchTools", "ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"])
+        self.assertEqual(context["tools"]["loaded"],
+                         [{"name": "mcp__GitHub__search_code", "step": 1, "via": "SearchTools"}])
+        self.assertEqual(context["tools"]["deferred"], ["mcp__GitHub__get_me"])
+        self.assertEqual([found["id"] for found in context["flags"]],
+                         ["no-sdk-index", "guessed-sdk-methods", "failing-code"])
+        self.assertIn("steps 2, 3, 4", context["flags"][1]["text"])
+
+    def test_describing_the_sdk_clears_the_guessed_methods_flag(self):
+        export = {"session": {"id": "s"}, "spans": spans_for_turn(2), "frames": [
+            prompt(0),
+            *tool_result(1, "d1", "mcp__macro_internal__DescribeCodeTools", {"index": "…"}),
+            *code_failure(2, "c1", "TypeError: msg.sender is not a function"),
+            end(3),
+        ]}
+        source = ["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs", "SearchTools"]
+        flags = [found["id"] for found in turn_context.for_session(export, source)[0]["flags"]]
+        self.assertEqual(flags, ["eager-count-mismatch"])
+
+    def test_unknown_eager_names_are_a_loud_flag(self):
+        export = {"session": {"id": "s"}, "spans": spans_for_turn(2), "frames": [prompt(0), end(1)]}
+        context = turn_context.for_session(export, None)[0]
+        self.assertIsNone(context["tools"]["eager"]["names"])
+        self.assertEqual(context["flags"][0]["id"], "eager-names-unknown")
+        self.assertEqual(context["flags"][0]["level"], "warn")
+
+    def test_the_same_failure_three_times_is_flagged(self):
+        frames = [prompt(0)]
+        for number in range(3):
+            frames += [call(1 + number, f"b{number}", "BashCodeExecution"),
+                       done(1.5 + number, f"b{number}", "No bash code execution result returned", "failed")]
+        export = {"session": {"id": "s"}, "spans": spans_for_turn(2), "frames": [*frames, end(5)]}
+        flags = turn_context.for_session(export, ["BashCodeExecution"])[0]["flags"]
+        self.assertEqual(flags[0]["id"], "repeated-failure")
+        self.assertIn("3 times", flags[0]["text"])
+
+    def test_without_spans_there_is_no_context(self):
+        self.assertEqual(turn_context.for_session({"session": {"id": "s"}, "frames": [prompt(0)]}, []), [])
 
 
 class Cli(unittest.TestCase):

@@ -36,6 +36,7 @@ import urllib.parse
 
 import datadog_spans
 import markdown_export
+import turn_context
 
 HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "template.html"
@@ -280,14 +281,15 @@ def export_batch(url, args):
     out_dir = args.out or DEFAULT_OUT_DIR / "batch"
     out_dir.mkdir(parents=True, exist_ok=True)
     found = find_sessions(url, args)
+    eager_source = turn_context.eager_names_from_source()
     rows = []
     for number, match in enumerate(found, 1):
         print(f"[{number}/{len(found)}] {match['id']}", file=sys.stderr)
         export = query_session(url, match["id"], args.datadog)
-        summary, full = markdown_export.render(export)
+        summary, full = markdown_export.render(export, eager_source)
         (out_dir / f"{match['id']}.md").write_text(summary)
         (out_dir / f"{match['id']}.full.md").write_text(full)
-        rows.append(markdown_export.index_row(export))
+        rows.append(markdown_export.index_row(export, eager_source))
     (out_dir / "index.md").write_text(markdown_export.index(rows, vars(args)))
     return out_dir / "index.md"
 
@@ -306,9 +308,12 @@ def normalize(export):
 
 
 def render(export):
+    # The turns' context goes in beside the export, computed at render time
+    # so an older export renders with it too.
+    contexts = turn_context.for_session(export, turn_context.eager_names_from_source())
     # Every `<` as \u003c, so no `</script>` or `<!--` in the session ends or
     # changes the script element it is inlined in.
-    payload = json.dumps(export, ensure_ascii=False).replace("<", "\\u003c")
+    payload = json.dumps({**export, "turn_context": contexts}, ensure_ascii=False).replace("<", "\\u003c")
     return TEMPLATE.read_text().replace("__SESSION_JSON__", payload)
 
 
@@ -368,7 +373,7 @@ def main():
     out = args.out or DEFAULT_OUT_DIR / f"{export['session']['id']}{suffix}"
     out.parent.mkdir(parents=True, exist_ok=True)
     if args.markdown:
-        summary, full = markdown_export.render(export)
+        summary, full = markdown_export.render(export, turn_context.eager_names_from_source())
         out.write_text(summary)
         out.with_suffix(".full.md").write_text(full)
     else:
