@@ -11,7 +11,9 @@
 import { createCalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
 import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
 import { eventGuestOptions } from '@app/features/calendar/components/composer/guest-options';
+import type { ComposerMetadataChanges } from '@app/features/calendar/core/composer-metadata';
 import { useCalendarGuestInvitesFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { createAgentComposer } from '@app/features/calendar/primitives/create-agent-composer';
 import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/types';
 import {
   calendarDisplayLabel,
@@ -19,10 +21,13 @@ import {
 } from '@app/features/calendar/utils/calendar-label';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { EventForm } from '@app/features/calendar/views/composer/EventForm';
+import { MobileAgentComposer } from '@app/features/calendar/views/composer/mobile/MobileAgentComposer';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { calendarConsentScopes } from '@core/email-link/consent';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -31,7 +36,6 @@ import { Button, Layer } from '@ui';
 import {
   createEffect,
   createMemo,
-  createSignal,
   ErrorBoundary,
   onCleanup,
   Show,
@@ -100,6 +104,7 @@ function CalendarDraftComposerFallback() {
 
 function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   const [preferences] = useCalendarPreferences();
+  const resolveAppLink = useMacroMentionLinkResolver();
   const calendarsQuery = useVisibleCalendarsQuery();
   const linksQuery = useEmailLinksQuery();
   const userId = useUserId();
@@ -135,11 +140,9 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   const macroCallsEnabled = () => quickCalls().enabled && !quickCalls().loading;
   // Guest permissions roll out with guest invites.
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
-  const [operation, setOperation] = createSignal<'create' | 'reject'>();
-  let finalized = false;
+  let agent: ReturnType<typeof createAgentComposer<CreateCalendarEvent>>;
 
-  const interactionLocked = () =>
-    finalized || !props.sink.canAct() || operation() !== undefined;
+  const interactionLocked = () => agent?.locked() ?? !props.sink.canAct();
 
   const guestOptions = createMemo(() =>
     eventGuestOptions(props.initialData.attendees ?? [])
@@ -209,140 +212,165 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
     if (selected) controller.setField('calendarId', selected.id);
   });
 
-  function currentArgs(values = controller.submitValues()) {
+  function currentArgs(
+    values?: EventEditorSubmitValues,
+    metadata?: ComposerMetadataChanges
+  ) {
+    if (!values) {
+      const prepared = agent?.model.submission();
+      if (agent && !prepared) return undefined;
+      values = prepared?.values ?? controller.submitValues();
+      metadata = prepared?.changes;
+    }
     return values
       ? editorSubmitValuesToCreateCalendarEvent(
           values,
           props.initialData,
           guestInvitesEnabled() &&
             controller.selectedCalendarOption()?.capabilities?.guestPolicy !==
-              false
+              false,
+          metadata
         )
       : undefined;
   }
 
+  agent = createAgentComposer({
+    controller,
+    get timeFormat() {
+      return preferences.timeFormat;
+    },
+    get guestPolicyEditable() {
+      return guestInvitesEnabled();
+    },
+    canAct: props.sink.canAct,
+    prepare: currentArgs,
+    onExecute: props.sink.onExecute,
+    onReject: props.sink.onReject,
+  });
+
   props.registerDraftReader?.(currentArgs);
   props.registerSubmitReader?.(async () => currentArgs());
 
-  async function handleCreate(values: EventEditorSubmitValues) {
-    if (interactionLocked()) return;
-    const args = currentArgs(values);
-    if (!args) return;
-    setOperation('create');
-    const done = await props.sink.onExecute(args);
-    setOperation(undefined);
-    if (done) finalized = true;
-  }
-
-  async function handleCancel() {
-    if (interactionLocked()) return;
-    setOperation('reject');
-    const done = await props.sink.onReject();
-    setOperation(undefined);
-    if (done) finalized = true;
-  }
+  const status = () => (
+    <>
+      <Show when={props.sink.lockedNotice()}>
+        {(notice) => (
+          <p class="px-4 pt-3 text-xs text-ink-extra-muted/60">{notice()}</p>
+        )}
+      </Show>
+      <Show when={!controller.selectedCalendarOption()}>
+        <div
+          role="status"
+          class="flex flex-wrap items-center gap-2 px-4 pt-3 text-sm text-ink-muted"
+        >
+          <Show
+            when={!calendarLoadFailed()}
+            fallback={
+              <>
+                <span>Could not load your calendars.</span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={retryCalendarData}
+                >
+                  Try again
+                </Button>
+              </>
+            }
+          >
+            <Show when={!loadingCalendars()} fallback="Loading your calendars…">
+              <span>
+                The requested calendar is unavailable.{' '}
+                {requestedNeedsAccess()
+                  ? 'Reconnect it or choose another calendar.'
+                  : 'Wait for it to sync or choose another calendar.'}
+              </span>
+              <Show when={requestedNeedsAccess() && requestedInbox()}>
+                {(link) => (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      fireAndForget(
+                        startAddInbox({
+                          scopes: calendarConsentScopes(link()),
+                          emailAddress: link().email_address,
+                        }),
+                        'add-inbox'
+                      )
+                    }
+                  >
+                    Reconnect calendar
+                  </Button>
+                )}
+              </Show>
+              <Show when={!requestedInbox()}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    fireAndForget(
+                      startAddInbox({ scopes: 'gmail_and_calendar' }),
+                      'add-inbox'
+                    )
+                  }
+                >
+                  Connect calendar
+                </Button>
+              </Show>
+            </Show>
+          </Show>
+        </div>
+      </Show>
+    </>
+  );
 
   onCleanup(() => props.sink.onDispose?.());
 
   return (
     <Layer depth={2}>
       <div class="flex min-h-0 w-full flex-col gap-4">
-        <div
-          data-calendar-tool-composer
-          class="flex min-h-80 max-h-128 min-w-0 flex-col gap-3 overflow-hidden rounded-xl border border-edge-muted bg-surface text-ink shadow-sm"
-        >
-          <Show when={props.sink.lockedNotice()}>
-            {(notice) => (
-              <p class="px-4 pt-3 text-xs text-ink-extra-muted/60">
-                {notice()}
-              </p>
-            )}
-          </Show>
-          <Show when={!controller.selectedCalendarOption()}>
+        <Show
+          when={isTouchDevice()}
+          fallback={
             <div
-              role="status"
-              class="flex flex-wrap items-center gap-2 px-4 pt-3 text-sm text-ink-muted"
+              data-calendar-tool-composer
+              class="flex min-h-80 max-h-128 min-w-0 flex-col gap-3 overflow-hidden rounded-xl border border-edge-muted bg-surface text-ink shadow-sm"
             >
-              <Show
-                when={!calendarLoadFailed()}
-                fallback={
-                  <>
-                    <span>Could not load your calendars.</span>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={retryCalendarData}
-                    >
-                      Try again
-                    </Button>
-                  </>
+              {status()}
+              <EventForm
+                timeFormat={preferences.timeFormat}
+                controller={controller}
+                macroCallsEnabled={macroCallsEnabled()}
+                guestPolicyEditable={guestInvitesEnabled()}
+                class="min-w-0"
+                disabled={
+                  !props.sink.canAct() ||
+                  agent.operation() === 'reject' ||
+                  (agent.locked() && agent.operation() !== 'create')
                 }
-              >
-                <Show
-                  when={!loadingCalendars()}
-                  fallback="Loading your calendars…"
-                >
-                  <span>
-                    The requested calendar is unavailable.{' '}
-                    {requestedNeedsAccess()
-                      ? 'Reconnect it or choose another calendar.'
-                      : 'Wait for it to sync or choose another calendar.'}
-                  </span>
-                  <Show when={requestedNeedsAccess() && requestedInbox()}>
-                    {(link) => (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() =>
-                          fireAndForget(
-                            startAddInbox({
-                              scopes: calendarConsentScopes(link()),
-                              emailAddress: link().email_address,
-                            }),
-                            'add-inbox'
-                          )
-                        }
-                      >
-                        Reconnect calendar
-                      </Button>
-                    )}
-                  </Show>
-                  <Show when={!requestedInbox()}>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        fireAndForget(
-                          startAddInbox({ scopes: 'gmail_and_calendar' }),
-                          'add-inbox'
-                        )
-                      }
-                    >
-                      Connect calendar
-                    </Button>
-                  </Show>
-                </Show>
-              </Show>
+                pending={agent.operation() === 'create'}
+                onCancel={() =>
+                  fireAndForget(agent.cancel(), 'ai-calendar-compose')
+                }
+                onSubmit={(values) =>
+                  fireAndForget(agent.create(values), 'ai-calendar-compose')
+                }
+              />
             </div>
-          </Show>
-          <EventForm
-            timeFormat={preferences.timeFormat}
-            controller={controller}
+          }
+        >
+          <MobileAgentComposer
+            model={agent.model}
+            resolveAppLink={resolveAppLink}
             macroCallsEnabled={macroCallsEnabled()}
-            guestPolicyEditable={guestInvitesEnabled()}
-            class="min-w-0"
-            disabled={
-              finalized || !props.sink.canAct() || operation() === 'reject'
-            }
-            pending={operation() === 'create'}
             onCancel={() =>
-              fireAndForget(handleCancel(), 'ai-calendar-compose')
+              fireAndForget(agent.cancel(), 'ai-calendar-compose')
             }
-            onSubmit={(values) =>
-              fireAndForget(handleCreate(values), 'ai-calendar-compose')
-            }
-          />
-        </div>
+          >
+            {status()}
+          </MobileAgentComposer>
+        </Show>
         <Show when={props.showPreview !== false}>
           <ErrorBoundary
             fallback={

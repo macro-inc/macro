@@ -3,6 +3,7 @@ import type {
   EventEditorSubmitValues,
 } from '@app/features/calendar/components/composer/event-form-model';
 import type { EventEditorOutOfOffice } from '@app/features/calendar/components/composer/out-of-office';
+import type { ComposerMetadataChanges } from '@app/features/calendar/core/composer-metadata';
 import type {
   AutoDeclineModeInput,
   CreateCalendarEvent,
@@ -108,7 +109,8 @@ export function createCalendarEventToEditorInitialValues(
 
 function toolTime(
   time: EventEditorSubmitValues['time'],
-  original: EventTimeInput
+  original: EventTimeInput,
+  metadata?: ComposerMetadataChanges
 ): EventTimeInput {
   if (time.kind === 'allDay') {
     return {
@@ -123,7 +125,7 @@ function toolTime(
     startsAt: time.startsAt,
     endsAt: time.endsAt,
     timeZone:
-      original.kind === 'timed'
+      original.kind === 'timed' && !metadata?.timeZoneChanged
         ? (original.timeZone ?? time.timeZone)
         : time.timeZone,
   };
@@ -156,7 +158,8 @@ function attendees(
 export function editorSubmitValuesToCreateCalendarEvent(
   values: EventEditorSubmitValues,
   original: CompatibleCalendarEvent,
-  sendGuestPolicy: boolean
+  sendGuestPolicy: boolean,
+  metadata?: ComposerMetadataChanges
 ): CreateCalendarEvent {
   // A create's submit values carry `outOfOffice` exactly while the editor kind
   // is out of office, so its presence decides the tool's event type.
@@ -165,7 +168,7 @@ export function editorSubmitValuesToCreateCalendarEvent(
   return {
     ...normalized,
     title: values.title,
-    time: toolTime(values.time, original.time),
+    time: toolTime(values.time, original.time, metadata),
     description: values.description || undefined,
     location: values.location || undefined,
     attendees: attendees(values.guestEmails, original.attendees),

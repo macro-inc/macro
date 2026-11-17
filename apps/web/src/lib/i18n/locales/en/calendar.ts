@@ -101,6 +101,7 @@ export default {
   visibilityPrivate: 'Private',
   visibilityConfidential: 'Confidential',
   visibilityUnavailable: 'Visibility for one occurrence is unavailable',
+  visibilityUnsupported: 'This action does not support visibility changes',
   conferenceLocked:
     'Microsoft keeps the online meeting link on an existing event. To remove it, use “Replace event” after saving or discarding your edits without a meeting link.',
   providerDeclinesWarning:

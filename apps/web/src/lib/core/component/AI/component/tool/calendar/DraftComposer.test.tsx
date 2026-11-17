@@ -17,7 +17,25 @@ const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   quickCalls: () => ({ loading: false, enabled: true }),
   guestInvites: (): boolean => true,
+  touch: false,
 }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => mocks.touch,
+}));
+vi.mock(
+  '@app/features/calendar/views/composer/mobile/MobileAgentComposer',
+  () => ({
+    MobileAgentComposer: (props: {
+      model: { submit: () => void };
+      children: JSX.Element;
+    }) => (
+      <div data-testid="phone-agent-draft">
+        {props.children}
+        <button onClick={props.model.submit}>Create event</button>
+      </div>
+    ),
+  })
+);
 vi.mock('@app/features/meetings/use-quick-calls-flag', () => ({
   useQuickCallsFlag: () => () => mocks.quickCalls(),
 }));
@@ -169,12 +187,26 @@ beforeEach(() => {
   mocks.startAddInbox.mockResolvedValue(undefined);
   mocks.quickCalls = () => ({ loading: false, enabled: true });
   mocks.guestInvites = () => true;
+  mocks.touch = false;
   mocks.calendarError = false;
   mocks.linksError = false;
   mocks.links = [link('personal'), link('work')];
   mocks.calendars = [calendar('personal'), calendar('work')];
 });
 afterEach(cleanup);
+
+it('routes phone drafts through the shared agent model without mounting the desktop form', async () => {
+  mocks.touch = true;
+  showDraft();
+  expect(screen.getByTestId('phone-agent-draft')).not.toBeNull();
+  await fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+  expect(mocks.execute).toHaveBeenCalledWith(
+    expect.objectContaining({
+      title: 'Customer demo',
+      calendarId: 'work-calendar',
+    })
+  );
+});
 
 describe('AI calendar draft account selection', () => {
   it.each([

@@ -64,8 +64,14 @@ host lives in `../block-calendar/`.
   `MobileStartTime` and `MobileEndTime` share the same range and rollover behavior.
   `views/composer/mobile/MobileComposer.tsx` composes the 2J sheet around those fields;
   `MobileComposerHost.tsx` uses the popover's footer, header, and sole scroll viewport.
-  Add-field visibility and compact-title observation live in composer primitives.
+  New-menu sheets use 92% height; Day slot taps request a low 42% sheet with a
+  one-hour draft. The sheet requests an opaque surface through the same owned
+  drawer-height registration. Add-field visibility and compact-title observation live in composer primitives.
   Guest selection stages changes in `PickerSheet` and applies only on Done.
+- `primitives/create-agent-composer.ts` keeps one validated review decision; the
+  agent host selects `MobileAgentComposer` for the same 2J fields on touch.
+  Pass explicit time-zone metadata through the tool adapter and keep unsupported
+  visibility read-only; the current tool accepts one time, not alternatives.
 - Pass the calendar clock preference into shared date/time controls from their
   host; generic fields must not import calendar preferences.
 - Browse calendar foundations at `/app/component/ui?ui=date-tile`,
