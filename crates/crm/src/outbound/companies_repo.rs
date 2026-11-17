@@ -7,6 +7,7 @@ mod association;
 mod company_contacts;
 mod contact_listing;
 mod contact_update;
+mod email_policy;
 mod email_privacy;
 mod previews;
 
