@@ -62,17 +62,16 @@ attribution) instead of sniffing request headers. A Macro API token's signed
 `agent_id` and `routine_id` reach `MacroUserAuthentication`;
 `attribution()` reads them as `CredentialAttribution`. Routes where only a
 person may decide, answer or approve (review decisions, elicitation and
-permission answers, held tool-call approvals) refuse anything but `Person`
-through `is_program_run(attribution, headers)`. Routes that only ask a program
-to confirm (email send and schedule, calendar create) use `is_agent_run`,
+permission answers, held tool-call approvals, the email sign-in, call tokens)
+refuse anything but `Person` through `is_program_run(attribution, headers)`;
+sign-in routes answer with `PROGRAM_SIGN_IN_REFUSAL`. Routes that only ask a
+program to confirm (email send and schedule, calendar create) use `is_agent_run`,
 which leaves owner routine steps (`Routine`) alone so scheduled sends keep
 working, even with `x-macro-code-execution`: the runtime marks every code
 step's request, so the header counts only for a credential that signs no
-program (`Person`), never against a signed claim. Call tokens are not among
-them: call start and join refuse every code-execution request first
-(`call`'s `refuse_code_execution_token`), owner routine steps included. A
-routine step running as its owner signs only `routine_id`, so never test
-`agent_id` alone for "is this a person". `authorize_identity` retains
+program (`Person`), never against a signed claim. A routine step running as
+its owner signs only `routine_id`, so never test `agent_id` alone for "is
+this a person". `authorize_identity` retains
 verified origin and signed agent attribution on user authentication. It
 does not turn a user credential into bot authority or change endpoint policies.
 
@@ -80,9 +79,9 @@ An account manager's credential arrives as a normal `x-macro-user-api-key` and
 authenticates as the managed account, with `CredentialOrigin::AccountManager`
 naming the grant and the agent holding it. `AccountHolderOrInternal` is
 `UserOrInternal` minus that credential and `ScopedMacroApiJwt` (a Macro API token
-that signs `agent_scope`, held by a scoped code-mode run): use it on anything that
-mints credentials, changes who can sign in, deletes the account, or changes its
-managers.
+that signs `agent_scope`, held by a scoped code-mode run or a routine dry run):
+use it on anything that mints credentials, changes who can sign in, deletes
+the account, or changes its managers.
 
 ## Gotchas
 
@@ -92,6 +91,10 @@ managers.
 - Cookies are ambient and only considered when no explicit credential is
   present; an explicit credential always wins over a cookie.
 - A valid principal not admitted by the chosen policy is a 403, not a 401.
+- A route whose response carries a new credential's secret refuses
+  `is_program_run`, because a program's results reach the model: the
+  bot-token, channel-scoped bot and user API key routes do. The header alone
+  does not hold there; a program can drop it with a raw `fetch`.
 - `mark_harness_token_used` runs on every harness-authenticated request. It
   writes `last_used_at` at most once a minute and skips a row another request
   is already updating. Don't make it a plain per-request `UPDATE`: one busy

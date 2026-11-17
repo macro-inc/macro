@@ -102,6 +102,10 @@ function MutedItemLayout(props: {
   pending?: boolean;
 }) {
   const dmRecipientId = useMutedChannelDmRecipientId(() => props.item);
+  const resumeLabel = () => {
+    if (props.item.mentions_only) return 'Notify for all';
+    return props.item.snoozed_until ? 'Resume' : 'Unmute';
+  };
 
   return (
     <div class="flex items-center gap-3 px-6 py-3.5 min-h-[60px] mobile:grid mobile:grid-cols-[1.25rem_minmax(0,1fr)] mobile:gap-y-1 mobile:px-4">
@@ -151,7 +155,7 @@ function MutedItemLayout(props: {
           onClick={props.onUnmute}
           disabled={props.pending}
         >
-          {props.item.snoozed_until ? 'Resume' : 'Unmute'}
+          {resumeLabel()}
         </button>
       </div>
     </div>

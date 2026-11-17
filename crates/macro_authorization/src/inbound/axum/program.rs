@@ -18,8 +18,8 @@ pub const CODE_EXECUTION_HEADER: &str = "x-macro-code-execution";
 /// (`dangerously_operate_as_user`, signed `routine_id` with no agent) is not
 /// one, even from a code step: the runtime marks every code step's request,
 /// so the signed claim decides, never the header alone. Routes that only ask
-/// a program to confirm (sending or scheduling email, creating events,
-/// starting calls) keep serving owner routines.
+/// a program to confirm (sending or scheduling email, creating events) keep
+/// serving owner routines.
 pub fn is_agent_run(attribution: CredentialAttribution, headers: &HeaderMap) -> bool {
     match attribution {
         CredentialAttribution::Agent => true,
@@ -35,3 +35,7 @@ pub fn is_agent_run(attribution: CredentialAttribution, headers: &HeaderMap) -> 
 pub fn is_program_run(attribution: CredentialAttribution, headers: &HeaderMap) -> bool {
     attribution != CredentialAttribution::Person || headers.contains_key(CODE_EXECUTION_HEADER)
 }
+
+/// The refusal a sign-in route gives a program: one that reads the code from
+/// the user's inbox would hold the account.
+pub const PROGRAM_SIGN_IN_REFUSAL: &str = "An agent's program cannot sign in to Macro: the sign-in code would give it the account. Tell the user to sign in themselves.";

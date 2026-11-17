@@ -55,15 +55,28 @@ impl CompaniesRepositoryImpl {
         Ok(())
     }
 
+    #[tracing::instrument(
+        name = "crm.email_eligibility",
+        skip_all,
+        fields(team_id = %team, link_id = %link),
+        err
+    )]
     pub(super) async fn eligible_interactions(
         conn: &mut PgConnection,
         team: Uuid,
         link: Uuid,
         email: &str,
     ) -> Result<Option<EligibleInteractions>, CrmError> {
+        // All callers own a transaction. Bound the address history scan on
+        // both admission and the write-time recheck, including worker pools
+        // that have no default statement timeout.
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         // Retain lifecycle and membership locks through a population transaction.
-        // Pre-enrichment callers use an autocommit connection, so this is only
-        // admission there; the writer repeats it inside its transaction.
+        // The pre-enrichment transaction ends before external work; the writer
+        // repeats admission and the history scan inside its own transaction.
         let live = sqlx::query_scalar!(
             "SELECT l.id FROM email_links l JOIN team_user tu ON tu.user_id = l.macro_id AND tu.team_id = $1 WHERE l.id = $2 AND l.is_primary AND l.deleting_at IS NULL AND l.disconnect_requested_at IS NULL AND NOT l.needs_reauth FOR SHARE OF l FOR KEY SHARE OF tu",
             team, link
@@ -77,7 +90,7 @@ impl CompaniesRepositoryImpl {
                 SELECT 1 FROM crm_email_consent c
                 JOIN email_links l ON l.id = c.link_id AND l.macro_id = c.user_id AND l.is_primary AND l.deleting_at IS NULL
                 JOIN team_user tu ON tu.team_id = c.team_id AND tu.user_id = c.user_id
-                WHERE c.team_id = $1 AND c.link_id = $2 AND c.enabled
+                WHERE c.team_id = $1 AND c.link_id = $2 AND (c.enabled OR c.selected_enabled)
                   AND NOT crm_email_domain_blocked($1, c.user_id, split_part($3, '@', 2))
             ) AS "consented!""#,
             team,
@@ -176,7 +189,7 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
             r#"SELECT l.id AS link_id, l.email_address FROM crm_email_consent c
                JOIN email_links l ON l.id = c.link_id AND l.macro_id = c.user_id AND l.is_primary AND l.deleting_at IS NULL
                JOIN team_user tu ON tu.team_id = c.team_id AND tu.user_id = c.user_id
-               WHERE c.team_id = $1 AND c.user_id = $2 AND c.enabled"#,
+               WHERE c.team_id = $1 AND c.user_id = $2 AND (c.enabled OR c.selected_enabled)"#,
             team,
             user
         )
@@ -192,16 +205,19 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
         link: Uuid,
         email: &str,
     ) -> Result<bool, CrmError> {
-        let mut conn = self
+        let mut tx = self
             .pool
-            .acquire()
+            .begin()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        Ok(
-            Self::eligible_interactions(&mut conn, team, link, &email.to_ascii_lowercase())
+        let eligible =
+            Self::eligible_interactions(&mut tx, team, link, &email.to_ascii_lowercase())
                 .await?
-                .is_some(),
-        )
+                .is_some();
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(eligible)
     }
 
     #[tracing::instrument(skip_all, fields(team_id = %team), err)]
@@ -220,7 +236,7 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         let mailbox = sqlx::query!(
-            r#"SELECT l.id, l.email_address, COALESCE(c.enabled, FALSE) AS "enabled!"
+            r#"SELECT l.id, l.email_address, COALESCE(c.enabled OR c.selected_enabled, FALSE) AS "enabled!"
                FROM email_links l LEFT JOIN crm_email_consent c
                  ON c.link_id = l.id AND c.user_id = $2 AND c.team_id = $1
                WHERE l.macro_id = $2 AND l.is_primary AND l.deleting_at IS NULL AND l.disconnect_requested_at IS NULL AND NOT l.needs_reauth LIMIT 1"#,
@@ -427,7 +443,7 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
         if backfill_user || backfill_team {
             sqlx::query!(
                 r#"INSERT INTO crm_email_backfill_outbox (team_id, user_id, traceparent)
-                   SELECT team_id, user_id, $4 FROM crm_email_consent WHERE team_id = $1 AND enabled AND ($3 OR user_id = $2)
+                   SELECT team_id, user_id, $4 FROM crm_email_consent WHERE team_id = $1 AND (enabled OR selected_enabled) AND ($3 OR user_id = $2)
                    ON CONFLICT (team_id, user_id) DO UPDATE SET requested_at = now(), traceparent = EXCLUDED.traceparent"#, team, user, backfill_team, Self::current_traceparent()
             ).execute(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
         }

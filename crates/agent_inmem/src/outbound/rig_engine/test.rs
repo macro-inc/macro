@@ -141,6 +141,14 @@ impl NativeToolGate for RecordingGate {
             }
         })
     }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
+    }
 }
 
 #[tokio::test]
@@ -164,6 +172,7 @@ async fn shared_definitions_keep_the_callers_context_and_check_each_sessions_gat
             session,
             awaiting: Arc::default(),
             reviewed_tools: Vec::new(),
+            remote: None,
         };
         let result = tools
             .dispatch_tool_call(
@@ -584,6 +593,14 @@ impl NativeToolGate for SelectedActor {
     ) -> std::pin::Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
         Box::pin(async { NativeToolVerdict::RunAs(self.0.clone()) })
     }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
+    }
 }
 
 #[tokio::test]
@@ -595,6 +612,7 @@ async fn native_dispatch_uses_the_resolved_account_and_strips_routing_arguments(
         session: AgentSessionId::new(),
         awaiting: Arc::default(),
         reviewed_tools: Vec::new(),
+        remote: None,
     };
     let result = tools
         .dispatch_tool_call(
@@ -635,6 +653,14 @@ impl NativeToolGate for HeldForOwner {
             answer.await.unwrap()
         })
     }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
+    }
 }
 
 #[tokio::test]
@@ -650,6 +676,7 @@ async fn cancelling_the_turn_ends_a_call_held_for_the_owner_and_a_later_approval
         session: AgentSessionId::new(),
         awaiting: Arc::default(),
         reviewed_tools: Vec::new(),
+        remote: None,
     });
     let request = RequestContext::new(MacroUserIdStr::try_from_email("owner@example.com").unwrap());
     let cancel = request.cancel.clone();
@@ -683,5 +710,172 @@ async fn cancelling_the_turn_ends_a_call_held_for_the_owner_and_a_later_approval
             ))
             .is_err(),
         "nobody is left waiting to act on a later approval"
+    );
+}
+
+/// Records every call it is handed, and answers each with its name.
+#[derive(Default)]
+struct RecordingTools(Mutex<Vec<String>>);
+
+impl AiToolSet<String> for RecordingTools {
+    fn dispatch_tool_call<'a>(
+        &'a self,
+        _: String,
+        _: RequestContext,
+        tool_name: &'a str,
+        _: &'a serde_json::Value,
+    ) -> ai_toolset::ToolCallFuture<'a> {
+        self.0.lock().unwrap().push(tool_name.to_owned());
+        Box::pin(async move { Ok(Ok(serde_json::json!(tool_name))) })
+    }
+
+    fn request_schemas(&self) -> Option<Vec<ai_toolset::RequestSchema>> {
+        None
+    }
+}
+
+/// Refuses every remote MCP tool, as a scoped session's gate does, and
+/// remembers which it was asked about.
+#[derive(Default)]
+struct RefusesRemoteMcp(Mutex<Vec<String>>);
+
+impl NativeToolGate for RefusesRemoteMcp {
+    fn check<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+        _: &'a serde_json::Value,
+    ) -> std::pin::Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
+        Box::pin(async { NativeToolVerdict::Run })
+    }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _: AgentSessionId,
+        tool: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        self.0.lock().unwrap().push(tool.to_owned());
+        Box::pin(async { Some("outside this session's scope".to_owned()) })
+    }
+}
+
+/// An MCP server with no behaviour, serving `tools` under `name` once
+/// listed; dropping the returned service closes it.
+async fn listed_server(
+    name: &str,
+    tools: &[&str],
+) -> (
+    rmcp::service::RunningService<rmcp::RoleServer, NoTools>,
+    mcp_toolset::ListedServer,
+) {
+    use rmcp::ServiceExt as _;
+    let (server_io, client_io) = tokio::io::duplex(4096);
+    let (server, client) = tokio::join!(
+        NoTools.serve(server_io),
+        mcp_toolset::client_info().serve(client_io),
+    );
+    let tools = tools
+        .iter()
+        .map(|tool| {
+            rmcp::model::Tool::new(
+                (*tool).to_owned(),
+                "Fixture tool",
+                Arc::new(serde_json::Map::new()),
+            )
+        })
+        .collect();
+    (
+        server.unwrap(),
+        mcp_toolset::ListedServer {
+            name: name.to_owned(),
+            client: Arc::new(client.unwrap()),
+            tools,
+        },
+    )
+}
+
+struct NoTools;
+impl rmcp::ServerHandler for NoTools {}
+
+/// A remote MCP tool is put to the gate before it runs, and a refusal runs
+/// nothing; the harness's internal server gates its own tools, so its calls
+/// go through untouched. Which server a call reaches is the one its tool was
+/// registered under: a custom server named to mangle like the internal one
+/// is asked about like any other, whichever registered first.
+#[tokio::test]
+async fn a_remote_mcp_tool_runs_only_when_the_gate_lets_it() {
+    let (_impostor, impostor) = listed_server("macro_internal_", &["post"]).await;
+    let (_internal, internal) = listed_server("macro_internal", &["ExecuteCode"]).await;
+    let (_slack, slack) = listed_server("slack", &["send_message"]).await;
+    let remote = mcp_toolset::RemoteMcpToolSet::from_listed(vec![impostor, internal, slack], None);
+    let inner = Arc::new(RecordingTools::default());
+    let gate = Arc::new(RefusesRemoteMcp::default());
+    let tools = GatedToolSet {
+        tools: inner.clone(),
+        gate: gate.clone(),
+        session: AgentSessionId::new(),
+        awaiting: Arc::default(),
+        reviewed_tools: Vec::new(),
+        remote: Some(remote.clone()),
+    };
+    let owner = MacroUserIdStr::try_from_email("owner@example.com").unwrap();
+    for refused in ["mcp__slack__send_message", "mcp__macro_internal__post"] {
+        let result = tools
+            .dispatch_tool_call(
+                "context".into(),
+                RequestContext::new(owner.clone()),
+                refused,
+                &serde_json::Value::Null,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            result.unwrap_err().description,
+            "outside this session's scope",
+            "{refused}"
+        );
+    }
+    let result = tools
+        .dispatch_tool_call(
+            "context".into(),
+            RequestContext::new(owner.clone()),
+            "mcp__macro_internal__ExecuteCode",
+            &serde_json::Value::Null,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        result.unwrap(),
+        serde_json::json!("mcp__macro_internal__ExecuteCode")
+    );
+    assert_eq!(
+        *gate.0.lock().unwrap(),
+        vec!["mcp__slack__send_message", "mcp__macro_internal__post"]
+    );
+    assert_eq!(
+        *inner.0.lock().unwrap(),
+        vec!["mcp__macro_internal__ExecuteCode"]
+    );
+
+    let unscoped = GatedToolSet {
+        tools: inner.clone(),
+        gate: Arc::new(crate::domain::tool_gate::UngatedNativeTools),
+        session: AgentSessionId::new(),
+        awaiting: Arc::default(),
+        reviewed_tools: Vec::new(),
+        remote: Some(remote),
+    };
+    let result = unscoped
+        .dispatch_tool_call(
+            "context".into(),
+            RequestContext::new(owner),
+            "mcp__slack__send_message",
+            &serde_json::Value::Null,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        result.unwrap(),
+        serde_json::json!("mcp__slack__send_message")
     );
 }
