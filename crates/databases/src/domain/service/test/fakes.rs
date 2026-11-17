@@ -166,6 +166,23 @@ impl DatabasesRepo for FakeRepo {
             .push((database.id, AccessLevel::Owner));
         Ok(database)
     }
+    async fn create_database_in_project(
+        &self,
+        command: &CreateDatabase,
+        first_table: FirstTable,
+        project_id: &str,
+    ) -> Result<Database, FakeError> {
+        let mut database = self.create_database(command, first_table).await?;
+        database.project_id = Some(project_id.to_string());
+        let mut world = self.0.lock().unwrap();
+        let stored = world
+            .databases
+            .iter_mut()
+            .find(|stored| stored.id == database.id)
+            .ok_or(FakeError)?;
+        stored.project_id = database.project_id.clone();
+        Ok(database)
+    }
     async fn get_database(
         &self,
         id: DatabaseId,

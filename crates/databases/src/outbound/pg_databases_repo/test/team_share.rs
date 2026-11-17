@@ -20,7 +20,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{CreateDatabase, DatabaseError, Viewer};
-use crate::domain::ports::{DatabasesRepo, DatabasesService};
+use crate::domain::ports::{DatabasesProjectService, DatabasesRepo, DatabasesService};
 use crate::domain::receipt::database_receipt;
 use crate::domain::sharing::DatabaseSharingService;
 use crate::outbound::gateway_event_publisher::NoOpTableEventPublisher;
@@ -266,5 +266,134 @@ async fn a_teammate_reads_and_writes_a_team_shared_database_until_it_is_unshared
         .await
         .unwrap(),
         0
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_database_in_project_keeps_shared_folder_access_independent(pool: PgPool) {
+    let run = Uuid::now_v7();
+    let owner = insert_user(&pool, &format!("macro|import-owner-{run}@example.com")).await;
+    let teammate = insert_user(&pool, &format!("macro|import-member-{run}@example.com")).await;
+    let team = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id, seat_count) VALUES ($1, 'Team', $2, 2)",
+        team,
+        owner.user_id.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, $2, 'owner'), ($1, $3, 'member')",
+        team,
+        owner.user_id.as_ref(),
+        teammate.user_id.as_ref(),
+    ).execute(&pool).await.unwrap();
+    let project_id = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, 'Imported page', $2)"#,
+        project_id.to_string(),
+        owner.user_id.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut transaction = pool.begin().await.unwrap();
+    entity_access_db_utils::insert_entity_access_row(
+        &mut transaction,
+        &project_id,
+        EntityType::Project,
+        owner.user_id.as_ref(),
+        entity_access_db_utils::EntityAccessSourceType::User,
+        AccessLevel::Owner,
+    )
+    .await
+    .unwrap();
+    entity_access_db_utils::insert_entity_access_row(
+        &mut transaction,
+        &project_id,
+        EntityType::Project,
+        &team.to_string(),
+        entity_access_db_utils::EntityAccessSourceType::Team,
+        AccessLevel::View,
+    )
+    .await
+    .unwrap();
+    transaction.commit().await.unwrap();
+    let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        pool.clone(),
+    )));
+    let service = build_service(
+        pool.clone(),
+        access.clone(),
+        NoOpTableEventPublisher,
+        NoopMacroEventBroker,
+    );
+    let project = access
+        .generate_entity_access_receipt::<OwnerAccessLevel>(
+            &owner.user_id,
+            None,
+            &project_id.to_string(),
+            EntityType::Project,
+        )
+        .await
+        .unwrap();
+    access
+        .generate_entity_access_receipt::<ViewAccessLevel>(
+            &teammate.user_id,
+            None,
+            &project_id.to_string(),
+            EntityType::Project,
+        )
+        .await
+        .unwrap();
+    let database = service
+        .create_database_in_project(
+            CreateDatabase {
+                name: "Tasks".into(),
+                owner_id: owner.user_id.clone(),
+                acting_bot: None,
+                first_table: None,
+            },
+            project,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        database.project_id.as_deref(),
+        Some(project_id.to_string().as_str())
+    );
+    assert!(
+        service
+            .list_databases(teammate.clone())
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        database_receipt::<ViewAccessLevel, _>(access.as_ref(), &teammate, database.id)
+            .await
+            .is_err()
+    );
+    let repo = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
+    let (stored, _) = repo.get_database(database.id).await.unwrap().unwrap();
+    assert_eq!(stored.project_id, database.project_id);
+    service
+        .update_share_permissions(
+            database_receipt::<OwnerAccessLevel, _>(access.as_ref(), &owner, database.id)
+                .await
+                .unwrap(),
+            team_share(Some(ShareAccessLevel::View)),
+        )
+        .await
+        .unwrap();
+    database_receipt::<ViewAccessLevel, _>(access.as_ref(), &teammate, database.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        service.list_databases(teammate).await.unwrap()[0]
+            .database
+            .id,
+        database.id
     );
 }

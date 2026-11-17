@@ -34,6 +34,12 @@ its repository and uses `CellStore` to hold the entity's lifecycle lock during w
 Both paths use the same transaction engine, table versions, cells and journal.
 An app entity's foreign key prevents deleting its storage through the core port.
 
+Imports can call `DatabasesProjectService::create_database_in_project` with an
+owner-access receipt for the destination project. It files the new database in
+the creation transaction and deliberately grants only its owner, without
+inheriting folder access. Apply the database's reviewed sharing separately;
+ordinary database moves keep their existing inheritance behavior.
+
 `DatabaseStorageService` reuses the typed operation planner for hosts that accept
 `DatabaseOp` batches. It reads schema and paginated cells without app metadata,
 then writes through `DatabaseStorage::apply_storage_writes`; it does not mint

@@ -2,6 +2,78 @@
 //! restore, delete, and the receipts they take.
 
 use super::*;
+use crate::domain::ports::DatabasesProjectService;
+
+#[tokio::test]
+async fn create_database_in_project_checks_owner_identity_and_project_receipt() {
+    let world: Shared = Arc::default();
+    let svc = service(&world);
+    let project = EntityAccessReceipt::<OwnerAccessLevel>::try_new_authenticated_user(
+        user(OWNER),
+        Entity {
+            entity_id: "0190f5a0-0000-7000-8000-000000000001".into(),
+            entity_type: EntityType::Project,
+        },
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    )
+    .unwrap();
+    let db = svc
+        .create_database_in_project(
+            CreateDatabase {
+                name: "Imported tasks".into(),
+                owner_id: user(OWNER),
+                acting_bot: None,
+                first_table: Some("Tasks".into()),
+            },
+            project.clone(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        db.project_id.as_deref(),
+        Some("0190f5a0-0000-7000-8000-000000000001")
+    );
+    assert!(
+        svc.list_databases(viewer(STRANGER))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        svc.list_databases(viewer(OWNER)).await.unwrap()[0].tables[0].name,
+        "Tasks"
+    );
+
+    let error = svc
+        .create_database_in_project(
+            CreateDatabase {
+                name: "Wrong owner".into(),
+                owner_id: user(STRANGER),
+                acting_bot: None,
+                first_table: None,
+            },
+            project,
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DatabaseError::Unauthorized));
+    let error = svc
+        .create_database_in_project(
+            CreateDatabase {
+                name: "Wrong entity".into(),
+                owner_id: user(OWNER),
+                acting_bot: None,
+                first_table: None,
+            },
+            receipt::<OwnerAccessLevel>(db.id, OWNER, AccessLevel::Owner),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DatabaseError::Unauthorized));
+    assert_eq!(world.lock().unwrap().databases.len(), 1);
+}
 
 #[tokio::test]
 async fn create_database_grants_owner_and_starter_table() {

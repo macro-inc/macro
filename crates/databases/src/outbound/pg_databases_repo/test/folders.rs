@@ -155,3 +155,37 @@ async fn trashing_another_folder_leaves_a_database_filed(pool: PgPool) {
     let (database, _) = repo.get_database(database_id).await.unwrap().unwrap();
     assert_eq!(database.project_id.as_deref(), Some(SUBFOLDER));
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_database_in_project_rolls_back_when_the_folder_is_missing(pool: PgPool) {
+    insert_user(&pool).await;
+    let repo = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
+    let before = sqlx::query!(
+        "SELECT (SELECT count(*) FROM databases) AS databases, (SELECT count(*) FROM database_entities) AS entities, (SELECT count(*) FROM database_tables) AS tables, (SELECT count(*) FROM property_definitions) AS definitions, (SELECT count(*) FROM entity_access WHERE entity_type = 'database') AS grants"
+    ).fetch_one(&pool).await.unwrap();
+    assert!(
+        repo.create_database_in_project(
+            &CreateDatabase {
+                name: "Tasks".into(),
+                owner_id: user(),
+                acting_bot: None,
+                first_table: None
+            },
+            FirstTable {
+                name: "Tasks".into(),
+                title_column: "Name"
+            },
+            FOLDER,
+        )
+        .await
+        .is_err()
+    );
+    let after = sqlx::query!(
+        "SELECT (SELECT count(*) FROM databases) AS databases, (SELECT count(*) FROM database_entities) AS entities, (SELECT count(*) FROM database_tables) AS tables, (SELECT count(*) FROM property_definitions) AS definitions, (SELECT count(*) FROM entity_access WHERE entity_type = 'database') AS grants"
+    ).fetch_one(&pool).await.unwrap();
+    assert_eq!(after.databases, before.databases);
+    assert_eq!(after.entities, before.entities);
+    assert_eq!(after.tables, before.tables);
+    assert_eq!(after.definitions, before.definitions);
+    assert_eq!(after.grants, before.grants);
+}

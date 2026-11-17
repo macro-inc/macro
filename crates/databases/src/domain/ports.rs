@@ -45,6 +45,15 @@ pub trait DatabasesRepo: Send + Sync + 'static {
         first_table: FirstTable,
     ) -> impl Future<Output = Result<Database, Self::Error>> + Send;
 
+    /// Create inside a project atomically, granting only the owner; project
+    /// sharing is deliberately not inherited by imported databases.
+    fn create_database_in_project(
+        &self,
+        command: &CreateDatabase,
+        first_table: FirstTable,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Database, Self::Error>> + Send;
+
     /// A database and its tables, if it exists.
     fn get_database(
         &self,
@@ -382,6 +391,17 @@ pub trait TableEventPublisher: Send + Sync + 'static {
         can_edit: bool,
         state: &Awareness,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+}
+
+/// Creation for imports that review database sharing independently of folders.
+pub trait DatabasesProjectService: DatabasesService {
+    /// Create atomically inside the owner's project, without inheriting its
+    /// grants. Apply the database's reviewed sharing separately afterward.
+    fn create_database_in_project(
+        &self,
+        command: CreateDatabase,
+        project: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> impl Future<Output = Result<Database, DatabaseError>> + Send;
 }
 
 /// The databases domain service.

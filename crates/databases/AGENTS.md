@@ -15,6 +15,11 @@ service with Axum, agent-tool and Postgres adapters.
   adapters implement. `DatabaseLifecycleReads` exposes only existence/trash
   facts to trusted backend hosts, independently of viewer permissions.
 - `src/domain/models.rs`: `Database`, `DatabaseStorage`, typed ops/results.
+- `src/domain/service/project_creation.rs`: `DatabasesProjectService::create_database_in_project`
+  creates atomically inside an owner-access project. Import sharing is reviewed
+  per database: this API deliberately grants only its owner and does not inherit
+  folder grants; apply the reviewed database sharing separately. Ordinary moves
+  retain their existing grant-inheritance behavior.
 - `set_appearance` updates `database_entities` presentation under Edit access, preserving content dates and committing history-only activity in the same transaction.
 
 ## Scope

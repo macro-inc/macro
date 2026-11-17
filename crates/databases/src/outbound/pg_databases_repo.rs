@@ -1,8 +1,9 @@
 //! Postgres repository for databases, tables, columns and row identities;
 //! cells are entity properties, written through the properties adapter.
 
-/// The change journal's statements, shared with the cell store's batches.
+mod creation;
 mod folders;
+/// The change journal's statements, shared with the cell store's batches.
 pub(crate) mod journal;
 /// Row identity statements, shared with the cell store's batches.
 pub(crate) mod rows;
@@ -390,44 +391,18 @@ where
         command: &CreateDatabase,
         first_table: FirstTable,
     ) -> Result<Database, Self::Error> {
-        let mut transaction = self.pool.begin().await?;
-        let table_id = TableId::new();
-        let database = insert_owned_database(
-            &mut transaction,
-            DatabaseId::new(),
-            &command.name,
-            command.owner_id.as_ref(),
-            table_id,
-            &first_table.name,
-        )
-        .await?;
-        let title = self
-            .properties
-            .create_database_definition_in(
-                &mut transaction,
-                NewDatabaseDefinition {
-                    id: macro_uuid::generate_uuid_v7(),
-                    database_id: database.id.into_uuid(),
-                    name: first_table.title_column,
-                    data_type: DataType::String,
-                    is_multi_select: false,
-                    specific_entity_type: None,
-                    options: &[],
-                },
-            )
+        self.create_database_at(command, first_table, None).await
+    }
+
+    #[tracing::instrument(err, skip(self, command))]
+    async fn create_database_in_project(
+        &self,
+        command: &CreateDatabase,
+        first_table: FirstTable,
+        project_id: &str,
+    ) -> Result<Database, Self::Error> {
+        self.create_database_at(command, first_table, Some(project_id))
             .await
-            .map_err(|error| PgDatabasesRepoError::Properties(Box::new(error)))?;
-        insert_column(
-            &mut transaction,
-            ColumnId::new(),
-            table_id,
-            title.definition.id,
-            &position_after(None)?,
-            true,
-        )
-        .await?;
-        transaction.commit().await?;
-        Ok(database)
     }
 
     /// Returns the row whether or not it is trashed; the domain decides what a
