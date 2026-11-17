@@ -100,8 +100,31 @@ pub struct EnrolledInboxes {
     pub unknown: usize,
 }
 
+/// Whether newly classified mail gets its due date read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DueDates {
+    /// Read it, for a thread that can be in Focus for a reason other than a
+    /// calendar hold.
+    Read,
+    /// Store no date: for the old mail a backfill reaches past the top of the
+    /// tab, where a date costs more than it shows. The thread's next mail reads one.
+    Skip,
+}
+
 /// Stale threads one backfill read asks for at a time.
 const BACKFILL_PAGE: i64 = 500;
+
+/// How one inbox's stale threads are walked.
+struct Walk {
+    since: DateTime<Utc>,
+    /// Stale threads read at a time.
+    page: i64,
+    /// Checks the whole sweep may make; no limit when `None`.
+    budget: Option<i64>,
+    /// Threads at the classifier at once.
+    at_once: usize,
+    due_dates: DueDates,
+}
 
 /// Where one sweep stands as it moves from inbox to inbox.
 #[derive(Default)]
@@ -217,7 +240,14 @@ where
     /// already classified at its latest message under the current rule is left
     /// alone, and one classified under an older rule is decided again from its
     /// stored answers without calling the classifier.
+    pub async fn classify_thread(&self, thread_id: Uuid) -> Result<ClassifyOutcome, Report> {
+        self.classify(thread_id, DueDates::Read).await
+    }
+
+    /// [`Self::classify_thread`], reading the due date of newly classified mail
+    /// only with [`DueDates::Read`].
     #[tracing::instrument(
+        name = "classify_thread",
         skip(self),
         err,
         fields(
@@ -231,7 +261,11 @@ where
             redecided = tracing::field::Empty,
         )
     )]
-    pub async fn classify_thread(&self, thread_id: Uuid) -> Result<ClassifyOutcome, Report> {
+    async fn classify(
+        &self,
+        thread_id: Uuid,
+        due_dates: DueDates,
+    ) -> Result<ClassifyOutcome, Report> {
         let Some(inbox) = self.store.thread_inbox(thread_id).await? else {
             return Ok(ClassifyOutcome::Missing);
         };
@@ -308,7 +342,10 @@ where
         };
         let verdict = decide(&answers, &signals);
         let model = self.classifier.model().to_owned();
-        let due_on = self.due_on(&thread, &verdict).await;
+        let due_on = match due_dates {
+            DueDates::Read => self.due_on(&thread, &verdict).await,
+            DueDates::Skip => None,
+        };
         let saved = self
             .save_verdict(&thread, latest, verdict, answers, model, due_on)
             .await?;
@@ -445,7 +482,8 @@ where
 
     /// Classify every stale thread in `inbox` from the last `window`, newest
     /// first, `at_once` at a time: what fills an inbox whose owner just joined
-    /// the rollout. Stops on the same signs as a sweep, and the sweep leaves
+    /// the rollout. `due_dates` says whether newly classified mail gets a due
+    /// date. Stops on the same signs as a sweep, and the sweep leaves
     /// the inbox alone meanwhile. An owner outside the rollout gets nothing.
     #[tracing::instrument(
         name = "email_focus.backfill",
@@ -463,6 +501,7 @@ where
         inbox: &FocusInboxOwner,
         window: Duration,
         at_once: usize,
+        due_dates: DueDates,
     ) -> Result<SweepReport, Report> {
         let mut progress = SweepProgress::default();
         if !self.is_enrolled(inbox.link_id, &inbox.owner).await? {
@@ -474,15 +513,15 @@ where
             link_id: inbox.link_id,
         };
         progress.report.inboxes = 1;
-        self.sweep_inbox(
-            inbox.link_id,
-            Utc::now() - window,
-            BACKFILL_PAGE,
-            None,
-            at_once.max(1),
-            &mut progress,
-        )
-        .await?;
+        let walk = Walk {
+            since: Utc::now() - window,
+            page: BACKFILL_PAGE,
+            budget: None,
+            at_once: at_once.max(1),
+            due_dates,
+        };
+        self.sweep_inbox(inbox.link_id, &walk, &mut progress)
+            .await?;
         let span = tracing::Span::current();
         span.record("candidates", progress.report.candidates);
         span.record("classified", progress.report.classified);
@@ -504,7 +543,13 @@ where
     /// never reach older ones.
     #[tracing::instrument(skip(self), err)]
     pub async fn sweep(&self, window: Duration, limit: i64) -> Result<SweepReport, Report> {
-        let since = Utc::now() - window;
+        let walk = Walk {
+            since: Utc::now() - window,
+            page: limit,
+            budget: Some(limit),
+            at_once: 1,
+            due_dates: DueDates::Read,
+        };
         let mut inboxes: HashMap<Uuid, MacroUserIdStr<'static>> = self
             .store
             .inboxes_with_focus()
@@ -536,10 +581,7 @@ where
                 }
             }
             progress.report.inboxes += 1;
-            if !self
-                .sweep_inbox(link_id, since, limit, Some(limit), 1, &mut progress)
-                .await?
-            {
+            if !self.sweep_inbox(link_id, &walk, &mut progress).await? {
                 saw_them_all = false;
                 break;
             }
@@ -554,27 +596,23 @@ where
         Ok(progress.report)
     }
 
-    /// Page through one inbox's stale threads, `page` at a time, classifying
-    /// up to `at_once` of them at a time until the sweep has made `budget`
-    /// checks (no limit when `None`). Returns whether the sweep can go on to
+    /// Page through one inbox's stale threads as `walk` says, until the sweep
+    /// has made its budget of checks. Returns whether the sweep can go on to
     /// the next inbox: false once it hits the budget or must stop early.
     async fn sweep_inbox(
         &self,
         link_id: Uuid,
-        since: DateTime<Utc>,
-        page: i64,
-        budget: Option<i64>,
-        at_once: usize,
+        walk: &Walk,
         progress: &mut SweepProgress,
     ) -> Result<bool, Report> {
         let mut after = None;
         loop {
             let threads = self
                 .store
-                .stale_threads(link_id, since, after, page)
+                .stale_threads(link_id, walk.since, after, walk.page)
                 .await?;
             progress.report.candidates += threads.len();
-            let last_page = i64::try_from(threads.len()).is_ok_and(|len| len < page);
+            let last_page = i64::try_from(threads.len()).is_ok_and(|len| len < walk.page);
             after = threads.last().copied();
             if after.is_none() {
                 return Ok(true);
@@ -591,7 +629,7 @@ where
                     progress.report.skipped += 1;
                     continue;
                 }
-                if budget.is_some_and(|budget| progress.checks >= budget) {
+                if walk.budget.is_some_and(|budget| progress.checks >= budget) {
                     out_of_budget = true;
                     break;
                 }
@@ -612,11 +650,11 @@ where
                         (
                             thread_id,
                             latest_at,
-                            Some(self.classify_thread(thread_id).await),
+                            Some(self.classify(thread_id, walk.due_dates).await),
                         )
                     }
                 })
-                .buffer_unordered(at_once);
+                .buffer_unordered(walk.at_once);
             while let Some((thread_id, latest_at, outcome)) = outcomes.next().await {
                 let Some(outcome) = outcome else {
                     progress.checks -= 1;

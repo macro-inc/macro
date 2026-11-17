@@ -1472,6 +1472,7 @@ async fn a_backfill_classifies_every_stale_thread_in_the_inbox() {
             },
             Duration::days(30),
             3,
+            DueDates::Read,
         )
         .await
         .unwrap();
@@ -1498,6 +1499,7 @@ async fn a_backfill_reads_no_mail_of_an_owner_outside_the_rollout() {
             },
             Duration::days(30),
             3,
+            DueDates::Read,
         )
         .await
         .unwrap();
@@ -1521,6 +1523,7 @@ async fn a_backfill_stops_when_the_classifier_is_down() {
             },
             Duration::days(30),
             2,
+            DueDates::Read,
         )
         .await
         .unwrap();
@@ -1540,4 +1543,42 @@ async fn the_sweep_leaves_an_inbox_being_backfilled_to_the_backfill() {
     let report = service.sweep(Duration::days(30), 100).await.unwrap();
     assert_eq!(report, SweepReport::default());
     assert!(store.stale_reads.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_backfill_that_skips_due_dates_stores_none_and_asks_for_none() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
+    let ids: Vec<_> = (0..3).map(|_| insert(&store, thread(OWNER))).collect();
+    set_stale(&store, &ids, noon());
+    let service = due_date_service(&store, &classifier, &due_dates, None);
+    let inbox = FocusInboxOwner {
+        link_id: INBOX,
+        owner: owner(OWNER),
+    };
+
+    let report = service
+        .backfill(&inbox, Duration::days(30), 3, DueDates::Skip)
+        .await
+        .unwrap();
+    assert_eq!(report.classified, 3);
+    assert!(due_dates.inputs.lock().unwrap().is_empty());
+    assert!(
+        store
+            .saved
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|record| record.due_on.is_none())
+    );
+
+    // Reading them is the default everywhere else.
+    let more = insert(&store, thread(OWNER));
+    set_stale(&store, &[more], noon());
+    service
+        .backfill(&inbox, Duration::days(30), 3, DueDates::Read)
+        .await
+        .unwrap();
+    assert_eq!(due_dates.inputs.lock().unwrap().len(), 1);
 }

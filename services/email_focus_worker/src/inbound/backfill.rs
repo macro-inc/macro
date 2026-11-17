@@ -4,7 +4,7 @@
 //! in the rollout, through the flag cache, so most looks ask PostHog nothing.
 //! An enrolled inbox this process hasn't filled yet is backfilled in two
 //! passes: first its last [`FIRST_FILL_DAYS`] days, the top of the Focus tab,
-//! then the rest of the window. Every first pass waiting goes before any second
+//! then the rest of the window, with no due dates. Every first pass waiting goes before any second
 //! one, so a rollout step that enrolls many inboxes at once shows each of them
 //! a filled tab before any is filled to the bottom. Each pass classifies the
 //! inbox's stale threads newest first, [`THREADS_AT_ONCE`] at a time, with
@@ -23,7 +23,7 @@ use std::{
 };
 
 use email::domain::focus::{
-    DueDateExtractor, FocusClassifier, FocusEnrollment, FocusInboxOwner, FocusNotifier,
+    DueDateExtractor, DueDates, FocusClassifier, FocusEnrollment, FocusInboxOwner, FocusNotifier,
     FocusService, FocusStore, ProfileSource, SweepReport,
 };
 use futures::{StreamExt as _, stream::FuturesUnordered};
@@ -59,6 +59,15 @@ enum Pass {
 }
 
 impl Pass {
+    /// The first pass reads due dates for the top of the tab; the rest skips
+    /// them, which keeps a rollout step's cost to the extractor bounded.
+    fn due_dates(self) -> DueDates {
+        match self {
+            Self::First => DueDates::Read,
+            Self::Rest => DueDates::Skip,
+        }
+    }
+
     fn name(self) -> &'static str {
         match self {
             Self::First => "first",
@@ -208,7 +217,7 @@ where
             running.push(Box::pin(async move {
                 let started = Instant::now();
                 let report = service
-                    .backfill(&waiting.inbox, window, THREADS_AT_ONCE)
+                    .backfill(&waiting.inbox, window, THREADS_AT_ONCE, pass.due_dates())
                     .await;
                 Finished {
                     waiting,

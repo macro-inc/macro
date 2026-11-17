@@ -204,6 +204,7 @@ async fn fill_speed(pool: Pool<Postgres>) {
                 },
                 chrono::Duration::days(30),
                 THREADS_AT_ONCE,
+                DueDates::Read,
             )
             .await
             .unwrap();
