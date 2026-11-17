@@ -283,6 +283,9 @@ The control plane, per computer:
   cannot write;
   three failed boots of a broken commit roll the workspace back to last-good;
   the restart marker restarts it; removing the file stops it.
+  A fourth VM enrolls from a file against `files/test-fake-macro.py` on
+  loopback while `network-online.target` never comes: the claim and macrod's
+  runtime connection still go through, and neither unit is ordered after it.
 - After `packages/starter-agent/bun.lock` changes, update `outputHash` in
   `_agent-runtime.nix` from the fetch derivation's reported `got:` hash.
 - To upgrade computer-use-linux, change `version` in

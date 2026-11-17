@@ -357,14 +357,14 @@ in
     # `#!/bin/bash` and `#!/usr/bin/python3` shebangs resolve through PATH.
     services.envfs.enable = true;
 
+    # Neither enrollment nor macrod waits for network-online.target: the
+    # claim retries every 250 ms and macrod redials from 250 ms, so each one
+    # starts as soon as its input exists (the Incus socket, the enrolled
+    # marker) and reaches the network the moment DHCP answers.
     systemd.services.macrod-enroll = {
       description = "Join this computer to Macro";
       wantedBy = [ "multi-user.target" ];
-      wants = [ "network-online.target" ];
-      after = [
-        "network-online.target"
-        "incus-agent.service"
-      ];
+      after = [ "incus-agent.service" ];
       before = [ "macrod.service" ];
       # Runs on every boot: `macrod enroll` re-enrolls for a newer
       # generation and keeps the existing enrollment otherwise.
@@ -406,14 +406,8 @@ in
       wantedBy = [ "multi-user.target" ];
       # Wants, not Requires: a first enroll attempt that fails must not fail
       # macrod's start for good; the enroll retry starts it once enrolled.
-      wants = [
-        "network-online.target"
-        "macrod-enroll.service"
-      ];
-      after = [
-        "network-online.target"
-        "macrod-enroll.service"
-      ];
+      wants = [ "macrod-enroll.service" ];
+      after = [ "macrod-enroll.service" ];
       path = systemPath;
       environment.HOME = home;
       unitConfig = {

@@ -1,7 +1,9 @@
 # Boots the guest module in a NixOS test VM and checks the macrod contract,
 # the agent tools, nix-ld, and the agent teammate's units and computer use. Incus enrollment cannot
 # run here, so macrod-enroll must fail with its readable reason. Then a
-# second image boots from the same data disk, as an image update does.
+# second image boots from the same data disk, as an image update does. A
+# last VM enrolls from a file against a fake Macro on loopback with
+# network-online.target held back, so macrod must connect without it.
 {
   pkgs,
   guest,
@@ -122,6 +124,46 @@ pkgs.testers.runNixOSTest {
       wantedBy = [ "multi-user.target" ];
       path = [ pkgs.git ];
       serviceConfig.ExecStart = "${pkgs.python3}/bin/python3 ${./files/test-git-server.py}";
+    };
+  };
+  # A computer whose enrollment succeeds against a fake Macro on loopback
+  # while network-online.target is held back for good: enrollment, the claim
+  # and macrod's runtime connection must not wait for it.
+  nodes.enrolled = {
+    imports = [ guest ];
+    macro.box = {
+      inherit macrod;
+      harnessd.package = harnessd;
+      dataDisk = null;
+      enrollFrom = "file:/etc/macro-box-test/enrollment.json";
+    };
+    virtualisation.memorySize = 2048;
+    virtualisation.cores = 2;
+    virtualisation.diskSize = 4096;
+    environment.etc."macro-box-test/enrollment.json".text = builtins.toJSON {
+      generation = 1;
+      computer_id = "00000000-0000-0000-0000-00000000000c";
+      pairing_id = "00000000-0000-0000-0000-00000000000a";
+      device_secret = "mhds_test";
+      name = "Boot path";
+      deployment = {
+        agent_harness_url = "http://127.0.0.1:41009/agent-harness/";
+        document_storage_url = "http://127.0.0.1:41009/dss";
+        app_url = "http://127.0.0.1:41009";
+        egress_url = "http://127.0.0.1:41009";
+      };
+    };
+    systemd.services.fake-macro = {
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig.ExecStart = "${pkgs.python3}/bin/python3 ${./files/test-fake-macro.py} 41009";
+    };
+    # network-online.target is never reached.
+    systemd.services.systemd-networkd-wait-online.serviceConfig = {
+      ExecStart = pkgs.lib.mkForce [
+        ""
+        "${pkgs.coreutils}/bin/sleep infinity"
+      ];
+      TimeoutStartSec = "infinity";
     };
   };
   testScript =
@@ -383,5 +425,17 @@ pkgs.testers.runNixOSTest {
       with subtest("removing the agent environment stops the agent"):
           agent.succeed("rm /var/lib/macrod/agent.env")
           agent.wait_until_fails("systemctl is-active --quiet macro-agent.service")
+          agent.shutdown()
+
+      with subtest("enrollment and macrod connect without waiting for network-online"):
+          # Not multi-user.target: it waits for units ordered after network-online.
+          enrolled.wait_until_succeeds("journalctl -u fake-macro -o cat | grep -F 'runtime ws'")
+          enrolled.succeed("journalctl -u fake-macro -o cat | grep -F 'claim /dss/harness-pairings/00000000-0000-0000-0000-00000000000a/claim'")
+          enrolled.fail("systemctl is-active --quiet network-online.target")
+          for unit in ["macrod-enroll.service", "macrod.service"]:
+              ordering = enrolled.succeed(f"systemctl show {unit} --property=After,Wants --value")
+              assert "network-online.target" not in ordering, f"{unit}: {ordering}"
+          enrolled.succeed("[ \"$(sed -n 2p /var/lib/macrod/enrolled)\" = 1 ]")
+          print(enrolled.succeed("journalctl -b -o short-monotonic -u fake-macro"))
     '';
 }
