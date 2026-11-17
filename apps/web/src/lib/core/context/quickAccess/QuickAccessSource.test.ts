@@ -71,8 +71,6 @@ const mocks = vi.hoisted(() => ({
   initiatives: [] as InitiativeEntity[],
   databases: [] as ListedDatabase[],
   schedules: [] as ScheduledAction[],
-  crmEnabled: (): boolean => true,
-  projectsEnabled: (): boolean => true,
   cacheEnabled: true,
   queries: {} as Partial<
     Record<
@@ -86,17 +84,6 @@ vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'viewer',
 }));
 
-vi.mock('@core/constant/featureFlags', () => ({
-  isFeatureEnabled: () => mocks.crmEnabled(),
-}));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: (flag: { key?: string }) => () => ({
-    enabled:
-      flag.key === 'enable-projects'
-        ? mocks.projectsEnabled()
-        : mocks.crmEnabled(),
-  }),
-}));
 vi.mock('@core/constant/allBlocks', () => ({
   itemToSafeName: (item: { name: string }) => item.name,
 }));
@@ -275,8 +262,6 @@ beforeEach(() => {
   mocks.initiatives = [];
   mocks.databases = [];
   mocks.schedules = [];
-  mocks.crmEnabled = () => true;
-  mocks.projectsEnabled = () => true;
   mocks.cacheEnabled = true;
   mocks.queries = {};
   mocks.readRecordsByKeys.mockReset().mockResolvedValue({

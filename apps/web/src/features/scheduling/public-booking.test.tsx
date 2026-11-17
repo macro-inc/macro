@@ -48,18 +48,13 @@ vi.mock('./views/public-booking-view', () => ({
 import { BookingReceiptPage, PublicBookingPage } from './public-booking';
 import { createBookingReceiptSource } from './queries/public';
 
-const SCHEDULING_FLAG = 'enable-calendar-scheduling';
-
-/** Mounts the page and returns PostHog's pending answer to the flag request. */
+/** Mounts the page. */
 function openBookingLink() {
   render(() => (
     <PosthogProvider>
       <PublicBookingPage profile="team" />
     </PosthogProvider>
   ));
-  const answer = posthog.onFeatureFlags.mock.calls[0]?.[0];
-  if (!answer) throw new Error('PostHog provider is not mounted');
-  return answer;
 }
 
 beforeEach(() => {
@@ -74,16 +69,8 @@ afterEach(() => {
 });
 
 describe('public booking route', () => {
-  it('opens once PostHog reports the rollout on', async () => {
-    posthog.getFeatureFlagResult.mockReturnValue({
-      key: SCHEDULING_FLAG,
-      enabled: true,
-      variant: undefined,
-      payload: undefined,
-    });
-    const answer = openBookingLink();
-
-    answer([SCHEDULING_FLAG], { [SCHEDULING_FLAG]: true });
+  it('opens the booking page', async () => {
+    openBookingLink();
 
     expect(await screen.findByText('Choose an event')).toBeTruthy();
   });
@@ -93,14 +80,7 @@ describe('public booking route in the website dialog', () => {
   it('tells the website when a guest books', async () => {
     const website = { postMessage: vi.fn() };
     vi.stubGlobal('parent', website);
-    posthog.getFeatureFlagResult.mockReturnValue({
-      key: SCHEDULING_FLAG,
-      enabled: true,
-      variant: undefined,
-      payload: undefined,
-    });
-    const answer = openBookingLink();
-    answer([SCHEDULING_FLAG], { [SCHEDULING_FLAG]: true });
+    openBookingLink();
 
     fireEvent.click(await screen.findByText('Choose an event'));
 
