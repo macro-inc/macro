@@ -28,7 +28,7 @@ import {
   forgetUnheldRead,
   noteUnheldRead,
   type UnheldRead,
-  unheldReads,
+  unheldReadsLeft,
 } from './unheld-reads';
 import { watchWaitingWrites } from './waiting-writes';
 
@@ -215,19 +215,33 @@ async function holdUnheldRead(
  * Has the device hold the channel pages and threads a page that is gone
  * showed from the server and did not see the device store.
  */
-export async function holdUnheldReads(host: CacheHost): Promise<void> {
-  for (const read of unheldReads()) {
+let holdingUnheldReads: Promise<void> | undefined;
+
+/** One pass at a time: a second caller waits on the pass already running. */
+export function holdUnheldReads(host: CacheHost): Promise<void> {
+  holdingUnheldReads ??= (async () => {
+    try {
+      await holdUnheldReadsLeft(host);
+    } finally {
+      holdingUnheldReads = undefined;
+    }
+  })();
+  return holdingUnheldReads;
+}
+
+async function holdUnheldReadsLeft(host: CacheHost): Promise<void> {
+  for (const read of unheldReadsLeft()) {
     // Offline it stays noted for the pass after the reconnect.
     if (!onlineManager.isOnline()) return;
     try {
       await holdUnheldRead(host, read);
       forgetUnheldRead(read, true);
-    } catch (error) {
+    } catch {
       if (!onlineManager.isOnline()) return;
-      // A channel the person can no longer read, or a failed request: the
-      // prewarm keeps what is still wanted, so this is not tried again.
+      // A channel this person cannot read (the note may be another
+      // account's) or a failed request. Neither is tried again or reported:
+      // the prewarm keeps what is still wanted.
       forgetUnheldRead(read, true);
-      reportDeviceFault(error);
     }
   }
 }

@@ -63,12 +63,22 @@ function write(reads: UnheldRead[]): void {
   }
 }
 
+/** The reads pages that are gone left noted: not the ones this page is storing. */
+export function unheldReadsLeft(): UnheldRead[] {
+  return unheldReads().filter((read) => !noted.has(idOf(read)));
+}
+
 export function noteUnheldRead(read: UnheldRead): void {
   const id = idOf(read);
   if (noted.has(id)) return;
   noted.add(id);
   const others = unheldReads().filter((other) => idOf(other) !== id);
-  write([...others, read].slice(-MAX_NOTED));
+  const kept = [...others, read].slice(-MAX_NOTED);
+  // A note pushed out may be noted again by a later read.
+  for (const dropped of others.slice(0, others.length + 1 - kept.length)) {
+    noted.delete(idOf(dropped));
+  }
+  write(kept);
 }
 
 /**

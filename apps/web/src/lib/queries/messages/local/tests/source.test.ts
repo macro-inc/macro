@@ -225,6 +225,26 @@ describe('holdUnheldReads', () => {
     expect(unheldReads()).toEqual([]);
   });
 
+  it('leaves the reads this page is still storing, and runs one pass at a time', async () => {
+    leave(leftThread);
+    noteUnheldRead(leftPage);
+    let finish = () => {};
+    mocks.loadChannelThread.mockReturnValue(
+      new Promise((resolve) => {
+        finish = () => resolve({ thread: thread('s'), source: 'server' });
+      })
+    );
+
+    const first = holdUnheldReads(host);
+    const second = holdUnheldReads(host);
+    finish();
+    await Promise.all([first, second]);
+
+    expect(mocks.loadChannelThread).toHaveBeenCalledTimes(1);
+    expect(mocks.loadChannelPage).not.toHaveBeenCalled();
+    expect(unheldReads()).toEqual([leftPage]);
+  });
+
   it('keeps them noted without a connection', async () => {
     leave(leftPage, leftThread);
     onlineManager.setOnline(false);

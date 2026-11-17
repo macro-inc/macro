@@ -45,6 +45,9 @@ describe('unheld reads', () => {
     const noted = unheldReads();
     expect(noted).toHaveLength(50);
     expect(noted[0]).toEqual({ channelId: 'c5' });
+    // One pushed out can be noted again.
+    noteUnheldRead({ channelId: 'c0' });
+    expect(unheldReads().at(-1)).toEqual({ channelId: 'c0' });
   });
 
   it('reads nothing from a value it did not write', () => {
