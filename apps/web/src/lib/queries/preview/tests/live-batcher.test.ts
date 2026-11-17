@@ -88,3 +88,36 @@ describe('live preview batching', () => {
     b.dispose();
   });
 });
+
+describe('released batches that linger', () => {
+  it('keeps a released batch for a remount within the linger window', () => {
+    const disposers: ReturnType<typeof vi.fn>[] = [];
+    const start = vi.fn((items: string[]) => {
+      const dispose = vi.fn();
+      disposers.push(dispose);
+      return { value: items, dispose };
+    });
+    const batcher = createLivePreviewBatcher({ start, linger: 1_000 });
+    const first = batcher.acquire('a', 'a', vi.fn());
+    vi.advanceTimersByTime(30);
+    first.dispose();
+    vi.advanceTimersByTime(999);
+    expect(disposers[0]).not.toHaveBeenCalled();
+
+    // A remount reuses the live batch and its data.
+    const remounted = vi.fn();
+    const second = batcher.acquire('a', 'a', remounted);
+    expect(remounted).toHaveBeenCalledExactlyOnceWith(['a']);
+    expect(start).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(5_000);
+    expect(disposers[0]).not.toHaveBeenCalled();
+
+    second.dispose();
+    vi.advanceTimersByTime(1_000);
+    expect(disposers[0]).toHaveBeenCalledOnce();
+    const third = vi.fn();
+    batcher.acquire('a', 'a', third);
+    vi.advanceTimersByTime(30);
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+});

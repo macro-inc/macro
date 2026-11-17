@@ -142,6 +142,20 @@ describe('createBotIdentity', () => {
     expect(server.requests).toEqual([[RELEASE_BOT]]);
   });
 
+  it('shows a bot at once on a remount soon after its last reader left', async () => {
+    const rows = new Map([[RELEASE_BOT, bot(RELEASE_BOT, 'Shipper')]]);
+    const server = createServer(rows);
+    client = createClient({ url: '/graphql', exchanges: [server.exchange] });
+    const first = mount(() => createBotIdentity(() => RELEASE_BOT));
+    await vi.waitFor(() => expect(first.value.data()?.name).toBe('Shipper'));
+    first.dispose();
+
+    const again = mounted(() => createBotIdentity(() => RELEASE_BOT));
+
+    expect(again.data()?.name).toBe('Shipper');
+    expect(server.requests).toEqual([[RELEASE_BOT]]);
+  });
+
   it('keeps a missing bot missing while its batch reads again', async () => {
     const server = createServer(new Map());
     client = createClient({ url: '/graphql', exchanges: [server.exchange] });

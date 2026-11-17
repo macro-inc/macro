@@ -28,6 +28,11 @@ export type BotIdentity = {
 
 /** `user.bots` takes at most 100 ids. */
 const MAX_BOT_IDS = 100;
+/**
+ * How long a bot read nobody shows stays live, so a recycled row or a
+ * reopened view shows the bot at once rather than reading it again.
+ */
+const RELEASED_BOT_LINGER_MS = 5 * 60_000;
 
 type Revalidator = {
   client: Client;
@@ -98,6 +103,7 @@ function batcher(client: Client) {
     value = createLivePreviewBatcher<string, Batch>({
       start: (ids) => startBatch(client, ids),
       maxSize: MAX_BOT_IDS,
+      linger: RELEASED_BOT_LINGER_MS,
     });
     batchers.set(client, value);
   }
