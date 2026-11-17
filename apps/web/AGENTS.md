@@ -88,10 +88,14 @@ membership/context tokens, not previous result IDs or a scoring clock. Contact
 changes invalidate pending replies and restart paging; honor short/empty continuations.
 Quick Access person lists are per-observer windows, never global item-cache rows.
 Forward live queries from commands, mentions and property selectors; resolve CRM
-aliases only for the listed rows. In menus (Cmd+K, mentions, mobile name search)
-further pages of people and contact matches are listed below the earlier ones, up
-to a bound; property pickers use explicit paging, and query-backed pages append
-to the visible options. Thread/generic pickers advance their browsed-email and
+aliases only for the listed rows. Every contact menu and picker (Cmd+K, mentions,
+mobile name search, property, recipient and filter pickers) lists further pages
+below the earlier ones as the end scrolls into view, up to 500 rows
+(`queries/contacts/directory-list.ts`); query-backed pages append to the visible
+options. A page with no matching rows reads on until one matches or the source
+ends. Never add a Next options button; a failed page offers Retry. A sentinel
+element opts out of scroll anchoring (`[overflow-anchor:none]`), or Chrome holds
+it in view and every page loads the next. Thread/generic pickers advance their browsed-email and
 server-search pages alongside Quick Access; explicit user rosters stay capped.
 A window key names the page or growing list on screen, never a refresh of it. Reset
 virtual focus/scroll only on window replacement, not label updates or refreshes.
@@ -109,8 +113,8 @@ Keep native row timestamps and forwarding through both editor configuration and
 constructs a per-picker source from live query/open/self/domain inputs; use
 `useContactRecipientSource` or `useCombinedRecipientSource` for personal suggestions
 and keep `options` for explicit scoped extras. Closing releases the page and reopening
-starts at the first window. Selected chips remain caller-owned; Next options/PageDown
-can advance empty windows. Main email To/Cc/Bcc inputs receive the factory through
+starts at the first page. Selected chips remain caller-owned; PageDown loads the
+next page from the keyboard. Main email To/Cc/Bcc inputs receive the factory through
 `EmailComposeContext.createRecipientSource`; scoped hosts opt out explicitly with
 `undefined`. Thread extras and personal hits deduplicate by canonical email while
 preserving the selected representation. Keep selection/outside dismissal synchronous;
@@ -121,7 +125,7 @@ names to option/chip avatars instead of duplicating resolved names in the shared
 recipient and email app-browser fixtures cover desktop/touch. Channel invitation
 and participant pickers use the same source with explicit roster exclusions; keep
 whole-team selection separate. Exclude up to the native IPC budget before ranking,
-filter any oversized roster remainder within each replaceable window, and retain
+filter any oversized roster remainder within each listed page, and retain
 empty continuations. Bind paging to the complete roster's reset key, including
 changes beyond that budget. Keep picker portals inside their owning dialog/drawer;
 cancel a recipient option's pointerup default so synchronous popup removal cannot

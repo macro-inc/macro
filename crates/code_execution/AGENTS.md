@@ -42,6 +42,8 @@ quotes the user's approval, so an owner routine step (signed `routine_id`, no
 agent) sends and creates. The email sign-in and the MCP OAuth broker take no
 credential, so the header is what refuses a program there.
 
+A program reads Macro's own sign-in emails redacted (email and storage-service responses, `models_email::sign_in_email`), and GraphQL refuses it.
+
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
 host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
 `new Macro(...)` makes the SDK default to prod, so `webUrl()` links on dev and

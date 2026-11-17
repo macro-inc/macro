@@ -159,8 +159,26 @@ def model_call(span):
             for section in PROMPT_SECTIONS
             if number(dig(prompt, f"{section}.bytes")) is not None
         },
+        # The first 16 hex digits of each section's SHA-256, which a
+        # reconstructed section is checked against.
+        "prompt_hashes": {
+            section: dig(prompt, f"{section}.hash")
+            for section in PROMPT_SECTIONS
+            if isinstance(dig(prompt, f"{section}.hash"), str)
+        },
+        "task_definition": task_definition(span),
         "failed": failed(span),
     }
+
+
+def task_definition(span):
+    """The ECS task definition (`family:revision`) that served the span, from
+    its tags: the way back to the image, and so the commit, it ran. A family
+    alone would name its latest revision, not this one."""
+    tags = dict(tag.split(":", 1) for tag in span.get("tags") or [] if ":" in tag)
+    if "task_family" not in tags or "task_version" not in tags:
+        return None
+    return f"{tags['task_family']}:{tags['task_version']}"
 
 
 def documentation(span):
@@ -177,6 +195,7 @@ def documentation(span):
         "bytes": number(custom.get("bytes")),
         "guidance": custom.get("guidance"),
         "batches": number(custom.get("batches")),
+        "task_definition": task_definition(span),
     }
 
 

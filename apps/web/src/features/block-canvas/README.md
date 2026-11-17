@@ -97,6 +97,55 @@ that forwards these keys unless the artifact handled them or the user is typing.
 The host treats those messages only as navigation. Touch devices use the on-screen
 buttons.
 
+## Desktop and touch views
+
+`canvas-next.tsx` is the entry: it owns the editor, state, clipboard and hotkeys,
+and holds the view's device switch. The pane's header is switched beside it, in
+`component/Block.tsx`, between `views/canvas-header.tsx` and
+`views/mobile/canvas-header.tsx`. `views/canvas-view.tsx` and
+`views/canvas-read-only-view.tsx` are the desktop compositions,
+`views/mobile/` the phone and tablet ones, and `views/shared/` the parts both
+render: `CanvasViewParts` (the root that wires the viewport, the scene, the
+insert menu, the presentation and the empty state), `CanvasInspectorSections`,
+`CanvasReadOnlyParts`, and `CANVAS_TOOLS`, which names and draws each tool
+while every view lists the tools it offers. A canvas embedded in a document
+keeps the desktop read-only view on every device, so its controls stay inside
+the embed.
+
+On touch the canvas's controls are islands in the app's bottom chrome, in the
+`accessory` float region above the dock, so the dock, the home indicator and
+the keyboard never cover them, and the page's New button gives way while a
+canvas is open. Zoom and undo/redo sit on the left, the drawing tools in the
+middle, and, while something is selected, Style, Duplicate, Delete and More on
+the right. They share one row wherever it fits (tablets, a phone on its side);
+an upright phone stacks the tools under the rest. Where there is no room to list
+every tool, Rectangle and Ellipse fold into one button and Arrow, Line and
+Connector into another: a tap picks the group's last tool, and a tap while it is
+picked opens the others. A read-only canvas offers zoom, Select and Hand. The
+chrome steps aside while the keyboard is up. A press on it first commits text
+being edited and leaves an embed, as a press on the canvas does, because the
+float region renders it outside the canvas's own root. On a page without the
+app's bottom chrome (a public link opened signed out) there is no float region,
+and the same islands sit at the bottom of the canvas instead.
+
+The zoom button opens a sheet with what the desktop zoom menu holds: fit, zoom
+to selection, zoom levels, the dot grid and snapping. More, and a long press on
+the canvas with Select or Hand, open a sheet with every context-menu action:
+clipboard, duplicate, select all, group, layer order and delete. Copy leaves the
+sheet open and confirms with a check, as copy actions do in other menus. A long press
+first selects what is under the finger, as a right-click does, and cancels
+whatever the press had started; `longPress` on the graphics input reports it,
+half a second in, if the finger has drifted no more than 10px. The sheet opens
+under the finger, and a browser clicks whatever is under a finger as it lifts,
+so the graphics input swallows that lift's click: letting go presses no row.
+
+On a phone Style opens the inspector in a sheet over the lower half of the
+screen. Its scrim is clear, so the shape stays visible and a change shows as it
+is made, and a tap on the canvas closes it with the selection kept. Wider touch
+screens keep the inspector as a floating panel on the right, between the split
+header and the bottom chrome; Style collapses it, remembered for the browser
+session.
+
 ## Controls
 
 The floating top toolbar uses the shared `Toolbar` and Phosphor icons for drawing
@@ -283,8 +332,10 @@ outline tolerance; a thick stroke does not gain another 3px outside its paint.
 - `core/`: seed/defaults only. Editing algorithms and typed commands live in graphics.
 - `primitives/`: Solid state, mixed values, creation defaults and UI actions.
 - `components/`: inspector and layer list with explicit props.
-- `views/`: editor surface and controls composed around a supplied editor/state.
-- `canvas-next.tsx`: shared Loro editor (or read-only JSON before sharing), hotkeys and clipboard.
+- `views/`: editor surface and controls composed around a supplied editor/state,
+  split into desktop, `mobile/` and `shared/` (see Desktop and touch views).
+- `canvas-next.tsx`: shared Loro editor (or read-only JSON before sharing), hotkeys,
+  clipboard, and the device switch between the desktop and touch views.
 - `queries/canvas-session.ts`: shared runtime, initialization, recovery, permissions and teardown.
 - `primitives/create-canvas-presence.ts`: ephemeral cursor/selection/gesture publication.
 - `clipboard.ts` / `hotkeys.ts`: host adapters. No browser/app dependency in the core.
@@ -517,8 +568,6 @@ selection, and group movement. Scene hierarchy, paint order, and picking bounds
 are indexed on immutable snapshots; edits and undo replace those indexes.
 Selection outlines share a camera transform so panning does not rewrite every
 outline. Mutable scene builders continue to bypass caches.
-
-On touch layouts, keep the floating zoom/inspector below the split header so the details button and document-title file menu remain reachable.
 
 
 ## AI snapshot rendering and measured fitting
