@@ -45,7 +45,7 @@ impl utoipa::ToSchema for EmlFile {}
             (status = 503, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization), fields(eml_bytes = tracing::field::Empty), err)]
+#[tracing::instrument(skip(ctx, authorization, headers), fields(eml_bytes = tracing::field::Empty), err)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
@@ -64,7 +64,9 @@ pub async fn handler(
     {
         return Ok((
             axum::http::StatusCode::FORBIDDEN,
-            models_email::sign_in_email::HIDDEN_SIGN_IN_EMAIL,
+            axum::Json(ErrorResponse {
+                message: models_email::sign_in_email::HIDDEN_SIGN_IN_EMAIL.into(),
+            }),
         )
             .into_response());
     }

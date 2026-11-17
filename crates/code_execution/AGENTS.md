@@ -39,6 +39,8 @@ create route refuses them, and the email send and schedule routes refuse
 them unless the schedule quotes the user's approval
 (`macro_authorization::is_agent_run`).
 
+A program reads Macro's own sign-in emails redacted (email and storage-service responses, `models_email::sign_in_email`), and GraphQL refuses it.
+
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
 host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
 `new Macro(...)` makes the SDK default to prod, so `webUrl()` links on dev and

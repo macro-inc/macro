@@ -7,6 +7,8 @@ const FUSIONAUTH_PROD: &str =
     include_str!("../../../../infra/stacks/fusionauth-instance/Pulumi.prod.yaml");
 const FUSIONAUTH_DEV: &str =
     include_str!("../../../../infra/stacks/fusionauth-instance/Pulumi.dev.yaml");
+const FUSIONAUTH_LOCAL: &str =
+    include_str!("../../../../infra/stacks/fusionauth-instance/Pulumi.local.yaml");
 const LOCAL_KICKSTART: &str =
     include_str!("../../../../tooling/xtask/crates/xtask_local/src/local/kickstart.rs");
 const LOCAL_IDENTITY: &str =
@@ -29,7 +31,7 @@ fn quoted_after<'a>(source: &'a str, marker: &str) -> Vec<&'a str> {
 
 /// The from-addresses FusionAuth is configured with in every environment.
 fn configured_senders() -> Vec<String> {
-    let mut senders: Vec<String> = [FUSIONAUTH_PROD, FUSIONAUTH_DEV]
+    let mut senders: Vec<String> = [FUSIONAUTH_PROD, FUSIONAUTH_DEV, FUSIONAUTH_LOCAL]
         .iter()
         .flat_map(|config| config.lines())
         .filter_map(|line| {
@@ -63,41 +65,48 @@ fn rendered_subjects() -> Vec<String> {
         .collect()
 }
 
-/// A changed sender or template subject must fail here rather than let a
-/// sign-in email through to programs.
+/// A changed sender must fail here rather than let a sign-in email through
+/// to programs.
 #[test]
-fn every_configured_sender_and_template_subject_is_recognised() {
+fn every_configured_sign_in_sender_is_recognised() {
     let senders = configured_senders();
     let mut configured = senders.clone();
     configured.sort();
+    configured.dedup();
     let mut known: Vec<String> = SIGN_IN_SENDERS.iter().map(|s| (*s).to_owned()).collect();
     known.sort();
     assert_eq!(configured, known, "FusionAuth's from-addresses");
+    for sender in &senders {
+        assert!(is_macro_sign_in_sender(sender), "{sender}");
+        assert!(
+            is_macro_sign_in_sender(&format!("Macro <{sender}>")),
+            "{sender}"
+        );
+    }
+}
 
+/// Every template FusionAuth renders, from any configured sender, is hidden.
+#[test]
+fn every_rendered_sign_in_template_is_hidden() {
     for subject in rendered_subjects() {
-        for sender in &senders {
-            assert!(
-                is_macro_sign_in_email(sender, &subject),
-                "{sender}: {subject}"
-            );
+        for sender in configured_senders() {
+            let mut message = json!({"subject": subject, "from": {"email": sender}});
+            hide_sign_in_emails(&mut message);
+            assert_eq!(message["subject"], HIDDEN_SIGN_IN_EMAIL, "{subject}");
         }
     }
 }
 
 #[test]
-fn other_mail_from_macro_or_with_the_subject_from_others_is_not_a_sign_in() {
-    assert!(!is_macro_sign_in_email(
-        "auth@macro.com",
-        "Your Macro invoice"
+fn mail_from_anyone_else_is_not_a_sign_in() {
+    assert!(!is_macro_sign_in_sender("someone@example.com"));
+    assert!(!is_macro_sign_in_sender(
+        "Macro <auth@macro.com.example.com>"
     ));
-    assert!(!is_macro_sign_in_email(
-        "someone@example.com",
-        "Log into Macro - 482913"
-    ));
-    assert!(!is_macro_sign_in_email(
-        "auth@macro.com",
-        "Log into Macro - 4829"
-    ));
+    let mut message =
+        json!({"subject": "Log into Macro - 482913", "from": {"email": "someone@example.com"}});
+    hide_sign_in_emails(&mut message);
+    assert_eq!(message["subject"], "Log into Macro - 482913");
 }
 
 #[test]
