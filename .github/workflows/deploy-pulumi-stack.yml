@@ -89,14 +89,14 @@ jobs:
       - name: Deploy ${{ inputs.pulumi-service-name }}
         uses: ./.github/actions/deploy-cloud-storage-pulumi
         with:
-          environment: ${{ inputs.environment }}
           aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           pulumi-service-name: ${{ inputs.pulumi-service-name }}
-          cloud-storage-service-name: ${{ inputs.cloud-storage-service-name }}
           dd-app-key: ${{ secrets.DD_APP_KEY }}
           dd-api-key: ${{ secrets.DD_API_KEY }}
+          environment: ${{ inputs.environment }}
+          cloud-storage-service-name: ${{ inputs.cloud-storage-service-name }}
       - name: Teardown Nix
         if: always()
         uses: ./.github/actions/teardown-nix

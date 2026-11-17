@@ -16,6 +16,9 @@ use gh_workflow::{
     WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
 };
 
+use crate::workflows::actions::{
+    LocalDeployCloudStoragePulumi, LocalGetProjectName, LocalMigrateCloudStorageDb,
+};
 use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
@@ -93,7 +96,7 @@ pub(crate) struct ProjectNameOutputs {
 pub(crate) const PROJECT_NAME: StepHandle<ProjectNameOutputs> = StepHandle::new(
     "project-name",
     ProjectNameOutputs {
-        project_name: StepOutput::new("project-name", "project-name"),
+        project_name: LocalGetProjectName::project_name_output("project-name"),
     },
 );
 
@@ -267,7 +270,7 @@ fn build_job(name: &str, warm_job: &JobHandle<()>, gate: &JobOutput<Str>) -> Job
             })),
             max_parallel: None,
         })
-        .add_step(steps::checkout_v4().add_with(("clean", false)))
+        .add_step(steps::checkout_v4_action().clean(false))
         .add_step(steps::setup_bun_pinned())
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix_with_cache())
@@ -382,16 +385,12 @@ fn migrate_db() -> Job {
                 .and(!all_needs_results().contains("cancelled")),
         )
         .runs_on(runners::DB_MIGRATOR)
-        .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
+        .add_step(steps::checkout_v4_action().sparse_checkout(".github/"))
         .add_step(run_migrations())
 }
 
 fn run_migrations() -> Step<Use> {
-    steps::uses_local(
-        "Run migrations",
-        xtask_paths::repo_dir!(".github/actions/migrate-cloud-storage-db"),
-    )
-    .add_with(("environment", input::<Str>("environment")))
+    LocalMigrateCloudStorageDb::new("Run migrations", input::<Str>("environment")).step()
 }
 
 /// Deploys via Pulumi + Docker; AWS auth is via explicit static keys
@@ -436,12 +435,9 @@ fn deploy_services() -> Job {
 }
 
 fn get_project_name() -> Step<Use> {
-    steps::uses_local(
-        "Get project name",
-        xtask_paths::repo_dir!(".github/actions/get-project-name"),
-    )
-    .id(PROJECT_NAME.id())
-    .add_with(("service-name", matrix::<Str>("service")))
+    LocalGetProjectName::new("Get project name", matrix::<Str>("service"))
+        .step()
+        .id(PROJECT_NAME.id())
 }
 
 fn check_artifact_config() -> Step<Run> {
@@ -504,35 +500,26 @@ fn download_handoff_artifacts() -> Step<Run> {
 }
 
 fn deploy_service() -> Step<Use> {
-    steps::uses_local(
+    LocalDeployCloudStoragePulumi::new(
         &format!("Deploy {}", matrix::<Str>("service")),
-        xtask_paths::repo_dir!(".github/actions/deploy-cloud-storage-pulumi"),
-    )
-    .add_with(("environment", input::<Str>("environment")))
-    .add_with(("aws-access-key", vars::AWS_ACCESS_KEY))
-    .add_with(("aws-secret-key", vars::AWS_SECRET_ACCESS_KEY))
-    .add_with(("pulumi-access-token", vars::PULUMI_ACCESS_TOKEN))
-    .add_with((
-        "pulumi-service-name",
+        vars::AWS_ACCESS_KEY,
+        vars::AWS_SECRET_ACCESS_KEY,
+        vars::PULUMI_ACCESS_TOKEN,
         PROJECT_NAME.outputs.project_name.read(),
+        vars::DD_APP_KEY,
+        vars::DD_API_KEY,
+    )
+    .environment(input::<Str>("environment"))
+    .use_namespace_builder("true")
+    .prebuilt_binaries_tar(handoff_tar_path(
+        &CHECK_ARTIFACTS.outputs.has_binaries,
+        "prebuilt-binaries.tar.gz",
     ))
-    .add_with(("use-namespace-builder", "true"))
-    .add_with((
-        "prebuilt-binaries-tar",
-        handoff_tar_path(
-            &CHECK_ARTIFACTS.outputs.has_binaries,
-            "prebuilt-binaries.tar.gz",
-        ),
+    .lambda_artifacts_tar(handoff_tar_path(
+        &CHECK_ARTIFACTS.outputs.has_lambdas,
+        "lambda-artifacts.tar.gz",
     ))
-    .add_with((
-        "lambda-artifacts-tar",
-        handoff_tar_path(
-            &CHECK_ARTIFACTS.outputs.has_lambdas,
-            "lambda-artifacts.tar.gz",
-        ),
-    ))
-    .add_with(("dd-app-key", vars::DD_APP_KEY))
-    .add_with(("dd-api-key", vars::DD_API_KEY))
+    .step()
 }
 
 /// The downloaded handoff tar when the service has one, else empty.

@@ -42,7 +42,7 @@ fn check_package() -> Job {
         .name("SDK Package Check")
         .runs_on("ubuntu-latest")
         .add_step(steps::checkout(false, false))
-        .add_step(steps::setup_bun().add_with(("bun-version", "1.3.5")))
+        .add_step(steps::setup_bun_action().bun_version(steps::SDK_BUN_VERSION))
         .add_step(ActionsSetupNode::new("Setup Node").node_version("24"))
         .add_step(install_dependencies())
         .add_step(typecheck())

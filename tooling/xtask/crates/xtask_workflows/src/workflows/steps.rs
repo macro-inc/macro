@@ -8,12 +8,13 @@ use gh_workflow::expr::typed::{
     Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, always, github, input,
 };
 use gh_workflow::{Env, Job, Run, Step, Use};
-use xtask_paths::{RepoDir, RuntimePath};
+use xtask_paths::RuntimePath;
 
 use crate::workflows::actions::{
     ActionsCheckout, ActionsDownloadArtifact, ActionsUploadArtifact, GoogleGithubActionsAuth,
-    LocalTeardownNix, NamespacelabsNscloudCacheAction, NamespacelabsNscloudSetupBuildxAction,
-    OvenShSetupBun, SoftpropsActionGhRelease,
+    LocalCheckMacroDbMigrations, LocalSetupNix, LocalSetupNixDevShell, LocalSetupReqsWeb,
+    LocalSetupRust, LocalTeardownNix, NamespacelabsNscloudCacheAction,
+    NamespacelabsNscloudSetupBuildxAction, OvenShSetupBun, SoftpropsActionGhRelease,
 };
 use crate::workflows::{runners, vars};
 
@@ -53,11 +54,7 @@ impl FluentBuilder for Job {}
 impl<T> FluentBuilder for Step<T> {}
 impl FluentBuilder for ActionsCheckout {}
 impl FluentBuilder for GoogleGithubActionsAuth {}
-
-/// Reference a repo-local composite action (`uses: ./path`).
-pub(crate) fn uses_local(name: &str, path: RepoDir<'_>) -> Step<Use> {
-    Step::new(name).uses_local(path.as_str())
-}
+impl FluentBuilder for LocalSetupReqsWeb {}
 
 /// Namespace remote BuildKit, pinned. Multi-arch `docker buildx --push` goes
 /// through it so nix-in-Docker work does not land on a Small runner's local
@@ -85,8 +82,16 @@ pub fn checkout_action(full_history: bool, persist_credentials: bool) -> Actions
 
 /// `oven-sh/setup-bun` — installs the Bun version the action picks.
 pub fn setup_bun() -> Step<Use> {
-    OvenShSetupBun::new("Setup Bun").step()
+    setup_bun_action().step()
 }
+
+/// [`setup_bun`] before it becomes a step, for call sites that pin a version.
+pub fn setup_bun_action() -> OvenShSetupBun {
+    OvenShSetupBun::new("Setup Bun")
+}
+
+/// The Bun the SDK package builds, checks and publishes with.
+pub const SDK_BUN_VERSION: &str = "1.3.5";
 
 /// `oven-sh/setup-bun` with an exact Bun version, for the native
 /// release workflows that run the `apps/web/scripts` release helpers.
@@ -139,12 +144,10 @@ pub fn google_play_auth(credentials_file: bool) -> Step<Use> {
 /// Install the Rust toolchain only (no sccache, no cache) — for the lightweight
 /// `path-check` and workflow-drift jobs.
 pub fn setup_rust_light() -> Step<Use> {
-    uses_local(
-        "Setup Rust",
-        xtask_paths::repo_dir!(".github/actions/setup-rust"),
-    )
-    .add_with(("sccache", "false"))
-    .add_with(("rust-cache", "false"))
+    LocalSetupRust::new("Setup Rust")
+        .sccache("false")
+        .rust_cache("false")
+        .step()
 }
 
 /// A `bash` step whose output the job's closing "Comment on the PR" step
@@ -182,10 +185,7 @@ pub fn install_nix_macos() -> Step<Run> {
 /// `/nix` cache volume mounted by [`mount_cache_volume`] keeps the store warm,
 /// so it re-inits the daemon rather than doing a full install.
 pub fn setup_nix() -> Step<Use> {
-    uses_local(
-        "Setup Nix",
-        xtask_paths::repo_dir!(".github/actions/setup-nix"),
-    )
+    LocalSetupNix::new("Setup Nix").step()
 }
 
 /// [`setup_nix`] with the private S3 binary cache configured as a substituter,
@@ -194,18 +194,21 @@ pub fn setup_nix() -> Step<Use> {
 /// jobs). No-ops back to plain [`setup_nix`] behavior while the
 /// `NIX_CACHE_*` repo variables are unset.
 pub fn setup_nix_with_cache() -> Step<Use> {
-    setup_nix()
-        .add_with(("nix-cache-url", vars::NIX_CACHE_URL))
-        .add_with(("nix-cache-public-key", vars::NIX_CACHE_PUBLIC_KEY))
-        .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
-        .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
+    LocalSetupNix::new("Setup Nix")
+        .nix_cache_url(vars::NIX_CACHE_URL)
+        .nix_cache_public_key(vars::NIX_CACHE_PUBLIC_KEY)
+        .aws_access_key_id(vars::AWS_ACCESS_KEY)
+        .aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .step()
 }
 
 /// [`setup_nix`] restoring `/nix` from Namespace's HTTP cache when the volume is
 /// empty. PR jobs write that copy, so this is only for PR check jobs: never a job
 /// that deploys or holds deploy secrets.
 pub fn setup_nix_with_seed() -> Step<Use> {
-    setup_nix().add_with(("seed-cache", vars::CI_SCCACHE_NAME))
+    LocalSetupNix::new("Setup Nix")
+        .seed_cache(vars::CI_SCCACHE_NAME)
+        .step()
 }
 
 /// Push built store paths to the private S3 binary cache, signing on upload —
@@ -251,15 +254,14 @@ pub fn push_nix_cache(targets: &str) -> Step<Run> {
 /// cache. Requires [`setup_nix`] first. The composite action defaults to the
 /// `default` flake shell when no `shell` input is passed.
 pub fn setup_dev_shell() -> Step<Use> {
-    uses_local(
-        "Setup Nix dev shell",
-        xtask_paths::repo_dir!(".github/actions/setup-nix-dev-shell"),
-    )
+    LocalSetupNixDevShell::new("Setup Nix dev shell").step()
 }
 
 /// [`setup_dev_shell`] for a named `devShells.<name>` flake output.
 pub fn setup_dev_shell_named(name: &str) -> Step<Use> {
-    setup_dev_shell().add_with(("shell", name))
+    LocalSetupNixDevShell::new("Setup Nix dev shell")
+        .shell(name)
+        .step()
 }
 
 /// Mount the Namespace profile's persisted cache volume: cargo's registry, git
@@ -420,11 +422,9 @@ pub fn mount_web_build_check_cache_volume() -> Step<Use> {
 /// Jobs that run `gen-api` follow this with [`configure_namespace_sccache`].
 /// Requires [`setup_nix`] first.
 pub fn setup_reqs_web(name: &str, playwright: bool) -> Step<Use> {
-    uses_local(
-        name,
-        xtask_paths::repo_dir!(".github/actions/setup-reqs-web"),
-    )
-    .when(playwright, |step| step.add_with(("playwright", "true")))
+    LocalSetupReqsWeb::new(name)
+        .when(playwright, |action| action.playwright("true"))
+        .step()
 }
 
 /// Build the code-mode assets (`crates/code_mode_assets`) in Nix, or restore them
@@ -479,7 +479,7 @@ pub fn checkout_v4() -> Step<Use> {
 }
 
 /// [`checkout_v4`] before it becomes a step, for call sites that add inputs.
-fn checkout_v4_action() -> ActionsCheckout {
+pub fn checkout_v4_action() -> ActionsCheckout {
     ActionsCheckout::new("Checkout Repo").persist_credentials(false)
 }
 
@@ -501,11 +501,8 @@ pub fn check_macro_db_migrations_job<SetupOutputs>(
         .runs_on(runners::DB_MIGRATOR)
         .add_step(checkout_v4_action().sparse_checkout(".github/").step())
         .add_step(
-            uses_local(
-                "Check migrations",
-                xtask_paths::repo_dir!(".github/actions/check-macro-db-migrations"),
-            )
-            .add_with(("environment", input::<Str>("environment"))),
+            LocalCheckMacroDbMigrations::new("Check migrations", input::<Str>("environment"))
+                .step(),
         )
 }
 

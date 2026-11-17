@@ -34,7 +34,7 @@ fn publish() -> Job {
                 .id_token(Level::Write),
         )
         .add_step(steps::checkout(true, false))
-        .add_step(steps::setup_bun().add_with(("bun-version", "1.3.5")))
+        .add_step(steps::setup_bun_action().bun_version(steps::SDK_BUN_VERSION))
         .add_step(setup_node())
         .add_step(setup_npm())
         .add_step(verify_release())

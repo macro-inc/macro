@@ -15,7 +15,9 @@ use gh_workflow::{
     Event, Job, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
 };
 
-use crate::workflows::actions::ActionsCheckout;
+use crate::workflows::actions::{
+    ActionsCheckout, LocalGetProjectName, LocalPreviewCloudStoragePulumi,
+};
 use crate::workflows::{runners, steps, vars};
 
 pub(crate) struct ProjectNameOutputs {
@@ -28,7 +30,7 @@ pub(crate) struct ProjectNameOutputs {
 pub(crate) const PROJECT_NAME: StepHandle<ProjectNameOutputs> = StepHandle::new(
     "project-name",
     ProjectNameOutputs {
-        project_name: StepOutput::new("project-name", "project-name"),
+        project_name: LocalGetProjectName::project_name_output("project-name"),
     },
 );
 
@@ -109,33 +111,27 @@ fn checkout() -> Step<Use> {
 }
 
 fn get_project_name() -> Step<Use> {
-    steps::uses_local(
-        "Get project name",
-        xtask_paths::repo_dir!(".github/actions/get-project-name"),
-    )
-    .id(PROJECT_NAME.id())
-    .add_with(("service-name", input::<Str>("service-name")))
+    LocalGetProjectName::new("Get project name", input::<Str>("service-name"))
+        .step()
+        .id(PROJECT_NAME.id())
 }
 
 fn preview_pulumi() -> Step<Use> {
-    steps::uses_local(
+    LocalPreviewCloudStoragePulumi::new(
         "Preview pulumi stack",
-        xtask_paths::repo_dir!(".github/actions/preview-cloud-storage-pulumi"),
-    )
-    .add_with(("environment", input::<Str>("environment")))
-    .add_with(("aws-access-key", vars::AWS_ACCESS_KEY))
-    .add_with(("aws-secret-key", vars::AWS_SECRET_ACCESS_KEY))
-    .add_with(("pulumi-access-token", vars::PULUMI_ACCESS_TOKEN))
-    .add_with((
-        "pulumi-service-name",
+        vars::AWS_ACCESS_KEY,
+        vars::AWS_SECRET_ACCESS_KEY,
+        vars::PULUMI_ACCESS_TOKEN,
         input::<Str>("pulumi-stack-name").or_else(PROJECT_NAME.outputs.project_name.read()),
-    ))
-    .add_with(("dd-app-key", vars::DD_APP_KEY))
-    .add_with(("dd-api-key", vars::DD_API_KEY))
-    .add_with(("use-docker", input::<Bool>("use-docker")))
-    .add_with(("use-lfs", input::<Bool>("use-lfs")))
-    .add_with(("github-token", input::<Str>("github-token")))
-    .add_with(("cloud-storage-service-name", input::<Str>("service-name")))
+        vars::DD_APP_KEY,
+        vars::DD_API_KEY,
+    )
+    .environment(input::<Str>("environment"))
+    .use_docker(input::<Bool>("use-docker"))
+    .use_lfs(input::<Bool>("use-lfs"))
+    .github_token(input::<Str>("github-token"))
+    .cloud_storage_service_name(input::<Str>("service-name"))
+    .step()
 }
 
 #[cfg(test)]

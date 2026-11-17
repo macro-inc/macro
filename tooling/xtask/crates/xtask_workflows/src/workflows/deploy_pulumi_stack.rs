@@ -10,6 +10,7 @@ use gh_workflow::{
     Concurrency, Env, Event, Job, Run, Step, Use, Workflow, WorkflowDispatch, WorkflowInput,
 };
 
+use crate::workflows::actions::LocalDeployCloudStoragePulumi;
 use crate::workflows::{runners, steps, vars};
 
 pub(crate) struct SetupOutputs {
@@ -74,7 +75,7 @@ fn setup() -> Job {
             SETUP.outputs.ships_code.name(),
             CHECK.outputs.ships_code.read(),
         )
-        .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
+        .add_step(steps::checkout_v4_action().sparse_checkout(".github/"))
         .add_step(check_artifact_config())
 }
 
@@ -124,19 +125,16 @@ fn deploy() -> Job {
 }
 
 fn deploy_stack() -> Step<Use> {
-    steps::uses_local(
+    LocalDeployCloudStoragePulumi::new(
         &format!("Deploy {}", stack()),
-        xtask_paths::repo_dir!(".github/actions/deploy-cloud-storage-pulumi"),
+        vars::AWS_ACCESS_KEY,
+        vars::AWS_SECRET_ACCESS_KEY,
+        vars::PULUMI_ACCESS_TOKEN,
+        stack(),
+        vars::DD_APP_KEY,
+        vars::DD_API_KEY,
     )
-    .add_with(("environment", input::<Str>("environment")))
-    .add_with(("aws-access-key", vars::AWS_ACCESS_KEY))
-    .add_with(("aws-secret-key", vars::AWS_SECRET_ACCESS_KEY))
-    .add_with(("pulumi-access-token", vars::PULUMI_ACCESS_TOKEN))
-    .add_with(("pulumi-service-name", stack()))
-    .add_with((
-        "cloud-storage-service-name",
-        input::<Str>("cloud-storage-service-name"),
-    ))
-    .add_with(("dd-app-key", vars::DD_APP_KEY))
-    .add_with(("dd-api-key", vars::DD_API_KEY))
+    .environment(input::<Str>("environment"))
+    .cloud_storage_service_name(input::<Str>("cloud-storage-service-name"))
+    .step()
 }

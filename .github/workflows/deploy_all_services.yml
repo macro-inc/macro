@@ -396,16 +396,16 @@ jobs:
       - name: Deploy ${{ matrix.service }}
         uses: ./.github/actions/deploy-cloud-storage-pulumi
         with:
-          environment: ${{ inputs.environment }}
           aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
+          dd-app-key: ${{ secrets.DD_APP_KEY }}
+          dd-api-key: ${{ secrets.DD_API_KEY }}
+          environment: ${{ inputs.environment }}
           use-namespace-builder: 'true'
           prebuilt-binaries-tar: ${{ steps.check-artifacts.outputs.has_binaries == 'true' && format('{0}/handoff/prebuilt-binaries.tar.gz', runner.temp) || '' }}
           lambda-artifacts-tar: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' && format('{0}/handoff/lambda-artifacts.tar.gz', runner.temp) || '' }}
-          dd-app-key: ${{ secrets.DD_APP_KEY }}
-          dd-api-key: ${{ secrets.DD_API_KEY }}
   deployment-summary:
     needs:
       - setup

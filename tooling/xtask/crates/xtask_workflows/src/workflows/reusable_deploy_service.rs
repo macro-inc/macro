@@ -18,6 +18,7 @@ use gh_workflow::{
     Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
 };
 
+use crate::workflows::actions::{LocalDeployCloudStoragePulumi, LocalGetProjectName};
 use crate::workflows::{runners, steps, vars};
 
 pub(crate) struct SetupOutputs {
@@ -68,7 +69,7 @@ pub(crate) struct ProjectNameOutputs {
 pub(crate) const PROJECT_NAME: StepHandle<ProjectNameOutputs> = StepHandle::new(
     "project-name",
     ProjectNameOutputs {
-        project_name: StepOutput::new("project-name", "project-name"),
+        project_name: LocalGetProjectName::project_name_output("project-name"),
     },
 );
 
@@ -150,7 +151,7 @@ fn setup() -> Job {
             SETUP.outputs.has_lambdas.name(),
             CHECK.outputs.has_lambdas.read(),
         )
-        .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
+        .add_step(steps::checkout_v4_action().sparse_checkout(".github/"))
         .add_step(check_artifact_config())
 }
 
@@ -181,7 +182,7 @@ fn build_job(name: &str, gate: &JobOutput<Flag>) -> Job {
         .needs(vec![SETUP.to_string()])
         .cond(gate.read().is_set())
         .runs_on(runners::Runner::Mid.to_string())
-        .add_step(steps::checkout_v4().add_with(("clean", false)))
+        .add_step(steps::checkout_v4_action().clean(false))
         .add_step(steps::setup_bun_pinned())
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
@@ -297,13 +298,10 @@ fn deploy() -> Job {
 }
 
 fn get_project_name() -> Step<Use> {
-    steps::uses_local(
-        "Get project name",
-        xtask_paths::repo_dir!(".github/actions/get-project-name"),
-    )
-    .id(PROJECT_NAME.id())
-    .if_condition(input::<Str>("pulumi-stack-name").eq(""))
-    .add_with(("service-name", service_name()))
+    LocalGetProjectName::new("Get project name", service_name())
+        .step()
+        .id(PROJECT_NAME.id())
+        .if_condition(input::<Str>("pulumi-stack-name").eq(""))
 }
 
 /// Pull the handoff tars from Namespace artifact storage into runner.temp
@@ -354,31 +352,28 @@ fn download_handoff_artifacts() -> Step<Run> {
 }
 
 fn deploy_service() -> Step<Use> {
-    steps::uses_local(
+    LocalDeployCloudStoragePulumi::new(
         &format!("Deploy {}", service_name()),
-        xtask_paths::repo_dir!(".github/actions/deploy-cloud-storage-pulumi"),
-    )
-    .add_with(("environment", input::<Str>("environment")))
-    .add_with(("aws-access-key", vars::AWS_ACCESS_KEY))
-    .add_with(("aws-secret-key", vars::AWS_SECRET_ACCESS_KEY))
-    .add_with(("pulumi-access-token", vars::PULUMI_ACCESS_TOKEN))
-    .add_with((
-        "pulumi-service-name",
+        vars::AWS_ACCESS_KEY,
+        vars::AWS_SECRET_ACCESS_KEY,
+        vars::PULUMI_ACCESS_TOKEN,
         input::<Str>("pulumi-stack-name").or_else(PROJECT_NAME.outputs.project_name.read()),
+        vars::DD_APP_KEY,
+        vars::DD_API_KEY,
+    )
+    .environment(input::<Str>("environment"))
+    .use_namespace_builder("true")
+    .use_docker(input::<Bool>("use-docker"))
+    .use_lfs(input::<Bool>("use-lfs"))
+    .prebuilt_binaries_tar(handoff_tar_path(
+        &SETUP.outputs.has_binaries,
+        "prebuilt-binaries.tar.gz",
     ))
-    .add_with(("use-namespace-builder", "true"))
-    .add_with(("use-docker", input::<Bool>("use-docker")))
-    .add_with(("use-lfs", input::<Bool>("use-lfs")))
-    .add_with((
-        "prebuilt-binaries-tar",
-        handoff_tar_path(&SETUP.outputs.has_binaries, "prebuilt-binaries.tar.gz"),
+    .lambda_artifacts_tar(handoff_tar_path(
+        &SETUP.outputs.has_lambdas,
+        "lambda-artifacts.tar.gz",
     ))
-    .add_with((
-        "lambda-artifacts-tar",
-        handoff_tar_path(&SETUP.outputs.has_lambdas, "lambda-artifacts.tar.gz"),
-    ))
-    .add_with(("dd-app-key", vars::DD_APP_KEY))
-    .add_with(("dd-api-key", vars::DD_API_KEY))
+    .step()
 }
 
 /// The downloaded handoff tar when the service has one, else empty.
