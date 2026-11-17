@@ -42,7 +42,7 @@ use trigger_context::RoutineEvent;
 
 use crate::domain::{
     event_runs::{AuthorizedEventRun, EventAccessCapability, condition::EventContentReader},
-    event_trigger::{EventName, EventReference, EventSource},
+    event_trigger::{EventName, EventReference, EventSource, WebhookDelivery},
     ports::RoutineEventReader,
 };
 
@@ -155,6 +155,8 @@ enum EventContent {
     Call(Option<CallRecord>),
     /// A GitHub delivery, as it was received.
     Github(Box<GithubWebhookReceived>),
+    /// A webhook delivery, as it was received.
+    Webhook(Box<WebhookDelivery>),
 }
 
 struct ChannelMessage {
@@ -192,8 +194,14 @@ where
             // External deliveries carry their own content; there is nothing to read.
             EventAccessCapability::GithubInstallation { .. } => match event.source() {
                 EventSource::Github(delivery) => Ok(EventContent::Github(delivery.clone())),
-                EventSource::Entity { .. } => Err(rootcause::report!(
-                    "an external capability was minted for a Macro event"
+                EventSource::Entity { .. } | EventSource::Webhook(_) => Err(rootcause::report!(
+                    "a GitHub capability was minted for another event"
+                )),
+            },
+            EventAccessCapability::Webhook { .. } => match event.source() {
+                EventSource::Webhook(delivery) => Ok(EventContent::Webhook(delivery.clone())),
+                EventSource::Entity { .. } | EventSource::Github(_) => Err(rootcause::report!(
+                    "a webhook capability was minted for another event"
                 )),
             },
         }
@@ -375,6 +383,7 @@ fn content_json(event: &EventReference, content: &EventContent) -> Value {
             ),
         }),
         EventContent::Github(delivery) => json!({ "github": github_json(delivery) }),
+        EventContent::Webhook(delivery) => json!({ "webhook": webhook_json(delivery) }),
     }
 }
 
@@ -395,6 +404,17 @@ fn github_json(delivery: &GithubWebhookReceived) -> Value {
             .payload
             .clone()
             .unwrap_or_else(|| unavailable("the payload was too large to carry")),
+    })
+}
+
+/// The whole body: it is at most 64 KiB, like a GitHub payload.
+fn webhook_json(delivery: &WebhookDelivery) -> Value {
+    json!({
+        "body": delivery
+            .body
+            .as_ref()
+            .map_or_else(|| unavailable("the body is no longer available"), |body| json!(body)),
+        "content_type": delivery.content_type,
     })
 }
 

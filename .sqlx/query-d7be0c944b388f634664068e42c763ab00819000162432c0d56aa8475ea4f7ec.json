@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT count(*) AS \"queued!\" FROM scheduled_action_event_run\n            WHERE action_id = $1 AND state = 'pending' AND event_context ? 'webhook'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "queued!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d7be0c944b388f634664068e42c763ab00819000162432c0d56aa8475ea4f7ec"
+}

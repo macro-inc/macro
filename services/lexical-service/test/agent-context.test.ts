@@ -205,6 +205,35 @@ const githubRoutineWire = {
   },
 };
 
+const webhookRoutineWire = {
+  kind: 'routine',
+  routine_id: '00000000-0000-0000-0000-0000000000f3',
+  name: 'Failed deploys',
+  owner: {
+    id: 'macro|julia@example.com',
+    name: 'Julia',
+    email: 'julia@example.com',
+  },
+  instructions: 'Post failed deploys to #ops.',
+  triggers: [
+    {
+      type: 'events',
+      events: ['webhook'],
+      payload_match: ['status = "failed"'],
+    },
+  ],
+  firing: {
+    type: 'event',
+    event: {
+      event: 'webhook',
+      request: {
+        body: '{"status":"failed"}',
+        content_type: 'application/json',
+      },
+    },
+  },
+};
+
 function endpoint() {
   const app = new Hono();
   fromHono(app).post('/agent-context', AgentContextEndpoint);
@@ -225,6 +254,7 @@ describe('agent-context request schema', () => {
       callStartedRoutineWire,
       callEndedRoutineWire,
       githubRoutineWire,
+      webhookRoutineWire,
     ]) {
       const parsed = agentContextRequest.safeParse({
         promptMarkdown: 'please fix',
@@ -274,6 +304,7 @@ describe('POST /agent-context', () => {
       callStartedRoutineWire,
       callEndedRoutineWire,
       githubRoutineWire,
+      webhookRoutineWire,
     ]) {
       const response = await post({ promptMarkdown: 'please fix', trigger });
       expect(response.status).toBe(200);

@@ -643,6 +643,12 @@ border on the cell. Virtual rows are transformed, so each is its own stacking
 context: a row carrying labels rises above the header only while its top edge
 is in view.
 
+Routine webhook triggers have a backend-free desktop/phone regression over the
+real trigger list, menu and webhook URL panel: adding **Webhook received** from
+its own group, making its URL (shown once with a `curl` example) and the JSON
+body tests:
+`bunx playwright test --config src/features/routines/browser-test/playwright.config.ts`.
+
 The database timeline (the real view over an in-memory host) has a desktop/phone
 regression in the same suite, `timeline.browser.e2e.ts`: a bar too short for its
 title shows it beside the bar, inside the calendar clip, until zoom makes room

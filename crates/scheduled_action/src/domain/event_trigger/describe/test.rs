@@ -110,6 +110,11 @@ fn macro_events_read_by_their_names() {
 }
 
 #[test]
+fn a_webhook_reads_as_the_menus_name() {
+    assert_eq!(events(json!({ "events": ["webhook"] })), "Webhook received");
+}
+
+#[test]
 fn a_task_property_change_reads_by_its_property() {
     let property = |definition: &str| {
         events(json!({

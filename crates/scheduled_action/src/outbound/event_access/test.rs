@@ -275,3 +275,34 @@ async fn github_deliveries_follow_the_installation_claim_and_bind_to_it() {
     assert!(unclaimed.authorize(&owner, &event).await.unwrap().is_none());
     assert!(service.calls.lock().unwrap().is_empty());
 }
+
+fn webhook_event(routine_id: Uuid) -> EventReference {
+    serde_json::from_value(json!({
+        "event_id": generate_uuid_v7(),
+        "event_name": "webhook",
+        "webhook": { "routine_id": routine_id, "body": "Deploy finished" },
+    }))
+    .unwrap()
+}
+
+#[tokio::test]
+async fn webhook_deliveries_are_the_owners_and_bind_to_their_routine() {
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@macro.com").unwrap();
+    let service = AccessService {
+        permission: EntityPermission::AccessLevel {
+            access_level: AccessLevel::View,
+        },
+        calls: Arc::default(),
+    };
+    let routine = generate_uuid_v7();
+    let event = webhook_event(routine);
+
+    let adapter = EventAccessAdapter::new(service.clone(), Claims(false));
+    let capability = adapter.authorize(&owner, &event).await.unwrap().unwrap();
+    assert!(capability.authorizes(&owner, &event));
+    assert!(!capability.authorizes(&owner, &webhook_event(generate_uuid_v7())));
+    let stranger = MacroUserIdStr::parse_from_str("macro|stranger@macro.com").unwrap();
+    assert!(!capability.authorizes(&stranger, &event));
+    // Neither entity access nor GitHub is asked.
+    assert!(service.calls.lock().unwrap().is_empty());
+}

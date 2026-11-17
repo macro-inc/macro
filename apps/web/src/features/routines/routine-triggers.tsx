@@ -4,11 +4,13 @@ import {
   enableRoutineConditions,
 } from '@core/constant/featureFlags';
 import { Show, Suspense } from 'solid-js';
+import { match } from 'ts-pattern';
 import { RoutineEventCondition } from './components/routine-event-condition';
 import { RoutineGithubConnect } from './components/routine-github-connect';
 import { RoutineGithubSettings } from './components/routine-github-settings';
 import { RoutinePayloadTests } from './components/routine-payload-tests';
 import { RoutineTriggers as TriggerList } from './components/routine-triggers';
+import { RoutineWebhookUrl } from './components/routine-webhook-url';
 import {
   type EventTriggerDraft,
   eventScopeKind,
@@ -18,6 +20,7 @@ import {
 } from './core/routine-triggers';
 import { createGithubConnection } from './queries/github-link';
 import { createGithubRepositoryOptions } from './queries/github-repositories';
+import { createRoutineWebhook } from './queries/webhook';
 import {
   RoutineEventPropertyValues,
   RoutineEventValueLabel,
@@ -27,10 +30,19 @@ import {
   RoutineEventScopeLabel,
 } from './routine-event-scope';
 
-/** The Macro entity kind a trigger narrows to; GitHub has none. */
+/** The Macro entity kind a trigger narrows to; GitHub and webhooks have none. */
 function entityKind(trigger: EventTriggerDraft) {
-  const kind = eventScopeKind(trigger);
-  return kind === 'GITHUB' ? undefined : kind;
+  return match(eventScopeKind(trigger))
+    .with('GITHUB', 'WEBHOOK', () => undefined)
+    .with(
+      'TASK',
+      'DOCUMENT',
+      'THREAD',
+      'CALL_RECORD',
+      'CHANNEL',
+      (kind) => kind
+    )
+    .exhaustive();
 }
 
 function RepositoryScopeLabel(props: { trigger: EventTriggerDraft }) {
@@ -47,6 +59,8 @@ export function RoutineTriggers(props: {
   triggers: RoutineTriggerDraft[];
   onChange: (triggers: RoutineTriggerDraft[]) => void;
   layout?: 'rows' | 'add' | 'inline';
+  /** The saved routine's id; a new routine gets its webhook URL once saved. */
+  routineId?: string;
 }) {
   const conditions = useFeatureFlag(enableRoutineConditions);
   const eventRoutines = useFeatureFlag(enableEventRoutines);
@@ -57,6 +71,14 @@ export function RoutineTriggers(props: {
       props.triggers.some(
         (trigger) =>
           trigger.kind === 'event' && trigger.events.includes('github')
+      )
+  );
+  const webhook = createRoutineWebhook(
+    () => props.routineId,
+    () =>
+      props.triggers.some(
+        (trigger) =>
+          trigger.kind === 'event' && trigger.events.includes('webhook')
       )
   );
   const connect = (message: string) => (
@@ -143,6 +165,18 @@ export function RoutineTriggers(props: {
                   />
                 </Show>
               )}
+            </Show>
+            <Show when={eventScopeKind(trigger()) === 'WEBHOOK'}>
+              <RoutineWebhookUrl
+                state={props.routineId ? webhook() : undefined}
+              />
+              <RoutinePayloadTests
+                subject="JSON body"
+                pathPlaceholder="status"
+                listExample="alerts.*.severity"
+                tests={trigger().match ?? []}
+                onChange={(match) => onChange({ match })}
+              />
             </Show>
           </>
         )}

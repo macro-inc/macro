@@ -43,6 +43,7 @@ use scheduled_action::domain::suggestions::{
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
+use scheduled_action::domain::webhooks::RoutineWebhookService;
 use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, scheduled_action_router};
 use scheduled_action::inbound::draft_job_router::{
     RoutineDraftJobRouterState, routine_draft_job_router,
@@ -56,6 +57,9 @@ use scheduled_action::inbound::suggestion_router::{
 use scheduled_action::inbound::template_router::{
     RoutineTemplateRouterState, routine_template_router,
 };
+use scheduled_action::inbound::webhook_router::{
+    RoutineWebhookRouterState, routine_webhook_router,
+};
 use scheduled_action::outbound::agent_session_client::AgentSessionClient;
 use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdates;
 use scheduled_action::outbound::event_access::EventAccessAdapter;
@@ -68,6 +72,7 @@ use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
 };
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
+use scheduled_action::outbound::pg_routine_webhook_repo::PgRoutineWebhookRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo as PgRoutineSuggestionRepo;
 use scheduled_action::swagger::ApiDoc;
@@ -647,6 +652,18 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
     // Event routines follow each owner's PostHog flag; without PostHog no one has it.
     let event_routines = routine_flags.clone().map(FlaggedEventRoutines::new);
+    // A webhook delivery joins its routine's event queue directly; the event
+    // worker runs it like any other event.
+    let webhooks = Arc::new(RoutineWebhookService::new(
+        Arc::clone(&repo),
+        Arc::new(PgRoutineWebhookRepo::new(db.clone())),
+        Arc::new(EventAdmissionService::new(
+            Arc::clone(&event_repo),
+            Arc::clone(&event_access),
+            PageSize::try_from(ADMISSION_PAGE_SIZE).expect("valid admission bound"),
+        )),
+        event_routines.clone(),
+    ));
     let event_dispatch = EventDispatchService::new(
         Arc::clone(&event_repo),
         Arc::clone(&event_access),
@@ -1020,6 +1037,11 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         access_service: Arc::clone(&access),
         authorization_state: authorization_state.clone(),
     };
+    let webhook_state = RoutineWebhookRouterState {
+        service: webhooks,
+        access_service: Arc::clone(&access),
+        authorization_state: authorization_state.clone(),
+    };
     let draft_state = RoutineDraftRouterState {
         service: drafts,
         authorization_state: authorization_state.clone(),
@@ -1036,6 +1058,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
         .merge(routine_template_router::<_, _, _, ()>(template_state))
         .merge(routine_draft_router::<_, _, ()>(draft_state))
+        .merge(routine_webhook_router::<_, _, _, ()>(webhook_state))
         .merge(routine_draft_job_router::<_, _, ()>(draft_job_state))
         .merge(routine_suggestion_router::<_, _, ()>(suggestion_state))
         .merge(suggestion_router::<_, _, ()>(feed_state))

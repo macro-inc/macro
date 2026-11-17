@@ -159,6 +159,9 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/scheduled-actions/{id}/execute"),
     ("PUT", "/scheduled-actions/{id}/template"),
     ("POST", "/scheduled-actions/{id}/template/activate"),
+    // A webhook URL lets anyone start the routine later.
+    ("POST", "/scheduled-actions/{id}/webhook"),
+    ("POST", "/scheduled-actions/webhooks/{token}"),
     ("POST", "/call/record/{id}/decline"),
     ("POST", "/call/ring-status/{id}/decline"),
     ("POST", "/call/record/{id}/join"),

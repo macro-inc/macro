@@ -104,7 +104,7 @@ impl TryFrom<PendingRow> for PendingEventRun {
 fn github_event(event: &EventReference) -> Option<&str> {
     match event.source() {
         EventSource::Github(delivery) => Some(delivery.event.as_str()),
-        EventSource::Entity { .. } => None,
+        EventSource::Entity { .. } | EventSource::Webhook(_) => None,
     }
 }
 
@@ -499,7 +499,7 @@ impl EventRunRepository for PgEventRunRepo {
             r#"
             UPDATE scheduled_action_event_run
             SET state = 'finished', finished_at = $3, outcome = $4, execution_record_id = $5,
-                event_context = event_context #- '{github,payload}'
+                event_context = event_context #- '{github,payload}' #- '{webhook,body}'
             WHERE action_id = $1 AND event_id = $2
             "#,
             run.key.action_id,
@@ -531,7 +531,7 @@ impl EventRunRepository for PgEventRunRepo {
         sqlx::query!(
             r#"
             UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4,
-                event_context = event_context #- '{github,payload}'
+                event_context = event_context #- '{github,payload}' #- '{webhook,body}'
             WHERE action_id = $1 AND event_id = $2 AND configuration_revision = $3 AND state = 'pending'
             "#,
             key.action_id,
@@ -565,7 +565,7 @@ impl EventRunRepository for PgEventRunRepo {
         let skipped = sqlx::query_scalar!(
             r#"
             UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4,
-                event_context = event_context #- '{github,payload}'
+                event_context = event_context #- '{github,payload}' #- '{webhook,body}'
             WHERE action_id = $1 AND event_id = $2 AND configuration_revision = $3 AND state = 'pending'
             RETURNING event_id
             "#,
@@ -640,7 +640,7 @@ impl EventRunRepository for PgEventRunRepo {
                 r#"
                 UPDATE scheduled_action_event_run r
                 SET state = 'finished', finished_at = $3,
-                    event_context = r.event_context #- '{github,payload}',
+                    event_context = r.event_context #- '{github,payload}' #- '{webhook,body}',
                     outcome = CASE WHEN r.state = 'started' THEN $4::jsonb
                         WHEN NOT a.enabled THEN $5::jsonb ELSE $6::jsonb END
                 FROM scheduled_action a

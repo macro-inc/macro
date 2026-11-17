@@ -78,6 +78,20 @@ A trigger is when the routine runs. The saved prompt does nothing until one fire
 - **Call started** — a call you start begins. The routine gets the call and who has joined.
 - **Call ended** — a call you joined ends. The routine gets the participants and the transcript.
 
+### Webhooks
+
+**Webhook received** runs when another app or script sends text to the routine's secret URL. Use it to hand Macro work from tools that can call a URL, such as a deploy script or a monitoring alert. The routine gets the text exactly as sent.
+
+After you add the trigger and the routine is saved, open the trigger and click **Create URL**. Copy the URL then: it is shown only once. Send text to it with a `POST` request, up to 64 KB:
+
+```bash
+curl -X POST 'https://gateway.macro.com/scheduled-action/scheduled-actions/webhooks/mrw_…' \
+  -H 'Content-Type: text/plain' \
+  --data 'Deploy to production failed'
+```
+
+Anyone with the URL can run the routine, so keep it secret. **New URL** replaces it and the old one stops working; **Delete URL** turns it off. If the text is JSON, **Only when the JSON body** runs the routine only when fields have the values you choose, such as `status` is `failed`. A paused routine, or one without a webhook trigger, refuses what is sent with `409`, and at most 20 deliveries wait to run at once.
+
 Message, mention, deletion, and task triggers can be limited to specific channels, documents, or tasks, or left open to everything you can access. Changes made by agents and bots do not fire triggers.
 
 ### Scheduled

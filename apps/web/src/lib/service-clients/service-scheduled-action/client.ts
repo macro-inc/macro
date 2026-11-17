@@ -56,6 +56,7 @@ import type {
   ActionConfigurationUpdate,
   CatalogEntry,
   CodeUpgrade,
+  CreatedRoutineWebhook,
   Draft,
   DraftJob,
   DraftRoutineRequest,
@@ -65,6 +66,7 @@ import type {
   RegenerationCooldown,
   RoutineSuggestions,
   RoutineTemplate,
+  RoutineWebhook,
   ScheduledAction,
   ScheduledActionResponse,
   SetScheduledActionEnabled,
@@ -82,6 +84,11 @@ export type RegenerateAnswer =
   | { kind: 'cooldown'; availableAt: string };
 
 const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
+
+/** The URL a routine's webhook token is POSTed to; the token is the whole credential. */
+export function routineWebhookUrl(token: string) {
+  return `${scheduledActionHost}/scheduled-actions/webhooks/${token}`;
+}
 
 function scheduledActionFetch(
   url: string,
@@ -296,6 +303,25 @@ export const scheduledActionClient = {
       `/scheduled-actions/${args.templateId}/template/activate`,
       { method: 'POST', body: JSON.stringify(args.body) }
     ),
+
+  /** The routine's webhook URL, without its token; NOT_FOUND when it has none. */
+  getWebhook: (scheduleId: string) =>
+    scheduledActionFetch<RoutineWebhook>(
+      `/scheduled-actions/${scheduleId}/webhook`,
+      { method: 'GET' }
+    ),
+
+  /** A new webhook URL for the routine; its token is shown only in this response. */
+  createWebhook: (scheduleId: string) =>
+    scheduledActionFetch<CreatedRoutineWebhook>(
+      `/scheduled-actions/${scheduleId}/webhook`,
+      { method: 'POST' }
+    ),
+
+  deleteWebhook: (scheduleId: string) =>
+    scheduledActionFetch(`/scheduled-actions/${scheduleId}/webhook`, {
+      method: 'DELETE',
+    }),
 
   /**
    * The caller's feed of suggestions. `timezone` is the IANA zone they are

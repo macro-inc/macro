@@ -92,9 +92,9 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     generated: 'suggestRoutine',
     checked: 'checkScheduledAction',
     listed: 'listScheduledActions listScheduledActionHistory listSuggestions',
-    read: 'getScheduledAction getScheduledActionTemplate reviewSuggestions reviewRoutineSuggestions',
-    created: 'createScheduledAction addSuggestion',
-    deleted: 'deleteScheduledAction',
+    read: 'getScheduledAction getScheduledActionTemplate reviewSuggestions reviewRoutineSuggestions getRoutineWebhook',
+    created: 'createScheduledAction addSuggestion createRoutineWebhook',
+    deleted: 'deleteScheduledAction deleteRoutineWebhook',
     edited:
       'updateScheduledAction detachScheduledAction rewriteSuggestion setScheduledActionAppearance',
     enabled: 'setScheduledActionEnabled activateScheduledActionTemplate',

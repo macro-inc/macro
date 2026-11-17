@@ -204,6 +204,7 @@ fn event_label(event: EventName, filter: &EventFilter) -> &'static str {
         EventName::CallStarted => "Call started",
         EventName::CallEnded => "Call ended",
         EventName::Github => "Any GitHub event",
+        EventName::Webhook => "Webhook received",
     }
 }
 

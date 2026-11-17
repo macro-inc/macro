@@ -295,6 +295,7 @@ export const propertiesBacklog =
   [] as const satisfies readonly (keyof PropertiesSdk)[];
 
 export const scheduledActionExcluded = [
+  'deliverRoutineWebhook', // Unauthenticated; callers POST to the URL createWebhook returns.
   'draftRoutine', // The routine editor's AI drafting; agents use CreateRoutine.
   'startRoutineDraftJob', // The routine editor's background drafting.
   'listRoutineDraftJobs', // The routine editor's background drafting.

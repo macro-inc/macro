@@ -22,7 +22,7 @@ use trigger_context::{
     CallSnapshot, CallStartedSnapshot, ChannelType, ContextAttachment, ContextMessage,
     ContextPerson, ContextThread, DiscussionContext, DiscussionSurface, DocumentSnapshot,
     EmailSnapshot, GithubDelivery, PullRequestChange, ReplyTarget, RoutineEvent, TaskSnapshot,
-    TranscriptLine,
+    TranscriptLine, WebhookRequest,
 };
 
 use super::{
@@ -89,6 +89,17 @@ pub(super) fn routine_event(
                 payload: delivery.payload,
             },
         }),
+        EventContent::Webhook(delivery) => match delivery.body {
+            Some(body) => Ok(RoutineEvent::Webhook {
+                request: WebhookRequest {
+                    body,
+                    content_type: delivery.content_type,
+                },
+            }),
+            None => Err(rootcause::report!(
+                "the webhook body is no longer available"
+            )),
+        },
     }
 }
 

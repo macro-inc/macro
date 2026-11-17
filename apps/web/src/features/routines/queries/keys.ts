@@ -26,6 +26,9 @@ export const scheduledActionKeys = createQueryKeys('scheduledAction', {
   template: (params: { scheduleId: string }) => ({
     queryKey: [params.scheduleId, 'template'],
   }),
+  webhook: (params: { scheduleId: string }) => ({
+    queryKey: [params.scheduleId, 'webhook'],
+  }),
   referenceAccess: (params: { itemId: string; itemType: string }) => ({
     queryKey: [params.itemId, params.itemType],
   }),

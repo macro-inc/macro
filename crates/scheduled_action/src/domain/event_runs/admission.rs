@@ -68,6 +68,27 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess> EventAdmissionService<R, A> {
     }
 }
 
+impl<R: EventRunRepository, A: CurrentOwnerAccess> EventAdmissionService<R, A> {
+    /// Admit a webhook delivery to the routine whose URL received it, and no
+    /// other. False when that routine doesn't take it now: paused, not
+    /// watching webhooks, or its payload tests fail.
+    pub async fn admit_webhook(&self, event: &EventReference) -> Result<bool, Report> {
+        let EventSource::Webhook(delivery) = event.source() else {
+            return Err(rootcause::report!(
+                "only webhook deliveries name their routine"
+            ));
+        };
+        let Some(configuration) = self
+            .repository
+            .current_configuration(delivery.routine_id)
+            .await?
+        else {
+            return Ok(false);
+        };
+        self.admit_candidate(configuration, event, None).await
+    }
+}
+
 impl<R: EventRunRepository, A: CurrentOwnerAccess> EventIngestion for EventAdmissionService<R, A> {
     async fn ingest(&self, incoming: &IncomingEvent) -> Result<EventIngestionResult, Report> {
         let event = match incoming.normalize() {
