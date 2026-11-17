@@ -580,8 +580,6 @@ export default {
       other: '{{count}} में से {{accepted}} आइटम अधूरे मार्क किए गए',
     },
     toastMarkNotDoneFailed: 'अधूरा मार्क नहीं किया जा सका',
-    toastThreadStaysDone: 'इस थ्रेड में कोई मैसेज नहीं आया है, इसलिए यह पूरा हुआ ही रहेगा',
-    toastThreadsStayDone: 'इन थ्रेड में कोई मैसेज नहीं आया है, इसलिए ये पूरे हुए ही रहेंगे',
     toastCountNotRestored: {
       one: '{{count}} आइटम वापस नहीं लाया जा सका।',
       other: '{{count}} आइटम वापस नहीं लाए जा सके।',

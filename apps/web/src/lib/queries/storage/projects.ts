@@ -1,7 +1,4 @@
 import { analytics } from '@app/lib/analytics';
-import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
-import { useUserId } from '@core/context/user';
-import { compareDateDesc } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   refetchHistory,
@@ -12,78 +9,16 @@ import { refetchSoupEntity } from '@queries/soup/cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { Project } from '@service-storage/generated/schemas/project';
-import { keepPreviousData, useMutation, useQuery } from '@tanstack/solid-query';
+import { useMutation } from '@tanstack/solid-query';
 import { v4 as uuidv4 } from 'uuid';
 import { queryClient } from '../client';
 import { refreshActiveGraphqlFoldersQueries } from './graphql-folders';
 import { storageKeys } from './keys';
 
-const PROJECTS_STALE_TIME = 5 * 60 * 1000;
-const PROJECTS_GC_TIME = 10 * 60 * 1000;
-
 type ProjectsQueryResponse = {
   projects: Project[];
   pending: Project[];
 };
-
-async function fetchProjects(): Promise<ProjectsQueryResponse> {
-  const [projectsResult, pendingResult] = await Promise.all([
-    storageServiceClient.projects.getAll(),
-    storageServiceClient.projects.getPending(),
-  ]);
-
-  const projects = projectsResult.isOk() ? projectsResult.value.data : [];
-  const pending = pendingResult.isOk() ? pendingResult.value.data : [];
-
-  return { projects, pending };
-}
-
-function projectsQueryOptions() {
-  return {
-    queryKey: storageKeys.projects.list.queryKey,
-    queryFn: fetchProjects,
-    staleTime: PROJECTS_STALE_TIME,
-    gcTime: PROJECTS_GC_TIME,
-  };
-}
-
-function sortProjects(projects: Project[]): Project[] {
-  return [...projects].sort((a, b) =>
-    compareDateDesc(a.createdAt, b.createdAt)
-  );
-}
-
-function filterByUserId(
-  projects: Project[],
-  userId: string | undefined
-): Project[] {
-  if (!userId) return projects;
-  return projects.filter((project) => project.userId === userId);
-}
-
-// Cached callbacks outlive the caller; only the resolved user id enters them.
-function projectsListQueryOptions(userId: string | undefined) {
-  return {
-    ...projectsQueryOptions(),
-    placeholderData: keepPreviousData,
-    select: (data: ProjectsQueryResponse): Project[] => {
-      const allProjects = [...data.projects, ...data.pending];
-      const sorted = sortProjects(allProjects);
-
-      if (!ENABLE_PROJECT_SHARING) {
-        return filterByUserId(sorted, userId);
-      }
-
-      return sorted;
-    },
-  };
-}
-
-export function useProjectsQuery() {
-  const userId = useUserId();
-
-  return useQuery(() => projectsListQueryOptions(userId()));
-}
 
 export function invalidateProjects() {
   return Promise.all([

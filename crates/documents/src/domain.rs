@@ -77,6 +77,10 @@ pub mod illustrator;
 #[cfg(feature = "ports")]
 pub mod ports;
 
+/// Trashing email attachments whose mail is gone.
+#[cfg(feature = "ports")]
+pub mod released_attachments;
+
 #[cfg(feature = "service")]
 pub mod service;
 
