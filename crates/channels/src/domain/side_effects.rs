@@ -389,21 +389,22 @@ where
                 has_attachments,
                 notification_policy,
             } => {
-                if notification_policy == PostMessageNotificationPolicy::Silent {
-                    return;
+                // A silent post skips only notifications; its mention events
+                // below still publish.
+                if notification_policy != PostMessageNotificationPolicy::Silent {
+                    let bot_profile = self.bot_profile_for_message(&message).await;
+                    self.send_message_posted_notifications(PostedMessageNotificationInputs {
+                        channel_id,
+                        metadata,
+                        participants,
+                        message,
+                        mentions,
+                        has_attachments,
+                        bot_profile,
+                        notification_policy,
+                    })
+                    .await;
                 }
-                let bot_profile = self.bot_profile_for_message(&message).await;
-                self.send_message_posted_notifications(PostedMessageNotificationInputs {
-                    channel_id,
-                    metadata,
-                    participants,
-                    message,
-                    mentions,
-                    has_attachments,
-                    bot_profile,
-                    notification_policy,
-                })
-                .await;
             }
             ChannelEvent::ReactionAdded {
                 channel_id,

@@ -10,17 +10,24 @@
 //! (`workflow_dispatch`). It is not part of `PR CI` and does not run on
 //! pushes to `main`: the stack is every service, built from the commit under
 //! test. A failure is a red run on that commit; nothing is reverted or
-//! blocked by it.
+//! blocked by it. Its last job tells the Macro Alerts channel when the sweep
+//! turns red, and when it passes again ([`email_e2e_alert`]).
 
 use gh_workflow::{
     Concurrency, Event, Expression, Job, Run, Schedule, Step, Use, Workflow, WorkflowDispatch,
 };
 
 use crate::workflows::{
-    code_check_cloud_storage, email_e2e, runners,
+    code_check_cloud_storage, email_e2e, email_e2e_alert, runners,
     steps::{self, FluentBuilder},
     vars, web_app_check_main,
 };
+
+/// The job that runs the tier.
+const TIER_JOB: &str = "email-e2e-full-stack";
+
+/// The artifact the tier uploads its coverage report as.
+const COVERAGE_REPORT: &str = "email-e2e-full-stack-coverage";
 
 /// The stack instance the job starts: its own Compose project and ports.
 const INSTANCE: &str = "email-e2e";
@@ -46,7 +53,11 @@ pub fn email_e2e_full_stack() -> Workflow {
             .workflow_dispatch(WorkflowDispatch::default()))
         .concurrency(concurrency())
         .map(vars::with_global_env)
-        .add_job("email-e2e-full-stack", tier())
+        .add_job(TIER_JOB, tier())
+        .add_job(
+            email_e2e_alert::JOB,
+            email_e2e_alert::job(&[TIER_JOB], COVERAGE_REPORT),
+        )
 }
 
 /// Every commit keeps its own result, per event.
@@ -79,7 +90,7 @@ fn tier() -> Job {
         .add_step(known_bugs())
         .add_step(ledger())
         .add_step(
-            steps::upload_artifact("email-e2e-full-stack-coverage", LEDGER)
+            steps::upload_artifact(COVERAGE_REPORT, LEDGER)
                 .add_with(("if-no-files-found", "ignore"))
                 .add_with(("retention-days", 30))
                 .if_condition(Expression::new("!cancelled()")),
