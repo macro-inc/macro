@@ -175,7 +175,9 @@ from one `GraphqlBot` record (`@queries/bots/graphql-bots`), so open views
 update without a reload or a refetch. Clients without the Soup GraphQL
 websocket take the same change from the gateway's `bot_profile_changed`
 message (`gateway-profile-bridge.ts`, removed once that websocket ships to
-everyone). To
+everyone). The `@` menu lists `mentionableBots`; other lists (channel bots,
+the invite picker, assignees, DM recipients) keep their REST source for which
+bots they show and read names and pictures from the same records. To
 check it, open the same channel in two windows, ask an agent in one to create
 an agent or change its own name or picture, and confirm the other window's `@`
 menu, chips and earlier messages follow, on desktop and at phone width.
