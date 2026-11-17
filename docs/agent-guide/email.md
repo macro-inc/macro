@@ -56,8 +56,10 @@ and `Reminders` (when reminders are enabled), followed by a **Library** section 
 order; `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
 `Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
 While the email list itself has focus, `Tab` moves browser focus instead; use
-`g i` or `g o`. Calendar mail remains available through the calendar filter and
-existing Calendar route. Mobile keeps its original tabs and order, including
+`g i` or `g o`. Leaving the search field (`Escape`, `ArrowDown`, `Enter`,
+or picking a recent search) hands the keyboard to the view, not the list,
+so `Tab` still switches tabs there. Calendar mail remains available through
+the calendar filter and existing Calendar route. Mobile keeps its original tabs and order, including
 separate Signal, Noise, and Calendar tabs, with `Focus` (flagged) first.
 The top of Signal shows a pinned **Learn how to use Macro Mail** row
 (`TutorialRow` from `features/video-tutorials`, shared by every block). No block shows a tutorial entry on a touch device (`isTouchDevice()`: phones,
@@ -131,11 +133,10 @@ place, even though its sort time falls back to the last real message, until
 the tab, filters, or sort change; only the badge and preview change back to
 that message. Check it on a reply draft in All: the row must not move.
 
-Star and mute feedback reports what happened to the write. With GraphQL Soup
-enabled, a star queued while offline toasts that it is waiting to sync (for
-example `Added to favorites, waiting to sync`) rather than confirming it. A REST
-star and a mute fail offline with an error toast and roll back instead of
-waiting for reconnect, so pressing them again works at once.
+Star and mute feedback reports what happened to the write. A star queued
+while offline toasts that it is waiting to sync (for example `Added to favorites,
+waiting to sync`) rather than confirming it. A mute fails offline with an error
+toast and rolls back instead of waiting for reconnect, so pressing it again works at once.
 
 Recipient fields turn complete addresses into chips when the typed or pasted
 text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
@@ -219,13 +220,12 @@ from `apps/web`.
 `Favorites`, directly below Inbox on desktop, lists starred Macro emails across
 Signal, Noise, and archived mail. It respects the selected inboxes and filters; search
 within the tab is also restricted to favorites. Removing a star removes the row
-from this view. The tab persists across reloads. With `enable-graphql-soup` on,
-the paginated GraphQL Soup query uses `favoritesOnly: true`. With the flag off,
-REST Soup uses `favorites_only: true`. Starring changes membership without
+from this view. The tab persists across reloads. The paginated
+GraphQL Soup query uses `favoritesOnly: true`. Starring changes membership without
 changing the list query. Text search still resolves favorite IDs for the search
 service. An empty favorites list shows `No favorite emails`.
 
-With `enable-email-focus` and `enable-graphql-soup` on, a `Focus` tab leads the
+With `enable-email-focus` on, a `Focus` tab leads the
 desktop Inbox tabs and the mobile pills. It lists inbox
 threads from the last 30 days that the email focus worker
 (`services/email_focus_worker`) classified as worth attention, including inboxes
@@ -412,7 +412,7 @@ filters, tab, inbox, or user resets admission. Check that unread mail is discove
 even after 100 newer read threads, then verify focus through Mark Read and refresh
 in both list and search, including with more than one loaded page.
 
-With GraphQL Soup enabled, **Mark read/unread** updates the normalized email row
+**Mark read/unread** updates the normalized email row
 optimistically. Permanent server errors roll it back; retryable transport failures
 can leave the action in the durable queue. Mark unread sends only the thread ID;
 the server resolves that inbox's UNREAD label and returns the canonical thread
@@ -425,7 +425,7 @@ continuation pages. Once replay commits (even after a reload), only those querie
 refresh from the server; they should not refetch over the optimistic state merely
 because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
-The GraphQL-disabled REST path is unchanged. With GraphQL enabled, archive-based
+Archive-based
 Mark Done, Mark Not Done, and Undo/Redo use `setEmailThreadArchived`: `inboxVisible`
 updates optimistically in the normalized cache, and each reversal is a distinct
 ordered queue entry. The server resolves the thread's owning/delegated inbox;
@@ -450,7 +450,7 @@ Threads without received mail hide Mark Not Done in the header, row, menu, and
 hotkeys. REST Soup rows lack that fact, so their row action stays and then says
 the thread stays done. Older sent-only threads still offer it until their
 metadata is next recomputed, and the server rejects it.
-With GraphQL Soup enabled, bulk Mark Not Done settles per email: a rejected
+Bulk Mark Not Done settles per email: a rejected
 sent-only/draft thread stays done, while successful and durably queued siblings
 remain restored. Only accepted
 threads get their notifications restored. Notification or list-refresh failures
@@ -466,11 +466,9 @@ thread again plus Home's unread presence, whose `unreadReminders` edge no cached
 write fills. Home's work-feed Done and Undo return no notification rows, so they
 still read every notification reader again. In the
 network panel one `e` in the Email view sends its two mutations and no `Soup`,
-`SoupNotifications` or `ChannelUnreadPresence` query. Verify the open-thread header too: with GraphQL enabled,
+`SoupNotifications` or `ChannelUnreadPresence` query. Verify the open-thread header too:
 Mark Not Done remains available for an archived received thread whose inbox timestamp is
 missing; the server decides whether its received-message history allows restoration.
-The REST path retains its timestamp preflight, whole-batch handling, notification
-ordering, and existing cache reconciliation.
 For optimistic mutation interface changes, delay the network response and verify
 that only the affected row's read/done indicator changes, with scroll position and
 unrelated rows retained. Quickly reverse the action, then reject the first request:
