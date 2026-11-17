@@ -241,7 +241,6 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
 export type NavItemGates = {
   showNotifications: boolean;
   showForYou: boolean;
-  showScheduling: boolean;
   showCalls: boolean;
   showReviews: boolean;
   showActivity: boolean;
@@ -258,7 +257,6 @@ export const isNavItemAvailable = (
 ): boolean => {
   if (item.id === 'notifications') return gates.showNotifications;
   if (item.id === 'for-you') return gates.showForYou;
-  if (item.id === 'booking-links') return gates.showScheduling;
   if (item.id === 'calls') return gates.showCalls;
   if (item.id === 'reviews') return gates.showReviews;
   if (item.id === 'activity') return gates.showActivity;

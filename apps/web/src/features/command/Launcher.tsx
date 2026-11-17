@@ -15,10 +15,7 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   enableAiEditor,
   enableCarouselCreateMenu,
-  enableDatabases,
   enableFigViewer,
-  enableForms,
-  enableProjects,
   enablePsdEditor,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
@@ -382,7 +379,6 @@ export function runCreateAction(
       });
       return;
     case 'initiative':
-      if (!isFeatureEnabled(enableProjects)) return;
       createComponent({
         componentId: 'project-compose',
         asPopover: true,
@@ -435,7 +431,6 @@ export function runCreateAction(
       });
       return;
     case 'database':
-      if (!isFeatureEnabled(enableDatabases)) return;
       createBlock({
         blockName: 'database',
         loading: true,
@@ -455,7 +450,6 @@ export function runCreateAction(
       }).catch(reportCreateBlockError);
       return;
     case 'form':
-      if (!isFeatureEnabled(enableForms)) return;
       createBlock({
         blockName: 'form',
         loading: true,
@@ -597,7 +591,6 @@ const createBlocks = (
     },
     keywords: ['new', 'make', 'add', 'database', 'table', 'db'],
     blockName: 'database',
-    enabled: () => isFeatureEnabled(enableDatabases),
     hotkeyToken: TOKENS.create.database,
     altHotkeyToken: TOKENS.create.databaseNewSplit,
     hotkey: 'l',
@@ -618,7 +611,6 @@ const createBlocks = (
     },
     keywords: ['new', 'make', 'add', 'form', 'survey', 'questionnaire', 'poll'],
     blockName: 'form',
-    enabled: () => isFeatureEnabled(enableForms),
     hotkeyToken: TOKENS.create.form,
     altHotkeyToken: TOKENS.create.formNewSplit,
     hotkey: 'q',
@@ -689,7 +681,6 @@ const createBlocks = (
     description: () => t('create.projectDescription'),
     keywords: ['new', 'make', 'add', 'project'],
     blockName: 'initiative',
-    enabled: () => isFeatureEnabled(enableProjects),
     hotkeyToken: TOKENS.create.initiative,
     hotkey: 'p',
     keyDownHandler: () => {
@@ -930,23 +921,17 @@ export function useCreateMenuBlocks(
   source: () => CreatableBlock[] | undefined = () => undefined
 ): Accessor<CreatableBlock[]> {
   const commands = useCreateCommands();
-  const projectsFlag = useFeatureFlag(enableProjects);
   // Subscribed to rather than left to the block's own `enabled`, which reads
   // PostHog without tracking it: this memo has no other reason to re-run, so a
   // flag that resolves after mount would leave the menu as it was until reload.
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const psdFlag = useFeatureFlag(enablePsdEditor);
   const figFlag = useFeatureFlag(enableFigViewer);
   const aiFlag = useFeatureFlag(enableAiEditor);
-  const formsFlag = useFeatureFlag(enableForms);
   return createMemo(() => {
-    databasesFlag();
     psdFlag();
     figFlag();
     aiFlag();
-    formsFlag();
     return (source() ?? commands).filter((block) => {
-      if (block.blockName === 'initiative') return projectsFlag().enabled;
       return block.enabled?.() ?? true;
     });
   });

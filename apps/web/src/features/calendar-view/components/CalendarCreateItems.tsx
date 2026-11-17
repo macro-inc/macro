@@ -3,11 +3,9 @@ import {
   bookingLinksSearch,
   bookingLinksSearchCodec,
 } from '@app/features/scheduling/booking-links-search';
-import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useNavigate as useSplitNavigate } from '@app/lib/split-router';
 import { bookingLinksRoute } from '@app/routes/routes';
-import { enableCalendarScheduling } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
@@ -55,31 +53,29 @@ export function CalendarCreateBookingLinkItem(props: CreateItemProps) {
   const navigate = useSplitNavigate();
 
   return (
-    <ShowFeatureFlag flag={enableCalendarScheduling}>
-      <CreateMenuItem
-        icon={LinkIcon}
-        title={t('create.bookingLinkLabel')}
-        description={t('create.guideBookingLink')}
-        closeOnSelect
-        onSelect={() => {
-          props.onSelect?.();
-          fireAndForget(
-            navigate(
-              { route: bookingLinksRoute },
-              {
-                search: {
-                  [bookingLinksSearch.namespace]:
-                    bookingLinksSearchCodec.serialize({
-                      ...bookingLinksSearch.defaults,
-                      createBookingLink: true,
-                    }),
-                },
-              }
-            ),
-            'scheduling'
-          );
-        }}
-      />
-    </ShowFeatureFlag>
+    <CreateMenuItem
+      icon={LinkIcon}
+      title={t('create.bookingLinkLabel')}
+      description={t('create.guideBookingLink')}
+      closeOnSelect
+      onSelect={() => {
+        props.onSelect?.();
+        fireAndForget(
+          navigate(
+            { route: bookingLinksRoute },
+            {
+              search: {
+                [bookingLinksSearch.namespace]:
+                  bookingLinksSearchCodec.serialize({
+                    ...bookingLinksSearch.defaults,
+                    createBookingLink: true,
+                  }),
+              },
+            }
+          ),
+          'scheduling'
+        );
+      }}
+    />
   );
 }

@@ -2,7 +2,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
-  enableCalendarScheduling,
   enablePasswords,
   enableTasksReviews,
   enableWhatsappLinked,
@@ -153,7 +152,6 @@ export const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
 
 export function useMobileDockViews() {
   const reviews = useFeatureFlag(enableTasksReviews);
-  const scheduling = useFeatureFlag(enableCalendarScheduling);
   const passwords = useFeatureFlag(enablePasswords);
   const team = useCurrentTeamQuery(() => passwords().enabled);
   const passwordsAvailable = () =>
@@ -163,7 +161,6 @@ export function useMobileDockViews() {
     MOBILE_DOCK_VIEWS.filter(
       (view) => view.id !== 'reviews' || reviews().enabled
     )
-      .filter((view) => view.id !== 'booking-links' || scheduling().enabled)
       .filter((view) => view.id !== 'passwords' || passwordsAvailable())
       .filter((view) => view.id !== 'external' || external().enabled)
   );

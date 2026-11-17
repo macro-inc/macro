@@ -112,7 +112,6 @@ import {
   setCreateMenuOpen,
   useCreateAction,
   useCreateCommands,
-  useCreateMenuBlocks,
 } from './Launcher';
 
 beforeEach(() => {
@@ -151,50 +150,6 @@ afterEach(() => {
   cleanup();
   setCreateMenuOpen(false, false);
   vi.clearAllMocks();
-});
-
-it.each([false, undefined])(
-  'blocks Project shortcuts and imperative creation while the flag is %s',
-  (enabled) => {
-    host.projectFlag = () => enabled;
-    const project = CREATABLE_BLOCKS.find(
-      (item) => item.blockName === 'initiative'
-    );
-    expect(project?.enabled?.()).toBe(false);
-    project?.keyDownHandler();
-    runCreateAction('initiative');
-    expect(host.popoverSplit).not.toHaveBeenCalled();
-  }
-);
-
-it('reactively adds and removes Project while retaining Task and Folder', () => {
-  const [enabled, setEnabled] = createSignal<boolean | undefined>(undefined);
-  host.projectFlag = enabled;
-  const Menu = () => {
-    const blocks = useCreateMenuBlocks();
-    return (
-      <div>
-        {blocks()
-          .map((item) => item.label)
-          .join(', ')}
-      </div>
-    );
-  };
-  const view = render(() => (
-    <CreateContextProvider focusedPaneId={() => undefined}>
-      <MemoryRouter>
-        <Route path="/" component={Menu} />
-      </MemoryRouter>
-    </CreateContextProvider>
-  ));
-  expect(view.container.textContent).not.toContain('Project');
-  expect(view.container.textContent).toContain('Task');
-  expect(view.container.textContent).toContain('Folder');
-  setEnabled(true);
-  expect(view.container.textContent).toContain('Project');
-  setEnabled(false);
-  expect(view.container.textContent).not.toContain('Project');
-  expect(view.container.textContent).toContain('Folder');
 });
 
 it('offers Project in the shared create menu and opens its native composer', () => {

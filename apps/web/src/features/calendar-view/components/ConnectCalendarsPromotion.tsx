@@ -3,11 +3,8 @@ import { CALENDAR_ACCOUNTS_PROMOTION as COPY } from '@app/features/sidebar-promo
 import { createLastKnown } from '@app/features/sidebar-promotion/primitives/last-known';
 import {
   allOf,
-  flagVerdict,
   SidebarPromotion,
 } from '@app/features/sidebar-promotion/sidebar-promotion';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableSidebarPromotions } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -40,7 +37,6 @@ type CardState = z.infer<typeof cardStateSchema>;
  * the calendar settings menu.
  */
 export function ConnectCalendarsPromotion(props: { class?: string }) {
-  const promotions = useFeatureFlag(enableSidebarPromotions);
   const accounts = useLoadedCalendarAccounts();
   const userId = useUserId();
   const startAddInbox = useAddInboxFlow();
@@ -100,10 +96,7 @@ export function ConnectCalendarsPromotion(props: { class?: string }) {
   return (
     <SidebarPromotion
       id={COPY.id}
-      applies={allOf(
-        flagVerdict(promotions()),
-        state() === undefined ? undefined : !state()?.satisfied
-      )}
+      applies={allOf(state() === undefined ? undefined : !state()?.satisfied)}
       logos={COPY.logos}
       headline={COPY.headline}
       pitch={COPY.pitch}

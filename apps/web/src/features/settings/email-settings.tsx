@@ -1,6 +1,4 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
-import { enableEmailReadReceipts } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
@@ -20,7 +18,6 @@ import {
 import { SignatureSection } from './SignatureSection';
 
 export function EmailSettings() {
-  const readReceipts = useFeatureFlag(enableEmailReadReceipts);
   const { openSettings } = useSettingsState();
   const isAvailable = useSettingsTabAvailable();
   return (
@@ -56,22 +53,20 @@ export function EmailSettings() {
           <EmailSignatures />
         </Suspense>
       </SettingsSection>
-      <Show when={readReceipts().enabled}>
-        <SettingsSection
-          title="Read receipts"
-          description="See when recipients open messages you send."
+      <SettingsSection
+        title="Read receipts"
+        description="See when recipients open messages you send."
+      >
+        <Suspense
+          fallback={
+            <p role="status" class="text-sm text-ink-muted">
+              Loading accounts…
+            </p>
+          }
         >
-          <Suspense
-            fallback={
-              <p role="status" class="text-sm text-ink-muted">
-                Loading accounts…
-              </p>
-            }
-          >
-            <EmailReadReceipts />
-          </Suspense>
-        </SettingsSection>
-      </Show>
+          <EmailReadReceipts />
+        </Suspense>
+      </SettingsSection>
       <Show when={isAvailable('Notifications') || isAvailable('Calendar')}>
         <SettingsSection title="Related settings">
           <SettingsCard>

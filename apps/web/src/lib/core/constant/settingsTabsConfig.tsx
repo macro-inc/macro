@@ -31,12 +31,10 @@ import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
 import { isPlatform } from '../util/platform';
 import {
-  botManagement,
   DEV_MODE_ENV,
   desktopApp,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_EMAIL,
-  enableCalendarScheduling,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -356,8 +354,6 @@ export const settingsSlugToTab = (
  * surface a tab the panel won't render.
  */
 export const useSettingsTabAvailable = () => {
-  const calendarSchedulingFlag = useFeatureFlag(enableCalendarScheduling);
-  const botManagementFlag = useFeatureFlag(botManagement);
   const desktopAppFlag = useFeatureFlag(desktopApp);
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
@@ -372,7 +368,7 @@ export const useSettingsTabAvailable = () => {
       case 'Email':
         return ENABLE_EMAIL;
       case 'Calendar':
-        return calendarSchedulingFlag().enabled;
+        return true;
       // Issuing and copying a key is desk work, and the mobile sheet has no
       // good place for a one-time secret.
       case 'API Keys':
@@ -406,7 +402,7 @@ export const useSettingsTabAvailable = () => {
       case 'Routines':
         return isTouchDevice();
       case 'Bots':
-        return botManagementFlag().enabled;
+        return true;
       case 'Mobile':
         return isNativeMobilePlatform() && DEV_MODE_ENV;
       case 'Admin':

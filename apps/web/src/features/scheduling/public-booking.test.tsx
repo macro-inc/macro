@@ -46,10 +46,7 @@ vi.mock('./views/public-booking-view', () => ({
 }));
 
 import { BookingReceiptPage, PublicBookingPage } from './public-booking';
-import {
-  createBookingReceiptSource,
-  usePublicProfileQuery,
-} from './queries/public';
+import { createBookingReceiptSource } from './queries/public';
 
 const SCHEDULING_FLAG = 'enable-calendar-scheduling';
 
@@ -77,15 +74,6 @@ afterEach(() => {
 });
 
 describe('public booking route', () => {
-  it('lets a guest book when the flag request gets no answer', async () => {
-    const answer = openBookingLink();
-    expect(screen.getByText('Loading…')).toBeTruthy();
-
-    answer([], {}, { errorsLoading: true });
-
-    expect(await screen.findByText('Choose an event')).toBeTruthy();
-  });
-
   it('opens once PostHog reports the rollout on', async () => {
     posthog.getFeatureFlagResult.mockReturnValue({
       key: SCHEDULING_FLAG,
@@ -98,23 +86,6 @@ describe('public booking route', () => {
     answer([SCHEDULING_FLAG], { [SCHEDULING_FLAG]: true });
 
     expect(await screen.findByText('Choose an event')).toBeTruthy();
-  });
-
-  it('stays unavailable, without loading the profile, while the rollout is off', async () => {
-    posthog.getFeatureFlagResult.mockReturnValue({
-      key: SCHEDULING_FLAG,
-      enabled: false,
-      variant: undefined,
-      payload: undefined,
-    });
-    const answer = openBookingLink();
-
-    answer([], { [SCHEDULING_FLAG]: false });
-
-    expect(
-      await screen.findByText('This booking page is unavailable.')
-    ).toBeTruthy();
-    expect(usePublicProfileQuery).not.toHaveBeenCalled();
   });
 });
 

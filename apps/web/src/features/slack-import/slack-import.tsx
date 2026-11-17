@@ -3,8 +3,6 @@ import {
   IntegrationRow,
   SettingsSurface,
 } from '@app/features/settings/primitives';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableSlackArchiveImport } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
@@ -40,9 +38,8 @@ type Props = {
 };
 
 export function SlackImport(props: Props): JSX.Element {
-  const flag = useFeatureFlag(enableSlackArchiveImport);
   return (
-    <Show when={props.isAdmin && flag().enabled}>
+    <Show when={props.isAdmin}>
       <Show when={props.teamId} keyed>
         {(teamId) => (
           <Suspense

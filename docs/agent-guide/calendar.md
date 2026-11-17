@@ -183,15 +183,6 @@ While an event response saves, a small spinner appears beside `Going?` within
 the RSVP footer on desktop and mobile; the row and buttons stay in place.
 Failures appear below the buttons inside the padded footer and allow retrying.
 
-Calendar scheduling is on by default in dev. Production uses the PostHog flag
-`enable-calendar-scheduling` and stays off unless enabled remotely. Set
-`VITE_ENABLE_CALENDAR_SCHEDULING=false` to test the disabled state locally.
-While off, the Scheduling workspace and calendar booking shortcuts are hidden;
-public booking and receipt links show an unavailable page without fetching
-scheduling data. When enabling a production rollout, include anonymous visitors
-so invitees can open those links. A public booking link stays available when
-the flag request gets no answer, for example when a browser blocks it.
-
 Calendar connections live in **Settings → Calendar** (`/app/settings/calendar`).
 Connected calendars offers Connect account (pick Gmail or Outlook / Microsoft 365,
 then consent; Outlook is offered only to accounts with the `enable-outlook` flag,

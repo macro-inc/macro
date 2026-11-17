@@ -112,16 +112,16 @@ describe('Slack import production boundary', () => {
     expect(host.openSettings).toHaveBeenCalledWith('Connected');
   });
 
-  it.each([
-    { isAdmin: false, enabled: true },
-    { isAdmin: true, enabled: false },
-  ])('mounts no queries for $isAdmin admin / $enabled flag', (gate) => {
-    host.enabled = gate.enabled;
-    render(() => <SlackImport teamId="team" isAdmin={gate.isAdmin} />);
-    expect(screen.queryByText('Mounted import')).toBeNull();
-    expect(host.channels).not.toHaveBeenCalled();
-    expect(host.createSource).not.toHaveBeenCalled();
-  });
+  it.each([{ isAdmin: false, enabled: true }])(
+    'mounts no queries for $isAdmin admin / $enabled flag',
+    (gate) => {
+      host.enabled = gate.enabled;
+      render(() => <SlackImport teamId="team" isAdmin={gate.isAdmin} />);
+      expect(screen.queryByText('Mounted import')).toBeNull();
+      expect(host.channels).not.toHaveBeenCalled();
+      expect(host.createSource).not.toHaveBeenCalled();
+    }
+  );
 
   it('remounts on team changes, unmounts on role revocation and wires all completion refreshes', async () => {
     const [admin, setAdmin] = createSignal(true);

@@ -4,7 +4,6 @@ import { useSuggestionsFlag } from '@app/features/suggestions/use-suggestions-fl
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_CALLS,
-  enableCalendarScheduling,
   enablePasswords,
   enableTasksReviews,
   enableWhatsappLinked,
@@ -22,7 +21,6 @@ import { useSidebarPrefs } from './use-sidebar-prefs';
 export function useNavItemGates(): Accessor<NavItemGates> {
   const notifications = useUnifiedNotificationsFlag();
   const suggestions = useSuggestionsFlag();
-  const scheduling = useFeatureFlag(enableCalendarScheduling);
   const reviews = useFeatureFlag(enableTasksReviews);
   const activity = useActivityFeedFlag();
   const passwords = useFeatureFlag(enablePasswords);
@@ -33,7 +31,6 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   return createMemo(() => ({
     showNotifications: notifications(),
     showForYou: suggestions(),
-    showScheduling: scheduling().enabled,
     showCalls: ENABLE_CALLS,
     showReviews: reviews().enabled,
     showActivity: activity(),

@@ -12,8 +12,7 @@ Deleted or replaced scratch databases fail the old import instead of silently
 continuing with incomplete history; its cleanup must leave a replacement intact.
 
 In **Integrations → Accounts**, the **Slack export** row appears only for team admins
-and owners with `enable-slack-archive-import` enabled. Production rollout stays
-off until explicitly enabled. Select an export ZIP, filter the grouped conversation
+and owners. Select an export ZIP, filter the grouped conversation
 picker, optionally show archived conversations, and use Space to toggle focused
 checkboxes. **Select all visible conversations** preserves selections hidden by
 filters; unchecking it or **Clear visible selection** clears only visible selections.
@@ -124,7 +123,7 @@ under that action, including the account catalog's durable refresh.
 
 ### Email read receipts
 
-Behind `enable-email-read-receipts` (on in dev), **Settings → Email → Read
+**Settings → Email → Read
 receipts** lists each owned inbox with a switch that saves immediately. It is
 on by default, and the section's only copy is "See when recipients open
 messages you send." Messages sent from an inbox with it on carry an invisible
@@ -537,12 +536,8 @@ language has loaded, PostHog stores it on the person as `interface_language`
 Existing settings URLs remain valid; `connections` still opens Integrations,
 `agent-connections` aliases Integrations, and `harness` aliases Machines (tab id `Harness`, slug `runtimes`).
 
-`Usage` appears directly above Billing, including for Free accounts. In
-production, the `enable-ai-usage-billing` PostHog flag controls activation. While
-it is off or loading, the page shows **AI billing changes take effect on October
-8, 2026.** and all Usage controls are disabled. Turning the flag on activates the
-page and removes the announcement. Dev and local remain interactive even with
-the flag off. The production usage-limit dialog follows the same flag. Its
+`Usage` appears directly above Billing, including for Free accounts. The
+usage-limit dialog's
 **Monthly limit** meter displays a percentage using the backend's current-period
 usage and allowance. The info button explains AI agent chat and AI document
 editing. **Usage Credits** shows the dollar balance and `Add more`, which opens
@@ -663,8 +658,7 @@ users keep their current plan. Cards appear only for users who can
 manage their subscription. Team-paid members see no plan options, including
 on Free seats. Member options stay hidden until the billing summary confirms
 they pay for their own seat. On a team, a plan change moves only the viewer's
-own seat. Max lists "10x more AI usage than Pro"; Free and Pro allowance labels
-still follow the `enable-ai-usage-billing` flag. Usage controls live in Usage.
+own seat. Max lists "10x more AI usage than Pro". Usage controls live in Usage.
 The upgrade modal and Billing use the same plan cards and benefits, including
 the same flag-gated AI usage label and responsive card layout. The modal offers
 Pro and Max to Free accounts, only Max to Pro accounts, and no upgrade cards to

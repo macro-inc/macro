@@ -1,7 +1,5 @@
 import { requestBotDetail } from '@app/features/channel/Bots/botSettingsState';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type { UserCardAction } from '@core/component/userCardActions';
-import { botManagement } from '@core/constant/featureFlags';
 import { isBotPrincipalId, isMacroAgentId } from '@core/constant/macroAgent';
 import { isMacroNewId } from '@core/constant/macroNew';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -28,14 +26,13 @@ type BotSettingsDestination =
 export function createBotSettingsUserCardAction(
   principalId: Accessor<string | undefined>
 ): Accessor<UserCardAction | undefined> {
-  const botsFlag = useFeatureFlag(botManagement);
   const { openSettings } = useSettingsState();
   const currentUserId = useUserId();
   const isBot = () => isBotPrincipalId(principalId());
   // Only a bot's card needs these lists, so a person's card never fetches
   // them. Guarded reads: an unguarded `data` suspends the card.
   const agentsQuery = useAgentsQuery(isBot);
-  const botsQuery = useBotsQuery(() => isBot() && botsFlag().enabled);
+  const botsQuery = useBotsQuery(isBot);
   const currentTeamQuery = useCurrentTeamQuery(isBot);
 
   const destination = (): BotSettingsDestination | undefined => {
@@ -57,8 +54,7 @@ export function createBotSettingsUserCardAction(
         : undefined;
     }
 
-    const bots =
-      botsFlag().enabled && botsQuery.isSuccess ? botsQuery.data : [];
+    const bots = botsQuery.isSuccess ? botsQuery.data : [];
     if (bots.some((bot) => bot.id === botId)) return { type: 'bot', botId };
     return undefined;
   };

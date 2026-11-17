@@ -1,12 +1,8 @@
 import {
-  allOf,
-  flagVerdict,
   type PromoAction,
   SidebarPromotion,
   type Verdict,
 } from '@app/features/sidebar-promotion/sidebar-promotion';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableSidebarPromotions } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { createSignal, type JSX, Show, Suspense } from 'solid-js';
@@ -35,12 +31,8 @@ export function ConnectorImportSidebar(props: {
   alternatives?: readonly ImportAlternative[];
   class?: string;
 }): JSX.Element {
-  const flag = useFeatureFlag(enableSidebarPromotions);
   return (
-    <ConnectorImportPromotion
-      {...props}
-      applies={allOf(flagVerdict(flag()), props.applies ?? true)}
-    />
+    <ConnectorImportPromotion {...props} applies={props.applies ?? true} />
   );
 }
 

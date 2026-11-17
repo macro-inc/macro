@@ -1,9 +1,5 @@
 import { SlackImport } from '@app/features/slack-import/slack-import';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_EMAIL,
-  enableSlackArchiveImport,
-} from '@core/constant/featureFlags';
+import { ENABLE_EMAIL } from '@core/constant/featureFlags';
 import { useEmailLinks } from '@core/email-link';
 import { OutlookBetaBadge } from '@core/email-link/OutlookBetaBadge';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
@@ -239,11 +235,10 @@ export function useGithubItem(
 /** Slack export import for team admins, else the agent-led channel import. */
 function SlackImportAction() {
   const teams = useUserTeamsQuery();
-  const archiveImport = useFeatureFlag(enableSlackArchiveImport);
   const team = () => (teams.isSuccess ? teams.data[0] : undefined);
   return (
     <Show
-      when={archiveImport().enabled && team()}
+      when={team()}
       keyed
       fallback={<ImportAction appSlug="slack" name="Slack" />}
     >

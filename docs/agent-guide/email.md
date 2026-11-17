@@ -1115,7 +1115,7 @@ open shadow root: Playwright text locators can reach them, but a card's ordinary
 
 ### Read receipts
 
-With `enable-email-read-receipts` on and read receipts on for an inbox, which
+With read receipts on for an inbox, which
 is the default (see [Settings](settings.md#email-read-receipts)), messages sent from that
 inbox show **Opened** or **Not opened** beside the date in the expanded
 message header. The desktop tooltip and the expanded header details (tap the
@@ -1663,7 +1663,7 @@ Date-grouped email lists start directly with today's messages; Today is not show
 
 ## Saved email views
 
-Behind `enable-email-saved-views` (on in dev). A saved view is a named
+A saved view is a named
 `kind: "email"` definition in the shared saved-view store; opening it queries
 live mail with the viewer's access. See `docs/design/saved-views.md`.
 

@@ -1202,15 +1202,6 @@ describe('Quick Access source integration', () => {
     expect(list.items()).toHaveLength(1);
   });
 
-  it('does not search cached projects when Projects is disabled', () => {
-    mocks.projectsEnabled = () => false;
-    const list = setup((source) =>
-      source.useList({ buckets: ['initiative'], searchTerm: () => 'launch' })
-    );
-    expect(list.items()).toEqual([]);
-    expect(mocks.search).not.toHaveBeenCalled();
-  });
-
   it('merges CRM cache hits with the REST feed without duplicates', async () => {
     mocks.companies = [restCompany];
     mocks.search.mockResolvedValue({

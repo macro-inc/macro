@@ -45,7 +45,6 @@ function Modal() {
       gates={{
         showNotifications: false,
         showForYou: false,
-        showScheduling: true,
         showCalls: true,
         showReviews: true,
         showActivity: true,
