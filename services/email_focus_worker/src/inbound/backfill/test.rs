@@ -19,8 +19,11 @@ fn inbox(n: u128) -> FocusInboxOwner {
     }
 }
 
+/// Passes started, and each one's inbox number and pass.
+type Started = (Vec<(Waiting, Pass)>, Vec<(u128, Pass)>);
+
 /// Start every pass that may start, returning them and their inbox numbers.
-fn start(backfills: &mut Backfills) -> (Vec<(Waiting, Pass)>, Vec<(u128, Pass)>) {
+fn start(backfills: &mut Backfills) -> Started {
     let passes: Vec<_> = std::iter::from_fn(|| backfills.next()).collect();
     let started = passes
         .iter()
