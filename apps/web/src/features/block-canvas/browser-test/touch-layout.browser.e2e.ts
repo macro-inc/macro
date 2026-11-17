@@ -520,3 +520,39 @@ test('with the Text tool a pen keeps its press whichever of pen and palm lands f
   const stillThePensText = await textBeingEdited(page);
   expect(stillThePensText).toEqual(afterPalmFirst);
 });
+
+test('a long press on an item in a group offers to select it alone', async ({
+  page,
+}) => {
+  await page.clock.install();
+  const cdp = await page.context().newCDPSession(page);
+  // Group the fixture's two shapes, then let go of the group.
+  const group = await page.evaluate(() => {
+    const { editor, state } = window.canvasTouchFixture;
+    editor.selectMany(['filled', 'outline']);
+    state.group();
+    const [id] = editor.getSession().selectedIds;
+    editor.selectMany([]);
+    return id;
+  });
+  const shape = await filledShape(page);
+  const sheet = page.getByRole('dialog', { name: 'Canvas actions' });
+
+  await touch(cdp, 'touchStart', [shape]);
+  await page.clock.runFor(600);
+  await touch(cdp, 'touchEnd', []);
+  // The press selects the group, as a tap does.
+  expect((await canvas(page)).selectedIds).toEqual([group]);
+  await sheet.getByRole('button', { name: 'Select inside group' }).tap();
+
+  await expect(sheet).toBeHidden();
+  expect((await canvas(page)).selectedIds).toEqual(['filled']);
+
+  // More has no place the finger pressed, so it does not offer it.
+  await page.touchscreen.tap(shape.x, shape.y);
+  await page.getByRole('button', { name: 'More actions' }).tap();
+  await expect(sheet).toBeVisible();
+  await expect(
+    sheet.getByRole('button', { name: 'Select inside group' })
+  ).toHaveCount(0);
+});

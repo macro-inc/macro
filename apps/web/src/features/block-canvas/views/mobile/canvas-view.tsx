@@ -211,8 +211,23 @@ function MobileCanvasLayout() {
     return (point: { x: number; y: number }) => {
       hapticImpact('medium');
       view.selectAt(point.x, point.y, LONG_PRESS_REACH);
+      setPressedInside(itemInsideSelectedGroup(point));
       setActions('long-press');
     };
+  };
+  // The item a long press landed on, when it sits inside the group the press
+  // selected. A finger has no Cmd/Ctrl-click, so the sheet offers to select it.
+  const [pressedInside, setPressedInside] = createSignal<string>();
+  const itemInsideSelectedGroup = (point: { x: number; y: number }) => {
+    const world = view.worldPoint(point.x, point.y);
+    const item = editor.hitTest(world, true, LONG_PRESS_REACH);
+    const outermost = editor.hitTest(world, false, LONG_PRESS_REACH);
+    if (!item || !outermost || item === outermost) return undefined;
+    return state.session().selectedIds.includes(outermost) ? item : undefined;
+  };
+  const selectInside = () => {
+    const item = pressedInside();
+    return item ? () => editor.select(item) : undefined;
   };
 
   // Closing the keyboard ends a text edit: nothing else would, and the text
@@ -291,7 +306,10 @@ function MobileCanvasLayout() {
         styleOpen={styleOpen()}
         onStyle={toggleStyle}
         onView={() => setViewOpen(true)}
-        onMore={() => setActions('more')}
+        onMore={() => {
+          setPressedInside(undefined);
+          setActions('more');
+        }}
       />
       <MobileCanvasInspectorSheet
         open={isMobile() && sheetOpen() && hasSelection()}
@@ -324,6 +342,7 @@ function MobileCanvasLayout() {
         hasSelection={hasSelection()}
         canGroup={state.canGroup()}
         canUngroup={state.canUngroup()}
+        onSelectInside={selectInside()}
         onCut={() => fireAndForget(props.clipboard.cut(), 'canvas-clipboard')}
         onCopy={props.clipboard.copy}
         onPaste={() =>

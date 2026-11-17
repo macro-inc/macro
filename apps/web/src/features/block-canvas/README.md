@@ -140,7 +140,9 @@ clipboard, duplicate, select all, group, layer order and delete. Copy leaves the
 sheet open and confirms with a check, as copy actions do in other menus. A long press
 first selects what is under the finger, as a right-click does, and cancels
 whatever the press had started; `longPress` on the graphics input reports it,
-half a second in, if the finger has drifted no more than 10px.
+half a second in, if the finger has drifted no more than 10px. When the press
+landed on an item inside the group it selected, the sheet adds Select inside
+group, which selects that item alone: a finger has no Cmd/Ctrl-click.
 
 On a phone Style opens the inspector in a sheet over the lower half of the
 screen. Its scrim is clear, so the shape stays visible and a change shows as it
