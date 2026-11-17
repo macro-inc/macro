@@ -6,7 +6,7 @@ import {
   WebsocketEvent,
 } from '@macro-inc/collaboration/websocket';
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import { createEffect, createRoot, createSignal, onCleanup } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
 import { createSessionWebsocketTelemetry } from '../session-websocket-telemetry';
 
@@ -63,7 +63,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', handleVisibilityChange);
 }
 
-const _state = createWebsocketStateSignal(ws);
+const _state = createRoot(() => createWebsocketStateSignal(ws));
 
 type WebSocketJobConfig<T, R, D, U> = {
   // websocket request data

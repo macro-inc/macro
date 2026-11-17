@@ -15,12 +15,12 @@ function EvidenceLink(props: { href: string; children: JSX.Element }) {
   );
 }
 
-type TrustQuestion = { title: string; answer: JSX.Element };
+type TrustQuestion = { title: string; answer: () => JSX.Element };
 
 const GOOGLE_QUESTIONS: TrustQuestion[] = [
   {
     title: 'Why does Google ask for these permissions?',
-    answer: (
+    answer: () => (
       <>
         Gmail access lets Macro read, send, organize, and move messages to
         trash. Contacts help suggest recipients; mail settings support your
@@ -32,7 +32,7 @@ const GOOGLE_QUESTIONS: TrustQuestion[] = [
   },
   {
     title: 'Does Macro get my Google password?',
-    answer: (
+    answer: () => (
       <>
         No. You sign in and approve access on Google. Google gives Macro
         authorization for the permissions you approve; your Google password
@@ -42,7 +42,7 @@ const GOOGLE_QUESTIONS: TrustQuestion[] = [
   },
   {
     title: 'Is my email used to train AI?',
-    answer: (
+    answer: () => (
       <>
         Data received through Google Workspace APIs is not used to develop or
         train generalized AI models. Macro also maintains zero data retention
@@ -52,7 +52,7 @@ const GOOGLE_QUESTIONS: TrustQuestion[] = [
   },
   {
     title: 'How do I revoke access?',
-    answer: (
+    answer: () => (
       <>
         You can disconnect in Macro’s Settings or revoke access from your Google
         account. Revoking access and deleting data already stored in Macro are
@@ -71,7 +71,7 @@ const GOOGLE_QUESTIONS: TrustQuestion[] = [
 const MICROSOFT_QUESTIONS: TrustQuestion[] = [
   {
     title: 'What does Microsoft sign-in share with Macro?',
-    answer: (
+    answer: () => (
       <>
         Only your identity: your name, email address, and Microsoft account ID.
         Microsoft may describe this as signing you in, viewing your basic
@@ -82,7 +82,7 @@ const MICROSOFT_QUESTIONS: TrustQuestion[] = [
   },
   {
     title: 'Why does Outlook ask for more permissions?',
-    answer: (
+    answer: () => (
       <>
         After you sign in, Macro asks Microsoft separately for Outlook access.
         Mail access lets Macro read, send, and organize messages; contacts help
@@ -95,7 +95,7 @@ const MICROSOFT_QUESTIONS: TrustQuestion[] = [
   },
   {
     title: 'What if my organization needs an admin to approve Macro?',
-    answer: (
+    answer: () => (
       <>
         Some work and school accounts let only an administrator approve apps. If
         that stops Microsoft sign-in, continue with your email instead. If it
@@ -109,7 +109,7 @@ const MICROSOFT_QUESTIONS: TrustQuestion[] = [
 const SECURITY_QUESTIONS: TrustQuestion[] = [
   {
     title: 'What does zero data retention mean?',
-    answer: (
+    answer: () => (
       <>
         When you use an agent, information needed for your request is processed
         by its model provider. Our agreements with OpenAI and Anthropic provide
@@ -121,7 +121,7 @@ const SECURITY_QUESTIONS: TrustQuestion[] = [
   },
   {
     title: 'Who can access production data?',
-    answer: (
+    answer: () => (
       <>
         Production access is restricted to authorized engineering staff, and
         development runs in a separate environment. Personnel who process
@@ -131,7 +131,7 @@ const SECURITY_QUESTIONS: TrustQuestion[] = [
   },
   {
     title: 'Can my team review the security evidence?',
-    answer: (
+    answer: () => (
       <>
         Yes. Our security program includes SOC 2, ISO 27001, and Google CASA
         Tier 2, with external audits and penetration testing. Visit our{' '}
@@ -149,7 +149,7 @@ const SECURITY_QUESTIONS: TrustQuestion[] = [
   },
   {
     title: 'Is Macro open source?',
-    answer: (
+    answer: () => (
       <>
         Macro is open source: you can inspect our{' '}
         <EvidenceLink href="https://github.com/macro-inc/macro">
@@ -273,7 +273,7 @@ export function OnboardingTrustDetails(props: {
                   aria-hidden="true"
                 />
               </summary>
-              <p class="pb-6 pr-6 font-normal">{question.answer}</p>
+              <p class="pb-6 pr-6 font-normal">{question.answer()}</p>
             </details>
           )}
         </For>
