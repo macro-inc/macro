@@ -329,6 +329,12 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   harness's `POST /cognition/calendar/events/create-confirmed`
   (`CreateConfirmedCalendarEvent`, the SDK's `calendar.createConfirmed`),
   never an event the user has not seen.
+- The invite-guests route, and the update route when it changes
+  `attendees`, refuse an agent run (`is_agent_run`, 403
+  `confirmation_required`) unless `userConfirmation` quotes the user's
+  approval, since the calendar emails new guests. The quote is not stored.
+  A person in the app and an owner routine invite as before, and the copy
+  check still applies.
 - No provider field says whose calendar it is. An inbox syncs every calendar
   its account can see under its own address, and Google gives `accessRole`
   `owner` to anyone with manage rights, on a colleague's primary calendar too;

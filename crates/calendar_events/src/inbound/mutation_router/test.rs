@@ -270,9 +270,8 @@ fn code_execution() -> axum::http::HeaderMap {
 #[test]
 fn an_agent_program_cannot_invite_guests_without_the_users_approval() {
     let browser = axum::http::HeaderMap::new();
-    let refusal =
-        refuse_unconfirmed_program_invite(CredentialAttribution::Agent, &browser, None)
-            .unwrap_err();
+    let refusal = refuse_unconfirmed_program_invite(CredentialAttribution::Agent, &browser, None)
+        .unwrap_err();
     assert_eq!(refusal.status, StatusCode::FORBIDDEN);
     assert_eq!(
         refusal.code,
@@ -284,12 +283,8 @@ fn an_agent_program_cannot_invite_guests_without_the_users_approval() {
             .is_err()
     );
     assert!(
-        refuse_unconfirmed_program_invite(
-            CredentialAttribution::Agent,
-            &browser,
-            Some("  ")
-        )
-        .is_err()
+        refuse_unconfirmed_program_invite(CredentialAttribution::Agent, &browser, Some("  "))
+            .is_err()
     );
 }
 
