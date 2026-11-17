@@ -1,0 +1,24 @@
+apps/web/scripts/publish-web-assets.test.ts
+  s_358a0656ff17a9::t_f311dddb8352b7 36
+apps/web/scripts/retain-recent-builds.sh
+  s_358a0656ff17a9::t_f311dddb8352b7 55-58,64-66
+apps/web/scripts/retain-recent-builds.test.ts
+  s_358a0656ff17a9::t_f311dddb8352b7 24,138-145,319-349
+  s_358a0656ff17a9::t_9f8b2a9810bcec 350
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "170c632a791459211f93e442888c01ae5b7d04d8",
+  "prompts": {},
+  "sessions": {
+    "s_358a0656ff17a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "da35317f-151d-4c83-904b-8e1e317fd21e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
