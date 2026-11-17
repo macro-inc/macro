@@ -387,9 +387,9 @@ async fn enforce_signed_scope_request(
 }
 
 /// For a service no session scope may reach at all, such as one that fetches
-/// whatever its caller names: refuse every request whose credential signs a
-/// scope, a newer one included, before any handler runs. Requests with no
-/// Macro API token are the route's own to authenticate.
+/// whatever its caller names: refuse every request carrying a verified token
+/// that signs a scope, a newer one included, before any handler runs.
+/// Requests with no Macro API token are the route's own to authenticate.
 pub fn refuse_signed_scopes(
     state: State<JwtValidationArgs>,
     request: Request,
@@ -404,20 +404,23 @@ async fn refuse_signed_scopes_request(
     next: Next,
 ) -> Response {
     let (mut parts, body) = request.into_parts();
-    let token = verified_api_token(&mut parts, &jwt).await;
-    let scope = SignedScope::from_claim(
-        token
-            .as_ref()
-            .and_then(|token| token.agent_scope.as_deref()),
-    );
-    if scope != SignedScope::Unscoped {
-        tracing::warn!(
-            ?scope,
-            method = %parts.method,
-            agent_correlation_id = ?token.as_ref().and_then(|token| token.agent_correlation_id),
-            "refused a scoped credential at a service no scope reaches"
-        );
-        return CorrelationRejection(CorrelationError::OutOfScope).into_response();
+    let tokens = match verified_api_tokens(&mut parts, &jwt) {
+        Ok(tokens) => tokens,
+        Err(rejection) => return rejection.into_response(),
+    };
+    // Every verified token the request carries, so an unscoped one beside a
+    // scoped one gains nothing.
+    for token in tokens.authenticating.iter().chain(&tokens.others) {
+        let scope = SignedScope::from_claim(token.agent_scope.as_deref());
+        if scope != SignedScope::Unscoped {
+            tracing::warn!(
+                ?scope,
+                method = %parts.method,
+                agent_correlation_id = ?token.agent_correlation_id,
+                "refused a scoped credential at a service no scope reaches"
+            );
+            return CorrelationRejection(CorrelationError::OutOfScope).into_response();
+        }
     }
     next.run(Request::from_parts(parts, body)).await
 }
