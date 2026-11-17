@@ -27,7 +27,7 @@ use uuid::Uuid;
 use crate::inbox::{Inbox, Mail, MailAttachment, Provider, ProviderMessage};
 use crate::stack::Stack;
 use crate::user::User;
-use pool::Pool;
+use pool::{Pool, Taker};
 
 /// One stack and the users created in it, by address.
 struct Running {
@@ -43,7 +43,7 @@ type Stacks = Arc<Mutex<HashMap<String, Arc<Mutex<Running>>>>>;
 #[derive(Clone)]
 struct Server {
     stacks: Stacks,
-    pool: Arc<Pool>,
+    pool: Taker,
 }
 
 impl FromRef<Server> for Stacks {
@@ -102,10 +102,10 @@ impl IntoResponse for Failed {
 ///   panicked.
 pub async fn serve_stacks(listener: TcpListener) -> Result<(), Report> {
     let stacks = Stacks::default();
-    let pool = Arc::new(Pool::start(pool::size_from_env()));
+    let pool = Pool::start(pool::size_from_env());
     let server = Server {
         stacks: stacks.clone(),
-        pool: pool.clone(),
+        pool: pool.taker(),
     };
     let app = Router::new()
         .route("/stacks", post(start))
@@ -126,14 +126,12 @@ pub async fn serve_stacks(listener: TcpListener) -> Result<(), Report> {
         // Mail is delivered and seeded with its attachments in the JSON.
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .with_state(server);
-    axum::serve(listener, app)
+    let served = axum::serve(listener, app)
         .with_graceful_shutdown(stopped())
-        .await
-        .context("the stack server stopped")?;
-    // The router is gone, and its state with it.
-    if let Some(pool) = Arc::into_inner(pool) {
-        pool.finish().await;
-    }
+        .await;
+    // However the serving ended: the threads that start stacks would
+    // otherwise keep the process from exiting.
+    pool.finish().await;
     // Stacks of tests that died before finishing theirs: without this their
     // services, databases and queues would outlive the run.
     let left: Vec<_> = stacks.lock().await.drain().collect();
@@ -145,6 +143,7 @@ pub async fn serve_stacks(listener: TcpListener) -> Result<(), Report> {
             eprintln!("the stack {id} was left unfinished and did not end cleanly: {error}");
         }
     }
+    served.context("the stack server stopped")?;
     Ok(())
 }
 

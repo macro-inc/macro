@@ -24,8 +24,8 @@ Redis, an ElasticMQ and a Kafka broker in `EMAIL_E2E_*`), the repository's
 `bun install`, and Chromium (`bunx playwright install chromium`, or
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`). `EMAIL_E2E_BROWSER_WORKERS` sets how
 many tests run at once (4); each runs three services and a browser, and half
-as many stacks again wait started for the next tests (about 0.5 GB and 40
-Postgres connections each).
+as many stacks again wait started for the next tests (about 0.5 GB, 40
+Postgres connections and one Redis database each).
 
 ## How it works
 

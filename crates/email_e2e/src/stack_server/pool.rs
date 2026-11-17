@@ -84,6 +84,36 @@ impl Shared {
     }
 }
 
+/// What a route does with the pool. The pool itself stays with the server,
+/// which ends it whatever is still held of the routes' state.
+#[derive(Clone)]
+pub(super) struct Taker(Arc<Shared>);
+
+impl Taker {
+    /// A started stack, when one is ready; another is started in its place.
+    /// Its services may have died while it waited: the caller checks.
+    pub(super) fn take(&self) -> Option<Stack> {
+        let stack = self.0.ready().pop_front()?;
+        self.0.wanted.add_permits(1);
+        Some(stack)
+    }
+
+    /// Tells the pool that a test started a stack of its own because none
+    /// was ready: a place lost to a failed start is filled again.
+    pub(super) fn started_outside(&self) {
+        let regained = self
+            .0
+            .kept
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |kept| {
+                (kept < self.0.size).then_some(kept + 1)
+            })
+            .is_ok();
+        if regained {
+            self.0.wanted.add_permits(1);
+        }
+    }
+}
+
 /// The stacks kept started, and the threads that start them.
 pub(super) struct Pool {
     shared: Arc<Shared>,
@@ -112,27 +142,9 @@ impl Pool {
         Self { shared, fillers }
     }
 
-    /// A started stack, when one is ready; another is started in its place.
-    /// Its services may have died while it waited: the caller checks.
-    pub(super) fn take(&self) -> Option<Stack> {
-        let stack = self.shared.ready().pop_front()?;
-        self.shared.wanted.add_permits(1);
-        Some(stack)
-    }
-
-    /// Tells the pool that a test started a stack of its own because none
-    /// was ready: a place lost to a failed start is filled again.
-    pub(super) fn started_outside(&self) {
-        let regained = self
-            .shared
-            .kept
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |kept| {
-                (kept < self.shared.size).then_some(kept + 1)
-            })
-            .is_ok();
-        if regained {
-            self.shared.wanted.add_permits(1);
-        }
+    /// The routes' side of the pool.
+    pub(super) fn taker(&self) -> Taker {
+        Taker(self.shared.clone())
     }
 
     /// Stops starting stacks and ends those no test took.
