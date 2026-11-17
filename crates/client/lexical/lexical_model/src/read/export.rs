@@ -2,6 +2,14 @@
 use super::*;
 use serde_json::Value;
 
+/// Builtin keys a Loro writer stores as null on a text node when undefined
+/// (StateRef::storage_null_keys).
+pub const TEXT_STORAGE_NULL_KEYS: &[&str] = &["detail", "format", "mode", "style"];
+/// Builtin keys a Loro writer stores as null on a Paragraph when undefined
+/// (StateRef::storage_null_keys).
+pub const PARAGRAPH_STORAGE_NULL_KEYS: &[&str] =
+    &["direction", "indent", "textFormat", "textStyle"];
+
 /// Owned capacity for one node export and its nested NodeState object.
 /// Move it into `StateRef::export_json_reusing`; no previous content survives.
 #[derive(Default)]
@@ -106,12 +114,12 @@ impl StateRef<'_> {
             return &[];
         };
         match &slot.base {
-            BaseData::Text(_) => &["detail", "format", "mode", "style"],
+            BaseData::Text(_) => TEXT_STORAGE_NULL_KEYS,
             BaseData::Element(_) if self.is_root_or_shadow_root(key) => &[],
             BaseData::Element(_)
                 if self.state.registry.registered(slot.type_index).type_name == Paragraph::TYPE =>
             {
-                &["direction", "indent", "textFormat", "textStyle"]
+                PARAGRAPH_STORAGE_NULL_KEYS
             }
             // Other elements are unobserved; their null indent also reloads
             // differently (only exact Paragraph/Heading/Quote keep a raw null).

@@ -205,6 +205,65 @@ pub(crate) fn storage_null_keys<'policy>(
     }
     keys
 }
+/// storage_null_keys for a serialized node without a model view: the builtin text
+/// keys for the policy's text bases (ComparisonKind::Text), the builtin Paragraph
+/// keys for a Paragraph, and the policy's own-undefined fields for its type.
+fn storage_null_keys_json<'policy>(
+    node_type: &str,
+    policy: &'policy dyn SyncPolicy,
+) -> Vec<&'policy str> {
+    let mut keys: Vec<&str> = if policy.comparison_kind(node_type) == ComparisonKind::Text {
+        lexical_model::TEXT_STORAGE_NULL_KEYS.to_vec()
+    } else if node_type == <lexical_model::Paragraph as lexical_model::NodeType>::TYPE {
+        lexical_model::PARAGRAPH_STORAGE_NULL_KEYS.to_vec()
+    } else {
+        Vec::new()
+    };
+    for name in policy.own_undefined_fields(node_type) {
+        if !keys.contains(&name.as_str()) {
+            keys.push(name.as_str());
+        }
+    }
+    keys
+}
+/// A creator's exported node tree as a Source importer reads it back from Loro:
+/// Source's loroSyncState stores a storage-null key (storage_null_keys) the export
+/// left absent as null on creation (probes be8649fb, 1d9a47d4, 8672bafb), and every
+/// read then applies the policy's stored normalization (normalize_stored), as this
+/// crate's own Loro reads do. Present values the normalization does not own are
+/// kept exactly.
+pub fn read_back_storage_nulls(node: &mut Value, policy: &dyn SyncPolicy) -> Result<()> {
+    read_back_node(node, None, policy)
+}
+fn read_back_node(
+    node: &mut Value,
+    parent: Option<&SerializedNode>,
+    policy: &dyn SyncPolicy,
+) -> Result<()> {
+    let Some(object) = node.as_object_mut() else {
+        return Ok(());
+    };
+    let node_type = object
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    for name in storage_null_keys_json(&node_type, policy) {
+        object.entry(name).or_insert(Value::Null);
+    }
+    let mut children = object.remove("children");
+    normalize_stored(object, policy, || Ok(parent.cloned()))?;
+    if let Some(Value::Array(children)) = &mut children {
+        let own = object.clone();
+        for child in children {
+            read_back_node(child, Some(&own), policy)?;
+        }
+    }
+    if let Some(children) = children {
+        object.insert("children".to_owned(), children);
+    }
+    Ok(())
+}
 /// Store null for every storage-null key the export left absent; returns them.
 fn write_storage_nulls(
     view: StateRef<'_>,

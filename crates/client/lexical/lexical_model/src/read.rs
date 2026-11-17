@@ -1,7 +1,7 @@
 //! Borrowed views over committed and pending node maps.
 mod api;
 mod export;
-pub use export::JsonExportBuffer;
+pub use export::{JsonExportBuffer, PARAGRAPH_STORAGE_NULL_KEYS, TEXT_STORAGE_NULL_KEYS};
 mod record;
 pub use record::{NodeRecord, NodeRef};
 mod selection;
