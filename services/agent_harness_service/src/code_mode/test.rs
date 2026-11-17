@@ -169,6 +169,22 @@ fn concrete(path: &str) -> String {
         .join("/")
 }
 
+/// A routine's dry run reads anything the SDK reads, POST reads included,
+/// and is refused every SDK write.
+#[test]
+fn the_dry_run_scope_is_every_sdk_read_and_no_write() {
+    let scope = SessionScope::DryRun;
+    for (key, operation) in code_execution::domain::operations() {
+        assert_eq!(
+            scope.allows(&operation.method, &concrete(&operation.path)),
+            !operation.write,
+            "{key} ({} {})",
+            operation.method,
+            operation.path
+        );
+    }
+}
+
 /// The scope's list of POST reads covers every read the SDK sends as a POST,
 /// and the only writes it lets a generation session make are its own tools
 /// and creating an email draft.
@@ -545,7 +561,11 @@ fn every_sdk_host_holds_a_scoped_credential_to_its_scope() {
     for (key, operation) in code_execution::domain::operations() {
         let (service, _) = key.split_once('.').unwrap();
         if let ScopeEnforcement::NoMacroCredential = enforcement(host(service)) {
-            for scope in [SessionScope::Generation, SessionScope::NoSend] {
+            for scope in [
+                SessionScope::Generation,
+                SessionScope::NoSend,
+                SessionScope::DryRun,
+            ] {
                 assert!(
                     scope.allows(&operation.method, &concrete(&operation.path)),
                     "{key} ({} {}) is outside {scope:?} on a host that can't refuse it",

@@ -15,6 +15,10 @@ pub enum SessionScope {
     /// A background run whose suggestion sends and posts nothing: it may change
     /// the person's own items, but nothing that reaches anyone else.
     NoSend,
+    /// A routine step's dry run (a rewrite's check before it is saved): it
+    /// reads and changes nothing, so code written to get past the dry run
+    /// inside its process still can't write.
+    DryRun,
 }
 
 /// Requests that reach someone else: sending or scheduling mail, invites
@@ -244,6 +248,7 @@ impl SessionScope {
         match self {
             Self::Generation => "generation",
             Self::NoSend => "no_send",
+            Self::DryRun => "dry_run",
         }
     }
 
@@ -252,6 +257,7 @@ impl SessionScope {
         match name {
             "generation" => Some(Self::Generation),
             "no_send" => Some(Self::NoSend),
+            "dry_run" => Some(Self::DryRun),
             _ => None,
         }
     }
@@ -265,9 +271,10 @@ impl SessionScope {
     /// Whether a request with `method` to `path` is inside the scope. Reads
     /// by method are, unless the path runs writes too ([`ANY_WRITE`]). A
     /// generation session makes other requests only on its list or
-    /// [`POST_READS`]; a run that sends nothing makes any but the ones that
-    /// reach someone else. `path` may carry one service prefix before the
-    /// SDK's path. Credentials are not decided here: a scoped
+    /// [`POST_READS`], and a dry run only on [`POST_READS`]; a run that sends
+    /// nothing makes any but the ones that reach someone else. `path` may
+    /// carry one service prefix before the SDK's path. Credentials are not
+    /// decided here: a scoped
     /// credential is a `ScopedMacroApiJwt`, which `AccountHolderOrInternal`
     /// refuses on every route that issues one.
     pub fn allows(self, method: &str, path: &str) -> bool {
@@ -282,6 +289,7 @@ impl SessionScope {
                 listed(GENERATION_WRITES, method, path) || listed(POST_READS, method, path)
             }
             Self::NoSend => !listed(SENDS, method, path),
+            Self::DryRun => listed(POST_READS, method, path),
         }
     }
 
@@ -291,7 +299,7 @@ impl SessionScope {
     /// [`crate::context::refuse_sharing`], since a path can't tell.
     pub fn allows_sharing(self) -> bool {
         match self {
-            Self::Generation | Self::NoSend => false,
+            Self::Generation | Self::NoSend | Self::DryRun => false,
         }
     }
 }

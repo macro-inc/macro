@@ -247,7 +247,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   attributed to Macro acting for them, or, when the routine sets
   `dangerously_operate_as_user`, to the owner with no agent badge. Every such
   token carries the routine id, which the events its writes produce keep, so
-  they never start routines.
+  they never start routines. A dry run's token (a code upgrade's check of a
+  rewritten step, at run time or in the startup sweep) also signs the
+  `dry_run` scope (`routine_claims`), so every SDK host refuses its writes
+  even when code gets past the dry run inside its process.
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
   email_service's internal recent-messages route and the person's connected
