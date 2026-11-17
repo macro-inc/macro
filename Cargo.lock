@@ -24816,6 +24816,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-stream",
  "tokio-util",
+ "toml_edit 0.22.27",
  "tower 0.5.3",
  "tower-http",
  "tracing",
@@ -25029,6 +25030,18 @@ dependencies = [
  "toml 0.8.23",
  "uuid",
  "wiremock",
+]
+
+[[package]]
+name = "xtask_loro_vendor"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "quote",
+ "rootcause",
+ "syn 2.0.117",
+ "toml 0.8.23",
+ "workspace-hack",
 ]
 
 [[package]]

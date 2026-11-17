@@ -17610,6 +17610,10 @@
     "xtask_local_telemetry": [
       "tooling/xtask/crates/xtask_local_telemetry"
     ],
+    "xtask_loro_vendor": [
+      "crates/workspace-hack",
+      "tooling/xtask/crates/xtask_loro_vendor"
+    ],
     "xtask_nextest_filter": [
       "tooling/xtask/crates/xtask_graph",
       "tooling/xtask/crates/xtask_nextest_filter",
