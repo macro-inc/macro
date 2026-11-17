@@ -332,7 +332,9 @@ test('the circle marks a to-do done without opening anything', async ({
   ]);
 });
 
-test('earlier finished suggestions fold behind Logbook', async ({ page }) => {
+test('earlier finished suggestions fold behind the card’s last row', async ({
+  page,
+}) => {
   await page.goto('/');
   await page
     .getByRole('button', { name: 'Mark “Reply about the invoice” done' })
@@ -342,7 +344,7 @@ test('earlier finished suggestions fold behind Logbook', async ({ page }) => {
   await expect(row(page, 'suggestion-reply')).toBeVisible();
   await expect(row(page, 'suggestion-done')).toHaveCount(0);
 
-  await done.getByRole('button', { name: 'Logbook' }).click();
+  await done.getByRole('button', { name: '1 earlier today' }).click();
   await expect(row(page, 'suggestion-done')).toBeVisible();
 });
 

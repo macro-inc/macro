@@ -94,11 +94,12 @@ only, behind `enable-suggestions`.
   Running (`running` and `failed`) and Done today (`done`). A card with no
   row is not drawn. While something waits or runs, Done today shows the
   latest finished one and folds the earlier ones behind its footer's
-  Logbook button; with nothing waiting or running, a card says so and every
+  "N earlier today" button; with nothing waiting or running, a card says so and every
   finished one is listed. Refresh sits in the bar above the page
   (`ForYouRefresh`).
 - The cards are `Card variant="filled" depth={3}` and the rows `Item
-  size="sm"` with `border-0`, a medium `text-sm` title and one 13px line,
+  size="sm"` with `border-0`, a medium `text-sm` title and one dimmer 13px line
+  (`text-ink-extra-muted`),
   cut where the row ends so every row is the same height; pointing at a cut
   line shows all of it (`RowLine`).
   Don't give them local surfaces, borders, counts or descriptions beside

@@ -322,7 +322,7 @@ reads **Drafted by Macro**, links what else the suggestion cites, and offers
 **Rewrite**, which opens the agent composer with the thread mentioned and the
 request typed, unsent. A suggestion that is taken up or finished moves to
 **Done today**, which shows the latest one with its time; the earlier ones
-are behind **Logbook** in the card's footer, and pressing a finished row's
+are behind the card's last row, **N earlier today**, and pressing a finished row's
 text opens what it left. With nothing waiting or running, a card reads
 **You’re clear for today** above everything finished. The `x`
 (shown on hover or focus) dismisses at once and leaves the row in its card

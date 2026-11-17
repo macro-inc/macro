@@ -3,7 +3,6 @@ export default {
   suggestionsTitle: 'Suggestions',
   running: 'Running',
   doneToday: 'Done today',
-  logbook: 'Logbook',
   earlierToday: {
     other: '{{count}} earlier today',
   },

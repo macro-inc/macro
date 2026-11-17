@@ -151,7 +151,10 @@ function RowLine(props: {
     <Tooltip.Root>
       <Tooltip.Trigger as="span" class="flex min-w-0">
         <Item.Description
-          class={cn('truncate text-[13px] leading-[18px]', props.class)}
+          class={cn(
+            'truncate text-[13px] leading-[18px] text-ink-extra-muted',
+            props.class
+          )}
           onPointerEnter={(event) =>
             setCut(
               event.currentTarget.scrollWidth > event.currentTarget.clientWidth
@@ -346,7 +349,7 @@ export function ToDoRow(props: ToDoRowProps) {
           title={props.suggestion.title}
           onPress={props.onOpen}
         >
-          <Item.Description class="flex min-h-4.5 min-w-0 items-center gap-1.5 text-[13px] leading-[18px]">
+          <Item.Description class="flex min-h-4.5 min-w-0 items-center gap-1.5 text-[13px] leading-[18px] text-ink-extra-muted">
             <Show when={props.suggestion.about[0]} fallback={summary()}>
               {(target) => (
                 <props.parts.Source
@@ -431,7 +434,7 @@ export function DoneRow(props: { suggestion: Suggestion; onOpen(): void }) {
           onPress={props.onOpen}
         >
           <Show when={line()}>
-            <RowLine text={line()} class="text-ink-extra-muted">
+            <RowLine text={line()} class="text-ink-placeholder">
               {line()}
             </RowLine>
           </Show>

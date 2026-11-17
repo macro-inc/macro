@@ -2,8 +2,9 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { formatLocale, t } from '@app/lib/i18n';
 import { onElementConnect } from '@core/util/onElementConnect';
 import CheckCircleIcon from '@icon/system/fill/check-circle-fill.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Key } from '@solid-primitives/keyed';
-import { Button, Card, Item } from '@ui';
+import { Button, Card, cn, Item } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -154,11 +155,11 @@ export function ForYouView(props: {
       ![...macro(), ...toDo(), ...running()].some((entry) => !entry.dismissed));
   // While something still waits, only the latest finished one is in view;
   // the earlier ones fold away, unless one of them was asked for.
-  const [logbookOpen, setLogbookOpen] = createSignal(false);
+  const [earlierOpen, setEarlierOpen] = createSignal(false);
   const earlier = () => (clear() ? [] : done().slice(1));
   const folded = () =>
     earlier().length > 0 &&
-    !logbookOpen() &&
+    !earlierOpen() &&
     !earlier().some((entry) => entry.suggestion.id === props.focusedId);
   const doneShown = () => (folded() ? done().slice(0, 1) : done());
   const byId = (entry: FeedEntry) => entry.suggestion.id;
@@ -283,20 +284,24 @@ export function ForYouView(props: {
                 label={t('suggestions.doneToday')}
                 footer={
                   <Show when={earlier().length > 0}>
-                    <Card.Footer class="py-2 pr-2 pl-3">
-                      <Card.Metadata class="text-ink-placeholder">
-                        {t('suggestions.earlierToday', {
-                          count: earlier().length,
-                        })}
-                      </Card.Metadata>
+                    <Card.Footer class="p-1">
                       <Button
                         variant="ghost"
                         size="sm"
+                        class="w-full justify-between text-ink-extra-muted"
                         aria-expanded={!folded()}
-                        data-suggestions-logbook
-                        onClick={() => setLogbookOpen((open) => !open)}
+                        data-suggestions-earlier
+                        onClick={() => setEarlierOpen((open) => !open)}
                       >
-                        {t('suggestions.logbook')}
+                        {t('suggestions.earlierToday', {
+                          count: earlier().length,
+                        })}
+                        <CaretDownIcon
+                          class={cn(
+                            'size-3.5 transition-transform',
+                            !folded() && 'rotate-180'
+                          )}
+                        />
                       </Button>
                     </Card.Footer>
                   </Show>
