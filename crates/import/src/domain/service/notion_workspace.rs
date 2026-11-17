@@ -76,6 +76,21 @@ impl NotionConnections for NoNotionConnections {
 }
 
 impl NotionApi for NoNotionApi {
+    async fn list_views(
+        &self,
+        _scope: &import_notion::domain::views::ViewScope,
+        _cursor: Option<String>,
+    ) -> std::result::Result<Paged<NotionId>, NotionError> {
+        match *self {}
+    }
+
+    async fn retrieve_view(
+        &self,
+        _id: &NotionId,
+    ) -> std::result::Result<import_notion::domain::views::NotionView, NotionError> {
+        match *self {}
+    }
+
     async fn search(
         &self,
         _object: SearchObject,

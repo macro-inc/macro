@@ -35,6 +35,21 @@ struct FakeWorkspace {
 }
 
 impl NotionApi for FakeWorkspace {
+    async fn list_views(
+        &self,
+        _scope: &crate::domain::views::ViewScope,
+        _cursor: Option<String>,
+    ) -> std::result::Result<Paged<NotionId>, NotionError> {
+        Err(NotionError::NotFound)
+    }
+
+    async fn retrieve_view(
+        &self,
+        _id: &NotionId,
+    ) -> std::result::Result<crate::domain::views::NotionView, NotionError> {
+        Err(NotionError::NotFound)
+    }
+
     async fn search(
         &self,
         object: SearchObject,
@@ -370,6 +385,21 @@ async fn a_database_root_missing_from_search_is_expanded_into_its_data_sources()
     // sources are reachable by id.
     struct PartialSearch(FakeWorkspace);
     impl NotionApi for PartialSearch {
+        async fn list_views(
+            &self,
+            _scope: &crate::domain::views::ViewScope,
+            _cursor: Option<String>,
+        ) -> std::result::Result<Paged<NotionId>, NotionError> {
+            Err(NotionError::NotFound)
+        }
+
+        async fn retrieve_view(
+            &self,
+            _id: &NotionId,
+        ) -> std::result::Result<crate::domain::views::NotionView, NotionError> {
+            Err(NotionError::NotFound)
+        }
+
         async fn search(
             &self,
             object: SearchObject,

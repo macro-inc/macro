@@ -51,6 +51,21 @@ struct FakeNotion {
 }
 
 impl NotionApi for FakeNotion {
+    async fn list_views(
+        &self,
+        _scope: &import_notion::domain::views::ViewScope,
+        _cursor: Option<String>,
+    ) -> std::result::Result<Paged<NotionId>, NotionError> {
+        Err(NotionError::NotFound)
+    }
+
+    async fn retrieve_view(
+        &self,
+        _id: &NotionId,
+    ) -> std::result::Result<import_notion::domain::views::NotionView, NotionError> {
+        Err(NotionError::NotFound)
+    }
+
     async fn search(
         &self,
         _object: SearchObject,

@@ -20,6 +20,10 @@ maps a data source onto Macro database columns and cells
 - `src/domain/macro_cells.rs`: a data source's `ColumnPlan` (column kinds,
   options, UUIDv5 ids derived from the database), its column-create ops, and
   each row's `CellWrite`s.
+- `src/domain/views/`: Views API models and pure saved-view translation;
+  `bindings` uses the actual column plan, and `translate` returns a `NewView`
+  plus typed losses that the import report must surface. Unsupported filter
+  branches omit the entire filter, never a partial boolean expression.
 - `src/outbound/rest.rs`: requests, retries, pacing; `rest/wire.rs` maps
   Notion's wire shapes to the model.
 - `src/outbound/pipedream.rs`: reaching Notion through Pipedream's Connect
@@ -71,6 +75,19 @@ maps a data source onto Macro database columns and cells
   not empty: resolve linked views before declaring `EmptyContainer`. View
   selection and translation belong to the caller; a multi-source container
   retains every source, and a URL fragment never supplies the selected view.
+
+- Formula and rollup column names label their values as Notion snapshots.
+  Before planning columns, union `macro_cells::date_range_properties` from
+  the source rows with stable property ids used by timeline views, then call
+  `ColumnPlan::new_with_date_ranges` to preserve both date endpoints.
+- `NotionApi::list_views` returns paginated ids scoped by `ViewScope`; call
+  `retrieve_view` for each full configuration. Listing by source includes
+  linked views, whose `parent.database_id` may differ from the source owner.
+- Table columns preserve order/width; Macro has no table column-hiding setting.
+  Boards require single-select/single-person grouping; timelines require an
+  imported date-range column. Unsupported settings, computed filters/sorts,
+  relative dates, timestamp sorts, and separate timeline end columns are
+  reported as losses. The writer owns saved-view ids and name uniqueness.
 
 ## Related
 

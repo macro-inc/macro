@@ -18,6 +18,8 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{NotionApi, NotionError};
 
+use crate::domain::views::{NotionView, ViewScope};
+
 mod wire;
 
 use wire::{
@@ -82,6 +84,15 @@ pub enum NotionRead {
     },
     /// `GET /v1/databases/{id}`.
     Database(NotionId),
+    /// `GET /v1/views`, scoped to a database or data source.
+    ListViews {
+        /// Which container or source to list.
+        scope: ViewScope,
+        /// Pagination cursor.
+        cursor: Option<String>,
+    },
+    /// `GET /v1/views/{id}` with full saved configuration.
+    RetrieveView(NotionId),
     /// `GET /v1/users`, one page of members.
     Users {
         /// Where the previous page of members ended.
@@ -99,6 +110,8 @@ impl NotionRead {
             | Self::PageProperty { .. }
             | Self::DataSource(_)
             | Self::Database(_)
+            | Self::ListViews { .. }
+            | Self::RetrieveView(_)
             | Self::Users { .. } => Method::GET,
         }
     }
@@ -120,6 +133,14 @@ impl NotionRead {
             Self::DataSource(id) => format!("/v1/data_sources/{id}"),
             Self::QueryDataSource { id, .. } => format!("/v1/data_sources/{id}/query"),
             Self::Database(id) => format!("/v1/databases/{id}"),
+            Self::ListViews { scope, cursor } => {
+                let query = match scope {
+                    ViewScope::Database(id) => format!("database_id={id}"),
+                    ViewScope::DataSource(id) => format!("data_source_id={id}"),
+                };
+                with_cursor(format!("/v1/views?{query}&page_size={PAGE_SIZE}"), cursor)
+            }
+            Self::RetrieveView(id) => format!("/v1/views/{id}"),
             Self::Users { cursor } => {
                 with_cursor(format!("/v1/users?page_size={PAGE_SIZE}"), cursor)
             }
@@ -135,6 +156,8 @@ impl NotionRead {
             | Self::PageProperty { .. }
             | Self::DataSource(_)
             | Self::Database(_)
+            | Self::ListViews { .. }
+            | Self::RetrieveView(_)
             | Self::Users { .. } => None,
         }
     }
@@ -394,6 +417,41 @@ impl<Transport: NotionTransport> NotionApi for NotionRestClient<Transport> {
             .into_iter()
             .map(|source| source.id)
             .collect())
+    }
+
+    async fn list_views(
+        &self,
+        scope: &ViewScope,
+        cursor: Option<String>,
+    ) -> Result<Paged<NotionId>, NotionError> {
+        let list: WireList = self
+            .request(NotionRead::ListViews {
+                scope: scope.clone(),
+                cursor,
+            })
+            .await?;
+        if list.incomplete() || (list.has_more && list.next_cursor.is_none()) {
+            return Err(NotionError::Decode(
+                "view list is incomplete or missing its next cursor".to_owned(),
+            ));
+        }
+        let mut results = Vec::with_capacity(list.results.len());
+        for item in &list.results {
+            let id = item
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .and_then(NotionId::parse)
+                .ok_or_else(|| NotionError::Decode("view reference has no valid id".to_owned()))?;
+            results.push(id);
+        }
+        Ok(Paged {
+            results,
+            next_cursor: list.next(),
+        })
+    }
+
+    async fn retrieve_view(&self, id: &NotionId) -> Result<NotionView, NotionError> {
+        self.request(NotionRead::RetrieveView(id.clone())).await
     }
 
     /// Rows oldest first. Notion caps one query at 10,000 rows; past the cap

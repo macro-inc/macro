@@ -686,6 +686,11 @@ fn every_read() -> Vec<NotionRead> {
             body: json!({}),
         },
         NotionRead::Database(id.clone()),
+        NotionRead::ListViews {
+            scope: crate::domain::views::ViewScope::Database(id.clone()),
+            cursor: None,
+        },
+        NotionRead::RetrieveView(id.clone()),
         NotionRead::Users { cursor: None },
     ];
     for read in &reads {
@@ -697,6 +702,8 @@ fn every_read() -> Vec<NotionRead> {
             | NotionRead::DataSource(_)
             | NotionRead::QueryDataSource { .. }
             | NotionRead::Database(_)
+            | NotionRead::ListViews { .. }
+            | NotionRead::RetrieveView(_)
             | NotionRead::Users { .. } => {}
         }
     }
@@ -739,9 +746,144 @@ fn every_request_the_client_can_send_only_reads_notion() {
                 Method::GET,
                 "/v1/databases/598337872cf94fdf8782e53db20768a5".to_owned()
             ),
+            (Method::GET, "/v1/views?database_id=598337872cf94fdf8782e53db20768a5&page_size=100".to_owned()),
+            (Method::GET, "/v1/views/598337872cf94fdf8782e53db20768a5".to_owned()),
             (Method::GET, "/v1/users?page_size=100".to_owned()),
         ]
     );
+}
+
+// Synthetic Views API fixtures, Notion-Version 2026-03-11:
+// https://developers.notion.com/reference/list-views
+// https://developers.notion.com/reference/retrieve-a-view
+#[tokio::test(start_paused = true)]
+async fn views_list_references_by_container_or_source_and_retrieve_full_configuration() {
+    use crate::domain::views::ViewScope;
+    let transport = ScriptedTransport::new(vec![
+        ok(
+            json!({"object":"list", "type":"view", "view":{}, "has_more":true,
+            "next_cursor":"00000000-0000-4000-8000-000000000004",
+            "results":[{"object":"view", "id":"00000000-0000-4000-8000-000000000001"}]}),
+        ),
+        ok(
+            json!({"object":"list", "type":"view", "view":{}, "has_more":false, "next_cursor":null, "results":[]}),
+        ),
+        ok(
+            json!({"object":"view", "id":"00000000-0000-4000-8000-000000000001",
+            "name":"Open", "parent":{"type":"database_id", "database_id":"00000000-0000-4000-8000-000000000002"},
+            "data_source_id":"00000000-0000-4000-8000-000000000003", "type":"table",
+            "filter":{"property":"done", "checkbox":{"equals":false}}, "sorts":null, "configuration":null}),
+        ),
+    ]);
+    let client = NotionRestClient::new(
+        transport.clone(),
+        Arc::new(RequestPacer::new(Duration::ZERO)),
+    );
+    let database = NotionId::parse("00000000-0000-4000-8000-000000000002").unwrap();
+    let source = NotionId::parse("00000000-0000-4000-8000-000000000003").unwrap();
+    let list = client
+        .list_views(&ViewScope::Database(database), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        list.results,
+        vec![NotionId::parse("00000000-0000-4000-8000-000000000001").unwrap()]
+    );
+    assert!(
+        client
+            .list_views(&ViewScope::DataSource(source), list.next_cursor)
+            .await
+            .unwrap()
+            .results
+            .is_empty()
+    );
+    let view = client.retrieve_view(&list.results[0]).await.unwrap();
+    assert_eq!(
+        view.filter,
+        Some(json!({"property":"done", "checkbox":{"equals":false}}))
+    );
+    assert_eq!(
+        transport
+            .requests()
+            .iter()
+            .map(|r| r.path.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "/v1/views?database_id=00000000000040008000000000000002&page_size=100",
+            "/v1/views?data_source_id=00000000000040008000000000000003&page_size=100&start_cursor=00000000-0000-4000-8000-000000000004",
+            "/v1/views/00000000000040008000000000000001"
+        ]
+    );
+    assert!(
+        transport
+            .requests()
+            .iter()
+            .all(|r| r.method == Method::GET && r.body.is_none())
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn incomplete_view_lists_are_errors_and_view_reads_retry_and_preserve_access_errors() {
+    use crate::domain::views::ViewScope;
+    let id = NotionId::parse("00000000-0000-4000-8000-000000000001").unwrap();
+    let transport = ScriptedTransport::new(vec![
+        ok(
+            json!({"object":"list", "results":[], "has_more":false, "next_cursor":null, "request_status":{"type":"incomplete"}}),
+        ),
+        ok(json!({"object":"list", "results":[], "has_more":true, "next_cursor":null})),
+        TransportResponse {
+            status: StatusCode::TOO_MANY_REQUESTS,
+            retry_after: Some(Duration::from_secs(2)),
+            body: String::new(),
+        },
+        TransportResponse {
+            status: StatusCode::FORBIDDEN,
+            retry_after: None,
+            body: String::new(),
+        },
+        TransportResponse {
+            status: StatusCode::NOT_FOUND,
+            retry_after: None,
+            body: String::new(),
+        },
+    ]);
+    let client = NotionRestClient::new(
+        transport.clone(),
+        Arc::new(RequestPacer::new(Duration::ZERO)),
+    );
+    assert!(matches!(
+        client
+            .list_views(&ViewScope::Database(id.clone()), None)
+            .await,
+        Err(NotionError::Decode(_))
+    ));
+    assert!(matches!(
+        client
+            .list_views(&ViewScope::DataSource(id.clone()), None)
+            .await,
+        Err(NotionError::Decode(_))
+    ));
+    assert!(matches!(
+        client.retrieve_view(&id).await,
+        Err(NotionError::Forbidden)
+    ));
+    assert!(transport.requests()[3].after >= Duration::from_secs(2));
+    assert!(matches!(
+        client.retrieve_view(&id).await,
+        Err(NotionError::NotFound)
+    ));
+}
+
+#[tokio::test(start_paused = true)]
+async fn malformed_view_lists_cannot_be_mistaken_for_no_saved_views() {
+    use crate::domain::views::ViewScope;
+    let id = NotionId::parse("00000000-0000-4000-8000-000000000001").unwrap();
+    let transport = ScriptedTransport::new(vec![ok(json!({}))]);
+    let client = NotionRestClient::new(transport, Arc::new(RequestPacer::new(Duration::ZERO)));
+    assert!(matches!(
+        client.list_views(&ViewScope::Database(id), None).await,
+        Err(NotionError::Decode(_))
+    ));
 }
 
 #[tokio::test(start_paused = true)]
