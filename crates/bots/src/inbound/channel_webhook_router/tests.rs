@@ -1045,6 +1045,37 @@ async fn channel_webhook_router_refuses_an_unknown_notification_policy() {
 }
 
 #[tokio::test]
+async fn channel_webhook_router_refuses_malformed_json_that_names_a_policy() {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let token = "mbot_test_malformed_policy";
+    let service = TestBotService::for_preferred_webhook(channel_id, bot_id);
+    let poster = TestChannelPoster::new();
+    let authorizer = TestBotAuthorizer::authorized(token, None, bot_authentication(bot_id));
+    let request = webhook_request(channel_id)
+        .header(BOT_TOKEN_HEADER, token)
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+        .body(Body::from(
+            r#"{"content":"nightly sync done","notification_policy":"Silent",}"#,
+        ))
+        .unwrap();
+
+    let response = webhook_router_with_authorizer(service, poster.clone(), authorizer)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(
+        poster
+            .calls
+            .lock()
+            .expect("posted message mutex poisoned")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
 async fn channel_webhook_router_verified_acting_user_is_not_used_for_attribution() {
     let channel_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());

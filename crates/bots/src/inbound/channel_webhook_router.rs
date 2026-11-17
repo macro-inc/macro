@@ -355,9 +355,8 @@ fn parse_webhook_request(
         }
         // A body that asks for a policy must get it, never fall back to
         // posting itself as text with the default, which notifies everyone.
-        if serde_json::from_slice::<serde_json::Value>(&body)
-            .is_ok_and(|value| value.get("notification_policy").is_some())
-        {
+        // Look at the raw text, since a malformed body can't be parsed.
+        if std::str::from_utf8(&body).is_ok_and(|text| text.contains("\"notification_policy\"")) {
             return Err(ChannelBotWebhookHandlerErr::BadRequest(
                 "notification_policy must be Default, MentionsOnly or Silent, with content",
             ));
