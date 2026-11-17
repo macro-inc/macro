@@ -37,18 +37,13 @@ vi.mock('@service-storage/client', () => ({
     editDocument: mocks.edit,
     projects: {
       getProject: mocks.metadata,
-      edit: mocks.edit,
     },
   },
 }));
 vi.mock('@service-cognition/client', () => ({
   cognitionApiServiceClient: {
     getChat: mocks.metadata,
-    editChatProject: mocks.edit,
   },
-}));
-vi.mock('@service-email/client', () => ({
-  emailClient: { updateThreadProject: mocks.edit },
 }));
 
 import { getOperationAST } from 'graphql';

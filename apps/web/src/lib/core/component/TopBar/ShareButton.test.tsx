@@ -83,7 +83,6 @@ const mocks = vi.hoisted(() => ({
   updatePipelinePermissions: vi.fn(),
   updatePipelineTeamShare: vi.fn(),
   getChatPermissions: vi.fn(),
-  updateChatPermissions: vi.fn(),
   fetchCallSharePermission: vi.fn(),
   updateCallTeamShare: vi.fn(),
   setCallRecordTeamShareCache: vi.fn(),
@@ -269,7 +268,6 @@ vi.mock('@core/util/url', () => ({
 vi.mock('@service-cognition/client', () => ({
   cognitionApiServiceClient: {
     getChatPermissions: mocks.getChatPermissions,
-    updateChatPermissions: mocks.updateChatPermissions,
   },
 }));
 vi.mock('@queries/call/call', () => ({
@@ -442,7 +440,6 @@ beforeEach(() => {
     ok({ id: 'project-permissions', owner: ME })
   );
   mocks.updateInitiativePermissions.mockResolvedValue(ok({}));
-  mocks.updateChatPermissions.mockResolvedValue({ isErr: () => false });
   mocks.updateCallTeamShare.mockResolvedValue({ isErr: () => false });
   mocks.editProject.mockResolvedValue({ isErr: () => false });
   mocks.updateDatabasePermissions.mockResolvedValue({ isErr: () => false });
@@ -682,7 +679,6 @@ describe('agent session sharing', () => {
         )
       );
       expect(mocks.editDocument).not.toHaveBeenCalled();
-      expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
     }
   );
 
@@ -1066,7 +1062,6 @@ describe('call team sharing', () => {
       'call-1',
       true
     );
-    expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
     expect(mocks.editDocument).not.toHaveBeenCalled();
     expect(mocks.editProject).not.toHaveBeenCalled();
   });
@@ -1148,7 +1143,6 @@ describe('chat team sharing', () => {
           linkShareAccessLevel: 'view',
         })
       );
-      expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
     }
   );
 
@@ -1204,7 +1198,6 @@ describe('chat team sharing', () => {
     expect(
       screen.queryByRole('group', { name: 'Team access level' })
     ).toBeNull();
-    expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
   });
 });
 
@@ -1263,7 +1256,6 @@ describe('project team sharing', () => {
         teamShareAccessLevel: 'edit',
       })
     );
-    expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
     expect(mocks.editDocument).not.toHaveBeenCalled();
   });
 
