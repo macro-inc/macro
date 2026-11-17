@@ -6,7 +6,6 @@ pub mod create_team;
 pub mod delete_team;
 /// Delete a team invite.
 pub mod delete_team_invite;
-/// Email a new team's domain contacts that it exists.
 /// Get a team by ID.
 pub mod get_team;
 /// Get all invites for a team.
@@ -34,7 +33,6 @@ pub mod premium_user;
 pub mod reject_invitation;
 /// Remove a user from a team.
 pub mod remove_user_from_team;
-/// Toggle automatic domain joining for a team.
 /// Toggle whether non-admin members may invite users to a team.
 pub mod toggle_non_admin_invites;
 
@@ -205,7 +203,7 @@ const PROGRAM_TEAM_REFUSAL: &str = "An agent's program cannot invite people, mak
 
 /// Inviting people, minting a lasting join link, changing members' roles,
 /// plans or CRM access, the team's default share scope, and opening the team
-/// to a domain or to members' invites decide who reaches the team's content:
+/// to members' invites decide who reaches the team's content:
 /// a person does those, never an agent's program (`is_program_run`: a
 /// credential signed for an agent or a routine run, or the code-mode header)
 /// nor a bot acting for a member. A credential that does not verify is

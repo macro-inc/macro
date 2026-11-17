@@ -39,9 +39,9 @@ export function TeamInviteAcceptance() {
 
   const teamName = createMemo(() => teamQuery.data?.team.name);
 
-  // If the invite is gone but the user already belongs to a team (e.g. a
-  // domain auto-join consumed the invite between clicking the link and
-  // landing here), show that instead of "Invite Not Found". Only fetched
+  // If the invite is gone but the user already belongs to a team (e.g. they
+  // accepted it in another tab between clicking the link and landing here),
+  // show that instead of "Invite Not Found". Only fetched
   // once the invite lookup has settled without a match — a valid invite
   // never waits on (or triggers) this request.
   const currentTeamQuery = useCurrentTeamQuery(

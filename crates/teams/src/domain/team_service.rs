@@ -1371,7 +1371,7 @@ where
                     error = ?rollback_err,
                     %team_id,
                     %user_id,
-                    "unable to rollback auto-joined team member after {failed_step} failed"
+                    "unable to rollback directly joined team member after {failed_step} failed"
                 );
             })
             .ok();

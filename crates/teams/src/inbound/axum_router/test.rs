@@ -985,7 +985,7 @@ async fn get_team_invites_reads_the_named_current_team() {
 }
 
 /// Inviting people, minting a lasting join link, changing roles or plans,
-/// and opening the team to a domain or to members' invites grant outsiders
+/// and opening the team to members' invites grant outsiders
 /// access: only a person does those, whatever the program's credential or
 /// the code-mode header says. The fake service panics if any is reached.
 #[tokio::test]
@@ -995,7 +995,7 @@ async fn a_program_cannot_invite_or_change_who_is_on_the_team() {
         ("an owner-identity routine run", "routine", false),
         ("the code-mode runtime", "valid", true),
     ] {
-        let routes: [(&str, &str, &str); 6] = [
+        let routes: [(&str, &str, &str); 5] = [
             (
                 "POST",
                 "/invite",
@@ -1008,7 +1008,6 @@ async fn a_program_cannot_invite_or_change_who_is_on_the_team() {
                 "/members/macro%7Cother%40example.com/plan",
                 r#"{"plan": "max"}"#,
             ),
-            ("POST", "/auto-join-domain/toggle", ""),
             ("POST", "/non-admin-invites/toggle", ""),
         ];
         for (method, uri, body) in routes {

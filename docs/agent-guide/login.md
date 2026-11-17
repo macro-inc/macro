@@ -360,7 +360,7 @@ Connection status failures have an explicit retry; they must not prevent
 independent providers such as native GitHub from connecting. Verify unknown
 status never launches a duplicate OAuth flow and continuation remains possible.
 Someone already on a team when they leave the tools step (joined by invite
-link or by domain) never sees the team step: Continue goes to the plan step, or
+link) never sees the team step: Continue goes to the plan step, or
 finishes for a licensed member, and Back from plan returns to tools. Pending
 email invites still show on the team step for acceptance, and a team created
 there shows the **You're on <team>** confirmation. Team setup retains invite

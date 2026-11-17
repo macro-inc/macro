@@ -40,7 +40,6 @@ export function TeamSetupFields(props: {
   onEmailChange: (index: number, value: string) => void;
   onRemoveEmail: (index: number) => void;
   onAddEmail: () => void;
-  children?: JSX.Element;
 }) {
   return (
     <fieldset
@@ -68,7 +67,6 @@ export function TeamSetupFields(props: {
           onAddEmail={props.onAddEmail}
         />
       </div>
-      {props.children}
     </fieldset>
   );
 }

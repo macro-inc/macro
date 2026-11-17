@@ -94,8 +94,8 @@ event contract (schema, sanitization, delivery semantics).
 - Inviting, creating an invite link, patching the team (roles, CRM access, default share scope), changing a member's plan, and the non-admin-invite toggle refuse an agent's program or a bot (`refuse_programs` in `inbound/axum_router.rs`, `macro_authorization::is_program_run`, 403). A person does those in Settings, Team; an agent account's own key counts as a person.
 - Domain auto-join is off: nothing joins a user to a team by email domain,
   creation claims no domain, and `team.auto_join_domain` (with its index) is
-  kept in the database but never read or written, so the feature could be
-  revived. Every join takes an invite, an invite link, or an admin adding a
+  kept in the database but no application code reads or writes it, so the
+  feature could be revived. Every join takes an invite, an invite link, or an admin adding a
   team agent.
 - Carry async-stripe's `stripe::PriceId` through generic item changes; validate
   once at configuration/provider boundaries.

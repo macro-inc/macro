@@ -178,7 +178,7 @@ function TeamForm(props: {
         onEmailChange={form.setSlot}
         onRemoveEmail={form.removeSlot}
         onAddEmail={form.addSlot}
-      ></TeamSetupFields>
+      />
       <ContinueButton
         label={
           props.finishing
