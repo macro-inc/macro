@@ -130,13 +130,14 @@ function createCanvasView(props: CanvasViewProps) {
   /**
    * Run `place` where the Attach menu was opened and close the menu. A caller
    * that answers later (a dropped file that had to be fetched) names the
-   * opening it belongs to, so it never lands where a newer menu was opened.
+   * opening it belongs to, so it never lands where a newer menu was opened,
+   * and lands nowhere once the canvas has gone.
    */
   const insertAt = (
     place: (world: Point) => void,
     at = props.insert.location()
   ) => {
-    if (!at) return;
+    if (disposed || !at) return;
     place(at.world);
     if (props.insert.location() === at) props.insert.close();
   };
