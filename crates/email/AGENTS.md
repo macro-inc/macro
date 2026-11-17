@@ -50,6 +50,11 @@ tools — hexagonal, heavily feature-gated.
   import, initialization, completion accounting and leases, metadata, attachments,
   sent contact seeding and CRM operations. Its `outbox` module owns durable
   initialization, completion and consent publication through transaction ports.
+  `worker/crm_policy.rs` retains the original consent incarnation/version and
+  durable job ID through every page and effect. Legacy CRM history cannot adopt
+  initialized consent. Mark new per-message hints `live_mail=true`; the legacy
+  history fan-out explicitly uses false. Modern publication retains a recovery
+  signal until exact-generation progress/completion; legacy publication deletes.
   Backfill and inbox sync share catalog reconciliation, contact parsing,
   CRM normalization and pending-label snapshot rules. Inbox sync and link manager
   share notification-recipient selection.
@@ -67,6 +72,9 @@ tools — hexagonal, heavily feature-gated.
   Reuse the existing Gmail history journal and backfill repository through its ports.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
   the AI email tools (feature `ai_tools`).
+- `src/outbound/email_pg_repo/dynamic/filters/address_queries.rs`: shared
+  address-index streams for owned and Team reads; Team selection queries live
+  beside `dynamic/query/team_scope.rs`.
 - `src/outbound/email_pg_repo.rs`, `src/outbound/invitation_pg.rs`: Postgres
   adapters (feature `outbound`); `src/outbound/email_service_http.rs`: calls
   into `email_service`; `src/outbound/s3_draft_attachment_storage.rs`: staged
@@ -178,18 +186,25 @@ tools — hexagonal, heavily feature-gated.
   `test/owned_address_read.rs` compares every tuning's pages with the general
   builder; extend it when the read covers a new filter. A repeated inbox id
   reads as one in every builder (`distinct_links`).
-- Address supersets keep joined and indexed recipient branches. Use the
-  indexed branches only for all-recipient-role groups in the initial capped
-  probe and the sparse page it selects, in both Team and Owned reads. A rare
+- Address supersets keep joined and indexed text branches. Use indexed sender
+  lookups in the initial capped probe and the sparse page it selects, in both
+  Team and Owned reads; the `OFFSET 0` keeps generic plans on
+  `idx_email_messages_from_contact_id` instead of scanning every message. Each
+  sender lookup stops one past the initial superset cap, so generic plans can
+  stop on that index instead of building a bitmap of all its messages; the
+  cap cannot truncate a page the probe proved sparse.
+  Indexed recipient lookups apply only to all-recipient-role groups. A rare
   requested role can scan a dense domain before the cap finds a match, so
-  role-restricted groups keep joined SQL. Dense underfill fallbacks and larger
-  Owned round probes also keep joined SQL; per-message probes can make those
+  role-restricted recipient groups keep joined SQL. Dense underfill fallbacks
+  and larger Owned round probes also keep joined SQL; per-message probes can make those
   large sets slower. Checked General branches keep their original joins so
   mailbox-fact checks are planned with the messages. Optimized Team probes
   and pages share a read-only repeatable-read snapshot, as Owned reads do,
   so imports cannot outgrow the probe's cap between statements; privacy changes
-  committed mid-request apply to the next request. General reads keep their
-  existing transaction.
+  committed mid-request apply to the next request. Resolve contribution modes
+  in that snapshot too. If none of the requested contributors uses selected
+  mode, keep the all-mail probe/page SQL without selected-rule work. General
+  reads keep their existing page transaction.
 - A requested sender may be a verified Gmail send-as alias, not just an inbox
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.
@@ -253,12 +268,25 @@ tools — hexagonal, heavily feature-gated.
   whole stream before the LIMIT, and keep the superset stream's lookup by id
   (`= ANY(ARRAY(…))`): as a semi-join the planner reads every thread of the
   inboxes. `team_blocked` relies on `crm_companies_email_sync_off_idx`, or it
-  scans every company. `ALLOWED` restates `crm_email_thread_allowed`
+  scans every company. `push_allowed` restates `crm_email_thread_allowed`
   set-based, and the contributing inboxes in `dynamic/resolve.rs` restate its
   mailbox conditions (`allowed_restates_the_privacy_function` and
   `contributing_inboxes_restate_the_privacy_function` compare them); change
-  them together. Apply `crm_email_thread_excluded` to both the candidate and
-  competing copies; a copy stays only when no better copy passes the same checks,
+  them together. Selected mode also resolves the active policy's live targets
+  once per page, retaining bounded IDs for per-thread indexed probes. Its
+  positive-target probe runs before the record probe and
+  resolves live company domains once against each selected mailbox's
+  contacts. All-mail-only reads retain their existing candidate path.
+  Keep selected-policy contact resolution within the requested mailboxes;
+  record probes and sparse pages reuse the shared indexed sender/recipient
+  branches. Positive-target discovery probes participants by their IDs. Do not
+  add a redundant mailbox condition inside a sender lookup; contacts already
+  scope it, and the competing index can scan the entire mailbox. All statements share
+  the ten-second deadline. The three-way selected parity suite compares the
+  real scalar, ingestion SQL and inline rule, including whole-thread matches
+  and hidden/deleted live targets. Apply `crm_email_thread_excluded` to both the
+  candidate and competing copies; a copy stays only when no better copy passes
+  the same checks,
   so the representative never depends on the cursor; `test/crm_team_read.rs`
   compares every stream with the general builder page by page. The superset
   keeps only the read inboxes' own contacts, because a message lists only its

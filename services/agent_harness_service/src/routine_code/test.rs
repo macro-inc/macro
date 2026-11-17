@@ -205,6 +205,7 @@ impl RoutineCredentials for RecordedTokens {
         _: &MacroUserIdStr<'static>,
         acts_as: CodeIdentity,
         routine_id: Uuid,
+        _: bool,
     ) -> anyhow::Result<String> {
         self.0.lock().unwrap().push((acts_as, routine_id));
         Ok("fixture-routine-token".into())
@@ -286,6 +287,168 @@ async fn a_step_waits_for_a_free_slot_before_its_credential_and_gives_up_after_f
     assert_eq!(*programs.0.lock().unwrap(), 1);
 }
 
+const PRIVATE: &str = include_str!(
+    "../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.private.pem"
+);
+const PUBLIC: &str = include_str!(
+    "../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.public.pem"
+);
+
+/// Signs each token with the claims the real signer signs, under the local
+/// test key.
+struct SignedTokens;
+
+impl RoutineCredentials for SignedTokens {
+    async fn mint(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        acts_as: CodeIdentity,
+        routine_id: Uuid,
+        dry_run: bool,
+    ) -> anyhow::Result<String> {
+        let (agent_id, scope) = routine_claims(acts_as, dry_run);
+        Ok(macro_auth::macro_api_token::encode_macro_api_token(
+            macro_auth::macro_api_token::EncodeMacroApiTokenArgs {
+                fusionauth_id: "fixture".into(),
+                macro_user_id: "macro|owner@example.com".into(),
+                organization_id: None,
+                issuer: "fixture".into(),
+                private_key: PRIVATE.into(),
+                expiry_seconds: 60,
+                agent_id,
+                agent_via: None,
+                agent_correlation_id: None,
+                agent_session_id: None,
+                routine_id: Some(routine_id),
+                agent_scope: scope.map(|scope| scope.as_str().to_owned()),
+            },
+        )?)
+    }
+}
+
+/// Keeps the token each program was run with.
+#[derive(Default)]
+struct RunTokens(std::sync::Mutex<Vec<String>>);
+
+#[async_trait::async_trait]
+impl ProgramExecutor for RunTokens {
+    async fn execute_program(
+        &self,
+        _: code_execution::domain::ExecuteRequest,
+        environment: code_execution::domain::RunEnvironment,
+        _: CancellationToken,
+    ) -> Outcome {
+        self.0.lock().unwrap().push(environment.token);
+        Outcome::Succeeded { value: json!({}) }
+    }
+}
+
+/// A dry run's token can't write, whatever the code does in its process:
+/// a service refuses each write it sends, and still serves its reads. A real
+/// run's token writes as before.
+#[tokio::test]
+async fn a_dry_run_token_is_refused_every_write() {
+    use tower::ServiceExt;
+
+    let tokens = Arc::new(RunTokens::default());
+    let code = SdkRoutineCode::new(
+        Arc::clone(&tokens) as Arc<dyn ProgramExecutor>,
+        Arc::new(NoChecks),
+        SignedTokens,
+        code_execution::domain::SdkEndpoints::default(),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+        None,
+        Arc::new(NoTimeZones),
+    );
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let step = routine_program::CodeStep {
+        id: None,
+        title: "Label invoices".into(),
+        summary: String::new(),
+        source: "export async function main() {}".into(),
+        knobs: Vec::new(),
+        sentence: None,
+    };
+    for (dry_run, acts_as) in [
+        (true, CodeIdentity::Agent),
+        (true, CodeIdentity::Owner),
+        (false, CodeIdentity::Owner),
+    ] {
+        let ran = code
+            .run(
+                &owner,
+                CodeRun {
+                    step: &step,
+                    context: &json!({ "run": {} }),
+                    steps: &json!({}),
+                    dry_run,
+                    acts_as,
+                    routine_id: Uuid::from_u128(7),
+                },
+            )
+            .await;
+        assert_eq!(ran.result, Ok(json!({})));
+    }
+    let api = axum::Router::new()
+        .route(
+            "/email/messages",
+            axum::routing::post(|| async { axum::http::StatusCode::OK }),
+        )
+        .route(
+            "/email/threads/{id}",
+            axum::routing::get(|| async { axum::http::StatusCode::OK })
+                .delete(|| async { axum::http::StatusCode::OK }),
+        )
+        .route(
+            "/search",
+            axum::routing::post(|| async { axum::http::StatusCode::OK }),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            macro_auth::middleware::decode_jwt::JwtValidationArgs::testing_macro_token(
+                "fixture", PUBLIC,
+            ),
+            agent_correlation::inbound::enforce_signed_scope,
+        ));
+    let status = |token: String, method: &'static str, path: &'static str| {
+        let api = api.clone();
+        async move {
+            api.oneshot(
+                axum::http::Request::builder()
+                    .method(method)
+                    .uri(path)
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+            .status()
+        }
+    };
+    let minted = tokens.0.lock().unwrap().clone();
+    let [agent_dry_run, owner_dry_run, real] = minted.try_into().unwrap();
+    for token in [agent_dry_run, owner_dry_run] {
+        for (method, path) in [("POST", "/email/messages"), ("DELETE", "/email/threads/1")] {
+            assert_eq!(
+                status(token.clone(), method, path).await,
+                axum::http::StatusCode::FORBIDDEN,
+                "{method} {path}"
+            );
+        }
+        for (method, path) in [("GET", "/email/threads/1"), ("POST", "/search")] {
+            assert_eq!(
+                status(token.clone(), method, path).await,
+                axum::http::StatusCode::OK,
+                "{method} {path}"
+            );
+        }
+    }
+    assert_eq!(
+        status(real, "POST", "/email/messages").await,
+        axum::http::StatusCode::OK
+    );
+}
+
 /// Owners without calendars: every owner reads UTC.
 struct NoTimeZones;
 
@@ -319,6 +482,7 @@ mod real_deno {
             _: &MacroUserIdStr<'static>,
             _: CodeIdentity,
             _: Uuid,
+            _: bool,
         ) -> anyhow::Result<String> {
             Ok("fixture-routine-token".into())
         }

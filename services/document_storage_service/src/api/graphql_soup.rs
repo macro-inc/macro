@@ -30,8 +30,8 @@ mod websocket;
 
 use websocket::GraphqlWebSocketUpgrade;
 
-const GRAPHQL_PATH: &str = "/soup/graphql";
-const GRAPHQL_SUBSCRIPTION_PATH: &str = "/soup/graphql/ws";
+pub(crate) const GRAPHQL_PATH: &str = "/soup/graphql";
+pub(crate) const GRAPHQL_SUBSCRIPTION_PATH: &str = "/soup/graphql/ws";
 
 pub(crate) fn router() -> Router<ApiContext> {
     Router::new()

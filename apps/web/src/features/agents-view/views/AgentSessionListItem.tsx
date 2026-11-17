@@ -1,8 +1,7 @@
 import { TextShimmer } from '@app/features/block-agent/ui';
 import { parseGithubPrUrl, prHtmlUrl } from '@app/features/block-pr/util/prKey';
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSessionActivity } from '@core/agent-session/session-activity';
-import { openInNewSplitForMention } from '@core/util/openInNewSplit';
+import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
 import FilledSparkleIcon from '@icon/system/fill/sparkle-fill.svg?component-solid';
 import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
@@ -34,7 +33,6 @@ type Props = {
 
 /** Persisted list metadata stays fresh through the session update events. */
 export function AgentSessionListItem(props: Props) {
-  const { openWithSplit } = useSplitLayout();
   const mode = () =>
     props.entity.harness
       ? modeForKind(kindForHarness(props.entity.harness))
@@ -144,23 +142,11 @@ export function AgentSessionListItem(props: Props) {
           <AgentSessionCodeDetails
             details={details()}
             statusIndicator={codeStatusIndicator()}
-            onOpenPullRequest={
-              props.entity.pullRequestId
-                ? (event) => {
-                    const id = props.entity.pullRequestId;
-                    if (!id) return;
-                    openWithSplit(
-                      { type: 'pr', id },
-                      {
-                        preferNewSplit: openInNewSplitForMention(
-                          event.shiftKey,
-                          true
-                        ),
-                      }
-                    );
-                  }
-                : undefined
-            }
+            onOpenPullRequest={() => {
+              // PRs open on GitHub for now, not in the PR split.
+              const url = details().pullRequest?.url;
+              if (url) openExternalUrl(url);
+            }}
           />
         )}
       </Show>

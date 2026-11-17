@@ -746,7 +746,7 @@ const PR_WASM_ENV: [(&str, &str); 6] = [
     ("CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS", "16"),
 ];
 
-fn with_pr_wasm_env(step: Step<Run>) -> Step<Run> {
+pub(crate) fn with_pr_wasm_env(step: Step<Run>) -> Step<Run> {
     with_wasm_pkg_cache(PR_WASM_ENV.into_iter().fold(step, Step::add_env))
 }
 

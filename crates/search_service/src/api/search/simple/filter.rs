@@ -9,7 +9,7 @@ use opensearch_client::search::unified::{
     UnifiedProjectSearchArgs,
 };
 
-use crate::domain::email_search::{EmailScope, ThreadStates, ViewerInboxes};
+use crate::domain::email_search::{EmailScope, MAX_EMAIL_PROJECTS, ThreadStates, ViewerInboxes};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use uuid::Uuid;
 
@@ -22,6 +22,9 @@ use crate::api::{
         simple_project::filter_projects,
     },
 };
+
+#[cfg(test)]
+mod test;
 
 /// Trait to convert item_filters into search args
 pub(super) trait FilterVariantToSearchArgs {
@@ -157,6 +160,25 @@ pub(super) struct EmailSearch {
     pub args: UnifiedEmailSearchArgs,
     pub hit_states: ThreadStates,
     pub shared_capped: bool,
+    pub project_capped: bool,
+}
+
+/// Email filters search cannot apply, rejected instead of ignored: the CRM
+/// filters widen a list to the team's mailboxes under per-mailbox consent,
+/// which only listing email implements.
+pub(super) fn reject_unsupported_email_filters(
+    filters: &item_filters::EmailFilters,
+) -> Result<(), SearchError> {
+    if !filters.crm_domains.is_empty() {
+        return Err(SearchError::UnsupportedEmailFilter("crm_domains"));
+    }
+    if !filters.crm_addresses.is_empty() {
+        return Err(SearchError::UnsupportedEmailFilter("crm_addresses"));
+    }
+    if filters.project_ids.len() > MAX_EMAIL_PROJECTS {
+        return Err(SearchError::TooManyEmailProjects(MAX_EMAIL_PROJECTS));
+    }
+    Ok(())
 }
 
 /// Resolves the email threads `filters` reach for the caller, or `None` when
@@ -167,6 +189,7 @@ pub(super) async fn email_search(
     filters: &item_filters::EmailFilters,
     should_include: bool,
 ) -> Result<Option<EmailSearch>, SearchError> {
+    reject_unsupported_email_filters(filters)?;
     if !should_include {
         return Ok(None);
     }
@@ -215,6 +238,7 @@ pub(super) async fn email_search(
         },
         hit_states: threads.hit_states,
         shared_capped: threads.shared_capped,
+        project_capped: threads.project_capped,
     }))
 }
 

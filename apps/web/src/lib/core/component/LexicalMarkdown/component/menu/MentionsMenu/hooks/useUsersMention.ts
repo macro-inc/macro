@@ -1,7 +1,16 @@
 import { type UserItem, useQuickAccess } from '@core/context/quickAccess';
-import { useEmail } from '@core/context/user';
+import { useEmail, useUserId } from '@core/context/user';
 import type { IUser } from '@core/user';
-import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
+import {
+  peopleBeforeAgents,
+  placeAgentsAfterPeople,
+  rankAgentsAfterPeople,
+} from '@core/user/people-before-agents';
+import {
+  createFreshSearch,
+  FreshSearchPresets,
+  NAME_MATCH_RANKING,
+} from '@core/util/freshSort';
 import { preservePersonOrder } from '@core/util/ordered-window';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
@@ -43,8 +52,6 @@ const GROUPS = [
   },
 ] as const;
 
-const BOT_MENTION_BOOST = 10;
-
 /**
  * Hook for managing user mentions in the mentions menu.
  * Handles user list retrieval, search, filtering, and special groups.
@@ -64,6 +71,7 @@ export function useUsersMention(
   });
   const workspaceUsers = workspace.items;
   const currentUserEmail = useEmail();
+  const currentUserId = useUserId();
 
   const currentUserDomain = () => {
     const email = currentUserEmail();
@@ -109,31 +117,64 @@ export function useUsersMention(
     );
 
     return createFreshSearch<UserItem>({
-      config: {
-        ...baseConfig,
-        boostFn: (item) =>
-          (baseConfig.boostFn?.(item) ?? 0) +
-          (isBotMentionUser(item) ? BOT_MENTION_BOOST : 0),
-      },
+      config: { ...baseConfig, ...NAME_MATCH_RANKING },
       getName: (item) => item.searchText,
+      getDisplayName: (item) => item.data.name || item.data.email,
+      isPersonItem: (item) => !isBotMentionUser(item),
       getTimestamp: (item) => ({
         lastInteraction: item.timestamps.lastInteraction,
       }),
     });
   };
 
+  // People come before agents and bots, as in assignee menus. The directory's
+  // personal window keeps its own order among people: its rows take the slots
+  // the ranking gives people, and search ranks only the rows outside it.
   const users = createLazyMemo(() => {
-    const term = searchTerm();
+    const term = searchTerm().trim();
     const list = usersList();
-    if (usesDirectory()) {
-      const personal = list.filter((item) => item.personOrder !== undefined);
-      const extras = userSearch()(
-        list.filter((item) => item.personOrder === undefined),
-        term
-      ).map(({ item }) => item);
-      return preservePersonOrder([...personal, ...extras], list);
+    const results = userSearch()(list, term);
+    if (!usesDirectory()) {
+      if (term) {
+        return rankAgentsAfterPeople(results, (item) => item.id);
+      }
+      return peopleBeforeAgents(
+        results.map(({ item }) => item),
+        (item) => item.id,
+        currentUserId()
+      );
     }
-    return userSearch()(list, term).map(({ item }) => item);
+
+    const people = list.filter((item) => !isBotMentionUser(item));
+    const extras = results
+      .map(({ item }) => item)
+      .filter(
+        (item) => !isBotMentionUser(item) && item.personOrder === undefined
+      );
+    const orderedPeople = preservePersonOrder(
+      [...people.filter((item) => item.personOrder !== undefined), ...extras],
+      people
+    );
+    const agents = results
+      .map(({ item }) => item)
+      .filter((item) => isBotMentionUser(item));
+    if (!term) {
+      return peopleBeforeAgents(
+        [...orderedPeople, ...agents],
+        (item) => item.id,
+        currentUserId()
+      );
+    }
+
+    const ranks = new Map(
+      results.map((result) => [result.item.id, result.nameMatchRank])
+    );
+    const rank = (item: UserItem) => ranks.get(item.id) ?? -1;
+    return placeAgentsAfterPeople(
+      orderedPeople,
+      agents.filter((item) => rank(item) >= 0),
+      rank
+    );
   });
 
   /**

@@ -35,6 +35,7 @@ export default {
   more: 'More',
   search: 'Search',
   selectItem: 'Select item',
+  unread: 'Unread',
   contactsAndCompanies: 'Contacts & Companies',
   loadingOptions: 'Loading options…',
   optionsUnavailable: 'Options unavailable. Selected values are kept.',
