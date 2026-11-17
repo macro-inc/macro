@@ -11,6 +11,8 @@ use super::*;
 use crate::domain::models::{ImportKind, ImportStatus, NotionJob, TEAMMATE_STOPPED};
 use crate::domain::ports::{ImportRepo, NotionRunRepo};
 
+mod reimport_after_delete;
+
 const ROADMAP: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 async fn member(pool: &PgPool, label: &str, team: Uuid) -> MacroUserIdStr<'static> {
