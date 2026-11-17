@@ -49,7 +49,11 @@ import {
   I_THEME_MENTION,
   I_USER_MENTION,
 } from './mentions';
-import { BR_TAG_TO_LINE_BREAK, HTML_ENTITY_TRANSFORMERS } from './transformers';
+import {
+  BR_TAG_TO_LINE_BREAK,
+  HTML_ENTITY_TRANSFORMERS,
+  LINK_XML,
+} from './transformers';
 import { UNKNOWN_MENTION } from './unknownMention';
 import { I_VIDEO } from './video';
 
@@ -136,18 +140,29 @@ const REG_EXP_XML_TABLE = xmlMatcherWithAttrs(TAG_TABLE, '');
 const REG_EXP_XML_TABLE_ROW = xmlMatcherWithAttrs(TAG_TABLE_ROW, 'gs');
 const REG_EXP_XML_TABLE_CELL = xmlMatcherWithAttrs(TAG_TABLE_CELL, 'gs');
 
+// Saves and reloads every inline chip and link a cell can hold, as the
+// document-level internal set does.
 const internalTransformersWithinTables: Transformer[] = [
   CHECK_LIST,
+  LINK_XML,
   I_USER_MENTION,
+  I_GROUP_MENTION,
   I_DOCUMENT_MENTION,
+  I_PR_MENTION,
+  I_BOOKING_LINK_MENTION,
+  I_AGENT_SESSION_MENTION,
   I_CONTACT_MENTION,
   I_DATE_MENTION,
+  I_THEME_MENTION,
+  I_TAG_MENTION,
+  I_CONNECT_APP,
   I_EQUATION_NODE,
   I_IMAGE_CONSTRAINED,
   IMAGE,
   I_VIDEO,
   ...HTML_TEXT_FORMAT_TRANSFORMERS,
   ...TRANSFORMERS,
+  UNKNOWN_MENTION, // Last: the fallback for tags nothing above recognizes
 ];
 
 // Transformers used inside table cells
@@ -309,6 +324,7 @@ const externalTransformersWithinTables: Transformer[] = [
 // Cells import every inline chip a paragraph imports, since agents write them
 // in cells too. These only import: a cell exports chips as a paragraph does.
 const importTransformersWithinTables: Transformer[] = [
+  LINK_XML,
   I_USER_MENTION,
   I_GROUP_MENTION,
   I_CONTACT_MENTION,
