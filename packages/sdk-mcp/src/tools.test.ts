@@ -109,4 +109,39 @@ describe('buildTools', () => {
       );
     }
   });
+  test('descriptions name tools, not SDK namespaces or TSDoc links', () => {
+    const tools = buildTools(catalog, 'entity');
+    const text = JSON.stringify(
+      tools.map(({ description, inputSchema }) => ({
+        description,
+        inputSchema,
+      }))
+    );
+    expect(text).not.toMatch(/\{@link/);
+    // `macro.web` alone is code mode's spelling; MCP gets `the web_* tools`.
+    expect(text).not.toMatch(/`macro\.[a-z][A-Za-z]*`/);
+    expect(
+      tools.find((tool) => tool.name === 'ai_read')?.description
+    ).toContain('the `images_*` tools');
+  });
+
+  test('every tool name says what it covers', () => {
+    const names = buildTools(catalog, 'entity').map((tool) => tool.name);
+    // Grab-bag and jargon groups the review called unclear.
+    for (const unclear of ['core', 'foreign', 'harnesses'])
+      expect(names.filter((name) => name.startsWith(`${unclear}_`))).toEqual(
+        []
+      );
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'account_managers_read',
+        'comments_write',
+        'linked_items_read',
+        'agent_hosts_read',
+        'web_read',
+        'referrals_send',
+        'teams_send',
+      ])
+    );
+  });
 });
