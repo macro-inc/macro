@@ -215,7 +215,7 @@ tools — hexagonal, heavily feature-gated.
   `stale_threads` restates `domain/focus/calendar.rs`'s test for a change in SQL;
   change both.
 - Focus classifies an inbox only while its owner is in the rollout
-  (`FocusEnrollment`, the worker's cached `enable-email-focus` read). Check it
+  (`FocusEnrollment`, the worker's locally evaluated `enable-email-focus` flag). Check it
   after `thread_inbox` and before any mail is read. `enrolled_inboxes` checks every
   `syncing_inboxes` owner, so an owner who joins is found without mail, and
   `backfill` fills one inbox several threads at a time. The sweep goes inbox by

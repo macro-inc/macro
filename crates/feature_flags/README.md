@@ -107,7 +107,10 @@ checks a flag too often to pay for a remote load each time (the email focus
 worker checks an owner per email event). It polls
 `GET /flags/definitions?token=<project key>` with a project secret key
 (`Authorization: Bearer`) at most every 5 minutes, sending the last `ETag` so an
-unchanged poll is a `304`; a failed poll is retried after 30 seconds.
+unchanged poll is a `304`; a failed poll is retried after 30 seconds. A `401`
+or `402` (revoked key, quota) drops the definitions at once. Each poll is a
+`feature_flags.definitions_poll` span, and a named flag absent from the
+definitions is logged.
 
 ```rust
 use feature_flags::outbound::posthog_local::PostHogLocalFeatureFlags;
@@ -120,7 +123,7 @@ let feature_flags = PostHogLocalFeatureFlags::new(
     "injected-project-token",
     "injected-secret-key".to_owned(),
     &["enable-email-focus"],
-    Duration::from_secs(3), // Bounds each poll.
+    Duration::from_secs(10), // Bounds each poll.
     Environment::Develop,
 )?;
 # Ok(())
@@ -138,7 +141,8 @@ percentage, bucketed with PostHog's SHA-1 hash of `<flag key>.<distinct id>`
 It fails closed: a load fails when no poll has succeeded in the last hour, or
 when a named flag uses anything else (variants, cohorts, groups, flag
 dependencies, holdouts, early access, experience continuity, device bucketing,
-another person property, another operator, boolean-like `exact` values) and no
+another person property, another operator, boolean-like `exact` values, or any
+set field it doesn't know, such as `early_exit`) and no
 supported condition matched. A condition that matches decides even beside one
 it can't evaluate, as in PostHog's SDKs. Inactive flags read `false`; deleted or
 unknown flags are missing.

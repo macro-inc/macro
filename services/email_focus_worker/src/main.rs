@@ -54,9 +54,11 @@ use crate::{
 
 /// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
-/// Longest a poll of the flag's definition holds up a classification or the
-/// sweep; checks between polls make no request.
-const FLAG_TIMEOUT: Duration = Duration::from_secs(3);
+/// Longest a poll of the flag definitions takes, as PostHog's SDKs allow. A
+/// poll holds up the flag checks waiting on it (classifications and looks)
+/// once every 5 minutes, or every 30 seconds while PostHog fails; checks
+/// between polls make no request.
+const FLAG_TIMEOUT: Duration = Duration::from_secs(10);
 /// The longest window of mail the worker classifies, as the Focus list reads.
 const MAX_WINDOW_DAYS: u16 = 90;
 

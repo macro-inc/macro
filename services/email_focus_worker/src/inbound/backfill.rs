@@ -1,7 +1,7 @@
 //! Fill an inbox as soon as its owner joins the Focus rollout.
 //!
 //! Every [`LOOK_INTERVAL`] the worker looks at every connected inbox's place
-//! in the rollout, through the flag cache, so most looks ask PostHog nothing.
+//! in the rollout, evaluating the flag in memory, so a look asks PostHog nothing.
 //! An enrolled inbox this process hasn't filled yet is backfilled in two
 //! passes: first its last [`FIRST_FILL_DAYS`] days, the top of the Focus tab,
 //! then the rest of the window, reading due dates only for threads with mail

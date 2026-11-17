@@ -50,7 +50,6 @@ struct Inner {
     endpoint: Url,
     secret_key: String,
     keys: Vec<String>,
-    timeout: Duration,
     environment: Environment,
     state: Mutex<State>,
 }
@@ -124,7 +123,6 @@ impl PostHogLocalFeatureFlags {
                 endpoint,
                 secret_key,
                 keys: keys.iter().map(|key| (*key).to_owned()).collect(),
-                timeout,
                 environment,
                 state: Mutex::default(),
             }),
@@ -144,6 +142,11 @@ impl Inner {
                 }
                 Err(error) => {
                     tracing::warn!(error = ?error, "PostHog flag definitions poll failed");
+                    // A revoked key or a quota block: PostHog's SDKs drop their
+                    // definitions too, so a step back made meanwhile isn't missed.
+                    if matches!(error, PollError::HttpStatus(401 | 402)) {
+                        state.definitions = None;
+                    }
                     state.next_poll = Some(Instant::now() + RETRY_INTERVAL);
                 }
             }
@@ -161,7 +164,7 @@ impl Inner {
             };
             let enabled = definition
                 .as_ref()
-                .map_err(|reason| *reason)
+                .map_err(Clone::clone)
                 .and_then(|definition| definition.evaluate(&person))
                 .map_err(|reason| LoadError::Unevaluable {
                     key: key.clone(),
@@ -175,7 +178,18 @@ impl Inner {
     }
 
     /// Read the definitions, or confirm the ones held are current.
-    async fn poll(&self, held: Option<&Definitions>) -> Result<Definitions, Report> {
+    #[tracing::instrument(
+        name = "feature_flags.definitions_poll",
+        skip_all,
+        fields(
+            status = tracing::field::Empty,
+            not_modified = tracing::field::Empty,
+            flags_found = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn poll(&self, held: Option<&Definitions>) -> Result<Definitions, PollError> {
+        let span = tracing::Span::current();
         let mut request = self
             .client
             .get(self.endpoint.clone())
@@ -183,18 +197,19 @@ impl Inner {
         if let Some(etag) = held.and_then(|held| held.etag.as_ref()) {
             request = request.header(header::IF_NONE_MATCH, etag);
         }
-        let response = tokio::time::timeout(self.timeout, request.send())
+        let response = request
+            .send()
             .await
-            .map_err(|_| PollError::Timeout)?
             .map_err(|error| PollError::Transport(error.without_url()))?;
+        span.record("status", response.status().as_u16());
         let etag = response
             .headers()
             .get(header::ETAG)
             .and_then(|etag| etag.to_str().ok())
             .map(str::to_owned);
-        if response.status() == StatusCode::NOT_MODIFIED
-            && let Some(held) = held
-        {
+        let not_modified = response.status() == StatusCode::NOT_MODIFIED;
+        span.record("not_modified", not_modified);
+        if not_modified && let Some(held) = held {
             return Ok(Definitions {
                 flags: held.flags.clone(),
                 etag: etag.or_else(|| held.etag.clone()),
@@ -202,11 +217,12 @@ impl Inner {
             });
         }
         if response.status() != StatusCode::OK {
-            return Err(PollError::HttpStatus(response.status().as_u16()).into());
+            return Err(PollError::HttpStatus(response.status().as_u16()));
         }
-        let body = tokio::time::timeout(self.timeout, response.bytes())
+        // The client's timeout bounds the whole poll, the body included.
+        let body = response
+            .bytes()
             .await
-            .map_err(|_| PollError::Timeout)?
             .map_err(|error| PollError::Transport(error.without_url()))?;
         // Never retain a decode error: it may quote the project's definitions.
         let response: DefinitionsResponse =
@@ -223,6 +239,13 @@ impl Inner {
             let definition =
                 serde_json::from_value(flag).map_err(|_| Unevaluable::UnreadableDefinition);
             flags.insert(key, definition);
+        }
+        span.record("flags_found", flags.len());
+        for key in &self.keys {
+            if !flags.contains_key(key) {
+                // Reads as off for everyone: say why.
+                tracing::warn!(flag = %key, "named flag not in the PostHog definitions");
+            }
         }
         Ok(Definitions {
             flags,
@@ -265,8 +288,10 @@ impl<'a> Person<'a> {
 }
 
 /// Why a flag can't be evaluated locally.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 enum Unevaluable {
+    #[error("it sets `{0}`, which this evaluator doesn't know")]
+    UnknownField(String),
     #[error("its definition could not be read")]
     UnreadableDefinition,
     #[error("it uses {0}, which only PostHog evaluates")]
@@ -305,6 +330,9 @@ struct Filters {
     super_groups: Option<Vec<Value>>,
     #[serde(default)]
     bucketing_identifier: Option<String>,
+    /// Fields this adapter doesn't know: any set one may change the result.
+    #[serde(flatten)]
+    other: serde_json::Map<String, Value>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -317,6 +345,9 @@ struct Condition {
     variant: Option<Value>,
     #[serde(default)]
     aggregation_group_type_index: Option<Value>,
+    /// Fields this adapter doesn't know: any set one may change the result.
+    #[serde(flatten)]
+    other: serde_json::Map<String, Value>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -379,6 +410,7 @@ impl FlagDefinition {
         {
             return Err(Unevaluable::Unsupported("a holdout"));
         }
+        unknown_field(&filters.other, &["payloads"])?;
         if filters.feature_enrollment == Some(true)
             || filters
                 .super_groups
@@ -403,6 +435,7 @@ impl FlagDefinition {
 
 impl Condition {
     fn matches(&self, flag_key: &str, person: &Person<'_>) -> Result<bool, Unevaluable> {
+        unknown_field(&self.other, &["description", "sort_key"])?;
         if self.variant.as_ref().is_some_and(|value| !value.is_null()) {
             return Err(Unevaluable::Unsupported("variants"));
         }
@@ -462,22 +495,44 @@ impl PropertyFilter {
     }
 }
 
+/// Fail on a field outside the known ones and `harmless`, unless it is unset:
+/// PostHog adds fields such as `early_exit` that change who matches.
+fn unknown_field(
+    fields: &serde_json::Map<String, Value>,
+    harmless: &[&str],
+) -> Result<(), Unevaluable> {
+    let set = |value: &Value| match value {
+        Value::Null | Value::Bool(false) => false,
+        Value::Array(values) => !values.is_empty(),
+        Value::Object(fields) => !fields.is_empty(),
+        Value::String(text) => !text.is_empty(),
+        Value::Bool(true) | Value::Number(_) => true,
+    };
+    match fields
+        .iter()
+        .find(|(name, value)| !harmless.contains(&name.as_str()) && set(value))
+    {
+        Some((name, _)) => Err(Unevaluable::UnknownField(name.clone())),
+        None => Ok(()),
+    }
+}
+
 /// The values an `exact` or `is_not` filter lists. Boolean-like values and
 /// empty lists compare by truthiness in PostHog, which isn't supported here.
 fn exact_values(value: &Value) -> Result<Vec<String>, Unevaluable> {
-    let unsupported = Unevaluable::Unsupported("a boolean or empty exact value");
+    const UNSUPPORTED: Unevaluable = Unevaluable::Unsupported("a boolean or empty exact value");
     let values = match value {
         Value::Array(values) if !values.is_empty() => values
             .iter()
-            .map(|value| scalar(value).ok_or(unsupported))
+            .map(|value| scalar(value).ok_or(UNSUPPORTED))
             .collect::<Result<Vec<_>, _>>()?,
-        value => vec![scalar(value).ok_or(unsupported)?],
+        value => vec![scalar(value).ok_or(UNSUPPORTED)?],
     };
     if values
         .iter()
         .any(|value| value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("false"))
     {
-        return Err(unsupported);
+        return Err(UNSUPPORTED);
     }
     Ok(values)
 }
@@ -514,13 +569,11 @@ enum PollError {
     HttpStatus(u16),
     #[error("PostHog returned malformed flag definitions")]
     MalformedResponse,
-    #[error("PostHog flag definitions poll timed out")]
-    Timeout,
 }
 
 #[derive(Debug, thiserror::Error)]
 enum LoadError {
-    #[error("No PostHog flag definitions read in the last hour")]
+    #[error("No PostHog flag definitions read successfully in the last hour")]
     NoDefinitions,
     #[error("PostHog flag {key} can't be evaluated locally: {reason}")]
     Unevaluable { key: String, reason: Unevaluable },

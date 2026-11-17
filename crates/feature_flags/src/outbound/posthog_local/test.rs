@@ -367,3 +367,97 @@ fn rejects_bad_configuration() {
     assert!(new(host, "p", "s", &[FLAG], Duration::ZERO));
     assert!(!new(host, "p", "s", &[FLAG], TIMEOUT));
 }
+
+#[tokio::test]
+async fn a_set_field_it_does_not_know_fails_the_flag() {
+    let mut early_exit = rollout(100);
+    early_exit["filters"]["early_exit"] = json!(true);
+    let server = serving(json!([early_exit])).await;
+    let error = enabled(
+        &loader(&server, Environment::Production),
+        "ada@staff.example",
+    )
+    .await
+    .unwrap_err();
+    assert!(format!("{error}").contains("early_exit"));
+
+    // Unset or known-harmless fields don't.
+    let mut harmless = rollout(100);
+    harmless["filters"]["early_exit"] = json!(false);
+    harmless["filters"]["groups"][0]["description"] = json!("Staff");
+    let server = serving(json!([harmless])).await;
+    assert_eq!(
+        enabled(
+            &loader(&server, Environment::Production),
+            "ada@staff.example"
+        )
+        .await
+        .unwrap(),
+        Some(true)
+    );
+}
+
+#[tokio::test]
+async fn a_rejected_key_drops_the_definitions_at_once() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(definitions(json!([rollout(0)])))
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(401))
+        .mount(&server)
+        .await;
+    let flags = loader(&server, Environment::Production);
+
+    assert_eq!(
+        enabled(&flags, "ada@staff.example").await.unwrap(),
+        Some(true)
+    );
+    pass(POLL_INTERVAL).await;
+    assert!(enabled(&flags, "ada@staff.example").await.is_err());
+}
+
+#[tokio::test]
+async fn compares_with_every_supported_operator() {
+    let cases = [
+        (person("email", "exact", json!("ada@staff.example")), true),
+        (
+            person("email", "is_not", json!(["ada@staff.example"])),
+            false,
+        ),
+        (person("email", "is_not", json!(["bo@staff.example"])), true),
+        (person("email", "not_icontains", json!("@STAFF")), false),
+        (person("email", "not_icontains", json!("@partner")), true),
+        (person("email", "is_set", json!(null)), true),
+        (person("email", "is_not_set", json!(null)), false),
+    ];
+    for (filter, expected) in cases {
+        let server = serving(json!([flag(json!([{"properties": [filter]}]))])).await;
+        let flags = loader(&server, Environment::Production);
+        assert_eq!(
+            enabled(&flags, "ada@staff.example").await.unwrap(),
+            Some(expected),
+            "{filter}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn buckets_by_the_macro_user_id() {
+    let server = serving(json!([flag(json!([{"rollout_percentage": 50}]))])).await;
+    let flags = loader(&server, Environment::Production);
+    let mut inside = 0;
+    for i in 0..200 {
+        let email = format!("user{i}@elsewhere.example");
+        let expected = bucket(FLAG, &format!("macro|{email}")) <= 0.5;
+        let actual = enabled(&flags, &email).await.unwrap();
+        assert_eq!(actual, Some(expected), "{email}");
+        inside += usize::from(expected);
+    }
+    assert!(
+        (70..130).contains(&inside),
+        "{inside} of 200 in a 50% rollout"
+    );
+}
