@@ -5,7 +5,9 @@ Pulumi (TypeScript, Bun) for all of Macro's AWS infrastructure. Production is in
 independently in `us-east-2`.
 
 Each directory under `stacks/` is one Pulumi project with `dev` and `prod` stacks;
-shared components live in `packages/`.
+shared components live in `packages/`. `k8s/observability/cluster/` is the
+exception: Kubernetes objects for the observability EKS cluster, written in Nix
+and applied by Argo CD (see its [README](k8s/observability/cluster/README.md)).
 
 Read the [infrastructure guide](../docs/development/infrastructure.md) before
 changing anything here, and the [new service guide](../docs/guides/new-service.md)
