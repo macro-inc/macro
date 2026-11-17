@@ -43,6 +43,7 @@ import { createMemo, lazy } from 'solid-js';
 import { createTagFacetContext } from '../soup';
 import { createCrmActivityFilters } from './activity-filters-adapter';
 import { createCrmActivityState } from './activity-state-adapter';
+import { createAddToPipelineSource } from './add-to-pipeline-adapter';
 import type { CrmContext } from './context/crm-context';
 import type { CrmQuery, ItemListSource } from './context/crm-sources';
 import {
@@ -234,6 +235,11 @@ export function createAppCrmContext(): CrmContext {
       graphql: getGraphqlSoupClient,
       storage: deps.storage,
     }),
+    createAddToPipeline: (record) =>
+      createAddToPipelineSource(
+        { ...deps, graphql: getGraphqlSoupClient },
+        record
+      ),
     PipelineSharing: PipelineShare,
     createPipelineTransfer: (pipeline) =>
       createPipelineTransfer(deps, pipeline),
