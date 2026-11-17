@@ -91,8 +91,6 @@ let
       # outage; the host takes about 900/s.
       ingestion_rate = 50000;
       ingestion_burst_size = 500000;
-      # The 30-day backfill of the host's Prometheus blocks (mimirtool backfill).
-      compactor_block_upload_enabled = true;
     };
   };
 

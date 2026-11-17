@@ -23,7 +23,6 @@ data:
         replication_factor: 3
         tokens_file_path: "/data/ingester-tokens"
     limits:
-      compactor_block_upload_enabled: true
       compactor_blocks_retention_period: "30d"
       ingestion_burst_size: 500000
       ingestion_rate: 50000
