@@ -460,16 +460,21 @@ export function createEmailSendSchedule(options: {
       }
       const result = action === 'update' ? 'updated' : 'scheduled';
       // Meanwhile a composer for the draft in another view may have cancelled
-      // or moved the schedule; a notice would then announce one that is gone.
+      // or rescheduled it, and the notice would announce a schedule that is
+      // gone; or one may have seen it moved on another device, and the notice
+      // follows it.
       // What this composer observed meanwhile may be that change, so it reads
       // the draft afresh instead of ignoring it.
-      if (scheduledNotices.get(draftId) !== notice) {
+      const live = scheduledNotices.get(draftId) === notice;
+      if (live && sameTime(notice.sendTime, requested)) {
+        ignoredLifecycleObservation =
+          deferredLifecycleObservation ?? options.lifecycleState?.();
+      } else {
         ignoredLifecycleObservation = undefined;
         await options.reconcile?.().catch(notices.reportError);
-        return result;
+        if (scheduledNotices.get(draftId) !== notice) return result;
       }
-      ignoredLifecycleObservation =
-        deferredLifecycleObservation ?? options.lifecycleState?.();
+      const announced = notice.sendTime;
       try {
         // The title stays terse so it never truncates; the time is the subtext.
         let toastId: number | undefined;
@@ -527,8 +532,8 @@ export function createEmailSendSchedule(options: {
           action === 'update' ? 'Email rescheduled' : 'Email scheduled',
           {
             subtext: `Sends ${format(
-              requested,
-              isThisYear(requested)
+              announced,
+              isThisYear(announced)
                 ? "EEE, MMM d 'at' h:mm a"
                 : "EEE, MMM d, yyyy 'at' h:mm a"
             )}`,

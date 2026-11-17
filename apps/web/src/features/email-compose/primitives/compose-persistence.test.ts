@@ -937,6 +937,41 @@ it('reads the draft afresh when its schedule was cancelled before this composer 
   root.dispose();
 });
 
+it('announces where a schedule moved while the thread was marked done', async () => {
+  const composeContext = createComposeContext();
+  const moved = new Date('2026-12-02T14:30:00Z');
+  const { root, markDone } = await scheduleWhileMarkingDone(
+    composeContext,
+    new Date('2026-12-01T12:00:00Z')
+  );
+  const beside = mountEmailComposer(composeContext, undefined, {
+    draft: message('draft', { is_draft: true }),
+  });
+  // Another device moves the schedule; the thread open beside sees it.
+  composeContext.setDraftLifecycle({
+    type: 'scheduled',
+    draftId: 'draft',
+    threadId: 'thread',
+    inboxId: 'inbox',
+    sendTime: moved.toISOString(),
+    observedAt: Date.now(),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(beside.state.context.schedule.confirmedTime()).toEqual(moved);
+
+  markDone();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
+    'Email scheduled',
+    expect.objectContaining({
+      subtext: expect.stringMatching(/^Sends Wed, Dec 2(, 2026)? at 2:30 PM$/),
+    })
+  );
+  expect(root.state.context.schedule.confirmedTime()).toEqual(moved);
+  beside.dispose();
+  root.dispose();
+});
+
 it('starts composers from the schedule while its notice shows, however long marking done took', async () => {
   const composeContext = createComposeContext();
   const sendTime = new Date('2026-12-01T12:00:00Z');
