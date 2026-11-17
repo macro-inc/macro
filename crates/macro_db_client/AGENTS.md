@@ -92,6 +92,15 @@ data checks and explicit vault purge. It does not depend on a successful item.
 
 ## Gotchas
 
+- `document_email` has a statement-level `AFTER DELETE` trigger
+  (`document_email_release`, migration `20261116200143`) that queues each
+  document a statement unlinks in `released_email_attachment_documents`, even
+  one still linked elsewhere or already in the Trash, and notifies
+  `email_attachment_documents_released`;
+  document storage drains it. A document already queued is updated, not
+  skipped, so its row stays locked until the deleting transaction commits. It
+  fires once per outer statement, cascades included. Write a moved link before
+  deleting the old one. `tests/released_email_attachment_documents.rs` covers it.
 - `crm_email_rule_*` and `crm_email_policy_audit` hold private member/mailbox
   policy history. Selected consent uses its own grant bit and exact revision FK;
   legacy-write/version triggers and mailbox revocation must survive rollbacks.
@@ -161,6 +170,7 @@ foreign keys; the broker deletes expired rows.
 
 - Spam/Trash candidate indexes cover `email_messages(link_id, id)` only for the corresponding positive `mailbox_state` JSON containment predicate; keep query literals aligned with the partial-index predicates.
 - If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
+- `document::get_all_documents::get_documents_to_delete` pages expired trash in `("deletedAt", id)` order through the partial `idx_document_deleted_at_id`, under a 10 s statement timeout; keep its `ORDER BY` and keyset comparison matching that index, or each page reads the whole Document table.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
 Hosted runtime enrollment generations are additive counters owned by

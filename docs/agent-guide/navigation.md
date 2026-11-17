@@ -626,8 +626,11 @@ dot. Channel/thread scoping happens before the witness limit; seen thread reason
 still affect that scoping. Reading or completing a witness refreshes the bounded
 edge so an older unread item can keep the dot lit. These witnesses must never be
 used as the complete mark-read/done input. The experimental notification-time
-sort remains on its existing REST path; disabling GraphQL or enabling that sort
-must not construct an unsupported GraphQL input or blank the app shell.
+sort is REST-only and does not move the dot: with GraphQL enabled the dot keeps
+the updated-at `HomeUnreadPresence` page whatever Home's list sorts by, and never
+reads the REST list or the notification feed. Only disabling GraphQL returns the
+dot to the REST list. Neither may construct an unsupported GraphQL input or
+blank the app shell.
 Cold offline launch must retain navigation even while notification preferences
 or badge queries are pending. Unknown preferences use the default enabled
 behavior; loaded disabled preferences still suppress Email's dot, including
@@ -706,7 +709,19 @@ only the field's X clears from inside it. An empty field collapses on `Escape`.
 Check it in Email, Tasks, Drive, and Projects, which land on the first row and
 scroll it into view; a list without the shared list keys keeps the row it was
 on. Where the view has no keyboard list on screen (Passwords, the booking
-lists, Routines' Discover tab), `ArrowDown` and `Enter` stay in the field.
+lists, Routines' Discover tab), or the search found no rows, `ArrowDown` and
+`Enter` stay in the field, so typing goes on. A list that empties while its
+search loads counts as having no rows until they arrive. `Enter` on one of Email's recent
+searches still moves to the list, which lands on the first row once that
+search's rows arrive.
+Home's and Chat's sidebar search fields follow the same rules, landing on the
+first matching row of the sidebar list; emptying the field from the list
+collapses it back to the Search icon. An `Escape` pressed in the preview or
+conversation beside the sidebar leaves the search alone. Home's field stays
+open while its query filters the list, including after the sidebar remounts
+(a window narrowed and widened again), and its Search icon then closes the
+field and clears the query, as the field's X does in a list header. Agents' sidebar field does not yet: its
+conversation list has no keyboard navigation.
 Mobile creation controls, search controls, and placement are unchanged.
 When multiple desktop splits are open, a **Close** (X) button appears in the
 sidebar title bar and closes that split, including

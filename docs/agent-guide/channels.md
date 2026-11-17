@@ -164,6 +164,17 @@ Named-channel invites still show `#<channel name>` and **Join channel**.
 Verify both emails in local Mailpit using distinct, unregistered test addresses;
 repeat with a plus-addressed DM recipient to check the email-name fallback.
 
+## Agent names and pictures stay current
+
+An agent's name and picture show as they are now everywhere: the `@` menu,
+mention chips, and the sender of every message it has sent, including older
+ones. Creating, renaming, re-picturing or deleting a bot (from settings, the
+SDK, or an agent's own tools) pushes a `bot_profile_changed` message to its
+owner, team and channel members, and open views update without a reload. To
+check it, open the same channel in two windows, ask an agent in one to create
+an agent or change its own name or picture, and confirm the other window's `@`
+menu, chips and earlier messages follow, on desktop and at phone width.
+
 ## Private conversations with an agent
 
 Agent DM discovery is on in development builds (dev.macro.com and `bun run dev`)
@@ -1342,9 +1353,10 @@ Display remain personal.
 ### Phone sections (flag on)
 
 The phone list reuses Home rows and the existing large favorite circles with
-unread dots. Up to six loaded favorites retain their saved order in one sideways
-scrolling row. All is selected initially, followed by Direct messages and custom
-sections in personal display order. All excludes pins except incoming-call rows;
+unread dots. All loaded channel favorites retain their saved order in one sideways
+scrolling row; swipe horizontally to reach favorites beyond the viewport. All is
+selected initially, followed by Direct messages and custom sections in personal
+display order. All excludes pins except incoming-call rows;
 the shared list renderer owns that exclusion so ringing pins retain their Join
 and Decline actions. Other tabs retain their pinned members. The shared `PillTabs`
 control sits below Favorites and above the conversation list, scrolls horizontally,

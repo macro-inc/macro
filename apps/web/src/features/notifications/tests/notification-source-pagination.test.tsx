@@ -54,6 +54,11 @@ vi.mock('@queries/soup/graphql/active-queries', () => ({
 vi.mock('@service-storage/graphql-notifications', () => ({
   updateNotifications: vi.fn(),
 }));
+vi.mock('@queries/auth/account-scope', () => ({
+  currentQueryAccount: () => undefined,
+  isCurrentQueryAccount: () => false,
+  queryAccountSessionPending: () => false,
+}));
 vi.mock('@service-storage/graphql-soup', () => ({
   graphqlCacheEnabled: () => false,
   mapGraphqlNotification: vi.fn(),
