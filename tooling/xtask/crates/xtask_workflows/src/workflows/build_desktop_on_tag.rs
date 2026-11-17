@@ -5,10 +5,10 @@
 //! The reusable job definitions live in [`super::build_appimage_on_tag`] and
 //! [`super::build_dmg_on_tag`].
 
-use gh_workflow::expr::typed::{Expr, Str, needs};
+use gh_workflow::expr::typed::{Expr, Str, github, input, needs, steps as step};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Push, Run, Step, Workflow,
-    WorkflowDispatch, WorkflowInput,
+    Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Workflow, WorkflowDispatch,
+    WorkflowInput,
 };
 
 use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag, steps, vars};
@@ -21,13 +21,21 @@ fn resolved_ref() -> Expr<Str> {
     needs("resolve-ref").output("ref")
 }
 
+/// The dispatch override, else the pushed tag, else the selected ref.
+fn desktop_ref() -> Expr<Str> {
+    let event_ref = github()
+        .event::<Str>("ref_type")
+        .eq("tag")
+        .then_else(github().event::<Str>("ref"), github().ref_name());
+    input::<Str>("ref").or_else(event_ref)
+}
+
 /// Build the workflow.
 pub fn build_desktop_on_tag() -> Workflow {
     Workflow::new("Build Desktop on Tag")
         .on(desktop_events())
         .concurrency(
-            Concurrency::new(Expression::new("desktop-${{ inputs.ref || (github.event.ref_type == 'tag' && github.event.ref || github.ref_name) }}"))
-                .cancel_in_progress(true),
+            Concurrency::new(format!("desktop-{}", desktop_ref())).cancel_in_progress(true),
         )
         .add_job("resolve-ref", resolve_ref())
         .add_job(
@@ -65,15 +73,11 @@ fn publish_desktop_job() -> Job {
         .name("Sign and publish desktop updates")
         .runs_on("ubuntu-latest")
         // Serialize channel promotion across tags; an older build cannot win a race.
-        .concurrency(
-            Concurrency::new(Expression::new("desktop-stable-publish")).cancel_in_progress(false),
-        )
+        .concurrency(Concurrency::new("desktop-stable-publish").cancel_in_progress(false))
         // A wedged signer must not hold the channel lock, and must not sit long
         // enough for the runner to be reaped with its logs still unuploaded.
         .timeout_minutes(20u32)
-        .cond(Expression::new(
-            "startsWith(needs.resolve-ref.outputs.ref, 'refs/tags/v')",
-        ))
+        .cond(resolved_ref().starts_with("refs/tags/v"))
         .permissions(Permissions {
             contents: Some(Level::Write),
             ..Default::default()
@@ -89,17 +93,17 @@ fn publish_desktop_job() -> Job {
                 .run(include_str!("scripts/sign_desktop_updates.sh"))
                 .shell("bash")
                 .add_env(("DOPPLER_TOKEN", vars::MACOS_RELEASE_DOPPLER_TOKEN))
-                .add_env(("GH_TOKEN", "${{ github.token }}"))
-                .add_env(("RELEASE_TAG", "${{ steps.metadata.outputs.tag }}"))
-                .add_env(("RELEASE_REPOSITORY", "${{ github.repository }}")),
+                .add_env(("GH_TOKEN", github().token()))
+                .add_env(("RELEASE_TAG", step("metadata").output("tag")))
+                .add_env(("RELEASE_REPOSITORY", github().repository())),
         )
         .add_step(
             Step::new("Publish desktop release and update feed")
                 .run(include_str!("scripts/publish_desktop_updates.sh"))
                 .shell("bash")
-                .add_env(("GH_TOKEN", "${{ github.token }}"))
-                .add_env(("RELEASE_TAG", "${{ steps.metadata.outputs.tag }}"))
-                .add_env(("RELEASE_REPOSITORY", "${{ github.repository }}")),
+                .add_env(("GH_TOKEN", github().token()))
+                .add_env(("RELEASE_TAG", step("metadata").output("tag")))
+                .add_env(("RELEASE_REPOSITORY", github().repository())),
         )
     // No Teardown Nix here. This job runs on a hosted runner with no /nix cache
     // volume to unmount, where the teardown's `fuser -km /nix` kills the runner
@@ -124,12 +128,19 @@ fn workflow_dispatch() -> WorkflowDispatch {
 
 fn resolve_ref() -> Job {
     Job::default()
-        .cond(Expression::new(
-            "github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag')",
-        ))
+        .cond(
+            github()
+                .event_name()
+                .eq("workflow_dispatch")
+                .or(github().event_name().eq("push"))
+                .or(github()
+                    .event_name()
+                    .eq("create")
+                    .and(github().event::<Str>("ref_type").eq("tag"))),
+        )
         .name("Resolve build ref")
         .runs_on("ubuntu-latest")
-        .add_output("ref", "${{ steps.resolve.outputs.ref }}")
+        .add_output("ref", step("resolve").output("ref"))
         .add_step(resolve_ref_step())
 }
 
@@ -138,9 +149,9 @@ fn resolve_ref_step() -> Step<Run> {
         .run(include_str!("scripts/resolve_desktop_ref.sh"))
         .id("resolve")
         .shell("bash")
-        .add_env(("EVENT_NAME", "${{ github.event_name }}"))
-        .add_env(("INPUT_REF", "${{ inputs.ref }}"))
-        .add_env(("GITHUB_EVENT_REF", "${{ github.event.ref }}"))
-        .add_env(("GITHUB_EVENT_REF_TYPE", "${{ github.event.ref_type }}"))
-        .add_env(("SELECTED_REF", "${{ github.ref }}"))
+        .add_env(("EVENT_NAME", github().event_name()))
+        .add_env(("INPUT_REF", input::<Str>("ref")))
+        .add_env(("GITHUB_EVENT_REF", github().event::<Str>("ref")))
+        .add_env(("GITHUB_EVENT_REF_TYPE", github().event::<Str>("ref_type")))
+        .add_env(("SELECTED_REF", github().git_ref()))
 }

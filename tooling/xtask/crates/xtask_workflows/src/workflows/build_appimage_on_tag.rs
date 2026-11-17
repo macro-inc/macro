@@ -1,7 +1,7 @@
 //! `Build AppImage` — reusable workflow that builds the Tauri desktop AppImage
 //! via Nix. Called from [`super::build_desktop_on_tag`].
 
-use gh_workflow::expr::typed::{Expr, Str, input};
+use gh_workflow::expr::typed::{Expr, Str, input, steps as step};
 use gh_workflow::{
     Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall, WorkflowCallSecret,
     WorkflowInput,
@@ -57,7 +57,7 @@ pub fn build_appimage_job(ref_expr: Expr<Str>) -> Job {
         .add_step(nix_build_appimage())
         .add_step(collect_appimage())
         .add_step(steps::upload_artifact(
-            "macro-appimage-${{ steps.metadata.outputs.safe_tag }}",
+            &format!("macro-appimage-{}", step("metadata").output("safe_tag")),
             xtask_paths::runtime_path!("artifacts/*"),
         ))
         .add_step(steps::teardown_nix())

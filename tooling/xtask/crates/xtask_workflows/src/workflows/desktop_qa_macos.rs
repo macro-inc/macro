@@ -10,10 +10,9 @@
 //! WebKit. The harness is `apps/web/tests/macos/qa.mjs`.
 //! Generated into `desktop_qa_macos.yml`.
 
-use gh_workflow::expr::typed::input;
+use gh_workflow::expr::typed::{Bool, Str, cancelled, format, github, input, raw, runner};
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowDispatch,
-    WorkflowInput,
+    Event, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::{build_dmg_on_tag, runners, steps};
@@ -22,15 +21,15 @@ const NIX_CACHE_SIZE_GB: u16 = 100;
 /// A cold Chromium build is slow; stop a hung job before it bills for hours.
 const TIMEOUT_MINUTES: u32 = 120;
 /// Where the harness writes, and what the artifact holds.
-const OUT: &str = "${{ runner.temp }}/qa-out";
+fn out() -> String {
+    format!("{}/qa-out", runner().temp())
+}
 
 /// Build the workflow. The `run-name` carries the suite, ref and report key so
 /// a run is recognisable in the Actions list.
 pub fn desktop_qa_macos() -> Workflow {
     Workflow::new("Desktop QA macOS")
-        .run_name(
-            "macOS QA ${{ inputs.suite }} ${{ inputs.ref }}${{ inputs.report && format(' [{0}]', inputs.report) || '' }}",
-        )
+        .run_name(run_name())
         .permissions(Permissions {
             contents: Some(Level::Read),
             ..Default::default()
@@ -67,6 +66,17 @@ pub fn desktop_qa_macos() -> Workflow {
         .add_job("qa-macos", qa_macos_job())
 }
 
+fn run_name() -> String {
+    // `inputs.report` is a string; only its truthiness picks the suffix.
+    let report_suffix = raw::<Bool>("inputs.report")
+        .then_else(format(" [{0}]", [input::<Str>("report").into_ast()]), "");
+    format!(
+        "macOS QA {} {}{report_suffix}",
+        input::<Str>("suite"),
+        input::<Str>("ref")
+    )
+}
+
 fn qa_macos_job() -> Job {
     Job::default()
         .name("QA on macOS")
@@ -77,9 +87,9 @@ fn qa_macos_job() -> Job {
         ])
         .timeout_minutes(TIMEOUT_MINUTES)
         .add_env(("DESKTOP_NIX_CACHE_SIZE_GB", NIX_CACHE_SIZE_GB.to_string()))
-        .add_env(("QA_SUITE", "${{ inputs.suite }}"))
-        .add_env(("QA_REF", "${{ inputs.ref }}"))
-        .add_env(("QA_REPORT", "${{ inputs.report }}"))
+        .add_env(("QA_SUITE", input::<Str>("suite")))
+        .add_env(("QA_REF", input::<Str>("ref")))
+        .add_env(("QA_REPORT", input::<Str>("report")))
         .add_step(steps::checkout_ref(input("ref")))
         .add_step(harness_checkout())
         .add_step(record_sha())
@@ -100,7 +110,7 @@ fn qa_macos_job() -> Job {
 fn harness_checkout() -> Step<Use> {
     Step::new("Checkout QA harness")
         .uses("actions", "checkout", steps::CHECKOUT_SHA)
-        .add_with(("ref", "${{ github.sha }}"))
+        .add_with(("ref", github().sha()))
         .add_with(("path", ".qa-harness"))
         .add_with(("sparse-checkout", "apps/web/tests/macos"))
         .add_with(("persist-credentials", false))
@@ -122,7 +132,7 @@ fn cargo_test() -> Step<Run> {
     Step::new("cargo test (src-tauri)")
         .run(include_str!("scripts/qa_cargo_test_macos.sh"))
         .shell("bash")
-        .if_condition(Expression::new("inputs.suite == 'full'"))
+        .if_condition(input::<Str>("suite").eq("full"))
         .continue_on_error(true)
 }
 
@@ -139,9 +149,9 @@ fn upload_results() -> Step<Use> {
             "upload-artifact",
             "ea165f8d65b6e75b540449e92b4886f43607fa02",
         ) // v4
-        .add_with(("name", "macos-qa-${{ github.run_id }}"))
-        .add_with(("path", OUT))
+        .add_with(("name", format!("macos-qa-{}", github().run_id())))
+        .add_with(("path", out()))
         .add_with(("if-no-files-found", "warn"))
         .add_with(("retention-days", 14))
-        .if_condition(Expression::new("!cancelled()"))
+        .if_condition(!cancelled())
 }

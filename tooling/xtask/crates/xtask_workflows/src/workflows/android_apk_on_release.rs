@@ -20,10 +20,10 @@
 //! Credentials: the signing keystore and Firebase config come from Doppler
 //! (`android-release/prd` via `ANDROID_RELEASE_DOPPLER_TOKEN`).
 
-use gh_workflow::expr::typed::github;
+use gh_workflow::expr::typed::{github, steps as step};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Release, ReleaseType, Run, Step, Use,
-    Workflow, WorkflowDispatch,
+    Concurrency, Event, Job, Level, Permissions, Release, ReleaseType, Run, Step, Use, Workflow,
+    WorkflowDispatch,
 };
 
 use crate::workflows::android_build::{self, Artifact};
@@ -39,8 +39,9 @@ pub fn android_apk_on_release() -> Workflow {
         .on(Event::default()
             .release(Release::default().add_type(ReleaseType::Released))
             .workflow_dispatch(WorkflowDispatch::default()))
-        .concurrency(Concurrency::new(Expression::new(
-            "android-apk-on-release-${{ github.ref_name }}",
+        .concurrency(Concurrency::new(format!(
+            "android-apk-on-release-{}",
+            github().ref_name()
         )))
         .add_job("build", build_job())
         .add_job("publish", publish_job())
@@ -55,7 +56,7 @@ fn build_job() -> Job {
         .timeout_minutes(90u32)
         .permissions(Permissions::default().contents(Level::Read))
         .add_env(("CI", "true"))
-        .add_env(("RELEASE_TAG", "${{ github.ref_name }}"))
+        .add_env(("RELEASE_TAG", github().ref_name()))
         .add_step(require_release())
         .add_step(steps::checkout_ref(github().git_ref()))
         .add_step(android_build::install_android_sdk())
@@ -76,7 +77,7 @@ fn publish_job() -> Job {
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(10u32)
         .permissions(Permissions::default().contents(Level::Write))
-        .add_env(("RELEASE_TAG", "${{ github.ref_name }}"))
+        .add_env(("RELEASE_TAG", github().ref_name()))
         .add_step(download_workflow_artifact())
         .add_step(upload_release_assets())
 }
@@ -100,7 +101,7 @@ fn require_release() -> Step<Run> {
               }
         "#})
         .shell("bash")
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
+        .add_env(("GH_TOKEN", github().token()))
 }
 
 fn prepare_version_and_signing() -> Step<Run> {
@@ -139,7 +140,7 @@ fn verify_and_collect() -> Step<Run> {
         "#})
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(("APK_FILENAME", "${{ steps.metadata.outputs.filename }}"))
+        .add_env(("APK_FILENAME", step("metadata").output("filename")))
 }
 
 fn upload_workflow_artifact() -> Step<Use> {
@@ -177,5 +178,5 @@ fn upload_release_assets() -> Step<Run> {
             gh release upload "$RELEASE_TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
         "#})
         .shell("bash")
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
+        .add_env(("GH_TOKEN", github().token()))
 }

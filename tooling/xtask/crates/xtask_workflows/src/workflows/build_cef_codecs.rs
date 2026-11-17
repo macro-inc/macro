@@ -8,9 +8,9 @@
 //! distribution before the pin lands, and is skipped when the release asset
 //! already exists.
 
+use gh_workflow::expr::typed::{Str, github};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, Step, Workflow,
-    WorkflowDispatch,
+    Concurrency, Event, Job, Level, Permissions, PullRequest, Step, Workflow, WorkflowDispatch,
 };
 
 use crate::workflows::{runners, steps};
@@ -40,7 +40,7 @@ pub fn build_cef_codecs() -> Workflow {
             .workflow_dispatch(WorkflowDispatch::default()))
         // One Chromium build per manifest at a time; never cancel a build hours in.
         .concurrency(
-            Concurrency::new(Expression::new("build-cef-codecs")).cancel_in_progress(false),
+            Concurrency::new("build-cef-codecs").cancel_in_progress(false),
         )
         .add_job("build-cef", build_cef_job())
 }
@@ -51,19 +51,22 @@ fn build_cef_job() -> Job {
         .runs_on(runners::Runner::MacOsArmLarge.to_string())
         // A full Chromium checkout and official build takes several hours.
         .timeout_minutes(1440u32)
-        .cond(Expression::new(
-            "github.event_name != 'pull_request' || \
-             github.event.pull_request.head.repo.full_name == github.repository",
-        ))
+        .cond(
+            github().event_name().ne("pull_request").or(github()
+                .event::<Str>("pull_request.head.repo.full_name")
+                .eq(github().repository())),
+        )
         .add_step(steps::checkout(false, false))
         .add_step(
             Step::new("Build and publish CEF")
                 .run(include_str!("scripts/build_cef_codecs.sh"))
                 .shell("bash")
-                .add_env(("GH_TOKEN", "${{ github.token }}"))
+                .add_env(("GH_TOKEN", github().token()))
                 .add_env((
                     "TARGET_SHA",
-                    "${{ github.event.pull_request.head.sha || github.sha }}",
+                    github()
+                        .event::<Str>("pull_request.head.sha")
+                        .or_else(github().sha()),
                 )),
         )
 }

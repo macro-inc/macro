@@ -16,14 +16,12 @@
 //! events created with the workflow token never start workflows. The iOS
 //! counterpart is [`super::ios_release_watch`].
 
+use gh_workflow::expr::typed::{Bool, Expr, github, steps as step};
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, Run, Schedule, Step, Use, Workflow,
-    WorkflowDispatch,
+    Event, Job, Level, Permissions, Run, Schedule, Step, Use, Workflow, WorkflowDispatch,
 };
 
 use crate::workflows::{runners, steps};
-
-const HAS_PRS: &str = "steps.prs.outputs.count != '0'";
 
 /// Build the workflow.
 pub fn android_release_watch() -> Workflow {
@@ -47,8 +45,8 @@ fn watch_job() -> Job {
         .name("Re-run the Android Native Check once the Play release is live")
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(15u32)
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
         .add_step(find_prs())
         .add_step(steps::checkout(false, false).if_condition(gated()))
         .add_step(setup_bun())
@@ -56,8 +54,8 @@ fn watch_job() -> Job {
         .add_step(rerun_live_checks())
 }
 
-fn gated() -> Expression {
-    Expression::new(HAS_PRS)
+fn gated() -> Expr<Bool> {
+    step("prs").output("count").ne("0")
 }
 
 fn find_prs() -> Step<Run> {
@@ -90,9 +88,9 @@ fn rerun_live_checks() -> Step<Run> {
         ))
         .shell("bash")
         .if_condition(gated())
-        .add_env(("PRS", "${{ steps.prs.outputs.prs }}"))
+        .add_env(("PRS", step("prs").output("prs")))
         .add_env((
             "GOOGLE_PLAY_ACCESS_TOKEN",
-            "${{ steps.auth.outputs.access_token }}",
+            step("auth").output("access_token"),
         ))
 }

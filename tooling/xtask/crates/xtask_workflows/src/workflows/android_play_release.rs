@@ -24,9 +24,10 @@
 //! Credentials: the signing keystore and Firebase config come from Doppler
 //! (`android-release/prd` via `ANDROID_RELEASE_DOPPLER_TOKEN`).
 
+use gh_workflow::expr::typed::{Expr, Str, failure, github, steps as step};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,
-    Step, Use, Workflow,
+    Concurrency, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use,
+    Workflow,
 };
 
 use crate::workflows::android_build::{self, Artifact};
@@ -37,8 +38,9 @@ pub fn android_play_release() -> Workflow {
     Workflow::new("Android Play Release")
         .on(Event::default()
             .pull_request(PullRequest::default().add_type(PullRequestType::Labeled)))
-        .concurrency(Concurrency::new(Expression::new(
-            "android-play-release-${{ github.event.pull_request.number }}",
+        .concurrency(Concurrency::new(format!(
+            "android-play-release-{}",
+            pr_number()
         )))
         .add_job("release", release_job())
 }
@@ -48,10 +50,16 @@ fn release_job() -> Job {
         .name("Android Play Release")
         // Same-repo PRs only: the release needs the signing secrets and the
         // Play identity, which fork PRs don't receive anyway.
-        .cond(Expression::new(
-            "github.event.label.name == 'android-update' && \
-             github.event.pull_request.head.repo.full_name == github.repository",
-        ))
+        .cond(
+            github()
+                .event::<Str>("label.name")
+                .eq("android-update")
+                .and(
+                    github()
+                        .event::<Str>("pull_request.head.repo.full_name")
+                        .eq(github().repository()),
+                ),
+        )
         // The former tag-driven build ran on this hosted image (Android SDK
         // preinstalled, no Nix cache mount; see docs/development/android.md).
         .runs_on("ubuntu-24.04")
@@ -66,10 +74,13 @@ fn release_job() -> Job {
                 .statuses(Level::Read),
         )
         .add_env(("CI", "true"))
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
-        .add_env(("BASE_BRANCH", "${{ github.event.pull_request.base.ref }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env(("PR_NUMBER", pr_number()))
+        .add_env((
+            "BASE_BRANCH",
+            github().event::<Str>("pull_request.base.ref"),
+        ))
         .add_step(checkout_pr_head())
         .add_step(setup_bun())
         .add_step(preconditions())
@@ -86,10 +97,22 @@ fn release_job() -> Job {
         .add_step(pr_comment())
 }
 
+fn pr_number() -> Expr<Str> {
+    github().event("pull_request.number")
+}
+
+fn head_sha() -> Expr<Str> {
+    github().event("pull_request.head.sha")
+}
+
+fn version_code() -> Expr<Str> {
+    step("preconditions").output("version_code")
+}
+
 fn checkout_pr_head() -> Step<Use> {
     Step::new("Checkout PR head")
         .uses("actions", "checkout", steps::CHECKOUT_SHA)
-        .add_with(("ref", "${{ github.event.pull_request.head.sha }}"))
+        .add_with(("ref", head_sha()))
         .add_with(("persist-credentials", false))
 }
 
@@ -115,7 +138,7 @@ fn preconditions() -> Step<Run> {
     )
     .id("preconditions")
     .working_directory(xtask_paths::repo_dir!("apps/web"))
-    .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
+    .add_env(("HEAD_SHA", head_sha()))
     .add_env(("WAIT_MINUTES", "30"))
     .add_env(("RELEASE_LABEL", "android-update"))
 }
@@ -144,7 +167,7 @@ fn prepare_version_and_signing() -> Step<Run> {
         .id("metadata")
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(("VERSION_CODE", "${{ steps.preconditions.outputs.version_code }}"))
+        .add_env(("VERSION_CODE", version_code()))
         .add_env(("DOPPLER_TOKEN", vars::ANDROID_RELEASE_DOPPLER_TOKEN))
 }
 
@@ -185,8 +208,8 @@ fn verify_and_collect() -> Step<Run> {
     )
     .id("artifact")
     .working_directory(xtask_paths::repo_dir!("apps/web"))
-    .add_env(("VERSION_CODE", "${{ steps.preconditions.outputs.version_code }}"))
-    .add_env(("RELEASE_FILENAME", "${{ steps.metadata.outputs.filename }}"))
+    .add_env(("VERSION_CODE", version_code()))
+    .add_env(("RELEASE_FILENAME", step("metadata").output("filename")))
 }
 
 /// Native code pushed while the build ran, on the PR or on `main`, would make
@@ -229,8 +252,8 @@ fn pr_comment() -> Step<Use> {
         // successful build. Not `always()` either: a run the drift workflow
         // cancelled must not post "failed, re-add the label" next to drift's
         // own comment.
-        .if_condition(Expression::new("failure()"))
-        .add_with(("github-token", "${{ secrets.GITHUB_TOKEN }}"))
+        .if_condition(failure())
+        .add_with(("github-token", vars::GITHUB_TOKEN))
         .add_with((
             "script",
             indoc::indoc! {r#"

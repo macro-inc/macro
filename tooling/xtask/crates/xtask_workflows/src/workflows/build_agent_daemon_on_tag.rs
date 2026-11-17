@@ -13,9 +13,9 @@
 //! waiting on DMG notarization, and a flaky desktop build has no business
 //! holding it back.
 
-use gh_workflow::expr::typed::{Expr, Str, needs};
+use gh_workflow::expr::typed::{Bool, Expr, Str, cancelled, github, input, needs, steps as step};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Push, Run, Step, Workflow, WorkflowDispatch, WorkflowInput,
+    Concurrency, Event, Job, Push, Run, Step, Workflow, WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::{build_appimage_on_tag, runners, steps, vars};
@@ -90,8 +90,9 @@ pub fn build_agent_daemon_on_tag() -> Workflow {
     let mut workflow = Workflow::new("Build Agent Daemon on Tag")
         .on(daemon_events())
         .concurrency(
-            Concurrency::new(Expression::new(
-                "agent-daemon-${{ inputs.ref || github.ref_name }}",
+            Concurrency::new(format!(
+                "agent-daemon-{}",
+                input::<Str>("ref").or_else(github().ref_name())
             ))
             .cancel_in_progress(true),
         )
@@ -117,17 +118,19 @@ pub fn build_agent_daemon_on_tag() -> Workflow {
     }
     // A failed platform must not prevent successful platform artifacts from
     // reaching the release.
-    publish = publish.cond(Expression::new(publish_when_any_build_succeeded()));
+    publish = publish.cond(publish_when_any_build_succeeded());
 
     workflow.add_job("publish-daemon", publish)
 }
 
-fn publish_when_any_build_succeeded() -> String {
+fn publish_when_any_build_succeeded() -> Expr<Bool> {
     let any_build = all_targets()
-        .map(|target| format!("needs.{}.result == 'success'", job_id(target)))
-        .collect::<Vec<_>>()
-        .join(" || ");
-    format!("!cancelled() && needs.resolve-ref.result == 'success' && ({any_build})")
+        .map(|target| needs(&job_id(target)).result().eq("success"))
+        .reduce(Expr::or)
+        .expect("at least one daemon target");
+    (!cancelled())
+        .and(needs("resolve-ref").result().eq("success"))
+        .and(any_build)
 }
 
 fn job_id(target: &DaemonTarget) -> String {
@@ -155,7 +158,7 @@ fn resolve_ref() -> Job {
     Job::default()
         .name("Resolve build ref")
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_output("ref", "${{ steps.resolve.outputs.ref }}")
+        .add_output("ref", step("resolve").output("ref"))
         .add_step(resolve_ref_step())
 }
 
@@ -164,11 +167,11 @@ fn resolve_ref_step() -> Step<Run> {
         .run(include_str!("scripts/resolve_desktop_ref.sh"))
         .id("resolve")
         .shell("bash")
-        .add_env(("EVENT_NAME", "${{ github.event_name }}"))
-        .add_env(("INPUT_REF", "${{ inputs.ref }}"))
-        .add_env(("GITHUB_EVENT_REF", "${{ github.event.ref }}"))
-        .add_env(("GITHUB_EVENT_REF_TYPE", "${{ github.event.ref_type }}"))
-        .add_env(("SELECTED_REF", "${{ github.ref }}"))
+        .add_env(("EVENT_NAME", github().event_name()))
+        .add_env(("INPUT_REF", input::<Str>("ref")))
+        .add_env(("GITHUB_EVENT_REF", github().event::<Str>("ref")))
+        .add_env(("GITHUB_EVENT_REF_TYPE", github().event::<Str>("ref_type")))
+        .add_env(("SELECTED_REF", github().git_ref()))
 }
 
 /// The minimal agent-daemon Nix shell carries cargo-zigbuild, zig, and cmake
@@ -237,7 +240,7 @@ fn build_step(target: &DaemonTarget, script: &str) -> Step<Run> {
         .run(script)
         .shell("bash")
         .add_env(("TARGET", target.triple))
-        .add_env(("MACROD_RELEASE_TAG", "${{ steps.metadata.outputs.tag }}"))
+        .add_env(("MACROD_RELEASE_TAG", step("metadata").output("tag")))
 }
 
 fn package_step(target: &DaemonTarget) -> Step<Run> {
@@ -246,16 +249,17 @@ fn package_step(target: &DaemonTarget) -> Step<Run> {
         .shell("bash")
         .add_env(("TARGET", target.triple))
         .add_env(("SLUG", target.slug))
-        .add_env(("SAFE_TAG", "${{ steps.metadata.outputs.safe_tag }}"))
-        .add_env(("RELEASE_TAG", "${{ steps.metadata.outputs.tag }}"))
+        .add_env(("SAFE_TAG", step("metadata").output("safe_tag")))
+        .add_env(("RELEASE_TAG", step("metadata").output("tag")))
         .add_env(("SMOKE_RUN", if target.smoke_run { "1" } else { "0" }))
 }
 
 fn upload_step(target: &DaemonTarget) -> Step<gh_workflow::Use> {
     steps::upload_artifact(
         &format!(
-            "macrod-{}-${{{{ steps.metadata.outputs.safe_tag }}}}",
-            target.slug
+            "macrod-{}-{}",
+            target.slug,
+            step("metadata").output("safe_tag")
         ),
         xtask_paths::runtime_path!("artifacts/*"),
     )

@@ -20,18 +20,15 @@
 //! Credentials come from Doppler like the other two iOS workflows; the
 //! common case (no labeled PRs) exits before fetching anything.
 
+use gh_workflow::expr::typed::{Bool, Expr, github, steps as step};
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, Run, Schedule, Step, Use, Workflow,
-    WorkflowDispatch,
+    Event, Job, Level, Permissions, Run, Schedule, Step, Use, Workflow, WorkflowDispatch,
 };
 
 use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
 mod test;
-
-/// `true` when the first step found at least one PR to look at.
-const HAS_PRS: &str = "steps.prs.outputs.count != '0'";
 
 /// Build the workflow.
 pub fn ios_release_watch() -> Workflow {
@@ -53,8 +50,8 @@ fn watch_job() -> Job {
         .name("Re-run the iOS Native Check once Apple approves the App Store release")
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(15u32)
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
         .add_step(find_prs())
         .add_step(steps::checkout(false, false).if_condition(gated()))
         .add_step(setup_bun())
@@ -62,8 +59,9 @@ fn watch_job() -> Job {
         .add_step(rerun_approved_checks())
 }
 
-fn gated() -> Expression {
-    Expression::new(HAS_PRS)
+/// `true` when the first step found at least one PR to look at.
+fn gated() -> Expr<Bool> {
+    step("prs").output("count").ne("0")
 }
 
 fn find_prs() -> Step<Run> {
@@ -106,5 +104,5 @@ fn rerun_approved_checks() -> Step<Run> {
         ))
         .shell("bash")
         .if_condition(gated())
-        .add_env(("PRS", "${{ steps.prs.outputs.prs }}"))
+        .add_env(("PRS", step("prs").output("prs")))
 }

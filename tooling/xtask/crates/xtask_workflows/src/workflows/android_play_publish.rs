@@ -29,12 +29,15 @@
 //! `publish` joins the per-branch concurrency group (a queued no-op run would
 //! otherwise cancel a pending publish).
 
+use gh_workflow::expr::typed::{
+    Str, always, failure, github, job_status, needs, runner, steps as step, success,
+};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowRun,
+    Concurrency, Event, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowRun,
     WorkflowRunType,
 };
 
-use crate::workflows::{runners, steps};
+use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
 mod test;
@@ -59,11 +62,21 @@ fn check_job() -> Job {
         .name("Check the release request")
         // The build job skips fork PRs, and fork runs never get here with a
         // successful build; the head-repository test is belt and braces.
-        .cond(Expression::new(
-            "github.event.workflow_run.conclusion == 'success' && \
-             github.event.workflow_run.event == 'pull_request' && \
-             github.event.workflow_run.head_repository.full_name == github.repository",
-        ))
+        .cond(
+            github()
+                .event::<Str>("workflow_run.conclusion")
+                .eq("success")
+                .and(
+                    github()
+                        .event::<Str>("workflow_run.event")
+                        .eq("pull_request"),
+                )
+                .and(
+                    github()
+                        .event::<Str>("workflow_run.head_repository.full_name")
+                        .eq(github().repository()),
+                ),
+        )
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(10u32)
         .permissions(
@@ -73,12 +86,12 @@ fn check_job() -> Job {
                 .issues(Level::Read)
                 .pull_requests(Level::Write),
         )
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_output("publish", "${{ steps.verify.outputs.publish }}")
-        .add_output("pr_number", "${{ steps.verify.outputs.pr_number }}")
-        .add_output("version_code", "${{ steps.verify.outputs.version_code }}")
-        .add_output("release_name", "${{ steps.verify.outputs.release_name }}")
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_output("publish", step("verify").output("publish"))
+        .add_output("pr_number", step("verify").output("pr_number"))
+        .add_output("version_code", step("verify").output("version_code"))
+        .add_output("release_name", step("verify").output("release_name"))
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_bun_pinned())
         .add_step(verify())
@@ -95,21 +108,24 @@ fn verify() -> Step<Run> {
     )
     .id("verify")
     .working_directory(xtask_paths::repo_dir!("apps/web"))
-    .add_env(("RUN_ID", "${{ github.event.workflow_run.id }}"))
+    .add_env(("RUN_ID", github().event::<Str>("workflow_run.id")))
     .add_env((
         "RUN_ATTEMPT",
-        "${{ github.event.workflow_run.run_attempt }}",
+        github().event::<Str>("workflow_run.run_attempt"),
     ))
-    .add_env(("RUN_PATH", "${{ github.event.workflow_run.path }}"))
-    .add_env(("RUN_ACTOR", "${{ github.event.workflow_run.actor.login }}"))
+    .add_env(("RUN_PATH", github().event::<Str>("workflow_run.path")))
+    .add_env((
+        "RUN_ACTOR",
+        github().event::<Str>("workflow_run.actor.login"),
+    ))
     .add_env((
         "RUN_CREATED_AT",
-        "${{ github.event.workflow_run.created_at }}",
+        github().event::<Str>("workflow_run.created_at"),
     ))
-    .add_env(("HEAD_SHA", "${{ github.event.workflow_run.head_sha }}"))
+    .add_env(("HEAD_SHA", github().event::<Str>("workflow_run.head_sha")))
     .add_env((
         "HEAD_BRANCH",
-        "${{ github.event.workflow_run.head_branch }}",
+        github().event::<Str>("workflow_run.head_branch"),
     ))
 }
 
@@ -123,15 +139,18 @@ fn refusal_comment() -> Step<Run> {
 
             A person with write access can remove and re-add the \`android-update\` label to release the PR's current head."
         "#})
-        .if_condition(Expression::new(
-            "failure() && steps.verify.outputs.pr_number != ''",
-        ))
+        .if_condition(failure().and(step("verify").output("pr_number").ne("")))
         .shell("bash")
-        .add_env(("PR_NUMBER", "${{ steps.verify.outputs.pr_number }}"))
-        .add_env(("BUILD_URL", "${{ github.event.workflow_run.html_url }}"))
+        .add_env(("PR_NUMBER", step("verify").output("pr_number")))
+        .add_env(("BUILD_URL", github().event::<Str>("workflow_run.html_url")))
         .add_env((
             "RUN_URL",
-            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            format!(
+                "{}/{}/actions/runs/{}",
+                github().server_url(),
+                github().repository(),
+                github().run_id()
+            ),
         ))
 }
 
@@ -139,14 +158,15 @@ fn publish_job() -> Job {
     Job::default()
         .name(PUBLISH_JOB_NAME)
         .add_needs("check")
-        .cond(Expression::new("needs.check.outputs.publish == 'true'"))
+        .cond(needs("check").output("publish").is_true())
         // A hosted image: the upload action and the promotion script need Node.
         .runs_on("ubuntu-24.04")
         .timeout_minutes(30u32)
         // One release at a time per PR branch, queued rather than cancelled:
         // a cancelled run can leave a promotion half-reported.
-        .concurrency(Concurrency::new(Expression::new(
-            "android-play-publish-${{ github.event.workflow_run.head_branch }}",
+        .concurrency(Concurrency::new(format!(
+            "android-play-publish-{}",
+            github().event::<Str>("workflow_run.head_branch")
         )))
         .permissions(
             Permissions::default()
@@ -157,11 +177,11 @@ fn publish_job() -> Job {
                 .pull_requests(Level::Write)
                 .statuses(Level::Write),
         )
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("PR_NUMBER", "${{ needs.check.outputs.pr_number }}"))
-        .add_env(("VERSION_CODE", "${{ needs.check.outputs.version_code }}"))
-        .add_env(("BUILT_SHA", "${{ github.event.workflow_run.head_sha }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env(("PR_NUMBER", needs("check").output("pr_number")))
+        .add_env(("VERSION_CODE", needs("check").output("version_code")))
+        .add_env(("BUILT_SHA", github().event::<Str>("workflow_run.head_sha")))
         .add_env(("BASE_BRANCH", "main"))
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_bun_pinned())
@@ -222,9 +242,9 @@ fn download_artifact() -> Step<Use> {
     Step::new("Download the built App Bundle")
         .uses("actions", "download-artifact", steps::DOWNLOAD_ARTIFACT_SHA)
         .add_with(("name", "android-release"))
-        .add_with(("run-id", "${{ github.event.workflow_run.id }}"))
-        .add_with(("github-token", "${{ github.token }}"))
-        .add_with(("path", "${{ runner.temp }}/android-release"))
+        .add_with(("run-id", github().event::<Str>("workflow_run.id")))
+        .add_with(("github-token", github().token()))
+        .add_with(("path", format!("{}/android-release", runner().temp())))
 }
 
 /// The artifact was written by PR code: take exactly one bundle and one
@@ -265,15 +285,15 @@ fn upload_internal() -> Step<Use> {
         .id("upload")
         .add_with((
             "serviceAccountJson",
-            "${{ steps.auth.outputs.credentials_file_path }}",
+            step("auth").output("credentials_file_path"),
         ))
         .add_with(("packageName", "com.macro.workspace.mobile"))
-        .add_with(("releaseFiles", "${{ steps.artifact.outputs.bundle }}"))
-        .add_with(("mappingFile", "${{ steps.artifact.outputs.mapping }}"))
-        .add_with(("releaseName", "${{ needs.check.outputs.release_name }}"))
+        .add_with(("releaseFiles", step("artifact").output("bundle")))
+        .add_with(("mappingFile", step("artifact").output("mapping")))
+        .add_with(("releaseName", needs("check").output("release_name")))
         .add_with(("track", "internal"))
         .add_with(("status", "completed"))
-        .add_with(("whatsNewDirectory", "${{ runner.temp }}/whatsnew"))
+        .add_with(("whatsNewDirectory", format!("{}/whatsnew", runner().temp())))
 }
 
 /// Set before the promotion starts, so a drift check running meanwhile
@@ -290,7 +310,7 @@ fn mark_promotion_pending() -> Step<Run> {
         ))
         .id("pending")
         .shell("bash")
-        .add_env(("NATIVE_HASH", "${{ steps.stamp.outputs.native_hash }}"))
+        .add_env(("NATIVE_HASH", step("stamp").output("native_hash")))
 }
 
 /// Internal → production, full rollout. Play can take a moment to show the
@@ -313,7 +333,7 @@ fn promote_production() -> Step<Run> {
     )
     .id("promote")
     .working_directory(xtask_paths::repo_dir!("apps/web"))
-    .add_env(("GOOGLE_PLAY_ACCESS_TOKEN", "${{ steps.auth.outputs.access_token }}"))
+    .add_env(("GOOGLE_PLAY_ACCESS_TOKEN", step("auth").output("access_token")))
     .add_env(("CHANGES_NOT_SENT_FOR_REVIEW", "false"))
 }
 
@@ -333,12 +353,10 @@ fn mark_promotion_result() -> Step<Run> {
                   "$(android_release_description "$VERSION_CODE" "$NATIVE_HASH")"
             "#}
         ))
-        .if_condition(Expression::new(
-            "always() && steps.pending.outcome == 'success'",
-        ))
+        .if_condition(always().and(step("pending").outcome().eq("success")))
         .shell("bash")
-        .add_env(("NATIVE_HASH", "${{ steps.stamp.outputs.native_hash }}"))
-        .add_env(("PROMOTE_OUTCOME", "${{ steps.promote.outcome }}"))
+        .add_env(("NATIVE_HASH", step("stamp").output("native_hash")))
+        .add_env(("PROMOTE_OUTCOME", step("promote").outcome()))
 }
 
 fn pr_comment() -> Step<Use> {
@@ -348,13 +366,13 @@ fn pr_comment() -> Step<Use> {
             "github-script",
             "f28e40c7f34bde8b3046d885e986cb6290c5673b",
         )
-        .if_condition(Expression::new("success() || failure()"))
-        .add_with(("github-token", "${{ secrets.GITHUB_TOKEN }}"))
+        .if_condition(success().or(failure()))
+        .add_with(("github-token", vars::GITHUB_TOKEN))
         .add_env(("JOB_NAME", PUBLISH_JOB_NAME))
-        .add_env(("BUILD_URL", "${{ github.event.workflow_run.html_url }}"))
-        .add_env(("RELEASE_NAME", "${{ needs.check.outputs.release_name }}"))
-        .add_env(("JOB_STATUS", "${{ job.status }}"))
-        .add_env(("UPLOAD_OUTCOME", "${{ steps.upload.outcome }}"))
+        .add_env(("BUILD_URL", github().event::<Str>("workflow_run.html_url")))
+        .add_env(("RELEASE_NAME", needs("check").output("release_name")))
+        .add_env(("JOB_STATUS", job_status()))
+        .add_env(("UPLOAD_OUTCOME", step("upload").outcome()))
         .add_with((
             "script",
             include_str!("scripts/android_play_publish_comment.js"),

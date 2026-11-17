@@ -21,17 +21,15 @@
 //! lookup fails.
 //! The iOS counterpart is [`super::ios_release_drift`].
 
+use gh_workflow::expr::typed::{Bool, Expr, Json, Str, always, github, steps as step};
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use,
-    Workflow,
+    Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use, Workflow,
 };
 
 use crate::workflows::{runners, steps};
 
 #[cfg(test)]
 mod test;
-
-const CHANGED: &str = "steps.detect.outputs.changed == 'true'";
 
 /// Build the workflow.
 pub fn android_release_drift() -> Workflow {
@@ -44,10 +42,16 @@ pub fn android_release_drift() -> Workflow {
 fn drift_job() -> Job {
     Job::default()
         .name("Android Release Drift")
-        .cond(Expression::new(
-            "contains(github.event.pull_request.labels.*.name, 'android-update') && \
-             github.event.pull_request.head.repo.full_name == github.repository",
-        ))
+        .cond(
+            github()
+                .event::<Json>("pull_request.labels.*.name")
+                .contains("android-update")
+                .and(
+                    github()
+                        .event::<Str>("pull_request.head.repo.full_name")
+                        .eq(github().repository()),
+                ),
+        )
         .runs_on(runners::Runner::TinyNoCache.to_string())
         // Cancelling release runs waits up to 3 minutes, publish runs in
         // progress up to 10.
@@ -59,9 +63,9 @@ fn drift_job() -> Job {
                 .pull_requests(Level::Write)
                 .statuses(Level::Read),
         )
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env(("PR_NUMBER", github().event::<Str>("pull_request.number")))
         .add_step(steps::checkout(false, false))
         .add_step(setup_bun())
         .add_step(detect())
@@ -71,8 +75,12 @@ fn drift_job() -> Job {
         .add_step(comment())
 }
 
-fn changed() -> Expression {
-    Expression::new(CHANGED)
+fn changed() -> Expr<Bool> {
+    step("detect").output("changed").is_true()
+}
+
+fn version_code() -> Expr<Str> {
+    step("detect").output("version_code")
 }
 
 fn setup_bun() -> Step<Use> {
@@ -88,8 +96,8 @@ fn detect() -> Step<Run> {
         .id("detect")
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(("BEFORE_SHA", "${{ github.event.before }}"))
-        .add_env(("AFTER_SHA", "${{ github.event.after }}"))
+        .add_env(("BEFORE_SHA", github().event::<Str>("before")))
+        .add_env(("AFTER_SHA", github().event::<Str>("after")))
 }
 
 fn cancel_release_runs() -> Step<Run> {
@@ -120,7 +128,7 @@ fn cancel_release_runs() -> Step<Run> {
         "#})
         .if_condition(changed())
         .shell("bash")
-        .add_env(("HEAD_REF", "${{ github.event.pull_request.head.ref }}"))
+        .add_env(("HEAD_REF", github().event::<Str>("pull_request.head.ref")))
 }
 
 /// Was the stale bundle already promoted to production (in review or
@@ -132,18 +140,16 @@ fn play_status() -> Step<Run> {
             include_str!("scripts/android_release_drift_promoted.sh")
         ))
         .id("status")
-        .if_condition(Expression::new(format!(
-            "{CHANGED} && steps.detect.outputs.version_code != ''"
-        )))
+        .if_condition(changed().and(version_code().ne("")))
         .shell("bash")
-        .add_env(("BEFORE_SHA", "${{ github.event.before }}"))
-        .add_env(("VERSION_CODE", "${{ steps.detect.outputs.version_code }}"))
+        .add_env(("BEFORE_SHA", github().event::<Str>("before")))
+        .add_env(("VERSION_CODE", version_code()))
 }
 
 /// `always()`: even if the status check failed, the label must come off and
 /// someone must be told.
-fn after_detect() -> Expression {
-    Expression::new(format!("always() && {CHANGED}"))
+fn after_detect() -> Expr<Bool> {
+    always().and(changed())
 }
 
 fn remove_label() -> Step<Run> {
@@ -169,6 +175,6 @@ fn comment() -> Step<Run> {
         "#})
         .if_condition(after_detect())
         .shell("bash")
-        .add_env(("PROMOTED", "${{ steps.status.outputs.promoted }}"))
-        .add_env(("VERSION_CODE", "${{ steps.detect.outputs.version_code }}"))
+        .add_env(("PROMOTED", step("status").output("promoted")))
+        .add_env(("VERSION_CODE", version_code()))
 }
