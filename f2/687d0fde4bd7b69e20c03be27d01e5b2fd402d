@@ -1,0 +1,21 @@
+crates/native_app_service/src/domain/service.rs
+  s_358a0656ff17a9::t_b02167f3dc93fd 24-72,76,93,104,109,120,126,130,134,146,153,161-178
+apps/web/tauri/src-tauri/README.md
+  s_358a0656ff17a9::t_ea83fb20116d24 103-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f2687d0fde4bd7b69e20c03be27d01e5b2fd402d",
+  "prompts": {},
+  "sessions": {
+    "s_358a0656ff17a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "da35317f-151d-4c83-904b-8e1e317fd21e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
