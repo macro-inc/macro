@@ -5,7 +5,7 @@ use ::axum::{
     http::{StatusCode, request::Parts},
 };
 
-use macro_auth::credential::RequestCredential;
+use macro_auth::credential::{CredentialKind, TokenSource};
 
 use crate::{MacroAuthorization, MacroAuthorizationService};
 
@@ -76,33 +76,36 @@ where
     // The one reading of the request's credential, shared with the agent
     // scope check, so the two can't pick different ones.
     let credential = macro_auth::credential::request_credential(parts)
-        .map_err(|_| status_rejection(StatusCode::BAD_REQUEST, "conflicting_credentials"))?;
-    let user_token = match credential {
-        RequestCredential::Internal => {
+        .map_err(|error| status_rejection(StatusCode::BAD_REQUEST, error.code()))?;
+    let user_token = match credential.kind {
+        CredentialKind::Internal => {
             let Some(convention) = internal_header_convention(&parts.headers) else {
                 return Err(rejection("unauthorized"));
             };
             return authorize_internal_request::<S, Svc>(parts, state, convention).await;
         }
-        RequestCredential::UserApiKey => {
+        CredentialKind::UserApiKey => {
             let user = authorize_user_api_key_request::<S, Svc>(parts, state).await?;
             return Ok(Some(MacroAuthorization::User(user)));
         }
-        RequestCredential::Bot => {
+        CredentialKind::Bot => {
             let bot = authorize_optional_bot_request::<S, Svc>(parts, state)
                 .await?
-                .expect("bot token presence was checked");
+                .ok_or_else(|| rejection("unauthorized"))?;
             return Ok(Some(MacroAuthorization::Bot(bot)));
         }
-        RequestCredential::Harness => {
+        CredentialKind::Harness => {
             let harness = authorize_optional_harness_request::<S, Svc>(parts, state)
                 .await?
-                .expect("harness token presence was checked");
+                .ok_or_else(|| rejection("unauthorized"))?;
             return Ok(Some(MacroAuthorization::Harness(harness)));
         }
-        RequestCredential::MalformedAuthorization => return Err(rejection("unauthorized")),
-        RequestCredential::UserToken { token, explicit } => Some(UserToken { token, explicit }),
-        RequestCredential::None => None,
+        CredentialKind::MalformedAuthorization => return Err(rejection("unauthorized")),
+        CredentialKind::UserToken { token, source } => Some(UserToken {
+            token,
+            explicit: source != TokenSource::Cookie,
+        }),
+        CredentialKind::None => None,
     };
 
     authorize_optional_user_request::<S, Svc>(state, user_token)

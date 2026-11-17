@@ -83,14 +83,14 @@ managers.
 
 - Both extractors read the request's credential only through
   `macro_auth::credential::request_credential`, the same reading the agent
-  scope check (`agent_correlation`) uses, so authentication and scope can't
-  pick different credentials. A request carrying differing credentials (any
-  two of internal key, bot token, harness token, user API key and user
-  token, or two different user tokens across bearer, `macro-api-token`
-  query parameters with keys percent-decoded, and the access-token cookie)
-  is refused 400 `conflicting_credentials` before any is authorized. The
-  same token repeated is one credential. Don't "fix" this with precedence
-  logic.
+  scope check (`agent_correlation`) uses, so the two can't disagree. A user
+  token authenticates by fixed precedence: `macro-api-token` query parameter
+  (keys percent-decoded), then bearer, then the access-token cookie.
+  Explicit credentials of different kinds (internal key, bot token, harness
+  token, user API key, explicit user token), or one credential header with
+  different values, are refused 400 `conflicting_credentials`; an ambient
+  cookie beside another credential is not a conflict (browsers and native
+  apps send it everywhere), and the scope check still reads its token.
 - Locally (`local_auth`), a configured user stands in for an ambient cookie
   or none; an explicit user token is always the one used.
 - A valid principal not admitted by the chosen policy is a 403, not a 401.

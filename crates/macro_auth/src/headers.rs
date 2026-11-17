@@ -60,8 +60,11 @@ where
     }
 }
 
-/// Extracts the access token from either the `Authorization: Bearer` header or a cookie.
-/// Returns `UNAUTHORIZED` if neither source provides a token.
+/// The request's user token as [`crate::credential::request_credential`] reads
+/// it, so every reader agrees on it: a `macro-api-token` query parameter or
+/// bearer (both as `Header`), else the access-token cookie. Returns
+/// `UNAUTHORIZED` when the request authenticates with no user token, and
+/// `BAD_REQUEST` when its credentials can't be told apart.
 pub enum AccessTokenExtractor {
     Header(TypedHeader<Authorization<Bearer>>),
     Cookie(AccessTokenCookieExtractor),
@@ -88,11 +91,20 @@ where
         parts: &mut axum::http::request::Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let either: Either<TypedHeader<Authorization<Bearer>>, AccessTokenCookieExtractor> =
-            parts.extract().await?;
-        Ok(match either {
-            Either::E1(l) => Self::Header(l),
-            Either::E2(r) => Self::Cookie(r),
+        let credential =
+            crate::credential::request_credential(parts).map_err(|_| StatusCode::BAD_REQUEST)?;
+        let crate::credential::CredentialKind::UserToken { token, source } = credential.kind else {
+            return Err(StatusCode::UNAUTHORIZED);
+        };
+        Ok(match source {
+            crate::credential::TokenSource::Query | crate::credential::TokenSource::Bearer => {
+                Self::Header(TypedHeader(
+                    Authorization::bearer(&token).map_err(|_| StatusCode::UNAUTHORIZED)?,
+                ))
+            }
+            crate::credential::TokenSource::Cookie => Self::Cookie(AccessTokenCookieExtractor(
+                Cookie::new(crate::credential::access_token_cookie_name(), token),
+            )),
         })
     }
 }

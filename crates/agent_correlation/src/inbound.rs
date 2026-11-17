@@ -3,7 +3,7 @@
 use crate::{
     context::{Attribution, SharingRefused},
     domain::{Correlation, CorrelationError, CorrelationRepository, validate},
-    scope::SignedScope,
+    scope::{SessionScope, SignedScope},
 };
 use axum::{
     Json,
@@ -13,7 +13,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_auth::{
-    credential::RequestCredential,
+    credential::CredentialKind,
     macro_api_token::MacroApiToken,
     middleware::decode_jwt::{JwtToken, JwtValidationArgs},
 };
@@ -53,7 +53,9 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state = CorrelationState::from_ref(state);
-        let token = verified_api_token(parts, &state.jwt)?;
+        let tokens = verified_api_tokens(parts, &state.jwt)?;
+        other_tokens_scope(Some(&state), &tokens.others, parts).await?;
+        let token = tokens.authenticating;
         checked_signed_scope(token.as_ref(), parts)?;
         let correlation = accept_correlation(&state, token.as_ref()).await?;
         if let Some((_, correlation)) = correlation
@@ -67,28 +69,104 @@ where
     }
 }
 
-/// The request's Macro API token, only if its signature verifies. The token
-/// is the one [`macro_auth::credential::request_credential`] finds, the same
-/// one the route authenticates; a request carrying differing credentials is
-/// refused.
-fn verified_api_token(
+/// The request's Macro API tokens whose signatures verify, as
+/// [`macro_auth::credential::request_credential`] reads them: the one the
+/// request authenticates with, if it is one, and every other the request
+/// carries. A request is held to every scope any of them is in, so sending
+/// an unscoped token beside a scoped one gains nothing. Tokens of different
+/// users, or credentials that can't be told apart, are refused.
+struct VerifiedTokens {
+    authenticating: Option<MacroApiToken>,
+    others: Vec<MacroApiToken>,
+}
+
+fn verified_api_tokens(
     parts: &mut Parts,
     jwt: &JwtValidationArgs,
-) -> Result<Option<MacroApiToken>, CorrelationRejection> {
+) -> Result<VerifiedTokens, CorrelationRejection> {
     let credential = macro_auth::credential::request_credential(parts)
         .map_err(|_| CorrelationRejection(CorrelationError::ConflictingCredentials))?;
-    let RequestCredential::UserToken { token, .. } = credential else {
-        return Ok(None);
+    let authenticating_token = match &credential.kind {
+        CredentialKind::UserToken { token, .. } => Some(token.as_str()),
+        _ => None,
     };
+    let mut verified = VerifiedTokens {
+        authenticating: None,
+        others: Vec::new(),
+    };
+    let mut users: Vec<String> = Vec::new();
     // Authentication remains the route's responsibility. Public webhooks and
     // non-Macro credentials may share the listener; only a verified Macro
-    // JWT can introduce attribution, never an unsigned header or claim.
-    Ok(
-        match macro_auth::middleware::decode_jwt::handler(jwt, &token) {
-            Ok(JwtToken::MacroApiToken(token)) => Some(token),
-            _ => None,
-        },
-    )
+    // JWT can introduce attribution, never an unsigned header or claim. A
+    // token that doesn't verify (expired, or another kind of bearer) signs
+    // nothing.
+    for token in &credential.user_tokens {
+        match macro_auth::middleware::decode_jwt::handler(jwt, token) {
+            Ok(JwtToken::MacroApiToken(decoded)) => {
+                users.push(decoded.macro_user_id.clone());
+                if Some(token.as_str()) == authenticating_token {
+                    verified.authenticating = Some(decoded);
+                } else {
+                    verified.others.push(decoded);
+                }
+            }
+            Ok(JwtToken::MacroAccessToken(decoded)) => users.push(decoded.macro_user_id),
+            Err(_) => {}
+        }
+    }
+    users.sort();
+    users.dedup();
+    if users.len() > 1 {
+        tracing::warn!(
+            tokens = credential.user_tokens.len(),
+            "refused a request carrying tokens of different users"
+        );
+        return Err(CorrelationRejection(
+            CorrelationError::ConflictingCredentials,
+        ));
+    }
+    Ok(verified)
+}
+
+/// The narrower of two scopes: a generation session's is narrower than a
+/// run's that sends nothing.
+fn narrowest(first: Option<SessionScope>, second: Option<SessionScope>) -> Option<SessionScope> {
+    match (first, second) {
+        (Some(SessionScope::Generation), _) | (_, Some(SessionScope::Generation)) => {
+            Some(SessionScope::Generation)
+        }
+        (Some(SessionScope::NoSend), _) | (_, Some(SessionScope::NoSend)) => {
+            Some(SessionScope::NoSend)
+        }
+        (None, None) => None,
+    }
+}
+
+/// Hold the request to the scopes the tokens beside the authenticating one
+/// sign or are stored with (`state`, when there is a database to look their
+/// correlations up in), and name the narrowest of them.
+async fn other_tokens_scope(
+    state: Option<&CorrelationState>,
+    others: &[MacroApiToken],
+    parts: &Parts,
+) -> Result<Option<SessionScope>, CorrelationRejection> {
+    let mut scope = None;
+    for token in others {
+        let signed = checked_signed_scope(Some(token), parts)?;
+        scope = narrowest(scope, signed.known());
+        let Some(state) = state else {
+            continue;
+        };
+        if let Some((_, correlation)) = accept_correlation(state, Some(token)).await?
+            && let Some(stored) = correlation.scope
+        {
+            if !stored.allows(parts.method.as_str(), parts.uri.path()) {
+                return Err(CorrelationRejection(CorrelationError::OutOfScope));
+            }
+            scope = narrowest(scope, Some(stored));
+        }
+    }
+    Ok(scope)
 }
 
 /// The scope `token` signs, or a refusal when the request is outside it. The
@@ -214,10 +292,15 @@ async fn propagate_request(
     next: Next,
 ) -> Response {
     let (mut parts, body) = request.into_parts();
-    let token = match verified_api_token(&mut parts, &state.jwt) {
-        Ok(token) => token,
+    let tokens = match verified_api_tokens(&mut parts, &state.jwt) {
+        Ok(tokens) => tokens,
         Err(rejection) => return rejection.into_response(),
     };
+    let others_scope = match other_tokens_scope(Some(&state), &tokens.others, &parts).await {
+        Ok(scope) => scope,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let token = tokens.authenticating;
     let signed = match checked_signed_scope(token.as_ref(), &parts) {
         Ok(signed) => signed,
         Err(rejection) => return rejection.into_response(),
@@ -250,9 +333,12 @@ async fn propagate_request(
         correlation_id,
         routine_id: token.and_then(|token| token.routine_id),
         session_id: correlation.map(|(_, correlation)| correlation.session_id),
-        scope: correlation
-            .and_then(|(_, correlation)| correlation.scope)
-            .or(signed.known()),
+        scope: narrowest(
+            correlation
+                .and_then(|(_, correlation)| correlation.scope)
+                .or(signed.known()),
+            others_scope,
+        ),
         verb: correlation_id.and_then(|_| sdk_verb(&parts)),
     };
     let handling = answer_sharing_refusals(next.run(Request::from_parts(parts, body)));
@@ -283,10 +369,14 @@ async fn enforce_signed_scope_request(
     next: Next,
 ) -> Response {
     let (mut parts, body) = request.into_parts();
-    let token = match verified_api_token(&mut parts, &jwt) {
-        Ok(token) => token,
+    let tokens = match verified_api_tokens(&mut parts, &jwt) {
+        Ok(tokens) => tokens,
         Err(rejection) => return rejection.into_response(),
     };
+    if let Err(rejection) = other_tokens_scope(None, &tokens.others, &parts).await {
+        return rejection.into_response();
+    }
+    let token = tokens.authenticating;
     if let Err(rejection) = checked_signed_scope(token.as_ref(), &parts) {
         return rejection.into_response();
     }

@@ -53,10 +53,12 @@ code, not in its prompt. The harness also signs the scope into the credential
   Both record the refusal for `propagate`.
 - `src/verb.rs`: closed SDK display-verb vocabulary.
 - `src/inbound.rs`: optional signed-claim extractor and HTTP propagation.
-  The token is the one `macro_auth::credential::request_credential` finds,
-  the same one the route authenticates; a request carrying differing
-  credentials is refused 400 `conflicting_credentials` before any handler
-  runs. `propagate` checks the signed scope, then scopes the validated
+  It reads `macro_auth::credential::request_credential`, as authentication
+  does, and verifies every user token the request carries: the request is
+  held to every scope any verified token signs or is stored with, and the
+  narrowest is the one handlers see. Verified tokens of different users,
+  or credentials that can't be told apart, are refused 400
+  `conflicting_credentials` before any handler runs. `propagate` checks the signed scope, then scopes the validated
   correlation, its verb and the signed routine, and answers a request that
   recorded a sharing refusal with 403 `SharingRefused`, whatever error the
   handler mapped it to. `enforce_signed_scope` is the

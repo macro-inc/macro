@@ -460,10 +460,11 @@ async fn a_service_without_a_database_enforces_the_signed_scope() {
     }
 }
 
-/// The scope check reads the request's credential as authentication does,
-/// through `macro_auth::credential`: a scoped token in the ambient cookie
-/// scopes the request however the query spells its key, and a request
-/// carrying differing credentials is refused before any handler runs.
+/// The scope check reads the request's credentials as authentication does,
+/// through `macro_auth::credential`, and holds the request to every scope
+/// any verified token in it signs: a scoped token in the ambient cookie
+/// scopes the request whatever else it carries, however the query spells
+/// its key. Tokens of different users are refused.
 #[tokio::test]
 async fn a_scoped_token_in_the_cookie_scopes_the_request_whatever_else_it_carries() {
     use tower::ServiceExt;
@@ -483,49 +484,125 @@ async fn a_scoped_token_in_the_cookie_scopes_the_request_whatever_else_it_carrie
         None,
         Some("generation"),
     );
-    let other = mint(
+    let unscoped = mint(
         Some(Uuid::from_u128(1)),
         Some(Uuid::from_u128(3)),
         None,
         None,
     );
-    let cookie = format!(
-        "{}={scoped}",
-        macro_auth::credential::access_token_cookie_name()
-    );
-    let bearer = format!("Bearer {other}");
-    for (query, authorization, expected) in [
-        ("", None, StatusCode::FORBIDDEN),
-        // Not a credential once decoded, so the cookie is the credential.
-        ("?Macro-Api-Token=junk", None, StatusCode::FORBIDDEN),
+    let someone_else = encode_macro_api_token(EncodeMacroApiTokenArgs {
+        fusionauth_id: "fixture".into(),
+        macro_user_id: "macro|someone@example.com".into(),
+        organization_id: None,
+        issuer: "fixture".into(),
+        private_key: PRIVATE.into(),
+        expiry_seconds: 60,
+        agent_id: None,
+        agent_via: None,
+        agent_correlation_id: None,
+        agent_session_id: None,
+        routine_id: None,
+        agent_scope: None,
+    })
+    .unwrap();
+    let cookie_name = macro_auth::credential::access_token_cookie_name();
+    let scoped_cookie = format!("{cookie_name}={scoped}");
+    let cases: Vec<(String, Option<String>, Option<String>, StatusCode)> = vec![
         (
-            &format!("?macro-api-token={scoped}&macro-api-token={scoped}") as &str,
+            String::new(),
+            None,
+            Some(scoped_cookie.clone()),
+            StatusCode::FORBIDDEN,
+        ),
+        // The bypass: an encoded key with a value that isn't a token.
+        (
+            "?macro%2Dapi%2Dtoken=junk".into(),
+            None,
+            Some(scoped_cookie.clone()),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            "?Macro-Api-Token=junk".into(),
+            None,
+            Some(scoped_cookie.clone()),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            format!("?macro-api-token={unscoped}&macro-api-token={unscoped}"),
+            None,
+            Some(scoped_cookie.clone()),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            format!("?macro-api-token={unscoped}"),
+            None,
+            Some(scoped_cookie.clone()),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            String::new(),
+            Some(format!("Bearer {unscoped}")),
+            Some(scoped_cookie.clone()),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            format!("?macro-api-token={unscoped}"),
+            Some(format!("Bearer {scoped}")),
             None,
             StatusCode::FORBIDDEN,
         ),
-        // A credential beside the cookie, which differs from it.
-        ("?macro%2Dapi%2Dtoken=junk", None, StatusCode::BAD_REQUEST),
-        ("?macro-api-token=junk", None, StatusCode::BAD_REQUEST),
-        ("", Some(bearer.as_str()), StatusCode::BAD_REQUEST),
+        // An encoded cookie name and value are the cookie, as cookie jars read it.
         (
-            &format!("?macro-api-token={other}") as &str,
-            Some(bearer.as_str()),
+            String::new(),
+            None,
+            Some(format!(
+                "{}={}",
+                cookie_name.replace('-', "%2D"),
+                scoped.replace('.', "%2E")
+            )),
+            StatusCode::FORBIDDEN,
+        ),
+        // Unscoped, however many places carry it, and with an unverifiable bearer.
+        (
+            String::new(),
+            Some(format!("Bearer {unscoped}")),
+            Some(format!("{cookie_name}={unscoped}")),
+            StatusCode::OK,
+        ),
+        (
+            String::new(),
+            Some("Bearer booking-capability".into()),
+            Some(format!("{cookie_name}={unscoped}")),
+            StatusCode::OK,
+        ),
+        // Tokens of different users.
+        (
+            String::new(),
+            Some(format!("Bearer {someone_else}")),
+            Some(format!("{cookie_name}={unscoped}")),
             StatusCode::BAD_REQUEST,
         ),
-    ] {
+    ];
+    for (query, authorization, cookie, expected) in cases {
         let mut request = Request::builder()
             .method("DELETE")
-            .uri(format!("/api/file/01a1{query}"))
-            .header("cookie", &cookie);
-        if let Some(authorization) = authorization {
+            .uri(format!("/api/file/01a1{query}"));
+        if let Some(authorization) = &authorization {
             request = request.header("authorization", authorization);
+        }
+        if let Some(cookie) = &cookie {
+            request = request.header("cookie", cookie);
         }
         let response = app
             .clone()
             .oneshot(request.body(axum::body::Body::empty()).unwrap())
             .await
             .unwrap();
-        assert_eq!(response.status(), expected, "{query} {authorization:?}");
+        assert_eq!(
+            response.status(),
+            expected,
+            "{query} {authorization:?} {cookie:?}"
+        );
     }
 }
 
