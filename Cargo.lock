@@ -22918,6 +22918,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "bot_id",
  "chrono",
  "entity_access",
  "entity_access_db_utils",
