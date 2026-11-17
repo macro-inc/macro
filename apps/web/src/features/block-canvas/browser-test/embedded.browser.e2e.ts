@@ -92,10 +92,14 @@ test('two fingers dragging down pan the canvas, and the document stays put', asy
   await touch(cdp, 'touchStart', pair(0));
   for (let step = 1; step <= 6; step++)
     await touch(cdp, 'touchMove', pair(step * 20));
+  // Read with the fingers still down: lifted this fast they flick, and the
+  // canvas glides on from where they left it.
+  await expect.poll(async () => (await camera(page)).y).toBeCloseTo(120, 0);
   await touch(cdp, 'touchEnd', []);
 
-  await expect.poll(async () => (await camera(page)).y).toBeCloseTo(120, 0);
-  expect((await camera(page)).scale).toBe(1);
+  const lifted = await camera(page);
+  expect(lifted.y).toBeGreaterThanOrEqual(119.5);
+  expect(lifted.scale).toBe(1);
   expect(await scrolled(page)).toBe(0);
 });
 

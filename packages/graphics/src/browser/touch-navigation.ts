@@ -330,10 +330,12 @@ export function attachTouchNavigation(
     }
 
     swallow(event);
-    // The step below takes the fingers as they are now.
-    dropFrame();
     if (event.type === 'pointercancel') cancelled = true;
     if (pair?.ids.includes(event.pointerId)) {
+      // The step below takes the fingers as they are now, so the frame that
+      // was waiting has nothing left to do. A finger that is not of the pair
+      // leaves that frame alone: the pair's last move is still owed.
+      dropFrame();
       // Take the lifting finger's last position (a cancelled touch reports
       // none), then hand over to the next pair if a third finger is still down.
       if (event.type === 'pointerup')
