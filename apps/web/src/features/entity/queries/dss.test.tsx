@@ -10,10 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TaskEntity } from '../types/entity';
 
 const mocks = vi.hoisted(() => ({
-  graphqlEnabled: vi.fn(() => true),
   deleteItem: vi.fn(),
-  deleteCall: vi.fn(),
-  deleteChannel: vi.fn(),
   deleteCallGraphql: vi.fn(),
   deleteReminder: vi.fn(),
   deleteSchedule: vi.fn(),
@@ -40,10 +37,6 @@ vi.mock('@core/component/FileList/itemOperations', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: {},
-  isFeatureEnabled: mocks.graphqlEnabled,
-}));
 vi.mock('@queries/client', () => ({
   get queryClient() {
     return client;
@@ -69,15 +62,11 @@ vi.mock('@queries/soup/graphql/active-queries', () => ({
 vi.mock('@queries/storage/entity-mutations', () => ({
   permanentlyDeleteEntity: mocks.deleteCallGraphql,
 }));
-vi.mock('@service-call/client', () => ({
-  callServiceClient: { deleteCallRecord: mocks.deleteCall },
-}));
 vi.mock('@service-scheduled-action/client', () => ({
   scheduledActionClient: { deleteSchedule: mocks.deleteSchedule },
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {
-    deleteChannel: mocks.deleteChannel,
     reminders: { deleteReminder: mocks.deleteReminder },
   },
 }));
@@ -143,12 +132,10 @@ function mount() {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.graphqlEnabled.mockReturnValue(true);
   mocks.removeSoup.mockReturnValue({ rollback: mocks.rollbackSoup });
   mocks.removeSearch.mockReturnValue({ rollback: mocks.rollbackSearch });
   mocks.refresh.mockResolvedValue(undefined);
   mocks.deleteItem.mockResolvedValue(true);
-  mocks.deleteChannel.mockReturnValue(okAsync(undefined));
   mocks.trashDatabase.mockReturnValue(okAsync(undefined));
   mocks.moveToFolder.mockResolvedValue(true);
   mocks.copyItem.mockResolvedValue('copied-task');
@@ -214,87 +201,71 @@ const folderTask: TaskEntity = {
   projectId: 'source',
 };
 
-// These writes still use REST transport even when Soup readers use GraphQL.
+// These writes still use REST transport even though Soup readers use GraphQL.
 // Their successful completion must revalidate GraphQL membership too; marking
 // only TanStack soup keys stale cannot update a mounted urql list.
 describe('GraphQL Soup membership after list actions', () => {
-  it.each([true, false])(
-    'revalidates single folder moves only for GraphQL Soup (%s)',
-    async (graphql) => {
-      mocks.graphqlEnabled.mockReturnValue(graphql);
-      const mutation = mountMutation(createMoveToProjectDssEntityMutation);
-      await mutation.mutateAsync({
-        entity: folderTask,
-        project: { id: 'destination' },
-      });
-      expect(mocks.moveToFolder).toHaveBeenCalledWith({
-        itemType: 'document',
-        id: 'task',
-        folderId: 'destination',
-      });
-      expect(mocks.refresh).toHaveBeenCalledTimes(graphql ? 1 : 0);
-    }
-  );
+  it('revalidates GraphQL Soup after single folder moves', async () => {
+    const mutation = mountMutation(createMoveToProjectDssEntityMutation);
+    await mutation.mutateAsync({
+      entity: folderTask,
+      project: { id: 'destination' },
+    });
+    expect(mocks.moveToFolder).toHaveBeenCalledWith({
+      itemType: 'document',
+      id: 'task',
+      folderId: 'destination',
+    });
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
 
-  it.each([true, false])(
-    'revalidates bulk folder moves only for GraphQL Soup (%s)',
-    async (graphql) => {
-      mocks.graphqlEnabled.mockReturnValue(graphql);
-      const mutation = mountMutation(createBulkMoveToProjectDssEntityMutation);
-      await mutation.mutateAsync({
-        entities: [folderTask],
-        project: { id: 'destination', name: 'Destination' },
-      });
-      expect(mocks.moveToFolder).toHaveBeenCalledWith({
-        itemType: 'document',
-        id: 'task',
-        folderId: 'destination',
-      });
-      expect(mocks.refresh).toHaveBeenCalledTimes(graphql ? 1 : 0);
-    }
-  );
+  it('revalidates GraphQL Soup after bulk folder moves', async () => {
+    const mutation = mountMutation(createBulkMoveToProjectDssEntityMutation);
+    await mutation.mutateAsync({
+      entities: [folderTask],
+      project: { id: 'destination', name: 'Destination' },
+    });
+    expect(mocks.moveToFolder).toHaveBeenCalledWith({
+      itemType: 'document',
+      id: 'task',
+      folderId: 'destination',
+    });
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
 
-  it.each([true, false])(
-    'revalidates folder removal only for GraphQL Soup (%s)',
-    async (graphql) => {
-      mocks.graphqlEnabled.mockReturnValue(graphql);
-      const mutation = mountMutation(
-        createBulkRemoveFromProjectDssEntityMutation
-      );
-      await mutation.mutateAsync({
-        entities: [folderTask],
-      });
-      expect(mocks.moveToFolder).toHaveBeenCalledWith({
-        itemType: 'document',
-        id: 'task',
-        folderId: null,
-      });
-      expect(mocks.refresh).toHaveBeenCalledTimes(graphql ? 1 : 0);
-    }
-  );
+  it('revalidates GraphQL Soup after folder removal', async () => {
+    const mutation = mountMutation(
+      createBulkRemoveFromProjectDssEntityMutation
+    );
+    await mutation.mutateAsync({
+      entities: [folderTask],
+    });
+    expect(mocks.moveToFolder).toHaveBeenCalledWith({
+      itemType: 'document',
+      id: 'task',
+      folderId: null,
+    });
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
 
-  it.each([true, false])(
-    'refreshes GraphQL Soup after duplicate returns its new id (%s)',
-    async (graphql) => {
-      mocks.graphqlEnabled.mockReturnValue(graphql);
-      const response = deferred<string>();
-      mocks.copyItem.mockReturnValue(response.promise);
-      const mutation = mountMutation(createBulkCopyDssEntityMutation);
-      const result = mutation.mutateAsync({
-        entities: [folderTask],
-        name: 'Task copy',
-      });
-      try {
-        await vi.waitFor(() => expect(mocks.copyItem).toHaveBeenCalledOnce());
-        // No optimistic placeholder is required when the new id is unknown.
-        expect(mocks.refresh).not.toHaveBeenCalled();
-      } finally {
-        response.resolve('copied-task');
-        await result;
-      }
-      expect(mocks.refresh).toHaveBeenCalledTimes(graphql ? 1 : 0);
+  it('refreshes GraphQL Soup after duplicate returns its new id', async () => {
+    const response = deferred<string>();
+    mocks.copyItem.mockReturnValue(response.promise);
+    const mutation = mountMutation(createBulkCopyDssEntityMutation);
+    const result = mutation.mutateAsync({
+      entities: [folderTask],
+      name: 'Task copy',
+    });
+    try {
+      await vi.waitFor(() => expect(mocks.copyItem).toHaveBeenCalledOnce());
+      // No optimistic placeholder is required when the new id is unknown.
+      expect(mocks.refresh).not.toHaveBeenCalled();
+    } finally {
+      response.resolve('copied-task');
+      await result;
     }
-  );
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('bulk delete GraphQL optimism', () => {
@@ -381,7 +352,6 @@ describe('bulk delete GraphQL optimism', () => {
       type: 'CALL',
       id: 'deleted-call',
     });
-    expect(mocks.deleteCall).not.toHaveBeenCalled();
     expect(invalidate).toHaveBeenCalledWith({ queryKey: callKeys._def });
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: scheduledActionKeys.list.queryKey,
@@ -452,21 +422,17 @@ describe('bulk delete GraphQL optimism', () => {
     expect(mocks.deleteItem).not.toHaveBeenCalled();
   });
 
-  it.each([true, false])(
-    'restores a refused database deletion with GraphQL Soup enabled=%s',
-    async (enabled) => {
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-      mocks.graphqlEnabled.mockReturnValue(enabled);
-      mocks.trashDatabase.mockReturnValue(errAsync({ kind: 'unreachable' }));
-      const { mutation } = mount();
-      await expect(
-        mutation.mutateAsync([entity('db-1', 'database')])
-      ).rejects.toBeDefined();
-      expect(mocks.rollbackSoup).toHaveBeenCalled();
-      expect(mocks.rollbackSearch).toHaveBeenCalled();
-      expect(mocks.failure).toHaveBeenCalled();
-    }
-  );
+  it('restores a refused database deletion', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.trashDatabase.mockReturnValue(errAsync({ kind: 'unreachable' }));
+    const { mutation } = mount();
+    await expect(
+      mutation.mutateAsync([entity('db-1', 'database')])
+    ).rejects.toBeDefined();
+    expect(mocks.rollbackSoup).toHaveBeenCalled();
+    expect(mocks.rollbackSearch).toHaveBeenCalled();
+    expect(mocks.failure).toHaveBeenCalled();
+  });
 
   it('does not remove or invalidate unsuccessful side-effect entities', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -490,20 +456,16 @@ describe('bulk delete GraphQL optimism', () => {
     );
   });
 
-  it.each([true, false])(
-    'restores a boolean-only total failure with GraphQL Soup enabled=%s',
-    async (graphql) => {
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-      mocks.graphqlEnabled.mockReturnValue(graphql);
-      mocks.deleteItem.mockResolvedValue(false);
-      const { mutation } = mount();
-      const result = mutation.mutateAsync([entity('failed')]);
-      await expect(result).rejects.toThrow('Failed to delete items');
-      expect(mocks.rollbackSoup).toHaveBeenCalledOnce();
-      expect(mocks.rollbackSearch).toHaveBeenCalledOnce();
-      expect(mocks.failure).toHaveBeenCalledWith('Failed to delete items');
-    }
-  );
+  it('restores a boolean-only total failure', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.deleteItem.mockResolvedValue(false);
+    const { mutation } = mount();
+    const result = mutation.mutateAsync([entity('failed')]);
+    await expect(result).rejects.toThrow('Failed to delete items');
+    expect(mocks.rollbackSoup).toHaveBeenCalledOnce();
+    expect(mocks.rollbackSearch).toHaveBeenCalledOnce();
+    expect(mocks.failure).toHaveBeenCalledWith('Failed to delete items');
+  });
 
   it('hides only deletable ids until deletion and GraphQL refresh both finish', async () => {
     const network = deferred<boolean>();
@@ -594,37 +556,30 @@ describe('bulk delete GraphQL optimism', () => {
     refreshed.resolve();
     await vi.waitFor(() => expect(pendingKeys().size).toBe(0));
   });
-  it.each([true, false])(
-    'latches the GraphQL flag at creation (initially %s)',
-    async (enabled) => {
-      mocks.graphqlEnabled.mockReturnValue(enabled);
-      const network = deferred<boolean>();
-      const refreshed = deferred<void>();
-      mocks.deleteItem.mockReturnValue(network.promise);
-      mocks.refresh.mockReturnValue(refreshed.promise);
-      const { mutation, pendingKeys } = mount();
-      mocks.graphqlEnabled.mockReturnValue(!enabled);
-      const result = mutation.mutateAsync([entity('task')]);
-      await vi.waitFor(() => expect(mocks.deleteItem).toHaveBeenCalledOnce());
-      expect(pendingKeys().has('GraphqlSoupDocument:task')).toBe(enabled);
-      const cached = client.getMutationCache().getAll()[0];
-      expect(cached.options.mutationKey).toEqual(
-        enabled ? GRAPHQL_SOUP_DELETE_MUTATION_KEY : undefined
-      );
-      expect(
-        Boolean(
-          (cached.state.context as GraphqlSoupDeleteContext).graphqlDeletion
-        )
-      ).toBe(enabled);
-      mocks.graphqlEnabled.mockReturnValue(enabled);
-      network.resolve(true);
-      await result;
-      expect(mocks.refresh).toHaveBeenCalledTimes(enabled ? 1 : 0);
-      expect(mocks.graphqlEnabled).toHaveBeenCalledTimes(1);
-      refreshed.resolve();
-      await vi.waitFor(() => expect(pendingKeys().size).toBe(0));
-    }
-  );
+  it('registers a GraphQL deletion under the shared mutation key', async () => {
+    const network = deferred<boolean>();
+    const refreshed = deferred<void>();
+    mocks.deleteItem.mockReturnValue(network.promise);
+    mocks.refresh.mockReturnValue(refreshed.promise);
+    const { mutation, pendingKeys } = mount();
+    const result = mutation.mutateAsync([entity('task')]);
+    await vi.waitFor(() => expect(mocks.deleteItem).toHaveBeenCalledOnce());
+    expect(pendingKeys().has('GraphqlSoupDocument:task')).toBe(true);
+    const cached = client.getMutationCache().getAll()[0];
+    expect(cached.options.mutationKey).toEqual(
+      GRAPHQL_SOUP_DELETE_MUTATION_KEY
+    );
+    expect(
+      Boolean(
+        (cached.state.context as GraphqlSoupDeleteContext).graphqlDeletion
+      )
+    ).toBe(true);
+    network.resolve(true);
+    await result;
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    refreshed.resolve();
+    await vi.waitFor(() => expect(pendingKeys().size).toBe(0));
+  });
 
   it('does not recreate deletion state after the client is cleared during an API request', async () => {
     const network = deferred<boolean>();
@@ -695,37 +650,6 @@ describe('bulk delete GraphQL optimism', () => {
     refreshed.resolve();
     await vi.waitFor(() => expect(pendingKeys().size).toBe(0));
   });
-
-  it.each([false, true])(
-    'preserves disabled-path behavior (failure: %s)',
-    async (fails) => {
-      mocks.graphqlEnabled.mockReturnValue(false);
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-      const network = deferred<boolean>();
-      mocks.deleteItem.mockReturnValue(network.promise);
-      const { mutation, pendingKeys } = mount();
-      const result = mutation.mutateAsync([entity('task')]);
-      const settled = fails
-        ? expect(result).rejects.toThrow('delete failed')
-        : expect(result).resolves.toEqual([true]);
-      await vi.waitFor(() => expect(mocks.deleteItem).toHaveBeenCalledOnce());
-      expect(mocks.removeSoup).toHaveBeenCalledWith(new Set(['task']));
-      expect(mocks.removeSearch).toHaveBeenCalledWith(new Set(['task']));
-      expect(pendingKeys().size).toBe(0);
-      expect(
-        client.getMutationCache().getAll()[0].options.mutationKey
-      ).toBeUndefined();
-      expect(
-        client.getMutationCache().getAll()[0].options.onSettled
-      ).toBeUndefined();
-      if (fails) network.reject(new Error('delete failed'));
-      else network.resolve(true);
-      await settled;
-      expect(mocks.refresh).not.toHaveBeenCalled();
-      expect(mocks.rollbackSoup).toHaveBeenCalledTimes(fails ? 1 : 0);
-      expect(mocks.rollbackSearch).toHaveBeenCalledTimes(fails ? 1 : 0);
-    }
-  );
 });
 
 describe('moving databases and forms between folders', () => {
@@ -824,75 +748,59 @@ describe('moving databases and forms between folders', () => {
 });
 
 describe('channel deletion', () => {
-  it.each([true, false])(
-    'keeps confirmed channel deletions removed when a sibling fails (GraphQL: %s)',
-    async (graphql) => {
-      mocks.graphqlEnabled.mockReturnValue(graphql);
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-      const soup = cacheRows(mocks.removeSoup, mocks.rollbackSoup, [
-        'deleted-channel',
-        'failed',
-        'other',
-      ]);
-      const search = cacheRows(mocks.removeSearch, mocks.rollbackSearch, [
-        'deleted-channel',
-        'failed',
-        'other',
-      ]);
-      const invalidate = vi.spyOn(client, 'invalidateQueries');
-      const failure = deferred<boolean>();
-      mocks.deleteItem.mockReturnValue(failure.promise);
-      const deleted = entity('deleted-channel', 'channel');
-      const failed = entity('failed');
-      const { mutation } = mount();
+  it('keeps confirmed channel deletions removed when a sibling fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const soup = cacheRows(mocks.removeSoup, mocks.rollbackSoup, [
+      'deleted-channel',
+      'failed',
+      'other',
+    ]);
+    const search = cacheRows(mocks.removeSearch, mocks.rollbackSearch, [
+      'deleted-channel',
+      'failed',
+      'other',
+    ]);
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const failure = deferred<boolean>();
+    mocks.deleteItem.mockReturnValue(failure.promise);
+    const deleted = entity('deleted-channel', 'channel');
+    const failed = entity('failed');
+    const { mutation } = mount();
 
-      const result = expect(
-        mutation.mutateAsync([deleted, failed])
-      ).rejects.toMatchObject({
-        deletedEntities: [deleted],
-        failedEntities: [failed],
-        results: [true, false],
-      });
-      await vi.waitFor(() => expect(mocks.deleteItem).toHaveBeenCalledOnce());
-      expect(soup()).toEqual(['other']);
-      expect(search()).toEqual(['other']);
-      expect(mutation.isPending).toBe(true);
-      failure.reject(new Error('document delete failed'));
-      await result;
+    const result = expect(
+      mutation.mutateAsync([deleted, failed])
+    ).rejects.toMatchObject({
+      deletedEntities: [deleted],
+      failedEntities: [failed],
+      results: [true, false],
+    });
+    await vi.waitFor(() => expect(mocks.deleteItem).toHaveBeenCalledOnce());
+    expect(soup()).toEqual(['other']);
+    expect(search()).toEqual(['other']);
+    expect(mutation.isPending).toBe(true);
+    failure.reject(new Error('document delete failed'));
+    await result;
 
-      expect(soup()).toEqual(['failed', 'other']);
-      expect(search()).toEqual(['failed', 'other']);
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: channelKeys._def });
-      expect(mocks.failure).toHaveBeenCalledWith(
-        'Deleted 1 of 2 items; 1 failed'
-      );
-    }
-  );
+    expect(soup()).toEqual(['failed', 'other']);
+    expect(search()).toEqual(['failed', 'other']);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: channelKeys._def });
+    expect(mocks.failure).toHaveBeenCalledWith(
+      'Deleted 1 of 2 items; 1 failed'
+    );
+  });
 
-  it.each([true, false])(
-    'deletes channels and refreshes channel caches (GraphQL: %s)',
-    async (graphql) => {
-      mocks.graphqlEnabled.mockReturnValue(graphql);
-      const invalidate = vi.spyOn(client, 'invalidateQueries');
-      const { mutation } = mount();
+  it('deletes channels and refreshes channel caches', async () => {
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const { mutation } = mount();
 
-      await expect(
-        mutation.mutateAsync([entity('channel-id', 'channel')])
-      ).resolves.toEqual([true]);
+    await expect(
+      mutation.mutateAsync([entity('channel-id', 'channel')])
+    ).resolves.toEqual([true]);
 
-      if (graphql) {
-        expect(mocks.deleteCallGraphql).toHaveBeenCalledWith({
-          type: 'CHANNEL',
-          id: 'channel-id',
-        });
-        expect(mocks.deleteChannel).not.toHaveBeenCalled();
-      } else {
-        expect(mocks.deleteChannel).toHaveBeenCalledWith({
-          channel_id: 'channel-id',
-        });
-        expect(mocks.deleteCallGraphql).not.toHaveBeenCalled();
-      }
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: channelKeys._def });
-    }
-  );
+    expect(mocks.deleteCallGraphql).toHaveBeenCalledWith({
+      type: 'CHANNEL',
+      id: 'channel-id',
+    });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: channelKeys._def });
+  });
 });

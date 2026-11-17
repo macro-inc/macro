@@ -2828,8 +2828,7 @@ exclude CRM records. On mobile, the single list includes both CRM record types, 
 Macro people and groups are pinned. The PostHog `disable-crm-contact-search`
 kill switch removes contact results and disables their search while leaving
 companies and Macro users available; existing contact mentions still work.
-Override locally with `VITE_DISABLE_CRM_CONTACT_SEARCH=true`. With
-`ENABLE_GRAPHQL_SOUP` enabled, results include cached companies even if they are
+Override locally with `VITE_DISABLE_CRM_CONTACT_SEARCH=true`. Results include cached companies even if they are
 absent from the first 500 companies in the REST Quick Access feed; the REST feed
 remains a fallback. Cache search covers synchronized companies, not the entire CRM.
 
@@ -2983,7 +2982,7 @@ detail reads answer non-owners 401/403 for a missing item too, so a deleted
 database or form reads `No Access` to anyone but its owner. A reference made in
 the last minute whose item hasn't reached the preview yet still opens it.
 
-With `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`
+The popup reuses the reference's live `ItemPreviews`
 batch, including task properties and viewer permission, without another fetch.
 Explicit refreshes may revalidate that batch, but requests must settle while the
 pointer stays over the same reference; cache updates must not cause a continuous
@@ -3430,7 +3429,7 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   During tag creation, the compact Back/title row shows the draft color beside
   the heading. Back and Escape return from sharing to color, then to the name
   search, preserving the name and chosen color.
-  With GraphQL Soup enabled, applying the first tag refetches only that entity's
+  Applying the first tag refetches only that entity's
   properties; later edits update the existing assignment optimistically. Verify
   both the side panel and list-row chip, then reload to confirm persistence.
   This must also work after background backfills populate more than 128 cached

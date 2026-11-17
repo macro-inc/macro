@@ -12,10 +12,6 @@ vi.mock('@service-storage/graphql-soup', () => ({
 
 vi.mock('@core/context/user', () => ({ useIsAuthenticated: () => () => true }));
 
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: {},
-  isFeatureEnabled: () => true,
-}));
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 vi.mock('../client', () => ({ queryClient: {} }));
 

@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   isTauri: vi.fn(() => false),
-  graphqlEnabled: vi.fn(() => true),
   isFeatureEnabled: vi.fn<(flag: string) => boolean | undefined>(),
   unsupportedBrowserReason: vi.fn<() => string | undefined>(),
 }));
@@ -12,12 +11,10 @@ vi.mock('./host/browser-support', () => ({
   unsupportedBrowserReason: mocks.unsupportedBrowserReason,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
   disableBrowserTursoCache: {
     key: 'disable-browser-turso-cache',
     override: undefined,
   },
-  isFeatureEnabled: mocks.graphqlEnabled,
 }));
 vi.mock('@app/lib/analytics', () => ({
   analytics: {
@@ -33,12 +30,11 @@ describe('browser Turso cache production gate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.isTauri.mockReturnValue(false);
-    mocks.graphqlEnabled.mockReturnValue(true);
     mocks.isFeatureEnabled.mockReturnValue(undefined);
     mocks.unsupportedBrowserReason.mockReturnValue(undefined);
   });
 
-  it('enables browser cache with the GraphQL soup gate', () => {
+  it('enables browser cache by default', () => {
     expect(getBrowserTursoCacheRolloutDecision()).toMatchObject({
       enabled: true,
       cohort: 'treatment',
@@ -64,17 +60,8 @@ describe('browser Turso cache production gate', () => {
     });
   });
 
-  it('disables browser cache with the GraphQL soup gate', () => {
-    mocks.graphqlEnabled.mockReturnValue(false);
-    expect(getBrowserTursoCacheRolloutDecision()).toMatchObject({
-      enabled: false,
-      reason: 'graphql-transport-disabled',
-    });
-  });
-
   it('does not read browser PostHog flags or subscribe on Tauri', () => {
     mocks.isTauri.mockReturnValue(true);
-    mocks.graphqlEnabled.mockReturnValue(true);
     mocks.isFeatureEnabled.mockImplementation(() => {
       throw new Error('browser flag touched on Tauri');
     });

@@ -16,7 +16,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   enableCalendarUi,
-  enableGraphqlSoup,
   enableInboxNotifiedSort,
   enableSnippets,
   enableSupportedSoupForeignEntities,
@@ -235,18 +234,16 @@ export type HomeListDataSource = HomeDataSource & {
 };
 
 /**
- * Home's list. Desktop Signal reads the server work feed wherever GraphQL
- * Soup is on, since the feed's live changes ride its websocket and cache;
- * every other view (Noise, touch devices) merges Soup, notification and
- * recent-activity sources on the client. Searching a feed-backed Home lists
- * the feed's rows whose name matches, then the search service's hits.
+ * Home's list. Desktop Signal reads the server work feed, since the feed's
+ * live changes ride the GraphQL Soup websocket and cache; every other view
+ * (Noise, touch devices) merges Soup, notification and recent-activity
+ * sources on the client. Searching a feed-backed Home lists the feed's rows
+ * whose name matches, then the search service's hits.
  */
 export function useHomeDataSource(
   state: HomeDataSourceInput
 ): HomeListDataSource {
-  const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
-  const listsWorkFeed = () =>
-    graphqlSoup().enabled && state.tab === 'signal' && !isTouchDevice();
+  const listsWorkFeed = () => state.tab === 'signal' && !isTouchDevice();
   const usesWorkFeed = () => listsWorkFeed() && !state.search.trim();
 
   // The feed stays live while searching: its rows are what the search finds.
