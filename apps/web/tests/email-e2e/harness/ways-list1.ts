@@ -17,6 +17,42 @@ const { defaultBrowserType: _browser, ...iPhone } = devices['iPhone 13'];
 /** The phone the suite's phone tests run on. */
 export const PHONE = iPhone;
 
+/** The Email sidebar as a touch device shows it: a sheet. */
+export function sidebarSheet(page: Page): Locator {
+  return page.getByRole('dialog', { name: 'Sidebar' });
+}
+
+/** Opens the Email sidebar's sheet with the touch header's pill. */
+export async function openSidebarSheet(page: Page): Promise<Locator> {
+  await page.getByRole('button', { name: 'Show sidebar' }).tap();
+  const sheet = sidebarSheet(page);
+  await expect(
+    sheet.getByRole('navigation', { name: 'Email tabs' })
+  ).toBeVisible();
+  return sheet;
+}
+
+/**
+ * Opens a tab on a touch device. Its header has pills for the Inbox tabs
+ * only; every tab is in the sidebar's sheet, which closes on the choice.
+ */
+export async function openTouchTab(page: Page, name: string): Promise<void> {
+  const sheet = await openSidebarSheet(page);
+  await sheet
+    .getByRole('navigation', { name: 'Email tabs' })
+    .getByRole('button', { name, exact: true })
+    .tap();
+  await expect(sheet).toHaveCount(0);
+}
+
+/**
+ * The name the touch list header shows in place of the Inbox pills: the
+ * tab's, outside the Inbox.
+ */
+export function touchHeaderName(page: Page, name: string): Locator {
+  return page.getByRole('main').getByText(name, { exact: true });
+}
+
 export const GRACE = 'Grace <grace@example.com>';
 export const HUGO = 'Hugo <hugo@example.com>';
 
