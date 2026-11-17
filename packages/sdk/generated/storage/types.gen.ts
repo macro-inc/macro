@@ -9313,7 +9313,8 @@ export type EmailFilters = {
      * fully-qualified addresses. Each address is authorized against
      * `crm_contacts` + `crm_companies` (contact must not be hidden, company
      * must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_domains`.
+     * Mutually exclusive with `crm_domains`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_addresses?: Array<string>;
     /**
@@ -9322,7 +9323,8 @@ export type EmailFilters = {
      * domains (in any of sender/cc/bcc/recipient). Each domain is authorized
      * against `crm_domains` + `crm_companies` (must exist for the caller's
      * team, company must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_addresses`.
+     * Mutually exclusive with `crm_addresses`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_domains?: Array<string>;
     /**
@@ -9365,7 +9367,10 @@ export type EmailFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * A list of project ids to search within. Empty to ignore project filtering.
+     * Drive folder (project) ids to search within: threads filed in any of
+     * these folders. Besides the caller's own threads, it reaches every
+     * thread in a folder shared with the caller, whoever's inbox holds it,
+     * as the folder's list does. Empty to ignore project filtering.
      */
     project_ids?: Array<string>;
     /**

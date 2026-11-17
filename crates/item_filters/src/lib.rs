@@ -253,7 +253,10 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub link_ids: Vec<String>,
 
-    /// A list of project ids to search within. Empty to ignore project filtering.
+    /// Drive folder (project) ids to search within: threads filed in any of
+    /// these folders. Besides the caller's own threads, it reaches every
+    /// thread in a folder shared with the caller, whoever's inbox holds it,
+    /// as the folder's list does. Empty to ignore project filtering.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_ids: Vec<String>,
 
@@ -297,7 +300,8 @@ pub struct EmailFilters {
     /// domains (in any of sender/cc/bcc/recipient). Each domain is authorized
     /// against `crm_domains` + `crm_companies` (must exist for the caller's
     /// team, company must not be hidden, `email_sync` must be true).
-    /// Mutually exclusive with `crm_addresses`.
+    /// Mutually exclusive with `crm_addresses`. Listing email only: search
+    /// rejects a request that sets it with a 400.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub crm_domains: Vec<String>,
 
@@ -306,7 +310,8 @@ pub struct EmailFilters {
     /// fully-qualified addresses. Each address is authorized against
     /// `crm_contacts` + `crm_companies` (contact must not be hidden, company
     /// must not be hidden, `email_sync` must be true).
-    /// Mutually exclusive with `crm_domains`.
+    /// Mutually exclusive with `crm_domains`. Listing email only: search
+    /// rejects a request that sets it with a 400.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub crm_addresses: Vec<String>,
 
