@@ -170,6 +170,52 @@ async fn publishes_committed_consent_and_removes_request(pool: PgPool) -> anyhow
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn selected_grant_publishes_but_legacy_withdrawal_discards_pending_work(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let (repo, team, link) = consent(&pool).await?;
+    // Selected activation is fixture-only until the policy API is shipped.
+    sqlx::query!(
+        r#"INSERT INTO crm_email_rule_revisions (team_id, user_id, revision, link_id, schema_version, definition)
+           VALUES ($1, $2, 1, $3, 1, '{"schema_version":1,"include":[]}')"#,
+        team, USER, link
+    ).execute(&pool).await?;
+    sqlx::query!(
+        "UPDATE crm_email_consent SET enabled = FALSE WHERE team_id = $1",
+        team
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!("UPDATE crm_email_consent SET mode = 'selected', selected_enabled = TRUE, active_rule_revision = 1 WHERE team_id = $1", team)
+        .execute(&pool).await?;
+    let queue = TestQueue::start().await?;
+    drain(&pool, &queue.sqs).await?;
+    assert_eq!(queue.messages().len(), 1);
+    assert_eq!(pending(&pool).await?, 0);
+
+    repo.change_email_privacy(
+        team,
+        USER,
+        EmailPrivacyChange::SetConsent {
+            enabled: false,
+            link_id: None,
+        },
+    )
+    .await?;
+    sqlx::query!(
+        "INSERT INTO crm_email_backfill_outbox (team_id, user_id) VALUES ($1, $2)",
+        team,
+        USER
+    )
+    .execute(&pool)
+    .await?;
+    drain(&pool, &queue.sqs).await?;
+    assert_eq!(queue.messages().len(), 1);
+    assert_eq!(pending(&pool).await?, 0);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn failed_publish_remains_pending_and_retries(pool: PgPool) -> anyhow::Result<()> {
     consent(&pool).await?;
     let queue = TestQueue::start().await?;

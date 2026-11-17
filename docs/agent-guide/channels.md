@@ -1115,22 +1115,27 @@ reopen the channel or mark it read after the user leaves its mobile pane. Messag
 loading retains its own access/error states. Verify with the notification request
 held, then failed, and with rapid back-navigation while it is pending.
 
-The title bar's **Hide navigation** control hides the whole rail. Reopen it with
-**Show navigation** (the hamburger) immediately before the conversation title.
-Chat remembers this choice independently of other workspaces and restores it
-after reload. While no conversation is selected, the rail stays open regardless
-of that choice and offers no **Hide navigation** control (`Cmd+.` is inert);
-selecting a conversation applies the saved choice again. Chat uses
-the shared 256px default sidebar width and resize limits. In splits 720px wide or
-narrower, the rail and the conversation take turns at full width instead of a
-slide-over: with no conversation selected the rail fills the split (no Hide
-navigation, `Cmd+.` inert), and an open conversation shows **Back** (left arrow)
-where the hamburger was. Back opens the Channels list route, so browser or split
-back returns to the conversation. There is no separate skinny sidebar mode.
+The sidebar title row's **Hide navigation** control hides the whole rail.
+Reopen it with **Show navigation** before the conversation title on desktop,
+or as the leading header pill on touch. Chat remembers the wide-layout choice
+independently of other workspaces. The rail starts at 256px on desktop and 403px
+on wide touch,
+docks above 720px. Narrow desktop panes use a navigation overlay. It remains
+collapsible with no conversation selected and while showing Threads. At 720px
+or narrower, touch shows the full-frame conversation list and
+full-screen navigation, with no sidebar, expand button, or reserved navigation
+row. Only the safe-area top inset precedes the list. Wider touch panes use the
+same touch feed as narrow touch, docked on the left with inline conversation
+selection on the right. With sections disabled this is Recent with favorite pins;
+with sections enabled both widths show All, DMs, and custom section
+tabs with horizontally scrolling pins. Open conversations keep the
+floating touch title/menu, call, and invite islands inside the preview pane;
+messages scroll behind that header with the same safe-area gutter as list views.
+Re-selecting the open conversation refreshes its read state and jumps to latest.
 
 ### Sidebar redesign rollout
 
-`enable-chat-sidebar-sections` gates the desktop sidebar and phone section tabs,
+`enable-chat-sidebar-sections` gates the desktop sidebar and touch section tabs,
 not channel or direct-message creation. It defaults on in development; deployed
 builds defer to PostHog. Set `VITE_ENABLE_CHAT_SIDEBAR_SECTIONS=true` or `false`
 locally. Both layouts wait for the flag result. When off, desktop restores
@@ -1333,6 +1338,17 @@ the same durations under **Mute notifications**, with a muted bell for Mute and
 an ordinary bell for Unmute. Preset end dates and times align with the menu's right
 content edge.
 
+For a channel or group chat (not a one-to-one direct message) the same submenu
+starts with **Only @mentions**, on desktop and in the phone drill-in page. It
+silences every notification from that channel, web and push, except a message
+that @mentions the viewer directly; replies in a thread they took part in,
+reactions and document mentions stay silent, and the channel shows no unread
+dot for them. The option shows a check while on, and choosing it again returns
+the channel to notifying for every message. The rail row and Home row show an
+`@` in place of the muted bell, and Settings → Notifications lists the channel
+under **Mentions only** with **Notify for all**. Mute, snooze and mentions-only
+replace each other; a snooze that expires returns the channel to all messages.
+
 **Add to section** lists eligible sections with checked membership, then New
 section. Rule-only matches stay checked and read-only; edit the rule to remove
 them. Explicit assignments remain exclusive within each scope; personal and
@@ -1345,8 +1361,8 @@ Display remain personal.
 The phone list reuses Home rows and the existing large favorite circles with
 unread dots. All loaded channel favorites retain their saved order in one sideways
 scrolling row; swipe horizontally to reach favorites beyond the viewport. All is
-selected initially, followed by Direct messages and custom sections in personal
-display order. All excludes pins except incoming-call rows;
+selected initially, followed by DMs and custom sections in personal display
+order. All excludes pins except incoming-call rows;
 the shared list renderer owns that exclusion so ringing pins retain their Join
 and Decline actions. Other tabs retain their pinned members. The shared `PillTabs`
 control sits below Favorites and above the conversation list, scrolls horizontally,
@@ -1443,14 +1459,16 @@ From a custom-section heading in the middle of the list, use both `[` and `]`;
 each shortcut must move to the adjacent heading rather than the Team channels
 heading.
 
-On touch layouts, Channels shows only the Recent conversation feed, with channel
+With sections disabled, every touch width shows the Recent conversation feed, with channel
 and DM message previews. Rows use Home's touch row: the unread dot in the left
 rail, a 44px avatar, and a divider inset to the text column. The first six
 favorited channels (favorite order) are pinned in a three-across grid above the
 feed, iMessage style, and leave the feed below; tapping a pin opens it and a
 hold opens its action menu, where Unfavorite unpins it. There are no view tabs or reserved tab-header space;
 older saved tab selections and mobile-tab links cannot change the list. It loads
-more as the list approaches the end and supports pull to refresh.
+more as the list approaches the end and supports pull to refresh. With sections
+enabled, both touch widths show All, DMs, and personal/shared section
+tabs with horizontally scrolling favorite pins instead of the three-across grid.
 Rows use the same touch highlight as Home and Email: taps retain feedback while
 opening, holds stay highlighted for the action menu, and scrolling or cancelling
 a touch clears the press highlight.
@@ -1704,8 +1722,8 @@ channel split, the message composer stays fully visible at the bottom. The
 recordings for that channel
 (same rows as the Calls soup view, filtered to this channel). The live `Call` tab
 appears while a call is in progress. `Ask Macro` opens a new chat pane with the channel
-already @mentioned as context (see ai-chat.md). On mobile the title menu is a
-drawer. Clicking the radio input can time out — click the adjacent label text
+already @mentioned as context (see ai-chat.md). On touch, at every width, the title menu is a
+drawer (`SoupEntityActionsSheet`) with the view choices above the actions. Clicking the radio input can time out — click the adjacent label text
 instead.
 
 In the Chat workspace — and wherever a channel opens inline inside another

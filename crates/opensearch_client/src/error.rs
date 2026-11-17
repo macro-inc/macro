@@ -24,6 +24,7 @@ pub enum OpensearchOperation {
     BulkUpsertSingleChunk,
     UpdateDocumentMetadata,
     UpdateDocumentProperties,
+    BulkUpdateDocumentEmailAttachment,
     UpsertChannelMessage,
     UpsertChatMessageParent,
     UpsertChatMessageChild,
@@ -139,6 +140,28 @@ impl TransportFailure {
     }
 }
 
+/// Why OpenSearch refused a write to protect itself.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    strum::Display,
+    strum::AsRefStr,
+    strum::IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum WriteRefusal {
+    /// A 429: a full write queue or a tripped circuit breaker.
+    TooManyRequests,
+    /// A `cluster_block_exception`, such as the read-only block OpenSearch puts
+    /// on an index once a node crosses the flood-stage disk watermark.
+    ClusterBlock,
+}
+
 #[derive(thiserror::Error, Debug, serde::Serialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum OpensearchClientError {
@@ -168,6 +191,18 @@ pub enum OpensearchClientError {
     RequestFailed {
         details: String,
         cause: TransportFailure,
+        operation: OpensearchOperation,
+    },
+
+    /// OpenSearch refused the write to protect itself. Sending it again adds
+    /// to the load that caused the refusal, so callers stop and resume later
+    /// instead of retrying.
+    #[error(
+        "opensearch refused the write. operation: {operation} cause: {cause} details: {details}"
+    )]
+    WritesRefused {
+        details: String,
+        cause: WriteRefusal,
         operation: OpensearchOperation,
     },
 

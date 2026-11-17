@@ -31,7 +31,7 @@ vi.mock('@components/app/mobile-header/mobile-header', () => {
   return { MobileHeader };
 });
 vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
-  BlockSplitFileMenu: (props: { tools: BlockTool[] }) => (
+  SplitFileMenu: (props: { tools: BlockTool[] }) => (
     <menu aria-label="Email actions">
       <For each={props.tools}>
         {(tool) => (

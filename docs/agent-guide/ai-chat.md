@@ -268,7 +268,10 @@ channel message link and a settings page (refused; linked instead).
 **Agents** opens the new conversation list on phones,
 including GitHub PR state and links. Tap a row to open a full-screen conversation;
 the header back button returns to the previous screen, or Agents for a direct link.
-Portrait and landscape touch layouts have no conversation side panel. **Changes** opens a full-width,
+Narrow touch layouts have no docked conversation side panel. Above 720px,
+including unfolded Duo, selecting a session or legacy chat opens it in the
+right preview instead of a standalone split. The Agents sidebar stays left and can
+be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
 The mobile conversation list omits the desktop **Agents** and **Connections** controls. Use the Agents composer or global create menu to start
@@ -550,11 +553,9 @@ the shimmer.
   session update.
   Sessions with a linked PR show
   **#<number>** beneath the title (icon colored by open / merged / closed; no
-  status word). Clicking it opens the synced
-  GitHub PR entity in a split (the same destination as the session header chip
-  and Magic Chip). A synced PR opens at `/pr/<foreign-entity-id>`; existing
-  inline previews retain their legacy block host. Until GitHub has synced the
-  entity it opens GitHub in a new tab. Either click leaves the session unopened.
+  status word). Clicking it opens the pull request on GitHub (a new tab, or the
+  system browser in the desktop app), as the session header chip and Magic Chip
+  do. The click leaves the session unopened.
   Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Switching conversations keeps the sidebar mounted (no reload or scroll reset)
@@ -1873,9 +1874,9 @@ an inline edit.
 
 When the session has opened a pull request, a compact `#N` status chip
 appears in the header (top right) and in the side-panel Details. Click it
-to open the PR entity in a split; until GitHub has synced the entity the
-chip is a GitHub link instead. The icon and status word follow open /
-merged / closed. Merging happens from the PR entity's top bar or from a channel
+to open the pull request on GitHub; once GitHub has synced it, the chip
+previews it on hover. The icon and status word follow open / merged /
+closed. Merging happens from the PR entity's top bar or from a channel
 Magic Chip's PR row, not from this header chip.
 
 Agent prose sets the documents, sessions, pull requests, and contacts it

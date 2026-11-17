@@ -3,6 +3,10 @@ import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
+import {
+  capPeople,
+  rankAgentsAfterPeople,
+} from '@core/user/people-before-agents';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch } from '@core/util/freshSort';
@@ -41,6 +45,7 @@ import {
 import {
   type CombinedEntity,
   createEntitySearchConfig,
+  createRosterSearch,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
@@ -371,6 +376,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return userToEntity({ id: emailToId(email), email, name: email });
   };
 
+  const rosterSearch = createRosterSearch(currentUserDomain, currentUserId);
   const entitySearch = createFreshSearch<CombinedEntity>({
     config: createEntitySearchConfig(currentUserDomain, currentUserId),
     getName: getEntitySearchText,
@@ -442,16 +448,28 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     // Get visible entities based on search
     // Sort self to top BEFORE slicing to ensure self appears even if not in top 50 by default
     let localResults: CombinedEntity[];
-    if (term) {
+    if (term && props.config.users) {
+      localResults = capPeople(
+        rankAgentsAfterPeople(
+          rosterSearch(allEntities.filter(excludeFilter), term),
+          (entity) => entity.id
+        ),
+        (entity) => entity.id,
+        maxLocalResults
+      );
+    } else if (term) {
       localResults = entitySearch(allEntities, term)
         .slice(0, maxLocalResults)
         .map((result) => result.item)
         .filter(excludeFilter);
     } else {
-      localResults = sortEntitiesWithSelfFirst(
+      const ordered = sortEntitiesWithSelfFirst(
         allEntities.filter(excludeFilter),
         userId
-      ).slice(0, maxLocalResults);
+      );
+      localResults = props.config.users
+        ? capPeople(ordered, (entity) => entity.id, maxLocalResults)
+        : ordered.slice(0, maxLocalResults);
     }
 
     // For THREAD or generic entity: merge local + server results
