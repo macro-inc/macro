@@ -609,6 +609,79 @@ impl<T> StepOutput<T> {
     }
 }
 
+/// A job, as the rest of the workflow refers to it: its id (for `add_job`,
+/// `needs`) and its outputs as fields of `Outputs`, so a reader that names a
+/// job or output that doesn't exist fails to compile. Define it once, next
+/// to the job:
+///
+/// ```ignore
+/// pub struct PathCheckOutputs { pub should_run: JobOutput<Flag> }
+/// pub const PATH_CHECK: JobHandle<PathCheckOutputs> = JobHandle::new(
+///     "path-check",
+///     PathCheckOutputs { should_run: JobOutput::new("path-check", "should_run") },
+/// );
+/// workflow.add_job(PATH_CHECK, path_check_job());
+/// job.add_needs(PATH_CHECK).cond(PATH_CHECK.outputs.should_run.read().is_set());
+/// ```
+pub struct JobHandle<Outputs> {
+    id: &'static str,
+    pub outputs: Outputs,
+}
+
+impl<Outputs> JobHandle<Outputs> {
+    pub const fn new(id: &'static str, outputs: Outputs) -> Self {
+        Self { id, outputs }
+    }
+
+    pub const fn id(&self) -> &'static str {
+        self.id
+    }
+
+    /// `needs.<id>.result`
+    pub fn result(&self) -> Expr<Str> {
+        needs(self.id).result()
+    }
+}
+
+impl<Outputs> fmt::Display for JobHandle<Outputs> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.id)
+    }
+}
+
+/// A step with an id, as later steps and the job's `outputs:` refer to it:
+/// its id (for `.id(...)`) and its outputs as fields of `Outputs`.
+pub struct StepHandle<Outputs> {
+    id: &'static str,
+    pub outputs: Outputs,
+}
+
+impl<Outputs> StepHandle<Outputs> {
+    pub const fn new(id: &'static str, outputs: Outputs) -> Self {
+        Self { id, outputs }
+    }
+
+    pub const fn id(&self) -> &'static str {
+        self.id
+    }
+
+    /// `steps.<id>.outcome`
+    pub fn outcome(&self) -> Expr<Str> {
+        steps(self.id).outcome()
+    }
+
+    /// `steps.<id>.conclusion`
+    pub fn conclusion(&self) -> Expr<Str> {
+        steps(self.id).conclusion()
+    }
+}
+
+impl<Outputs> fmt::Display for StepHandle<Outputs> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.id)
+    }
+}
+
 /// The whole `needs` context (every needed job's result and outputs), for
 /// `toJSON(needs)`.
 pub fn whole_needs() -> Expr<Json> {

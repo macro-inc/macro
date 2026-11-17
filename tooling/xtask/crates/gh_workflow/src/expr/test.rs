@@ -209,3 +209,43 @@ fn output_handles_read_and_name_the_same_output() {
         "${{ steps.filter.outputs.changed != 'true' }}"
     );
 }
+
+#[test]
+fn handles_carry_the_id_and_typed_outputs() {
+    use super::typed::{Flag, JobHandle, JobOutput, StepHandle, StepOutput};
+
+    struct PathCheckOutputs {
+        should_run: JobOutput<Flag>,
+    }
+    const PATH_CHECK: JobHandle<PathCheckOutputs> = JobHandle::new(
+        "path-check",
+        PathCheckOutputs {
+            should_run: JobOutput::new("path-check", "should_run"),
+        },
+    );
+    struct FilterOutputs {
+        changed: StepOutput<Flag>,
+    }
+    const FILTER: StepHandle<FilterOutputs> = StepHandle::new(
+        "filter",
+        FilterOutputs {
+            changed: StepOutput::new("filter", "changed"),
+        },
+    );
+
+    assert_eq!(PATH_CHECK.to_string(), "path-check");
+    assert_eq!(
+        PATH_CHECK.outputs.should_run.read().is_set().condition().0,
+        "needs.path-check.outputs.should_run == 'true'"
+    );
+    assert_eq!(
+        PATH_CHECK.result().to_string(),
+        "${{ needs.path-check.result }}"
+    );
+    assert_eq!(FILTER.id(), "filter");
+    assert_eq!(
+        FILTER.outputs.changed.read().to_string(),
+        "${{ steps.filter.outputs.changed }}"
+    );
+    assert_eq!(FILTER.outcome().to_string(), "${{ steps.filter.outcome }}");
+}
