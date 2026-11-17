@@ -77,7 +77,8 @@ fn an_image_without_boot_files_on_the_host_boots_through_firmware() {
     assert_eq!(boot, BootPath::Firmware(FirmwareReason::NoBootFiles));
     assert_eq!(boot.label(), "firmware");
     assert_eq!(
-        boot.fallback_reason().map(|reason| reason.as_ref().to_owned()),
+        boot.fallback_reason()
+            .map(|reason| reason.as_ref().to_owned()),
         Some("no_boot_files".to_owned())
     );
 }
@@ -122,7 +123,10 @@ fn a_command_line_the_host_would_not_write_boots_through_firmware() {
         "",
     ] {
         assert_eq!(
-            choose(&macro_box_alias(), &listed(&[(BOOT_APPEND_PROPERTY, append)])),
+            choose(
+                &macro_box_alias(),
+                &listed(&[(BOOT_APPEND_PROPERTY, append)])
+            ),
             BootPath::Firmware(FirmwareReason::InvalidBootFiles),
             "{append:?}"
         );

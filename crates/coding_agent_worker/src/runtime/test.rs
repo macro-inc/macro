@@ -168,11 +168,17 @@ fn a_healthy_connection_is_redialed_at_once_and_failures_back_off() {
         redial_delay(None, &mut backoff);
     }
     let capped = redial_delay(None, &mut backoff);
-    assert!(near(capped, MAX_RECONNECT_DELAY), "capped redial after {capped:?}");
+    assert!(
+        near(capped, MAX_RECONNECT_DELAY),
+        "capped redial after {capped:?}"
+    );
     assert_eq!(
         redial_delay(Some(HEALTHY_CONNECTION), &mut backoff),
         Duration::ZERO
     );
     let after_reset = redial_delay(None, &mut backoff);
-    assert!(near(after_reset, ms(250)), "redial after a healthy connection: {after_reset:?}");
+    assert!(
+        near(after_reset, ms(250)),
+        "redial after a healthy connection: {after_reset:?}"
+    );
 }
