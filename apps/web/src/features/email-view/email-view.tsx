@@ -108,7 +108,7 @@ function EmailPanes(props: {
 }) {
   const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
-  const { state, setState, closeThread, list, source } = useEmailView();
+  const { state, setState, list, source } = useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
   const recentSearches = createEmailSearchSuggestions({
@@ -138,7 +138,6 @@ function EmailPanes(props: {
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
     canSearch: () => canSearchEmailTab(state.tab),
-    showList: closeThread,
   });
 
   const listColumn = (beside?: 'reader') => (
