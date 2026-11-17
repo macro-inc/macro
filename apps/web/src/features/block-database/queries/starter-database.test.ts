@@ -24,7 +24,6 @@ const runQuery = () =>
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => mocks.flag,
 }));
-vi.mock('@core/constant/featureFlags', () => ({ enableDatabases: {} }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => mocks.userId }));
 vi.mock('@core/util/result', () => ({
   throwOnErr: (call: () => unknown) => call(),
@@ -61,14 +60,9 @@ beforeEach(() => {
 });
 
 describe('starter onboarding', () => {
-  it('waits for the flag, identity, and a successful empty list', () => {
+  it('waits for identity and a successful empty list', () => {
     const enabled = () => mocks.options!().enabled;
     expect(enabled()).toBe(true);
-    mocks.flag.loading = true;
-    expect(enabled()).toBe(false);
-    mocks.flag = { enabled: false, loading: false };
-    expect(enabled()).toBe(false);
-    mocks.flag.enabled = true;
     mocks.userId = undefined;
     expect(enabled()).toBe(false);
     mocks.userId = 'macro|new@macro.com';

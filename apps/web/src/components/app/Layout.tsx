@@ -45,10 +45,7 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import {
-  enableDatabases,
-  enableWhatsappLinked,
-} from '@core/constant/featureFlags';
+import { enableWhatsappLinked } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -285,11 +282,9 @@ export function AppChrome(props: ParentProps) {
   return (
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
       <Show when={isAuthenticated() === true}>
-        <ShowFeatureFlag flag={enableDatabases}>
-          <Suspense>
-            <StarterDatabase />
-          </Suspense>
-        </ShowFeatureFlag>
+        <Suspense>
+          <StarterDatabase />
+        </Suspense>
       </Show>
       <Suspense>
         <Show when={isAuthenticated()}>

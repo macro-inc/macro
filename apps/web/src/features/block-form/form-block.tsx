@@ -8,7 +8,6 @@ import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance'
  * the share dialog agree with what the service answered.
  */
 
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { ResponsivePermissionsBadge } from '@components/app/ResponsiveBlockToolbar';
@@ -33,7 +32,6 @@ import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import { enableForms } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -342,7 +340,6 @@ function FormCardContent() {
 }
 
 export default function FormBlock(props: { view?: unknown }) {
-  const flag = useFeatureFlag(enableForms);
   const nested = useIsNestedBlock();
   // The flag gates authoring only: with it off, a form opens on its respond
   // view, and the service decides who may answer.
@@ -351,7 +348,7 @@ export default function FormBlock(props: { view?: unknown }) {
       <DocumentBlockContainer>
         <div class="size-full">
           <FormBlockContent
-            respondOnly={props.view === 'respond' || !flag().enabled}
+            respondOnly={props.view === 'respond' || !true}
             initialTab={
               props.view === 'responses' || props.view === 'share'
                 ? props.view
