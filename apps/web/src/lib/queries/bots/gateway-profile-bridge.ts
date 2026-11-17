@@ -51,7 +51,7 @@ export function handleBotProfileChanged(payload: unknown): void {
     deletedAt: profile.deleted_at ?? null,
   };
   PUSHED.set(profile.id, pushed);
-  invalidateRestBotLists([profile.id]);
+  invalidateRestBotLists([pushed]);
   // Mounted reads show the profile from here; lists lacking the bot, or
   // holding a deleted one, read again.
   fireAndForget(

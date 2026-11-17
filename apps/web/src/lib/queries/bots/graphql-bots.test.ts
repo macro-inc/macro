@@ -21,6 +21,7 @@ import { map, pipe } from 'wonka';
 import { agentKeys } from '../agents/keys';
 import { channelKeys } from '../channel/keys';
 import { botKeys } from './keys';
+import { useLiveRestBots } from './live-rest-bots';
 
 let testQueryClient: QueryClient;
 let client: Client;
@@ -272,31 +273,42 @@ describe('botUpdates', () => {
     expect(server.requests).toEqual([[RELEASE_BOT], [RELEASE_BOT]]);
   });
 
-  it('refreshes the REST bot lists settings and the mention menu still read', () => {
+  it('refreshes the settings lists on every change, and channel bot lists only on a deletion', () => {
     client = createClient({
       url: '/graphql',
       exchanges: [createServer(new Map()).exchange],
     });
+    const channelBotsKey = channelKeys.channelBots('channel-1').queryKey;
     testQueryClient.setQueryData(agentKeys.list.queryKey, []);
     testQueryClient.setQueryData(botKeys.list.queryKey, []);
     testQueryClient.setQueryData(botKeys.detail(RELEASE_BOT).queryKey, {});
-    testQueryClient.setQueryData(
-      channelKeys.channelBots('channel-1').queryKey,
-      []
-    );
+    testQueryClient.setQueryData(channelBotsKey, []);
+    const handler = createBotUpdatesHandler(client);
 
-    createBotUpdatesHandler(client).onResult(
-      pushed([bot(RELEASE_BOT, 'Shipper')], true)
-    );
+    handler.onResult(pushed([bot(RELEASE_BOT, 'Shipper')], true));
 
     for (const queryKey of [
       agentKeys.list.queryKey,
       botKeys.list.queryKey,
       botKeys.detail(RELEASE_BOT).queryKey,
-      channelKeys.channelBots('channel-1').queryKey,
     ]) {
       expect(testQueryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
     }
+    // A channel's rows read the bot's name from its identity; only who is
+    // in the channel comes from this list.
+    expect(testQueryClient.getQueryState(channelBotsKey)?.isInvalidated).toBe(
+      false
+    );
+
+    handler.onResult(
+      pushed(
+        [{ ...bot(RELEASE_BOT, 'Shipper'), deletedAt: '2026-11-17T00:00:00Z' }],
+        true
+      )
+    );
+    expect(testQueryClient.getQueryState(channelBotsKey)?.isInvalidated).toBe(
+      true
+    );
   });
 });
 
@@ -445,5 +457,33 @@ describe('createBotIdentities', () => {
     await vi.waitFor(() => expect(identity(REVIEW_BOT)?.name).toBe('Reviewer'));
     expect(identity(RELEASE_BOT)?.name).toBe('Shipper');
     expect(server.requests).toEqual([[RELEASE_BOT, REVIEW_BOT]]);
+  });
+});
+
+describe('useLiveRestBots', () => {
+  it('renames a REST-listed bot from a push without refetching the list', async () => {
+    const rows = new Map([[RELEASE_BOT, bot(RELEASE_BOT, 'Release bot')]]);
+    const server = createServer(rows);
+    client = createClient({ url: '/graphql', exchanges: [server.exchange] });
+    const restRows = [
+      {
+        id: RELEASE_BOT,
+        name: 'Release bot',
+        handle: 'release-bot',
+        avatar_url: null,
+        description: 'Ships things',
+      },
+    ];
+    const bots = mounted(() => useLiveRestBots(() => restRows));
+    expect(bots()[0]?.name).toBe('Release bot');
+    await vi.waitFor(() => expect(server.requests).toHaveLength(1));
+
+    rows.set(RELEASE_BOT, bot(RELEASE_BOT, 'Shipper'));
+    createBotUpdatesHandler(client).onResult(
+      pushed([bot(RELEASE_BOT, 'Shipper')], false)
+    );
+
+    await vi.waitFor(() => expect(bots()[0]?.name).toBe('Shipper'));
+    expect(bots()[0]?.description).toBe('Ships things');
   });
 });

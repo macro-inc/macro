@@ -1,6 +1,9 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
-import type { BotUpdatesSubscription } from '@service-storage/graphql/generated/graphql';
+import type {
+  BotFieldsFragment,
+  BotUpdatesSubscription,
+} from '@service-storage/graphql/generated/graphql';
 import type { Client, OperationResult } from '@urql/core';
 import { agentKeys } from '../agents/keys';
 import { channelKeys } from '../channel/keys';
@@ -9,20 +12,27 @@ import { revalidateBotReads } from './graphql-bots';
 import { botKeys } from './keys';
 
 /**
- * The REST lists that still name bots (settings, the mention menu, channel
- * bots) hold copies the normalized cache can't reach, so every change to a
- * bot refetches them. `botIds` null means changes may have been missed.
+ * The REST lists settings reads (bots, agents) hold copies the normalized
+ * cache can't reach, so every change to a bot refetches them. A channel's bot
+ * list only says which bots are in it; its rows read names from the bots'
+ * identities, so it refetches only when a bot is deleted. `bots` null means
+ * changes may have been missed.
  */
-export function invalidateRestBotLists(botIds: readonly string[] | null) {
+export function invalidateRestBotLists(
+  bots: readonly Pick<BotFieldsFragment, 'id' | 'deletedAt'>[] | null
+) {
   queryClient.invalidateQueries({ queryKey: agentKeys.list.queryKey });
   queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey });
-  queryClient.invalidateQueries({ queryKey: channelKeys.channelBots._def });
-  if (botIds === null) {
+  if (bots === null || bots.some((bot) => bot.deletedAt != null))
+    queryClient.invalidateQueries({ queryKey: channelKeys.channelBots._def });
+  if (bots === null) {
     queryClient.invalidateQueries({ queryKey: botKeys.detail._def });
     return;
   }
-  for (const id of botIds)
-    queryClient.invalidateQueries({ queryKey: botKeys.detail(id).queryKey });
+  for (const bot of bots)
+    queryClient.invalidateQueries({
+      queryKey: botKeys.detail(bot.id).queryKey,
+    });
 }
 
 /** The `botUpdates` subscription's handler for one websocket client. */
@@ -31,7 +41,7 @@ export function createBotUpdatesHandler(client: Pick<Client, 'query'>) {
     onResult(result: OperationResult<BotUpdatesSubscription>) {
       const bots = result.data?.botUpdates;
       if (result.error || !bots?.length) return;
-      invalidateRestBotLists(bots.map((bot) => bot.id));
+      invalidateRestBotLists(bots);
       // The normalized cache replaced each `GraphqlBot` record, so mounted
       // reads show the push on their own; a client without the cache, or
       // whose cache could not apply it, reads those bots again. Lists also
