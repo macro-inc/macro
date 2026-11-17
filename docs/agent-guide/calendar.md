@@ -78,7 +78,16 @@ changing the user or date range must not retain the old events. Verify both hand
 directions with delayed responses and delay calendar metadata past occurrences.
 If metadata fails, events remain usable with the default calendar presentation.
 Provider backfill shows a persistent `Syncing your calendar…` banner above the
-grid, explaining that events will appear automatically and Macro remains usable.
+grid, on desktop and phone, saying events are still being imported, that it may
+take a while, that some days may look empty until the import finishes, and that
+Macro stays usable. The server reports only that some account is importing, so
+the banner names a provider (`from Google`, `from Outlook`) only when every
+inbox in the email links list, delegated ones included, is on it; mixed or
+unloaded links name none. It shows no progress: the client has no per-account
+or per-calendar import state. Outlook imports from a year back forward, so the
+current month can be empty while older events have already arrived. The banner
+never suggests turning the calendar off, which deletes Macro's copy and starts
+the import again.
 The banner stays visible as partial results arrive and disappears when sync finishes.
 A routine sync of an already imported account never shows it.
 Errors retain the separate retry state. Verify delayed occurrence

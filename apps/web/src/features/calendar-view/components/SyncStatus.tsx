@@ -1,8 +1,36 @@
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import { useEmailLinksQuery } from '@queries/email/link';
+import type { Link as EmailLink } from '@service-email/generated/schemas';
+import { UserProvider } from '@service-email/generated/schemas/userProvider';
 import { Show } from 'solid-js';
+import { match } from 'ts-pattern';
+
+type ImportProvider = 'Google' | 'Outlook';
+
+/**
+ * The sync status says only that some account is still importing, not which
+ * one, so a provider is named only when every connected inbox, delegated ones
+ * included, uses it. Mixed or unloaded inboxes name none.
+ */
+function importProvider(
+  links: readonly EmailLink[]
+): ImportProvider | undefined {
+  const [first, ...rest] = links;
+  if (!first || rest.some((link) => link.provider !== first.provider)) {
+    return undefined;
+  }
+  return match(first.provider)
+    .with(UserProvider.GMAIL, (): ImportProvider => 'Google')
+    .with(UserProvider.OUTLOOK, (): ImportProvider => 'Outlook')
+    .exhaustive(() => undefined);
+}
 
 /** Keep backfill progress visible while events arrive and the grid is usable. */
 export function SyncStatus(props: { syncing: boolean }) {
+  const linksQuery = useEmailLinksQuery();
+  const provider = () =>
+    linksQuery.isSuccess ? importProvider(linksQuery.data.links) : undefined;
+
   return (
     <Show when={props.syncing}>
       <div
@@ -15,8 +43,11 @@ export function SyncStatus(props: { syncing: boolean }) {
             Syncing your calendar…
           </span>
           <span class="text-xs text-ink-muted">
-            Events are still being imported from Google. They’ll appear
-            automatically. You can keep using Macro.
+            <Show when={provider()} fallback="Events are still being imported.">
+              {(name) => `Events are still being imported from ${name()}.`}
+            </Show>{' '}
+            This may take a while, and some days may look empty until the import
+            finishes. You can keep using Macro.
           </span>
         </div>
       </div>
