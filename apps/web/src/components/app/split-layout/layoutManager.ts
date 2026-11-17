@@ -1232,14 +1232,16 @@ export function createSplitLayout(
 
   /**
    * Stacked panes bring a pane behind the front forward; the panes that were in
-   * front of it stay, behind it. The splits follow the router's new order only
-   * once their computations run, which inside a reactive update or a router
-   * commit is after this returns, so the split is activated without waiting.
+   * front of it stay, behind it. The router applies the move later while it is
+   * busy, and the splits follow its order only when their computations run, so
+   * neither has happened yet inside an effect, a batch, or a router commit: the
+   * split is activated without waiting. The move targets the end of the panes
+   * as they are when it applies, which the router clamps to the front.
    */
   function bringToFront(id: SplitId) {
     if (splitIndexById(id) < 0) return;
 
-    router.move(paneOf(id), state.splits.length - 1);
+    router.move(paneOf(id), Number.MAX_SAFE_INTEGER);
     setActiveSplit(id);
   }
 

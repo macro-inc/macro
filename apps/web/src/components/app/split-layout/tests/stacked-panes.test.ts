@@ -486,10 +486,10 @@ describe('stacked panes', () => {
   });
 });
 
-// A covered pane's activation reorders the router's panes, and the layout
-// mirrors that order only when its computations next run. Inside a reactive
-// update or a router commit that is later, which once made activation recurse
-// until the stack overflowed and left the layout no longer following the router.
+// A covered pane's activation moves its pane to the front through the router.
+// Inside an effect or a batch the layout follows the new order only after the
+// activation returns, and inside a router commit the move itself waits, which
+// once made activation recurse until the stack overflowed.
 describe('activating a covered pane', () => {
   type Setup = ReturnType<typeof setup>;
 
