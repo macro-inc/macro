@@ -429,7 +429,6 @@ export type {
   ReplyContext,
 } from './entities/channels/message';
 export { ChannelPicture } from './entities/channels/picture';
-export { ChatGeneration, ChatMessage } from './entities/chats/generation';
 export type {
   ConnectedAppKind,
   ConnectedToolResult,

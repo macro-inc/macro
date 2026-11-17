@@ -847,10 +847,9 @@ the handle only retains metadata. It and `bot.createToken()` are refused to an
 agent's program (ExecuteCode, a routine), whose results reach the model. `list()` and `key.delete()` manage keys.
 `tokenForEmail(email)` exchanges credentials subject to ordinary server authorization.
 
-`chat.send({ content, model, attachments, toolset })` starts a generation and returns
-its chat, response message and cancellable stream handle. Use
-`generation.message.refresh()` after it changes; reading an unfinished response
-may report that it is not yet available. Tools can perform writes unless disabled.
+AI chats are read-only history: `macro.chats` finds them and `chat.history()`
+reads them, but nothing creates, copies or sends to one. Continue a chat in
+Agents instead.
 `macro.ai.usage({ from, until, users, features })` reads AI usage.
 
 # Events

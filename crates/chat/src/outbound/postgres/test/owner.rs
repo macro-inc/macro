@@ -92,7 +92,7 @@ async fn bot_owned_create_registers_owner_grants_without_user_history(pool: Pool
 )]
 async fn bot_owned_copy_copies_messages_and_registers_owner_grants(pool: Pool<Postgres>) {
     let repo = test_repo(pool.clone());
-    let (source_id, _) = create_chat_with_message(&repo).await;
+    let source_id = create_chat_with_message(&repo).await;
 
     let copied_id = repo
         .copy_chat(

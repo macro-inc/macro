@@ -61,9 +61,8 @@ async fn chat_project_id<S: ChatService>(
     service.get_metadata(view_receipt).await.ok()?.project_id
 }
 
-impl<R, ToolSetContext, Eam> RenameEntity for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, Eam> RenameEntity for ChatServiceImpl<R, Eam>
 where
-    ToolSetContext: Clone + Send + Sync + 'static,
     Self: ChatService,
 {
     type Receipt = OwnerAccessLevel;
@@ -87,9 +86,8 @@ where
     }
 }
 
-impl<R, ToolSetContext, Eam> MoveEntity for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, Eam> MoveEntity for ChatServiceImpl<R, Eam>
 where
-    ToolSetContext: Clone + Send + Sync + 'static,
     Self: ChatService,
 {
     type Receipt = OwnerAccessLevel;
@@ -128,9 +126,8 @@ where
     }
 }
 
-impl<R, ToolSetContext, Eam> UpdateEntitySharePolicy for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, Eam> UpdateEntitySharePolicy for ChatServiceImpl<R, Eam>
 where
-    ToolSetContext: Clone + Send + Sync + 'static,
     Self: ChatService,
 {
     type Receipt = OwnerAccessLevel;
@@ -154,9 +151,8 @@ where
     }
 }
 
-impl<R, ToolSetContext, Eam> TrashEntity for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, Eam> TrashEntity for ChatServiceImpl<R, Eam>
 where
-    ToolSetContext: Clone + Send + Sync + 'static,
     Self: ChatService,
 {
     type Receipt = OwnerAccessLevel;
@@ -178,9 +174,8 @@ where
     }
 }
 
-impl<R, ToolSetContext, Eam> RestoreEntity for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, Eam> RestoreEntity for ChatServiceImpl<R, Eam>
 where
-    ToolSetContext: Clone + Send + Sync + 'static,
     Self: ChatService,
 {
     type Receipt = OwnerAccessLevel;
@@ -202,9 +197,8 @@ where
     }
 }
 
-impl<R, ToolSetContext, Eam> DeleteEntityPermanently for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, Eam> DeleteEntityPermanently for ChatServiceImpl<R, Eam>
 where
-    ToolSetContext: Clone + Send + Sync + 'static,
     Self: ChatService,
 {
     type Receipt = OwnerAccessLevel;
@@ -226,9 +220,8 @@ where
     }
 }
 
-impl<R, ToolSetContext, Eam> DuplicateEntity for ChatServiceImpl<R, ToolSetContext, Eam>
+impl<R, Eam> DuplicateEntity for ChatServiceImpl<R, Eam>
 where
-    ToolSetContext: Clone + Send + Sync + 'static,
     Self: ChatService,
 {
     type Receipt = ViewAccessLevel;

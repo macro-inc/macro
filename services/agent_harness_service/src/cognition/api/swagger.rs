@@ -3,9 +3,7 @@ use crate::cognition::api::{
     chats::{chat_history, chat_history_batch_messages},
     citations, confirmed_actions, database_query, decisions, health,
     preview::get_batch_preview,
-    stream::chat_message::{
-        self, ChatMessageError, HttpSendChatMessageRequest, SendChatMessageResponse,
-    },
+    stream::chat_message::{self, ChatMessageError, ChatMessageErrorCode},
     stream::stop::{
         self as stream_stop, StopChatStreamError, StopChatStreamRequest, StopChatStreamResponse,
     },
@@ -15,7 +13,7 @@ use crate::cognition::api::{
 };
 use crate::cognition::model::{
     response::attachments::GetChatsForAttachmentResponse,
-    stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
+    stream::{ChatStream, StreamError, ToolSet},
 };
 use ai_usage::inbound::axum_router::{self as ai_usage_api};
 use image_generation::inbound::axum_router::{self as image_generation_api};
@@ -41,9 +39,7 @@ use crate::cognition::api::preview::get_batch_preview::{
 
 use chat::domain::models::{ChatResponse, FreeTierModel, GetChatResponse, WebCitation};
 use chat::inbound::http::router::{
-    self as chat_router, CallToolRequest, CallToolResponse, CreateChatRequest,
-    GetChatPermissionsResponse, PatchChatRequest, RejectToolCallRequest, UpdateToolCallRequest,
-    UpdateToolResponseRequest,
+    self as chat_router, GetChatPermissionsResponse, PatchChatRequest,
 };
 
 use model::{
@@ -52,7 +48,7 @@ use model::{
         ChatMessageWithAttachments, ConversationRecord, MessageWithAttachments, NewAttachment,
         NewChatMessage, NewMessageAttachment,
     },
-    response::{GenericErrorResponse, StringIDResponse},
+    response::GenericErrorResponse,
     version::DocumentCognitionServiceApiVersion,
 };
 
@@ -73,17 +69,11 @@ use utoipa::OpenApi;
         paths(
             health::health_handler,
             chat_router::get_chat_handler,
-            chat_router::create_chat_handler,
-            chat_router::copy_chat_handler,
             chat_router::get_chat_permissions_handler,
             chat_router::delete_chat_handler,
             chat_router::permanently_delete_chat_handler,
             chat_router::patch_chat_handler,
             chat_router::revert_delete_handler,
-            chat_router::update_tool_call_handler,
-            chat_router::update_tool_response_handler,
-            chat_router::call_tool_handler,
-            chat_router::reject_tool_call_handler,
             get_chats_for_attachment::get_chats_for_attachment_handler,
             citations::get_citation_handler,
             get_batch_preview::handler,
@@ -144,7 +134,6 @@ use utoipa::OpenApi;
             schemas(
                 DocumentCognitionServiceApiVersion,
                 // Generic
-                StringIDResponse,
                 GenericErrorResponse,
                 // Permissions V2
                 models_permissions::share_permission::LinkShare, models_permissions::share_permission::access_level::AccessLevel, models_permissions::share_permission::SharePermissionV2, models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
@@ -171,7 +160,6 @@ use utoipa::OpenApi;
                 DocumentTextPart,
 
                 // Chat Request
-                CreateChatRequest,
                 PatchChatRequest,
                 AttachmentMetadata,
                 // Chat Response
@@ -179,18 +167,12 @@ use utoipa::OpenApi;
                 GetChatResponse,
 
                 // Tool Operations
-                UpdateToolCallRequest,
-                UpdateToolResponseRequest,
-                CallToolRequest,
-                CallToolResponse,
-                RejectToolCallRequest,
 
                 // Share Permission
                 UpdateOperation,
 
                 //stream
                 ChatStream,
-                SendChatMessagePayload,
                 StreamError,
 
                 // Attachments
@@ -202,9 +184,8 @@ use utoipa::OpenApi;
                 GetBatchPreviewResponse,
 
                 // Stream HTTP API
-                HttpSendChatMessageRequest,
-                SendChatMessageResponse,
                 ChatMessageError,
+                ChatMessageErrorCode,
                 StopChatStreamRequest,
                 StopChatStreamResponse,
                 StopChatStreamError,

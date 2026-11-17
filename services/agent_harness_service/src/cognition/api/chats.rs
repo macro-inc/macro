@@ -1,5 +1,6 @@
 pub mod chat_history;
 pub mod chat_history_batch_messages;
+mod retired;
 
 use super::context::{ApiContext, DcsAuthorizationService};
 use axum::{
@@ -11,9 +12,7 @@ use axum::{
 };
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use chat::domain::service::ChatServiceImpl;
-use chat::inbound::http::router::{
-    ChatRouterState, chat_create_router, chat_id_router, chat_view_router,
-};
+use chat::inbound::http::router::{ChatRouterState, chat_id_router, chat_view_router};
 use chat::outbound::postgres::PgChatRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
@@ -25,7 +24,7 @@ use tower::ServiceBuilder;
 /// Requires an authenticated acting user before the request proceeds.
 ///
 /// Applied to the owner/editor-only `/{chat_id}` routes (delete, patch,
-/// tool calls, etc.) so missing/invalid credentials get a 401 before
+/// permissions, etc.) so missing/invalid credentials get a 401 before
 /// `ensure_chat_exists` performs its lookup (and 404s), rather than falling
 /// through to the entity-access-level authorization check. It is
 /// deliberately **not** applied to the read-only `GET /{chat_id}` route
@@ -50,8 +49,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
 
     let chat_service = ChatServiceImpl::new(
         chat_repo,
-        state.all_tools.clone(),
-        state.tool_service_context.clone(),
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(state.db.clone()),
         ),
@@ -72,12 +69,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     let require_user =
         axum::middleware::from_fn_with_state(state.clone(), require_authenticated_user);
 
+    // Legacy chats are read-only: create and copy only refuse stale clients,
+    // and there is no tool-call route.
     Router::new()
-        // Create route — no ensure_chat_exists; the handler's authorization
-        // extractor enforces authentication.
-        // Note: free users are intentionally no longer capped by chat/document count,
-        // so no quota-enforcement middleware is applied here.
-        .merge(chat_create_router(chat_state.clone()))
+        .route("/", post(retired::create_chat))
+        .route("/{chat_id}/copy", post(retired::copy_chat))
         // Read-only view route — ensure_chat_exists only. No auth gate:
         // ChatAccessLevelExtractor<ViewAccessLevel, ..> permits anonymous
         // callers when the chat has public-view link sharing enabled.

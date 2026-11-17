@@ -616,7 +616,6 @@ pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 /// Chat service used by the unified entity mutation adapter.
 pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
     chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
-    (),
     EntityAccessManagementService,
 >;
 
@@ -625,7 +624,6 @@ pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
 /// and activity learn a chat is gone.
 pub(crate) type DssChatPurgeService = chat::domain::service::ChatServiceImpl<
     chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
-    (),
     EntityAccessManagementService,
     DssEventBroker,
 >;

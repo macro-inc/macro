@@ -1,63 +1,25 @@
 import type {
   GetChatHistoryHandlerResponses,
   GetChatResponses,
-  HttpSendChatMessageRequest,
 } from '../../../generated/cognition/types.gen';
 import { type Mentionable, type MentionPart, wrapXml } from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
-import type { EntityReference } from '../reference';
 import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
 import {
   type SharePermissionOptions,
   sharePermissionBody,
 } from '../sharing/permissions';
-import { ChatGeneration, ChatMessage } from './generation';
 
 type ChatDetail = GetChatResponses[200]['chat'];
 
 type ChatHistory = GetChatHistoryHandlerResponses[200]['conversation'];
 
-/** A Macro AI chat. */
+/** A legacy Macro AI chat. Read-only: nothing can be sent to it. */
 export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
-  /**
-   * Send a message and start a background generation. Tools may perform writes.
-   *
-   * @write
-   * @openworld
-   */
-  async send(
-    options: Omit<
-      HttpSendChatMessageRequest,
-      'chat_id' | 'attachments' | 'additional_instructions'
-    > & { attachments?: EntityReference[]; additionalInstructions?: string },
-  ): Promise<ChatGeneration> {
-    const { attachments, additionalInstructions, ...rest } = options;
-    const result = await this.mutate((c) =>
-      c.cognition.sendChatMessage({
-        body: {
-          ...rest,
-          chat_id: this.id,
-          additional_instructions: additionalInstructions,
-          attachments: attachments?.map((a) => ({
-            entity_id: a.entity.id,
-            entity_type: a.type,
-          })),
-        },
-      }),
-    );
-    const chat = Chat.byId(this.client, result.chat_id);
-    return ChatGeneration.byId(
-      this.client,
-      chat,
-      result.stream_id,
-      ChatMessage.byId(this.client, chat, result.message_id),
-    );
-  }
-
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'chat', this);
 
@@ -76,22 +38,6 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
 
   /** A handle to a chat by id. Details load on first access. */
   static byId(client: MacroClient, id: string): Chat {
-    return new Chat(client, id);
-  }
-
-  /** Create a chat, optionally named and attached to a project. */
-  static async create(
-    client: MacroClient,
-    opts?: { name?: string; project?: Project },
-  ): Promise<Chat> {
-    const { id } = unwrap(
-      await client.cognition.createChat({
-        body: {
-          name: opts?.name ?? null,
-          projectId: opts?.project?.id ?? null,
-        },
-      }),
-    );
     return new Chat(client, id);
   }
 
@@ -172,18 +118,6 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
         ? c.cognition.permanentlyDeleteChat({ path: { chat_id: this.id } })
         : c.cognition.deleteChat({ path: { chat_id: this.id } }),
     );
-  }
-
-  /**
-   * Copy the chat, returning a handle to the new copy.
-   *
-   * @write
-   */
-  async copy(): Promise<Chat> {
-    const { id } = await this.mutate((c) =>
-      c.cognition.copyChat({ path: { chat_id: this.id } }),
-    );
-    return new Chat(this.client, id);
   }
 
   /**

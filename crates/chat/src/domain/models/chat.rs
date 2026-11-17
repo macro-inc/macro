@@ -5,7 +5,8 @@ use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-/// Arguments for creating a new chat.
+/// Arguments for creating a chat in a test fixture.
+#[cfg(test)]
 #[derive(Debug)]
 pub struct CreateChatArgs {
     /// The name of the chat.

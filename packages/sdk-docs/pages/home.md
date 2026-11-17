@@ -130,8 +130,8 @@ scoped to their parent document.
 
 GitHub pull request snapshots and diffs use `macro.githubPullRequests`. Cross-resource
 mentions use `macro.entityMentions`, with typed source and target references.
-`macro.unfurls` reads URL metadata; `chat.send` returns a generation with a response
-message handle and explicit cancellation. `macro.ai.usage` reads usage summaries.
+`macro.unfurls` reads URL metadata; AI chats are read-only history. `macro.ai.usage`
+reads usage summaries.
 
 ## How to use entity handles
 

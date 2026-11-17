@@ -16,10 +16,8 @@ use model_owner::Owner;
 use rootcause::{Report, prelude::*};
 use shared_entity_registry::{OwnedPurgeOutcome, PurgeOwnedEntity};
 
-impl<R: ChatRepo, ToolSetContext, Eam: EntityAccessManagementService, B: MacroEventBroker>
-    PurgeOwnedEntity for ChatServiceImpl<R, ToolSetContext, Eam, B>
-where
-    ToolSetContext: Clone + Send + Sync + 'static,
+impl<R: ChatRepo, Eam: EntityAccessManagementService, B: MacroEventBroker> PurgeOwnedEntity
+    for ChatServiceImpl<R, Eam, B>
 {
     #[tracing::instrument(
         skip(self, expected_owner),

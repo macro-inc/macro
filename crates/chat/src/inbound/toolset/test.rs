@@ -19,12 +19,9 @@ fn test_read_chat_schema_validation() {
 
 mod self_read_guard {
     use super::super::ChatToolContext;
-    use crate::domain::models::{
-        ChatErr, ChatResponse, CreateChatArgs, GetChatResponse, PatchChatArgs, Result,
-    };
+    use crate::domain::models::{ChatErr, ChatResponse, GetChatResponse, PatchChatArgs, Result};
     use crate::domain::ports::ChatService;
     use crate::inbound::toolset::read_chat::ReadChat;
-    use ai_toolset::tool_object::UserToolResponse;
     use ai_toolset::{AsyncTool, RequestContext, ServiceContext};
     use entity_access::domain::models::{
         AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, Entity,
@@ -41,14 +38,6 @@ mod self_read_guard {
     struct UnreachableChatService;
 
     impl ChatService for UnreachableChatService {
-        async fn create(
-            &self,
-            _owner: model_owner::Owner,
-            _args: CreateChatArgs,
-        ) -> Result<String> {
-            unreachable!("guard should short-circuit before calling the chat service")
-        }
-
         async fn get_chat(
             &self,
             _entity_access_receipt: EntityAccessReceipt<
@@ -119,53 +108,6 @@ mod self_read_guard {
                 entity_access::domain::models::EditAccessLevel,
             >,
         ) -> Result<models_permissions::share_permission::SharePermissionV2> {
-            unreachable!("guard should short-circuit before calling the chat service")
-        }
-
-        async fn update_tool_call(
-            &self,
-            _entity_access_receipt: EntityAccessReceipt<
-                entity_access::domain::models::OwnerAccessLevel,
-            >,
-            _message_id: &str,
-            _tool_call_id: &str,
-            _new_args: serde_json::Value,
-        ) -> Result<()> {
-            unreachable!("guard should short-circuit before calling the chat service")
-        }
-
-        async fn update_tool_response(
-            &self,
-            _entity_access_receipt: EntityAccessReceipt<
-                entity_access::domain::models::OwnerAccessLevel,
-            >,
-            _message_id: &str,
-            _tool_call_id: &str,
-            _response: UserToolResponse<serde_json::Value>,
-        ) -> Result<()> {
-            unreachable!("guard should short-circuit before calling the chat service")
-        }
-
-        async fn call_tool(
-            &self,
-            _entity_access_receipt: EntityAccessReceipt<
-                entity_access::domain::models::OwnerAccessLevel,
-            >,
-            _message_id: &str,
-            _tool_call_id: &str,
-            _args: Option<serde_json::Value>,
-        ) -> Result<serde_json::Value> {
-            unreachable!("guard should short-circuit before calling the chat service")
-        }
-
-        async fn reject_tool_call(
-            &self,
-            _entity_access_receipt: EntityAccessReceipt<
-                entity_access::domain::models::OwnerAccessLevel,
-            >,
-            _message_id: &str,
-            _tool_call_id: &str,
-        ) -> Result<()> {
             unreachable!("guard should short-circuit before calling the chat service")
         }
     }
@@ -278,14 +220,6 @@ mod self_read_guard {
     struct StubChatService;
 
     impl ChatService for StubChatService {
-        async fn create(
-            &self,
-            _owner: model_owner::Owner,
-            _args: CreateChatArgs,
-        ) -> Result<String> {
-            Err(ChatErr::Unknown(anyhow::anyhow!("not used by this test")))
-        }
-
         async fn get_metadata(
             &self,
             entity_access_receipt: EntityAccessReceipt<
@@ -384,53 +318,6 @@ mod self_read_guard {
                 entity_access::domain::models::EditAccessLevel,
             >,
         ) -> Result<models_permissions::share_permission::SharePermissionV2> {
-            Err(ChatErr::Unknown(anyhow::anyhow!("not used by this test")))
-        }
-
-        async fn update_tool_call(
-            &self,
-            _entity_access_receipt: EntityAccessReceipt<
-                entity_access::domain::models::OwnerAccessLevel,
-            >,
-            _message_id: &str,
-            _tool_call_id: &str,
-            _new_args: serde_json::Value,
-        ) -> Result<()> {
-            Err(ChatErr::Unknown(anyhow::anyhow!("not used by this test")))
-        }
-
-        async fn update_tool_response(
-            &self,
-            _entity_access_receipt: EntityAccessReceipt<
-                entity_access::domain::models::OwnerAccessLevel,
-            >,
-            _message_id: &str,
-            _tool_call_id: &str,
-            _response: UserToolResponse<serde_json::Value>,
-        ) -> Result<()> {
-            Err(ChatErr::Unknown(anyhow::anyhow!("not used by this test")))
-        }
-
-        async fn call_tool(
-            &self,
-            _entity_access_receipt: EntityAccessReceipt<
-                entity_access::domain::models::OwnerAccessLevel,
-            >,
-            _message_id: &str,
-            _tool_call_id: &str,
-            _args: Option<serde_json::Value>,
-        ) -> Result<serde_json::Value> {
-            Err(ChatErr::Unknown(anyhow::anyhow!("not used by this test")))
-        }
-
-        async fn reject_tool_call(
-            &self,
-            _entity_access_receipt: EntityAccessReceipt<
-                entity_access::domain::models::OwnerAccessLevel,
-            >,
-            _message_id: &str,
-            _tool_call_id: &str,
-        ) -> Result<()> {
             Err(ChatErr::Unknown(anyhow::anyhow!("not used by this test")))
         }
     }
