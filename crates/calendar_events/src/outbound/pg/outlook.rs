@@ -407,7 +407,9 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         } else {
             (None, false, false)
         };
-        sqlx::query!("UPDATE calendar_accounts SET sync_status=CASE WHEN last_synced_at IS NULL OR sync_status='reauth_required' THEN 'syncing' ELSE sync_status END WHERE id=$1",row.account_id).execute(&mut *tx).await.map_err(report)?;
+        // Writes only when the status changes: every claim runs it, and eight
+        // loops claim several times a second.
+        sqlx::query!("UPDATE calendar_accounts SET sync_status='syncing' WHERE id=$1 AND sync_status<>'syncing' AND(last_synced_at IS NULL OR sync_status='reauth_required')",row.account_id).execute(&mut *tx).await.map_err(report)?;
         log.commit(tx).await?;
         Ok(Some(OutlookCalendarLease {
             id: row.id,
