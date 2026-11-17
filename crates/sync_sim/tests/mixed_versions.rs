@@ -7,6 +7,7 @@ mod peer_protocol;
 mod ts_child;
 use mixed::Mixed;
 use peer_protocol::*;
+use sync_sim::invariants::without_retained_root_state;
 use sync_sim::*;
 
 #[test]
@@ -423,8 +424,16 @@ fn editor_native_and_shipping_worker(seed: u64) -> (Outcome, Vec<String>) {
         .editor
         .as_ref()
         .unwrap();
-    assert_eq!(editor, native.synced_json);
-    assert_eq!(editor, native.reconstructed);
+    // Each live model keeps its own retained root state (root id, metadata), and the
+    // persisted root keeps the one the TS peer wrote; everything else must be equal.
+    assert_eq!(
+        without_retained_root_state(&editor),
+        without_retained_root_state(&native.synced_json)
+    );
+    assert_eq!(
+        without_retained_root_state(&editor),
+        without_retained_root_state(&native.reconstructed)
+    );
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&peer.value_json).unwrap(),
         outcome.finals.servers[&DocIx(0)].deep_value
@@ -526,8 +535,16 @@ fn markdown_native_and_shipping_worker(seed: u64, snippet: u8) -> (Outcome, Vec<
         .editor
         .as_ref()
         .unwrap();
-    assert_eq!(editor, native.synced_json);
-    assert_eq!(editor, native.reconstructed);
+    // Each live model keeps its own retained root state (root id, metadata), and the
+    // persisted root keeps the one the TS peer wrote; everything else must be equal.
+    assert_eq!(
+        without_retained_root_state(&editor),
+        without_retained_root_state(&native.synced_json)
+    );
+    assert_eq!(
+        without_retained_root_state(&editor),
+        without_retained_root_state(&native.reconstructed)
+    );
     assert!(peer.rows.iter().all(|row| row.delivered));
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&peer.value_json).unwrap(),

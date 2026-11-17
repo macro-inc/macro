@@ -14,6 +14,11 @@ use std::{
     },
 };
 
+/// The sync policy native editor clients run with; projection checks read its
+/// retained live root state from here too.
+pub(crate) static EDITOR_SYNC_POLICY: &macro_document_model::sync::MacroSyncPolicy =
+    &macro_document_model::sync::MACRO_SYNC_POLICY;
+
 pub(crate) struct EditorRuntime {
     session: DocumentSession<EditorSurface>,
     wall: Arc<AtomicU64>,
@@ -30,6 +35,10 @@ impl EditorRuntime {
         let clock = wall.clone();
         // Rebuilds retain the peer but must not restart a retired ID stream.
         let creation = AtomicU64::new(0);
+        // Node ids come from the Source NodeIdPlugin below (web 8, headless none). This
+        // composition does not install document_session's application id pass, so even a
+        // view-attached client mints no root id after a Loro import; a foreign root id
+        // stays only in the persisted document (see invariants::projection_matches).
         let id_length = (mode == EditorMode::ViewAttached).then_some(8);
         let session = DocumentSession::new(
             SessionConfig {
@@ -56,7 +65,7 @@ impl EditorRuntime {
                         )?
                         .key())
                     },
-                    policy: &macro_document_model::sync::MACRO_SYNC_POLICY,
+                    policy: EDITOR_SYNC_POLICY,
                     local_commands: super::commands::LOCAL_COMMANDS,
                     ..EditorConfig::default()
                 }),

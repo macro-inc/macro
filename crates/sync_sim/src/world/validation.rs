@@ -62,7 +62,7 @@ impl Sim {
                     client.spec.doc,
                 );
             match client.core.editor_final() {
-                Ok(Some(editor)) if !faulted && editor.synced_json != editor.reconstructed => {
+                Ok(Some(editor)) if !faulted && !crate::invariants::projection_matches(&editor) => {
                     failures.push(Failure::new(
                         "projection_consistent",
                         format!("{name:?}: live model differs from persisted reconstruction"),

@@ -65,6 +65,10 @@ Observe snapshot statistics through the same pure real-document port as producti
   projection, undo and document; never keep a shadow core or mutable document copy.
 - Capture live synced editor JSON and independently reconstructed persisted JSON.
   Compare both per step and in finals; include editor finals in replay/hash evidence.
+  Compare them modulo only the root state the editor sync policy retains live
+  (`invariants::without_retained_root_state`): a remote root id or metadata write
+  reaches the persisted root before the live model's next local write, as in Source.
+  This composition installs no application root-id pass, so native live roots have no id.
   Exempt projection consistency only after an actual injected-write receipt for the
   exact client session incarnation. Keep all healthy projection, convergence and
   loss checks; reopening never inherits an exemption.

@@ -183,7 +183,7 @@ pub fn projection_consistent(outcome: &Outcome) -> Result<(), Failure> {
             ));
         }
         if let Some(editor) = &client.editor
-            && editor.synced_json != editor.reconstructed
+            && !projection_matches(editor)
         {
             return Err(Failure::new(
                 "projection_consistent",
@@ -290,3 +290,42 @@ pub(crate) fn ranges_cover(ranges: &[IdSpan], target: &IdSpan) -> bool {
     }
     through >= target.end
 }
+
+/// Live model and persisted reconstruction agree except on the root state the editor's
+/// sync policy retains live. Source applies only root children on import, so a remote
+/// write of a retained root slot (the root id, document metadata) reaches the persisted
+/// document while the live model keeps its own until its next local write. Every other
+/// field is compared exactly.
+pub(crate) fn projection_matches(editor: &EditorFinal) -> bool {
+    projection_json_matches(&editor.synced_json, &editor.reconstructed)
+}
+fn projection_json_matches(live: &serde_json::Value, persisted: &serde_json::Value) -> bool {
+    without_retained_root_state(live) == without_retained_root_state(persisted)
+}
+/// Editor JSON without the root state slots the editor sync policy retains live, for
+/// comparing a live model with a persisted reconstruction.
+pub fn without_retained_root_state(json: &serde_json::Value) -> serde_json::Value {
+    let mut json = json.clone();
+    if let Some(root) = json
+        .get_mut("root")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        if let Some(state) = root.get_mut("$").and_then(serde_json::Value::as_object_mut) {
+            for key in lexical_loro::SyncPolicy::retained_live_root_state(
+                crate::client::application::EDITOR_SYNC_POLICY,
+            ) {
+                state.remove(*key);
+            }
+        }
+        if root
+            .get("$")
+            .and_then(serde_json::Value::as_object)
+            .is_some_and(serde_json::Map::is_empty)
+        {
+            root.remove("$");
+        }
+    }
+    json
+}
+#[cfg(test)]
+mod projection_test;
