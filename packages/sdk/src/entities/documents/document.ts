@@ -381,14 +381,44 @@ export class Document
   }
 
   /**
-   * The user's recently soft-deleted documents. The underlying endpoint also
-   * returns deleted chats and projects; those are filtered out here.
+   * The documents among the user's most recently trashed items: the first
+   * page of the trash (100 items, newest first), not all of it. The
+   * underlying endpoint also returns trashed chats and projects; those are
+   * filtered out here. Page through the whole trash with
+   * {@link Document.trashed}.
    */
   static async recentlyDeleted(client: MacroClient): Promise<Document[]> {
     const { data } = unwrap(await client.storage.recentlyDeleted({}));
     return data.items
       .filter((i) => i.type === 'document')
       .map((d) => new Document(client, d.id));
+  }
+
+  /**
+   * The user's trashed documents, most recently trashed first,
+   * auto-paginated. `pageSize` counts trashed chats and projects too, which
+   * are filtered out, so a page can yield fewer documents.
+   */
+  static trashed(
+    client: MacroClient,
+    opts?: { pageSize?: number },
+  ): AsyncGenerator<Document> {
+    return paginate(async (cursor) => {
+      const { data } = unwrap(
+        await client.storage.recentlyDeleted({
+          query: {
+            ...(opts?.pageSize !== undefined ? { limit: opts.pageSize } : {}),
+            ...(cursor !== undefined ? { cursor } : {}),
+          },
+        }),
+      );
+      return {
+        items: data.items
+          .filter((i) => i.type === 'document')
+          .map((d) => new Document(client, d.id)),
+        nextCursor: data.next_cursor ?? null,
+      };
+    });
   }
 
   /** Favorites identify documents as `document`. */

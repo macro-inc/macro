@@ -35,7 +35,8 @@ export default defineConfig(async (env) => {
             return mock;
           if (
             importer.endsWith('/agent-work/views/call-work.tsx') &&
-            (id === '@app/lib/analytics/posthog' || id === './use-work-client')
+            (id === '@app/lib/analytics/posthog' ||
+              id === '@service-storage/graphql-soup')
           )
             return mock;
         },

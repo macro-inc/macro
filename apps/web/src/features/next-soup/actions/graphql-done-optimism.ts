@@ -2,7 +2,7 @@ import { setDoneOverride } from '@notifications';
 import { hideGraphqlSoupEntitiesAsDone } from '@queries/soup/graphql/optimistic-done';
 import { batch } from 'solid-js';
 
-/** GraphQL display intent never reads or patches the legacy REST caches. */
+/** Hides entities as done in GraphQL Soup and overrides their notifications. */
 export function applyGraphqlDoneOptimistic(args: {
   entityIds: string[];
   notificationIds: string[];

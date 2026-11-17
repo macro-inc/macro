@@ -28013,8 +28013,30 @@
     "/recents/deleted": {
       "get": {
         "tags": ["recents"],
-        "summary": "Gets the users recently deleted items.",
+        "summary": "Gets one page of the user's trashed documents, chats and folders, most\nrecently trashed first.",
         "operationId": "recently_deleted",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-500, default 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The previous page's next_cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -41579,6 +41601,21 @@
                 "description": "A peer joined, left, or a periodic save occurred."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Documents whose mail is gone stopped being email attachments, in one\nbatch: the system moved some to the Trash and left the rest. Like the\ndocuments in a trashed folder, the trashed ones are removed from open\nlists and trigger nothing per document.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.email_attachments_released"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailAttachmentsReleasedMetadata",
+                "description": "Documents whose mail is gone stopped being email attachments, in one\nbatch: the system moved some to the Trash and left the rest. Like the\ndocuments in a trashed folder, the trashed ones are removed from open\nlists and trigger nothing per document."
+              }
+            }
           }
         ],
         "description": "Events that can be published to [`MacroDocumentsTopic`]."
@@ -44682,6 +44719,27 @@
           }
         ],
         "description": "One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options."
+      },
+      "EmailAttachmentsReleasedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::EmailAttachmentsReleased`]: the\ndocuments of one queue batch that lost their last email link.",
+        "required": ["trashed_document_ids", "kept_document_ids"],
+        "properties": {
+          "kept_document_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Documents left as they were: kept by their owner, or already in the\nTrash. They are no longer email attachments either."
+          },
+          "trashed_document_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Documents the batch moved to the Trash."
+          }
+        }
       },
       "EmailBlockScope": {
         "type": "string",
@@ -58502,7 +58560,11 @@
             "items": {
               "$ref": "#/components/schemas/Item"
             },
-            "description": "The items returned from the call"
+            "description": "The items returned from the call, most recently trashed first"
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Pass as `cursor` to get the next page; absent on the last page"
           }
         }
       },
@@ -66347,7 +66409,11 @@
                     "items": {
                       "$ref": "#/components/schemas/Item"
                     },
-                    "description": "The items returned from the call"
+                    "description": "The items returned from the call, most recently trashed first"
+                  },
+                  "next_cursor": {
+                    "type": ["string", "null"],
+                    "description": "Pass as `cursor` to get the next page; absent on the last page"
                   }
                 }
               }

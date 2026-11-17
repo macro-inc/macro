@@ -143,6 +143,8 @@ function Search(props: {
   onValueChange: (value: string) => void;
   /** Moves keyboard focus into the sidebar's result list. */
   focusResults?: () => void;
+  /** Whether that list has a row; see `ListSearchKeysOptions.hasResults`. */
+  hasResults?: () => boolean;
   hotkey?: string;
   ref?: (element: HTMLInputElement) => void;
 }) {
@@ -155,6 +157,7 @@ function Search(props: {
       header?.close();
     },
     focusResults: () => props.focusResults,
+    hasResults: props.hasResults,
     input: () => input,
     trigger: () => header?.button(),
     // The preview or conversation beside the sidebar keeps its own Escape.

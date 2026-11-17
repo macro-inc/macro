@@ -81,7 +81,6 @@ import {
   localDraftEntities,
   localDraftMatchesFilters,
 } from '@queries/email/local-draft-source';
-import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import type {
   GroupMeta as ApiGroupMeta,
@@ -1564,7 +1563,6 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
         void queryClient
           .invalidateQueries({ queryKey: soupKeys._def })
           .catch(() => undefined);
-        void invalidateUserNotifications().catch(() => undefined);
 
         // Only the visible list decides the outcome. It throws on refetch
         // failure, so pull-to-refresh can tell "nothing came back" apart from

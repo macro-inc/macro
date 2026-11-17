@@ -308,6 +308,15 @@ tools — hexagonal, heavily feature-gated.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
+- Deleting mail sends the Drive documents imported from it to the Trash: when
+  a statement removes a live document's `document_email` rows (a message,
+  thread or inbox delete, a purge batch, a replaced attachment, all through
+  cascades), the `document_email_release` trigger queues it in
+  `released_email_attachment_documents` (migration `20261116200143`), and
+  document storage trashes it if no link is left and its owner did not adopt
+  it. Moving a link (sent-identity adoption) inserts the new row before
+  deleting the old one, so the document is never without a link; keep that
+  order in any new path.
 - An attachment links to its document before the bytes reach storage, and a link
   stops sync from offering it again. `AttachmentReadService::document` stores the
   bytes again when a linked document is still awaiting its upload, and DSS signs a

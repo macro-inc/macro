@@ -573,10 +573,6 @@ export default {
       other: '{{accepted}} dari {{count}} item ditandai belum selesai',
     },
     toastMarkNotDoneFailed: 'Gagal menandai belum selesai',
-    toastThreadStaysDone:
-      'Utas ini belum menerima pesan apa pun, jadi tetap selesai',
-    toastThreadsStayDone:
-      'Utas-utas ini belum menerima pesan apa pun, jadi tetap selesai',
     toastCountNotRestored: {
       other: '{{count}} item tidak dapat dipulihkan.',
     },
