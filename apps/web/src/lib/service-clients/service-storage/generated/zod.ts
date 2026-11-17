@@ -9074,38 +9074,72 @@ export const setCrmContactNameBody = zod
 /**
  * @summary Read the caller's mailbox consent and both exclusion lists.
  */
+export const getCrmEmailPrivacyQueryParams = zod.object({
+  consent_only: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Return only consent and mailbox fields, without querying domain lists.'
+    ),
+});
+
 export const getCrmEmailPrivacyResponse = zod
-  .object({
-    can_remove_team_domains: zod
-      .boolean()
-      .describe('Whether the caller can remove a team exclusion.'),
-    enabled: zod
-      .boolean()
+  .union([
+    zod
+      .object({
+        can_remove_team_domains: zod
+          .boolean()
+          .describe('Whether the caller can remove a team exclusion.'),
+        enabled: zod
+          .boolean()
+          .describe(
+            'Whether this exact mailbox has explicit contribution consent.'
+          ),
+        mailbox_email: zod
+          .string()
+          .nullish()
+          .describe(
+            'The primary mailbox that would contribute; absent before email connection.'
+          ),
+        mailbox_link_id: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Exact current primary connection; clients bind opt-in to this identifier.'
+          ),
+        personal_domains: zod
+          .array(zod.string())
+          .describe("Domains excluded only for the caller's contributions."),
+        team_domains: zod
+          .array(zod.string())
+          .describe(
+            'Domains excluded across the team, including legacy company exclusions.'
+          ),
+      })
+      .describe('Current consent and exclusions, readable by any team member.'),
+    zod
+      .object({
+        enabled: zod
+          .boolean()
+          .describe(
+            'Whether this exact mailbox has explicit contribution consent.'
+          ),
+        mailbox_email: zod
+          .string()
+          .nullish()
+          .describe('The primary mailbox that would contribute, if connected.'),
+        mailbox_link_id: zod
+          .uuid()
+          .nullish()
+          .describe('Exact current primary mailbox connection.'),
+      })
       .describe(
-        'Whether this exact mailbox has explicit contribution consent.'
+        'Current mailbox consent without loading domain exclusion lists.'
       ),
-    mailbox_email: zod
-      .string()
-      .nullish()
-      .describe(
-        'The primary mailbox that would contribute; absent before email connection.'
-      ),
-    mailbox_link_id: zod
-      .uuid()
-      .nullish()
-      .describe(
-        'Exact current primary connection; clients bind opt-in to this identifier.'
-      ),
-    personal_domains: zod
-      .array(zod.string())
-      .describe("Domains excluded only for the caller's contributions."),
-    team_domains: zod
-      .array(zod.string())
-      .describe(
-        'Domains excluded across the team, including legacy company exclusions.'
-      ),
-  })
-  .describe('Current consent and exclusions, readable by any team member.');
+  ])
+  .describe(
+    'Full settings by default, or mailbox consent when explicitly requested.'
+  );
 
 /**
  * @summary Apply one consent, domain, or thread exclusion change as the member.
@@ -9208,6 +9242,12 @@ export const updateCrmEmailPrivacyResponse = zod
  */
 export const listCrmExcludedEmailThreadsQueryParams = zod.object({
   after: zod.uuid().nullish().describe('Read entries after this thread ID.'),
+  thread_id: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'Look up one thread instead of paging. Cannot be combined with `after`.'
+    ),
 });
 
 export const listCrmExcludedEmailThreadsResponse = zod

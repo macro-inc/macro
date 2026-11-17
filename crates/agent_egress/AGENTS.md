@@ -54,6 +54,8 @@ resolve it before credentials, strip it before upstream dispatch, and ask for
 approval only when the selected account differs from the verified requester.
 Check turn authority through `TurnPrompter::acting_user()`: System turns never
 inherit requester access, including malformed records retaining a user ID.
+A Program turn (a program or routine prompted it for the user) acts with that
+user's access, so its calls are held or not exactly as the user's own turn's.
 Keep discovery on the session owner's configured catalog. Requester-only
 integrations are not advertised by this version. A missing selected connection
 returns an actionable tool error; never fall back to another account.

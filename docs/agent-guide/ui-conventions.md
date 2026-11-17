@@ -12,7 +12,9 @@ keeps loaded items visible. Wait for real rows before navigating or selecting.
 On touch devices, check top bars with a nonzero safe area as well as at phone
 and tablet widths. Collection headers clear the pane's full top content inset:
 safe area only in composable CRM/Tasks/Drive, plus the floating split header in
-Reviews. Native project detail navigation also clears the safe area, with its
+Reviews. Floating entity split headers add the same 0.5rem top gutter as
+collection controls, with that gutter included in the measured content inset.
+Native project detail navigation also clears the safe area, with its
 content directly below it. Content nested below an in-flow header must not add
 the same inset again. See the [mobile layout rule](../../.agents/rules/web/mobile.md#layout-and-chrome).
 
@@ -39,7 +41,10 @@ belongs to its view's mobile view, which lists every island it shows. A new one
 shows Back, the title (tap it for the title menu), and Info, with other actions
 in the title menu, as the email thread's does. A header split from a shared one
 keeps what it had: a document's or task's also shows the access badge, the sync
-indicator, Ask Macro and, on tablets, Dispatch Agent. Other touch headers keep
+indicator, and Ask Macro; a task's dispatch actions are under Code Actions in
+its title menu at every touch width. A touch view that shows an item beside its list hosts that
+same header in the pane, so it does not change between a split of its own and
+a preview. Other touch headers keep
 their current controls until their views are split. Recent, Folders, and Agents lists use the same islands (filters,
 view options, New, expandable Search) with active filter chips below; Search
 keeps its full-width field with facet chips under it. Inputs, search fields,
@@ -179,6 +184,10 @@ The agent composer's tray sits below that surface with its own fill, and holds
 the Chat/Code switch; the open tray gives the input its multiline layout.
 
 ## Scrolling content
+
+On wide touch layouts, floating composers and page actions stay within the
+preview or detail pane that owns them. Their width follows sidebar collapse and
+resizing, while app navigation retains its global placement.
 
 Desktop Email, Drive, and Tasks lists, email threads, and the Channels thread feed
 and navigation lists use a linear 32px top fade as content scrolls

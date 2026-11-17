@@ -2,7 +2,7 @@
 
 use ::axum::{
     body::Body,
-    extract::{FromRequestParts, Request},
+    extract::Request,
     http::header,
     middleware::Next,
     response::Response,
@@ -20,49 +20,28 @@ use crate::is_program_run;
 /// runtime's header, or a Macro API JWT signed for an agent or a routine
 /// run.
 ///
-/// Only a Macro API JWT carries those signed claims, so this reads the one
-/// JWT a request sends (the `macro-api-token` query, a bearer or the access
-/// cookie) and checks its signature, with no database lookup and no second
-/// run of the route's credential extraction. A request carrying a user API
-/// key, bot, harness or internal credential carries no program claims and
-/// is not checked further. A JWT that does not verify counts as none; the
-/// route rejects it.
+/// Only a Macro API JWT carries those signed claims, so this reads the
+/// request's credential once, through the cached
+/// [`macro_auth::credential::request_credential`] the route's own
+/// authentication uses, and checks the signature of the user token it
+/// authenticates with: no database lookup and no second credential
+/// extraction. A user API key, bot, harness or internal credential carries
+/// no program claims. A JWT that does not verify counts as none; the route
+/// rejects it.
 pub async fn request_is_program<Svc: MacroAuthorizationService>(
     request: Request,
     authorization: &MacroAuthorizationState<Svc>,
 ) -> (Request, bool) {
-    let headers = request.headers();
-    if headers.contains_key(super::CODE_EXECUTION_HEADER) {
+    if request.headers().contains_key(super::CODE_EXECUTION_HEADER) {
         return (request, true);
     }
-    // The legacy header still authenticates internal callers.
-    #[allow(deprecated)]
-    let other_credential = [
-        super::USER_API_KEY_HEADER,
-        super::BOT_TOKEN_HEADER,
-        super::HARNESS_TOKEN_HEADER,
-        super::INTERNAL_API_KEY_HEADER,
-        super::LEGACY_DSS_INTERNAL_API_KEY_HEADER,
-    ]
-    .into_iter()
-    .any(|name| headers.contains_key(name));
-    if other_credential {
-        return (request, false);
-    }
     let (mut parts, body) = request.into_parts();
-    let query_token = parts.uri.query().and_then(|query| {
-        query.split('&').find_map(|parameter| {
-            parameter
-                .strip_prefix("macro-api-token=")
-                .map(str::to_owned)
-        })
-    });
-    let token = match query_token {
-        Some(token) => Some(token),
-        None => macro_auth::headers::AccessTokenExtractor::from_request_parts(&mut parts, &())
-            .await
-            .ok()
-            .map(|token| token.as_ref().to_owned()),
+    let token = match macro_auth::credential::request_credential(&mut parts) {
+        Ok(macro_auth::credential::RequestCredential {
+            kind: macro_auth::credential::CredentialKind::UserToken { token, .. },
+            ..
+        }) => Some(token),
+        _ => None,
     };
     let program = match token {
         Some(token) => authorization

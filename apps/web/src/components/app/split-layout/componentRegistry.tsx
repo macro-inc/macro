@@ -358,7 +358,7 @@ registerComponent('agents', () => <AgentsRouteView />, {
 registerComponent(
   'mail',
   () => <MailRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent(
   'documents',
@@ -378,19 +378,17 @@ registerComponent(
 registerComponent(
   'calendar',
   () => <CalendarRouteView />,
-  // Desktop Calendar draws its own top bar. Touch still needs the split header
-  // for the floating month and action controls.
-  () => (isTouchDevice() ? undefined : { splitPanelLayout: 'composable' })
+  () => composableLayout(true)
 );
 registerComponent(
   'channels',
   () => <ChannelsRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent(
   'calls',
   () => <CallsRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent('companies', () => <CompaniesRouteView />, {
   ownsCollectionState: true,
@@ -488,7 +486,7 @@ registerComponent(
 registerComponent(
   'settings',
   () => <SettingsRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent(
   'booking-links',

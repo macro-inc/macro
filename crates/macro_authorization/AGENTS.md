@@ -62,13 +62,16 @@ attribution) instead of sniffing request headers. A Macro API token's signed
 `agent_id` and `routine_id` reach `MacroUserAuthentication`;
 `attribution()` reads them as `CredentialAttribution`. Routes where only a
 person may decide, answer or approve (review decisions, elicitation and
-permission answers, held tool-call approvals, the email sign-in) refuse
-anything but `Person` through `is_program_run(attribution, headers)`; sign-in
-routes answer with `PROGRAM_SIGN_IN_REFUSAL`. Routes that only ask a program
-to confirm (email send, calendar create, call tokens) use `is_agent_run`,
+permission answers, held tool-call approvals, the email sign-in, call tokens)
+refuse anything but `Person` through `is_program_run(attribution, headers)`;
+sign-in routes answer with `PROGRAM_SIGN_IN_REFUSAL`. Routes that only ask a
+program to confirm (email send and schedule, calendar create) use `is_agent_run`,
 which leaves owner routine steps (`Routine`) alone so scheduled sends keep
-working. A routine step running as its owner signs only `routine_id`, so
-never test `agent_id` alone for "is this a person". `authorize_identity` retains
+working, even with `x-macro-code-execution`: the runtime marks every code
+step's request, so the header counts only for a credential that signs no
+program (`Person`), never against a signed claim. A routine step running as
+its owner signs only `routine_id`, so never test `agent_id` alone for "is
+this a person". `authorize_identity` retains
 verified origin and signed agent attribution on user authentication. It
 does not turn a user credential into bot authority or change endpoint policies.
 
@@ -82,12 +85,19 @@ the account, or changes its managers.
 
 ## Gotchas
 
-- `rewrite_program_json` rewrites a JSON response only for a program's request (`request_is_program`: the header, or a credential signed for an agent or routine run). Layer it inside compression, so it reads the handler's JSON.
-- Both extractors reject (400) a request that combines explicit credential
-  types (internal key, bot token, user API key, bearer/query user) rather
-  than picking one — don't "fix" this by adding precedence logic.
-- Cookies are ambient and only considered when no explicit credential is
-  present; an explicit credential always wins over a cookie.
+- `rewrite_program_json` rewrites a JSON response only for a program's request (`request_is_program`: the header, or the request's own user token, from `request_credential`, signed for an agent or routine run). Layer it inside compression, so it reads the handler's JSON.
+- Both extractors read the request's credential only through
+  `macro_auth::credential::request_credential`, the same reading the agent
+  scope check (`agent_correlation`) uses, so the two can't disagree. A user
+  token authenticates by fixed precedence: `macro-api-token` query parameter
+  (keys percent-decoded), then bearer, then the access-token cookie.
+  Explicit credentials of different kinds (internal key, bot token, harness
+  token, user API key, explicit user token), or one credential header with
+  different values, are refused 400 `conflicting_credentials`; an ambient
+  cookie beside another credential is not a conflict (browsers and native
+  apps send it everywhere), and the scope check still reads its token.
+- Locally (`local_auth`), a configured user stands in for an ambient cookie
+  or none; an explicit user token is always the one used.
 - A valid principal not admitted by the chosen policy is a 403, not a 401.
 - A route whose response carries a new credential's secret refuses
   `is_program_run`, because a program's results reach the model: the

@@ -22,6 +22,7 @@ pub(crate) use time::{Point, Span, Window};
 pub(crate) use write::{Actor, WriteOptions};
 
 use crate::error::ApiError;
+use crate::fault::FaultError;
 use crate::seed::SeedCalendar;
 
 /// The scopes that let a token read and write events.
@@ -192,6 +193,8 @@ pub(crate) struct Calendar {
     sync_tokens: HashMap<String, SyncCursor>,
     sync_tokens_issued: u64,
     pub(crate) channels: Vec<Channel>,
+    /// The error `events.list` answers for this calendar, while it has one.
+    pub(crate) failing: Option<FaultError>,
 }
 
 impl Calendar {
@@ -214,6 +217,7 @@ impl Calendar {
             sync_tokens: HashMap::new(),
             sync_tokens_issued: 0,
             channels: Vec::new(),
+            failing: None,
         }
     }
 
