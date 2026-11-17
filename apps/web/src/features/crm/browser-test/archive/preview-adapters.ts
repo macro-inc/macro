@@ -311,6 +311,7 @@ const deps = {
 };
 export const useCrmContext = () => ({
   userId: () => 'user-1',
+  pipelinesEnabled: () => () => false,
   isTeamAdmin: () => () => role() !== 'member',
   createCompanySource: (id: Accessor<string>) => useCompanyQuery(deps, id),
   createCompanyContactsSource: (
@@ -355,6 +356,9 @@ Object.assign(window, {
     snapshot: () => ({ company, contacts }),
   },
 });
+
+// Pipelines are off here, so the headers never render this.
+export const AddToPipeline = () => null;
 
 export const useFeatureFlag = () => () => ({ enabled: true, loading: false });
 

@@ -75,6 +75,8 @@ the gateway `/email` prefix.
 - `src/backfill_outbox.rs`: cancellation-aware polling facade for the domain's
   durable backfill publication. `outbound/backfill_jobs/outbox.rs` keeps each
   row lock through the queue send and commits the publication marker afterwards.
+  CRM publication recognizes either contribution grant (`enabled OR
+  selected_enabled`); rule activation and versioned jobs remain separate phases.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM
   company directory entries (names/logos) left by binaries without a resolver,
   using the public-homepage `UnfurlCompanyMetadataResolver` wired in

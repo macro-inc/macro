@@ -41,7 +41,9 @@ dependencies = [
 name = "account_manager"
 version = "0.1.0"
 dependencies = [
+ "account_manager",
  "axum",
+ "bot_id",
  "channels",
  "chrono",
  "entity_access",
@@ -57,6 +59,7 @@ dependencies = [
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "user_api_key",
  "utoipa",
@@ -387,6 +390,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "lazy-regex",
  "macro_auth",
  "macro_db_migrator",
  "rootcause",
@@ -399,6 +403,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "urlencoding",
  "uuid",
  "workspace-hack",
 ]
@@ -6160,6 +6165,7 @@ name = "database_webhooks"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bot_id",
  "chrono",
  "databases",
  "entity_access",
@@ -6170,6 +6176,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "model-error-response",
+ "model_user",
  "models_databases",
  "rand 0.9.4",
  "rootcause",
@@ -6179,6 +6186,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
@@ -10040,6 +10048,7 @@ dependencies = [
  "harness_id",
  "harness_token",
  "harnessd_protocol",
+ "harnesses",
  "hex",
  "macro_authorization",
  "macro_db_migrator",
@@ -10054,6 +10063,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
@@ -11027,6 +11037,7 @@ dependencies = [
 name = "image_proxy_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-secretsmanager",
  "axum",
@@ -11057,6 +11068,7 @@ dependencies = [
  "url",
  "utoipa",
  "utoipa-swagger-ui",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -20788,6 +20800,7 @@ dependencies = [
  "agent_credentials",
  "agent_git",
  "axum",
+ "bot_id",
  "chrono",
  "entity_access",
  "feature_flags",
@@ -20797,12 +20810,15 @@ dependencies = [
  "macro_service_urls",
  "macro_user_id",
  "model-error-response",
+ "model_user",
  "rootcause",
  "serde",
  "sqlx",
+ "team_agents",
  "teams",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "user_api_key",
  "utoipa",
@@ -22918,6 +22934,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "bot_id",
  "chrono",
  "entity_access",
  "entity_access_db_utils",

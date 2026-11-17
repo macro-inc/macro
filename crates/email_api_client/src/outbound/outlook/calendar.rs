@@ -447,7 +447,7 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
         &self,
         token: &str,
         target: &ProviderCalendarTarget,
-        primary: bool,
+        delta: bool,
         cursor: Option<&str>,
     ) -> Result<OutlookCalendarPage, CalendarProviderError> {
         let api = self.calendar_scope(target)?;
@@ -456,9 +456,10 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
             api.continuation(&StreamToken::new(cursor.to_owned()))
                 .map_err(error)?
         } else {
-            // Only the primary calendar has v1.0 delta; other calendars use
-            // complete bounded calendarView snapshots, without beta APIs.
-            let mut url = if primary {
+            // Only the primary calendar has v1.0 delta; other calendars, and a
+            // first import's near window on any calendar, use complete bounded
+            // calendarView snapshots, without beta APIs.
+            let mut url = if delta {
                 api.calendar_endpoint(&["me", "calendarView", "delta"])?
             } else {
                 api.calendar_endpoint(&[
@@ -471,19 +472,19 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
             url.query_pairs_mut()
                 .append_pair("startDateTime", &target.range.starts_at.to_rfc3339())
                 .append_pair("endDateTime", &target.range.ends_at.to_rfc3339());
-            if !primary {
+            if !delta {
                 url.query_pairs_mut().append_pair("$top", "1000");
             }
             url
         };
         let page = api.calendar_get(&token, url).await?;
         let next = page["@odata.nextLink"].as_str().map(str::to_owned);
-        let delta = page["@odata.deltaLink"].as_str().map(str::to_owned);
-        for cursor in next.iter().chain(delta.iter()) {
+        let delta_link = page["@odata.deltaLink"].as_str().map(str::to_owned);
+        for cursor in next.iter().chain(delta_link.iter()) {
             api.continuation(&StreamToken::new(cursor.clone()))
                 .map_err(error)?;
         }
-        if next.is_none() && primary && delta.is_none() {
+        if next.is_none() && delta && delta_link.is_none() {
             return Err(invalid());
         }
         let mut members = vec![];
@@ -503,7 +504,7 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
             members,
             removed,
             next,
-            delta,
+            delta: delta_link,
         })
     }
     async fn refresh_calendar_event(
