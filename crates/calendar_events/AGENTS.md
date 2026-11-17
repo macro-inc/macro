@@ -416,8 +416,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   retired. The near window reads its events closest to now first
   (`nearest_first`, from the start and end each `OutlookPageMember` carries
   from the listing), so this week comes before the rest of the two months;
-  every other page reads in ID order. A page holds up to 1,000 listed
-  occurrences, so a busier near window is ordered page by page. The near
+  every other page reads in ID order. Each listing page is ordered on its
+  own, so a near window longer than a page (the listing asks for 1,000
+  occurrences a page) is ordered page by page. The near
   window's events are read twice. Nothing marks the
   calendar synced or materialized, or its account ready, before the whole
   window finishes, so every coverage reader (sync health and booking, team
