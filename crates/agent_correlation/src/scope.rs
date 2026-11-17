@@ -370,27 +370,40 @@ const SERVICE_PREFIXES: &[&str] = &[
 
 /// Whether `path` is `template`'s SDK path, alone or under one service
 /// prefix, then alone or under one API version (`/v1`: document storage,
-/// cognition and notification also serve every route under
-/// `/{version}`), a `{…}` segment standing for any one segment.
+/// cognition and notification also serve every route under `/{version}`).
+/// A `{…}` segment stands for any one segment. Segments are compared
+/// percent-decoded, as routers decode the parameters they match, so
+/// `/%76%31` is a version too.
 pub fn matches(path: &str, template: &str) -> bool {
-    let path = path.trim_end_matches('/');
-    let exact = |path: &str| {
-        let path: Vec<&str> = path.split('/').collect();
-        let template: Vec<&str> = template.trim_end_matches('/').split('/').collect();
+    let segments: Vec<std::borrow::Cow<'_, str>> = path
+        .trim_end_matches('/')
+        .split('/')
+        .map(|segment| urlencoding::decode(segment).unwrap_or(segment.into()))
+        .collect();
+    let template: Vec<&str> = template.trim_end_matches('/').split('/').collect();
+    let (Some((root, path)), Some((template_root, template))) =
+        (segments.split_first(), template.split_first())
+    else {
+        return false;
+    };
+    if !root.is_empty() || !template_root.is_empty() {
+        return false;
+    }
+    let exact = |path: &[std::borrow::Cow<'_, str>]| {
         path.len() == template.len()
-            && path.iter().zip(&template).all(|(segment, wanted)| {
+            && path.iter().zip(template).all(|(segment, wanted)| {
                 (wanted.starts_with('{') && wanted.ends_with('}') && !segment.is_empty())
                     || segment == wanted
             })
     };
-    let unversioned = |path: &str| {
+    let unversioned = |path: &[std::borrow::Cow<'_, str>]| {
         exact(path)
-            || lazy_regex::regex_captures!(r"^/v[0-9]+(/.*)$", path)
-                .is_some_and(|(_, rest)| exact(rest))
+            || path.split_first().is_some_and(|(version, rest)| {
+                lazy_regex::regex_is_match!(r"^v[0-9]+$", version) && exact(rest)
+            })
     };
     unversioned(path)
-        || SERVICE_PREFIXES.iter().any(|prefix| {
-            path.strip_prefix(prefix)
-                .is_some_and(|rest| rest.starts_with('/') && unversioned(rest))
+        || path.split_first().is_some_and(|(prefix, rest)| {
+            SERVICE_PREFIXES.contains(&format!("/{prefix}").as_str()) && unversioned(rest)
         })
 }

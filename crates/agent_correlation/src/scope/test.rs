@@ -80,8 +80,27 @@ fn a_template_matches_its_path_under_an_api_version() {
     assert!(!matches("/v1/cognition/web/fetch", "/web/fetch"));
 }
 
-/// Every request a run that sends nothing is refused is refused under every
-/// service prefix and API version it can be sent with.
+/// Routers percent-decode the parameters they match (`/{version}`), so a
+/// path is compared decoded: an encoded version, prefix or literal still
+/// matches.
+#[test]
+fn a_template_matches_its_percent_encoded_path() {
+    assert!(matches(
+        "/dss/%76%31/items/soup/graphql",
+        "/items/soup/graphql"
+    ));
+    assert!(matches(
+        "/%64ss/v1/items/soup/graphql",
+        "/items/soup/graphql"
+    ));
+    assert!(matches("/cognition/web/%66etch", "/web/fetch"));
+    assert!(!SessionScope::NoSend.allows("POST", "/dss/%76%31/items/soup/graphql"));
+    assert!(!SessionScope::NoSend.allows("POST", "/cognition/%76%31/email/send-confirmed"));
+    assert!(!matches("/cognition/web%2Ffetch", "/web/fetch"));
+}
+
+/// A run that sends nothing is refused each of its sends under every service
+/// prefix and API version.
 #[test]
 fn a_run_that_sends_nothing_is_refused_every_send_under_any_version() {
     for (method, template) in SessionScope::sends() {
@@ -96,7 +115,7 @@ fn a_run_that_sends_nothing_is_refused_every_send_under_any_version() {
             })
             .collect::<Vec<_>>()
             .join("/");
-        for prefix in ["", "/cognition", "/dss", "/notification"] {
+        for prefix in std::iter::once("").chain(SERVICE_PREFIXES.iter().copied()) {
             for version in ["", "/v1", "/v2"] {
                 let sent = format!("{prefix}{version}{path}");
                 assert!(
