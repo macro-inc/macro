@@ -6,8 +6,8 @@ export type BundleDebugInfo = {
   nativeBuild: number;
 };
 
-// Release bundle builds are millisecond timestamps; local smoke builds use
-// small counters (e.g. 100) that are not dates.
+// Bundle builds are the bundle's source commit time in milliseconds (older
+// bundles: their build time); anything before 2020 is not a real build.
 const MIN_TIMESTAMP_MS = Date.UTC(2020, 0, 1);
 
 function timestampDate(ms: number | undefined): Date | undefined {
@@ -30,7 +30,10 @@ export async function getNativeBuildDate(): Promise<Date | undefined> {
   }
 }
 
-/** When the active OTA bundle was built; undefined while the embedded bundle runs. */
+/**
+ * The commit date of the active OTA bundle; undefined while the embedded
+ * bundle runs.
+ */
 export function otaBundleDate(
   info: BundleDebugInfo | null | undefined
 ): Date | undefined {
