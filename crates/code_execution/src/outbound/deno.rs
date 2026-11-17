@@ -305,15 +305,18 @@ impl DenoRunner {
             .arg(&bootstrap)
             .spawn()
             .map_err(internal)?;
+        let spawned = tokio::time::Instant::now();
         if let Err(error) = limit(&child, &job.limits) {
             reap(&mut child).await;
             return Err(error);
         }
+        let pid = child.id();
         let stdin = child.stdin.take().expect("piped child stdin");
         let stdout = child.stdout.take().expect("piped child stdout");
         let stderr = child.stderr.take().expect("piped child stderr");
         let execution = async {
-            let candidate = bridge(
+            let mut usage = exit::ProcessUsage::default();
+            let bridged = bridge(
                 &job.environment,
                 stdin,
                 stdout,
@@ -321,10 +324,30 @@ impl DenoRunner {
                 events,
                 &job.limits,
                 job.deadline,
-            )
-            .await?;
-            // Both streams have closed, so the process is exiting.
+            );
+            tokio::pin!(bridged);
+            let mut samples = tokio::time::interval(exit::SAMPLE_INTERVAL);
+            let candidate = loop {
+                tokio::select! {
+                    candidate = &mut bridged => break candidate?,
+                    _ = samples.tick() => if let Some(pid) = pid {
+                        usage.sample(pid).await;
+                    },
+                }
+            };
+            // Both streams have closed, so the process is exiting; its CPU
+            // time stays readable until it is reaped.
+            if let Some(pid) = pid {
+                usage.sample(pid).await;
+            }
             let status = child.wait().await.map_err(internal)?;
+            exit::ProcessExit {
+                status,
+                wall: spawned.elapsed(),
+                usage,
+                answered: candidate.is_some(),
+            }
+            .record(&tracing::Span::current());
             if std::os::unix::process::ExitStatusExt::signal(&status)
                 == Some(rustix::process::Signal::XCPU.as_raw())
             {
@@ -600,6 +623,7 @@ fn bounded_line(line: String, remaining: &mut usize) -> Result<String, Execution
 }
 
 pub mod check;
+mod exit;
 
 #[cfg(test)]
 mod test;
