@@ -1927,8 +1927,12 @@ async fn a_webhook_alone_needs_no_event_rollout() {
     ]}))
     .unwrap();
     assert_policy(
-        svc.update_action(edit_receipt(created.id.unwrap()), update(config))
-            .await,
+        svc.update_action(
+            edit_receipt(created.id.unwrap()),
+            update(config),
+            Requester::Person,
+        )
+        .await,
         ActionPolicyError::EventManagementDisabled,
     );
 }
