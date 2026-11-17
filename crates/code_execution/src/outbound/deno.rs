@@ -275,6 +275,10 @@ impl DenoRunner {
                     self.egress.clone(),
                     &job.environment.endpoints.hosts,
                     &job.environment.trace_headers,
+                    job.environment
+                        .unattended
+                        .as_ref()
+                        .is_some_and(|unattended| unattended.dry_run),
                 )
                 .await
                 .map_err(internal)?,

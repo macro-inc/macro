@@ -37,6 +37,7 @@ impl RunEgress {
         client: reqwest::Client,
         hosts: &BTreeMap<String, String>,
         trace_headers: &BTreeMap<String, String>,
+        dry_run: bool,
     ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
         let port = listener.local_addr()?.port();
@@ -54,6 +55,7 @@ impl RunEgress {
             client,
             upstreams,
             run,
+            dry_run,
         });
         let app = axum::Router::new().fallback(forward).with_state(routes);
         // Owned by the run, not a tracker: it is aborted when the run ends
@@ -103,6 +105,32 @@ struct Routes {
     upstreams: HashMap<String, String>,
     /// The run's trace context, each request's parent.
     run: opentelemetry::Context,
+    /// Whether the run is a dry run, which would refuse every write.
+    dry_run: bool,
+}
+
+/// The SDK's operations, read once for every run's decisions.
+static CATALOG: std::sync::LazyLock<decision::Catalog> =
+    std::sync::LazyLock::new(decision::Catalog::of_the_sdk);
+
+/// Whether a request carries a Macro credential, wherever one goes: its
+/// `authorization` or `x-macro-user-api-key` header, its
+/// `macro-access-token` cookie, or its `macro-api-token` query parameter.
+fn credentialed(headers: &HeaderMap, url: &url::Url) -> bool {
+    headers.contains_key(axum::http::header::AUTHORIZATION)
+        || headers.contains_key("x-macro-user-api-key")
+        || headers
+            .get_all(axum::http::header::COOKIE)
+            .iter()
+            .filter_map(|value| value.to_str().ok())
+            .flat_map(|cookies| cookies.split(';'))
+            .any(|cookie| {
+                cookie
+                    .trim()
+                    .split_once('=')
+                    .is_some_and(|(name, _)| name == "macro-access-token")
+            })
+        || url.query_pairs().any(|(name, _)| name == "macro-api-token")
 }
 
 /// The headers of `headers` that cross the forwarder: not the ones that
@@ -160,6 +188,9 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         method = %request.method(),
         status = tracing::field::Empty,
         outcome = tracing::field::Empty,
+        operation = tracing::field::Empty,
+        uncatalogued = tracing::field::Empty,
+        would_refuse = tracing::field::Empty,
         upstream_ms = tracing::field::Empty,
     );
     if routes.run.span().span_context().is_valid() {
@@ -170,10 +201,47 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         span.record("status", StatusCode::NOT_FOUND.as_u16());
         return (StatusCode::NOT_FOUND, "no such SDK host").into_response();
     };
-    let mut url = format!("{base}/{rest}");
+    let mut target = format!("{base}/{rest}");
     if let Some(query) = request.uri().query() {
-        url.push('?');
-        url.push_str(query);
+        target.push('?');
+        target.push_str(query);
+    }
+    // Parsing normalizes the path (`..`, `%2e`), as the host will read it.
+    let (Ok(url), Ok(base_url)) = (url::Url::parse(&target), url::Url::parse(base)) else {
+        span.record("outcome", "bad_url");
+        span.record("status", StatusCode::BAD_REQUEST.as_u16());
+        return (StatusCode::BAD_REQUEST, "not a URL the SDK hosts serve").into_response();
+    };
+    // Services under one base take each other's requests.
+    let sharing: Vec<&str> = routes
+        .upstreams
+        .iter()
+        .filter(|(_, other)| *other == base)
+        .map(|(name, _)| name.as_str())
+        .collect();
+    let decided = decision::decide_across(
+        &CATALOG,
+        &sharing,
+        base_url.path(),
+        request.method().as_str(),
+        url.path(),
+        routes.dry_run,
+        credentialed(request.headers(), &url),
+    );
+    if let Some(operation) = decided.operation {
+        span.record("operation", operation);
+        // Services under one base share a forwarder segment: the operation
+        // says which one this is.
+        if let Some((owner, _)) = operation.split_once('.') {
+            span.record("service", owner);
+        }
+    }
+    if decided.uncatalogued {
+        span.record("uncatalogued", true);
+    }
+    // Shadow only: recorded, and forwarded all the same.
+    if let Some(refusal) = decided.refusal {
+        span.record("would_refuse", refusal.as_str());
     }
     let method = request.method().clone();
     let mut headers = end_to_end(request.headers());
@@ -217,6 +285,8 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
     .instrument(span)
     .await
 }
+
+mod decision;
 
 #[cfg(test)]
 mod test;
