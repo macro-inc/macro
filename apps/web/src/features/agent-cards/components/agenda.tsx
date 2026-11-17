@@ -3,18 +3,12 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
 import { useCalendarSearchPreviewsQuery } from '@queries/calendar/mention-preview';
 import { queryReadyGate } from '@queries/gate';
-import { cn } from '@ui';
+import { cn, Item, Card as UiCard } from '@ui';
 import { createMemo, For, Match, Show, Switch } from 'solid-js';
 import { eventSchedule, groupByDay, overlaps } from '../core/event-time';
 import type { AgendaEventRef } from '../core/types';
 import { eventDetail, eventOpenTarget } from './event-card';
-import {
-  Card,
-  CardBody,
-  CardFooter,
-  CardHeader,
-  CardHiddenCount,
-} from './kit/card';
+import { Card, CardBody, CardFooter, CardHiddenCount } from './kit/card';
 import { CardGroupHeader, Skeleton } from './kit/parts';
 
 /** An agenda longer than this holds a fixed height and scrolls under a fade. */
@@ -63,83 +57,77 @@ export function AgendaView(props: {
     <Card
       width="standard"
       height={count() > AGENDA_ROWS ? 320 : 'auto'}
+      region={props.title ?? 'Agenda'}
       data-agent-card="agenda"
     >
-      <section
-        aria-label={props.title ?? 'Agenda'}
-        class="flex min-h-0 flex-1 flex-col"
-      >
-        <CardHeader
-          center
-          tile={
-            <CalendarBlank
-              class="size-4 flex-none text-ink-muted"
-              aria-hidden="true"
-            />
-          }
-          title={<span class="font-semibold">{props.title ?? 'Agenda'}</span>}
-          trailing={
+      <UiCard.Header>
+        <Item class="gap-3 border-0 p-0">
+          <Item.Media class="self-center">
+            <CalendarBlank aria-hidden="true" />
+          </Item.Media>
+          <Item.Content class="gap-0">
+            <UiCard.Title class="truncate">
+              {props.title ?? 'Agenda'}
+            </UiCard.Title>
             <Show when={count() > 0}>
-              <span class="text-xs text-ink-subtle">
+              <UiCard.Description>
                 {count()} {count() === 1 ? 'event' : 'events'}
-              </span>
+              </UiCard.Description>
             </Show>
-          }
-        />
-        <CardBody class="gap-0 p-2">
-          <Switch>
-            <Match when={props.state === 'error'}>
-              <p class="px-1.5 py-2 text-xs text-ink-muted">
-                Couldn't load these events.
-              </p>
-            </Match>
-            <Match when={props.state === 'loading'}>
-              <div class="flex flex-col gap-2 p-1" aria-busy="true">
-                <For each={[0, 1, 2]}>
-                  {() => <Skeleton width="100%" height="32px" />}
-                </For>
-              </div>
-            </Match>
-            <Match when={count() === 0}>
-              <p class="px-1.5 py-2 text-xs text-ink-muted">
-                No events to show.
-              </p>
-            </Match>
-            <Match when={true}>
-              <For each={props.days}>
-                {(day) => (
-                  <div>
-                    <CardGroupHeader>{day.heading}</CardGroupHeader>
-                    <For each={withNow(day)}>
-                      {(row) =>
-                        row === 'now' ? (
-                          <NowLine at={props.now ?? new Date()} />
-                        ) : (
-                          <AgendaRow row={row} />
-                        )
-                      }
-                    </For>
-                  </div>
-                )}
+          </Item.Content>
+        </Item>
+      </UiCard.Header>
+      <CardBody tight class="gap-0">
+        <Switch>
+          <Match when={props.state === 'error'}>
+            <p class="px-2 py-2 text-xs text-ink-muted">
+              Couldn't load these events.
+            </p>
+          </Match>
+          <Match when={props.state === 'loading'}>
+            <div class="flex flex-col gap-2 px-2" aria-busy="true">
+              <For each={[0, 1, 2]}>
+                {() => <Skeleton width="100%" height="32px" />}
               </For>
-            </Match>
-          </Switch>
-        </CardBody>
-        <Show when={count() > AGENDA_ROWS || (props.unseen ?? 0) > 0}>
-          <CardFooter small>
-            <Show
-              when={(props.unseen ?? 0) > 0}
-              fallback={<CardHiddenCount total={count()} noun="events" />}
-            >
-              <span class="mr-auto text-xs text-ink-subtle">
-                {props.unseen === 1
-                  ? "1 event isn't on your calendar"
-                  : `${props.unseen} events aren't on your calendar`}
-              </span>
-            </Show>
-          </CardFooter>
-        </Show>
-      </section>
+            </div>
+          </Match>
+          <Match when={count() === 0}>
+            <p class="px-2 py-2 text-xs text-ink-muted">No events to show.</p>
+          </Match>
+          <Match when={true}>
+            <For each={props.days}>
+              {(day) => (
+                <div>
+                  <CardGroupHeader>{day.heading}</CardGroupHeader>
+                  <For each={withNow(day)}>
+                    {(row) =>
+                      row === 'now' ? (
+                        <NowLine at={props.now ?? new Date()} />
+                      ) : (
+                        <AgendaRow row={row} />
+                      )
+                    }
+                  </For>
+                </div>
+              )}
+            </For>
+          </Match>
+        </Switch>
+      </CardBody>
+      <Show when={count() > AGENDA_ROWS || (props.unseen ?? 0) > 0}>
+        <CardFooter small>
+          <Show
+            when={(props.unseen ?? 0) > 0}
+            fallback={<CardHiddenCount total={count()} noun="events" />}
+          >
+            <UiCard.Metadata>
+              {props.unseen === 1
+                ? "1 event isn't on your calendar"
+                : `${props.unseen} events aren't on your calendar`}
+            </UiCard.Metadata>
+          </Show>
+        </CardFooter>
+      </Show>
     </Card>
   );
 }
@@ -153,7 +141,7 @@ function withNow(day: AgendaDayView): (AgendaRowView | 'now')[] {
 function NowLine(props: { at: Date }) {
   return (
     <div
-      class="flex items-center gap-1.5 px-1.5 text-[11px] leading-4 font-semibold text-failure-ink"
+      class="flex items-center gap-1.5 px-2 text-[11px] leading-4 font-semibold text-failure-ink"
       aria-label="Now"
     >
       {props.at.toLocaleTimeString('en-US', {
@@ -171,7 +159,7 @@ function AgendaRow(props: { row: AgendaRowView }) {
       type="button"
       data-card-row
       disabled={!props.row.onOpen}
-      class="grid w-full min-w-0 grid-cols-[minmax(0,124px)_2px_minmax(0,1fr)] items-stretch gap-2.5 rounded-lg p-1.5 text-left enabled:not-touch:hover:bg-hover touch:min-h-[44px]"
+      class="grid w-full min-w-0 grid-cols-[minmax(0,124px)_2px_minmax(0,1fr)] items-stretch gap-2.5 rounded-lg p-2 text-left enabled:not-touch:hover:bg-hover touch:min-h-[44px]"
       onClick={(click) => props.row.onOpen?.(click)}
     >
       <span

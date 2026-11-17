@@ -588,10 +588,6 @@ export default {
       other: 'Merket {{accepted}} av {{count}} elementer som ikke ferdige',
     },
     toastMarkNotDoneFailed: 'Kunne ikke merke som ikke ferdig',
-    toastThreadStaysDone:
-      'Denne tråden har ingen mottatte meldinger, så den forblir ferdig',
-    toastThreadsStayDone:
-      'Disse trådene har ingen mottatte meldinger, så de forblir ferdige',
     toastCountNotRestored: {
       one: '{{count}} kunne ikke gjenopprettes.',
       other: '{{count}} kunne ikke gjenopprettes.',

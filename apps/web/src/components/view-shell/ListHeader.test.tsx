@@ -12,7 +12,7 @@ import { setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
 import { fireEvent, render } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ListHeaderSearch } from './ListHeader';
 import { clearListSearch, hasListSearch } from './list-search-escape';
@@ -31,12 +31,20 @@ function type(field: HTMLElement, key: string, init: KeyboardEventInit = {}) {
 }
 
 function setup(
-  options: { search?: string; selected?: number; overridden?: boolean } = {}
+  options: {
+    search?: string;
+    selected?: number;
+    overridden?: boolean;
+    /** The search found nothing, so the list has no first row. */
+    empty?: boolean;
+    recent?: string[];
+  } = {}
 ) {
   const [search, setSearch] = createSignal(options.search ?? '');
   const [selected, setSelected] = createSignal(options.selected ?? 0);
+  const [active, setActive] = createSignal(-1);
   const focusResults = vi.fn();
-  const goToFirst = vi.fn(() => true);
+  const goToFirst = vi.fn(() => !options.empty);
   const backToDefaultTab = vi.fn(() => true);
   let list!: HTMLDivElement;
 
@@ -59,6 +67,16 @@ function setup(
             list.focus();
           }}
           registerFocus={() => {}}
+          suggestions={
+            options.recent
+              ? {
+                  count: () => options.recent?.length ?? 0,
+                  active,
+                  setActive,
+                  pick: (index) => setSearch(options.recent?.[index] ?? ''),
+                }
+              : undefined
+          }
         />
       </SplitPanelContext.Provider>
     );
@@ -164,6 +182,48 @@ it('moves from the field to the first result on ArrowDown and on Enter', () => {
   expect(document.activeElement).toBe(list());
   expect(goToFirst).toHaveBeenCalledTimes(2);
   expect(search()).toBe('budget');
+});
+
+it('keeps ArrowDown and Enter in the field when the search found nothing', () => {
+  const { field, search, focusResults, goToFirst } = setup({
+    search: 'zzz',
+    empty: true,
+  });
+
+  field().focus();
+  type(field(), 'ArrowDown');
+  expect(document.activeElement).toBe(field());
+
+  type(field(), 'Enter');
+  expect(document.activeElement).toBe(field());
+  expect(goToFirst).toHaveBeenCalledTimes(2);
+  expect(focusResults).not.toHaveBeenCalled();
+  expect(search()).toBe('zzz');
+});
+
+it('stays in the field past the last suggestion when the search found nothing', () => {
+  const { field } = setup({ search: 'bu', empty: true, recent: ['budget'] });
+
+  field().focus();
+  type(field(), 'ArrowDown');
+  type(field(), 'ArrowDown');
+
+  expect(document.activeElement).toBe(field());
+});
+
+it('moves to the list for a picked suggestion before its rows arrive', () => {
+  const { field, search, list } = setup({
+    search: 'bu',
+    empty: true,
+    recent: ['budget'],
+  });
+
+  field().focus();
+  type(field(), 'ArrowDown');
+  type(field(), 'Enter');
+
+  expect(search()).toBe('budget');
+  expect(document.activeElement).toBe(list());
 });
 
 it('turns off the browser history popup that would take the arrow keys', () => {
@@ -355,4 +415,127 @@ it('keeps an empty field open when the view has no list on screen', async () => 
   expect(document.activeElement).toBe(
     view.getByRole('button', { name: 'Search routines' })
   );
+});
+
+function setupSuggestions(initial: string[]) {
+  const [search, setSearch] = createSignal('bu');
+  const [active, setActive] = createSignal(-1);
+  const [open, setOpen] = createSignal(false);
+  const picked: number[] = [];
+  let list!: HTMLDivElement;
+
+  const view = render(() => (
+    <div>
+      <ListHeaderSearch
+        label="Search email"
+        value={search()}
+        onValueChange={setSearch}
+        focusResults={() => list.focus()}
+        registerFocus={() => {}}
+        wide
+        onOpenChange={setOpen}
+        suggestions={{
+          count: () => initial.length,
+          active,
+          setActive,
+          pick: (index) => {
+            picked.push(index);
+            setSearch(initial[index] ?? '');
+          },
+        }}
+      />
+      <div ref={list} tabIndex={0} />
+    </div>
+  ));
+  const field = view.getByRole('searchbox', { name: 'Search email' });
+  field.focus();
+  return {
+    view,
+    field,
+    search,
+    setSearch,
+    active,
+    open,
+    picked,
+    list: () => list,
+  };
+}
+
+it('walks suggestions with the arrows before it reaches the results', () => {
+  const { field, active, list } = setupSuggestions(['budget', 'build']);
+
+  type(field, 'ArrowDown');
+  type(field, 'ArrowDown');
+  expect(active()).toBe(1);
+  expect(document.activeElement).toBe(field);
+
+  type(field, 'ArrowUp');
+  type(field, 'ArrowUp');
+  expect(active()).toBe(-1);
+
+  type(field, 'ArrowDown');
+  type(field, 'ArrowDown');
+  type(field, 'ArrowDown');
+  expect(document.activeElement).toBe(list());
+});
+
+it('runs the active suggestion on Enter and moves to its results', () => {
+  const { field, search, picked, list } = setupSuggestions(['budget']);
+
+  type(field, 'ArrowDown');
+  type(field, 'Enter');
+
+  expect(picked).toEqual([0]);
+  expect(search()).toBe('budget');
+  expect(document.activeElement).toBe(list());
+});
+
+it('reports a wide field open, and closed once it is left empty', () => {
+  const { view, field, setSearch, open } = setupSuggestions([]);
+  expect(open()).toBe(true);
+
+  setSearch('');
+  fireEvent.blur(field);
+
+  expect(open()).toBe(false);
+  expect(view.queryByRole('searchbox')).toBeNull();
+});
+
+it('closes a wide field when the view clears its search from outside', () => {
+  const { view, field, setSearch, open } = setupSuggestions([]);
+  field.blur();
+  expect(open()).toBe(true);
+
+  // A tab change clears the search while the field is not focused.
+  setSearch('');
+
+  expect(open()).toBe(false);
+  expect(view.queryByRole('searchbox')).toBeNull();
+});
+
+it('reports closed and unfocused when it unmounts while open', () => {
+  const [shown, setShown] = createSignal(true);
+  const [open, setOpen] = createSignal(false);
+  const [focused, setFocused] = createSignal(false);
+  const view = render(() => (
+    <Show when={shown()}>
+      <ListHeaderSearch
+        label="Search email"
+        value="budget"
+        onValueChange={() => {}}
+        registerFocus={() => {}}
+        wide
+        onOpenChange={setOpen}
+        onFocusChange={setFocused}
+      />
+    </Show>
+  ));
+  view.getByRole('searchbox', { name: 'Search email' }).focus();
+  expect(open()).toBe(true);
+  expect(focused()).toBe(true);
+
+  setShown(false);
+
+  expect(open()).toBe(false);
+  expect(focused()).toBe(false);
 });

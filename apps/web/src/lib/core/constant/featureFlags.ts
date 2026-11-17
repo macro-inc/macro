@@ -630,6 +630,15 @@ export const enableEmailSavedViews = defineFlag({
   default: onInDev,
 });
 
+// Mail's search field takes over the list header while searching, lists
+// recent searches, and keeps the rows on screen while results load; on phones
+// it adds a search page to the Email list.
+export const enableEmailWideSearch = defineFlag({
+  key: 'enable-email-wide-search',
+  env: 'ENABLE_EMAIL_WIDE_SEARCH',
+  default: onInDev,
+});
+
 // The Focus tab in Mail: signal threads the email focus worker classified as
 // worth the owner's attention. Only allowlisted inboxes are classified, so the
 // tab is empty for everyone else.
@@ -710,12 +719,7 @@ export const enableInboxNotifiedSort = defineFlag({
   default: onInDev,
 });
 
-export const enableGraphqlSoup = defineFlag({
-  key: 'enable-graphql-soup',
-  env: 'ENABLE_GRAPHQL_SOUP',
-});
-
-/** Serves calendar reads from the normalized cache; requires GraphQL Soup. */
+/** Serves calendar reads from the normalized cache. */
 export const enableGraphqlCalendar = defineFlag({
   key: 'enable-graphql-calendar',
   env: 'ENABLE_GRAPHQL_CALENDAR',
