@@ -62,15 +62,16 @@ vi.mock('../plugins/shared', () => ({
 }));
 
 import { SupportedNodeTypes } from '@macro-inc/lexical-core/node-list';
+import { $createContactMentionNode } from '@macro-inc/lexical-core/nodes/ContactMentionNode';
 import {
   $createParagraphNode,
   $getRoot,
   createEditor,
   type LexicalEditor,
+  type ParagraphNode,
 } from 'lexical';
 import {
   INSERT_AGENT_SESSION_MENTION_COMMAND,
-  INSERT_CONTACT_MENTION_COMMAND,
   INSERT_DATE_MENTION_COMMAND,
   INSERT_DOCUMENT_MENTION_COMMAND,
   INSERT_GROUP_MENTION_COMMAND,
@@ -134,13 +135,22 @@ describe('mentionsPlugin callbacks', () => {
     });
     flush();
 
-    editor.dispatchCommand(INSERT_CONTACT_MENTION_COMMAND, {
-      contactId: 'contact-1',
-      name: 'Jane',
-      emailOrDomain: 'jane@test.com',
-      isCompany: false,
-      mentionUuid: 'uuid-contact',
-    });
+    // Nothing inserts legacy contact chips; existing ones still report.
+    editor.update(
+      () => {
+        $getRoot()
+          .getFirstChildOrThrow<ParagraphNode>()
+          .append(
+            $createContactMentionNode({
+              contactId: 'contact-1',
+              name: 'Jane',
+              emailOrDomain: 'jane@example.com',
+              isCompany: false,
+            })
+          );
+      },
+      { discrete: true }
+    );
     flush();
 
     editor.dispatchCommand(INSERT_DATE_MENTION_COMMAND, {

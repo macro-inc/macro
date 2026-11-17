@@ -1,4 +1,4 @@
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
@@ -146,4 +146,55 @@ it('refetches a searched Team list when a rename stops matching it', async () =>
   expect(listCompanyContactsPage).toHaveBeenCalledTimes(2);
   expect(source.contacts).toEqual([]);
   dispose();
+});
+
+function mountContact(contactId: string) {
+  const deps = { storage, client } as unknown as CrmRecordDependencies;
+  let query!: ReturnType<typeof useContactQuery>;
+  function Probe() {
+    query = useContactQuery(deps, () => contactId);
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Probe />
+    </QueryClientProvider>
+  ));
+  return query;
+}
+
+it('resolves a legacy email id to the CRM contact with that email', async () => {
+  storage.getContactByEmail.mockResolvedValue(ok({ contact }));
+  storage.getContact.mockResolvedValue(ok(contact));
+  const query = mountContact('Person%40example.com');
+
+  await waitFor(() => expect(query.data).toEqual(contact));
+  expect(storage.getContactByEmail).toHaveBeenCalledWith(
+    expect.objectContaining({ email: 'person@example.com' })
+  );
+  expect(storage.getContact).toHaveBeenCalledWith(
+    expect.objectContaining({ contactId: contact.id })
+  );
+  expect(client.getQueryData(crmKeys.contact(contact.id).queryKey)).toEqual(
+    contact
+  );
+});
+
+it('keeps a literal percent in an already decoded legacy email id', async () => {
+  storage.getContactByEmail.mockResolvedValue(ok({ contact }));
+  storage.getContact.mockResolvedValue(ok(contact));
+  const query = mountContact('person%20tag@example.com');
+
+  await waitFor(() => expect(query.data).toEqual(contact));
+  expect(storage.getContactByEmail).toHaveBeenCalledWith(
+    expect.objectContaining({ email: 'person%20tag@example.com' })
+  );
+});
+
+it('fails a legacy email id that no CRM contact has', async () => {
+  storage.getContactByEmail.mockResolvedValue(ok({ contact: null }));
+  const query = mountContact('nobody@example.com');
+
+  await waitFor(() => expect(query.isError).toBe(true));
+  expect(storage.getContact).not.toHaveBeenCalled();
 });

@@ -8,6 +8,7 @@ import type { CrmContactDetailResponse } from '@service-storage/generated/schema
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { legacyContactEmail } from '../core/contact';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
 import { listCanIncludeCrmContacts } from './list-refresh';
@@ -70,11 +71,23 @@ export function useCrmContactByEmailQuery(
 function contactQueryOptions(deps: CrmRecordDependencies, contactId: string) {
   return queryOptions({
     queryKey: crmKeys.contact(contactId).queryKey,
-    queryFn: ({ signal }) => {
+    queryFn: async ({ signal }) => {
       if (!contactId) {
         throw new Error('contact id is required to fetch contact');
       }
-      return throwOnErr(() => deps.storage.getContact({ contactId, signal }));
+      const email = legacyContactEmail(contactId);
+      if (!email) {
+        return throwOnErr(() => deps.storage.getContact({ contactId, signal }));
+      }
+      const { contact } = await throwOnErr(() =>
+        deps.storage.getContactByEmail({ email, signal })
+      );
+      if (!contact) throw new Error('no CRM contact has this email');
+      const detail = await throwOnErr(() =>
+        deps.storage.getContact({ contactId: contact.id, signal })
+      );
+      deps.client.setQueryData(crmKeys.contact(contact.id).queryKey, detail);
+      return detail;
     },
     staleTime: CONTACT_STALE_TIME,
     enabled: !!contactId,

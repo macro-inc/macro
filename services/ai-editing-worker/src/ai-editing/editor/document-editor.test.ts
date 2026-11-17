@@ -406,17 +406,6 @@ describe('DocumentEditor — mention methods push insertInline ops', () => {
       kind: 'insertInline',
       spec: { inline: 'mention', mention: { kind: 'group', groupAlias: 'g' } },
     });
-    const ec = ed();
-    ec.mentionContact('b1', 0, {
-      contactId: 'c',
-      name: 'n',
-      emailOrDomain: 'd',
-      isCompany: false,
-    });
-    expect(ec.drain()[0]).toMatchObject({
-      kind: 'insertInline',
-      spec: { inline: 'mention', mention: { kind: 'contact' } },
-    });
     const ed2 = ed();
     ed2.mentionDocument('b1', 0, {
       documentId: 'd',

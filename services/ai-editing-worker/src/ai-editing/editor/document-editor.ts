@@ -633,19 +633,6 @@ export class DocumentEditor {
     return this.insertMention(blockId, at, { kind: 'user', ...entity });
   }
 
-  public mentionContact(
-    blockId: NodeId,
-    at: number,
-    entity: {
-      contactId: string;
-      name: string;
-      emailOrDomain: string;
-      isCompany: boolean;
-    }
-  ): Ref {
-    return this.insertMention(blockId, at, { kind: 'contact', ...entity });
-  }
-
   public mentionGroup(
     blockId: NodeId,
     at: number,
