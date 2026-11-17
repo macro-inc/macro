@@ -985,6 +985,25 @@ async fn released_with_removal(
     (service, clock, removal_id)
 }
 
+use super::billing::removal_key;
+
+/// The computer [`released_with_removal`] releases.
+const RELEASED: ComputerId = ComputerId::new_from_uuid(Uuid::from_u128(1));
+
+/// Effect ids come from each database's own sequence, so two environments
+/// sharing one Stripe account reuse them: a removal key carries the computer
+/// id too, unique everywhere, so their keys never collide.
+#[test]
+fn removal_keys_of_two_computers_with_the_same_effect_id_differ() {
+    let other = ComputerId::new_from_uuid(Uuid::from_u128(2));
+
+    assert_ne!(removal_key(RELEASED, 15, 0), removal_key(other, 15, 0));
+    assert_eq!(
+        removal_key(RELEASED, 15, 0),
+        format!("computer-remove:{RELEASED}:15:0")
+    );
+}
+
 /// A retried removal sends its own key again, so the subscription guard
 /// lets it replay its change instead of refusing it as another one in flight.
 #[tokio::test]
@@ -1000,7 +1019,10 @@ async fn a_retried_removal_reuses_its_own_key() {
 
     assert_eq!(
         *service.billing.removals.lock().unwrap(),
-        vec![(item("si_1"), format!("computer-remove:{removal_id}:0"))]
+        vec![(
+            item("si_1"),
+            format!("computer-remove:{RELEASED}:{removal_id}:0")
+        )]
     );
 }
 
@@ -1029,7 +1051,10 @@ async fn a_pool_timeout_never_spends_a_removal_attempt() {
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
     assert_eq!(
         *service.billing.removals.lock().unwrap(),
-        vec![(item("si_1"), format!("computer-remove:{removal_id}:0"))]
+        vec![(
+            item("si_1"),
+            format!("computer-remove:{RELEASED}:{removal_id}:0")
+        )]
     );
 }
 
@@ -1046,7 +1071,7 @@ async fn a_removal_moves_past_an_abandoned_key_and_stops_once_one_landed() {
         .abandoned_keys
         .lock()
         .unwrap()
-        .push(format!("computer-remove:{removal_id}:0"));
+        .push(format!("computer-remove:{RELEASED}:{removal_id}:0"));
 
     *service.billing.remove_outcome.lock().unwrap() = RemoveOutcome::Removed;
     clock.advance(chrono::Duration::hours(1));
@@ -1054,7 +1079,10 @@ async fn a_removal_moves_past_an_abandoned_key_and_stops_once_one_landed() {
 
     assert_eq!(
         *service.billing.removals.lock().unwrap(),
-        vec![(item("si_1"), format!("computer-remove:{removal_id}:1"))]
+        vec![(
+            item("si_1"),
+            format!("computer-remove:{RELEASED}:{removal_id}:1")
+        )]
     );
     assert!(
         service

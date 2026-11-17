@@ -56,9 +56,11 @@ fn readd_key(computer: &crate::domain::models::Computer, purpose: &str, attempt:
     )
 }
 
-/// The key of one generation of a billing effect's item removal.
-fn removal_key(effect_id: i64, generation: u32) -> String {
-    format!("computer-remove:{effect_id}:{generation}")
+/// The key of one generation of a billing effect's item removal. Effect ids
+/// come from each database's own sequence, so environments sharing one
+/// Stripe account reuse them; the computer id makes the key unique there.
+pub(super) fn removal_key(computer_id: ComputerId, effect_id: i64, generation: u32) -> String {
+    format!("computer-remove:{computer_id}:{effect_id}:{generation}")
 }
 
 /// One removal per stray item and snapshot: a later snapshot tries again.
@@ -822,7 +824,7 @@ impl<
                 return Ok(());
             }
         }
-        let Some(key) = self.removal_key(pending.id).await? else {
+        let Some(key) = self.removal_key(pending).await? else {
             tracing::info!(subscription_item = %subscription_item,
                 "an earlier attempt removed this item");
             return Ok(());
@@ -909,7 +911,7 @@ impl<
         team_id: Uuid,
         subscription_item: &SubscriptionItemId,
     ) -> Result<(), ComputerError> {
-        let Some(key) = self.removal_key(pending.id).await? else {
+        let Some(key) = self.removal_key(pending).await? else {
             return Ok(());
         };
         match self
@@ -928,9 +930,9 @@ impl<
     /// generation whose change definitely did not apply (given up while its
     /// outcome was unknown) is spent, and the next one is used. `None` when
     /// a generation already removed the item.
-    async fn removal_key(&self, effect_id: i64) -> Result<Option<String>, ComputerError> {
+    async fn removal_key(&self, pending: &PendingEffect) -> Result<Option<String>, ComputerError> {
         for generation in 0..MAX_BILLING_ATTEMPTS {
-            let key = removal_key(effect_id, generation);
+            let key = removal_key(pending.computer_id, pending.id, generation);
             match self.billing.charge_status(&key).await? {
                 Some(ChargeStatus::NotApplied) => continue,
                 Some(ChargeStatus::Applied) => return Ok(None),
