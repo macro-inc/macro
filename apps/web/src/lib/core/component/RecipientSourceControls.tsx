@@ -6,7 +6,8 @@ import { useComboboxContext } from '@kobalte/core/combobox';
 import { Button } from '@ui';
 import { createEffect, Show } from 'solid-js';
 
-/** Pagination remains available even when a bounded local window has no rows. */
+/** Status for a picker's growing suggestion list. Further pages load as the
+ * list scrolls; a failed page offers Retry. */
 export function RecipientSourceControls(props: {
   source: RecipientSource<CombinedRecipientKind>;
   resetScroll: () => void;
@@ -49,29 +50,28 @@ export function RecipientSourceControls(props: {
         </Show>
       </div>
       <Show
-        when={!props.source.loading() && !props.source.error() && props.empty}
+        when={
+          !props.source.loading() &&
+          !props.source.error() &&
+          !props.source.hasNext() &&
+          props.empty
+        }
       >
-        {t('common.noOptionsInWindow')}
+        {t('common.noMatchingOptions')}
       </Show>
-      <Show when={props.source.hasNext() || props.source.error()}>
+      <Show when={props.source.error()}>
         <Button
           variant="ghost"
           size="sm"
           fullWidth
           disabled={props.source.loading()}
-          aria-keyshortcuts="PageDown"
           onPointerDown={keepFocus}
           onMouseDown={keepFocus}
           onClick={() =>
-            fireAndForget(
-              props.source.error() ? props.source.retry() : props.source.next(),
-              'recipient-directory'
-            )
+            fireAndForget(props.source.retry(), 'recipient-directory')
           }
         >
-          {props.source.error()
-            ? t('viewMenus.retryOptions')
-            : t('viewMenus.nextOptions')}
+          {t('viewMenus.retryOptions')}
         </Button>
       </Show>
     </div>

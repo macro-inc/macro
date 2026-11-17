@@ -4,8 +4,8 @@ use sqlx::PgConnection;
 
 impl CompaniesRepositoryImpl {
     /// Record one source event inside the source edit's existing transaction,
-    /// after its exclusive team privacy lock. The following rollout stage wires
-    /// this into live edits; recording a source event never scans its references.
+    /// after its exclusive team privacy lock. Recording an event never scans
+    /// its references; ordinary edits use the indexed conditional helpers.
     #[tracing::instrument(skip_all, fields(team_id = %event.team_id, event_id = %event.event_id), err)]
     pub async fn record_email_policy_source_event(
         connection: &mut PgConnection,

@@ -23,7 +23,6 @@ const mocks = vi.hoisted(() => ({
   existingSplit: vi.fn<() => { id: string } | undefined>(() => undefined),
   tabManager: vi.fn<() => object | undefined>(() => undefined),
   openProjectAction: vi.fn(),
-  projectsEnabled: true,
 }));
 
 vi.mock('@app/features/next-soup/actions', () => ({
@@ -74,7 +73,7 @@ vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.projectsEnabled }),
+  useFeatureFlag: () => () => ({ enabled: true }),
 }));
 vi.mock('@app/lib/i18n', () => ({ t: (key: string) => key }));
 vi.mock('@app/signal/splitLayout', () => ({
@@ -118,7 +117,6 @@ beforeEach(() => {
   mocks.existingSplit.mockReset();
   mocks.tabManager.mockReset();
   mocks.openProjectAction.mockReset();
-  mocks.projectsEnabled = true;
 });
 
 afterEach(() => disarmOpenInNewTabIntent());
@@ -261,15 +259,6 @@ describe('Project rows', () => {
     clearSelection.mockClear();
     mocks.openProjectAction.mock.calls[0]?.[1]?.onDeleted(['a']);
     expect(clearSelection).toHaveBeenCalledOnce();
-  });
-
-  it('offers no project actions while projects are off or loading', () => {
-    mocks.projectsEnabled = false;
-    const ids = menuItems([project('a', 'user')]).map(({ id }) => id);
-
-    expect(ids).not.toContain('rename');
-    expect(ids).not.toContain('share');
-    expect(ids).not.toContain('delete');
   });
 
   it('keeps project actions off a selection mixing projects with other items', () => {

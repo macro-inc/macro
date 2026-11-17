@@ -1,4 +1,7 @@
+mod all_mail;
 mod envelopes;
+mod history;
+mod source_changes;
 mod sources;
 
 use super::helpers::*;

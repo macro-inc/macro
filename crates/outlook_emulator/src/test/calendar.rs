@@ -139,7 +139,11 @@ async fn round(
             .calendar_page(token, target, true, cursor.as_deref())
             .await
             .unwrap();
-        members.extend(page.members);
+        members.extend(
+            page.members
+                .into_iter()
+                .map(|member| (member.provider_id, member.master_id)),
+        );
         removed.extend(page.removed);
         match (page.next, page.delta) {
             (Some(next), _) => cursor = Some(next),
