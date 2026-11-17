@@ -6,6 +6,7 @@
 // saved and then scheduled, sent or deleted the way another tab does.
 
 import type { Browser, Locator, Page, Request, Route } from '@playwright/test';
+import { closeCalendarPrompts } from './calendar-prompt';
 import { composeNew, graphqlOperation, loadAppSteadily } from './drafts';
 import { expect, type Mailbox, type ThreadPreview } from './fixtures';
 import { replyTo } from './ways-compose2';
@@ -153,14 +154,10 @@ export async function anotherDevice(
 ): Promise<OtherDevice> {
   const context = await browser.newContext();
   const page = await context.newPage();
-  await page.addInitScript((linkId) => {
+  await page.addInitScript(() => {
     localStorage.setItem('macro:login', 'true');
-    // As in the fixture: the calendar prompt stays closed for this inbox.
-    localStorage.setItem(
-      'macro:calendar-prompt:dismissed',
-      JSON.stringify([linkId])
-    );
-  }, mailbox.inbox.linkId);
+  });
+  await closeCalendarPrompts(page);
   const broken = process.env.EMAIL_E2E_BREAK;
   if (broken) {
     await page.addInitScript((name) => {

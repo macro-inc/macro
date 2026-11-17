@@ -9,6 +9,7 @@ import {
   type WebSocketRoute,
 } from '@playwright/test';
 import { record } from '../ledger/record';
+import { closeCalendarPrompts } from './calendar-prompt';
 import {
   bundleFile,
   FROM_TEST,
@@ -182,16 +183,10 @@ export const test = base.extend<
       evidence.requests(front.requests);
 
       try {
-        await page.addInitScript((linkId) => {
+        await page.addInitScript(() => {
           localStorage.setItem('macro:login', 'true');
-          // The inbox grants mail alone, so the app asks to enable its
-          // calendar in a toast that covers the composer; close it as a
-          // person who said no would.
-          localStorage.setItem(
-            'macro:calendar-prompt:dismissed',
-            JSON.stringify([linkId])
-          );
-        }, inbox.linkId);
+        });
+        await closeCalendarPrompts(page);
         // Proving a test (`ledger/README.md`): a bundle built with breaks
         // that each wait for a name, and the one this run switches on.
         const broken = process.env.EMAIL_E2E_BREAK;
