@@ -896,6 +896,41 @@ it('announces no schedule that another view cancelled while the thread was marke
   );
   // The cancel it observed while marking the thread done unlocks it.
   expect(root.state.context.schedule.state().type).toBe('editing');
+  expect(root.state.context.disabled()).toBe(false);
+  beside.dispose();
+  root.dispose();
+});
+
+it('reads the draft afresh when its schedule was cancelled before this composer heard', async () => {
+  const composeContext = createComposeContext();
+  const { root, markDone } = await scheduleWhileMarkingDone(
+    composeContext,
+    new Date('2026-12-01T12:00:00Z')
+  );
+  const beside = mountEmailComposer(composeContext, undefined, {
+    draft: message('draft', { is_draft: true }),
+  });
+  expect(await beside.state.context.schedule.onCancel()).toBe(true);
+  // The cancel has not reached this composer's lifecycle; only a read finds it.
+  const [observed] = vi.mocked(composeContext.draftLifecycle.observe).mock
+    .results;
+  if (observed?.type !== 'return') throw new Error('no lifecycle observed');
+  vi.mocked(observed.value.refresh).mockImplementation(async () => {
+    const editing = {
+      type: 'editing' as const,
+      draftId: 'draft',
+      threadId: 'thread',
+      inboxId: 'inbox',
+      observedAt: Date.now(),
+    };
+    composeContext.setDraftLifecycle(editing);
+    return editing;
+  });
+
+  markDone();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(root.state.context.schedule.state().type).toBe('editing');
+  expect(root.state.context.disabled()).toBe(false);
   beside.dispose();
   root.dispose();
 });
