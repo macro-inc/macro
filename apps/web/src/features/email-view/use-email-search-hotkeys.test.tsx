@@ -134,6 +134,17 @@ it('focuses the list search with Cmd+F while the list is on screen', () => {
   expect(keydown.defaultPrevented).toBe(true);
 });
 
+it('focuses the returning list search with Cmd+F once the list comes back', () => {
+  const email = renderEmail();
+  email.setListOnScreen(false);
+  email.setListOnScreen(true);
+
+  const keydown = press('f', { ctrlKey: true });
+
+  expect(email.handled).toEqual(['list search']);
+  expect(keydown.defaultPrevented).toBe(true);
+});
+
 it('leaves Cmd+F to the browser once a thread replaces the list', () => {
   const email = renderEmail();
   email.setListOnScreen(false);

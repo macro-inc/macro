@@ -6,7 +6,6 @@ import type { Accessor } from 'solid-js';
  *
  * Cmd+F belongs to the list header's field only; without it the key is left
  * alone, so the browser can still find text in the open thread or draft.
- * Email binds no `/`: as in every other view, it opens the app's Search view.
  */
 export function useEmailSearchHotkeys(options: {
   scopeId: string;
