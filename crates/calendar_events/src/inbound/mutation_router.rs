@@ -248,6 +248,11 @@ pub struct UpdateCalendarEventRequest {
     /// inboxes, and it must be the inbox holding the addressed copy; a
     /// mismatch is refused whoever sends it.
     pub inbox: Option<String>,
+    /// The user's own reply approving a change to the guest list, quoted verbatim.
+    /// Required from an agent's program, because the calendar emails each
+    /// new guest; never the request that asked for the change. Not stored.
+    #[serde(default)]
+    pub user_confirmation: Option<String>,
 }
 
 /// How much of a recurring series an update applies to.
@@ -379,6 +384,11 @@ pub struct InviteCalendarEventGuestsRequest {
     /// inboxes, and it must be the inbox holding the addressed copy; a
     /// mismatch is refused whoever sends it.
     pub inbox: Option<String>,
+    /// The user's own reply approving these invitations, quoted verbatim.
+    /// Required from an agent's program, because the calendar emails each
+    /// new guest; never the request that asked for the change. Not stored.
+    #[serde(default)]
+    pub user_confirmation: Option<String>,
 }
 
 /// Machine-readable failure category for calendar mutations.
@@ -488,6 +498,22 @@ fn refuse_program_create(
             status: StatusCode::FORBIDDEN,
         });
     }
+    Ok(())
+}
+
+/// Why an agent's program may not invite guests as it asked: the calendar
+/// emails every new guest, so the user approves the invitations first, as
+/// with email.
+const PROGRAM_INVITE_REFUSAL: &str = "An agent's program cannot invite guests to a calendar event without the user's approval: the calendar emails each new guest. Write out who will be invited, ask whether to invite them, and only after the user replies approving it call inviteGuests (or update with attendees) again with their reply quoted in userConfirmation.";
+
+/// Refuse an agent run (see [`is_agent_run`]) that changes an event's guests
+/// without quoting the user's approval. A person in the app and an owner
+/// routine invite as before.
+fn refuse_unconfirmed_program_invite(
+    attribution: CredentialAttribution,
+    headers: &HeaderMap,
+    confirmation: Option<&str>,
+) -> Result<(), CalendarMutationApiError> {
     Ok(())
 }
 
