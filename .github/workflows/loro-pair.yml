@@ -9,6 +9,12 @@ name: loro-pair
     - crates/client/lexical/**
     - packages/loro-mirror/**
     - packages/lexical-core/markdown-loro-schema.ts
+    - vendor/loro-editor/**
+    - tooling/scripts/check-loro-editor-vendor.sh
+    - tooling/xtask/crates/xtask_loro_vendor/**
+    - tooling/scripts/check-loro-native-editor-features.sh
+    - crates/**/Cargo.toml
+    - services/**/Cargo.toml
     - Cargo.toml
     - Cargo.lock
     - package.json
@@ -75,6 +81,10 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
+    - name: Editor Loro with native-editor off matches crates.io 1.17.1
+      run: just check-loro-editor-vendor
+    - name: native-editor stays out of server dependency graphs
+      run: just check-loro-native-editor-features
     - name: Install catalog dependencies
       run: bun install --frozen-lockfile
     - name: Native projection and catalog Loro compatibility

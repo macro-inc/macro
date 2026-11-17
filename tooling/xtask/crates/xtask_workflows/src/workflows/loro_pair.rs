@@ -7,6 +7,13 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("crates/client/lexical/**"),
     xtask_paths::repo_glob!("packages/loro-mirror/**"),
     xtask_paths::repo_glob!("packages/lexical-core/markdown-loro-schema.ts"),
+    xtask_paths::repo_glob!("vendor/loro-editor/**"),
+    xtask_paths::repo_glob!("tooling/scripts/check-loro-editor-vendor.sh"),
+    xtask_paths::repo_glob!("tooling/xtask/crates/xtask_loro_vendor/**"),
+    // Any member manifest can enable the editor feature in a server graph.
+    xtask_paths::repo_glob!("tooling/scripts/check-loro-native-editor-features.sh"),
+    xtask_paths::repo_glob!("crates/**/Cargo.toml"),
+    xtask_paths::repo_glob!("services/**/Cargo.toml"),
     xtask_paths::repo_glob!("Cargo.toml"),
     xtask_paths::repo_glob!("Cargo.lock"),
     xtask_paths::repo_glob!("package.json"),
@@ -38,6 +45,15 @@ pub fn loro_pair() -> Workflow {
                 .add_step(steps::setup_nix())
                 .add_step(steps::setup_dev_shell())
                 .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+                // With native-editor off, the editor copy is crates.io 1.17.1.
+                .add_step(
+                    Step::new("Editor Loro with native-editor off matches crates.io 1.17.1")
+                        .run("just check-loro-editor-vendor"),
+                )
+                .add_step(
+                    Step::new("native-editor stays out of server dependency graphs")
+                        .run("just check-loro-native-editor-features"),
+                )
                 .add_step(
                     Step::new("Install catalog dependencies").run("bun install --frozen-lockfile"),
                 )

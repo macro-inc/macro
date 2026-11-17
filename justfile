@@ -191,6 +191,14 @@ build-lexical-conformance-wasm:
 lexical-coverage-seed *ARGS:
   bun packages/lexical-conformance/coverage/gen-matrix.ts {{ARGS}}
 
+# Fail unless vendor/loro-editor with native-editor off compiles as crates.io loro-internal 1.17.1.
+check-loro-editor-vendor:
+  bash tooling/scripts/check-loro-editor-vendor.sh
+
+# Fail if any server dependency graph enables loro-internal's native-editor feature.
+check-loro-native-editor-features:
+  bash tooling/scripts/check-loro-native-editor-features.sh
+
 # Generate or check traceability and list every uncovered P0 symbol.
 lexical-coverage *ARGS:
   bun packages/lexical-conformance/coverage/check.ts {{ARGS}}
