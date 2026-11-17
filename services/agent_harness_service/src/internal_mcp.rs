@@ -121,7 +121,7 @@ impl ServerHandler for InternalTools {
     async fn list_tools(
         &self,
         _: Option<PaginatedRequestParams>,
-        _: rmcp::service::RequestContext<rmcp::RoleServer>,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
         let mut definitions: Vec<_> = toolset()
             .tools
@@ -142,27 +142,35 @@ impl ServerHandler for InternalTools {
                 )
             })
             .collect();
-        if self.code_mode.is_some() {
-            definitions.extend(
-                agent_code_mode::inbound::toolset::toolset()
-                    .tools
-                    .iter()
-                    .map(|(name, tool)| {
-                        Tool::new(
-                            name.clone(),
-                            tool.description.clone(),
-                            Arc::new(tool.input_schema.clone()),
-                        )
-                        .with_title(tool.annotations.title)
-                        .annotate(
-                            ToolAnnotations::with_title(tool.annotations.title)
-                                .read_only(tool.annotations.kind.read_only_hint())
-                                .destructive(tool.annotations.kind.destructive_hint())
-                                .idempotent(tool.annotations.idempotent)
-                                .open_world(tool.annotations.open_world),
-                        )
-                    }),
-            );
+        if let Some(code_mode) = &self.code_mode {
+            // A session whose owner has the OCaml rollout sees ExecuteCode
+            // with a language; every other session sees it unchanged.
+            let tools = match context
+                .extensions
+                .get::<axum::http::request::Parts>()
+                .and_then(|parts| parts.extensions.get::<AuthenticatedSession>())
+            {
+                Some(AuthenticatedSession(grant)) => {
+                    agent_code_mode::inbound::toolset::session_toolset(code_mode.as_ref(), grant)
+                        .await
+                }
+                None => agent_code_mode::inbound::toolset::toolset(),
+            };
+            definitions.extend(tools.tools.iter().map(|(name, tool)| {
+                Tool::new(
+                    name.clone(),
+                    tool.description.clone(),
+                    Arc::new(tool.input_schema.clone()),
+                )
+                .with_title(tool.annotations.title)
+                .annotate(
+                    ToolAnnotations::with_title(tool.annotations.title)
+                        .read_only(tool.annotations.kind.read_only_hint())
+                        .destructive(tool.annotations.kind.destructive_hint())
+                        .idempotent(tool.annotations.idempotent)
+                        .open_world(tool.annotations.open_world),
+                )
+            }));
         }
         definitions.extend(
             agent_code_mode::inbound::reviews::toolset()
@@ -267,7 +275,17 @@ impl ServerHandler for InternalTools {
             return Ok(result.into());
         }
         if let Some(code_mode) = &self.code_mode {
-            let tools = agent_code_mode::inbound::toolset::toolset();
+            // Only a call that names a language needs the OCaml rollout; one
+            // without it is the same JavaScript call either way.
+            let tools = if request
+                .arguments
+                .as_ref()
+                .is_some_and(|arguments| arguments.contains_key("language"))
+            {
+                agent_code_mode::inbound::toolset::session_toolset(code_mode.as_ref(), grant).await
+            } else {
+                agent_code_mode::inbound::toolset::toolset()
+            };
             if tools.tools.contains_key(request.name.as_ref()) {
                 // The session actor meters the outer MCP call. Only SDK calls
                 // bypass ACP and retain the toolset's own telemetry.

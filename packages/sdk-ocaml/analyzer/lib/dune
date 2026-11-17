@@ -1,0 +1,14 @@
+(library
+ (name macro_sdk_analyzer)
+ (libraries compiler-libs.common yojson))
+
+; Every operation in generated/, keyed by compilation unit and value name.
+
+(rule
+ (target operation_table.ml)
+ (deps
+  (glob_files %{project_root}/generated/*.ml))
+ (action
+  (with-stdout-to
+   %{target}
+   (run %{exe:../index/index.exe} %{deps}))))

@@ -51,7 +51,8 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 jev = { path = "../jev", features = ["outbound"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "process", "io-util"] }
+tempfile = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 agent_session = { path = "../agent_session", default-features = false, features = ["test-utils", "outbound"] }
 entity_access = { path = "../entity_access", features = ["outbound"] }

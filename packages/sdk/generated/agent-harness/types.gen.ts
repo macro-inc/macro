@@ -1964,11 +1964,22 @@ export type ExecutionRecord = {
      */
     executionId: ExecutionId;
     /**
+     * The language `source` is written in; historical records are JavaScript.
+     * JavaScript, the default, is left out, so records of sessions without
+     * OCaml serialize as they did before languages.
+     */
+    language?: ProgramLanguage;
+    /**
      * JSON returned by the program, if successful.
      */
     result?: unknown;
     /**
-     * The submitted JavaScript module.
+     * For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
+     * against (SDK version plus a hash of its interfaces).
+     */
+    sdkFingerprint?: string | null;
+    /**
+     * The submitted program: a JavaScript module or an OCaml `main.ml`.
      */
     source: string;
     /**
@@ -2436,6 +2447,12 @@ export type PreviewAgentSessionsResponse = {
      */
     previews: Array<AgentSessionPreviewDto>;
 };
+
+/**
+ * The language of a session program. OCaml is offered only to sessions
+ * whose owner has the OCaml rollout ([`OcamlRollout`](super::OcamlRollout)).
+ */
+export type ProgramLanguage = 'javascript' | 'ocaml';
 
 /**
  * A file the prompt refers to, by where the agent can fetch it.

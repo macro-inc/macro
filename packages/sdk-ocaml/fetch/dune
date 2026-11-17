@@ -1,0 +1,21 @@
+; The WebAssembly transport. Built only with `--profile wasm` (see the
+; README): native `dune build` never needs js_of_ocaml or wasm_of_ocaml.
+
+(library
+ (name macro_sdk_fetch)
+ (enabled_if
+  (= %{profile} wasm))
+ (libraries macro_sdk.runtime js_of_ocaml uri)
+ (wasm_of_ocaml
+  (javascript_files await.js)
+  (wasm_files await.wat bigstringaf.wat)))
+
+; JSPI is wasm_of_ocaml's default; say so, since await.wat needs it.
+
+(env
+ (_
+  (wasm_of_ocaml
+   (flags
+    (:standard --effects=jspi))
+   (build_runtime_flags
+    (:standard --effects=jspi)))))

@@ -24,6 +24,7 @@ fn request(timeout_ms: u64) -> ExecuteRequest {
     ExecuteRequest {
         source: "return 42;".into(),
         timeout_ms,
+        language: Language::Javascript,
     }
 }
 
@@ -51,7 +52,8 @@ async fn validates_before_admission_and_bounds_queue() {
         service.execute(
             ExecuteRequest {
                 source: " ".into(),
-                timeout_ms: 1
+                timeout_ms: 1,
+                language: Language::Javascript,
             },
             RunEnvironment::default()
         ),
