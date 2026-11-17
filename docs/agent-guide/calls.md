@@ -276,7 +276,7 @@ LiveKit speaking state. Background noise can also activate this audio indicator.
 
 ### Calls whose discussion is a channel thread
 
-With the `enable-call-channel-thread` server flag on for the caller, a new call in a channel stores
+A new call in a channel stores
 `channel_thread` as its discussion, and `CallRecord.discussion` says so. Past channel calls, calls
 already running, and calls with no channel keep `call_chat`, and behave as described elsewhere here.
 
