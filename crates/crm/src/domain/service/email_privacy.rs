@@ -4,8 +4,8 @@ use crate::domain::{
     companies_repo::CompaniesRepository,
     company_metadata_resolver::CompanyMetadataResolver,
     email_privacy::{
-        EmailBlockScope, EmailContributionMailbox, EmailPrivacyChange, EmailPrivacyService,
-        EmailPrivacySettings, ExcludedEmailThreads,
+        EmailBlockScope, EmailContributionConsent, EmailContributionMailbox, EmailPrivacyChange,
+        EmailPrivacyService, EmailPrivacySettings, ExcludedEmailThreads,
     },
     model::CrmError,
 };
@@ -15,16 +15,35 @@ impl<CR: CompaniesRepository, R: CompanyMetadataResolver> EmailPrivacyService
     for CrmServiceImpl<CR, R>
 {
     #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn email_consent(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<EmailContributionConsent, CrmError> {
+        let user = access.receipt().get_authenticated_user().map_err(|_| {
+            CrmError::InvalidRequest("email consent requires an authenticated user".into())
+        })?;
+        self.companies_repository
+            .email_consent(access.team_id(), user.as_ref())
+            .await
+    }
+
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id(), thread_id = ?thread_id), err)]
     async fn excluded_email_threads(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         after: Option<uuid::Uuid>,
+        thread_id: Option<uuid::Uuid>,
     ) -> Result<ExcludedEmailThreads, CrmError> {
         let user = access.receipt().get_authenticated_user().map_err(|_| {
             CrmError::InvalidRequest("email privacy requires an authenticated user".into())
         })?;
+        if after.is_some() && thread_id.is_some() {
+            return Err(CrmError::InvalidRequest(
+                "thread_id cannot be combined with after".into(),
+            ));
+        }
         self.companies_repository
-            .excluded_email_threads(access.team_id(), user.as_ref(), after)
+            .excluded_email_threads(access.team_id(), user.as_ref(), after, thread_id)
             .await
     }
 
@@ -107,9 +126,17 @@ impl<CR: CompaniesRepository, R: CompanyMetadataResolver> EmailPrivacyService
 }
 
 impl EmailPrivacyService for NoOpCrmService {
+    async fn email_consent(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<EmailContributionConsent, CrmError> {
+        unimplemented!("NoOpCrmService.email_consent")
+    }
+
     async fn excluded_email_threads(
         &self,
         _: &CrmTeamReceipt<MemberTeamRole>,
+        _: Option<uuid::Uuid>,
         _: Option<uuid::Uuid>,
     ) -> Result<ExcludedEmailThreads, CrmError> {
         unimplemented!("NoOpCrmService.excluded_email_threads")

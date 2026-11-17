@@ -21,15 +21,11 @@ vi.mock('@queries/email/local-draft-source', () => ({
 }));
 beforeEach(() => localDrafts.mockReset().mockReturnValue([]));
 vi.mock('@notifications', () => ({
-  EmailReadMarker: (props: { threadId: string; linkId?: string }) => {
+  EmailReadMarker: (props: { threadId: string }) => {
     const id = props.threadId;
     onMount(() => markers.mounts.push(id));
     onCleanup(() => markers.releases.push(id));
-    return (
-      <span data-testid="read-marker">
-        {props.threadId}:{props.linkId}
-      </span>
-    );
+    return <span data-testid="read-marker">{props.threadId}</span>;
   },
 }));
 vi.mock('@core/mobile/native-network-status', () => ({
@@ -64,7 +60,6 @@ it('opens an unqueued local draft after a server 404 without overriding access e
   const [error, setError] = createSignal<EntityLoadError>('NOT_FOUND');
   render(() => {
     const source = createEmailThreadSource(() => 'local-thread', {
-      transport: 'graphql',
       resolvedThreadId: 'local-thread',
       isError: true,
       isSuccess: false,
@@ -165,7 +160,6 @@ it('clears the previous thread and read marker when a reused host navigates', ()
             {} as EmailThreadLoadGateProps<ApiThread>['notificationSource']
           }
           threadId={route()}
-          linkId={source.thread()?.link_id}
           onRetry={() => {}}
         >
           <Composer />
@@ -174,9 +168,7 @@ it('clears the previous thread and read marker when a reused host navigates', ()
     );
   });
   expect(screen.getByTestId('title').textContent).toBe('first');
-  expect(screen.getByTestId('read-marker').textContent).toBe(
-    'first:first-inbox'
-  );
+  expect(screen.getByTestId('read-marker').textContent).toBe('first');
   // The query may still report the old successful result when props change.
   setRoute('second');
   expect(screen.queryByRole('textbox')).toBeNull();
@@ -189,9 +181,7 @@ it('clears the previous thread and read marker when a reused host navigates', ()
   setData(fixture('second'));
   setPending(false);
   expect(screen.getByTestId('title').textContent).toBe('second');
-  expect(screen.getByTestId('read-marker').textContent).toBe(
-    'second:second-inbox'
-  );
+  expect(screen.getByTestId('read-marker').textContent).toBe('second');
   expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe(
     'second'
   );

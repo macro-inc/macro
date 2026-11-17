@@ -23,6 +23,14 @@ impl NativeToolGate for Gate {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async { self.verdict.clone() })
     }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
+    }
 }
 #[tokio::test]
 async fn owner_approval_is_required_before_credentials_and_cancel_skips_gate() {
@@ -108,6 +116,14 @@ impl NativeToolGate for Open {
     ) -> Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
         Box::pin(async { NativeToolVerdict::Run })
     }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
+    }
 }
 
 /// A generation session's native tools are code mode's and finding tools
@@ -155,6 +171,34 @@ async fn a_generation_session_uses_only_code_and_finding_tools() {
     );
 }
 
+/// The tools that use nobody's access (the web, Macro's help) are outside
+/// every scope, `NoSend` included: a run that sends nothing could send data
+/// out in a URL. The engine asks this gate about them (`GatedToolSet`).
+#[tokio::test]
+async fn a_scoped_session_uses_no_web_or_help_tool() {
+    let gate = |scope| ScopedToolGate {
+        inner: Arc::new(Open),
+        scopes: Arc::new(Scopes(scope)),
+    };
+    let session = AgentSessionId::new();
+    let args = serde_json::json!({});
+    for scope in [SessionScope::NoSend, SessionScope::Generation] {
+        for tool in ["WebSearch", "WebFetch", "SelfKnowledge"] {
+            assert!(
+                matches!(
+                    gate(Some(scope)).check(session, tool, &args).await,
+                    NativeToolVerdict::Refuse(_)
+                ),
+                "{scope:?} {tool}"
+            );
+        }
+    }
+    assert_eq!(
+        gate(None).check(session, "WebFetch", &args).await,
+        NativeToolVerdict::Run
+    );
+}
+
 /// An SDK operation's path with every parameter filled in.
 fn concrete(path: &str) -> String {
     path.split('/')
@@ -167,6 +211,22 @@ fn concrete(path: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("/")
+}
+
+/// A routine's dry run reads anything the SDK reads, POST reads included,
+/// and is refused every SDK write.
+#[test]
+fn the_dry_run_scope_is_every_sdk_read_and_no_write() {
+    let scope = SessionScope::DryRun;
+    for (key, operation) in code_execution::domain::operations() {
+        assert_eq!(
+            scope.allows(&operation.method, &concrete(&operation.path)),
+            !operation.write,
+            "{key} ({} {})",
+            operation.method,
+            operation.path
+        );
+    }
 }
 
 /// The scope's list of POST reads covers every read the SDK sends as a POST,
@@ -392,6 +452,7 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
             "agent-sessions",
             "harness",
             "/tool",
+            "/web/",
         ]
         .iter()
         .any(|word| text.contains(word))
@@ -545,7 +606,11 @@ fn every_sdk_host_holds_a_scoped_credential_to_its_scope() {
     for (key, operation) in code_execution::domain::operations() {
         let (service, _) = key.split_once('.').unwrap();
         if let ScopeEnforcement::NoMacroCredential = enforcement(host(service)) {
-            for scope in [SessionScope::Generation, SessionScope::NoSend] {
+            for scope in [
+                SessionScope::Generation,
+                SessionScope::NoSend,
+                SessionScope::DryRun,
+            ] {
                 assert!(
                     scope.allows(&operation.method, &concrete(&operation.path)),
                     "{key} ({} {}) is outside {scope:?} on a host that can't refuse it",
@@ -650,4 +715,55 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         .unwrap();
         assert_eq!(signed(&run.token).as_deref(), name, "MCP run {scope:?}");
     }
+}
+
+/// The scope can't be read.
+struct UnreadableScopes;
+
+#[async_trait]
+impl SessionScopes for UnreadableScopes {
+    async fn scope(&self, _: uuid::Uuid) -> Result<Option<SessionScope>, rootcause::Report> {
+        Err(rootcause::report!("database unavailable"))
+    }
+}
+
+/// A scoped session calls no connected app's tool directly, read or write:
+/// the egress proxy that carries the call doesn't know the scope. A session
+/// with no scope is left to the proxy, and one whose scope can't be read
+/// calls nothing.
+#[tokio::test]
+async fn a_scoped_session_calls_no_connected_apps_tool_directly() {
+    let session = AgentSessionId::new();
+    for scope in [SessionScope::NoSend, SessionScope::Generation] {
+        let gate = ScopedToolGate {
+            inner: Arc::new(Open),
+            scopes: Arc::new(Scopes(Some(scope))),
+        };
+        for tool in ["mcp__slack__send_message", "mcp__linear__list_issues"] {
+            assert!(
+                gate.refuse_remote_mcp(session, tool).await.is_some(),
+                "{scope:?} {tool}"
+            );
+        }
+    }
+    let unscoped = ScopedToolGate {
+        inner: Arc::new(Open),
+        scopes: Arc::new(Scopes(None)),
+    };
+    assert_eq!(
+        unscoped
+            .refuse_remote_mcp(session, "mcp__slack__send_message")
+            .await,
+        None
+    );
+    let unreadable = ScopedToolGate {
+        inner: Arc::new(Open),
+        scopes: Arc::new(UnreadableScopes),
+    };
+    assert!(
+        unreadable
+            .refuse_remote_mcp(session, "mcp__slack__send_message")
+            .await
+            .is_some()
+    );
 }

@@ -60,6 +60,8 @@ pub struct ListedServer {
 struct RegisteredTool {
     peer: Peer<RoleClient>,
     tool: Tool,
+    /// The name the server was registered under, before mangling.
+    server: Arc<str>,
 }
 
 /// Dispatches tool calls to connected MCP servers using name-mangled routing.
@@ -159,6 +161,16 @@ impl RemoteMcpToolSet {
         }))
     }
 
+    /// The name of the server a mangled tool name reaches, as it was
+    /// registered. Unlike the name's server segment, which another server's
+    /// name can sanitize or truncate to, this says which server it is.
+    pub fn server_of(&self, mangled: &str) -> Option<&str> {
+        self.0
+            .tools
+            .get(&MangledName(mangled.to_owned()))
+            .map(|entry| &*entry.server)
+    }
+
     /// Returns `true` when no tools were discovered.
     pub fn is_empty(&self) -> bool {
         self.0.tools.is_empty()
@@ -235,6 +247,7 @@ fn register_server(
     server_tools: Vec<Tool>,
     subject: &Option<String>,
 ) {
+    let server: Arc<str> = server_name.into();
     for tool in server_tools {
         let Mangled {
             name: mangled,
@@ -267,6 +280,7 @@ fn register_server(
             RegisteredTool {
                 peer: client.peer().clone(),
                 tool,
+                server: Arc::clone(&server),
             },
         );
     }

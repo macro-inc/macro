@@ -42,7 +42,11 @@ own permission checks and agent attribution apply.
   `McpChatgptServiceUrl` and `McpPublicUrl` in `crates/macro_service_urls`;
   change all of them together. Service hosts come from the SDK for
   `MACRO_ENV`; `MACRO_HOSTS` (JSON) only points a local run at a named stack.
-- Deploys are `workflow_dispatch` only (`Deploy MCP ChatGPT Worker`).
+- Deploys follow sync-service: every push to main deploys dev (`Deploy on
+  Push`), every release deploys prod (`release-production`), and `Deploy MCP
+  ChatGPT Worker` can be dispatched by hand. Each run first checks the env has
+  the secrets in `scripts/check-deploy-secrets.mjs`; a missing one fails the
+  job and leaves the live version serving.
 - The SDK is imported by relative path from `packages/sdk/src`; SDK changes
   reach this Worker on its next deploy.
 

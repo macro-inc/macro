@@ -84,8 +84,8 @@ in-call chat.
   participant events; an archived call's recreated room evicts the bot.
 - `enable-programmatic-calls` fails closed for explicit start and leave. For
   `POST /call/record/{call_id}/join`, only `MacroUserAuthentication::is_human_session()`
-  bypasses the flag; API credentials and agent-attributed sessions remain gated.
-  The handler still refuses code-execution tokens, and the domain service still
+  bypasses the flag; API credentials remain gated. Programs are refused before
+  the flag (see below), and the domain service still
   checks live-call admission and returns Gone for ended calls. Meeting join
   ignores optional join settings while disabled.
 - Accept bodyless meeting joins even with `Content-Type: application/json`;
@@ -95,8 +95,12 @@ in-call chat.
   `POST /call/record/{call_id}/join`; the latter never creates a call.
 - A view grant alone does not admit a user to a live call. Channel membership,
   standalone ownership, attendance, or an explicit invite is required.
-- Every token-producing HTTP route refuses `x-macro-code-execution` because
-  tokens can outlive a code execution and cannot be revoked.
+- Every authenticated token-producing HTTP route refuses a program
+  (`macro_authorization::is_program_run`: a credential signed for an agent or a
+  routine run, or `x-macro-code-execution`), because tokens reach the model,
+  outlive the run and cannot be revoked. A program can drop the header with a
+  raw `fetch`, so the signed claims carry the refusal. The guest join has no
+  credential and checks the header only.
 - `edit_call_record_handler` refuses share permission and team sharing
   changes from a scoped agent session
   (`agent_correlation::context::refuse_sharing`, 403); a new sharing field

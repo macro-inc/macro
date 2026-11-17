@@ -32,25 +32,23 @@ function Fixture() {
     client.clear();
   });
   const setAccess = (accessible: boolean) => {
-    for (const graphql of [false, true]) {
-      client.setQueryData(
-        agentSessionKeys.preview(id, graphql).queryKey,
-        accessible
-          ? {
-              access: 'access',
-              data: {
-                id,
-                name: label,
-                ownerId: 'fixture-owner',
-                botId: 'fixture-bot',
-                status: { kind: 'disconnected' },
-                createdAt: '',
-                updatedAt: '',
-              },
-            }
-          : { access: 'no_access' }
-      );
-    }
+    client.setQueryData(
+      agentSessionKeys.preview(id).queryKey,
+      accessible
+        ? {
+            access: 'access',
+            data: {
+              id,
+              name: label,
+              ownerId: 'fixture-owner',
+              botId: 'fixture-bot',
+              status: { kind: 'disconnected' },
+              createdAt: '',
+              updatedAt: '',
+            },
+          }
+        : { access: 'no_access' }
+    );
   };
   setAccess(true);
   return (

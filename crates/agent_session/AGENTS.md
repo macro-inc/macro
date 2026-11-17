@@ -88,6 +88,12 @@ before the next real prompt attempts to attach quiet events.
 Discovery uses bounded cursor pages so callers can
 advance past unavailable sessions. Quiet batches bind to the actual prompt action ID;
 notification-only turns record `PrompterKind::System` and no human authority.
+A prompt from a program (`ControlPrincipal::Program`, including a session
+created with a first prompt) or a routine's agent step, and a queued prompt a
+program rewrote, record `PrompterKind::Program`: the user's access, never the
+user's decision. The kind rides `ControlEvent`, the harness queue
+(`StoredQueuedAction.prompter`, absent = `user`) and `turn_prompter_kind`
+(`program`; unknown values read as `user`).
 Never expose notification metadata through public session controls. Notification
 sessions read original log frames across load boundaries to retain trusted event
 provenance when runtimes echo their prompt history. A log trigger records this
@@ -232,6 +238,5 @@ skips the turn before any model call; unset or unreadable, summaries run.
 - No session opens for a bot bound to an agent teammate's computer
   (`BotFacts::on_team_agent_computer`): `persona_for_owner` and a runtime's
   external create refuse it with `TeamAgentComputer` (409).
-- `RuntimeSessionLookup` resolves ACP ids for a supplied bot set; runtime wiring obtains assignments through the bots port.
-
+- `RuntimeSessionLookup` resolves ACP ids for a supplied bot set, skipping archived sessions and flagging dormant ones; runtime wiring obtains assignments through the bots port.
 - Structured session activity additionally requires current access for CRM records, including acting-user bot credentials. Preserve the raw cursor when filtering denied rows; saved transcript text remains a received snapshot.
