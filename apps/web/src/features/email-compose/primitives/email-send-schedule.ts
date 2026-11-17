@@ -461,20 +461,23 @@ export function createEmailSendSchedule(options: {
       const result = action === 'update' ? 'updated' : 'scheduled';
       // Meanwhile a composer for the draft in another view may have cancelled
       // or rescheduled it, and the notice would announce a schedule that is
-      // gone; or one may have seen it moved on another device, and the notice
-      // follows it.
-      // What this composer observed meanwhile may be that change, so it reads
-      // the draft afresh instead of ignoring it.
-      const live = scheduledNotices.get(draftId) === notice;
-      if (live && sameTime(notice.sendTime, requested)) {
+      // gone; or one may have seen it moved on another device. What this
+      // composer observed meanwhile may be that change, so it reads the draft
+      // afresh instead of ignoring it, and announces what it reads.
+      let announced = requested;
+      if (
+        scheduledNotices.get(draftId) === notice &&
+        sameTime(notice.sendTime, requested)
+      ) {
         ignoredLifecycleObservation =
           deferredLifecycleObservation ?? options.lifecycleState?.();
       } else {
         ignoredLifecycleObservation = undefined;
-        await options.reconcile?.().catch(notices.reportError);
+        const fresh = await options.reconcile?.().catch(notices.reportError);
         if (scheduledNotices.get(draftId) !== notice) return result;
+        if (fresh && fresh.type !== 'scheduled') return result;
+        announced = fresh ? new Date(fresh.sendTime) : notice.sendTime;
       }
-      const announced = notice.sendTime;
       try {
         // The title stays terse so it never truncates; the time is the subtext.
         let toastId: number | undefined;
