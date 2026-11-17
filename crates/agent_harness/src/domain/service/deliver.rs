@@ -7,27 +7,30 @@ use super::*;
 /// dial stops restoring it.
 const IDLE_SESSION_AFTER: chrono::TimeDelta = chrono::TimeDelta::hours(1);
 
-/// Whether neither Macro nor the runtime has seen activity in `session` for
-/// [`IDLE_SESSION_AFTER`]. `modified_at` moves when a turn starts, runs, is
-/// stopped or blocks, never when it ends, so an unfinished turn is read from
-/// the turn projection instead. `runtime_activity` is the runtime's own
-/// `updatedAt` for it, when its listing carries one; a runtime clock ahead of
-/// ours counts as now, never as the future.
-fn is_idle(
+/// When Macro or the runtime last saw activity in `session`. `modified_at`
+/// moves when a turn starts, runs, is stopped or blocks, never when it ends,
+/// so an unfinished turn is read from the turn projection instead.
+/// `runtime_activity` is the runtime's own `updatedAt` for it, when its
+/// listing carries one; a runtime clock ahead of ours counts as now, never as
+/// the future.
+fn last_activity(
     session: &AgentSession,
     runtime_activity: Option<chrono::DateTime<chrono::Utc>>,
-) -> bool {
-    let now = chrono::Utc::now();
-    let last_activity = runtime_activity.map_or(session.modified_at, |runtime| {
+    now: chrono::DateTime<chrono::Utc>,
+) -> chrono::DateTime<chrono::Utc> {
+    runtime_activity.map_or(session.modified_at, |runtime| {
         runtime.min(now).max(session.modified_at)
-    });
-    now - last_activity >= IDLE_SESSION_AFTER
+    })
 }
 
 /// What a runtime's dial does with a session it listed.
 pub(super) enum DialReattach {
-    /// Restore it now.
-    Eager,
+    /// Restore it now, however many others the dial restores: work is in
+    /// flight or waiting on it.
+    Required,
+    /// Seen active at this time, within [`IDLE_SESSION_AFTER`]: restore it
+    /// now if the dial's eager cap has room, most recent first.
+    Recent(chrono::DateTime<chrono::Utc>),
     /// Leave it to bind on its next prompt or delivery.
     Lazy,
     /// Archived, or not an external session.
@@ -172,12 +175,12 @@ where
 
     /// What a runtime's dial does with one of the sessions it listed.
     ///
-    /// Only work that would otherwise wait or go unseen is restored at dial
-    /// time: a command in flight here, a turn the durable projection shows
-    /// unfinished (still open, or open when the session disconnected, on any
-    /// replica), a durable queue nobody else dispatches, or a session that
-    /// Macro or the runtime (its listed `updatedAt`) saw active in the last
-    /// hour.
+    /// Work that would otherwise wait or go unseen is always restored at
+    /// dial time: a command in flight here, a turn the durable projection
+    /// shows unfinished (still open, or open when the session disconnected,
+    /// on any replica), or a durable queue nobody else dispatches. A session
+    /// that Macro or the runtime (its listed `updatedAt`) saw active in the
+    /// last hour is restored if the dial's eager cap has room.
     /// Everything else binds on its next prompt or delivery, which reconnects
     /// a detached session anyway; durable notifications and conversation
     /// recovery reach theirs through their own sweeps. Whether the session
@@ -201,19 +204,20 @@ where
             .as_ref()
             .and_then(|acp| runtime_activity.get(acp))
             .copied();
-        if self.busy.is_pending(session_id) || !is_idle(&session, listed_activity) {
-            return Ok(DialReattach::Eager);
-        }
-        if self.sessions.has_unfinished_turn(session_id).await? {
-            return Ok(DialReattach::Eager);
-        }
-        if !self
-            .sessions
-            .list_queued_actions(session_id)
-            .await?
-            .is_empty()
+        if self.busy.is_pending(session_id)
+            || self.sessions.has_unfinished_turn(session_id).await?
+            || !self
+                .sessions
+                .list_queued_actions(session_id)
+                .await?
+                .is_empty()
         {
-            return Ok(DialReattach::Eager);
+            return Ok(DialReattach::Required);
+        }
+        let now = chrono::Utc::now();
+        let last_activity = last_activity(&session, listed_activity, now);
+        if now - last_activity < IDLE_SESSION_AFTER {
+            return Ok(DialReattach::Recent(last_activity));
         }
         Ok(DialReattach::Lazy)
     }
