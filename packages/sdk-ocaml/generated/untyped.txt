@@ -1,0 +1,101 @@
+# Where the generated SDK uses Yojson.Safe.t: the spec allows any JSON there.
+agent-harness.json #/components/schemas/ActivityWireRow/properties/action_payload: the spec gives no type (serde_json::Value)
+agent-harness.json #/components/schemas/AgentPermissionAction/properties/requestId: the spec gives no type (serde_json::Value)
+agent-harness.json #/components/schemas/AgentSessionFoldedLogResponse/properties/messages/items: a free-form object
+agent-harness.json #/components/schemas/AiSuggestions: an object with no properties
+agent-harness.json #/components/schemas/CallConnectedTool/properties/arguments: a free-form object
+agent-harness.json #/components/schemas/ConnectedTool/properties/inputSchema: a free-form object
+agent-harness.json #/components/schemas/ConnectedToolResult/properties/content/items: a free-form object
+agent-harness.json #/components/schemas/ConnectedToolResult/properties/structuredContent: a free-form object
+agent-harness.json #/components/schemas/ControlRequest/allOf/1/properties/context: a free-form object
+agent-harness.json #/components/schemas/ExecutionRecord/properties/result: the spec gives no type (serde_json::Value)
+agent-harness.json #/components/schemas/LogFrameDto/properties/content: a free-form object
+agent-harness.json #/components/schemas/PresentView/properties/view: a free-form object
+agent-harness.json #/components/schemas/RecordedToolCall/properties/input: the spec gives no type (serde_json::Value)
+agent-harness.json #/components/schemas/RecordedToolCall/properties/output: the spec gives no type (serde_json::Value)
+agent-harness.json #/components/schemas/ReviewDecision/oneOf/0/properties/draft: a free-form object
+auth.json #/components/schemas/EmptyResponse: a free-form object
+cognition.json #/components/schemas/AssistantMessagePart/oneOf/1/properties/json: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/AssistantMessagePart/oneOf/2/properties/json: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/AssistantMessagePart/oneOf/3/properties/json: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/CallToolRequest/properties/args: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/CallToolResponse/properties/result: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/DatabaseQueryRequest/properties/schema: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/DecisionRequest/properties/input: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/DynamicSchema/properties/schema: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/ImportEntity/properties/metadata: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/StructuredCompletionOutcome/oneOf/0/properties/result: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/ToolActivityAction/oneOf/13/properties/payload: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/ToolActivityAction/oneOf/7/properties/from: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/ToolActivityAction/oneOf/7/properties/to: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/TrackImportEntityRequest/properties/metadata: a free-form object
+cognition.json #/components/schemas/UpdateToolCallRequest/properties/args: the spec gives no type (serde_json::Value)
+cognition.json #/components/schemas/UpsertProjectionRequest/properties/output_schema: a free-form object
+cognition.json #/components/schemas/UserToolResponse_Value/oneOf/2/properties/UserAction: the spec gives no type (serde_json::Value)
+cognition.json #/paths/~1calendar~1events~1create-confirmed/post/requestBody/content/application~1json/schema: a free-form object
+cognition.json #/paths/~1calendar~1events~1create-confirmed/post/responses/200/content/application~1json/schema: a free-form object
+cognition.json #/paths/~1email~1send-confirmed/post/requestBody/content/application~1json/schema: a free-form object
+cognition.json #/paths/~1email~1send-confirmed/post/responses/200/content/application~1json/schema: a free-form object
+connection.json #/components/schemas/BatchSendMessageBody/properties/message: the spec gives no type (serde_json::Value)
+connection.json #/components/schemas/SendMessageBody/properties/message: the spec gives no type (serde_json::Value)
+connection.json #/components/schemas/StreamItem/properties/payload: the spec gives no type (serde_json::Value)
+email.json #/components/schemas/ApiMessage/properties/headers_json: the spec gives no type (serde_json::Value)
+email.json #/components/schemas/EmptyResponse: a free-form object
+email.json #/components/schemas/Value: the spec gives no type (serde_json::Value)
+notification.json #/components/schemas/CreateNotification/allOf/1/properties/metadata: the spec gives no type (serde_json::Value)
+notification.json #/components/schemas/EmptyResponse: a free-form object
+notification.json #/components/schemas/RealtimeNotif_TaggedContent_Value/allOf/1/properties/notification_metadata/properties/content: the spec gives no type (serde_json::Value)
+scheduled-action.json #/components/schemas/ActionExecutionRecord/properties/result: a free-form object
+scheduled-action.json #/components/schemas/EmptyResponse: a free-form object
+scheduled-action.json #/components/schemas/ExecutionResult/properties/steps/items: a free-form object
+scheduled-action.json #/components/schemas/RoutineSoFar/properties/trigger: a free-form object
+scheduled-action.json #/components/schemas/SuggestRequest/oneOf/0/properties/knobs: a free-form object
+scheduled-action.json #/components/schemas/SuggestedPick/oneOf/0/properties/knobs: a free-form object
+search.json #/components/schemas/EmptyResponse: a free-form object
+static-files.json #/components/schemas/FileMetadata/properties/extension_data: the spec gives no type (serde_json::Value)
+static-files.json #/components/schemas/PutFileRequest/properties/extension_data: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/asf: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/calf: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/callf: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/ccf: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/cf: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/chanf: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/crmf: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/cthf: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/df: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/ef: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/fef: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/ghprf: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/if: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/pf: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ApiEntityFilterAst/properties/propf: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/CanvasEdited/properties/scene: a free-form object
+storage.json #/components/schemas/CanvasScene/properties/scene: a free-form object
+storage.json #/components/schemas/CreateSavedViewDefinitionRequest/properties/config: a free-form object
+storage.json #/components/schemas/CreateViewRequest/properties/config: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/CrmTeamSettingsResponse/properties/team_views: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/DocumentMetadata/properties/modificationData: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/DocumentResponseMetadata/properties/modificationData: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/EditPdfPlaceableCommentAnchorRequest/properties/allowableEdits: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/EmptyResponse: a free-form object
+storage.json #/components/schemas/ForeignEntity/properties/metadata: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/GenericResponse/properties/data: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/InitiativeActivityRecord/properties/actionPayload: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/PdfPlaceableCommentAnchor/properties/allowableEdits: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/SaveDocumentRequest/properties/modificationData: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/SavedViewDefinition/properties/config: a free-form object
+storage.json #/components/schemas/SoupForeignEntity/properties/metadata: a free-form object
+storage.json #/components/schemas/SpreadsheetValue/properties/value: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/TimelineActivity/properties/payload: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/UpdateCrmTeamSettingsRequest/properties/team_views: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/UpdateSavedViewDefinitionRequest/properties/config: a free-form object
+storage.json #/components/schemas/View/properties/config: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/ViewPatch/properties/config: the spec gives no type (serde_json::Value)
+storage.json #/components/schemas/WhatsAppPairState/properties/challenge: a free-form object
+storage.json #/paths/~1databases~1webhooks~1{token}/post/requestBody/content/application~1json/schema: the spec gives no type (serde_json::Value)
+storage.json #/paths/~1entities~1{entity_type}~1{entity_id}~1access-requests~1mine/delete/responses/200/content/application~1json/schema: the spec gives no type (serde_json::Value)
+storage.json #/paths/~1entities~1{entity_type}~1{entity_id}~1direct-access~1{user_id}/delete/responses/200/content/application~1json/schema: the spec gives no type (serde_json::Value)
+storage.json #/paths/~1entities~1{entity_type}~1{entity_id}~1direct-access~1{user_id}/put/responses/200/content/application~1json/schema: the spec gives no type (serde_json::Value)
+storage.json #/paths/~1favorites~1reorder/patch/responses/200/content/application~1json/schema: the spec gives no type (serde_json::Value)
+storage.json #/paths/~1favorites~1{entity_type}~1{entity_id}/delete/responses/200/content/application~1json/schema: the spec gives no type (serde_json::Value)
+storage.json #/paths/~1whatsapp~1pairing~1{id}~1passkey/post/requestBody/content/application~1json/schema: a free-form object

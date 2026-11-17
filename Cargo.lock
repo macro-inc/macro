@@ -371,6 +371,7 @@ dependencies = [
  "specta-typescript",
  "sqlx",
  "system_skills",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",

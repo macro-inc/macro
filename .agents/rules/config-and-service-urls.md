@@ -55,8 +55,9 @@ startup loudly.
 - The URL table is hand-copied. A new or changed service URL updates every copy:
   `macro_service_urls` and `infra/packages/shared/src/service_urls.ts`, plus each
   consuming runtime (`apps/web/src/lib/core/constant/servers.ts`,
-  `packages/sdk/src/config.ts`, and worker `[env.*.vars]`). Do not add unused
-  public OAuth identities to API transport maps.
+  `packages/sdk/src/config.ts`, `packages/sdk-ocaml/runtime/config.ml`, and
+  worker `[env.*.vars]`). Do not add unused public OAuth identities to API
+  transport maps.
 - Keep registered public OAuth identities separate from internal gateway API
   routes. Do not store stable URLs in Doppler; reserve it for secrets and
   infrastructure-generated addresses (such as preview DNS and SSH hosts).

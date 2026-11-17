@@ -683,6 +683,10 @@ pub async fn run() -> anyhow::Result<()> {
             )
             .await
             .map_err(|error| anyhow::anyhow!("invalid Deno runtime: {error}"))?;
+            // OCaml programs need the bundle this build names, if any.
+            let ocaml_fingerprint = runner
+                .ocaml_bundle()
+                .map(|bundle| bundle.fingerprint().to_owned());
             let runner: Arc<dyn code_execution::domain::CodeRunner> = Arc::new(runner);
             // Public MCP runs get their own admission budget so external
             // clients cannot exhaust the slots agent sessions rely on.
@@ -726,13 +730,14 @@ pub async fn run() -> anyhow::Result<()> {
                 public,
                 routines,
                 Arc::new(checker),
+                ocaml_fingerprint,
             ))
         }
         None => None,
     };
     // Routine code steps run as their owner on the routines' executor.
     let routine_code = match &code_runner {
-        Some((_, _, routines, checker)) => Some(
+        Some((_, _, routines, checker, _)) => Some(
             routine_code::SdkRoutineCode::new(
                 Arc::new(routines.clone()),
                 Arc::clone(checker) as Arc<dyn code_execution::domain::ProgramChecker>,
@@ -808,7 +813,7 @@ pub async fn run() -> anyhow::Result<()> {
         ),
     });
     let public_code_mode = match &code_runner {
-        Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
+        Some((_, public, _, _, _)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
@@ -871,7 +876,7 @@ pub async fn run() -> anyhow::Result<()> {
             ),
             scopes: Arc::clone(&session_scopes),
         });
-    let code_executor = code_runner.as_ref().map(|(runner, _, _, _)| {
+    let code_executor = code_runner.as_ref().map(|(runner, _, _, _, _)| {
         Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
     });
     let code_mode_enabled = code_executor.is_some();
@@ -923,30 +928,41 @@ pub async fn run() -> anyhow::Result<()> {
         agent_code_mode::domain::ui_commands::NavigableRoutes::generated()
             .context("the generated agent route table does not parse")?,
     );
-    let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> =
-        Arc::new(agent_code_mode::domain::CodeModeService::new(
-            code_executor,
-            Arc::new(code_mode::RunCredentials {
-                correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
-                signer: MacroApiTokenSigner::new(
-                    pool.clone(),
-                    config.macro_api_token_issuer.as_ref(),
-                    config.macro_api_token_private_secret_key.as_ref(),
-                ),
-                gate: owner_tool_gate.clone(),
-                endpoints: code_mode::sdk_endpoints()?,
-                scopes: Arc::clone(&session_scopes),
-            }),
-            execution_store,
-            execution_turns,
-            Arc::new(code_mode::images::StaticFileModelImages(
-                static_file_service_client::StaticFileServiceClient::with_timeout(
-                    config.internal_api_key.clone(),
-                    macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
-                    std::time::Duration::from_secs(10),
-                ),
-            )),
-        ));
+    let session_code_mode = agent_code_mode::domain::CodeModeService::new(
+        code_executor,
+        Arc::new(code_mode::RunCredentials {
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            signer: MacroApiTokenSigner::new(
+                pool.clone(),
+                config.macro_api_token_issuer.as_ref(),
+                config.macro_api_token_private_secret_key.as_ref(),
+            ),
+            gate: owner_tool_gate.clone(),
+            endpoints: code_mode::sdk_endpoints()?,
+            scopes: Arc::clone(&session_scopes),
+        }),
+        execution_store,
+        execution_turns,
+        Arc::new(code_mode::images::StaticFileModelImages(
+            static_file_service_client::StaticFileServiceClient::with_timeout(
+                config.internal_api_key.clone(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+                std::time::Duration::from_secs(10),
+            ),
+        )),
+    );
+    // OCaml programs, for owners with the rollout, when this build has the bundle.
+    let session_code_mode = match code_runner
+        .as_ref()
+        .and_then(|(_, _, _, _, fingerprint)| fingerprint.clone())
+    {
+        Some(fingerprint) => session_code_mode.with_ocaml(agent_code_mode::domain::OcamlPrograms {
+            fingerprint,
+            rollout: Arc::new(code_mode::OcamlFlag(feature_flags.clone())),
+        }),
+        None => session_code_mode,
+    };
+    let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> = Arc::new(session_code_mode);
     let session_metadata_realtime = WorkRegistrationRealtime::new(
         ConnectionGatewayAgentSessionRealtime::new(
             connection_gateway.clone(),
@@ -2662,7 +2678,7 @@ pub async fn run() -> anyhow::Result<()> {
     typing_heartbeat.abort();
     recovery.abort();
     runtime_commands.abort();
-    if let Some((sessions, public, routines, _)) = &code_runner {
+    if let Some((sessions, public, routines, _, _)) = &code_runner {
         tokio::join!(sessions.shutdown(), public.shutdown(), routines.shutdown());
     }
     let stop_failures = container_shutdown.shutdown_all().await;

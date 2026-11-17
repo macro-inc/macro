@@ -40,13 +40,27 @@ async fn owner_approval_is_required_before_credentials_and_cancel_skips_gate() {
         calls: AtomicUsize::new(0),
     };
     assert!(matches!(
-        approve_run(&gate, &identity, "fixture", &CancellationToken::new()).await,
+        approve_run(
+            &gate,
+            &identity,
+            "fixture",
+            ProgramLanguage::Javascript,
+            &CancellationToken::new()
+        )
+        .await,
         Err(CodeModeError::Invalid(_))
     ));
     let cancel = CancellationToken::new();
     cancel.cancel();
     assert!(matches!(
-        approve_run(&gate, &identity, "fixture", &cancel).await,
+        approve_run(
+            &gate,
+            &identity,
+            "fixture",
+            ProgramLanguage::Javascript,
+            &cancel
+        )
+        .await,
         Err(CodeModeError::Forbidden)
     ));
     assert_eq!(gate.calls.load(Ordering::SeqCst), 1);
@@ -55,9 +69,61 @@ async fn owner_approval_is_required_before_credentials_and_cancel_skips_gate() {
         calls: AtomicUsize::new(0),
     };
     assert!(
-        approve_run(&gate, &identity, "fixture", &CancellationToken::new())
-            .await
-            .is_ok()
+        approve_run(
+            &gate,
+            &identity,
+            "fixture",
+            ProgramLanguage::Javascript,
+            &CancellationToken::new()
+        )
+        .await
+        .is_ok()
+    );
+}
+
+/// Records the arguments the approval hold shows.
+#[derive(Default)]
+struct Recording(std::sync::Mutex<Vec<serde_json::Value>>);
+impl NativeToolGate for Recording {
+    fn check<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+        args: &'a serde_json::Value,
+    ) -> Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
+        self.0.lock().unwrap().push(args.clone());
+        Box::pin(async { NativeToolVerdict::Refuse("recorded".into()) })
+    }
+}
+
+#[tokio::test]
+async fn the_approval_hold_names_an_ocaml_programs_language() {
+    let session = test_agent_session(AgentSessionId::new());
+    let identity = ExecutionIdentity {
+        execution: agent_code_mode::domain::ExecutionId::mint(),
+        acting_as: ai_toolset::actor::ToolActor::Owner,
+        session: session.id,
+        agent_id: session.bot_id,
+        owner: session.owner_user().unwrap().clone(),
+        turn: macro_uuid::Uuid::from_u128(1),
+    };
+    let gate = Recording::default();
+    for language in [ProgramLanguage::Ocaml, ProgramLanguage::Javascript] {
+        let _ = approve_run(
+            &gate,
+            &identity,
+            "fixture",
+            language,
+            &CancellationToken::new(),
+        )
+        .await;
+    }
+    let held = gate.0.lock().unwrap();
+    assert_eq!(held[0]["language"], "ocaml");
+    // A JavaScript hold reads as it did before languages.
+    assert_eq!(
+        held[1],
+        serde_json::json!({"source": "fixture", "acting_as": identity.acting_as, "turn_id": identity.turn})
     );
 }
 
@@ -79,9 +145,15 @@ async fn execution_credentials_use_the_gate_resolved_requester() {
         calls: AtomicUsize::new(0),
     };
     assert_eq!(
-        approve_run(&gate, &identity, "fixture", &CancellationToken::new())
-            .await
-            .unwrap(),
+        approve_run(
+            &gate,
+            &identity,
+            "fixture",
+            ProgramLanguage::Javascript,
+            &CancellationToken::new()
+        )
+        .await
+        .unwrap(),
         requester
     );
 }
@@ -627,7 +699,12 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             endpoints: SdkEndpoints::default(),
             scopes: Arc::new(Scopes(scope)),
         }
-        .issue(&identity, "fixture", CancellationToken::new())
+        .issue(
+            &identity,
+            "fixture",
+            ProgramLanguage::Javascript,
+            CancellationToken::new(),
+        )
         .await
         .unwrap();
         assert_eq!(

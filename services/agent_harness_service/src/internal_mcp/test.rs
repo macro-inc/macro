@@ -429,3 +429,133 @@ fn code_results_send_pixels_as_images_and_keep_the_receipt_structured() {
     );
     assert_eq!(result.content.len(), 2);
 }
+
+/// Code mode whose OCaml rollout is fixed, recording each run's language.
+struct OcamlRollout {
+    on: bool,
+    languages: std::sync::Mutex<Vec<code_execution::domain::Language>>,
+}
+
+#[async_trait::async_trait]
+impl SessionCodeMode for OcamlRollout {
+    async fn execute(
+        &self,
+        _: &agent_session::domain::model::AgentSession,
+        execution: agent_code_mode::domain::ExecutionId,
+        _: ai_toolset::actor::ToolActor,
+        _: macro_uuid::Uuid,
+        request: code_execution::domain::ExecuteRequest,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<agent_code_mode::domain::ExecutionReceipt, agent_code_mode::domain::CodeModeError>
+    {
+        self.languages.lock().unwrap().push(request.language);
+        Ok(agent_code_mode::domain::ExecutionReceipt {
+            execution_id: execution,
+            status: agent_code_mode::domain::ExecutionStatus::Succeeded,
+            activity: Vec::new(),
+            result: None,
+            error: None,
+            model_media: Vec::new(),
+        })
+    }
+    async fn read(
+        &self,
+        _: &entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewAccessLevel,
+        >,
+        _: agent_code_mode::domain::ExecutionId,
+    ) -> Result<agent_code_mode::domain::ExecutionRecord, agent_code_mode::domain::CodeModeError>
+    {
+        Err(agent_code_mode::domain::CodeModeError::NotFound)
+    }
+    async fn ocaml_enabled(&self, _: &agent_session::domain::model::AgentSession) -> bool {
+        self.on
+    }
+}
+
+#[tokio::test]
+async fn execute_code_offers_and_accepts_ocaml_only_with_the_rollout() {
+    for on in [false, true] {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_agent_session(AgentSessionId::new());
+        repo.insert_session(session.clone());
+        repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
+            .await
+            .unwrap();
+        let tasks = FixedTasks::default();
+        let code_mode = Arc::new(OcamlRollout {
+            on,
+            languages: Default::default(),
+        });
+        let app = router(
+            Arc::new(repo.clone()),
+            configured_hosts(&["http://agent-harness-service:8102"]).unwrap(),
+            InternalTools {
+                service: Arc::new(SessionPullRequestService::new(
+                    repo.clone(),
+                    RecordingRealtime::new(),
+                    Arc::new(tasks.clone()),
+                )),
+                tasks: Arc::new(tasks),
+                code_mode: Some(code_mode.clone()),
+                cognition: None,
+                reviews: Arc::new(OnceLock::new()),
+                gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+                app_url: "https://macro.com".into(),
+            },
+        );
+        let (status, listed) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{listed}");
+        let execute = listed["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "ExecuteCode")
+            .unwrap()
+            .clone();
+        assert_eq!(
+            execute["inputSchema"]["properties"]
+                .get("language")
+                .is_some(),
+            on
+        );
+        assert_eq!(
+            execute["description"]
+                .as_str()
+                .unwrap()
+                .contains("Code_mode.run"),
+            on
+        );
+        let (_, called) = rpc(
+            app,
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "ExecuteCode",
+                "arguments": {
+                    "turn_id": "00000000-0000-0000-0000-000000000001",
+                    "language": "ocaml",
+                    "source": "let () = Code_mode.run (fun _ -> `Null)",
+                },
+            }),
+        )
+        .await;
+        if on {
+            assert!(called.get("error").is_none(), "{called}");
+            assert_eq!(
+                *code_mode.languages.lock().unwrap(),
+                [code_execution::domain::Language::Ocaml]
+            );
+        } else {
+            // Today's ExecuteCode has no language: the call is refused unrun.
+            assert!(called.get("error").is_some(), "{called}");
+            assert!(code_mode.languages.lock().unwrap().is_empty());
+        }
+    }
+}

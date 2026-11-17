@@ -1,0 +1,16 @@
+(library
+ (name macro_sdk_eio)
+ (public_name macro_sdk_eio)
+ (libraries
+  macro_sdk.runtime
+  cohttp-eio
+  eio
+  http
+  tls
+  tls-eio
+  x509
+  ca-certs
+  mirage-crypto-rng.unix
+  domain-name
+  ipaddr
+  uri))

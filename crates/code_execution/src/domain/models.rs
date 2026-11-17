@@ -8,14 +8,42 @@ use uuid::Uuid;
 #[serde(transparent)]
 pub struct RunId(pub Uuid);
 
-/// A JavaScript ES module exporting an async `main` function.
+/// A program to run: a JavaScript ES module exporting an async `main`
+/// function, or an OCaml `main.ml` calling `Code_mode.run`.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExecuteRequest {
-    /// Complete JavaScript module, including imports and `export async function main`.
+    /// The complete program: a JavaScript module, including imports and
+    /// `export async function main`, or an OCaml compilation unit.
     pub source: String,
-    /// Total budget including queueing and API requests.
+    /// Total budget including queueing, compiling and API requests.
     pub timeout_ms: u64,
+    /// The language `source` is written in.
+    #[serde(default)]
+    pub language: Language,
+}
+
+/// The language a program is written in.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Language {
+    /// A JavaScript ES module (TypeScript for an unattended program), run by
+    /// Deno directly.
+    #[default]
+    Javascript,
+    /// An OCaml program written against the OCaml SDK and `Code_mode`,
+    /// compiled to WebAssembly against the prebuilt bundle, then run by Deno.
+    Ocaml,
+}
+
+impl Language {
+    /// Its name in spans and the bootstrap's context.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Javascript => "javascript",
+            Self::Ocaml => "ocaml",
+        }
+    }
 }
 
 /// Run-only credentials and destinations supplied by the authenticated host.
@@ -167,7 +195,8 @@ pub enum AdmissionError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FailureCode {
-    /// Legacy source compilation failure retained for persisted outcomes.
+    /// The program didn't compile, or failed the policy check (OCaml).
+    /// Older persisted outcomes use it for JavaScript too.
     Compile,
     /// Program threw or exited without a result.
     Runtime,

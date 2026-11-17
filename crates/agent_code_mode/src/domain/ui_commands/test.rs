@@ -159,6 +159,8 @@ fn record(execution: ExecutionId, turn: Uuid) -> ExecutionRecord {
         acting_as: Some(ToolActor::Owner),
         turn_id: Some(turn),
         source: "export async function main() {}".into(),
+        language: Default::default(),
+        sdk_fingerprint: None,
         status: ExecutionStatus::Running,
         result: None,
         error: None,

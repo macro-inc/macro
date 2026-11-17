@@ -73,6 +73,7 @@ impl ExecutionService {
         let span = tracing::info_span!(
             "code_execution.run",
             run_id = %run_id.0,
+            language = job.request.language.as_str(),
             outcome = tracing::field::Empty,
         );
         self.tasks.spawn(
