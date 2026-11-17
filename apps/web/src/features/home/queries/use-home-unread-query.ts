@@ -24,11 +24,9 @@ import { useHomeEntitiesQuery } from './use-home-query';
 const selectItems = (data: HomeUnreadPresenceQuery) => data.user.soup.items;
 
 /** Home's existing membership, with bounded state-only edges rather than history. */
-export function useHomeUnreadQuery(
-  graphqlEnabled: Accessor<boolean>
-): Accessor<boolean> {
+export function useHomeUnreadQuery(): Accessor<boolean> {
   const userId = useUserId();
-  const enabled = () => graphqlEnabled() && Boolean(userId());
+  const enabled = () => Boolean(userId());
   const legacy = useHomeEntitiesQuery(
     { tab: 'signal', facets: { read: ['unread'] } },
     { enabled: () => !enabled() }

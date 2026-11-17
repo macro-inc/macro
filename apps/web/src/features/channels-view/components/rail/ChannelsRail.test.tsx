@@ -1393,11 +1393,10 @@ describe('section notification actions', () => {
   it('marks the complete section membership read', async () => {
     const actions = mountActions();
     await actions.markSectionRead('label:section');
-    expect(mocks.markChannelsAsRead).toHaveBeenCalledExactlyOnceWith(
-      mocks.source,
-      ['one', 'unloaded'],
-      expect.any(Function)
-    );
+    expect(mocks.markChannelsAsRead).toHaveBeenCalledExactlyOnceWith([
+      'one',
+      'unloaded',
+    ]);
     expect(mocks.bulkPreferences).not.toHaveBeenCalled();
   });
 
