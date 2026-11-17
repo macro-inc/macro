@@ -387,15 +387,20 @@ impl DenoRunner {
             outcome = tracing::field::Empty,
         );
         let execution = async {
-            let candidate = bridge(
+            let initial = child_context(
                 &job.environment,
                 ocaml.map(|bundle| bundle.assets()),
+                &job.limits,
+                job.deadline,
+            )?;
+            let candidate = bridge(
+                &job.environment,
+                initial,
                 stdin,
                 stdout,
                 stderr,
                 events,
                 &job.limits,
-                job.deadline,
             )
             .instrument(deno.clone())
             .await?;
@@ -577,16 +582,14 @@ enum ChildFrame {
     },
 }
 
-async fn bridge(
+/// The bootstrap's first line: the run's context, limits and, for an OCaml
+/// program, where its library modules are.
+fn child_context(
     environment: &RunEnvironment,
     ocaml_assets: Option<PathBuf>,
-    mut stdin: tokio::process::ChildStdin,
-    stdout: tokio::process::ChildStdout,
-    stderr: tokio::process::ChildStderr,
-    events: &mut EventSink,
     limits: &Limits,
     deadline: tokio::time::Instant,
-) -> Result<Option<Outcome>, ExecutionFailure> {
+) -> Result<Vec<u8>, ExecutionFailure> {
     let mut initial = serde_json::to_vec(&ChildContext {
         environment,
         max_result_bytes: limits.max_result_bytes,
@@ -600,6 +603,18 @@ async fn bridge(
     })
     .map_err(internal)?;
     initial.push(b'\n');
+    Ok(initial)
+}
+
+async fn bridge(
+    environment: &RunEnvironment,
+    initial: Vec<u8>,
+    mut stdin: tokio::process::ChildStdin,
+    stdout: tokio::process::ChildStdout,
+    stderr: tokio::process::ChildStderr,
+    events: &mut EventSink,
+    limits: &Limits,
+) -> Result<Option<Outcome>, ExecutionFailure> {
     stdin.write_all(&initial).await.map_err(internal)?;
     // Credentials travel once through the private pipe, never argv or a file.
     drop(stdin);
