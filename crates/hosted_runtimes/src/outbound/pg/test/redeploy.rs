@@ -29,11 +29,20 @@ async fn startup_push_only_changes_this_hosts_macrod_timers(pool: PgPool) {
     repo.postpone_macrod_timers(unrelated_host, now() + Duration::minutes(3))
         .await
         .unwrap();
-    assert_eq!(repo.due_timers(now(), 10).await.unwrap().len(), 2);
+    assert_eq!(
+        repo.due_timers(crate::domain::ports::HostScope::Every, now(), 10)
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
     repo.postpone_macrod_timers(host.id, now() + Duration::minutes(3))
         .await
         .unwrap();
-    let due = repo.due_timers(now(), 10).await.unwrap();
+    let due = repo
+        .due_timers(crate::domain::ports::HostScope::Every, now(), 10)
+        .await
+        .unwrap();
     assert_eq!(due.len(), 1);
     assert_eq!(due[0].kind, TimerKind::RetentionExpired);
 }
@@ -55,15 +64,27 @@ async fn release_only_returns_own_unfinished_fleet_leases(pool: PgPool) {
     }
     let deadline = now() + Duration::minutes(10);
     let claimed = repo
-        .lease_effects(EffectWorker::Fleet, 4, now(), deadline)
+        .lease_effects(
+            EffectWorker::Fleet,
+            crate::domain::ports::HostScope::Every,
+            4,
+            now(),
+            deadline,
+        )
         .await
         .unwrap();
     assert_eq!(claimed.len(), 4);
     assert!(
-        repo.lease_effects(EffectWorker::Fleet, 4, now(), deadline)
-            .await
-            .unwrap()
-            .is_empty()
+        repo.lease_effects(
+            EffectWorker::Fleet,
+            crate::domain::ports::HostScope::Every,
+            4,
+            now(),
+            deadline
+        )
+        .await
+        .unwrap()
+        .is_empty()
     );
     repo.retry_effect(
         claimed[1].id,
@@ -85,7 +106,13 @@ async fn release_only_returns_own_unfinished_fleet_leases(pool: PgPool) {
     let ids: Vec<i64> = claimed.iter().map(|effect| effect.id).collect();
     repo.release_effects(&ids, deadline, now()).await.unwrap();
     let reclaimed = repo
-        .lease_effects(EffectWorker::Fleet, 4, now(), deadline)
+        .lease_effects(
+            EffectWorker::Fleet,
+            crate::domain::ports::HostScope::Every,
+            4,
+            now(),
+            deadline,
+        )
         .await
         .unwrap();
     assert_eq!(reclaimed.len(), 1);
@@ -106,7 +133,13 @@ async fn completion_and_boot_timer_commit_together_or_roll_back_together(pool: P
     .unwrap();
     let id = bought(&repo, 1).await.id;
     let effect = repo
-        .lease_effects(EffectWorker::Fleet, 1, now(), now() + Duration::minutes(10))
+        .lease_effects(
+            EffectWorker::Fleet,
+            crate::domain::ports::HostScope::Every,
+            1,
+            now(),
+            now() + Duration::minutes(10),
+        )
         .await
         .unwrap()
         .remove(0);
@@ -161,10 +194,14 @@ async fn completion_and_boot_timer_commit_together_or_roll_back_together(pool: P
         Phase::Booting
     );
     assert_eq!(
-        repo.due_timers(now() + Duration::minutes(3), 10)
-            .await
-            .unwrap()
-            .len(),
+        repo.due_timers(
+            crate::domain::ports::HostScope::Every,
+            now() + Duration::minutes(3),
+            10
+        )
+        .await
+        .unwrap()
+        .len(),
         1
     );
 }

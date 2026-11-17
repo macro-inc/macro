@@ -542,6 +542,7 @@ impl<
             .repo
             .lease_effects(
                 EffectWorker::Billing,
+                crate::domain::ports::HostScope::Every,
                 BILLING_BATCH,
                 now,
                 now + BILLING_LEASE,

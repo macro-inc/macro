@@ -1,6 +1,7 @@
 use std::str::FromStr;
 mod agent;
 mod data_disk;
+mod host_scope;
 mod redeploy;
 mod setup_notice;
 
