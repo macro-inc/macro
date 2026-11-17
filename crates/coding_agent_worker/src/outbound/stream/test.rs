@@ -149,6 +149,8 @@ async fn connect_resumes_after_the_cursor_it_is_given() {
         requests[1].contains(&format!("last-event-id: {cursor}")),
         "{requests:?}"
     );
+    // Replay is opt-in on the service; only a client that asks resumes.
+    assert!(requests[1].contains("&resume=true"), "{requests:?}");
 }
 
 #[test]

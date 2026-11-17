@@ -197,7 +197,7 @@ Kafka messages are traced and skipped so they do not block a partition.
 from the moment it starts and fans it out to its open streams. Each SSE event's
 `id` is the broker event id (a UUIDv7). The process also keeps the last two
 minutes of events, up to 4,096 (`StreamFeed`). A client that opens the stream
-with the standard SSE `Last-Event-ID` header first receives the retained events
+with `resume=true` and the standard SSE `Last-Event-ID` header first receives the retained events
 after it, through the same filters and access checks, then live events, with no
 event twice and none skipped. An id this process retains resumes exactly after
 that event; any other UUIDv7 (an event another replica delivered, or one minted
@@ -209,7 +209,9 @@ started on its first open, so a session requested before its stream covered a
 newly bound agent still reaches it. That floor uses macrod's clock against the
 service's, so it assumes the two agree to within the seconds between macrod
 starting and the first request. The header is the standard SSE one and is not
-listed in the OpenAPI spec.
+listed in the OpenAPI spec, and without `resume=true` it is ignored: a browser
+`EventSource` reconnecting or an SDK listener gets exactly the live stream it
+always got.
 
 ## Queue contract, deduplication, and ordering
 

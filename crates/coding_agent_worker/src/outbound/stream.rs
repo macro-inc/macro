@@ -152,7 +152,10 @@ impl EventStreamClient {
                 ("filters", filters.as_str()),
             ]);
         if let Some(after) = after {
-            request = request.header(LAST_EVENT_ID_HEADER, after);
+            // Replay is opt-in on the service, so only this client resumes.
+            request = request
+                .header(LAST_EVENT_ID_HEADER, after)
+                .query(&[("resume", "true")]);
         }
         let response = self
             .credentialed(request)

@@ -4,7 +4,7 @@
 //! delivers every broker event that matches the caller's filters and passes
 //! the caller's entity access. Each SSE event's `id` is the UUIDv7 broker
 //! event id and its `event` is the event name; the `data` is the same broker
-//! envelope persisted webhooks deliver. A client that reconnects with the
+//! envelope persisted webhooks deliver. A client that asks to `resume` with the
 //! standard SSE `Last-Event-ID` header first receives the events this process
 //! still retains after that id (see [`StreamCursor`]); events older than the
 //! retention are missed and must be resynced out of band when needed.
@@ -91,6 +91,17 @@ pub struct StreamEventsQuery {
     pub filters: Option<String>,
 }
 
+/// Asks for the retained events after `Last-Event-ID` before live ones.
+///
+/// Kept out of the documented parameters while macrod is its one client:
+/// without it the stream is exactly what it was before resuming existed, so
+/// a browser `EventSource` or SDK listener reconnecting never replays.
+#[derive(Debug, serde::Deserialize)]
+struct ResumeQuery {
+    #[serde(default)]
+    resume: bool,
+}
+
 /// Parse the query's filters into the typed filter model.
 fn parse_filters(filters: Option<String>) -> Result<WebhookFilters, WebhookStreamHandlerError> {
     let bad_request =
@@ -141,12 +152,13 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
     authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
     headers: HeaderMap,
     Query(query): Query<StreamEventsQuery>,
+    Query(resume): Query<ResumeQuery>,
 ) -> Result<
     Sse<impl Stream<Item = Result<Event, Infallible>> + Send + 'static>,
     WebhookStreamHandlerError,
 > {
     let filters = parse_filters(query.filters)?;
-    let after = resume_cursor(&headers);
+    let after = resume.resume.then(|| resume_cursor(&headers)).flatten();
 
     let events = state
         .stream_service

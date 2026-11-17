@@ -81,6 +81,10 @@ impl MacroAuthorizationService for SignedIn {
 /// Open the stream with `last_event_id` and report the status and the cursor
 /// the service was asked to resume after.
 async fn open_with(last_event_id: &str) -> (StatusCode, Option<StreamCursor>) {
+    open(last_event_id, "&resume=true").await
+}
+
+async fn open(last_event_id: &str, extra_query: &str) -> (StatusCode, Option<StreamCursor>) {
     let streams = RecordingStreams::default();
     let router = webhook_stream_router::<_, _, ()>(WebhookStreamRouterState::new(
         streams.clone(),
@@ -89,7 +93,9 @@ async fn open_with(last_event_id: &str) -> (StatusCode, Option<StreamCursor>) {
     // `[{"events":["document.updated"]}]`, percent-encoded.
     let filters = "%5B%7B%22events%22%3A%5B%22document.updated%22%5D%7D%5D";
     let request = Request::builder()
-        .uri(format!("/events/stream?scope=user&filters={filters}"))
+        .uri(format!(
+            "/events/stream?scope=user&filters={filters}{extra_query}"
+        ))
         .header(header::AUTHORIZATION, "Bearer valid")
         .header("last-event-id", last_event_id)
         .body(Body::empty())
@@ -113,4 +119,20 @@ async fn an_unreadable_last_event_id_opens_the_stream_without_a_cursor() {
         assert_eq!(status, StatusCode::OK, "{unreadable}");
         assert_eq!(opened, None, "{unreadable}");
     }
+}
+
+/// Replay is opt-in: a client that does not ask to resume (a browser
+/// `EventSource` reconnecting, an SDK listener) gets the live stream it
+/// always got, whatever `Last-Event-ID` it sends.
+#[tokio::test]
+async fn only_a_client_that_asks_to_resume_gets_a_cursor() {
+    let id = uuid::Uuid::now_v7().to_string();
+    let cursor = StreamCursor::parse(&id).unwrap();
+
+    assert_eq!(open(&id, "").await, (StatusCode::OK, None));
+    assert_eq!(open(&id, "&resume=false").await, (StatusCode::OK, None));
+    assert_eq!(
+        open(&id, "&resume=true").await,
+        (StatusCode::OK, Some(cursor))
+    );
 }
