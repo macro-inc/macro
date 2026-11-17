@@ -12,13 +12,13 @@ const state = vi.hoisted(() => ({
     | undefined,
   client: {} as Client,
 }));
-const revalidateBotIdentities = vi.hoisted(() => vi.fn(async () => {}));
+const revalidateBotReads = vi.hoisted(() => vi.fn(async () => {}));
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlCacheHost: () => state.host,
   getGraphqlSoupClient: () => state.client,
 }));
-vi.mock('./graphql-bots', () => ({ revalidateBotIdentities }));
+vi.mock('./graphql-bots', () => ({ revalidateBotReads }));
 
 import { applyOwnBotWrite } from './own-bot-writes';
 
@@ -33,7 +33,7 @@ const cached: BotFieldsFragment = {
 };
 
 beforeEach(() => {
-  revalidateBotIdentities.mockClear();
+  revalidateBotReads.mockClear();
   state.host = {
     disabled: false,
     readRecordsByKeys: vi.fn(async () => ({
@@ -70,7 +70,11 @@ describe('applyOwnBotWrite', () => {
         ],
       },
     });
-    expect(revalidateBotIdentities).not.toHaveBeenCalled();
+    // Only lists read again; the record already shows the rename.
+    expect(revalidateBotReads).toHaveBeenCalledExactlyOnceWith(state.client, {
+      bots: [{ id: BOT, deletedAt: null }],
+      shown: true,
+    });
   });
 
   it('marks a deleted bot deleted and keeps its name', async () => {
@@ -87,10 +91,10 @@ describe('applyOwnBotWrite', () => {
 
     await applyOwnBotWrite({ id: BOT, name: 'Shipper' });
 
-    expect(revalidateBotIdentities).toHaveBeenCalledExactlyOnceWith(
-      state.client,
-      new Set([BOT])
-    );
+    expect(revalidateBotReads).toHaveBeenCalledExactlyOnceWith(state.client, {
+      bots: [{ id: BOT, deletedAt: null }],
+      shown: false,
+    });
   });
 
   it('writes nothing for a bot no view has read', async () => {

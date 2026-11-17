@@ -5,6 +5,7 @@ import type {
   BotFieldsFragment,
   BotIdentitiesQuery,
   BotUpdatesSubscription,
+  MentionableBotsQuery,
 } from '@service-storage/graphql/generated/graphql';
 import { QueryClient } from '@tanstack/solid-query';
 import {
@@ -20,6 +21,7 @@ import { map, pipe } from 'wonka';
 import { agentKeys } from '../agents/keys';
 import { channelKeys } from '../channel/keys';
 import { botKeys } from './keys';
+import { useLiveRestBots } from './live-rest-bots';
 
 let testQueryClient: QueryClient;
 let client: Client;
@@ -35,7 +37,13 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 
 import { createBotUpdatesHandler } from './bot-updates';
-import { type BotIdentity, createBotIdentity } from './graphql-bots';
+import {
+  type BotIdentity,
+  createBotIdentities,
+  createBotIdentity,
+  createMentionableBots,
+  revalidateMentionableBots,
+} from './graphql-bots';
 
 const RELEASE_BOT = '5f0c8a4e-2d1b-4c3a-9e7f-6a5b4c3d2e1f';
 const REVIEW_BOT = '0b1c2d3e-4f50-4617-8a9b-0c1d2e3f4a5b';
@@ -51,25 +59,47 @@ function bot(id: string, name: string): BotFieldsFragment {
   };
 }
 
-/** The server: answers `user.bots` from `rows` and records every request. */
-function createServer(rows: Map<string, BotFieldsFragment>) {
+/**
+ * The server: answers `user.bots` from `rows` and `mentionableBots` with the
+ * `mentionable` ids, and records every request.
+ */
+function createServer(
+  rows: Map<string, BotFieldsFragment>,
+  mentionable: string[] = []
+) {
   const requests: string[][] = [];
+  const listRequests: (string | null)[] = [];
   const exchange: Exchange = () => (operations) =>
     pipe(
       operations,
       map((operation: Operation): OperationResult => {
-        const ids = (operation.variables as { ids: string[] }).ids;
+        const variables = operation.variables as {
+          ids?: string[];
+          channelId?: string | null;
+        };
+        if (variables.ids === undefined) {
+          if (operation.kind === 'query')
+            listRequests.push(variables.channelId ?? null);
+          const data: MentionableBotsQuery = {
+            user: {
+              id: 'viewer',
+              mentionableBots: mentionable.flatMap((id) => rows.get(id) ?? []),
+            },
+          };
+          return { operation, data, stale: false, hasNext: false };
+        }
+        const ids = variables.ids;
         if (operation.kind === 'query') requests.push(ids);
         const data: BotIdentitiesQuery = {
           user: {
-            id: 'macro|viewer@example.com',
+            id: 'viewer',
             bots: ids.flatMap((id) => rows.get(id) ?? []),
           },
         };
         return { operation, data, stale: false, hasNext: false };
       })
     );
-  return { requests, exchange };
+  return { requests, listRequests, exchange };
 }
 
 function pushed(
@@ -260,7 +290,7 @@ describe('botUpdates', () => {
     expect(server.requests).toEqual([[RELEASE_BOT], [RELEASE_BOT]]);
   });
 
-  it('refreshes the REST bot lists settings and the mention menu still read', () => {
+  it('refreshes the settings and channel bot lists on every bot push', () => {
     client = createClient({
       url: '/graphql',
       exchanges: [createServer(new Map()).exchange],
@@ -273,6 +303,8 @@ describe('botUpdates', () => {
       []
     );
 
+    // A push carries no channel, and joining or leaving one pushes the bot
+    // to its members: every channel's bot list reads again.
     createBotUpdatesHandler(client).onResult(
       pushed([bot(RELEASE_BOT, 'Shipper')], true)
     );
@@ -285,5 +317,143 @@ describe('botUpdates', () => {
     ]) {
       expect(testQueryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
     }
+  });
+});
+
+describe('createMentionableBots', () => {
+  const NEW_BOT = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d';
+
+  function mountList(rows: Map<string, BotFieldsFragment>, ids: string[]) {
+    const server = createServer(rows, ids);
+    client = createClient({ url: '/graphql', exchanges: [server.exchange] });
+    const list = mounted(() => createMentionableBots(() => 'channel-1'));
+    return { server, list };
+  }
+
+  it('reads again for any push about a bot it lists, which may have left its scope', async () => {
+    const rows = new Map([[RELEASE_BOT, bot(RELEASE_BOT, 'Release bot')]]);
+    const ids = [RELEASE_BOT];
+    const { server, list } = mountList(rows, ids);
+    await vi.waitFor(() =>
+      expect(list.bots().map((row) => row.name)).toEqual(['Release bot'])
+    );
+
+    // Narrowed to selected channels: still the same bot, no longer listed.
+    ids.splice(0, 1);
+    createBotUpdatesHandler(client).onResult(
+      pushed([bot(RELEASE_BOT, 'Release bot')], true)
+    );
+
+    await vi.waitFor(() => expect(list.bots()).toEqual([]));
+    expect(server.listRequests).toEqual(['channel-1', 'channel-1']);
+  });
+
+  it('reads a channel’s list again after a bot joins or leaves that channel', async () => {
+    const rows = new Map([
+      [RELEASE_BOT, bot(RELEASE_BOT, 'Release bot')],
+      [REVIEW_BOT, bot(REVIEW_BOT, 'Reviewer')],
+    ]);
+    const ids = [RELEASE_BOT];
+    const { server, list } = mountList(rows, ids);
+    await vi.waitFor(() => expect(list.bots()).toHaveLength(1));
+
+    await revalidateMentionableBots(['channel-2']);
+    ids.push(REVIEW_BOT);
+    await revalidateMentionableBots(['channel-1']);
+
+    await vi.waitFor(() => expect(list.bots()).toHaveLength(2));
+    expect(server.listRequests).toEqual(['channel-1', 'channel-1']);
+  });
+
+  it('reads again for a bot it lacks, and for a deletion', async () => {
+    const rows = new Map([[RELEASE_BOT, bot(RELEASE_BOT, 'Release bot')]]);
+    const ids = [RELEASE_BOT];
+    const { server, list } = mountList(rows, ids);
+    await vi.waitFor(() => expect(list.bots()).toHaveLength(1));
+    const handler = createBotUpdatesHandler(client);
+
+    rows.set(NEW_BOT, bot(NEW_BOT, 'Newcomer'));
+    ids.push(NEW_BOT);
+    handler.onResult(pushed([bot(NEW_BOT, 'Newcomer')], true));
+    await vi.waitFor(() =>
+      expect(list.bots().map((row) => row.name)).toEqual([
+        'Release bot',
+        'Newcomer',
+      ])
+    );
+
+    ids.splice(0, 1);
+    handler.onResult(
+      pushed(
+        [
+          {
+            ...bot(RELEASE_BOT, 'Release bot'),
+            deletedAt: '2026-11-17T00:00:00Z',
+          },
+        ],
+        true
+      )
+    );
+    await vi.waitFor(() =>
+      expect(list.bots().map((row) => row.name)).toEqual(['Newcomer'])
+    );
+    expect(server.listRequests).toHaveLength(3);
+  });
+
+  it('reads again on reconnect', async () => {
+    const rows = new Map([[RELEASE_BOT, bot(RELEASE_BOT, 'Release bot')]]);
+    const { server, list } = mountList(rows, [RELEASE_BOT]);
+    await vi.waitFor(() => expect(list.bots()).toHaveLength(1));
+
+    createBotUpdatesHandler(client).reconnect();
+
+    await vi.waitFor(() => expect(server.listRequests).toHaveLength(2));
+  });
+});
+
+describe('createBotIdentities', () => {
+  it('reads the identities of ids another list supplies, in one request', async () => {
+    const rows = new Map([
+      [RELEASE_BOT, bot(RELEASE_BOT, 'Shipper')],
+      [REVIEW_BOT, bot(REVIEW_BOT, 'Reviewer')],
+    ]);
+    const server = createServer(rows);
+    client = createClient({ url: '/graphql', exchanges: [server.exchange] });
+
+    const identity = mounted(() =>
+      createBotIdentities(() => [RELEASE_BOT, REVIEW_BOT, RELEASE_BOT])
+    );
+
+    await vi.waitFor(() => expect(identity(REVIEW_BOT)?.name).toBe('Reviewer'));
+    expect(identity(RELEASE_BOT)?.name).toBe('Shipper');
+    expect(server.requests).toEqual([[RELEASE_BOT, REVIEW_BOT]]);
+  });
+});
+
+describe('useLiveRestBots', () => {
+  it('renames a REST-listed bot from a push without refetching the list', async () => {
+    const rows = new Map([[RELEASE_BOT, bot(RELEASE_BOT, 'Release bot')]]);
+    const server = createServer(rows);
+    client = createClient({ url: '/graphql', exchanges: [server.exchange] });
+    const restRows = [
+      {
+        id: RELEASE_BOT,
+        name: 'Release bot',
+        handle: 'release-bot',
+        avatar_url: null,
+        description: 'Ships things',
+      },
+    ];
+    const bots = mounted(() => useLiveRestBots(() => restRows));
+    expect(bots()[0]?.name).toBe('Release bot');
+    await vi.waitFor(() => expect(server.requests).toHaveLength(1));
+
+    rows.set(RELEASE_BOT, bot(RELEASE_BOT, 'Shipper'));
+    createBotUpdatesHandler(client).onResult(
+      pushed([bot(RELEASE_BOT, 'Shipper')], false)
+    );
+
+    await vi.waitFor(() => expect(bots()[0]?.name).toBe('Shipper'));
+    expect(bots()[0]?.description).toBe('Ships things');
   });
 });

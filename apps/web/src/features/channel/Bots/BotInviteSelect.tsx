@@ -5,6 +5,7 @@ import {
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
 import { useBotsQuery } from '@queries/bots/bots';
+import { useLiveRestBots } from '@queries/bots/live-rest-bots';
 import { useAddBotToChannelMutation } from '@queries/channel/channel-bots';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button, inputClasses, Surface } from '@ui';
@@ -58,9 +59,12 @@ export function BotInviteSelect(props: {
   const [selectedBot, setSelectedBot] = createSignal<Bot>();
   let inputRef: HTMLInputElement | undefined;
 
+  const bots = useLiveRestBots(() =>
+    botsQuery.isSuccess ? botsQuery.data : []
+  );
   const availableBots = createMemo(() => {
     const channelBotIds = new Set(props.channelBotIds);
-    return (botsQuery.data ?? []).filter((bot) => !channelBotIds.has(bot.id));
+    return bots().filter((bot) => !channelBotIds.has(bot.id));
   });
 
   const focusInput = () => {

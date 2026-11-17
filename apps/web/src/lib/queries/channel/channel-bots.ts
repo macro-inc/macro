@@ -1,5 +1,6 @@
 import { throwOnErr } from '@core/util/result';
 import { invalidateBotChannels, invalidateBots } from '@queries/bots/bots';
+import { revalidateMentionableBots } from '@queries/bots/graphql-bots';
 import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { Bot } from '@service-storage/generated/schemas/bot';
@@ -68,6 +69,8 @@ export function useAddBotToChannelMutation() {
 async function invalidateBotChannelViews(botId: string, channelIds: string[]) {
   await Promise.all([
     invalidateBotChannels(botId),
+    // Membership pushes no bot; the channel's @ menu reads its bots again.
+    revalidateMentionableBots(channelIds),
     ...[...new Set(channelIds)].flatMap((channelId) => [
       invalidateChannelBots(channelId),
       queryClient.invalidateQueries({

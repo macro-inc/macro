@@ -6,6 +6,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import RobotIcon from '@icon/system/regular/robot.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
+import { useLiveRestBots } from '@queries/bots/live-rest-bots';
 import {
   useChannelBotsQuery,
   useRemoveBotFromChannelMutation,
@@ -26,7 +27,10 @@ export function ChannelBotsPanel(props: {
 }) {
   const botsQuery = useChannelBotsQuery(() => props.channelId);
   const removeBotMutation = useRemoveBotFromChannelMutation();
-  const bots = () => (botsQuery.isSuccess ? botsQuery.data : []) ?? [];
+  // Membership comes from the channel; names and pictures as they are now.
+  const bots = useLiveRestBots(
+    () => (botsQuery.isSuccess ? botsQuery.data : []) ?? []
+  );
   const [search, setSearch] = createSignal('');
   const filteredBots = () => {
     const query = search().trim().toLowerCase();

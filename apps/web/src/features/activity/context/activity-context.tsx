@@ -6,11 +6,9 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { PropertyDefinitionDomain } from '@property/types';
-import { useBotsQuery } from '@queries/bots/bots';
-import {
-  firstPartyBotName,
-  getBotDisplayName,
-} from '@queries/messages/message-sender';
+import { isHexHyphenatedId } from '@queries/bots/bot-id';
+import { createBotIdentity } from '@queries/bots/graphql-bots';
+import { firstPartyBotName } from '@queries/messages/message-sender';
 import { useDatabasesQuery } from '@queries/storage/databases';
 import { useFormDetailQuery } from '@queries/storage/forms';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
@@ -67,8 +65,8 @@ export type ActivityContext = {
   displayName: (actorId: Accessor<string>) => Accessor<string | undefined>;
   /**
    * Display name for a bot by bare UUID. First-party bots resolve at once
-   * from constants; team bots resolve from the bots list, `undefined` while
-   * it loads, `Bot` when the list does not know the id or failed to load.
+   * from constants; team bots resolve from the bot's identity, `undefined`
+   * while it loads, `Bot` when no bot has the id or the read failed.
    */
   botName: (botId: Accessor<string>) => Accessor<string | undefined>;
   /**
@@ -98,14 +96,10 @@ export function useActivityContext(): ActivityContext {
 
 function appActivityContext(): ActivityContext {
   const userId = useUserId();
-  // One bots subscription per consumer, made under the consumer's owner the
-  // first time a bot row asks for a name and reused after that, so it is not
-  // rebuilt each time a recycled row changes actor and user-only surfaces
-  // never fetch the list at all.
+  // Database names come from one list subscription, made under the
+  // consumer's owner the first time a row asks, so rows that never name a
+  // database never fetch the list.
   const owner = getOwner();
-  let bots: ReturnType<typeof useBotsQuery> | undefined;
-  const botsQuery = () => (bots ??= runWithOwner(owner, useBotsQuery));
-  // Database names come from one list subscription, made the same way.
   let databases: DatabasesQuery | undefined;
   const databasesQuery = () =>
     (databases ??= runWithOwner(owner, useDatabasesQuery));
@@ -120,13 +114,19 @@ function appActivityContext(): ActivityContext {
       const [name] = useDisplayName(id, { emailFallback: 'local-part' });
       return name;
     },
-    botName: (botId) => () => {
-      const id = botId();
-      const firstParty = firstPartyBotName(id);
-      if (firstParty) return firstParty;
-      const list = botsQuery();
-      if (!list || list.isPending) return undefined;
-      return getBotDisplayName(`bot|${id}`, undefined, list.data ?? []);
+    botName: (botId) => {
+      // Mounted rows share batched identity reads.
+      const bot = createBotIdentity(() =>
+        firstPartyBotName(botId()) ? '' : botId()
+      );
+      return () => {
+        const firstParty = firstPartyBotName(botId());
+        if (firstParty) return firstParty;
+        if (!isHexHyphenatedId(botId())) return 'Bot';
+        const found = bot.data();
+        if (found) return found.name;
+        return found === null || bot.isError() ? 'Bot' : undefined;
+      };
     },
     entityTypeShown: (entityType) =>
       (entityType !== 'database' || databasesFlag().enabled) &&

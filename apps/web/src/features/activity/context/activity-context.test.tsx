@@ -3,7 +3,7 @@ import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const [databasesEnabled, setDatabasesEnabled] = createSignal(true);
-const useBotsQuery = vi.fn();
+const createBotIdentity = vi.fn();
 const useDatabasesQuery = vi.fn();
 const usePropertyEntityDisplay = vi.fn(
   (_entityId: () => string, _entityType: () => string) => ({})
@@ -12,8 +12,8 @@ const usePropertyEntityDisplay = vi.fn(
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: databasesEnabled() }),
 }));
-vi.mock('@queries/bots/bots', () => ({
-  useBotsQuery: () => useBotsQuery(),
+vi.mock('@queries/bots/graphql-bots', () => ({
+  createBotIdentity: (botId: () => string) => createBotIdentity(botId),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
 vi.mock('@core/user', () => ({
@@ -59,19 +59,19 @@ describe('appActivityContext.entityTypeShown', () => {
 });
 
 describe('appActivityContext.botName', () => {
+  const names: Record<string, string> = {
+    [TEAM_BOT]: 'Triage',
+    [OTHER_BOT]: 'Digest',
+  };
   beforeEach(() => {
-    useBotsQuery.mockReset();
-    useBotsQuery.mockReturnValue({
-      isPending: false,
-      isSuccess: true,
-      data: [
-        { id: TEAM_BOT, name: 'Triage' },
-        { id: OTHER_BOT, name: 'Digest' },
-      ],
-    });
+    createBotIdentity.mockReset();
+    createBotIdentity.mockImplementation((botId: () => string) => ({
+      data: () => ({ name: names[botId()] }),
+      isError: () => false,
+    }));
   });
 
-  it('subscribes to the bots list once per consumer, however many bot rows it names', () => {
+  it('names each team bot from its identity', () => {
     createRoot((dispose) => {
       const context = useActivityContext();
       const first = context.botName(() => TEAM_BOT);
@@ -79,44 +79,32 @@ describe('appActivityContext.botName', () => {
 
       expect(first()).toBe('Triage');
       expect(second()).toBe('Digest');
-      expect(first()).toBe('Triage');
-      expect(useBotsQuery).toHaveBeenCalledTimes(1);
       dispose();
     });
   });
 
-  it('is undefined while the list loads and `Bot` once it has failed', () => {
-    useBotsQuery.mockReturnValue({
-      isPending: true,
-      isSuccess: false,
-      data: undefined,
-    });
-    createRoot((dispose) => {
-      const context = useActivityContext();
-      expect(context.botName(() => TEAM_BOT)()).toBeUndefined();
-      dispose();
-    });
-
-    useBotsQuery.mockReturnValue({
-      isPending: false,
-      isSuccess: false,
-      isError: true,
-      data: undefined,
-    });
-    createRoot((dispose) => {
-      const context = useActivityContext();
-      expect(context.botName(() => TEAM_BOT)()).toBe('Bot');
-      dispose();
-    });
+  it('is undefined while the identity loads and `Bot` once it is unknown or failed', () => {
+    for (const [identity, expected] of [
+      [{ data: () => undefined, isError: () => false }, undefined],
+      [{ data: () => null, isError: () => false }, 'Bot'],
+      [{ data: () => undefined, isError: () => true }, 'Bot'],
+    ] as const) {
+      createBotIdentity.mockReturnValue(identity);
+      createRoot((dispose) => {
+        const context = useActivityContext();
+        expect(context.botName(() => TEAM_BOT)()).toBe(expected);
+        dispose();
+      });
+    }
   });
 
-  it('never fetches the bots list for first-party bots', () => {
+  it('never reads an identity for first-party bots', () => {
     createRoot((dispose) => {
       const context = useActivityContext();
       const name = context.botName(() => MACRO_SYSTEM_BOT_ID);
 
       expect(name()).toBe('System');
-      expect(useBotsQuery).not.toHaveBeenCalled();
+      expect(createBotIdentity.mock.calls[0]?.[0]()).toBe('');
       dispose();
     });
   });

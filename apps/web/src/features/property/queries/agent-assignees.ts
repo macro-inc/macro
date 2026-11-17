@@ -3,6 +3,7 @@ import { isMacroAgentId } from '@core/constant/macroAgent';
 import type { IUser } from '@core/user';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { useBotsQuery } from '@queries/bots/bots';
+import { createBotIdentities } from '@queries/bots/graphql-bots';
 import { queryReadyGate } from '@queries/gate';
 import type { Accessor } from 'solid-js';
 
@@ -15,22 +16,28 @@ export function useAgentAssignees(
   // The bot list is scoped to the caller's own and team bots, which are the
   // principals they may invoke from a task outside those channels.
   const bots = useBotsQuery(enabled);
-  const savedAgents = () => {
+  const assignable = () => {
     if (!enabled() || !queryReadyGate(agents) || !queryReadyGate(bots))
       return [];
     const availableIds = new Set(bots.data.map((bot) => bot.id));
     return agents.data
+      .map(({ bot }) => bot)
       .filter(
-        ({ bot }) =>
-          bot.has_agent && !bot.deleted_at && availableIds.has(bot.id)
-      )
-      .map(({ bot }) => ({
-        id: `bot|${bot.id}`,
-        name: bot.name,
-        email: `@${bot.handle}`,
-        photoUrl: bot.avatar_url ?? undefined,
-      }));
+        (bot) => bot.has_agent && !bot.deleted_at && availableIds.has(bot.id)
+      );
   };
+  // Config decides who is assignable; names and pictures as they are now.
+  const identity = createBotIdentities(() => assignable().map((bot) => bot.id));
+  const savedAgents = () =>
+    assignable().map((bot) => {
+      const current = identity(bot.id);
+      return {
+        id: `bot|${bot.id}`,
+        name: current?.name ?? bot.name,
+        email: `@${current?.handle || bot.handle}`,
+        photoUrl: (current ? current.avatarUrl : bot.avatar_url) ?? undefined,
+      };
+    });
   // Reuse the message composer's system-agent roster and rollout policy.
   // Classic Macro replies inline without a session, so it cannot be assigned.
   const available = useAgentMentionUsers(savedAgents, enabled);

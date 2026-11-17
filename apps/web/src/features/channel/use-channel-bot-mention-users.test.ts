@@ -1,81 +1,90 @@
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
-import type { Agent } from '@service-storage/generated/schemas/agent';
-import type { Bot } from '@service-storage/generated/schemas/bot';
+import type { BotIdentity } from '@queries/bots/graphql-bots';
+import type { MessageParent } from '@service-storage/messages';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  availableBotMentionUsers,
+  botMentionUsers,
   useMessageBotMentionUsers,
 } from './use-channel-bot-mention-users';
 
 const flags = vi.hoisted(() => ({ cursor: (): boolean => false }));
 const offline = vi.hoisted(() => ({ ids: new Set<string>() }));
+const mentionable = vi.hoisted(() => ({
+  bots: [] as BotIdentity[],
+  scopes: [] as (string | null | undefined)[],
+}));
 vi.mock('@core/constant/featureFlags', () => ({
   enableCursorAgents: { key: 'enable-cursor-agents' },
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: flags.cursor() }),
 }));
-
-vi.mock('@queries/channel/channel-bots', () => ({
-  useChannelBotsQuery: () => ({ isSuccess: true, data: [] }),
-}));
-vi.mock('@queries/agents/agents', () => ({
-  useAgentsQuery: () => ({
-    isSuccess: true,
-    data: [
-      agent('codex-agent', 'Codex', 'all', 'codex-cloud'),
-      agent(CURSOR_BOT_ID, 'Cursor', 'all', 'cursor'),
-    ],
+vi.mock('@queries/bots/graphql-bots', () => ({
+  createMentionableBots: (scope: () => string | null | undefined) => ({
+    bots: () => {
+      mentionable.scopes.push(scope());
+      return scope() === undefined ? [] : mentionable.bots;
+    },
   }),
 }));
 vi.mock('@queries/agents/offline-runtimes', () => ({
   useOfflineAgentBotIds: () => () => offline.ids,
 }));
 
-const timestamp = '2026-08-27T12:00:00Z';
-
-function bot(id: string, name: string, avatarUrl?: string): Bot {
+function bot(id: string, name: string, avatarUrl?: string): BotIdentity {
   return {
     id,
-    kind: 'owned',
     name,
     handle: name.toLowerCase().replaceAll(' ', '-'),
-    has_agent: true,
-    avatar_url: avatarUrl,
-    created_at: timestamp,
-    updated_at: timestamp,
+    avatarUrl,
+    deleted: false,
+    isSystem: false,
   };
 }
 
-function agent(
-  id: string,
-  name: string,
-  channelScope: Agent['channel_scope'],
-  harness = 'in-memory'
-): Agent {
-  return {
-    bot: bot(id, name),
-    channel_ids: channelScope === 'all' ? [] : ['channel-1'],
-    channel_scope: channelScope,
-    default_model: 'model',
-    harness,
-    instructions: '',
-    is_coding: harness !== 'in-memory',
-    mcp: { scope: 'owner_connections' },
-  };
+function mentionIds(parent: MessageParent, load?: () => boolean) {
+  return createRoot((dispose) => {
+    const ids = useMessageBotMentionUsers(() => parent, load)().map(
+      (user) => user.id
+    );
+    dispose();
+    return ids;
+  });
 }
 
-describe('availableBotMentionUsers', () => {
-  beforeEach(() => {
-    flags.cursor = () => false;
-    offline.ids = new Set<string>();
+beforeEach(() => {
+  flags.cursor = () => false;
+  offline.ids = new Set<string>();
+  mentionable.bots = [
+    bot('codex-agent', 'Codex'),
+    bot(CURSOR_BOT_ID, 'Cursor'),
+  ];
+  mentionable.scopes = [];
+});
+
+describe('useMessageBotMentionUsers', () => {
+  it('asks for a channel’s bots in a channel and every agent elsewhere', () => {
+    mentionIds({ type: 'channel', id: 'channel-1' });
+    mentionIds({ type: 'document', id: 'doc-1' });
+    mentionIds({ type: 'call', id: 'call-1' });
+    expect(mentionable.scopes).toEqual(['channel-1', null, null]);
+  });
+
+  it('reads nothing off a channel until the composer loads', () => {
+    expect(mentionIds({ type: 'document', id: 'doc-1' }, () => false)).toEqual(
+      []
+    );
+    expect(mentionable.scopes).toEqual([undefined]);
+    expect(
+      mentionIds({ type: 'channel', id: 'channel-1' }, () => false)
+    ).toEqual(['bot|codex-agent']);
   });
 
   it('marks an agent whose runtime is offline', () => {
+    flags.cursor = () => true;
+    offline.ids = new Set(['codex-agent']);
     createRoot((dispose) => {
-      flags.cursor = () => true;
-      offline.ids = new Set(['codex-agent']);
       const users = useMessageBotMentionUsers(() => ({
         type: 'channel',
         id: 'channel-1',
@@ -109,133 +118,29 @@ describe('availableBotMentionUsers', () => {
       dispose();
     });
   });
+});
 
-  it('gates built-in Cursor while preserving custom agents regardless of harness', () => {
-    const global = agent('global-cursor', 'Global Cursor', 'all', 'cursor');
-    const installed = agent(
-      'installed-cursor',
-      'Installed Cursor',
-      'selected',
-      'cursor'
-    );
-    const codex = agent('codex', 'Codex', 'all', 'codex-cloud');
+describe('botMentionUsers', () => {
+  it('hides only the built-in Cursor bot while Cursor is off', () => {
     expect(
-      availableBotMentionUsers(
-        [bot(CURSOR_BOT_ID, 'Cursor'), installed.bot],
-        [global, installed, codex],
+      botMentionUsers(
+        [bot(CURSOR_BOT_ID, 'Cursor'), bot('custom-cursor', 'Custom Cursor')],
         false
       ).map((user) => user.id)
-    ).toEqual(['bot|installed-cursor', 'bot|global-cursor', 'bot|codex']);
-  });
-  it('hides the built-in Cursor bot before agent metadata is available', () => {
-    expect(
-      availableBotMentionUsers(
-        [bot(CURSOR_BOT_ID, 'Cursor'), bot('custom', 'Custom agent')],
-        [],
-        false
-      ).map((user) => user.id)
-    ).toEqual(['bot|custom']);
-  });
-  it('offers Codex from the mention query without requiring account setup', () => {
-    createRoot((dispose) => {
-      expect(
-        useMessageBotMentionUsers(() => ({
-          type: 'channel' as const,
-          id: 'channel-1',
-        }))().map((user) => user.id)
-      ).toEqual(['bot|codex-agent']);
-      dispose();
-    });
-  });
-  it.each(['cursor', 'codex-cloud'])(
-    'offers global and installed %s agents before connection',
-    (harness) => {
-      const global = agent('global', 'Global', 'all', harness);
-      const installed = agent('installed', 'Installed', 'selected', harness);
-      expect(
-        availableBotMentionUsers(
-          [installed.bot],
-          [global, installed],
-          true
-        ).map((user) => user.id)
-      ).toEqual(['bot|installed', 'bot|global']);
-    }
-  );
-  it('adds all-channel agents without adding selected agents from other channels', () => {
-    expect(
-      availableBotMentionUsers(
-        [bot('installed', 'Installed')],
-        [
-          agent('global', 'Global', 'all'),
-          agent('selected', 'Selected', 'selected'),
-        ],
-        true
-      ).map((user) => user.id)
-    ).toEqual(['bot|installed', 'bot|global']);
+    ).toEqual(['bot|custom-cursor']);
   });
 
-  it('deduplicates an agent that is also an installed channel bot', () => {
-    expect(
-      availableBotMentionUsers(
-        [bot('global', 'Global')],
-        [agent('global', 'Global', 'all')],
-        true
-      )
-    ).toHaveLength(1);
-  });
-
-  it('preserves the agent avatar for the mention menu', () => {
+  it('names a mention after the bot and keeps its picture', () => {
     const avatarUrl = 'https://example.com/global-agent.png';
-
-    expect(
-      availableBotMentionUsers(
-        [],
-        [
-          {
-            ...agent('global', 'Global', 'all'),
-            bot: bot('global', 'Global', avatarUrl),
-          },
-        ],
-        true
-      )
-    ).toEqual([
-      {
-        id: 'bot|global',
-        name: 'Global',
-        email: 'Global',
-        photoUrl: avatarUrl,
-      },
-    ]);
-  });
-
-  it('offers a global Cursor agent before Cursor is connected', () => {
-    const cursorAgent = agent('cursor-agent', 'Cursor agent', 'all', 'cursor');
-
-    expect(availableBotMentionUsers([], [cursorAgent], true)).toHaveLength(1);
-  });
-
-  it.each(['document', 'initiative', 'crm_company', 'crm_contact'] as const)(
-    'includes channel-selected agents on a %s discussion surface',
-    (surface) => {
-      const selected = agent('doc-only', 'Doc only', 'selected');
-      expect(
-        availableBotMentionUsers([], [selected], true, 'channel').map(
-          (u) => u.id
-        )
-      ).toEqual([]);
-      expect(
-        availableBotMentionUsers([], [selected], true, surface).map((u) => u.id)
-      ).toEqual(['bot|doc-only']);
-    }
-  );
-
-  it('offers owned and team agents in calls regardless of channel scope', () => {
-    const owned = agent('owned-agent', 'Owned agent', 'selected');
-    const team = agent('team-agent', 'Team agent', 'all');
-    expect(
-      availableBotMentionUsers([], [owned, team], true, 'call').map(
-        (user) => user.id
-      )
-    ).toEqual(['bot|owned-agent', 'bot|team-agent']);
+    expect(botMentionUsers([bot('global', 'Global', avatarUrl)], true)).toEqual(
+      [
+        {
+          id: 'bot|global',
+          name: 'Global',
+          email: 'Global',
+          photoUrl: avatarUrl,
+        },
+      ]
+    );
   });
 });

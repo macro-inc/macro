@@ -16,9 +16,12 @@ import {
 import { getDisplayName, tryMacroId } from '@core/user';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import type { ReplyTargetDecoratorProps } from '@macro-inc/lexical-core';
-import { useBotsQuery } from '@queries/bots/bots';
-import { useChannelBotsQuery } from '@queries/channel/channel-bots';
-import { getBotDisplayName } from '@queries/messages/message-sender';
+import { firstPartyBotName } from '@queries/bots/first-party-bot-name';
+import { createBotIdentity } from '@queries/bots/graphql-bots';
+import {
+  getBotDisplayName,
+  senderFromStorageId,
+} from '@queries/messages/message-sender';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { createCallback } from '@solid-primitives/rootless';
 import { useContext } from 'solid-js';
@@ -33,26 +36,20 @@ export function ReplyTarget(props: ReplyTargetDecoratorProps) {
   const quoteName = useMessageQuoteName();
   const currentBlockId = useMaybeBlockId();
   const currentBlockName = useMaybeBlockName();
-  const channelBots = useChannelBotsQuery(() =>
-    props.parent.type === 'channel' ? props.parent.id : ''
-  );
-  const bots = useBotsQuery(() => !guest);
+  // A guest has no account to read bot identities with.
+  const senderBot = createBotIdentity(() => {
+    const sender = senderFromStorageId(props.senderId);
+    const teamBot = sender.type === 'bot' && !firstPartyBotName(sender.id);
+    return !guest && teamBot ? sender.id : '';
+  });
   const document = useDocumentMetadataQuery(() =>
     props.parent.type === 'document' ? props.parent.id : ''
   );
   const senderName = () =>
     quoteName?.(props.targetMessageId) ||
-    getBotDisplayName(
-      props.senderId,
-      undefined,
-      props.parent.type === 'channel'
-        ? channelBots.isSuccess
-          ? channelBots.data
-          : []
-        : bots.isSuccess
-          ? bots.data
-          : []
-    ) ||
+    getBotDisplayName(props.senderId, undefined, [
+      senderBot.data() ?? { id: '', name: '' },
+    ]) ||
     getDisplayName(tryMacroId(props.senderId), {}) ||
     props.senderId;
 
