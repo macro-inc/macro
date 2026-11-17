@@ -326,11 +326,17 @@ views/shared/<name>-parts.tsx  parts both views render
 Some items have two hosts: its block, and its list view, which shows it inline
 beside the list. The block adapter is the entry and gets the desktop and mobile
 pair. A list view shows an item inline on desktop and on wide touch (Mail at
-every touch width), so the inline host is an entry too: desktop keeps its own
-top bar, and touch wraps the pane in `SplitHeaderScope` and renders the item's
-mobile view, whose `MobileHeader` lands in the pane's top bar. The mobile view
-therefore reads its item from the feature's context, never from a legacy
-Block: `MobileEmailThread` in `EmailDetailView`, `MobileMarkdownHeader`
+every touch width; `AppView`'s `detailInlineOnly` sends a narrow touch pane to
+the block instead), so the inline host is an entry too. Its desktop view keeps
+the host's own top bar; its mobile view wraps the pane in `SplitHeaderScope`
+and renders the item's mobile view, whose `MobileHeader` lands in the pane's
+top bar. `EmailDetailView`, `EmailComposeRouteView` and `TasksDetailView` are
+such entries. The Drive, Home and CRM detail hosts show many item types, so
+they use `EntityDetailFrame` (`components/entity-detail`), which makes that
+choice per item: on touch, an item whose detail has a mobile header
+(`entityDetailHostsSplitHeader`) shows it, and any other item keeps the host's
+bar. The item's mobile view therefore reads its item from the feature's
+context, never from a legacy Block: `MobileEmailThread`, `MobileMarkdownHeader`
 through `HostedMarkdownHeader`, `MobileAgentSessionHeader` in
 `AgentSessionPane`.
 

@@ -105,8 +105,8 @@ that rows never blank between two queries, that switching tabs never shows
 the previous tab's rows, and that with the flag off the compact field and the
 spinner are unchanged.
 
-On a phone (and any touch device) the same flag adds a search pill at the start
-of Email's pill row, before Filters. Tapping it opens Email's search page: the
+On a phone (and any touch device) the same flag adds a search pill to Email's
+pill row, after Show sidebar and before Filters. Tapping it opens Email's search page: the
 field and **Cancel** replace the pills in the header, the keyboard comes up in
 the tap, recent searches are listed while the field has focus, and the list
 below shows the results as ordinary email rows, updating as you type and

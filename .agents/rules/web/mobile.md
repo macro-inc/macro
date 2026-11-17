@@ -161,11 +161,12 @@ read their code, and follow that pattern rather than inventing a new one.
 - Fixed overlays outside the app frame (sheets, toasts) stay between
   `--safe-left` and `--safe-right`: the iPhone Duo's clock and camera column
   is a right safe area. Only scrims cover the whole screen.
-- A view's mobile header is the same at every width; only a narrow detail adds
-  Back. List its islands without `isMobile()` checks, and show a detail beside
-  a list through `SplitHeaderScope`, which hosts the detail's own mobile header
-  (`MobileEmailThread`, `HostedMarkdownHeader`, `MobileAgentSessionHeader`)
-  in the pane's top bar.
+- Show a detail beside a list on wide touch through `SplitHeaderScope`, which
+  hosts the detail's own mobile header (`MobileEmailThread`,
+  `HostedMarkdownHeader`, `MobileAgentSessionHeader`) in the pane's top bar,
+  so a detail has one mobile header beside a list and on its own; only a
+  narrow detail adds Back. The mobile view may still differ by width with
+  `isMobile()`.
 - Compose a mobile view's header with `MobileHeader`
   (`components/app/mobile-header`): Back from the shell, a title that opens
   its menu, then explicit trailing islands such as `MobileHeader.Info`. While
