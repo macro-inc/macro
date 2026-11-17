@@ -8,7 +8,7 @@ UNR-04	The "1 unread ... below" notice sometimes never appears, or is gone again
 CHN-15	A channel deleted elsewhere sometimes stays open on its owner's page (1 of 3 runs)
 CHN-02	A team channel someone else makes is sometimes missing from a teammate's open list, or goes when opened, until reload: the list is read again before the new channel is in it (on one machine in every run, in CI in none)
 ACC-06	After a teammate joins a team channel found by name its row sometimes stays under "Not joined" with a Join button until reload; the join itself works (every run on one machine, none in CI)
-CHN-08	A deleted channel sometimes stays under its owner's Favorites until reload (every run in CI, 1 of 5 on another branch)
+CHN-08	A deleted channel sometimes stays under its owner's Favorites until reload (every run in CI, 1 of 5 on another branch); the channel's menu, opened just after a favorite, sometimes closes by itself before an entry can be chosen (5 of 6 runs on one machine, once in CI)
 UNR-08	A channel a person is added to is sometimes missing from the rows shown by "Search conversations" until the search is run again (3 of 4 whole-suite runs on a much-used stack, none in CI)
 DM-01	A new direct message is sometimes missing from the other person's open list until reload (on one machine in about half the runs, in CI in none)
 DM-02	A new direct message is sometimes missing from the other person's open list until reload
