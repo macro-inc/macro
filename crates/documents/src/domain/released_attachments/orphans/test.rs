@@ -122,6 +122,7 @@ async fn a_dry_run_counts_orphans_by_cause_and_what_the_drain_would_do() {
             orphans: vec![
                 Orphan {
                     document_id: "d1".to_string(),
+                    source_from_import: true,
                     mailbox_kept: false,
                     mailbox_predates_document: true,
                     thread_kept: true,
@@ -129,6 +130,7 @@ async fn a_dry_run_counts_orphans_by_cause_and_what_the_drain_would_do() {
                 },
                 Orphan {
                     document_id: "d2".to_string(),
+                    source_from_import: true,
                     mailbox_kept: true,
                     mailbox_predates_document: false,
                     thread_kept: false,
@@ -136,6 +138,7 @@ async fn a_dry_run_counts_orphans_by_cause_and_what_the_drain_would_do() {
                 },
                 Orphan {
                     document_id: "d3".to_string(),
+                    source_from_import: true,
                     mailbox_kept: true,
                     mailbox_predates_document: true,
                     thread_kept: false,
@@ -148,6 +151,7 @@ async fn a_dry_run_counts_orphans_by_cause_and_what_the_drain_would_do() {
             orphans: vec![
                 Orphan {
                     document_id: "d4".to_string(),
+                    source_from_import: true,
                     mailbox_kept: true,
                     mailbox_predates_document: true,
                     thread_kept: true,
@@ -155,6 +159,7 @@ async fn a_dry_run_counts_orphans_by_cause_and_what_the_drain_would_do() {
                 },
                 Orphan {
                     document_id: "d5".to_string(),
+                    source_from_import: true,
                     mailbox_kept: true,
                     mailbox_predates_document: true,
                     thread_kept: true,
@@ -222,6 +227,7 @@ async fn an_applied_scan_queues_each_page_at_its_rate_and_wakes_the_drain_per_ba
             orphans: (0..count)
                 .map(|n| Orphan {
                     document_id: format!("{prefix}{n:03}"),
+                    source_from_import: true,
                     mailbox_kept: false,
                     mailbox_predates_document: false,
                     thread_kept: false,
@@ -278,6 +284,7 @@ async fn a_scan_resumes_after_its_saved_cursor_with_its_saved_counts() {
         last_entity_id: Some("e9".to_string()),
         orphans: vec![Orphan {
             document_id: "d9".to_string(),
+            source_from_import: true,
             mailbox_kept: true,
             mailbox_predates_document: true,
             thread_kept: false,
@@ -326,6 +333,7 @@ async fn a_failed_page_stops_the_scan_at_the_last_saved_cursor_without_retrying(
             last_entity_id: Some("e2".to_string()),
             orphans: vec![Orphan {
                 document_id: "d1".to_string(),
+                source_from_import: true,
                 mailbox_kept: false,
                 mailbox_predates_document: false,
                 thread_kept: false,
@@ -337,6 +345,7 @@ async fn a_failed_page_stops_the_scan_at_the_last_saved_cursor_without_retrying(
             last_entity_id: Some("e4".to_string()),
             orphans: vec![Orphan {
                 document_id: "d3".to_string(),
+                source_from_import: true,
                 mailbox_kept: false,
                 mailbox_predates_document: false,
                 thread_kept: false,
@@ -376,6 +385,7 @@ async fn an_applied_scan_holds_back_while_the_queue_is_deeper_than_its_limit() {
         last_entity_id: Some("e1".to_string()),
         orphans: vec![Orphan {
             document_id: "d1".to_string(),
+            source_from_import: true,
             mailbox_kept: false,
             mailbox_predates_document: false,
             thread_kept: false,
@@ -398,3 +408,84 @@ async fn an_applied_scan_holds_back_while_the_queue_is_deeper_than_its_limit() {
     assert_eq!(done.counts.enqueued, 1);
     assert!(done.finished);
 }
+
+#[tokio::test(start_paused = true)]
+async fn documents_whose_thread_source_was_set_by_hand_are_counted_apart_and_left_alone() {
+    let page = || {
+        Ok(OrphanPage {
+            last_entity_id: Some("e3".to_string()),
+            orphans: vec![
+                Orphan {
+                    document_id: "d1".to_string(),
+                    source_from_import: true,
+                    mailbox_kept: false,
+                    mailbox_predates_document: false,
+                    thread_kept: false,
+                    message_kept: false,
+                },
+                Orphan {
+                    document_id: "d2".to_string(),
+                    source_from_import: false,
+                    mailbox_kept: false,
+                    mailbox_predates_document: false,
+                    thread_kept: false,
+                    message_kept: false,
+                },
+                Orphan {
+                    document_id: "d3".to_string(),
+                    source_from_import: true,
+                    mailbox_kept: true,
+                    mailbox_predates_document: true,
+                    thread_kept: false,
+                    message_kept: false,
+                },
+            ],
+        })
+    };
+    let dry_run =
+        OrphanedAttachmentScan::new(ScriptedRepo::new(vec![page()]), RecordingStore::default());
+    let applied =
+        OrphanedAttachmentScan::new(ScriptedRepo::new(vec![page()]), RecordingStore::default());
+
+    let previewed = dry_run
+        .run(OPTIONS, ScanProgress::start(false, None))
+        .await
+        .expect("dry run");
+    let queued = applied
+        .run(OPTIONS, ScanProgress::start(true, None))
+        .await
+        .expect("applied scan");
+
+    assert_eq!(
+        previewed.counts,
+        ScanCounts {
+            orphans: 2,
+            source_not_from_import: 1,
+            mailbox_gone: 1,
+            thread_gone: 1,
+            would_trash: 1,
+            would_keep_adopted: 1,
+            ..ScanCounts::default()
+        }
+    );
+    assert_eq!(
+        *dry_run.repo.previewed.lock().expect("previewed lock"),
+        vec![vec!["d1", "d3"]]
+    );
+    assert_eq!(
+        queued.counts,
+        ScanCounts {
+            orphans: 2,
+            source_not_from_import: 1,
+            mailbox_gone: 1,
+            thread_gone: 1,
+            enqueued: 2,
+            ..ScanCounts::default()
+        }
+    );
+    assert_eq!(
+        *applied.repo.enqueued.lock().expect("enqueued lock"),
+        vec![vec!["d1", "d3"]]
+    );
+}
+

@@ -204,6 +204,15 @@ one as they do a document released today.
   replaced) and what the drain would do with them: trash, keep as adopted,
   keep as already in the Trash, or skip as linked again. Then run
   `enqueue_orphaned_email_attachments_prod_apply` with a new state file.
+- Only a Source the import wrote counts: the import inserts Source and
+  Recipients in one statement and never updates them, so the Source row's
+  `created_at` equals the Recipients row's and its `updated_at` its own
+  `created_at`. Anyone who can edit a document can set its Source to a thread
+  by hand (the properties panel, the SDK's `setProperty` and its MCP tool, the
+  agent's `SetEntityProperty`), one property per statement; those documents
+  are counted as `source_not_from_import` and never queued. The document's
+  creation time can't tell the two apart: a backfilled import is dated by its
+  mail.
 - Rate: at most `--per-second` (default 100) orphans are queued a second, and
   the scan waits while more than `--max-queue-depth` (default 10,000, one drain
   round) are queued. The drain runs a round of 20 batches of 500 per
@@ -230,8 +239,6 @@ one as they do a document released today.
   to the database, which dominate from outside AWS; a larger `--page-size`
   (at most 2,000, so a page read from disk stays well inside its 10 s
   statement timeout) shortens a dry run.
-- A document whose owner set a thread Source by hand, without importing it,
-  matches too; the dry run's counts are the check before applying.
 
 ## Related
 

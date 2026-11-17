@@ -32,6 +32,12 @@ const CHANNEL_SOURCE: &str = "0d000000-0000-0000-0000-000000000010";
 const TASK_SOURCE: &str = "0d000000-0000-0000-0000-000000000011";
 const PURGED: &str = "0d000000-0000-0000-0000-000000000012";
 
+// Live and unlinked with a thread Source the import did not write: set apart
+// from the Recipients row, edited after the import, or set on a plain file.
+const SOURCE_SET_APART: &str = "0d000000-0000-0000-0000-000000000013";
+const SOURCE_EDITED: &str = "0d000000-0000-0000-0000-000000000014";
+const SOURCE_ON_PLAIN_FILE: &str = "0d000000-0000-0000-0000-000000000015";
+
 const ORPHANS: [&str; 6] = [
     MAILBOX_GONE,
     MAILBOX_RECREATED,
@@ -43,7 +49,9 @@ const ORPHANS: [&str; 6] = [
 
 /// Documents created 2026-01-01. OWNER's mailbox predates them,
 /// RECREATED_OWNER's was connected after, GONE_OWNER has none. Every document
-/// with a Source also has Subject and Sender rows, as an import writes.
+/// with a Source also has Sender, Recipients and Subject rows written in the
+/// same transaction, as an import writes them, except the three whose Source
+/// was set by hand.
 async fn seed(pool: &Pool<Postgres>) -> anyhow::Result<()> {
     sqlx::raw_sql(&format!(
         r#"
@@ -69,7 +77,10 @@ async fn seed(pool: &Pool<Postgres>) -> anyhow::Result<()> {
             ('{TRASHED}', '{GONE_OWNER}', '{THREAD}', '{MESSAGE}'),
             ('{NO_SOURCE}', '{GONE_OWNER}', NULL, NULL),
             ('{CHANNEL_SOURCE}', '{GONE_OWNER}', NULL, NULL),
-            ('{TASK_SOURCE}', '{GONE_OWNER}', NULL, NULL);
+            ('{TASK_SOURCE}', '{GONE_OWNER}', NULL, NULL),
+            ('{SOURCE_SET_APART}', '{GONE_OWNER}', '{THREAD}', '{MESSAGE}'),
+            ('{SOURCE_EDITED}', '{GONE_OWNER}', '{THREAD}', '{MESSAGE}'),
+            ('{SOURCE_ON_PLAIN_FILE}', '{GONE_OWNER}', '{THREAD}', '{MESSAGE}');
 
         INSERT INTO "Document" (id, name, owner, "createdAt", "updatedAt")
         SELECT document_id, 'attachment.pdf', owner, '2026-01-01', '2026-01-01' FROM seeded;
@@ -107,9 +118,16 @@ async fn seed(pool: &Pool<Postgres>) -> anyhow::Result<()> {
         CROSS JOIN (VALUES
             ('00000001-0000-0000-0000-00000000000d', jsonb_build_object('type', 'EntityReference', 'value',
                 jsonb_build_array(jsonb_build_object('entity_type', 'USER', 'entity_id', 'macro|sender@example.com')))),
+            ('00000001-0000-0000-0000-00000000000e', jsonb_build_object('type', 'EntityReference', 'value', '[]'::jsonb)),
             ('00000001-0000-0000-0000-00000000000f', jsonb_build_object('type', 'String', 'value', 'Invoice'))
         ) p(definition, value)
-        WHERE thread_id IS NOT NULL OR document_id = '{NO_SOURCE}';
+        WHERE (thread_id IS NOT NULL AND document_id <> '{SOURCE_ON_PLAIN_FILE}') OR document_id = '{NO_SOURCE}';
+
+        UPDATE entity_properties SET created_at = created_at + interval '1 day', updated_at = created_at + interval '1 day'
+        WHERE entity_id IN ('{SOURCE_SET_APART}', '{SOURCE_ON_PLAIN_FILE}')
+            AND property_definition_id = '00000001-0000-0000-0000-00000000000b';
+        UPDATE entity_properties SET updated_at = created_at + interval '1 day'
+        WHERE entity_id = '{SOURCE_EDITED}' AND property_definition_id = '00000001-0000-0000-0000-00000000000b';
 
         COMMIT;
         "#
@@ -171,11 +189,13 @@ async fn the_walk_finds_each_live_unlinked_document_with_a_thread_source_and_why
             .orphan_page(&after, NonZeroU32::new(2).expect("2"))
             .await?;
         pages += 1;
-        found.extend(
-            page.orphans
-                .iter()
-                .map(|orphan| (orphan.document_id.clone(), orphan.cause())),
-        );
+        found.extend(page.orphans.iter().map(|orphan| {
+            (
+                orphan.document_id.clone(),
+                orphan.cause(),
+                orphan.source_from_import,
+            )
+        }));
         match page.last_entity_id {
             Some(last) => after = last,
             None => break,
@@ -185,20 +205,37 @@ async fn the_walk_finds_each_live_unlinked_document_with_a_thread_source_and_why
     assert_eq!(
         found,
         vec![
-            (MAILBOX_GONE.to_string(), OrphanCause::MailboxGone),
-            (MAILBOX_RECREATED.to_string(), OrphanCause::MailboxRecreated),
-            (THREAD_GONE.to_string(), OrphanCause::ThreadGone),
-            (MESSAGE_GONE.to_string(), OrphanCause::MessageGone),
+            (MAILBOX_GONE.to_string(), OrphanCause::MailboxGone, true),
+            (
+                MAILBOX_RECREATED.to_string(),
+                OrphanCause::MailboxRecreated,
+                true
+            ),
+            (THREAD_GONE.to_string(), OrphanCause::ThreadGone, true),
+            (MESSAGE_GONE.to_string(), OrphanCause::MessageGone, true),
             (
                 ATTACHMENT_REPLACED.to_string(),
-                OrphanCause::AttachmentReplaced
+                OrphanCause::AttachmentReplaced,
+                true
             ),
-            (ADOPTED.to_string(), OrphanCause::MailboxGone),
+            (ADOPTED.to_string(), OrphanCause::MailboxGone, true),
+            (
+                SOURCE_SET_APART.to_string(),
+                OrphanCause::MailboxGone,
+                false
+            ),
+            (SOURCE_EDITED.to_string(), OrphanCause::MailboxGone, false),
+            (
+                SOURCE_ON_PLAIN_FILE.to_string(),
+                OrphanCause::MailboxGone,
+                false
+            ),
         ]
     );
-    // Twelve entities, each checked whole on the page its first row lands
-    // on, two rows a page, then the empty page that ends the walk.
-    assert_eq!(pages, 12);
+    // Fifteen entities, each checked whole on the page its first row lands
+    // on, two rows a page (single-row ones share), then the empty page that
+    // ends the walk.
+    assert_eq!(pages, 14);
 
     Ok(())
 }
@@ -322,6 +359,7 @@ async fn a_dry_run_counts_the_orphans_and_writes_nothing(
         done.counts,
         ScanCounts {
             orphans: 6,
+            source_not_from_import: 3,
             mailbox_gone: 2,
             mailbox_recreated: 1,
             thread_gone: 1,
@@ -354,6 +392,7 @@ async fn an_applied_scan_queues_every_orphan_and_the_drain_settles_them(
     batch.trashed.sort();
 
     assert_eq!(done.counts.orphans, 6);
+    assert_eq!(done.counts.source_not_from_import, 3);
     assert_eq!(done.counts.enqueued, 6);
     assert_eq!(queued_orphans, ORPHANS.map(String::from).to_vec());
     assert_eq!(

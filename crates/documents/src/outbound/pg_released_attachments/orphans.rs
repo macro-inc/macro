@@ -60,11 +60,20 @@ impl OrphanedAttachmentRepo for PgReleasedAttachmentRepo {
         // entity's fence so no plan can probe through its index. The import always writes UUIDs;
         // anything else reads as a thread and message that are gone rather
         // than failing the page.
+        //
+        // The import wrote the Source row when the document's Recipients row
+        // was inserted by the same statement (the import always writes both,
+        // so they share its transaction's timestamp) and the Source row was
+        // never updated (the import only inserts). Setting a property by hand
+        // writes one row per statement and an edit moves `updated_at`. The
+        // document's own creation time can't tell: an import dates a
+        // backfilled document by its mail.
         let orphans = sqlx::query_as!(
             Orphan,
             r#"
             SELECT
                 d.id AS "document_id!",
+                source.from_import AS "source_from_import!",
                 EXISTS (
                     SELECT 1 FROM email_links l WHERE l.macro_id = d.owner OFFSET 0
                 ) AS "mailbox_kept!",
@@ -92,10 +101,22 @@ impl OrphanedAttachmentRepo for PgReleasedAttachmentRepo {
                         WHEN ep.values->'value'->0->>'specific_message_id'
                             ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
                         THEN (ep.values->'value'->0->>'specific_message_id')::uuid
-                    END AS message_id
+                    END AS message_id,
+                    ep.updated_at = ep.created_at
+                        AND EXISTS (
+                            SELECT 1
+                            FROM (
+                                SELECT r.property_definition_id, r.created_at
+                                FROM entity_properties r
+                                WHERE r.entity_id = ep.entity_id AND r.entity_type = 'DOCUMENT'
+                                OFFSET 0
+                            ) r
+                            WHERE r.property_definition_id = '00000001-0000-0000-0000-00000000000e'
+                                AND r.created_at = ep.created_at
+                        ) AS from_import
                 FROM unnest($1::text[]) AS scanned(entity_id)
                 CROSS JOIN LATERAL (
-                    SELECT ep.entity_id, ep.property_definition_id, ep.values
+                    SELECT ep.entity_id, ep.property_definition_id, ep.values, ep.created_at, ep.updated_at
                     FROM entity_properties ep
                     WHERE ep.entity_id = scanned.entity_id AND ep.entity_type = 'DOCUMENT'
                     OFFSET 0

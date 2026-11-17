@@ -159,6 +159,10 @@ fn print_summary(progress: &ScanProgress) {
     println!("  after: {:?}", progress.after.as_deref().unwrap_or(""));
     println!("  pages: {}", progress.pages);
     println!("  finished: {}", progress.finished);
+    println!(
+        "  source_not_from_import: {}",
+        counts.source_not_from_import
+    );
     println!("  orphans: {}", counts.orphans);
     println!("    mailbox_gone: {}", counts.mailbox_gone);
     println!("    mailbox_recreated: {}", counts.mailbox_recreated);

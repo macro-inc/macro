@@ -5,6 +5,10 @@
 //! plain files. They are found by the Source property the import gave them: a
 //! live document whose Source names an email thread, with no link left.
 //!
+//! A thread Source the import did not write, set by hand from the properties
+//! panel, the SDK or an agent tool, does not make a document an orphan: those
+//! are counted apart and left alone.
+//!
 //! [`OrphanedAttachmentScan`] walks the property rows in pages and counts the
 //! orphans by why their links went. A dry run (the default) also asks what the
 //! drain would do with them, through the drain's own checks; an applied run
@@ -75,6 +79,10 @@ pub enum OrphanCause {
 pub struct Orphan {
     /// The document.
     pub document_id: String,
+    /// The email import wrote its Source, and nobody changed it since. Only
+    /// then is the document an attachment whose mail is gone; anyone who can
+    /// edit a document can point its Source at a thread by hand.
+    pub source_from_import: bool,
     /// Its owner has a mailbox connected.
     pub mailbox_kept: bool,
     /// One of its owner's mailboxes was connected before the document was
@@ -159,8 +167,11 @@ pub trait ScanProgressStore: Send + Sync {
 /// Running totals of a scan.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScanCounts {
-    /// Orphans found.
+    /// Orphans found, not counting [`Self::source_not_from_import`].
     pub orphans: usize,
+    /// Live, unlinked documents whose thread Source was set by hand rather
+    /// than by the import. Skipped: never previewed or queued.
+    pub source_not_from_import: usize,
     /// Orphans whose owner has no mailbox.
     pub mailbox_gone: usize,
     /// Orphans whose owner's mailboxes all came after them.
@@ -188,6 +199,7 @@ pub struct ScanCounts {
 impl ScanCounts {
     fn add(&mut self, page: &ScanCounts) {
         self.orphans += page.orphans;
+        self.source_not_from_import += page.source_not_from_import;
         self.mailbox_gone += page.mailbox_gone;
         self.mailbox_recreated += page.mailbox_recreated;
         self.thread_gone += page.thread_gone;
@@ -337,6 +349,7 @@ impl<R: OrphanedAttachmentRepo, S: ScanProgressStore> OrphanedAttachmentScan<R, 
             page_size = page_size.get(),
             last_entity_id = tracing::field::Empty,
             orphans = tracing::field::Empty,
+            skipped.source_not_from_import = tracing::field::Empty,
             cause.mailbox_gone = tracing::field::Empty,
             cause.mailbox_recreated = tracing::field::Empty,
             cause.thread_gone = tracing::field::Empty,
@@ -365,6 +378,10 @@ impl<R: OrphanedAttachmentRepo, S: ScanProgressStore> OrphanedAttachmentScan<R, 
                 }
                 let counts = &page.counts;
                 span.record("orphans", counts.orphans);
+                span.record(
+                    "skipped.source_not_from_import",
+                    counts.source_not_from_import,
+                );
                 span.record("cause.mailbox_gone", counts.mailbox_gone);
                 span.record("cause.mailbox_recreated", counts.mailbox_recreated);
                 span.record("cause.thread_gone", counts.thread_gone);
@@ -402,11 +419,16 @@ impl<R: OrphanedAttachmentRepo, S: ScanProgressStore> OrphanedAttachmentScan<R, 
             .await
             .map_err(|error| rootcause::Report::new(error).into_dynamic())?;
 
+        let (orphans, set_by_hand): (Vec<Orphan>, Vec<Orphan>) = page
+            .orphans
+            .into_iter()
+            .partition(|orphan| orphan.source_from_import);
         let mut counts = ScanCounts {
-            orphans: page.orphans.len(),
+            orphans: orphans.len(),
+            source_not_from_import: set_by_hand.len(),
             ..ScanCounts::default()
         };
-        for orphan in &page.orphans {
+        for orphan in &orphans {
             match orphan.cause() {
                 OrphanCause::MailboxGone => counts.mailbox_gone += 1,
                 OrphanCause::MailboxRecreated => counts.mailbox_recreated += 1,
@@ -416,11 +438,10 @@ impl<R: OrphanedAttachmentRepo, S: ScanProgressStore> OrphanedAttachmentScan<R, 
             }
         }
 
-        if !page.orphans.is_empty() {
-            let document_ids: Vec<String> = page
-                .orphans
-                .iter()
-                .map(|orphan| orphan.document_id.clone())
+        if !orphans.is_empty() {
+            let document_ids: Vec<String> = orphans
+                .into_iter()
+                .map(|orphan| orphan.document_id)
                 .collect();
             if apply {
                 counts.enqueued = self
@@ -504,6 +525,7 @@ fn log_progress(progress: &ScanProgress) {
         pages = progress.pages,
         finished = progress.finished,
         orphans = counts.orphans,
+        skipped.source_not_from_import = counts.source_not_from_import,
         cause.mailbox_gone = counts.mailbox_gone,
         cause.mailbox_recreated = counts.mailbox_recreated,
         cause.thread_gone = counts.thread_gone,
