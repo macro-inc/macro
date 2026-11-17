@@ -216,6 +216,17 @@ impl SharedEmailFilter {
     }
 }
 
+/// A mailbox view the Email list scopes a search to, as its tabs do.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub enum EmailSearchView {
+    /// Threads with a message the mailbox sent, as the Sent view lists.
+    Sent,
+    /// Threads with a draft, as the Drafts view lists.
+    Drafts,
+}
+
 /// The email filters used to filter down what emails you search over.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -304,6 +315,17 @@ pub struct EmailFilters {
     /// type). `Some(false)` and `None` apply no constraint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub calendar_only: Option<bool>,
+
+    /// Only threads with at least one attachment of one of these kinds, by
+    /// MIME type, on any of their messages. Empty applies no constraint.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<crate::ast::email::AttachmentKind>,
+
+    /// Only threads in this mailbox view. Search only: listing email takes
+    /// its view as a parameter of its own, so expanding this into a list
+    /// filter is an error.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<EmailSearchView>,
 }
 
 impl IsEmpty for EmailFilters {
@@ -326,6 +348,8 @@ impl IsEmpty for EmailFilters {
             crm_domains,
             crm_addresses,
             calendar_only,
+            attachments,
+            view,
         } = self;
         senders.is_empty()
             && cc.is_empty()
@@ -344,6 +368,8 @@ impl IsEmpty for EmailFilters {
             && crm_domains.is_empty()
             && crm_addresses.is_empty()
             && !calendar_only.unwrap_or(false)
+            && attachments.is_empty()
+            && view.is_none()
     }
 }
 

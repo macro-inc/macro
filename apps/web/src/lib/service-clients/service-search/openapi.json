@@ -279,6 +279,11 @@
           }
         }
       },
+      "AttachmentKind": {
+        "type": "string",
+        "description": "A kind of attachment a thread's messages carry, by MIME type.",
+        "enum": ["pdf", "image", "document"]
+      },
       "CalendarEventFilters": {
         "type": "object",
         "description": "Filters for canonical calendar-event entities.",
@@ -1814,6 +1819,13 @@
         "type": "object",
         "description": "The email filters used to filter down what emails you search over.",
         "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttachmentKind"
+            },
+            "description": "Only threads with at least one attachment of one of these kinds, by\nMIME type, on any of their messages. Empty applies no constraint."
+          },
           "bcc": {
             "type": "array",
             "items": {
@@ -1914,6 +1926,17 @@
           "shared": {
             "$ref": "#/components/schemas/SharedEmailFilter",
             "description": "Controls whether shared email threads are included in results.\nDefaults to \"exclude\" (only the user's own threads)."
+          },
+          "view": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EmailSearchView",
+                "description": "Only threads in this mailbox view. Search only: listing email takes\nits view as a parameter of its own, so expanding this into a list\nfilter is an error."
+              }
+            ]
           }
         }
       },
@@ -2171,6 +2194,11 @@
             "description": "When the email message was sent\nThis is only present if the search result is on the message content"
           }
         }
+      },
+      "EmailSearchView": {
+        "type": "string",
+        "description": "A mailbox view the Email list scopes a search to, as its tabs do.",
+        "enum": ["sent", "drafts"]
       },
       "EmptyResponse": {
         "type": "object",
