@@ -29,20 +29,26 @@ import { whenSettled } from '@core/util/whenSettled';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import {
   invalidateAllAfterLogin,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
 import type { ConsentScopes } from '@service-auth/client';
-import { useNavigate, useSearchParams } from '@solidjs/router';
+import {
+  useMatch,
+  useNavigate,
+  useResolvedPath,
+  useSearchParams,
+} from '@solidjs/router';
 import { Button } from '@ui';
 import {
   createSignal,
   Match,
   onCleanup,
   onMount,
+  Show,
   Suspense,
   Switch,
 } from 'solid-js';
@@ -70,7 +76,10 @@ export function makeEmailAuthComponents(params: EmailAuthParams) {
     ),
     EmailLinkCallback: () => (
       <Suspense>
-        <EmailLinkCallback successPath={params.successPath} />
+        <EmailLinkCallback
+          successPath={params.successPath}
+          linkCallbackPath={params.linkCallbackPath}
+        />
       </Suspense>
     ),
     CALLBACK_PATH: params.callbackPath,
@@ -190,6 +199,37 @@ function promptForEmailAccess(scopes: ConsentScopes | undefined) {
 }
 
 /**
+ * The inbox consent return route. A desktop deep link reaches it through the
+ * split router, which mounts the route before Solid Router's location catches
+ * up (the URL is written a task later), so until the location shows this
+ * route its query is still the previous route's. The callback reads its
+ * parameters only once the location has landed here; a web callback is a page
+ * load and lands at once.
+ *
+ * The `email.link.callback` span covers the return: whether the location had
+ * landed when the route mounted, which parameters arrived (presence only, never
+ * the token) and the outcome.
+ */
+function EmailLinkCallback(
+  props: Pick<EmailAuthParams, 'successPath' | 'linkCallbackPath'>
+) {
+  const callbackPath = useResolvedPath(() => props.linkCallbackPath);
+  const atCallback = useMatch(() => callbackPath() ?? props.linkCallbackPath);
+  const span = Telemetry.span('email.link.callback');
+  span.setAttr(
+    'email.link.callback.location_ready',
+    atCallback() !== undefined
+  );
+  onCleanup(() => span.end());
+
+  return (
+    <Show when={atCallback()}>
+      <EmailLinkCallbackHandler successPath={props.successPath} span={span} />
+    </Show>
+  );
+}
+
+/**
  * Handles the OAuth callback after an already-authenticated user adds another
  * inbox via /link/gmail or /link/outlook. Reads `link_id` from the query string
  * and invokes init to provision the second `email_links` row. Every outcome is
@@ -208,14 +248,19 @@ function promptForEmailAccess(scopes: ConsentScopes | undefined) {
  * against this `link_id`; restoring it is what keeps enabling calendar (or
  * adding an inbox) from clobbering whatever the user had open.
  */
-function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
+function EmailLinkCallbackHandler(
+  props: Pick<EmailAuthParams, 'successPath'> & { span: Span }
+) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { query, initEmailLink } = useEmailLinks();
   const analytics = useAnalytics();
   const trackOutcome = (
     outcome: AppEvents['email_link_callback_result']['outcome']
-  ) => analytics.track('email_link_callback_result', { outcome });
+  ) => {
+    props.span.setAttr('email.link.callback.outcome', outcome);
+    analytics.track('email_link_callback_result', { outcome });
+  };
   let disposed = false;
   onCleanup(() => {
     disposed = true;
@@ -278,7 +323,11 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
 
   const runInit = async (linkId: string, forceShare: boolean) => {
     try {
-      await initEmailLink({ linkId, forceShare }).match(
+      const initResult = await props.span.span(
+        'email.link.callback.init',
+        async () => await initEmailLink({ linkId, forceShare })
+      );
+      await initResult.match(
         async (connectedLinkId) => {
           // Pull the newly-provisioned link into the cache before leaving the
           // callback so the inbox panel shows it immediately on return rather
@@ -377,16 +426,23 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   // Completing consent does not depend on the old inbox list loading first.
   // A paused or slow query must not prevent the new grant from being applied.
   onMount(() => {
-    if (
-      stringParam(searchParams.email_link_notice) ===
-      ADMIN_CONSENT_GRANTED_NOTICE
-    ) {
+    const notice = stringParam(searchParams.email_link_notice);
+    const linkError = stringParam(searchParams.email_link_error);
+    props.span.setAttr('email.link.callback.has_link_id', linkId !== null);
+    props.span.setAttr(
+      'email.link.callback.has_token',
+      stringParam(searchParams.token) !== null
+    );
+    if (linkId) props.span.setAttr('email.link.id', linkId);
+    if (linkError) props.span.setAttr('email.link.callback.error', linkError);
+    if (notice) props.span.setAttr('email.link.callback.notice', notice);
+
+    if (notice === ADMIN_CONSENT_GRANTED_NOTICE) {
       toast.success('Approved. Try connecting again.');
       openAddInboxDialog();
       navigateAfterLink();
       return;
     }
-    const linkError = stringParam(searchParams.email_link_error);
     if (linkError) {
       handleConsentFailure(linkError);
       return;
