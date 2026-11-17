@@ -235,6 +235,7 @@ fn insert_graphql_context_data(
         state.soup_router_state.email_service(),
     ));
     data.insert(state.graphql_bots_context.clone());
+    data.insert(state.graphql_bot_updates_context.clone());
     data.insert(graphql_bots::bot_identity_loader(
         state.graphql_bots_context.clone(),
     ));

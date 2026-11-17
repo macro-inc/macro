@@ -3653,6 +3653,7 @@ dependencies = [
  "axum-extra",
  "bot_id",
  "bot_token",
+ "broadcast",
  "channels",
  "chrono",
  "connection_gateway_client",
@@ -3683,6 +3684,7 @@ dependencies = [
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-retry",
  "tower 0.5.3",
  "tracing",
  "utoipa",
@@ -9376,9 +9378,11 @@ name = "graphql_bots"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "async-stream",
  "bots",
  "chrono",
  "entity_access",
+ "futures",
  "graphql_common",
  "macro_user_id",
  "tokio",

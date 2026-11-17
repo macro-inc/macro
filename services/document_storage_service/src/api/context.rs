@@ -1000,6 +1000,8 @@ pub(crate) struct ApiContext {
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
     pub graphql_contacts_context: graphql_contacts::ContactsGraphqlContext,
     pub graphql_bots_context: graphql_bots::BotsGraphqlContext,
+    /// Live bot updates for the `botUpdates` subscription.
+    pub graphql_bot_updates_context: graphql_bots::BotUpdatesGraphqlContext,
     pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
     pub graphql_calendar_mutation_context: graphql_calendar::CalendarGraphqlMutationContext,
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
