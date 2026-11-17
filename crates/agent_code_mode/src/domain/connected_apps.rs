@@ -24,7 +24,7 @@ use super::{CodeModeError, ExecutionId, ExecutionStatus, ExecutionStore, Executi
 mod test;
 
 /// Which store a connected app comes from.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum ConnectedAppKind {
     /// An app connected through Macro Connect or Pipedream, keyed by its slug.
@@ -34,7 +34,7 @@ pub enum ConnectedAppKind {
 }
 
 /// Names one connected app: the key is its slug or its URL digest.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectedAppRef {
     /// Which store the app comes from.

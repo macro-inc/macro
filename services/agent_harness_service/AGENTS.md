@@ -174,7 +174,12 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service; a scoped
   session's code is refused it, and its turn calls no remote MCP tool
-  directly either (`ScopedToolGate::refuse_remote_mcp`).
+  directly either (`ScopedToolGate::refuse_remote_mcp`). Its calls run
+  through `connected_apps/budget.rs`: one lane per account and app, shared by
+  that account's executions on this instance only (in memory, so each replica
+  grants its own budget), with a concurrency cap, paced starts and a
+  `Retry-After` cooldown after an upstream 429; a call still refused at its
+  deadline answers HTTP 429 to the SDK, which throws.
   Code execution's destination list in `src/code_mode.rs` (`SdkHost`) also
   includes the configured editing worker, whose comment-mark endpoint requires
   a scoped document token; this does not grant permission to edit document

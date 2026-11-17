@@ -170,6 +170,7 @@ properties = { path = "../../crates/properties", default-features = false, featu
 rdkafka = { workspace = true }
 readonly_pool = { path = "../../crates/readonly_pool" }
 rate_limit = { path = "../../crates/rate_limit" }
+rand = { workspace = true }
 redis = { workspace = true, features = ["aio", "streams", "tokio-comp", "tokio-rustls-comp"] }
 reqwest = { workspace = true }
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }

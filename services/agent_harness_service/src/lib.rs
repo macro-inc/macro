@@ -897,6 +897,9 @@ pub async fn run() -> anyhow::Result<()> {
             gate: owner_tool_gate.clone(),
             connectors: tool_context.connector_tool_context.clone(),
             mcp_servers: tool_context.mcp_server_tool_context.clone(),
+            budget: code_mode::connected_apps::budget::CallBudget::new(
+                code_mode::connected_apps::budget::BudgetPolicy::DEFAULT,
+            ),
         }),
     );
     // A running program's `macro.ui.open`: the prompting person's own tab,

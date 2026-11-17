@@ -28,7 +28,10 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   previews, and shares the actor path's credential resolution and
   not-connected answers. A call as the owner in a turn someone else prompted
   is held per call through `OwnerApprovals::hold_in_process`, the same
-  approval record as the native tool gate.
+  approval record as the native tool gate. An upstream HTTP 429 on a
+  `tools/call` is `EgressError::RateLimited` (with its `Retry-After`), which
+  `exchange_as` returns as an error, never as an `isError` result, so the
+  caller can pace and retry it.
 
 ## Scope
 

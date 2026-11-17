@@ -282,6 +282,7 @@ impl IntoResponse for EgressError {
             // fix the URL; the agent cannot.
             Self::InsecureUpstream(_) => StatusCode::BAD_GATEWAY,
             Self::Upstream(_) => StatusCode::BAD_GATEWAY,
+            Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -307,6 +308,7 @@ impl IntoResponse for EgressError {
             Self::RequestTooLarge => "That request body is too large.",
             Self::InsecureUpstream(_) => "That upstream is misconfigured and cannot be reached.",
             Self::Upstream(_) => "The upstream could not be reached.",
+            Self::RateLimited { .. } => "The upstream is rate limiting this account; retry later.",
             Self::Internal(_) => "Egress failed.",
         };
 
