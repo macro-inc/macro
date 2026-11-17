@@ -9,7 +9,7 @@ use opensearch_client::search::unified::{
     UnifiedProjectSearchArgs,
 };
 
-use crate::domain::email_search::{EmailScope, ThreadStates, ViewerInboxes};
+use crate::domain::email_search::{EmailScope, MAX_EMAIL_PROJECTS, ThreadStates, ViewerInboxes};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use uuid::Uuid;
 
@@ -174,6 +174,9 @@ pub(super) fn reject_unsupported_email_filters(
     }
     if !filters.crm_addresses.is_empty() {
         return Err(SearchError::UnsupportedEmailFilter("crm_addresses"));
+    }
+    if filters.project_ids.len() > MAX_EMAIL_PROJECTS {
+        return Err(SearchError::TooManyEmailProjects(MAX_EMAIL_PROJECTS));
     }
     Ok(())
 }

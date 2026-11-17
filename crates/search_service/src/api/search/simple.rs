@@ -66,6 +66,9 @@ pub enum SearchError {
     /// An email filter search cannot apply, rejected rather than ignored
     #[error("email_filters.{0} is not supported by search")]
     UnsupportedEmailFilter(&'static str),
+    /// Too many Drive folders in one email search
+    #[error("email_filters.project_ids takes at most {0} folders")]
+    TooManyEmailProjects(usize),
     /// Opensearch error occurred
     #[error("unable to search")]
     Search(#[from] OpensearchClientError),
@@ -92,6 +95,7 @@ impl IntoResponse for SearchError {
             | SearchError::InvalidChannelId(_)
             | SearchError::InvalidChannelType(_)
             | SearchError::UnsupportedEmailFilter(_)
+            | SearchError::TooManyEmailProjects(_)
             | SearchError::NoQueryOrTermsProvided
             | SearchError::NoChannelIds => StatusCode::BAD_REQUEST,
             SearchError::NameSearch(NameSearchError::IncompatibleCursor) => StatusCode::BAD_REQUEST,

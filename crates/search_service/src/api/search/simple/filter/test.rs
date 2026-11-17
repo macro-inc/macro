@@ -34,3 +34,14 @@ fn search_accepts_email_filters_it_applies() {
     };
     assert!(reject_unsupported_email_filters(&filters).is_ok());
 }
+
+#[test]
+fn search_rejects_more_folders_than_it_scopes_to() {
+    let filters = item_filters::EmailFilters {
+        project_ids: (0..=MAX_EMAIL_PROJECTS).map(|n| n.to_string()).collect(),
+        ..Default::default()
+    };
+    let error = reject_unsupported_email_filters(&filters).unwrap_err();
+    assert!(error.to_string().contains("project_ids"));
+    assert_eq!(error.into_response().status(), StatusCode::BAD_REQUEST);
+}

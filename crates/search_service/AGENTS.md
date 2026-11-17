@@ -136,8 +136,10 @@ per-entity-type search plus a unified search across them — mounted into
   the list's Project candidate rule (`entity_access::project_email_threads`):
   the caller's own threads in the folders, every thread in a folder granted to
   their sources whoever's inbox holds it, and thread shares in the folders,
-  at most `MAX_PROJECT_THREADS`; the other thread-level filters are then
-  checked per hit. `crm_domains` and `crm_addresses` are rejected with a 400
+  at most `MAX_PROJECT_THREADS`, from at most `MAX_EMAIL_PROJECTS` folders
+  (more is a 400); the other thread-level filters are then checked per hit.
+  Each folder's read stops at the cap, and thread shares are probed only for
+  threads in folders the caller holds no grant on. `crm_domains` and `crm_addresses` are rejected with a 400
   (`UnsupportedEmailFilter`): they need the list's CRM team scope and consent.
   Enrichment reads a shared hit through its owner's inbox after `shared_among`
   confirms a grant on the thread or on its folder; a revoked grant drops it.

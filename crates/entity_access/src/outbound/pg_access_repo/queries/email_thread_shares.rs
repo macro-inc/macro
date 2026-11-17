@@ -95,11 +95,13 @@ pub async fn shared_email_threads(
 /// left out entirely, as the list's Shared-only view leaves them out. At most
 /// `limit` threads come back.
 ///
-/// Each folder's grant is checked once, one source at a time, and each
-/// folder's threads are read through `idx_email_threads_project_id`. Thread
-/// shares are found from the caller's grants, not checked thread by thread:
-/// a large folder the caller holds no grant on would otherwise cost one grant
-/// lookup per source for every thread in it.
+/// Each folder's grant is checked once, one source at a time. Each folder's
+/// threads are read through `idx_email_threads_project_id` and stop at
+/// `limit`, so a large granted folder is not read whole; a thread belongs to
+/// one folder, so no thread comes back twice. A thread share is one probe of
+/// `entity_access_entity_id_entity_type_idx` per thread outside the caller's
+/// inboxes in a folder not granted to them, so the cost follows the folder,
+/// not how many threads are shared with the caller.
 #[tracing::instrument(
     err,
     skip(pool, source_ids, own_link_ids, project_ids),
@@ -147,47 +149,26 @@ pub async fn project_email_threads(
                     LIMIT 1
                 ) g
             )
-        ),
-        in_folders AS (
-            SELECT t.id, t.link_id
-            FROM requested r
-            CROSS JOIN LATERAL (
-                SELECT t.id, t.link_id
-                FROM email_threads t
-                WHERE t.project_id = r.project_id
-                OFFSET 0
-            ) t
-            WHERE CASE
-                WHEN t.link_id = ANY($2) THEN $4
-                ELSE r.project_id IN (SELECT g.project_id FROM granted g)
-            END
-        ),
-        thread_shares AS (
-            SELECT t.id, t.link_id
-            FROM unnest($1::text[]) AS sources(source_id)
-            CROSS JOIN LATERAL (
-                SELECT ea.entity_id
-                FROM entity_access ea
-                WHERE ea.source_id = sources.source_id
-                  AND ea.entity_type = 'email_thread'
-                OFFSET 0
-            ) ea
-            CROSS JOIN LATERAL (
-                SELECT t.id, t.link_id, t.project_id
-                FROM email_threads t
-                WHERE t.id = ea.entity_id
-                OFFSET 0
-            ) t
-            WHERE $5
-              AND t.link_id <> ALL($2)
-              AND t.project_id IN (SELECT r.project_id FROM requested r)
         )
-        SELECT x.id AS "thread_id!", x.link_id AS "link_id!"
-        FROM (
-            SELECT f.id, f.link_id FROM in_folders f
-            UNION
-            SELECT s.id, s.link_id FROM thread_shares s
-        ) x
+        SELECT f.id AS "thread_id!", f.link_id AS "link_id!"
+        FROM requested r
+        CROSS JOIN LATERAL (
+            SELECT t.id, t.link_id
+            FROM email_threads t
+            WHERE t.project_id = r.project_id
+              AND CASE
+                  WHEN t.link_id = ANY($2) THEN $4
+                  WHEN r.project_id IN (SELECT g.project_id FROM granted g) THEN TRUE
+                  ELSE $5 AND EXISTS (
+                      SELECT 1
+                      FROM entity_access ea
+                      WHERE ea.entity_id = t.id
+                        AND ea.entity_type = 'email_thread'
+                        AND ea.source_id = ANY($1)
+                  )
+              END
+            LIMIT $6
+        ) f
         LIMIT $6
         "#,
         &source_ids.0,

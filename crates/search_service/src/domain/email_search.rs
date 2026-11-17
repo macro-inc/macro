@@ -30,6 +30,9 @@ pub(crate) const MAX_THREAD_SET_ALLOWLIST: usize = 10_000;
 /// term in the OpenSearch filter, which refuses more than 65,536.
 pub(crate) const MAX_PROJECT_THREADS: usize = 10_000;
 
+/// Most Drive folders one search may be scoped to.
+pub(crate) const MAX_EMAIL_PROJECTS: usize = 50;
+
 /// A bounded set of a mailbox's threads that an Email view lists, read from
 /// the partial index the view reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

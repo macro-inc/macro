@@ -70,7 +70,8 @@ caller can access" (soup expands to the full set at the router edge). */
   /** Drive folder (project) ids to search within: threads filed in any of
 these folders. Besides the caller's own threads, it reaches every
 thread in a folder shared with the caller, whoever's inbox holds it,
-as the folder's list does. Empty to ignore project filtering. */
+as the folder's list does. Search takes at most 50 folders and
+rejects more with a 400. Empty to ignore project filtering. */
   project_ids?: string[];
   /** Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient. */
   recipients?: string[];
