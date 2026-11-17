@@ -141,7 +141,7 @@ export interface LayoutProps {
 
 /** Classic rows' sender, subject and date weight; the preview keeps its own. */
 export function classicWeight(unread: boolean) {
-  return unread ? 'font-semibold' : 'font-normal';
+  return unread ? 'font-bold' : 'font-normal';
 }
 
 /**

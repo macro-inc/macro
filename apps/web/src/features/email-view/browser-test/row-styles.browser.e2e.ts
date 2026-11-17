@@ -32,6 +32,8 @@ async function open(page: Page, style: string, theme = 'dark') {
 
 const fontWeight = (locator: Locator) =>
   locator.evaluate((node) => getComputedStyle(node).fontWeight);
+const color = (locator: Locator) =>
+  locator.evaluate((node) => getComputedStyle(node).color);
 
 /** Whether the row shows its checkbox outline without a hover. */
 const showsCheckbox = (row: Locator) =>
@@ -52,11 +54,17 @@ async function weights(
   subject: string
 ) {
   const row = page.getByTestId(`row-${id}`);
+  const senderText = row.getByText(sender, { exact: true });
+  const subjectText = row.getByText(subject, { exact: true });
+  const dateText = row.getByText('Nov 3', { exact: true });
   return {
-    sender: await fontWeight(row.getByText(sender, { exact: true })),
-    subject: await fontWeight(row.getByText(subject, { exact: true })),
-    date: await fontWeight(row.getByText('Nov 3', { exact: true })),
+    sender: await fontWeight(senderText),
+    subject: await fontWeight(subjectText),
+    date: await fontWeight(dateText),
     preview: await fontWeight(row.getByText(/^Here is the latest/)),
+    senderColor: await color(senderText),
+    subjectColor: await color(subjectText),
+    dateColor: await color(dateText),
   };
 }
 
@@ -118,6 +126,18 @@ for (const size of SIZES) {
           (node) => getComputedStyle(node).backgroundColor
         );
         expect(unreadFill).not.toBe('rgba(0, 0, 0, 0)');
+        // Touch rows sit on an opaque swipe surface, which takes the fill.
+        if (size.touch) {
+          await expect(unread.locator('[data-swipe-content]')).toHaveCSS(
+            'background-color',
+            unreadFill
+          );
+          expect(
+            await read
+              .locator('[data-swipe-content]')
+              .evaluate((node) => getComputedStyle(node).backgroundColor)
+          ).not.toBe(unreadFill);
+        }
         await expect(rowSurface(page, 'read-1')).toHaveCSS(
           'background-color',
           'rgba(0, 0, 0, 0)'
@@ -140,13 +160,28 @@ for (const size of SIZES) {
           'Casey Moore',
           'Notes from the offsite'
         );
-        expect(unreadWeights.sender).toBe('600');
-        expect(unreadWeights.subject).toBe('600');
-        expect(unreadWeights.date).toBe('600');
+        expect(unreadWeights.sender).toBe('700');
+        expect(unreadWeights.subject).toBe('700');
+        expect(unreadWeights.date).toBe('700');
         expect(readWeights.sender).toBe('400');
         expect(readWeights.subject).toBe('400');
         expect(readWeights.date).toBe('400');
         expect(unreadWeights.preview).toBe(readWeights.preview);
+        // The unread date takes its sender's and subject's color; a read
+        // date stays muted.
+        expect(unreadWeights.subjectColor).toBe(unreadWeights.senderColor);
+        expect(unreadWeights.dateColor).toBe(unreadWeights.senderColor);
+        expect(readWeights.dateColor).not.toBe(readWeights.senderColor);
+
+        // A selected row's fill wins over the unread one.
+        if (!size.touch) {
+          await unread.getByRole('checkbox').click();
+          expect(
+            await rowSurface(page, 'unread-1').evaluate(
+              (node) => getComputedStyle(node).backgroundColor
+            )
+          ).not.toBe(unreadFill);
+        }
       });
     }
 

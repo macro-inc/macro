@@ -82,6 +82,8 @@ export function MaybeEntityRow(props: {
   entityId: string;
   children: JSX.Element;
   config?: EntityRowConfig;
+  /** The swipe surface's opaque fill, when the row has one of its own. */
+  rowBgClass?: string;
 }) {
   const ctx = useContext(SwipableRowContext);
   return (
@@ -92,6 +94,7 @@ export function MaybeEntityRow(props: {
         swipeLeftRevealedComponent={props.config?.swipeLeftRevealedComponent}
         swipeRightColor={props.config?.swipeRightColor}
         swipeRightRevealedComponent={props.config?.swipeRightRevealedComponent}
+        rowBgClass={props.rowBgClass}
       >
         {props.children}
       </SwipableRow>
@@ -285,6 +288,10 @@ export function ListEntity(props: ListEntityProps) {
       email: isEmailEntity(props.entity),
     });
 
+  // A touch row's swipe surface is opaque so the swipe actions stay hidden
+  // under it; a lifted Classic row paints it with its own fill.
+  const swipeFill = () => (classic() && unread() ? 'bg-control' : undefined);
+
   // Classic rows run wall to wall too, square, with a line between rows.
   const fullBleed = () => isNarrowEmail() || classic();
 
@@ -368,6 +375,7 @@ export function ListEntity(props: ListEntityProps) {
           <MaybeEntityRow
             entityId={props.entity.id}
             config={props.entityRowConfig}
+            rowBgClass={swipeFill()}
           >
             <WideLayout {...layoutProps} />
           </MaybeEntityRow>
@@ -415,6 +423,7 @@ export function ListEntity(props: ListEntityProps) {
           <MaybeEntityRow
             entityId={props.entity.id}
             config={props.entityRowConfig}
+            rowBgClass={swipeFill()}
           >
             <NarrowInboxLayout {...layoutProps} />
           </MaybeEntityRow>

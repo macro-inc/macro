@@ -358,8 +358,10 @@ export function WideLayout(props: LayoutProps) {
       <Entity.Slot
         placement="timestamp"
         class={cn(
-          'flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted',
-          props.classic ? classicWeight(props.unread) : 'font-medium'
+          'flex items-center justify-end gap-1 text-xs text-right',
+          props.classic ? classicWeight(props.unread) : 'font-medium',
+          // A Classic unread date reads like its sender and subject.
+          props.classic && props.unread ? 'text-ink' : 'text-ink-extra-muted'
         )}
       >
         {props.scheduleStatus}

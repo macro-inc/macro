@@ -63,7 +63,7 @@ export function NarrowInboxLayout(props: LayoutProps) {
           fallback={
             <UnreadIndicator
               class="mx-(--soup-inbox-unread-indicator-padding-x) size-(--soup-inbox-unread-indicator-diameter)"
-              active={props.unread}
+              active={props.unread && !props.classic}
             />
           }
         >
@@ -151,8 +151,10 @@ export function NarrowInboxLayout(props: LayoutProps) {
       <Entity.Slot
         placement="timestamp"
         class={cn(
-          'flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted pt-3 pr-4',
-          props.classic ? classicWeight(props.unread) : 'font-light'
+          'flex items-center justify-end gap-1 text-xs text-right pt-3 pr-4',
+          props.classic ? classicWeight(props.unread) : 'font-light',
+          // A Classic unread date reads like its sender and subject.
+          props.classic && props.unread ? 'text-ink' : 'text-ink-extra-muted'
         )}
       >
         {props.leadingAction}

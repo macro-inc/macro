@@ -7,10 +7,7 @@ export function parseEmailRowStyle(value: unknown): EmailRowStyle {
   return value === 'classic' ? 'classic' : 'minimalist';
 }
 
-/**
- * Phones always show Minimalist rows: Classic's checkbox column and raised
- * cards don't fit a phone row. The choice applies to tablets and desktop.
- */
+/** Phones always show Minimalist rows; the choice applies to tablets and desktop. */
 export function rowStyleForDevice(style: EmailRowStyle): EmailRowStyle {
   return isMobile() ? 'minimalist' : style;
 }

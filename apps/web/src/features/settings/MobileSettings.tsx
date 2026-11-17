@@ -8,7 +8,6 @@ import {
 } from '@core/constant/featureFlags';
 import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
@@ -46,7 +45,7 @@ export function MobileSettings() {
       groups={navGroups()}
       searchGroups={searchGroups()}
       emailSignatures={signatures().enabled}
-      emailRowStyle={!isMobile()}
+      emailRowStyle={false}
       outlook={outlook()}
       macroComputers={macroComputers().enabled}
       name={displayName()}
@@ -69,7 +68,7 @@ export function MobileSettings() {
       onLogout={() => {
         fireAndForget(logout(), 'logout');
       }}
-      renderPage={(page) => <SettingsTabContent tab={page} />}
+      renderPage={(page) => <SettingsTabContent tab={page} phone />}
     />
   );
 }

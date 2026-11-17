@@ -13,7 +13,6 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
 import { useEmailLinks } from '@core/email-link';
-import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
@@ -28,7 +27,11 @@ import {
 } from './primitives';
 import { SignatureSection } from './SignatureSection';
 
-export function EmailSettings() {
+/**
+ * `displayOptions` shows the Mail row style; the phone settings sheet leaves
+ * it out because phones always show Minimalist rows.
+ */
+export function EmailSettings(props: { displayOptions: boolean }) {
   const signatures = useFeatureFlag(enableEmailSignatures);
   const readReceipts = useFeatureFlag(enableEmailReadReceipts);
   const { openSettings } = useSettingsState();
@@ -52,9 +55,7 @@ export function EmailSettings() {
           <EmailCard />
         </Suspense>
       </SettingsSection>
-      {/* Phones always show Minimalist rows, so the choice lives on tablets
-          and desktop. */}
-      <Show when={!isMobile()}>
+      <Show when={props.displayOptions}>
         <SettingsSection
           title={t('settingsEmail.displayOptions')}
           target="Display options"
