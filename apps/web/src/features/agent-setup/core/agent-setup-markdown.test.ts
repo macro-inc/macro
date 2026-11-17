@@ -28,7 +28,7 @@ describe('agentSetupMarkdown', () => {
       )
     ).toEqual(
       expect.arrayContaining([
-        'https://docs.macro.com/AI/bring-your-own',
+        'https://macro.com/docs/AI/bring-your-own',
         'https://github.com/macro-inc/macro/tree/main/crates/coding_agent_worker',
       ])
     );

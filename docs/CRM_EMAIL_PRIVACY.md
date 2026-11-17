@@ -89,11 +89,24 @@ messages, documents, or agent transcripts is not retroactively redacted.
 - Sales Email currently reads the viewer's own mailbox, not teammates'
   contributed copies. Their own copy remains visible there, matching personal
   blocked-domain behavior; thread exceptions do not change that mailbox access.
-- Owners add an exception from their thread's **Keep this thread out of CRM** menu
-  action. **Email settings → Threads kept out of CRM** lists only their own
-  exceptions, fifty per page, and lets them remove one. Removing an exception
-  restores eligibility only if consent and every other exclusion still allow it.
+- Owners add an exception from their thread's **Exclude thread from CRM**
+  action beside sharing in its menu, or the desktop icon before the reminder
+  bell. Both explain when ownership or mailbox consent prevents exclusion.
+  A failed background check preserves the last known exclusion state while
+  disabling the action until a successful read.
+  **Email settings → Excluded threads** lists only their own exclusions, fifty
+  per page. Each thread uses the existing email mention (icon, subject, hover
+  preview, and split navigation). Inline titles come from the owner-scoped list;
+  full previews load only when opened. **Remove** clears the exclusion without
+  opening the thread, including after mailbox sharing is turned off. Removing
+  an exception restores eligibility only if consent and every other exclusion
+  still allow it.
   The same controls are available in the phone menu and settings drawer.
+  `GET /crm/email-privacy/threads?thread_id=<uuid>` returns zero or one own
+  exclusion for the header, with no continuation; `after` and `thread_id` are
+  mutually exclusive. Header and settings readers share cache invalidation;
+  successful thread changes cancel pending owner reads before refreshing them,
+  so a response from before the write cannot restore a removed exclusion.
 - Thread exceptions do not immediately recompute first/last interaction dates,
   matching personal blocked domains. Existing company/contact records, archive
   state, sources and prior interaction metadata remain. Normal population uses
@@ -110,19 +123,35 @@ messages, documents, or agent transcripts is not retroactively redacted.
 
 ## Enforcement and boundaries
 
-Selected contribution has dormant storage for versioned member/mailbox rules
-and actor history; see the [phased design](design/crm-selective-email-contribution.md).
+Selected contribution has versioned member/mailbox rules, actor history and
+compatible eligibility readers; see the [phased design](design/crm-selective-email-contribution.md).
 No public operation activates it yet. Existing consents keep `mode = all` and
-their original `enabled` value. A future selected grant uses `enabled = false`
-and a separate `selected_enabled` bit, so old readers fail closed. Database
-guards reject legacy opt-ins on selected rows, make legacy withdrawals clear
-both bits, and increment the policy version when effective consent changes.
-Mailbox lifecycle revocation clears both bits without reviving them on reconnect.
-All three eligibility implementations below must be upgraded before activation.
+their original `enabled` value. A selected grant uses `enabled = false` and a
+separate `selected_enabled` bit. Compatible readers recognize either grant;
+older binaries ignore selected grants. Database guards reject legacy opt-ins
+on selected rows, make legacy withdrawals clear both bits, and increment the
+policy version when effective consent changes. Mailbox lifecycle revocation
+clears both bits without reviving them on reconnect.
+
+All three eligibility implementations resolve the active revision's thread,
+address, contact, domain and company selectors. One matching non-draft participant
+shares the whole thread. Contact selectors use every current `crm_contact_emails`
+address; company selectors use current company domains and their subdomains.
+Resolution requires the source record to remain in the contributor's team and
+visible to their current role, including a contact's parent company. Deletion or
+hiding from that role removes its match; changes take effect on subsequent reads.
+The contributor's CRM viewing preference does not revoke contribution. Team and
+personal domain vetoes and private-thread exceptions still win, and another
+contributor's mailbox-local copy is evaluated independently.
 
 `EmailPrivacyService` in the CRM domain validates domains and authorizes typed team
 receipts. The Axum GET/PUT `/crm/email-privacy` adapters extract identity,
-forward a command, and map the response. `set_thread_exclusion` takes `thread_id`
+forward a command, and map the response. Thread controls use
+`GET /crm/email-privacy?consent_only=true`: only the effective `enabled` bit and
+current `mailbox_email`/`mailbox_link_id`, without any domain queries. Its
+owner/session CRM cache key is separate from the full settings response; privacy
+mutations update both and refresh thread-exclusion queries.
+`set_thread_exclusion` takes `thread_id`
 and `excluded`; identity always comes from the authenticated team receipt, and
 both setting and clearing require ownership of that thread's mailbox. It is
 idempotent and can be set before consent. `GET /crm/email-privacy/threads?after=…`
@@ -142,14 +171,14 @@ access. It verifies the mailbox, current membership, explicit consent, and
 whole-thread participant exclusions. The separate
 `crm_email_thread_excluded(team, user, link, thread)` predicate is a veto regardless
 of domain eligibility. `crm_email_thread_exclusions` holds team/member/mailbox/thread
-identities, with deletion cascades for membership, mailbox and thread. A future
-selective inclusion rule must retain this veto. Labels and folders are not
-implemented: future target-specific exclusion tables can keep their own foreign
-keys and add predicates alongside this one, without changing thread exceptions.
+identities, with deletion cascades for membership, mailbox and thread. Selected
+inclusion retains this veto. Labels and folders are not implemented: future
+target-specific exclusion tables can keep their own foreign keys and add
+predicates alongside this one, without changing thread exceptions.
 `crm_email_domain_blocked` also honors
 legacy company `email_sync = false` exclusions. The ingestion interaction scan
 (`crates/crm/src/outbound/companies_repo/email_privacy/interactions.sql`) and the
-Team view's read of one record's emails (`ALLOWED` in
+Team view's read of one record's emails (`push_allowed` in
 `crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope.rs`, with the
 contributing inboxes in `dynamic/resolve.rs`) apply the same rules set-based, once
 per call instead of once per thread and participant; change them together, and
@@ -158,8 +187,8 @@ The Team reader calls `crm_email_thread_excluded` for each candidate and each
 competing copy before choosing the conversation's representative.
 The Team view's read takes the inboxes that contributed when its filters resolved
 and rechecks each thread's consent and exclusions. The optimized Team reader uses
-one read-only repeatable-read snapshot for its probe and page, like the Owned
-reader, so an import cannot make a previously sparse set dense between statements.
+one read-only repeatable-read snapshot for mode resolution, probe and page, like
+the Owned reader, so an import cannot make a previously sparse set dense between statements.
 An in-flight request answers from that snapshot; a withdrawal or new exclusion
 committed during it takes effect on the next request. A new grant also shows mail
 from the next request. General fallback reads keep their existing transaction.
@@ -194,6 +223,100 @@ carried through queue delivery, retries, and contact fan-out without logging
 mailbox identities or message payloads.
 
 ## Rollout
+
+The dormant policy repository stores a server-generated `consent_incarnation`
+for each consent row lifetime. Legacy rows stay null until an owner-bound
+inspection initializes identity without changing the grant or policy version;
+a previously absent row starts disabled and requires the exact connected primary
+mailbox. Old-token operations cannot initialize a row. Identity is immutable
+across updates, and deletion/recreation gets a fresh identifier. The policy API remains unavailable; workers never initialize identity or grant
+contribution.
+
+Audit and idempotent outcomes carry incarnation/version. Preview and historical
+work each occupy one replaceable member slot; checkpoints and completion compare
+the captured generation and job identity. Retrying a preview ID preserves its
+progress and terminal outcome; a different definition/context requires a fresh
+ID. Job-start outcomes remain in incarnation-scoped idempotency storage, so a
+delayed start cannot resurrect an older slot occupant or completed history job.
+Only the large preview/work payload is one-slot bounded; small retry receipts
+remain until mailbox or membership cleanup. A separate durable work row survives
+outbox publication. Null generation fields in the existing outbox explicitly denote legacy work, which must be
+upgraded or drained before activation. Mailbox or membership deletion cascades
+private envelopes; deleting only consent cannot make old retry results valid.
+
+Contact address/parent edits, hides, company-hide cascades and sync deletion
+record source events in the same transaction, only for referenced targets.
+Imports of new IDs and metadata-only enrichment keep their existing write paths;
+there are no per-row source triggers. Direct SQL and future matching writers
+must use the same event hook. Existing mailbox teardown and company/contact
+visibility edits preserve the caller's statement timeout. Worker-owned metadata
+transactions retain their 15-second statement and 5-second lock limits.
+The worker pages at most 100 raw saved-rule references before checking whether a
+revision is active, so inactive history cannot turn a miss into an
+unbounded scan. Reverse indexes live only on `crm_email_rule_contacts` and
+`crm_email_rule_companies`; ordinary mail ingestion maintains neither. Source
+IDs have no record FK so deletion can still be reconciled. Team deletion removes
+its pending source events. Active selected policies receive coalesced history
+and content-free system audit entries; stable event receipts prevent duplicate
+history after a retry. Preview context invalidation is owned by the API phase.
+
+Modern history pages at most 100 raw mailbox contacts through the existing
+mailbox/address index, with sent-capable contacts before the received pass.
+Each contact reauthorizes before enrichment and in the population transaction;
+page completion compares incarnation, version, work ID and cursor. Same-lifetime
+version changes durably restart unfinished history; a different incarnation
+cannot adopt an old job. The outbox retains a 15-minute recovery signal until
+progress republishes it or exact-generation completion removes it. Legacy
+publication still deletes its outbox row and uses the existing contact fan-out;
+legacy history cannot consume initialized consent. New live-mail hints carry an
+explicit marker and reconcile against current stored eligibility. The API phase
+must replace unfinished legacy history atomically when initializing identity;
+old unmarked live notifications must be drained before activation.
+
+Selected contribution remains default-off under
+`enable-crm-selective-email-contribution`; this phase adds no API or worker that
+sets selected mode or its grant bit. The eligibility migration refuses to run
+if any consent is already in selected mode. It replaces the SQL function before
+new binaries roll out, while older Team and ingestion queries still require the
+legacy bit. That window is safe because every existing consent is all-mail and
+no deployed operation can activate selected mode. Activation must wait for all
+three readers, the policy API, generation-safe historical work and the PR 5
+performance gate, including the 1m-thread mailbox tier and a work bound for
+unmatched live target expansions and mailbox-contact discovery. The positive-
+thread probe's result cap alone does not bound that discovery work. CRM-scoped
+email search is deferred and rejects CRM filters with HTTP 400 without reading
+team mail; fourth-reader eligibility parity is required before activation only
+if that search ships first. Audit all live-source event producers, including
+member role changes, before activation. The API phase must also close the
+first-activation/bulk-deletion race: target locks and a fresh reference check
+must cover references committed while teardown waits, without holding the team
+privacy lock across long cascades. The remote flag controls future writes,
+never enforcement of stored restrictions.
+
+The optimized Team reader resolves contribution modes inside its read snapshot.
+When none of the requested contributors uses selected mode, it emits the existing
+all-mail probe and page SQL without selected-rule CTEs or predicates. Mode changes
+committed during a request apply to the next request, just like withdrawals and
+private-thread exceptions. Deterministic transition tests cover both directions.
+
+The Team reader keeps a shared ten-second deadline for its probes and pages.
+For selected mailboxes it first probes positive targets, so sparse selections do
+not require walking a record's entire mailbox history. Live company domains
+resolve against each selected mailbox's contacts in one indexed pass per page;
+contact-address targets use direct indexed lookups. Per-thread eligibility keeps
+only the bounded live target IDs and probes their indexed addresses or domains,
+so it does not repeat that expansion for each thread. Selected-policy target
+resolution fences mailbox contact and participant lookups. Company domains are
+fenced by company ID before checking team membership, so stale estimates cannot
+substitute a whole-team domain scan. Candidate contacts stream with `UNION ALL`;
+duplicates only make the probe conservatively choose another stream, while the
+page deduplicates thread IDs. Record probes and sparse pages reuse the shared
+indexed sender/recipient branches, without adding
+index maintenance to ordinary contact ingestion.
+All-mail-only reads retain their existing candidate path. Ingestion has a
+fifteen-second statement bound, including admission before enrichment, and
+rechecks eligibility in the population transaction. These bounds do not change
+which mail is eligible.
 
 Thread-exclusion controls and API writes are gated by the remote
 `enable-crm-thread-exclusions` flag, off by default in every environment. The

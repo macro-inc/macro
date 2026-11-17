@@ -29,3 +29,11 @@ fn allows_company_domains() {
     assert!(!is_generic_email_domain("macro.com"));
     assert!(!is_generic_email_domain("acme.dev"));
 }
+
+#[test]
+fn matches_apple_hide_my_email_relay() {
+    // Sign in with Apple's "Hide My Email" gives each person a unique
+    // address on this one shared domain, so it never identifies a company.
+    assert!(is_generic_email_domain("privaterelay.appleid.com"));
+    assert!(is_generic_email_domain("PrivateRelay.AppleID.com"));
+}

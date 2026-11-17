@@ -458,6 +458,7 @@ where
                             announce: Some(origin),
                             context,
                             client: None,
+                            prompter: agent_session::domain::model::PrompterKind::User,
                         })
                     }
                     Err(AgentSessionError::NotFound(_)) => HarnessCommand::Open(open),
@@ -611,10 +612,11 @@ where
                 action_id,
                 prompt,
                 actor,
+                prompter,
             } => {
                 queue_result(
                     self.queues
-                        .edit_prompt(session_id, action_id, prompt, actor),
+                        .edit_prompt(session_id, action_id, prompt, actor, prompter),
                     session_id,
                 )?;
                 self.persist_or_rollback(session_id).await?;
@@ -1117,6 +1119,7 @@ where
             announce: command.announce,
             context: command.context,
             client: command.client,
+            prompter: command.prompter,
             announced: None,
             created_at: dm_record
                 .as_ref()
@@ -1255,6 +1258,7 @@ where
                         announce: None,
                         context: None,
                         client: None,
+                        prompter: agent_session::domain::model::PrompterKind::User,
                     },
                 )
                 .await
@@ -1298,6 +1302,7 @@ where
                     announce: None,
                     context: None,
                     client: None,
+                    prompter: agent_session::domain::model::PrompterKind::User,
                 },
             )
             .await
@@ -1775,6 +1780,7 @@ where
                 // Already composed into the action above.
                 context: None,
                 client: None,
+                prompter: entry.prompter,
             };
             flight.announcement_message_id = entry.announced;
             if let Some(store) = conversation_store

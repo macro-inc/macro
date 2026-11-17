@@ -4,8 +4,10 @@ import {
   useViewShell,
   ViewBreadcrumbs,
   ViewShell,
+  ViewSidebar,
   ViewSwitchTrigger,
 } from '@app/components/view-shell';
+import { CollectionPanes } from '@app/components/view-shell/CollectionPanes';
 import {
   ListHeader,
   ListHeaderSearch,
@@ -386,7 +388,12 @@ function ReviewsRoot() {
             <div class="h-10 min-w-0 flex-1">
               <PillTabs
                 scrollable
-                leading={<ReviewsFilterDrawer {...controls()} />}
+                leading={
+                  <>
+                    <ViewSidebar.Toggle action="expand" presentation="pill" />
+                    <ReviewsFilterDrawer {...controls()} />
+                  </>
+                }
                 items={REVIEW_SCOPE_TABS}
                 value={scope()}
                 onChange={selectScope}
@@ -535,6 +542,7 @@ function ReviewsRoot() {
       <SplitPanel.Root>
         <SplitPanel.Body>
           <ViewShell.Root
+            contentLayout="collection"
             asidePreferenceKey="reviews"
             resizable
             aside={{ preserveDuringResize: false }}
@@ -557,7 +565,7 @@ function ReviewsRoot() {
                 activeForeignEntityId={params.foreignEntityId}
               />
             </ViewShell.Aside>
-            <ViewShell.Main>
+            <CollectionPanes hasDetail={!!params.foreignEntityId} list={list()}>
               <Suspense
                 fallback={
                   <div
@@ -568,9 +576,9 @@ function ReviewsRoot() {
                   </div>
                 }
               >
-                <SplitRouter.Outlet fallback={list} />
+                <SplitRouter.Outlet />
               </Suspense>
-            </ViewShell.Main>
+            </CollectionPanes>
           </ViewShell.Root>
         </SplitPanel.Body>
       </SplitPanel.Root>

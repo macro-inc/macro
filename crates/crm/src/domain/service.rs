@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+mod email_policy_work;
 mod email_privacy;
 
 use crate::domain::{
