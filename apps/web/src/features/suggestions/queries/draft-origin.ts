@@ -28,7 +28,10 @@ export function useDraftOrigin(
   return createMemo(
     () =>
       // Guarded: an unguarded read of a pending query suspends the thread.
-      queryReadyGate(feed) ? draftOrigin(feed.data, draftId()) : undefined,
+      // A feed cached while suggestions were on says nothing once they are off.
+      enabled() && queryReadyGate(feed)
+        ? draftOrigin(feed.data, draftId())
+        : undefined,
     undefined,
     { equals: deepEqual }
   );

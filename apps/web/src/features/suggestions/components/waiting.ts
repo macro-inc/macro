@@ -1,4 +1,3 @@
-import { formatRelativeTimestamp } from '@app/features/entity/utils/timestamp';
 import { t } from '@app/lib/i18n';
 import { type Suggestion, waitingFor } from '../core/suggestion';
 
@@ -23,18 +22,29 @@ export function waitingLabel(suggestion: Suggestion): string | undefined {
     : t('suggestions.waitingHours', { count: length.count });
 }
 
+/** How long ago `since` was, in whole minutes, hours or days. */
+export function sinceLabel(since: string): string {
+  const now = new Date();
+  const length = waitingFor(since, now);
+  if (length) {
+    return length.unit === 'days'
+      ? t('suggestions.ageDays', { count: length.count })
+      : t('suggestions.ageHours', { count: length.count });
+  }
+
+  const minutes = Math.floor((now.getTime() - Date.parse(since)) / 60_000);
+  return minutes >= 1
+    ? t('suggestions.ageMinutes', { count: minutes })
+    : t('suggestions.ageNow');
+}
+
 /**
- * How long a suggestion has waited, in whole hours or days: since the
- * message still unanswered came, else since it was proposed.
+ * How long a suggestion has waited: since the message still unanswered
+ * came, else since it was proposed.
  */
 export function ageLabel(suggestion: Suggestion): string {
-  const since =
+  return sinceLabel(
     (suggestion.kind === 'entity' ? suggestion.waitingSince : undefined) ??
-    suggestion.createdAt;
-  const length = waitingFor(since, new Date());
-  if (!length) return formatRelativeTimestamp(since, { condensed: true });
-
-  return length.unit === 'days'
-    ? t('suggestions.ageDays', { count: length.count })
-    : t('suggestions.ageHours', { count: length.count });
+      suggestion.createdAt
+  );
 }

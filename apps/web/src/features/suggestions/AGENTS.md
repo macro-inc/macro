@@ -67,7 +67,8 @@ only, behind `enable-suggestions`.
 - Clicking Run on a background suggestion is the approval, and there is no
   approval UI: a run that posts or sends something leads its line with
   `sends`, so it is read before Run and is never the part a long line cuts
-  off. A run that sends nothing doesn't say so.
+  off; it stays there while the run is under way and after it failed, since
+  Retry sends it again. A run that sends nothing doesn't say so.
 - The server decides and the page shows: each suggestion's `status`, the
   feed's order (what waits or runs, then what is done), `isNew`, what a
   finished one left (`result`, absent until its run

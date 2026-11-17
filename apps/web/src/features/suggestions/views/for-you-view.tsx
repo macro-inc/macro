@@ -163,11 +163,13 @@ export function ForYouView(props: {
     !earlier().some((entry) => entry.suggestion.id === props.focusedId);
   const doneShown = () => (folded() ? done().slice(0, 1) : done());
   const byId = (entry: FeedEntry) => entry.suggestion.id;
-  const today = new Intl.DateTimeFormat(formatLocale(), {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  }).format(new Date());
+  // Read where it renders, so it follows the interface language.
+  const today = () =>
+    new Intl.DateTimeFormat(formatLocale(), {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+    }).format(new Date());
 
   // Rows are kept by suggestion id, so a feed read or a busy flag updates a
   // row in place: focus stays, and the scroll to the one asked for runs once.
@@ -237,7 +239,7 @@ export function ForYouView(props: {
           <h1 class="text-[34px] leading-10 font-bold tracking-tight">
             {t('suggestions.today')}
           </h1>
-          <p class="text-base text-ink-muted">{today}</p>
+          <p class="text-base text-ink-muted">{today()}</p>
         </header>
         <Switch>
           <Match when={props.feed.view().kind === 'loading'}>

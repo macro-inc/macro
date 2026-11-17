@@ -27,6 +27,10 @@ export default {
   undo: 'Undo',
   runningNow: 'Running.',
   openInChat: 'Open chat',
+  ageNow: 'now',
+  ageMinutes: {
+    other: '{{count}} min',
+  },
   ageDays: {
     one: '{{count}} day',
     other: '{{count}} days',

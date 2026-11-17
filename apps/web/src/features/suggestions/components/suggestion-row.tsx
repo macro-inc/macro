@@ -1,4 +1,3 @@
-import { formatRelativeTimestamp } from '@app/features/entity/utils/timestamp';
 import { t } from '@app/lib/i18n';
 import { formatTime } from '@core/util/date';
 import SparkleIcon from '@icon/system/fill/sparkle-fill.svg';
@@ -12,7 +11,7 @@ import { Button, cn, Item, Spinner, Tooltip } from '@ui';
 import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import type { SuggestionItemParts } from '../context/suggestions-source';
 import type { Suggestion, SuggestionStatus } from '../core/suggestion';
-import { ageLabel } from './waiting';
+import { ageLabel, sinceLabel } from './waiting';
 
 type RowState = {
   suggestion: Suggestion;
@@ -43,14 +42,12 @@ export type ToDoRowProps = RowState & {
 
 /**
  * One line of text, cut where the row ends; pointing at a cut line shows all
- * of it. The child is the line itself and does the cutting (`truncate`).
+ * of it. The child is the line itself, and it or a part of it does the
+ * cutting (`truncate`).
  */
-function Cut(props: {
-  /** The whole line, for when it is cut. */
-  text: string;
-  children: JSX.Element;
-}) {
-  const [cut, setCut] = createSignal(false);
+function Cut(props: { children: JSX.Element }) {
+  // The line's whole text while some of it is cut off; undefined otherwise.
+  const [whole, setWhole] = createSignal<string>();
 
   return (
     <Tooltip.Root>
@@ -59,18 +56,25 @@ function Cut(props: {
         class="flex min-w-0"
         onPointerEnter={(event: PointerEvent & { currentTarget: Element }) => {
           const line = event.currentTarget.firstElementChild;
-          setCut(!!line && line.scrollWidth > line.clientWidth);
+          const cut =
+            !!line &&
+            [line, ...line.querySelectorAll('*')].some(
+              (part) => part.scrollWidth > part.clientWidth
+            );
+          setWhole(cut ? (line.textContent ?? undefined) : undefined);
         }}
       >
         {props.children}
       </Tooltip.Trigger>
       {/* Measured as the pointer arrives, before the tooltip's delay ends. */}
-      <Show when={cut()}>
-        <Tooltip.Portal>
-          <Tooltip.Content>
-            <span class="block max-w-80 text-left">{props.text}</span>
-          </Tooltip.Content>
-        </Tooltip.Portal>
+      <Show when={whole()}>
+        {(text) => (
+          <Tooltip.Portal>
+            <Tooltip.Content>
+              <span class="block max-w-80 text-left">{text()}</span>
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        )}
       </Show>
     </Tooltip.Root>
   );
@@ -90,7 +94,7 @@ function RowText(props: {
 }) {
   const text = () => (
     <>
-      <Cut text={props.title}>
+      <Cut>
         <Item.Title
           id={props.titleId}
           class={cn(
@@ -200,14 +204,9 @@ function sendsText(suggestion: Suggestion): string | undefined {
 }
 
 /** A row's second line: smaller and dimmer than its title, on one line. */
-function RowLine(props: {
-  /** The whole line, for when it is cut. */
-  text: string;
-  class?: string;
-  children: JSX.Element;
-}) {
+function RowLine(props: { class?: string; children: JSX.Element }) {
   return (
-    <Cut text={props.text}>
+    <Cut>
       <Item.Description
         class={cn(
           'truncate text-[13px] leading-[18px] text-ink-extra-muted',
@@ -266,9 +265,7 @@ function macroTime(props: MacroRowProps): string {
     suggestion.runMode === 'background' &&
     suggestion.run
   ) {
-    return formatRelativeTimestamp(suggestion.run.startedAt, {
-      condensed: true,
-    });
+    return sinceLabel(suggestion.run.startedAt);
   }
 
   return ageLabel(suggestion);
@@ -298,27 +295,22 @@ function MacroLead(props: MacroRowProps) {
  */
 function MacroSentence(props: MacroRowProps) {
   const sends = () => sendsText(props.suggestion);
-  const text = () => {
+  // What follows what the run sends: how it stands, else what it will do.
+  const rest = () => {
     if (props.status === 'failed') return t('suggestions.runFailed');
-    if (props.status === 'running') {
-      return [t('suggestions.runningNow'), sends()].filter(Boolean).join(' ');
-    }
+    if (props.status === 'running') return t('suggestions.runningNow');
 
-    const body = routineSentence(props.suggestion) ?? props.suggestion.summary;
-    return [sends(), body].filter(Boolean).join(' · ');
+    return routineSentence(props.suggestion) ?? props.suggestion.summary;
   };
 
   return (
-    <RowLine
-      text={text()}
-      class={props.status === 'failed' ? 'text-failure' : undefined}
-    >
-      <Show when={props.status === 'open' && sends()} fallback={text()}>
+    <RowLine class={props.status === 'failed' ? 'text-failure' : undefined}>
+      <Show when={sends()} fallback={rest()}>
         {(line) => (
           <>
             <span data-suggestion-sends>{line()}</span>
             {' · '}
-            {props.suggestion.summary}
+            {rest()}
           </>
         )}
       </Show>
@@ -435,29 +427,31 @@ export function ToDoRow(props: ToDoRowProps) {
           title={props.suggestion.title}
           onPress={props.onOpen}
         >
-          <Item.Description class="flex min-h-4.5 min-w-0 items-center gap-1.5 text-[13px] leading-[18px] text-ink-extra-muted">
-            <Show when={props.suggestion.about[0]} fallback={summary()}>
-              {(target) => (
-                <props.parts.Source
-                  target={target()}
-                  from={
-                    props.suggestion.kind === 'entity'
-                      ? props.suggestion.from
-                      : undefined
-                  }
-                  fallback={summary()}
-                />
-              )}
-            </Show>
-            <Show when={drafted()}>
-              <span
-                class="-ml-1.5 shrink-0 whitespace-pre"
-                data-suggestion-drafted
-              >
-                {` · ${t('suggestions.replyDrafted')}`}
-              </span>
-            </Show>
-          </Item.Description>
+          <Cut>
+            <Item.Description class="flex min-h-4.5 min-w-0 flex-1 items-center gap-1.5 text-[13px] leading-[18px] text-ink-extra-muted">
+              <Show when={props.suggestion.about[0]} fallback={summary()}>
+                {(target) => (
+                  <props.parts.Source
+                    target={target()}
+                    from={
+                      props.suggestion.kind === 'entity'
+                        ? props.suggestion.from
+                        : undefined
+                    }
+                    fallback={summary()}
+                  />
+                )}
+              </Show>
+              <Show when={drafted()}>
+                <span
+                  class="-ml-1.5 shrink-0 whitespace-pre"
+                  data-suggestion-drafted
+                >
+                  {` · ${t('suggestions.replyDrafted')}`}
+                </span>
+              </Show>
+            </Item.Description>
+          </Cut>
         </RowText>
         <RowNotes failed={props.failed} changed={props.changed} />
       </Item.Content>
@@ -505,9 +499,7 @@ export function DoneRow(props: { suggestion: Suggestion; onOpen(): void }) {
           onPress={props.onOpen}
         >
           <Show when={line()}>
-            <RowLine text={line()} class="text-ink-placeholder">
-              {line()}
-            </RowLine>
+            <RowLine class="text-ink-placeholder">{line()}</RowLine>
           </Show>
         </RowText>
       </Item.Content>

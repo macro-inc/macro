@@ -230,7 +230,10 @@ test('a row shows its age at rest, and its buttons with dismiss in the age’s p
 test('a failed run says so and Retry runs it again', async ({ page }) => {
   await page.goto('/');
   const suggestion = row(page, 'suggestion-failed');
-  await expect(suggestion).toContainText('The run didn’t finish');
+  // What retrying will send still leads the line.
+  await expect(suggestion).toContainText(
+    'Posts the weekly status summary in #ops · The run didn’t finish'
+  );
   await suggestion.getByRole('button', { name: 'Retry', exact: true }).click();
 
   await expect(suggestion).toHaveAttribute('data-suggestion-status', 'running');
@@ -444,7 +447,7 @@ test('a running suggestion reads as under way, with View in place of Run', async
   const running = row(page, 'suggestion-running');
 
   await expect(running).toContainText(
-    'Running. Posts the weekly status summary in #ops'
+    'Posts the weekly status summary in #ops · Running.'
   );
   await expect(
     running.getByRole('button', { name: 'View', exact: true })
