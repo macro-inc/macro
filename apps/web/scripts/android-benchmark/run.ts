@@ -262,8 +262,12 @@ console.log(`Results: ${file}`);
 // A run that measured nothing (signed out, wrong build), or nothing at one of
 // its rates (the throttle never took), is a failure.
 const timedSteps = selected.some((id) => SCENARIOS[id].steps);
+// Only timed steps count: cold start always runs at 1×, whatever the rate.
 const unmeasured = cpuThrottles.filter(
-  (rate) => !samples.some((sample) => sample.cpuThrottle === rate)
+  (rate) =>
+    !samples.some(
+      (sample) => sample.cpuThrottle === rate && sample.cpuThrottleMeasured
+    )
 );
 if (timedSteps && unmeasured.length)
   console.warn(`No steps measured at CPU throttle ${unmeasured.map((rate) => `${rate}×`).join(', ')}`);
