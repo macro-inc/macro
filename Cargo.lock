@@ -13742,7 +13742,6 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "email_utils",
- "lazy-regex",
  "macro_user_id",
  "mailparse",
  "models_pagination",

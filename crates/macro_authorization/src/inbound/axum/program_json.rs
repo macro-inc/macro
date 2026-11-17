@@ -57,8 +57,8 @@ pub async fn request_is_program<Svc: MacroAuthorizationService>(
 /// `application/json` or a structured `application/*+json` type.
 fn is_json(content_type: &str) -> bool {
     let media = content_type.split(';').next().unwrap_or_default().trim();
-    media.eq_ignore_ascii_case("application/json")
-        || (media.starts_with("application/") && media.ends_with("+json"))
+    let media = media.to_ascii_lowercase();
+    media == "application/json" || (media.starts_with("application/") && media.ends_with("+json"))
 }
 
 /// Middleware body: for a program's request, run `rewrite` over a JSON
