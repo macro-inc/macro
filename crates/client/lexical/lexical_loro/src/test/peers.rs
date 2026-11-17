@@ -450,7 +450,7 @@ fn a_local_commit_with_an_unprojected_remote_root_block_insert_diverges() -> Res
     let block = list.insert_container(0, LoroMap::new())?;
     schema::initialize_map(
         &block,
-        &serde_json::json!({"type":"paragraph","version":1,"format":"","indent":0,
+        serde_json::json!({"type":"paragraph","version":1,"format":"","indent":0,
             "direction":null,"children":[]})
         .as_object()
         .expect("paragraph object"),
