@@ -152,11 +152,8 @@ def model_call(span):
         "cache_read_tokens": number(dig(custom, "gen_ai.usage.cache_read.input_tokens")),
         "cache_write_tokens": number(dig(custom, "gen_ai.usage.cache_creation.input_tokens")),
         "finish_reasons": dig(custom, "gen_ai.response.finish_reasons"),
-        "trace_id": span.get("trace_id"),
         "eager_tools": number(dig(prompt, "tools.eager.count")),
         "loaded_tools": number(dig(prompt, "tools.loaded.count")),
-        "messages": number(dig(prompt, "messages")),
-        "tool_results": number(dig(prompt, "tool_results.count")),
         "prompt_bytes": {
             section: number(dig(prompt, f"{section}.bytes"))
             for section in PROMPT_SECTIONS
@@ -189,7 +186,6 @@ def tool_offer(span):
     custom = span.get("custom") or {}
     definitions = dig(custom, "gen_ai.tool.definitions") or ""
     return {
-        "trace_id": span.get("trace_id"),
         "start_ms": epoch_ms(span["start_timestamp"]),
         "end_ms": epoch_ms(span["end_timestamp"]),
         "names": list(dict.fromkeys(TOOL_DEFINITION.findall(definitions))),

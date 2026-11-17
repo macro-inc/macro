@@ -519,6 +519,7 @@ function renderContext(turn) {
   wrap.append(el('div', { class: 'card' }, docs
     ? `<h5>SDK docs (select_documentation)</h5><div class="big ${docs.selected === 0 || docs.status !== 'selected' ? 'bad' : ''}">${docs.selected ?? '?'} entities selected</div>` +
       `<div>status <b>${esc(docs.status)}</b> · &lt;macro_sdk&gt; ${kb(docs.bytes)} · guidance ${esc(docs.guidance)}</div>` +
+      `<div class="muted">trace <code>${esc(docs.trace_id)}</code></div>` +
       (docs.entities.length ? `<div class="names">${docs.entities.map(name => `<span class="chip">${esc(name)}</span>`).join('')}</div>` : `<div class="muted">catalog only: no entity index in the prompt</div>`)
     : `<h5>SDK docs</h5><div class="muted">no select_documentation span for this turn</div>`));
 

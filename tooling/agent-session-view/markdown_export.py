@@ -11,8 +11,6 @@ import datetime
 import json
 import re
 
-import turn_context
-
 CODE_BUDGET = 1500
 RESULT_BUDGET = 1200
 TEXT_BUDGET = 1500
@@ -247,13 +245,12 @@ class Totals:
         self.wall = sum(turn.bound - turn.started for turn in turns)
 
 
-def render(export, eager_source=None):
+def render(export, contexts=()):
     """The main markdown and the side file of uncut code and results.
-    `eager_source` is `turn_context.eager_names_from_source()`."""
+    `contexts` is `turn_context.for_session(export, ...)`, one per turn."""
     session = export["session"]
     spans = export.get("spans")
     turns = parse(export["frames"], (spans or {}).get("tools"))
-    contexts = turn_context.for_session(export, eager_source)
     totals = Totals(turns)
     sid = session.get("id")
 
@@ -362,8 +359,8 @@ def context_lines(context):
     if docs:
         entities = ", ".join(docs["entities"]) or "none"
         lines.append(
-            f"- SDK docs: {docs['status']}, {turn_context.count(docs['selected'])} selected ({entities}), "
-            f"<macro_sdk> {turn_context.count(docs['bytes'])} bytes, guidance {docs['guidance']}"
+            f"- SDK docs: {docs['status']}, {count_text(docs['selected'])} selected ({entities}), "
+            f"<macro_sdk> {count_text(docs['bytes'])} bytes, guidance {docs['guidance']}, trace `{docs['trace_id']}`"
         )
     else:
         lines.append("- SDK docs: no select_documentation span")
@@ -372,12 +369,12 @@ def context_lines(context):
     names = "unknown (the eager lists in the source could not be read)" if eager["names"] is None \
         else ", ".join(eager["names"]) or "none named"
     lines.append(
-        f"- eager tools: {turn_context.count(eager['count'])} per span, {kilobytes(eager['bytes'])}; "
+        f"- eager tools: {count_text(eager['count'])} per span, {kilobytes(eager['bytes'])}; "
         f"named from source: {names}"
     )
     loaded = ", ".join(f"{entry['name']} ({entry['via']} step {entry['step']})" for entry in tools["loaded"])
     lines.append(
-        f"- loaded tools: {turn_context.count(tools['loaded_count'])} per span, {kilobytes(tools['loaded_bytes'])}; "
+        f"- loaded tools: {count_text(tools['loaded_count'])} per span, {kilobytes(tools['loaded_bytes'])}; "
         f"{loaded or 'none loaded this turn'}"
     )
     lines.append(
@@ -421,12 +418,12 @@ def count_text(value):
     return "" if value is None else f"{value:.0f}"
 
 
-def index_row(export, eager_source=None):
+def index_row(export, contexts=()):
     session = export["session"]
     totals = Totals(parse(export["frames"], (export.get("spans") or {}).get("tools")))
     flags = sorted({
         found["id"]
-        for context in turn_context.for_session(export, eager_source)
+        for context in contexts
         for found in context["flags"] if found["level"] == "warn"
     })
     name = (session.get("name") or "").replace("|", "/")
