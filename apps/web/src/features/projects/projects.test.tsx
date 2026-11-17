@@ -162,7 +162,7 @@ function setupGraphql() {
           ...(['Initiative', 'InitiativeIdentity'].includes(
             getOperationName(operation.query) ?? ''
           )
-            ? { initiative: requestedProject }
+            ? { visibleInitiative: requestedProject }
             : { soup: { nextCursor: 'next', items: [initiative] } }),
         },
       },
@@ -538,23 +538,109 @@ it('settles a project the server cannot load as an error without data', () => {
       ),
     };
   });
-  const notFound = new CombinedError({
+  // The server omits an errored field next to its error instead of nulling it.
+  const failed = new CombinedError({
     graphQLErrors: [
       {
-        message: 'initiative not found',
-        path: ['user', 'initiative'],
-        extensions: { code: 'NOT_FOUND' },
+        message: 'internal server error',
+        path: ['user', 'visibleInitiative'],
+        extensions: { code: 'INTERNAL_SERVER_ERROR' },
       },
     ],
   });
   expect(requests).toHaveLength(2);
   for (const request of requests)
-    request.next({ user: { id: 'viewer' } }, notFound);
+    request.next({ user: { id: 'viewer' } }, failed);
   for (const query of [reads.identity, reads.detail]) {
     expect(query.data).toBeUndefined();
     expect(query.isPending).toBe(false);
     expect(query.isError).toBe(true);
   }
+});
+
+it('settles a project the server answers as missing without asking again', () => {
+  const { client, requests } = controlledClient();
+  const reads = createRoot((dispose) => {
+    disposeSource = dispose;
+    return {
+      identity: createProjectIdentityQuery(
+        () => client,
+        () => 'viewer',
+        () => 'deleted'
+      ),
+      detail: createProjectDetailQuery(
+        () => client,
+        () => 'viewer',
+        () => 'deleted'
+      ),
+    };
+  });
+  expect(requests).toHaveLength(2);
+  for (const request of requests)
+    request.next({ user: { id: 'viewer', visibleInitiative: null } });
+  for (const query of [reads.identity, reads.detail]) {
+    expect(query.data).toBeUndefined();
+    expect(query.isPending).toBe(false);
+    expect(query.isError).toBe(false);
+  }
+  expect(requests).toHaveLength(2);
+});
+
+it('asks the server again before showing a cached missing project, so one shared since appears', async () => {
+  setupGraphql();
+  const data = (
+    await mocks.soup({
+      query: (
+        await import('@service-storage/graphql/generated/graphql')
+      ).InitiativeIdentityDocument,
+    })
+  ).data;
+  const { client, requests } = controlledClient();
+  const query = createRoot((dispose) => {
+    disposeSource = dispose;
+    return createProjectIdentityQuery(
+      () => client,
+      () => 'viewer',
+      () => 'launch'
+    );
+  });
+  requests[0].next(
+    { user: { id: 'viewer', visibleInitiative: null } },
+    undefined,
+    true
+  );
+  expect(query.data).toBeUndefined();
+  expect(query.isPending).toBe(true);
+  await vi.waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[1].operation.context.requestPolicy).toBe('network-only');
+  requests[1].next(data);
+  expect(query.isPending).toBe(false);
+  expect(query.data?.name).toBe('Launch');
+});
+
+it('shows a cached missing project as missing when asking the server fails', async () => {
+  const { client, requests } = controlledClient();
+  const query = createRoot((dispose) => {
+    disposeSource = dispose;
+    return createProjectIdentityQuery(
+      () => client,
+      () => 'viewer',
+      () => 'deleted'
+    );
+  });
+  requests[0].next(
+    { user: { id: 'viewer', visibleInitiative: null } },
+    undefined,
+    true
+  );
+  await vi.waitFor(() => expect(requests).toHaveLength(2));
+  requests[1].next(
+    undefined,
+    new CombinedError({ networkError: new Error('Offline') })
+  );
+  await vi.waitFor(() => expect(query.isPending).toBe(false));
+  expect(query.data).toBeUndefined();
+  expect(requests).toHaveLength(2);
 });
 
 it('reauthorizes a denied identity after remount without exposing cached data', async () => {
