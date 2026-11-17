@@ -178,6 +178,47 @@ describe('project Soup source', () => {
     }
   );
 
+  it('reports a first read whose errored soup field was omitted instead of reading it', async () => {
+    const error = new CombinedError({
+      graphQLErrors: [
+        {
+          message: 'internal server error',
+          path: ['user', 'soup'],
+          extensions: { code: 'INTERNAL_SERVER_ERROR' },
+        },
+      ],
+    });
+    const exchange: Exchange = () => (operations) =>
+      pipe(
+        operations,
+        mergeMap((operation) =>
+          fromPromise(
+            Promise.resolve({
+              operation,
+              error,
+              data: { user: { id: 'viewer' } },
+              stale: false,
+              hasNext: false,
+            })
+          )
+        )
+      );
+    const client = createClient({
+      url: 'http://test.invalid/graphql',
+      exchanges: [exchange],
+    });
+    const source = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createProjectSoupSource(
+        () => client,
+        () => ({ sort: 'updated' }),
+        () => true
+      );
+    });
+    await vi.waitFor(() => expect(source.error()).toBe(error));
+    expect(source.rows()).toBeUndefined();
+  });
+
   it('keeps errors for uncached filters and pagination visible', async () => {
     const f = offlineFixture();
     await vi.waitFor(() => expect(f.source.rows()).toHaveLength(1));

@@ -151,7 +151,8 @@ export function createProjectSoupSource(
             }
           : initial,
       }),
-      getNextPageParam: (page) => page.user.soup.nextCursor,
+      // A failed read omits `soup` (see `rows`); keep its GraphQL error.
+      getNextPageParam: (page) => page.user.soup?.nextCursor,
     };
   });
   const refresh = async () => {
@@ -191,21 +192,22 @@ export function createProjectSoupSource(
       if (!enabled() || query.isPending || accessLost()) return undefined;
       // urql exposes a plain store, so failed background reads may retain the
       // last authorized pages without triggering a Solid resource suspension.
-      const data = query.data;
-      return data
-        ? projectSoupRows(
-            data.pages.flatMap((page) => page.user.soup.items)
-          ).map((row) => {
-            const appearance = pendingAppearance(
-              'initiative',
-              row.project.id,
-              Boolean(query.error)
-            );
-            return appearance
-              ? { ...row, project: { ...row.project, appearance } }
-              : row;
-          })
-        : undefined;
+      // An errored field is omitted rather than nulled, so a page from a
+      // failed first read can lack `soup` despite its generated type.
+      const pages = query.data?.pages;
+      if (!pages || pages.some((page) => !page.user.soup)) return undefined;
+      return projectSoupRows(pages.flatMap((page) => page.user.soup.items)).map(
+        (row) => {
+          const appearance = pendingAppearance(
+            'initiative',
+            row.project.id,
+            Boolean(query.error)
+          );
+          return appearance
+            ? { ...row, project: { ...row.project, appearance } }
+            : row;
+        }
+      );
     },
     loading: () => enabled() && query.isPending,
     error: () => {
