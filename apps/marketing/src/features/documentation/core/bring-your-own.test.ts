@@ -6,7 +6,10 @@ import { expect, it } from 'vitest';
 // through macrod. A cached copy of an older version once taught it a webhook
 // setup that no longer exists.
 const page = readFileSync(
-  path.resolve(import.meta.dirname, '../../../../../docs/AI/bring-your-own.mdx'),
+  path.resolve(
+    import.meta.dirname,
+    '../../../../../docs/AI/bring-your-own.mdx'
+  ),
   'utf8'
 );
 
