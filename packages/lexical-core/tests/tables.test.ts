@@ -1,3 +1,4 @@
+import { $isLinkNode } from '@lexical/link';
 import { $isListItemNode, $isListNode, type ListNode } from '@lexical/list';
 import {
   $convertFromMarkdownString,
@@ -1229,6 +1230,58 @@ describe('pipe characters inside pipe-table cells', () => {
           .some((cell) => cell.hasHeaderState(TableCellHeaderStates.ROW))
       ).toBe(false);
     });
+  });
+
+  it('keeps every cell chip through the internal (lossless) table XML', async () => {
+    const editor = createTestEditor();
+    const chips = [
+      '<m-group-mention>{"groupAlias":"here"}</m-group-mention>',
+      '<m-tag-mention>{"tagId":"t1","name":"urgent"}</m-tag-mention>',
+      '<m-pr-mention>{"url":"https://github.com/o/r/pull/1","label":""}</m-pr-mention>',
+    ];
+    await importWith(
+      editor,
+      ['| a |', '| --- |', `| ${chips.join(' ')} |`].join('\n'),
+      ALL_TRANSFORMERS
+    );
+    const $chipTypes = () =>
+      $inlineNodes($cellGrid()[1][0])
+        .map((node) => node.getType())
+        .filter((type) => type !== 'text');
+    const imported = editor.getEditorState().read($chipTypes);
+
+    const saved = exportMarkdown(editor, INTERNAL_TRANSFORMERS);
+    await importWith(editor, saved, INTERNAL_TRANSFORMERS);
+
+    expect(imported).toHaveLength(3);
+    expect(editor.getEditorState().read($chipTypes)).toEqual(imported);
+  });
+
+  it('imports an <m-link> in a cell as a link and keeps it through the internal XML', async () => {
+    const editor = createTestEditor();
+    const link =
+      '<m-link>{"url":"https://example.com/a","text":"example"}</m-link>';
+    await importWith(
+      editor,
+      ['| a |', '| --- |', `| ${link} |`].join('\n'),
+      ALL_TRANSFORMERS
+    );
+    const $linkUrls = () =>
+      $inlineNodes($cellGrid()[1][0])
+        .filter($isLinkNode)
+        .map((node) => node.getURL());
+    expect(editor.getEditorState().read($linkUrls)).toEqual([
+      'https://example.com/a',
+    ]);
+
+    await importWith(
+      editor,
+      exportMarkdown(editor, INTERNAL_TRANSFORMERS),
+      INTERNAL_TRANSFORMERS
+    );
+    expect(editor.getEditorState().read($linkUrls)).toEqual([
+      'https://example.com/a',
+    ]);
   });
 
   it('round-trips markdown -> lexical -> markdown stably', async () => {
