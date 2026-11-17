@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_email_policy_idempotency\n               (team_id, user_id, consent_incarnation, request_id, link_id,\n                expected_policy_version, policy_version, request_hash, outcome)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n               ON CONFLICT (team_id, user_id, consent_incarnation, request_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Bytea",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ba9b3cdf1d5b3b5d0e0fbfbc907b213232c5d8c5fdb68038e168db84c5874dd4"
+}

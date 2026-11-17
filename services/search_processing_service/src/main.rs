@@ -60,6 +60,13 @@ pub type AgentSessionIndexer = domain::agent_session_index::AgentSessionIndexSer
     outbound::agent_session_search::OpenSearchAgentSessionIndex,
 >;
 
+/// Production wiring for the email attachment status backfill.
+pub type EmailAttachmentStatusBackfill =
+    domain::email_attachment_status::EmailAttachmentStatusBackfill<
+        outbound::document_email::PgLinkedDocuments,
+        outbound::email_attachment_search::OpenSearchEmailAttachmentFlags,
+    >;
+
 /// Resolve a read-replica macrodb URL and
 /// connect a small pool. Returns `None` when the replica URL is missing,
 /// blank. Failures
@@ -250,6 +257,16 @@ async fn main() -> anyhow::Result<()> {
         outbound::agent_session_search::OpenSearchAgentSessionIndex(opensearch_client.clone()),
     ));
 
+    let email_attachment_status_backfill = Arc::new(EmailAttachmentStatusBackfill::new(
+        // The primary, not the backfill replica: a lagging replica can still
+        // show a link a release already removed, and the backfill would then
+        // write `true` after the release consumer wrote `false`.
+        outbound::document_email::PgLinkedDocuments::new(db.clone()),
+        outbound::email_attachment_search::OpenSearchEmailAttachmentFlags(
+            opensearch_client.clone(),
+        ),
+    ));
+
     let backfill_service = Arc::new(BackfillOrchestrator::new(
         PgBackfillSource::new(backfill_db, db.clone(), config.backfill_page_sizes()?),
         SqsSearchEventPublisher::new(sqs_client.clone()),
@@ -334,6 +351,7 @@ async fn main() -> anyhow::Result<()> {
             config: Arc::new(config),
             backfill_service,
             backfill_jobs,
+            email_attachment_status_backfill,
             macro_event_broker,
         },
         shutdown_token.clone(),

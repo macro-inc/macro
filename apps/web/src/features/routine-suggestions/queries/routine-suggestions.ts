@@ -1,8 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  enableRoutineCodeSteps,
-  enableRoutineSuggestions,
-} from '@core/constant/featureFlags';
+import { enableRoutineSuggestions } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
@@ -44,9 +41,7 @@ function routineSuggestionsQueryOptions(enabled: boolean) {
 export function useRoutineSuggestionsEnabled(): () => boolean {
   const userId = useUserId();
   const suggestions = useFeatureFlag(enableRoutineSuggestions);
-  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
-  return () =>
-    userId() !== undefined && suggestions().enabled && codeSteps().enabled;
+  return () => userId() !== undefined && suggestions().enabled;
 }
 
 export type RoutineSuggestionsSource = {

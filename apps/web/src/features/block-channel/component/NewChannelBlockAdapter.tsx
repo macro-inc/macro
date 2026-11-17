@@ -679,7 +679,6 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
                 <TraceFlow name="channel.participants.view">
                   <ChannelParticipantsTab
                     channelId={channelId}
-                    botManagementEnabled={botManagement.enabled()}
                     onCreateBot={botManagement.openCreateBot}
                     inviteBotFocusRequest={botManagement.inviteFocusRequest()}
                     onOpenBot={botManagement.openBot}

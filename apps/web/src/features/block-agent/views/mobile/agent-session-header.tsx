@@ -1,5 +1,5 @@
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
-import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
@@ -10,13 +10,16 @@ import type { AgentSessionHeaderState } from '../../component/agent-session-head
 import { useAgentSession } from '../../context/AgentSessionContext';
 
 /**
- * The agent session block's header on touch, where every session opens as
- * this block: the title with its menu, live viewers, the session's task and
- * pull request, and Info.
+ * An agent session's header on touch: the title with its menu, live viewers,
+ * the session's task and pull request, and Info. Its block shows it, and so
+ * does the touch Agents view beside its conversation list (inside a
+ * `SplitHeaderScope`), so the header is the same in both.
  */
 export function MobileAgentSessionHeader(props: {
   session: AgentSessionResponse | undefined;
   header: AgentSessionHeaderState;
+  /** Where a host goes after the title menu's Delete. */
+  onDelete?: () => void;
 }) {
   const { sessionId, metadata } = useAgentSession();
   const { actions } = props.header;
@@ -56,14 +59,16 @@ export function MobileAgentSessionHeader(props: {
         />
       </MobileHeader>
 
-      <BlockSplitFileMenu
+      <SplitFileMenu
         id={sessionId() ?? ''}
         itemType="agent_session"
+        entityKind="agent"
         name={props.header.title()}
         ops={props.header.ops()}
         tools={[actions.openExternally, actions.share]}
         entity={props.header.entity()}
         permissions={props.header.permissions()}
+        onDelete={props.onDelete}
       />
     </>
   );

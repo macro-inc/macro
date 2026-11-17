@@ -23,7 +23,6 @@ export {
 export { getDocumentCommentNotification } from './document-comment-notification';
 export {
   createEffectOnEntityTypeNotification,
-  entityHasUnreadNotifications,
   executeMarkNotificationsDone,
   executeMarkNotificationsUndone,
   isDocumentCommentNotification,

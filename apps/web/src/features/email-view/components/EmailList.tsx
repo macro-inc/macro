@@ -10,6 +10,7 @@ import {
   useListInteractions,
 } from '@app/components/list';
 import { StickyVirtualizer } from '@app/components/list/StickyVirtualizer';
+import { ViewShellListActiveContext } from '@app/components/view-shell/view-shell-context';
 import { CommandState } from '@app/features/command/state';
 import {
   resolveEntityActionViewContext,
@@ -63,6 +64,7 @@ import {
   Show,
   Suspense,
   Switch,
+  useContext,
 } from 'solid-js';
 import type { CacheSnapshot } from 'virtua';
 import type { VirtualizerHandle } from 'virtua/solid';
@@ -82,6 +84,8 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import { createSearchScrollReset } from '../primitives/create-search-scroll-reset';
+import { emailRowStyle } from '../primitives/email-row-style';
 import { createEmailFolderRestore } from '../primitives/folder-restore';
 import { createEmailRowActionState } from '../primitives/row-action-state';
 import { createScrollAnchor } from '../primitives/scroll-anchor';
@@ -320,8 +324,11 @@ export function EmailList(props: EmailListProps) {
     )
   );
   // While the reader has the keyboard the list's keys stand down.
+  const listActive = useContext(ViewShellListActiveContext);
   const listHasKeyboard = () =>
-    panel.isPanelActive() && !(props.pane?.readerHasKeyboard() ?? false);
+    listActive() &&
+    panel.isPanelActive() &&
+    !(props.pane?.readerHasKeyboard() ?? false);
 
   const [collapseEntity, setCollapseEntity] =
     createSignal<(entityId: string) => Promise<void>>();
@@ -635,6 +642,12 @@ export function EmailList(props: EmailListProps) {
     list.focus.clear({ reason: 'programmatic' });
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
+  createSearchScrollReset({
+    query: () => state.search,
+    showsPreviousRows,
+    reset: () =>
+      setPersistedListState((current) => ({ ...current, scrollOffset: 0 })),
+  });
 
   createEffect(() => {
     rows();
@@ -677,7 +690,7 @@ export function EmailList(props: EmailListProps) {
 
   const listTarget = tourTarget(EMAIL_TOUR.list);
   return (
-    <MaybeSoupEntityActionDrawerManager>
+    <MaybeSoupEntityActionDrawerManager keepOnWideTouch>
       <div
         ref={(element: HTMLDivElement) => {
           setGrid(element);
@@ -839,7 +852,7 @@ export function EmailList(props: EmailListProps) {
                         checkNearEnd();
                       }}
                     >
-                      {(row) => (
+                      {(row, index) => (
                         <Switch>
                           <Match
                             when={row.kind === 'group-header' ? row : undefined}
@@ -874,6 +887,10 @@ export function EmailList(props: EmailListProps) {
                                   <div role="gridcell">
                                     <ListEntity
                                       entity={entityRow().entity}
+                                      rowStyle={emailRowStyle()}
+                                      isFirstInGroup={
+                                        rows()[index() - 1]?.kind !== 'entity'
+                                      }
                                       onFilterByTag={filterByTag}
                                       meta={
                                         <EmailFocusReason

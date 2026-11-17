@@ -1,19 +1,11 @@
 import { TOKENS } from '@core/hotkey/tokens';
 import Undo from '@icon/system/regular/arrow-u-up-left.svg';
 import Redo from '@icon/system/regular/arrow-u-up-right.svg';
-import ArrowUpRight from '@icon/system/regular/arrow-up-right.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import Check from '@icon/system/regular/check.svg';
-import Circle from '@icon/system/regular/circle.svg';
-import Cursor from '@icon/system/regular/cursor.svg';
-import Eraser from '@icon/system/regular/eraser.svg';
-import Hand from '@icon/system/regular/hand.svg';
 import Minus from '@icon/system/regular/minus.svg';
 import Paperclip from '@icon/system/regular/paperclip.svg';
-import Pencil from '@icon/system/regular/pencil-simple.svg';
 import Plus from '@icon/system/regular/plus.svg';
-import Rectangle from '@icon/system/regular/rectangle.svg';
-import Text from '@icon/system/regular/text-t.svg';
 import { Button, Dropdown, Hotkey, Toolbar } from '@ui';
 import { type ComponentProps, For, type ParentProps, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -22,17 +14,22 @@ import type {
   CanvasState,
   CanvasTool,
 } from '../primitives/create-canvas-state';
+import { CANVAS_TOOLS } from './shared/canvas-tools';
 
-const tools = [
-  { id: 'select', label: 'Select', icon: Cursor, key: 'v' },
-  { id: 'pan', label: 'Hand', icon: Hand, key: 'h' },
-  { id: 'rectangle', label: 'Rectangle', icon: Rectangle, key: 'r' },
-  { id: 'ellipse', label: 'Ellipse', icon: Circle, key: 'o' },
-  { id: 'arrow', label: 'Arrow', icon: ArrowUpRight, key: 'a' },
-  { id: 'pencil', label: 'Pencil', icon: Pencil, key: 'p' },
-  { id: 'eraser', label: 'Eraser', icon: Eraser, key: 'e' },
-  { id: 'text', label: 'Text', icon: Text, key: 't' },
-] as const;
+const EDITING_TOOLS = [
+  'select',
+  'pan',
+  'rectangle',
+  'ellipse',
+  'arrow',
+  'pencil',
+  'eraser',
+  'text',
+] as const satisfies readonly CanvasTool[];
+const READ_ONLY_TOOLS = [
+  'select',
+  'pan',
+] as const satisfies readonly CanvasTool[];
 
 export function CanvasDrawingToolbar(props: {
   tool: CanvasTool;
@@ -49,24 +46,19 @@ export function CanvasDrawingToolbar(props: {
         class="pointer-events-auto relative max-w-full overflow-x-auto"
       >
         <Toolbar.Group>
-          <For
-            each={
-              props.readOnly
-                ? tools.filter(
-                    (tool) => tool.id === 'select' || tool.id === 'pan'
-                  )
-                : tools
-            }
-          >
-            {(tool) => (
+          <For each={props.readOnly ? READ_ONLY_TOOLS : EDITING_TOOLS}>
+            {(id) => (
               <Toolbar.Button
-                aria-label={`${tool.label} tool`}
-                tooltip={{ content: `${tool.label} tool`, shortcut: tool.key }}
-                aria-pressed={props.tool === tool.id}
-                variant={props.tool === tool.id ? 'primary' : 'ghost'}
-                onClick={() => props.onTool(tool.id)}
+                aria-label={`${CANVAS_TOOLS[id].label} tool`}
+                tooltip={{
+                  content: `${CANVAS_TOOLS[id].label} tool`,
+                  shortcut: CANVAS_TOOLS[id].key,
+                }}
+                aria-pressed={props.tool === id}
+                variant={props.tool === id ? 'primary' : 'ghost'}
+                onClick={() => props.onTool(id)}
               >
-                <Dynamic component={tool.icon} class="size-4" />
+                <Dynamic component={CANVAS_TOOLS[id].icon} class="size-4" />
               </Toolbar.Button>
             )}
           </For>

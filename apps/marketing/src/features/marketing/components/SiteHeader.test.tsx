@@ -9,9 +9,16 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SiteHeader } from './SiteHeader';
 
 vi.mock('./DemoBookingDialog', () => ({ DemoBookingDialog: () => null }));
+
+function stubMatchMedia(matches: (query: string) => boolean) {
+  vi.stubGlobal('matchMedia', (query: string) =>
+    Object.assign(new EventTarget(), { matches: matches(query) })
+  );
+}
+
 beforeEach(() => {
   localStorage.clear();
-  vi.stubGlobal('matchMedia', () => ({ matches: false }));
+  stubMatchMedia(() => false);
 });
 afterEach(() => {
   cleanup();
@@ -26,11 +33,11 @@ it('opens a searchable documentation sidebar on click and restores focus on Esca
   fireEvent.click(toggle);
   const nav = screen.getByRole('navigation', { name: 'Main navigation' });
   const search = within(nav).getByRole('searchbox');
-  fireEvent.input(search, { target: { value: 'MCP Setup' } });
+  fireEvent.input(search, { target: { value: 'Add Macro MCP' } });
   expect(
-    (await within(nav).findByRole('link', { name: /MCP Setup/ })).getAttribute(
-      'href'
-    )
+    (
+      await within(nav).findByRole('link', { name: /Add Macro MCP/ })
+    ).getAttribute('href')
   ).toBe('/docs/AI/mcp/overview');
   expect(
     within(nav).queryByRole('link', { name: 'Welcome to Macro' })
@@ -71,9 +78,7 @@ it('opens and focuses search with Command or Control K/F, and navigates results'
 });
 
 it('keeps desktop navigation open across content clicks and page mounts', () => {
-  vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: query === '(min-width: 768px)',
-  }));
+  stubMatchMedia((query) => query === '(min-width: 768px)');
   render(() => <SiteHeader currentPath="/docs/product/email" />);
   expect(screen.queryByRole('button', { name: 'Close navigation' })).toBeNull();
   expect(
@@ -90,9 +95,7 @@ it('keeps desktop navigation open across content clicks and page mounts', () => 
 });
 
 it('keeps the mobile guide visible until navigation is opened', () => {
-  vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: query === '(max-width: 767px)',
-  }));
+  stubMatchMedia((query) => query === '(max-width: 767px)');
   render(() => <SiteHeader currentPath="/docs/product/email" />);
   expect(screen.queryByRole('navigation')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));

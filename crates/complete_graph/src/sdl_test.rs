@@ -494,7 +494,11 @@ fn initiative_reads_and_mutations_share_the_canonical_soup_entity() {
     };
     assert_sdl_line(
         object("GraphqlUser"),
-        "initiative(initiativeId: ID!): GraphqlSoupInitiative!",
+        "initiative(initiativeId: ID!): GraphqlSoupInitiative! @deprecated(reason: \"Use visibleInitiative, which answers a missing or hidden project with null instead of NOT_FOUND. Remove after 2026-12-31.\")",
+    );
+    assert_sdl_line(
+        object("GraphqlUser"),
+        "visibleInitiative(initiativeId: ID!): GraphqlSoupInitiative",
     );
     assert!(!object("SoupQueryRoot").contains("initiative"));
     for field in [
