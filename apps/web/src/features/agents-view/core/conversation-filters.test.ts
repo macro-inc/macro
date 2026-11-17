@@ -84,7 +84,7 @@ describe('groupConversations', () => {
 
   it('returns one unlabeled group when grouping is off', () => {
     expect(groupConversations(items, (item) => item.facts, 'none')).toEqual([
-      { id: 'all', label: undefined, items },
+      { id: 'all', label: undefined, counted: false, items },
     ]);
   });
 
@@ -92,24 +92,41 @@ describe('groupConversations', () => {
     expect(
       groupConversations(items, (item) => item.facts, 'status').map((group) => [
         group.label,
+        group.counted,
         group.items.map((item) => item.id),
       ])
     ).toEqual([
-      ['Needs you', ['review']],
-      ['Working', ['hiring']],
-      ['Recent', ['kanban']],
+      ['Needs you', true, ['review']],
+      ['Working', true, ['hiring']],
+      // Recent grows with every loaded page, so it carries no count.
+      ['Recent', false, ['kanban']],
     ]);
   });
 
   it('drops empty groups and keeps the incoming order inside a group', () => {
+    const idle = { ...hiringPlan, state: 'dormant' as const };
     expect(
-      groupConversations(items, (item) => item.facts, 'type').map((group) => [
-        group.label,
-        group.items.map((item) => item.id),
-      ])
+      groupConversations(
+        [...items, { id: 'idle', facts: idle }],
+        (item) => item.facts,
+        'status'
+      ).map((group) => [group.label, group.items.map((item) => item.id)])
     ).toEqual([
-      ['Chat', ['hiring']],
-      ['Code', ['kanban', 'review']],
+      ['Needs you', ['review']],
+      ['Working', ['hiring']],
+      ['Recent', ['kanban', 'idle']],
+    ]);
+  });
+
+  it('leaves a list that is all one status without a heading', () => {
+    const idleOnly = [
+      { id: 'kanban', facts: kanbanDrag },
+      { id: 'idle', facts: { ...hiringPlan, state: 'dormant' as const } },
+    ];
+    expect(
+      groupConversations(idleOnly, (item) => item.facts, 'status')
+    ).toEqual([
+      { id: 'all', label: undefined, counted: false, items: idleOnly },
     ]);
   });
 });

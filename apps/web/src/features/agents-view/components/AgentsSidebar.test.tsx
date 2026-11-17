@@ -214,7 +214,7 @@ describe('mixed Agents sidebar', () => {
       screen
         .getAllByRole('heading', { level: 3 })
         .map((heading) => heading.textContent)
-    ).toEqual(['Needs you1', 'Recent1']);
+    ).toEqual(['Needs you1', 'Recent']);
     // Archived starts collapsed; its header expands it.
     const archivedToggle = screen.getByRole('button', { name: /Archived/ });
     expect(archivedToggle.getAttribute('aria-expanded')).toBe('false');

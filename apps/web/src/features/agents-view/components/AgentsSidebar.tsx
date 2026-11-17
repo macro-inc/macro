@@ -432,9 +432,11 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                         {(label) => (
                           <h3 class="flex shrink-0 items-center gap-1.5 px-(--sidebar-item-inset) pt-2 pb-1 text-xs font-medium text-ink-muted">
                             {label()}
-                            <span class="text-ink-extra-muted tabular-nums">
-                              {group().items.length}
-                            </span>
+                            <Show when={group().counted}>
+                              <span class="text-ink-extra-muted tabular-nums">
+                                {group().items.length}
+                              </span>
+                            </Show>
                           </h3>
                         )}
                       </Show>
