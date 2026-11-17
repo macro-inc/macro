@@ -48,6 +48,7 @@ export interface MobileComposerProps {
   footerMount?: HTMLElement;
   scrollElement: Accessor<HTMLElement | undefined>;
   macroCallsEnabled: boolean;
+  agentDraft?: boolean;
   saveError?: string;
   resolveAppLink?: ComponentProps<typeof ComposerDescription>['resolveAppLink'];
 }
@@ -99,7 +100,7 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
       </Show>
       <div class="flex min-w-0 flex-col gap-4 px-5 pb-1">
         <div ref={setTitle}>
-          <MobileComposerTitle />
+          <MobileComposerTitle agentDraft={props.agentDraft} />
         </div>
         <MobileComposerWhen />
         <Show when={!model.isOutOfOffice()}>

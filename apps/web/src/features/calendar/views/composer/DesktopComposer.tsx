@@ -54,6 +54,7 @@ interface DesktopComposerProps {
   onClose: () => void;
   onCancel: () => void;
   macroCallsEnabled: boolean;
+  agentDraft?: boolean;
   saveError?: string;
   resolveAppLink?: ComponentProps<typeof ComposerDescription>['resolveAppLink'];
 }
@@ -70,7 +71,7 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
   return (
     <>
       <ComposerHeader onPointerDown={props.onHeaderPointerDown}>
-        <ComposerKind />
+        <ComposerKind agentDraft={props.agentDraft} />
         <div class="flex-1" />
         <Show when={props.onTogglePin}>
           {(toggle) => (

@@ -42,6 +42,7 @@ export function MobileAgentComposer(
             headerMount={header()}
             footerMount={footer()}
             macroCallsEnabled={props.macroCallsEnabled}
+            agentDraft
             resolveAppLink={props.resolveAppLink}
           />
         </div>

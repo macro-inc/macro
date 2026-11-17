@@ -11,6 +11,7 @@
 import { createCalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
 import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
 import { eventGuestOptions } from '@app/features/calendar/components/composer/guest-options';
+import { ComposerRoot } from '@app/features/calendar/components/composer/root/ComposerRoot';
 import type { ComposerMetadataChanges } from '@app/features/calendar/core/composer-metadata';
 import { useCalendarGuestInvitesFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { createAgentComposer } from '@app/features/calendar/primitives/create-agent-composer';
@@ -20,7 +21,7 @@ import {
   spansMultipleInboxes,
 } from '@app/features/calendar/utils/calendar-label';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
-import { EventForm } from '@app/features/calendar/views/composer/EventForm';
+import { DesktopComposer } from '@app/features/calendar/views/composer/DesktopComposer';
 import { MobileAgentComposer } from '@app/features/calendar/views/composer/mobile/MobileAgentComposer';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
@@ -348,25 +349,19 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
               class="flex min-h-80 max-h-128 min-w-0 flex-col gap-3 overflow-hidden rounded-xl border border-edge-muted bg-surface text-ink shadow-sm"
             >
               {status()}
-              <EventForm
-                timeFormat={preferences.timeFormat}
-                controller={controller}
-                macroCallsEnabled={macroCallsEnabled()}
-                guestPolicyEditable={guestInvitesEnabled()}
-                class="min-w-0"
-                disabled={
-                  !props.sink.canAct() ||
-                  agent.operation() === 'reject' ||
-                  (agent.locked() && agent.operation() !== 'create')
-                }
-                pending={agent.operation() === 'create'}
-                onCancel={() =>
-                  fireAndForget(agent.cancel(), 'ai-calendar-compose')
-                }
-                onSubmit={(values) =>
-                  fireAndForget(agent.create(values), 'ai-calendar-compose')
-                }
-              />
+              <ComposerRoot model={agent.model} class="min-h-0 flex-1">
+                <DesktopComposer
+                  onClose={() =>
+                    fireAndForget(agent.cancel(), 'ai-calendar-compose')
+                  }
+                  onCancel={() =>
+                    fireAndForget(agent.cancel(), 'ai-calendar-compose')
+                  }
+                  macroCallsEnabled={macroCallsEnabled()}
+                  resolveAppLink={resolveAppLink}
+                  agentDraft
+                ></DesktopComposer>
+              </ComposerRoot>
             </div>
           }
         >

@@ -1,9 +1,9 @@
-import type { EventFormProps } from '@app/features/calendar/components/composer/event-form-state';
+import type { DesktopComposer } from '@app/features/calendar/views/composer/DesktopComposer';
 import type { VisibleCalendar } from '@queries/calendar/calendars';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import type { Link } from '@service-email/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, For, type JSX } from 'solid-js';
+import { type ComponentProps, createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -39,6 +39,9 @@ vi.mock(
     ),
   })
 );
+vi.mock('@components/app/split-layout/split-router/mention-links', () => ({
+  useMacroMentionLinkResolver: () => () => undefined,
+}));
 vi.mock('@app/features/meetings/use-quick-calls-flag', () => ({
   useQuickCallsFlag: () => () => mocks.quickCalls(),
 }));
@@ -68,12 +71,16 @@ vi.mock('@core/email-link', () => ({
 vi.mock('@core/user', () => ({
   recipientEntityMapper: () => (value: unknown) => value,
 }));
-vi.mock('@ui', () => ({
-  Layer: (props: { children: JSX.Element }) => props.children,
-  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button {...props} />
-  ),
-}));
+vi.mock('@ui', async () => {
+  const { cn } = await import('@app/components/ui/utils/classname');
+  return {
+    cn,
+    Layer: (props: { children: JSX.Element }) => props.children,
+    Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
+      <button {...props} />
+    ),
+  };
+});
 vi.mock('./EventPreview', () => ({
   CalendarToolEventPreview: (props: {
     timeZone?: string;
@@ -89,47 +96,51 @@ vi.mock('./EventPreview', () => ({
     </>
   ),
 }));
-vi.mock('@app/features/calendar/views/composer/EventForm', () => ({
-  EventForm: (props: EventFormProps) => (
-    <>
-      <select
-        aria-label="Calendar"
-        value={props.controller.effectiveCalendarId() ?? ''}
-        onChange={(event) =>
-          props.controller.setField('calendarId', event.currentTarget.value)
-        }
-      >
-        <option value="">Choose calendar</option>
-        <For each={props.controller.calendarOptions()}>
-          {(option) => <option value={option.id}>{option.label}</option>}
-        </For>
-      </select>
-      <output aria-label="Macro calls enabled">
-        {String(props.macroCallsEnabled)}
-      </output>
-      <output aria-label="Conference">
-        {props.controller.state().conference}
-      </output>
-      <button
-        type="button"
-        onClick={() => props.controller.setField('conference', 'macro')}
-      >
-        Pick Macro call
-      </button>
-      <button
-        disabled={
-          !props.controller.canSave() || props.disabled || props.pending
-        }
-        onClick={() => {
-          const values = props.controller.submitValues();
-          if (values) props.onSubmit(values);
-        }}
-      >
-        Create event
-      </button>
-    </>
-  ),
-}));
+vi.mock('@app/features/calendar/views/composer/DesktopComposer', async () => {
+  const { useCalendarComposer } = await import(
+    '@app/features/calendar/context/calendar-composer-context'
+  );
+  return {
+    DesktopComposer: (props: ComponentProps<typeof DesktopComposer>) => {
+      const model = useCalendarComposer();
+      const controller = model.controller;
+      return (
+        <>
+          <select
+            aria-label="Calendar"
+            value={controller.effectiveCalendarId() ?? ''}
+            onChange={(event) =>
+              controller.setField('calendarId', event.currentTarget.value)
+            }
+          >
+            <option value="">Choose calendar</option>
+            <For each={controller.calendarOptions()}>
+              {(option) => <option value={option.id}>{option.label}</option>}
+            </For>
+          </select>
+          <output aria-label="Macro calls enabled">
+            {String(props.macroCallsEnabled)}
+          </output>
+          <output aria-label="Conference">
+            {controller.state().conference}
+          </output>
+          <button
+            type="button"
+            onClick={() => controller.setField('conference', 'macro')}
+          >
+            Pick Macro call
+          </button>
+          <button
+            disabled={!model.canSave() || model.formIsDisabled()}
+            onClick={model.submit}
+          >
+            Create event
+          </button>
+        </>
+      );
+    },
+  };
+});
 
 import {
   CalendarDraftComposer,
