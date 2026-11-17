@@ -87,6 +87,10 @@ the account, or changes its managers.
 - Cookies are ambient and only considered when no explicit credential is
   present; an explicit credential always wins over a cookie.
 - A valid principal not admitted by the chosen policy is a 403, not a 401.
+- A route whose response carries a new credential's secret refuses
+  `is_program_run`, because a program's results reach the model: the
+  bot-token, channel-scoped bot and user API key routes do. The header alone
+  does not hold there; a program can drop it with a raw `fetch`.
 - `mark_harness_token_used` runs on every harness-authenticated request. It
   writes `last_used_at` at most once a minute and skips a row another request
   is already updating. Don't make it a plain per-request `UPDATE`: one busy
