@@ -62,7 +62,7 @@ test.describe("the phone composer's send time, Gmail inbox", () => {
   // When this fails, the phone's composer hides a chosen time: its header
   // no longer says when the message will go, its picker no longer offers to
   // clear the time, or Schedule send holds no message.
-  test('a time chosen on a phone shows in the header, can be cleared in the picker, and is held', async ({
+  test('a time chosen on a phone shows in the header, its picker offers to clear it, and it is held', async ({
     page,
     mailbox,
   }) => {
@@ -117,6 +117,7 @@ test.describe("the phone composer's send time, Gmail inbox", () => {
       .getByRole('button', { name: 'Undo' })
       .tap({ timeout: 15_000 });
     await expect(notice(page, /^Schedule cancelled\.$/)).toBeVisible();
+    saw('STC-065');
     await expect.poll(() => scheduled(mailbox)).toEqual([]);
   });
 

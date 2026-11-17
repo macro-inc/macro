@@ -58,7 +58,8 @@ for (const provider of PROVIDERS) {
       await expect.poll(() => scheduledTimes(mailbox)).toEqual([tomorrow]);
       await scheduledNotice(page).getByRole('button', { name: 'Undo' }).click();
       did('AC-055');
-      await expect(notice(page, 'Schedule cancelled.')).toBeVisible();
+      // Exactly: not the notice of a schedule cancelled from the composer.
+      await expect(notice(page, /^Schedule cancelled\.$/)).toBeVisible();
       saw('STC-065');
       await expect.poll(() => scheduledTimes(mailbox)).toEqual([]);
       await expect
