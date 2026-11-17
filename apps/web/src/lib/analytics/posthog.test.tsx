@@ -78,6 +78,7 @@ function renderFlag(
       </ShowFeatureFlag>
     );
   };
+  flagStore().connect(posthog);
   const view = render(() => (
     <PosthogProvider>
       <Probe />
@@ -123,9 +124,6 @@ describe('reactive PostHog flags', () => {
     expect(view.result().enabled).toBe(false);
     expect(screen.queryByRole('button', { name: 'New label' })).toBeNull();
     expect(view.mount).toHaveBeenCalledOnce();
-
-    view.unmount();
-    expect(posthog.unsubscribe).toHaveBeenCalledOnce();
   });
 
   it('refreshes payloads when the enabled flag list is unchanged', async () => {
@@ -146,6 +144,7 @@ describe('reactive PostHog flags', () => {
       () =>
         new Promise<{ default: () => JSX.Element }>((r) => (resolveView = r))
     );
+    flagStore().connect(posthog);
     render(() => (
       <PosthogProvider>
         <Suspense fallback={<p>Suspense fallback</p>}>

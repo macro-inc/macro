@@ -1,63 +1,21 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { RemoteFlag } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { Telemetry } from '@macro-inc/observability';
 import type { JsonType, PostHog } from 'posthog-js';
-import {
-  type Accessor,
-  createMemo,
-  createSignal,
-  type JSX,
-  onCleanup,
-  Show,
-  startTransition,
-} from 'solid-js';
+import { type Accessor, createMemo, type JSX, Show } from 'solid-js';
 import { flagStore } from './flag-store';
 
 export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
   'PosthogProvider',
   () => {
     const analytics = useAnalytics();
-
-    // PostHog only reports flags once `/flags` answers, but it already serves
-    // the flags it cached on the previous visit. Starting from that cache means
-    // returning users paint flagged UI once, not flags-off first and then again
-    // when the answer lands (e.g. soup lists reloading on a transport swap).
-    const cachedFlags = analytics.posthog.featureFlags?.getFlags() ?? [];
-    const [featureFlags, setFeatureFlags] = createSignal<string[]>(
-      cachedFlags,
-      { equals: false }
-    );
-    const disconnect = flagStore.connect(analytics.posthog);
-
-    const unsub = analytics.posthog.onFeatureFlags((flags, _, ctx) => {
-      // Flags usually arrive after first paint and swap flagged subtrees,
-      // often to lazy views. A transition keeps the painted UI until the new
-      // one is ready instead of flashing Suspense fallbacks in between.
-      startTransition(() => {
-        // Order matters: signals propagate synchronously, so the store must
-        // settle only after the flag values are in place — the other way
-        // around, flag-off fallbacks fire against the still-empty flag list.
-        if (!ctx?.errorsLoading) {
-          setFeatureFlags(flags);
-        }
-        flagStore.receiveRemote(ctx?.errorsLoading === true);
-      }).catch((error) => Telemetry.error(error, { surface: 'feature-flags' }));
-    });
-
-    onCleanup(() => {
-      unsub();
-      disconnect();
-    });
-
     return {
       instance: analytics.posthog,
-      featureFlags,
       // Distinguishes "flags not known yet" from "no flags enabled", so
       // destructive flag-off fallbacks (e.g. RedirectSplit) wait for an answer
-      // from PostHog, the backend, or a cache. Settles when PostHog fails and
-      // no backend read is pending, so an outage degrades to flags-off, not a
-      // hang.
+      // from PostHog, the backend, or a cache (`flag-store.ts`). Settles when
+      // PostHog fails and no backend read is pending, so an outage degrades to
+      // flags-off, not a hang.
       flagsLoaded: flagStore.settled,
       // Whether the last fetch got no answer at all (blocked, offline, PostHog
       // down), as opposed to an answer that says a flag is off.

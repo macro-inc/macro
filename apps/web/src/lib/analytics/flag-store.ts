@@ -1,5 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { createUserScopedStorage } from '@core/util/userScopedStorage';
+import {
+  createUserScopedStorage,
+  userScopedStorageKey,
+} from '@core/util/userScopedStorage';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   batch,
@@ -45,6 +48,13 @@ type BootstrapTrigger = 'cold' | 'fallback';
 
 /** What the store needs from the PostHog client. */
 export type FlagClient = {
+  onFeatureFlags: (
+    callback: (
+      flags: string[],
+      variants: Record<string, unknown>,
+      context?: { errorsLoading?: boolean }
+    ) => void
+  ) => () => void;
   reloadFeatureFlags: () => void;
   get_property?: (name: string) => unknown;
   featureFlags?: { getFlags: () => string[] };
@@ -80,9 +90,19 @@ const flagValuesSchema = z.record(
   z.union([z.boolean(), z.string()])
 );
 
-const persistedBootstrap = createUserScopedStorage(
-  'feature-flags:bootstrap:v1'
-);
+const PERSISTED_BOOTSTRAP_KEY = 'feature-flags:bootstrap:v1';
+const persistedBootstrap = {
+  ...createUserScopedStorage(PERSISTED_BOOTSTRAP_KEY),
+  remove(userId: string) {
+    try {
+      localStorage.removeItem(
+        userScopedStorageKey(PERSISTED_BOOTSTRAP_KEY, userId)
+      );
+    } catch {
+      // Storage may be unavailable; then nothing was written either.
+    }
+  },
+};
 
 function readPersisted(userId: string): FlagValues | undefined {
   const raw = persistedBootstrap.read(userId);
@@ -134,7 +154,6 @@ export function createFlagStore() {
   let account: FlagAccount | undefined;
   // Fences a backend answer that arrives after the account changed.
   let accountGeneration = 0;
-  let requestStartedAt = Date.now();
   let attempt = 0;
   let loadSpan: Span | undefined;
   let resolveSpan: Span | undefined;
@@ -224,7 +243,11 @@ export function createFlagStore() {
     span.setAttr('flags.outcome', 'ok');
     span.setAttr('flags.count', Object.keys(values).length);
     if (generation !== accountGeneration) return;
-    persistedBootstrap.write(current.userId, JSON.stringify(values));
+    // Kept for a later visit whose PostHog request fails too; once PostHog
+    // answers, its own cache is fresher (see receiveRemote).
+    if (remote() !== 'ok') {
+      persistedBootstrap.write(current.userId, JSON.stringify(values));
+    }
     // Like PostHog's answer, these swap flagged subtrees; a transition keeps
     // the painted UI until the new one is ready.
     await startTransition(() => {
@@ -250,75 +273,94 @@ export function createFlagStore() {
     );
   }
 
+  /** PostHog answered `/flags`; `errorsLoading` when it got no answer. */
+  function receiveRemote(errorsLoading: boolean) {
+    const outcome = errorsLoading && client ? classifyFailure(client) : 'ok';
+    // Only a failure that ends an attempt this store started or awaited
+    // schedules the next retry; PostHog's own reloads answer here too.
+    const endsAttempt = loadSpan !== undefined;
+    if (loadSpan) {
+      loadSpan.setAttr('flags.outcome', errorsLoading ? outcome : 'ok');
+      if (errorsLoading && client) {
+        loadSpan.setAttr('flags.errors', failureDetail(client));
+        loadSpan.setAttr(
+          'flags.online',
+          typeof navigator === 'undefined' || navigator.onLine !== false
+        );
+      }
+      loadSpan.end();
+      loadSpan = undefined;
+    }
+    if (!errorsLoading && remote() === 'unreachable' && unreachableSince) {
+      Telemetry.span('feature_flags.recovered', {
+        startTime: unreachableSince,
+        attributes: { 'flags.attempt': attempt },
+      }).end();
+    }
+    const firstAnswer = !errorsLoading && remote() !== 'ok';
+    batch(() => {
+      setUnreachable(errorsLoading);
+      setRevision((value) => value + 1);
+      // An answer earlier this session outranks a later failure.
+      if (!errorsLoading) setRemote('ok');
+      else if (remote() !== 'ok') setRemote('unreachable');
+    });
+    // PostHog's own cache now holds a fresher answer than an earlier
+    // backend one.
+    if (firstAnswer && account) persistedBootstrap.remove(account.userId);
+    if (errorsLoading && remote() === 'unreachable') {
+      unreachableSince ??= Date.now();
+      startBootstrap('fallback');
+      if (endsAttempt) scheduleRetry();
+    }
+    endResolveSpanIfSettled();
+  }
+
   return {
     settled,
     /** The last PostHog answer was a failure (blocked, timed out, offline). */
     unreachable,
 
-    /** PostHog is about to send its first `/flags` request. */
-    markRequestStart(at = Date.now()) {
-      requestStartedAt = at;
-    },
+    receiveRemote,
 
     /**
-     * Attach the PostHog client, once its provider mounts. Spans start from
-     * its first `/flags` request; a client without cached flags (a new user,
-     * device or cleared storage) reads the backend in parallel.
+     * Attach the PostHog client right after `init`, before its first
+     * `/flags` request can answer: PostHog replays an earlier answer to a
+     * late subscriber without saying it failed. A client without cached
+     * flags (a new user, device or cleared storage) reads the backend in
+     * parallel.
      */
     connect(next: FlagClient) {
-      const startedAt = requestStartedAt;
+      const startedAt = Date.now();
       client = next;
       setHadCache((next.featureFlags?.getFlags().length ?? 0) > 0);
-      resolveSpan ??= Telemetry.span('feature_flags.resolve', {
+      resolveSpan = Telemetry.span('feature_flags.resolve', {
         startTime: startedAt,
         attributes: { 'flags.had_cache': hadCache() },
       });
-      if (remote() === 'pending' && !loadSpan) startLoadSpan(startedAt);
+      startLoadSpan(startedAt);
+      const unsubscribe = next.onFeatureFlags((_flags, _variants, context) => {
+        // Flags swap flagged subtrees, often to lazy views. A transition
+        // keeps the painted UI until the new one is ready instead of flashing
+        // Suspense fallbacks in between.
+        fireAndForget(
+          startTransition(() => receiveRemote(context?.errorsLoading === true)),
+          'feature-flags'
+        );
+      });
       if (!hadCache()) startBootstrap('cold');
       return () => {
+        unsubscribe();
         for (const timer of timers) clearTimeout(timer);
         timers.clear();
+        for (const span of [loadSpan, resolveSpan]) {
+          span?.setAttr('flags.outcome', 'cancelled');
+          span?.end();
+        }
+        loadSpan = undefined;
+        resolveSpan = undefined;
         client = undefined;
       };
-    },
-
-    /** PostHog answered `/flags`; `errorsLoading` when it got no answer. */
-    receiveRemote(errorsLoading: boolean) {
-      const outcome = errorsLoading && client ? classifyFailure(client) : 'ok';
-      // Only a failure that ends an attempt this store started or awaited
-      // schedules the next retry; PostHog's own reloads answer here too.
-      const endsAttempt = loadSpan !== undefined;
-      if (loadSpan) {
-        loadSpan.setAttr('flags.outcome', errorsLoading ? outcome : 'ok');
-        if (errorsLoading && client) {
-          loadSpan.setAttr('flags.errors', failureDetail(client));
-          loadSpan.setAttr(
-            'flags.online',
-            typeof navigator === 'undefined' || navigator.onLine !== false
-          );
-        }
-        loadSpan.end();
-        loadSpan = undefined;
-      }
-      if (!errorsLoading && remote() === 'unreachable' && unreachableSince) {
-        Telemetry.span('feature_flags.recovered', {
-          startTime: unreachableSince,
-          attributes: { 'flags.attempt': attempt },
-        }).end();
-      }
-      batch(() => {
-        setUnreachable(errorsLoading);
-        setRevision((value) => value + 1);
-        // An answer earlier this session outranks a later failure.
-        if (!errorsLoading) setRemote('ok');
-        else if (remote() !== 'ok') setRemote('unreachable');
-      });
-      if (errorsLoading && remote() === 'unreachable') {
-        unreachableSince ??= Date.now();
-        startBootstrap('fallback');
-        if (endsAttempt) scheduleRetry();
-      }
-      endResolveSpanIfSettled();
     },
 
     /**
@@ -327,14 +369,20 @@ export function createFlagStore() {
      */
     setAccount(next: FlagAccount | undefined) {
       if (next?.userId === account?.userId) return;
+      // Signing out leaves nothing of the account's flags on this browser.
+      if (account && !next) persistedBootstrap.remove(account.userId);
       accountGeneration += 1;
       account = next;
+      const answered = remote() === 'ok';
+      if (next && answered) persistedBootstrap.remove(next.userId);
       batch(() => {
         setBootstrap(undefined);
         setBootstrapStatus('idle');
-        setPersisted(next ? readPersisted(next.userId) : undefined);
+        setPersisted(
+          next && !answered ? readPersisted(next.userId) : undefined
+        );
       });
-      if (!next || remote() === 'ok') return;
+      if (!next || answered) return;
       if (!hadCache() || remote() === 'unreachable') {
         startBootstrap(remote() === 'unreachable' ? 'fallback' : 'cold');
       }

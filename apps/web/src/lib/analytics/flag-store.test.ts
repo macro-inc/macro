@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createFlagStore,
   FLAG_RETRY_DELAYS_MS,
+  type FlagClient,
   type FlagValues,
 } from './flag-store';
 
@@ -68,6 +69,7 @@ function postHog(options: { cached?: string[] } = {}) {
   return {
     state,
     client: {
+      onFeatureFlags: vi.fn<FlagClient['onFeatureFlags']>(() => vi.fn()),
       reloadFeatureFlags: vi.fn(),
       get_property: (name: string) =>
         name === '$feature_flag_errors' ? state.errors : undefined,
@@ -229,6 +231,63 @@ describe('flag store', () => {
       fetchFlags: vi.fn(),
     });
     expect(read().resolved).toEqual({ enabled: false, source: 'cache' });
+  });
+
+  it("subscribes to PostHog's answers and lets go on disconnect", async () => {
+    const store = createFlagStore();
+    const unsubscribe = vi.fn();
+    const { client } = postHog();
+    client.onFeatureFlags.mockReturnValue(unsubscribe);
+    const disconnect = store.connect(client);
+
+    const callback = client.onFeatureFlags.mock.calls[0]?.[0];
+    callback?.([], {}, { errorsLoading: true });
+    await settle();
+    expect(store.unreachable()).toBe(true);
+
+    disconnect();
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(
+      spans.find((span) => span.name === 'feature_flags.resolve')
+    ).toMatchObject({ ended: true });
+  });
+
+  it('drops the saved backend answer once PostHog answers, and on sign-out', async () => {
+    const key = `feature-flags:bootstrap:v1:${encodeURIComponent(USER)}`;
+    const failing = createFlagStore();
+    failing.connect(postHog().client);
+    failing.receiveRemote(true);
+    failing.setAccount({
+      userId: USER,
+      fetchFlags: async () => ({ 'enable-crm': true }),
+    });
+    await settle();
+    expect(localStorage.getItem(key)).not.toBeNull();
+
+    // A later visit where PostHog answers: its cache is fresher from now on.
+    const answering = createFlagStore();
+    answering.connect(postHog({ cached: ['enable-crm'] }).client);
+    answering.setAccount({ userId: USER, fetchFlags: vi.fn() });
+    expect(answering.resolve('enable-crm', () => false)?.source).toBe(
+      'persisted_bootstrap'
+    );
+    answering.receiveRemote(false);
+    expect(localStorage.getItem(key)).toBeNull();
+
+    localStorage.setItem(key, JSON.stringify({ 'enable-crm': true }));
+    failing.setAccount(undefined);
+    expect(localStorage.getItem(key)).toBeNull();
+  });
+
+  it("doesn't save a backend answer that arrives after PostHog's", async () => {
+    const store = createFlagStore();
+    store.connect(postHog().client);
+    const backend = deferred<FlagValues>();
+    store.setAccount({ userId: USER, fetchFlags: () => backend.promise });
+    store.receiveRemote(false);
+    backend.resolve({ 'enable-crm': true });
+    await settle();
+    expect(localStorage.length).toBe(0);
   });
 
   it('applies a late PostHog answer to readers without a reload', () => {

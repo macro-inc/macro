@@ -199,10 +199,7 @@ const initializePosthog = (instance: PostHog) => {
     // on the mobile-email desktop link so that path is its own campaign field.
     custom_campaign_params: ['signup_flow'],
     // Runs before the first `/flags` request.
-    loaded: (posthog) => {
-      setFlagEnvironment(posthog);
-      flagStore.markRequestStart();
-    },
+    loaded: setFlagEnvironment,
     // The default 3 s times out on slow boots, and a timed-out answer is
     // discarded. Cached and backend flags (`flag-store.ts`) cover the wait.
     feature_flag_request_timeout_ms: FEATURE_FLAG_REQUEST_TIMEOUT_MS,
@@ -273,6 +270,8 @@ const createAnalytics = () => {
   };
 
   initializeProviders();
+  // Before any `/flags` answer can arrive: see `flagStore.connect`.
+  flagStore.connect(posthog);
 
   const sendEvent = (
     provider: AnalyticsProvider,

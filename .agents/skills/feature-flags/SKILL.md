@@ -110,6 +110,12 @@ stacks); a web build in any other mode sends `unknown`. Put the condition in
 the same release-condition set as the user IDs, as a person property: cohort
 and group conditions ignore this override.
 
+Target web flags by person properties or cohorts. When the web client's own
+PostHog request fails, the backend evaluates its flags (`/user/feature_flags`)
+with PostHog's stored person properties and `environment` only: no team
+groups, geo, browser or URL properties, so a flag targeted by those reads off
+there.
+
 ## 5. Backend
 
 - **Per-user remote flags** use `crates/feature_flags` (read its `README.md`):

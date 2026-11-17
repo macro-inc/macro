@@ -45,6 +45,7 @@ vi.mock('posthog-js', () => ({
     reset = mocks.reset;
     setPersonProperties = mocks.setPersonProperties;
     setPersonPropertiesForFlags = mocks.setPersonPropertiesForFlags;
+    onFeatureFlags = () => () => {};
   },
 }));
 
