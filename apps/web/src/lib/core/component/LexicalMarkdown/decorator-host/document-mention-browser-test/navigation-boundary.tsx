@@ -6,7 +6,6 @@ import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { createRoutedSplitLayoutWithRouter } from '@components/app/split-layout/tests/fixtures';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { createNotificationSource } from '@notifications';
-import { ws } from '@service-connection/websocket';
 import { onCleanup, type ParentProps } from 'solid-js';
 
 /** Actual app routing boundary; destination blocks and remote services are not mounted. */
@@ -16,11 +15,7 @@ export function NavigationBoundary(props: ParentProps) {
     orchestrator,
     '/home'
   );
-  const notificationSource = createNotificationSource(
-    ws,
-    undefined,
-    () => false
-  );
+  const notificationSource = createNotificationSource(undefined, () => false);
   setGlobalSplitManager(manager);
   onCleanup(() => {
     if (globalSplitManager() === manager) setGlobalSplitManager(undefined);
