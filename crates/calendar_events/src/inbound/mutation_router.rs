@@ -17,8 +17,8 @@ use axum::{
     routing::{get, patch, post, put},
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal, is_agent_run,
+    CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, UserOrInternal, is_agent_run,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -478,10 +478,10 @@ const PROGRAM_CREATE_REFUSAL: &str = "An agent's program cannot create a calenda
 /// Refuse an agent run's create (see [`is_agent_run`]); a person in the app
 /// creates from the composer, which is their confirmation.
 fn refuse_program_create(
-    agent_attributed: bool,
+    attribution: CredentialAttribution,
     headers: &HeaderMap,
 ) -> Result<(), CalendarMutationApiError> {
-    if is_agent_run(agent_attributed, headers) {
+    if is_agent_run(attribution, headers) {
         return Err(CalendarMutationApiError {
             code: CalendarMutationErrorCode::ConfirmationRequired,
             message: PROGRAM_CREATE_REFUSAL.to_owned(),
@@ -679,7 +679,7 @@ where
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
 {
-    refuse_program_create(user.authorization.user.agent_id.is_some(), &headers)?;
+    refuse_program_create(user.authorization.user.attribution(), &headers)?;
     let draft = CalendarEventDraft {
         idempotency_key: request.idempotency_key,
         title: request.title,
@@ -836,7 +836,7 @@ where
         confirm_copy(
             &*state.service,
             requester_id,
-            is_agent_run(user.authorization.user.agent_id.is_some(), &headers),
+            is_agent_run(user.authorization.user.attribution(), &headers),
             event_id,
             request.inbox.as_deref(),
             CopyChange::Update {
@@ -916,7 +916,7 @@ where
     confirm_copy(
         &*state.service,
         requester_id,
-        is_agent_run(user.authorization.user.agent_id.is_some(), &headers),
+        is_agent_run(user.authorization.user.attribution(), &headers),
         event_id,
         query.inbox.as_deref(),
         CopyChange::Delete,
@@ -1031,7 +1031,7 @@ where
     confirm_copy(
         &*state.service,
         requester_id,
-        is_agent_run(user.authorization.user.agent_id.is_some(), &headers),
+        is_agent_run(user.authorization.user.attribution(), &headers),
         event_id,
         request.inbox.as_deref(),
         CopyChange::InviteGuests,

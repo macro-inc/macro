@@ -60,9 +60,10 @@ pub use graphql_favorite::{
     entity_favorite_loader, resolve_favorites,
 };
 pub use graphql_notification::{
-    EntityNotificationsLoader, GraphqlNotificationUpdateOperation, NoOpNotificationMutationService,
-    NotificationMutationRoot, NotificationMutationService, SoupNotificationEdgeReader,
-    UpdateNotificationsForEntityInput, UpdateNotificationsInput, entity_notifications_loader,
+    ActiveNotificationIdsGraphqlContext, EntityNotificationsLoader,
+    GraphqlNotificationUpdateOperation, NoOpNotificationMutationService, NotificationMutationRoot,
+    NotificationMutationService, SoupNotificationEdgeReader, UpdateNotificationsForEntityInput,
+    UpdateNotificationsInput, entity_notifications_loader,
 };
 pub use graphql_notification_inbox::{
     NotificationInboxGraphqlContext, NotificationInboxGraphqlService,

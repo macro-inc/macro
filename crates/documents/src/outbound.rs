@@ -17,6 +17,8 @@ pub mod markdown_init;
 pub mod mention_tracker;
 #[cfg(feature = "outbound")]
 pub mod pg_document_repo;
+#[cfg(feature = "outbound")]
+pub mod pg_released_attachments;
 #[cfg(feature = "ai_tools")]
 pub mod s3_document_files;
 #[cfg(feature = "outbound")]

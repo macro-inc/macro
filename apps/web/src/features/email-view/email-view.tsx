@@ -43,6 +43,7 @@ import { EmailReader } from './components/EmailReader';
 import { EmailRecentSearches } from './components/EmailRecentSearches';
 import { EmailSidebar } from './components/EmailSidebar';
 import { canSearchEmailTab, EMAIL_TABS } from './constants';
+import { focusEmailSearchResults } from './email-search-focus';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
 import type { EmailListPane } from './reader-pane';
@@ -103,12 +104,13 @@ function EmailListFallback() {
 function EmailPanes(props: {
   list: JSX.Element;
   focusList: () => void;
+  focusSearchResults: () => void;
   setListPane: (pane: EmailListPane | undefined) => void;
   onListWidthChange: (width: number) => void;
 }) {
   const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
-  const { state, setState, closeThread, list, source } = useEmailView();
+  const { state, setState, list, source } = useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
   const recentSearches = createEmailSearchSuggestions({
@@ -138,14 +140,13 @@ function EmailPanes(props: {
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
     canSearch: () => canSearchEmailTab(state.tab),
-    showList: closeThread,
   });
 
   const listColumn = (beside?: 'reader') => (
     <>
       <EmailHeader
         tabOnly={beside === 'reader'}
-        focusSearchResults={props.focusList}
+        focusSearchResults={props.focusSearchResults}
         registerSearch={search.registerListSearch}
         searchSuggestions={searchSuggestions()}
       />
@@ -156,7 +157,7 @@ function EmailPanes(props: {
             suggestions={suggestions()}
             onPick={(index) => {
               suggestions().pick(index);
-              props.focusList();
+              props.focusSearchResults();
             }}
           />
         )}
@@ -192,6 +193,7 @@ function EmailPanes(props: {
 function EmailDesktopLayout(props: {
   list: JSX.Element;
   focusList: () => void;
+  focusSearchResults: () => void;
   setListPane: (pane: EmailListPane | undefined) => void;
 }) {
   const { readingPane, composing } = useEmailView();
@@ -229,6 +231,7 @@ function EmailDesktopLayout(props: {
       <EmailPanes
         list={props.list}
         focusList={props.focusList}
+        focusSearchResults={props.focusSearchResults}
         setListPane={props.setListPane}
         onListWidthChange={setListWidth}
       />
@@ -301,6 +304,8 @@ function EmailViewRoot() {
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
   const [listPane, setListPane] = createSignal<EmailListPane>();
   const focusList = () => listElement()?.focus();
+  const focusSearchResults = () =>
+    focusEmailSearchResults(panel, listElement());
 
   onMount(() => panel.handle.setDisplayName('Email'));
 
@@ -365,6 +370,7 @@ function EmailViewRoot() {
               <EmailDesktopLayout
                 list={list()}
                 focusList={focusList}
+                focusSearchResults={focusSearchResults}
                 setListPane={setListPane}
               />
             }

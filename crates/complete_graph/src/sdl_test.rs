@@ -660,6 +660,15 @@ fn crm_associations_scope_soup_and_compose_in_document_trees() {
 }
 
 #[test]
+fn active_notification_ids_hang_off_the_authenticated_user() {
+    let sdl = crate::build_schema().sdl();
+    assert_sdl_line(
+        &sdl,
+        "activeNotificationIds(eventTypes: [String!]!, limit: Int): [ID!]!",
+    );
+}
+
+#[test]
 fn scheduled_actions_hang_off_the_authenticated_user() {
     use apollo_compiler::schema::ExtendedType;
 
