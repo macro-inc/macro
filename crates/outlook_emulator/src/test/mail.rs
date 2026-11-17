@@ -235,6 +235,7 @@ async fn contacts_sync_from_the_default_folder_and_report_removals() {
     let carol = SeedContact {
         email: "carol@example.com".into(),
         name: Some("Carol".into()),
+        photo: None,
     };
     emulator.upsert_contact(ADA, None, &carol).unwrap();
 
@@ -248,4 +249,90 @@ async fn contacts_sync_from_the_default_folder_and_report_removals() {
         vec!["carol@example.com".to_string()]
     );
     assert_eq!(second.removed, vec![grace.id.clone()]);
+}
+
+#[tokio::test]
+async fn a_contact_has_the_photo_its_seed_gives_and_no_other() {
+    // One transparent pixel.
+    const PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+    let seed = format!(
+        "mailboxes:\n  - email: ada@example.com\n    contacts:\n      - {{ email: grace@example.com, name: Grace Example, photo: {{ mime_type: image/png, base64: \"{PNG}\" }} }}\n      - {{ email: alan@example.com, name: Alan Example }}\n"
+    );
+    let (emulator, api) = start(&seed).await;
+    let token = token(&emulator, ADA);
+    let folder = api
+        .contact_folders(&token)
+        .await
+        .unwrap()
+        .default_folder
+        .unwrap();
+    let book = api.contact_changes(&token, &folder, None).await.unwrap();
+    let contact = |email: &str| {
+        book.contacts
+            .iter()
+            .find(|contact| contact.emails == [email.to_string()])
+            .unwrap()
+            .id
+            .clone()
+    };
+    let (grace, alan) = (contact("grace@example.com"), contact("alan@example.com"));
+
+    let photo = api
+        .contact_photo(&token, Some((&folder, &grace)))
+        .await
+        .unwrap()
+        .expect("the seeded photo");
+    assert_eq!(photo.content_type, "image/png");
+    assert_eq!(
+        photo.bytes,
+        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, PNG).unwrap()
+    );
+    // Graph answers 404 for a contact without a photo, which the client
+    // reads as none.
+    assert!(
+        api.contact_photo(&token, Some((&folder, &alan)))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let statuses = emulator
+        .requests()
+        .into_iter()
+        .filter(|request| request.route == Some(crate::Route::ContactsPhoto))
+        .map(|request| request.status)
+        .collect::<Vec<_>>();
+    assert_eq!(statuses, [200, 404]);
+
+    // A photo given later is served; a contact saved again without one has
+    // none.
+    let with_photo = SeedContact {
+        email: "alan@example.com".into(),
+        name: Some("Alan Example".into()),
+        photo: Some(crate::SeedPhoto {
+            mime_type: None,
+            base64: PNG.into(),
+        }),
+    };
+    emulator
+        .upsert_contact(ADA, Some(alan.as_str().to_owned()), &with_photo)
+        .unwrap();
+    let photo = api
+        .contact_photo(&token, Some((&folder, &alan)))
+        .await
+        .unwrap()
+        .expect("the photo given later");
+    assert_eq!(photo.content_type, "image/jpeg");
+    let without = SeedContact {
+        photo: None,
+        ..with_photo
+    };
+    emulator
+        .upsert_contact(ADA, Some(alan.as_str().to_owned()), &without)
+        .unwrap();
+    assert!(
+        api.contact_photo(&token, Some((&folder, &alan)))
+            .await
+            .unwrap()
+            .is_none()
+    );
 }

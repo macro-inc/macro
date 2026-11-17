@@ -137,9 +137,10 @@ impl RigTurnEngine {
 /// turn already got, spend nobody's access.
 const UNGATED_NATIVE_TOOLS: [&str; 4] = ["AskUser", "SearchTools", "LoadTools", "ReadToolResult"];
 
-/// A turn's tools, each call to one of Macro's own asked of the gate first.
-/// A remote MCP tool's account and approvals are the egress proxy's; the gate
-/// only says whether the session may call it at all.
+/// A turn's tools, each call to one of Macro's own asked of the gate first,
+/// those that use nobody's access included. A remote MCP tool's account and
+/// approvals are the egress proxy's; the gate only says whether the session
+/// may call it at all.
 struct GatedToolSet<Context> {
     tools: Arc<dyn AiToolSet<Context> + Send + Sync>,
     gate: Arc<dyn NativeToolGate>,
@@ -187,11 +188,17 @@ where
                 }));
             }
             let native = !UNGATED_NATIVE_TOOLS.contains(&tool_name)
-                && !tool_name.starts_with(mcp_select::MANGLED_PREFIX)
-                && agent_egress::domain::approval::spends_owner_access("macro", tool_name);
+                && !tool_name.starts_with(mcp_select::MANGLED_PREFIX);
             let arguments = if native {
-                let _waiting = self.awaiting.begin();
-                let verdict = if self.reviewed_tools.iter().any(|name| name == tool_name) {
+                // A tool that uses nobody's access (the web, Macro's help)
+                // takes no account and waits for nobody, but still asks the
+                // gate: a scoped session's gate refuses it.
+                let spends_owner_access =
+                    agent_egress::domain::approval::spends_owner_access("macro", tool_name);
+                let _waiting = spends_owner_access.then(|| self.awaiting.begin());
+                let verdict = if spends_owner_access
+                    && self.reviewed_tools.iter().any(|name| name == tool_name)
+                {
                     NativeToolVerdict::Run
                 } else {
                     check_unless_cancelled(
@@ -204,8 +211,11 @@ where
                     .await
                 };
                 match verdict {
-                    NativeToolVerdict::RunAs(user) => request_context.user_id = user,
-                    NativeToolVerdict::Run => {}
+                    NativeToolVerdict::RunAs(user) if spends_owner_access => {
+                        request_context.user_id = user;
+                    }
+                    // An identity-free tool takes no account to run as.
+                    NativeToolVerdict::RunAs(_) | NativeToolVerdict::Run => {}
                     NativeToolVerdict::Refuse(reason) => {
                         return Ok(Err(ai_toolset::ToolCallError {
                             internal_error: anyhow::anyhow!("{tool_name} was not approved"),
@@ -213,14 +223,18 @@ where
                         }));
                     }
                 }
-                match ai_toolset::actor::ToolActor::take(json) {
-                    Ok((_, arguments)) => arguments,
-                    Err(error) => {
-                        return Ok(Err(ai_toolset::ToolCallError {
-                            description: error.to_string(),
-                            internal_error: error.into(),
-                        }));
+                if spends_owner_access {
+                    match ai_toolset::actor::ToolActor::take(json) {
+                        Ok((_, arguments)) => arguments,
+                        Err(error) => {
+                            return Ok(Err(ai_toolset::ToolCallError {
+                                description: error.to_string(),
+                                internal_error: error.into(),
+                            }));
+                        }
                     }
+                } else {
+                    json.clone()
                 }
             } else {
                 json.clone()

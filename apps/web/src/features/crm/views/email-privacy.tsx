@@ -109,7 +109,11 @@ function DomainBlocklist(props: {
   );
 }
 
-function ThreadExclusions(props: { source: PrivacySource }) {
+function ThreadExclusions(props: {
+  source: PrivacySource;
+  onOpenThread?: () => void;
+}) {
+  const { EmailThreadMention } = useCrmContext();
   const [after, setAfter] = createSignal<string>();
   const query = props.source.createExcludedThreads(after);
   return (
@@ -156,9 +160,11 @@ function ThreadExclusions(props: { source: PrivacySource }) {
             {(thread) => (
               <SettingsRow
                 label={
-                  <span class="break-words">
-                    {thread.subject || t('crm.privacyThreadNoSubject')}
-                  </span>
+                  <EmailThreadMention
+                    threadId={thread.threadId}
+                    subject={thread.subject || t('crm.privacyThreadNoSubject')}
+                    onOpened={props.onOpenThread}
+                  />
                 }
               >
                 <Button
@@ -209,7 +215,10 @@ function ThreadExclusions(props: { source: PrivacySource }) {
   );
 }
 
-export function CrmEmailPrivacySettings(props: { onOptIn?: () => void }) {
+export function CrmEmailPrivacySettings(props: {
+  onOptIn?: () => void;
+  onOpenThread?: () => void;
+}) {
   const threadExclusions = useFeatureFlag(enableCrmThreadExclusions);
   const source = useCrmContext().createEmailPrivacy();
   const settings = () =>
@@ -256,7 +265,7 @@ export function CrmEmailPrivacySettings(props: { onOptIn?: () => void }) {
       <DomainBlocklist source={source} scope="team" />
       <DomainBlocklist source={source} scope="personal" />
       <Show when={threadExclusions().enabled}>
-        <ThreadExclusions source={source} />
+        <ThreadExclusions source={source} onOpenThread={props.onOpenThread} />
       </Show>
       <div class="flex justify-end">
         <Button
@@ -334,7 +343,10 @@ export function CrmEmailPrivacyDialog(props: {
           </Dialog.CloseButton>
         </Panel.Header>
         <Panel.Body scroll class="p-4 flex flex-col gap-4">
-          <CrmEmailPrivacySettings onOptIn={() => props.onOpenChange(false)} />
+          <CrmEmailPrivacySettings
+            onOptIn={() => props.onOpenChange(false)}
+            onOpenThread={() => props.onOpenChange(false)}
+          />
         </Panel.Body>
       </Panel>
     </Dialog>
