@@ -1429,6 +1429,8 @@ export async function main() {
     "encoded base": "SERVER/%63ognition/marked",
     "lookalike base": "SERVER/cognitionx/marked",
     "encoded slash": "COGNITION/a%2F..%2F..%2Fimage-proxy",
+    "public booking": "CALENDAR/scheduling/public/someone/intro/book",
+    "encoded public booking": "CALENDAR/Scheduling/%70ublic/bookings/1/cancel",
   };
   const results = {};
   for (const [name, input] of Object.entries(attempts)) {
@@ -1480,12 +1482,14 @@ async fn a_scoped_program_reaches_only_the_sdk_and_never_unfurl() {
         .replace("LOCAL", &format!("http://localhost:{port}"))
         .replace("DOTTED", &format!("http://localhost.:{port}/unfurl"))
         .replace("COGNITION", &cognition)
+        .replace("CALENDAR", &format!("{server_origin}/calendar"))
         .replace("SERVER", &server_origin);
     let environment = RunEnvironment {
         token: "fixture-run-token".into(),
         endpoints: SdkEndpoints {
             hosts: BTreeMap::from([
                 ("cognition".into(), cognition.clone()),
+                ("calendar".into(), format!("{server_origin}/calendar")),
                 ("unfurl".into(), unfurl.clone()),
             ]),
             ..SdkEndpoints::default()
@@ -1519,7 +1523,8 @@ async fn a_scoped_program_reaches_only_the_sdk_and_never_unfurl() {
                 "doubled slashes": refused, "trailing dot": refused,
                 "request object": refused, "another prefix": refused,
                 "encoded base": refused, "lookalike base": refused,
-                "encoded slash": refused,
+                "encoded slash": refused, "public booking": refused,
+                "encoded public booking": refused,
             },
             "redirect": 302,
             "status": 200,

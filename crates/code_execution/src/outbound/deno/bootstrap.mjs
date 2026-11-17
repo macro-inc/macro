@@ -149,8 +149,10 @@ try {
   sendVerbHeaders(true);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
   // A scoped run (a suggestion generation, or a run that sends nothing) may
-  // reach only the SDK's own services, under their own bases, and never
-  // unfurl, which takes no credential and fetches any URL it is given.
+  // reach only the SDK's own services, under their own bases, and never the
+  // anonymous routes that act outward on a URL or a person no credential
+  // binds: unfurl, which fetches any URL it is given, and the public booking
+  // routes, which book, cancel and reschedule with a guest or host.
   // Anything else on an allowed host (another gateway prefix, such as the
   // image proxy) is refused, as is a path that reads two ways (an encoded
   // dot segment or slash), so what is checked is what is routed. This raises
@@ -205,26 +207,32 @@ try {
     }
     return true;
   };
+  // Each SDK host's anonymous outward routes, under its base; the whole of
+  // unfurl.
+  const WITHHELD = {__proto__: null, unfurl: [""], calendar: ["/scheduling/public"]};
   let scopedBases;
-  let unfurlBase;
+  let withheldBases;
   if (context.scoped) {
     scopedBases = {__proto__: null, length: 0};
+    withheldBases = {__proto__: null, length: 0};
     for (const [name, url] of entries(context.hosts)) {
-      const base = placeOf(url);
-      if (name === "unfurl") {
-        unfurlBase = base;
-        continue;
+      for (const route of WITHHELD[name] ?? []) {
+        withheldBases[withheldBases.length] = placeOf(`${url}${route}`);
+        withheldBases.length += 1;
       }
-      scopedBases[scopedBases.length] = base;
+      if (name === "unfurl") continue;
+      scopedBases[scopedBases.length] = placeOf(url);
       scopedBases.length += 1;
     }
   }
   // Whether a scoped run may send `url`: under an SDK base, exactly as
-  // spelled there, and not under unfurl however it is spelled.
+  // spelled there, and under no withheld route however it is spelled.
   const scopedMaySend = (url) => {
     const target = placeOf(url);
     if (target === undefined) return false;
-    if (unfurlBase && under(target, unfurlBase, "decoded")) return false;
+    for (let index = 0; index < withheldBases.length; index++) {
+      if (under(target, withheldBases[index], "decoded")) return false;
+    }
     for (let index = 0; index < scopedBases.length; index++) {
       if (under(target, scopedBases[index], "raw")) return true;
     }
@@ -234,7 +242,7 @@ try {
     let request = new RequestConstructor(input, init);
     if (scopedBases) {
       if (!scopedMaySend(requestUrl(request))) {
-        return rejection(new Error("A scoped run reaches only Macro's own services, and not link previews (macro.unfurls), which fetch any URL they're given."));
+        return rejection(new Error("A scoped run reaches only Macro's own services, and not link previews (macro.unfurls) or public booking pages, which act on anyone's behalf."));
       }
       // A redirect isn't checked again, so a scoped run follows none.
       request = new RequestConstructor(request, {redirect: "manual"});
