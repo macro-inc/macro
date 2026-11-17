@@ -345,7 +345,9 @@ impl FocusStore for FocusPgRepository {
         // window, through its indexes on latest inbound and latest outbound
         // time, and drops those already classified at their latest mail. The
         // `OFFSET 0` keeps the calendar and recent contact checks, a subquery
-        // each per thread, off everything else.
+        // each per thread, off everything else. A thread below the cursor has
+        // both times at or below it, so a later page starts each index range
+        // at the cursor instead of reading the window from the top again.
         let rows = sqlx::query!(
             r#"
             SELECT s.id AS "id!", s.latest_at AS "latest_at!"
@@ -362,10 +364,12 @@ impl FocusStore for FocusPgRepository {
                         WHERE w.link_id = $1
                           AND w.inbox_visible
                           AND w.latest_inbound_message_ts >= $2
+                          AND w.latest_inbound_message_ts <= COALESCE($7, 'infinity'::timestamptz)
                         UNION
                         SELECT w.id FROM email_threads w
                         WHERE w.link_id = $1
                           AND w.latest_outbound_message_ts >= $2
+                          AND w.latest_outbound_message_ts <= COALESCE($7, 'infinity'::timestamptz)
                     )
                   AND t.inbox_visible
                   AND t.latest_inbound_message_ts IS NOT NULL
