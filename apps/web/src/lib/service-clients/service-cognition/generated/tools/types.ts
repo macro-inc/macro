@@ -15504,6 +15504,10 @@ export interface SendChannelMessage {
    * Optional images, videos, or documents to attach, at most 10. Upload media before sending; a media attachment whose upload has not finished shows as broken.
    */
   attachments?: ChannelMessageAttachmentInput[];
+  /**
+   * Send without notifying anyone, mentioned people included: no push, email or inbox entry. The message still appears in the channel. Use it for routine updates nobody needs to be alerted to.
+   */
+  silent?: boolean;
 }
 /**
  * An attachment to send with a channel message.

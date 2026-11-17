@@ -33,7 +33,6 @@ vi.mock('@core/constant/allBlocks', () => ({
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableCalendarUi: { key: 'enable-calendar-ui' },
   enableReminders: { key: 'enable-reminders' },
   isFeatureEnabled: (flag: { key: string }) =>
     flag.key === 'enable-reminders' && flags.reminders,

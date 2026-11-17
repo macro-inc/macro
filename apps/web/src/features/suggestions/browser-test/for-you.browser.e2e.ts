@@ -237,21 +237,46 @@ test('Run on an suggestion that changed shows the new text and starts nothing un
   await expect(suggestion.locator('[data-suggestion-changed]')).toHaveCount(0);
 });
 
-test('an opened suggestion becomes done and can be opened again', async ({
+test('an opened reply suggestion stays open until the reply is sent', async ({
   page,
 }) => {
   await page.goto('/');
   const reply = card(page, 'suggestion-reply');
   await reply.getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(requests(page)).toContainText('open email_thread thread-1');
 
-  await expect(reply).toHaveAttribute('data-suggestion-status', 'done');
-  await reply.getByRole('button', { name: 'Open thread' }).click();
-  await expect(requests(page).getByText('accept suggestion-reply')).toHaveCount(
-    1
-  );
+  // Opening the thread isn't replying: the card stays open and opens again.
+  await expect(reply).toHaveAttribute('data-suggestion-status', 'open');
+  await reply.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(
     requests(page).getByText('open email_thread thread-1')
   ).toHaveCount(2);
+
+  // The reply on its thread makes it done, under Done today.
+  await page.getByRole('button', { name: 'Send replies' }).click();
+  await expect(reply).toHaveAttribute('data-suggestion-status', 'done');
+  await reply.getByRole('button', { name: 'Open thread' }).click();
+  await expect(requests(page).getByText('accept suggestion-reply')).toHaveCount(
+    2
+  );
+  await expect(
+    requests(page).getByText('open email_thread thread-1')
+  ).toHaveCount(3);
+});
+
+test('an opened suggestion that isn’t a reply becomes done and can be opened again', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const composer = card(page, 'suggestion-composer');
+  await composer
+    .getByRole('button', { name: 'Open in chat', exact: true })
+    .click();
+
+  await expect(composer).toHaveAttribute('data-suggestion-status', 'done');
+  await expect(
+    requests(page).getByText('accept suggestion-composer')
+  ).toHaveCount(1);
 });
 
 test('loading, failure with retry, and empty', async ({ page }) => {

@@ -58,7 +58,7 @@ for the remaining editor and collaboration work.
 
 ## Artifacts
 
-Behind `enable-canvas-artifacts`, an `artifact` node runs a self-contained HTML
+An `artifact` node runs a self-contained HTML
 document in `views/artifact-frame.tsx`. The frame's sandbox is `allow-scripts`
 only, so the document has an opaque origin with no access to Macro's cookies,
 storage or DOM. Never add `allow-same-origin`. `core/artifact-document.ts` writes
@@ -152,9 +152,20 @@ The floating top toolbar uses the shared `Toolbar` and Phosphor icons for drawin
 and inserting media, document cards, and embeds. Tooltips show each tool's shortcut.
 Zoom, reset-to-100%, fit, undo, and redo live at the bottom-left. Adjacent controls
 toggle floating properties and layers panels.
-Fit Scene and menu/keyboard zoom use the full canvas viewport without subtracting
-floating panels. Fit Scene centers all scene geometry and
+On desktop, Fit Scene and menu/keyboard zoom use the full canvas viewport without
+subtracting floating panels. Fit Scene centers all scene geometry and
 zooms in or out to leave 100 screen pixels per side on the first axis to fill.
+The touch views fit into the part of the canvas their chrome leaves clear, with
+24px around the content: `MobileCanvasChrome` lays a frame between the header and
+the bottom chrome (and left of the side panel when it is open) and hands it to
+`frameWithin` (`views/shared/canvas-framing.ts`). Sheet zoom levels zoom about the
+middle of that frame. The view follows the frame: until the person has moved the
+canvas, the last fit is redone when the frame changes (the chrome is measured
+after the first paint, and a rotation changes everything); once they have, a
+rotation keeps what was in the middle in the middle, and chrome that grows or
+shrinks, or a keyboard that makes the view shorter, moves nothing. A fit of an
+empty canvas is not kept up, and neither is any fit once a press lands on the
+canvas or text is being typed.
 Camera zoom limits still apply; padding decreases for small embedded viewports.
 Ctrl/Meta-wheel zoom is pointer-anchored, with a continuous 0.01 exponential rate
 per normalized wheel pixel and an exponent cap of 0.6 per event (about 82% zoom-in).
@@ -327,6 +338,33 @@ scale into its samples instead, preserving nominal brush width.
 Picking accepts painted stroke pixels or the existing 3-screen-pixel minimum
 outline tolerance; a thick stroke does not gain another 3px outside its paint.
 
+A finger gets larger targets than a cursor, decided by the pointer type of each
+press, while the handles are drawn the same size. A touch within 16px of a
+corner or the rotation knob, or 12px outside an edge, takes that handle even
+though nothing is drawn under it (`touchHandleAt` in the graphics core). A corner
+claims only the outer quarter of each side that meets at it, so a short side (one
+line of text) keeps its middle for its edge handle. Inside the frame the reach
+shrinks with it (a quarter of the shorter side for a corner, a sixth and at most
+8px for an edge), so the middle of a small shape still moves it; where the reach
+finds no handle a finger takes none, even on the strip drawn along the edge of a
+thin shape. Outside the frame the reach ends at another item's paint: a press
+there selects or drags that item. Inside the frame a press is the selection's,
+whatever is painted there, as it is for a cursor. A finger
+resizes or rotates once it has moved 3px; one that only taps near a handle
+changes nothing, and outside the frame it selects what it tapped or clears the
+selection. A touch that lands on nothing picks a stroke from 10px away rather
+than 3; paint under the finger always wins over a stroke that is merely near.
+The touch view also sets `touchHandles` on the surface, which holds for every
+pointer there: the rotation knob stands 32px off the frame instead of 16, a
+connector's endpoints are taken from 16px, and the corner-radius handles, which
+sit inside each corner, are left to the inspector's Corner radius field. An
+endpoint's reach holds over other items' paint, unlike a handle's: an end usually
+sits on the shape it is attached to, and only a selected connector has ends to
+take. An end taken from a distance (by a finger or pen, or by any pointer on
+that wider target) keeps its distance from the pointer and moves once the
+pointer has moved 3px, so a tap leaves the end, and what it is bound to, alone.
+A cursor that presses the end itself places it under the cursor, as on desktop.
+
 ## Ownership
 
 - `core/`: seed/defaults only. Editing algorithms and typed commands live in graphics.
@@ -378,6 +416,20 @@ the pen cannot take the press, and a pen takes it from a palm already resting.
 Double-click an existing text shape, or select it and press Enter, to edit.
 Double-click empty canvas also creates text. Escape, Cmd/Ctrl+Enter, or a click
 outside commits the edit. Empty drafts disappear without an undo entry.
+On touch the on-screen keyboard going away also commits it, returns to Select and
+selects the text: a phone's Done button takes the focus from the text to nowhere
+(`focusout` without a `relatedTarget`), and a tablet's hide key leaves the focus
+in place, so there `onKeyboardClosed` watches the app's keyboard state and the
+visual viewport growing back. While text is typed the touch views keep it inside
+the frame and the visual viewport (`keepInFrame` in `views/shared/canvas-framing.ts`):
+the canvas pans as the keyboard comes up and as the text grows, and the page
+itself is put back if the browser scrolled it to reveal the caret, so the
+header stays on screen. Text that fits is kept whole; text larger than the
+frame follows its caret and is otherwise left where the person put it. The
+keyboard closing because the focus moved to one of the editor's own menus, or
+the window losing focus, does not commit. On every device a scroll the browser gives the canvas
+surface (a caret typed past its edge) is turned into the same pan and undone, so
+presses keep landing where they are aimed.
 
 The editing toolbar supports bold, italic, underline, strike, code, highlight,
 links, headings, quotes, and nested bulleted/numbered lists.
@@ -526,6 +578,13 @@ activates the highlighted slice instead of dismissing the menu. The center remai
 navigate; Enter selects and Escape closes. Scrolled results
 keep the same inset as the menu padding. The media picker includes a dashed drop
 area and Add files button for local images/videos.
+On touch the Attach button opens a sheet of the same choices, and Media and
+Reference open the picker in a second sheet with finger-sized rows; Media has an
+Upload media row where a desktop has the drop area.
+Uploading asks the device through `pickCanvasMedia`: the photo library in the iOS
+app (`pickPhotoLibraryMediaOrFiles`), a file picker everywhere else. The menu
+closes as the picker opens, and the picker's input stays in the document until it
+answers, so the files arrive although the menu that asked is gone.
 Insertion keeps the world position captured when the menu opened, even under
 pan/zoom. New embed insertion and preview-to-embed conversion are unavailable.
 Existing embeds can be converted to previews in the inspector. Double-click an

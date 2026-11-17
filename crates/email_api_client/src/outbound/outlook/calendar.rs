@@ -494,10 +494,15 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
             if !event["@removed"].is_null() {
                 removed.push(id.to_owned());
             } else {
-                members.push((
-                    id.to_owned(),
-                    event["seriesMasterId"].as_str().unwrap_or(id).to_owned(),
-                ));
+                members.push(OutlookPageMember {
+                    provider_id: id.to_owned(),
+                    master_id: event["seriesMasterId"].as_str().unwrap_or(id).to_owned(),
+                    // Only orders a first import's reads, so a time Macro
+                    // cannot read is left out rather than failing the page.
+                    occurs: normalize::instant(&event["start"])
+                        .ok()
+                        .zip(normalize::instant(&event["end"]).ok()),
+                });
             }
         }
         Ok(OutlookCalendarPage {
