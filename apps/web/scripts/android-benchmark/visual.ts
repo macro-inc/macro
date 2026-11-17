@@ -18,6 +18,7 @@ import { Device } from './device';
 import { launchFresh, measureStep, prepare, sleep } from './harness';
 import { SCENARIOS, type Targets } from './scenarios';
 import { summarize } from './stats';
+import { parseCpuThrottle } from './throttle';
 
 const { values: options } = parseArgs({
   options: {
@@ -31,6 +32,7 @@ const { values: options } = parseArgs({
     },
     out: { type: 'string', default: 'android-benchmark-results' },
     port: { type: 'string', default: '9333' },
+    'cpu-throttle': { type: 'string', default: '1' },
     // Keeps each recording; it shows real account content, so never commit it.
     keep: { type: 'boolean', default: false },
   },
@@ -39,6 +41,9 @@ if (!options.serial) {
   console.error('Pass --serial (or set ANDROID_SERIAL): adb -s is required');
   process.exit(2);
 }
+
+const [cpuThrottle, ...extraRates] = parseCpuThrottle(options['cpu-throttle']);
+if (extraRates.length) throw new Error('--cpu-throttle takes one rate here');
 
 const FFMPEG = process.env.FFMPEG ?? 'ffmpeg';
 /** Frames are compared at 1/8 of the screen's resolution, in grey. */
@@ -175,6 +180,7 @@ try {
   for (let iteration = 0; iteration < Number(options.iterations); iteration++) {
     const { session } = await launchFresh(device, Number(options.port));
     try {
+      await session.throttleCpu(cpuThrottle);
       await sleep(5000);
       await prepare(session, scenario, targets, 3000);
       // Cold: the steps before this one. Warm: those, this one, and then a
@@ -226,10 +232,10 @@ const span = summarize(paired.map((row) => row.spanMs));
 const screen = summarize(paired.map((row) => row.visualMs ?? 0));
 const gap = summarize(paired.map((row) => (row.visualMs ?? 0) - row.spanMs));
 console.log(
-  `${options.step} (${options.variant}), n=${paired.length}: span median ${Math.round(span.median)} ms, screen median ${Math.round(screen.median)} ms, screen − span median ${Math.round(gap.median)} ms (min ${Math.round(gap.min)}, max ${Math.round(gap.max)})`
+  `${options.step} (${options.variant}, CPU throttle ${cpuThrottle}×), n=${paired.length}: span median ${Math.round(span.median)} ms, screen median ${Math.round(screen.median)} ms, screen − span median ${Math.round(gap.median)} ms (min ${Math.round(gap.min)}, max ${Math.round(gap.max)})`
 );
 await mkdir(resolve(options.out), { recursive: true });
 const file = resolve(options.out, `visual-${options.step}-${Date.now()}.json`);
-await writeFile(file, `${JSON.stringify({ step: options.step, variant: options.variant, rows }, null, 2)}\n`);
+await writeFile(file, `${JSON.stringify({ step: options.step, variant: options.variant, cpuThrottle, rows }, null, 2)}\n`);
 console.log(`Results: ${file}`);
 process.exit(0);
