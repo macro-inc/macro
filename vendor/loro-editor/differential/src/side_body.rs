@@ -60,12 +60,18 @@ impl Peer {
         // Event presence differs by design on the projected checkpoint path;
         // the kind and op span must not.
         undo.set_on_push(Some(Box::new(move |kind, span, _event| {
-            push_log.lock().unwrap().push(format!("push {kind:?} {span:?}"));
+            push_log
+                .lock()
+                .unwrap()
+                .push(format!("push {kind:?} {span:?}"));
             li::undo::UndoItemMeta::new()
         })));
         let pop_log = undo_log.clone();
         undo.set_on_pop(Some(Box::new(move |kind, span, _meta| {
-            pop_log.lock().unwrap().push(format!("pop {kind:?} {span:?}"));
+            pop_log
+                .lock()
+                .unwrap()
+                .push(format!("pop {kind:?} {span:?}"));
         })));
         let events = Arc::new(Mutex::new(Vec::new()));
         let sink = events.clone();
@@ -74,14 +80,26 @@ impl Peer {
             // the internal DocDiff versions are recorded separately.
             let meta = &event.event_meta;
             sink.lock().unwrap().push((
-                format!("{:?} {:?} {:?} {:?}", meta.by, meta.origin, event.current_target, event.events),
+                format!(
+                    "{:?} {:?} {:?} {:?}",
+                    meta.by, meta.origin, event.current_target, event.events
+                ),
                 format!("{:?}", meta.from),
                 format!("{:?}", meta.to),
             ));
         }));
         let history = vec![doc.oplog_frontiers()];
         let history_vv = vec![doc.oplog_vv()];
-        Ok(Self { id, doc, undo, _subscription: subscription, events, undo_log, history, history_vv })
+        Ok(Self {
+            id,
+            doc,
+            undo,
+            _subscription: subscription,
+            events,
+            undo_log,
+            history,
+            history_vv,
+        })
     }
 
     fn note_version(&mut self) {
@@ -177,12 +195,16 @@ fn resolve_text(doc: &LoroDoc, target: TextTarget) -> Option<TextHandler> {
         TextTarget::ListChild(i) => {
             let list = doc.get_list("l");
             let len = list.len();
-            (len > 0).then(|| text_child(list.get_child_handler(modulo(i, len)))).flatten()
+            (len > 0)
+                .then(|| text_child(list.get_child_handler(modulo(i, len))))
+                .flatten()
         }
         TextTarget::MovableChild(i) => {
             let list = doc.get_movable_list("ml");
             let len = list.len();
-            (len > 0).then(|| text_child(list.get_child_handler(modulo(i, len)))).flatten()
+            (len > 0)
+                .then(|| text_child(list.get_child_handler(modulo(i, len))))
+                .flatten()
         }
     }
 }
@@ -206,14 +228,25 @@ fn text_edit(text: &TextHandler, edit: &TextEdit) -> String {
             let len = usize::from(len).min(total - pos);
             result(text.delete(pos, len, pos_type(unit)))
         }
-        TextEdit::Mark { start, len, key, value, unit } => {
+        TextEdit::Mark {
+            start,
+            len,
+            key,
+            value,
+            unit,
+        } => {
             let total = text_len(text, unit);
             let start = modulo(start as usize, total + 1);
             let end = (start + usize::from(len)).min(total);
             let key = MARK_KEYS[usize::from(key) % MARK_KEYS.len()];
             result(text.mark(start, end, key, mark_value(value), pos_type(unit)))
         }
-        TextEdit::Unmark { start, len, key, unit } => {
+        TextEdit::Unmark {
+            start,
+            len,
+            key,
+            unit,
+        } => {
             let total = text_len(text, unit);
             let start = modulo(start as usize, total + 1);
             let end = (start + usize::from(len)).min(total);
@@ -227,7 +260,10 @@ fn text_edit(text: &TextHandler, edit: &TextEdit) -> String {
                 STRINGS[usize::from(s) % STRINGS.len()],
                 STRINGS[usize::from(suffix) % STRINGS.len()]
             );
-            result(text.update(&next, Default::default()).map_err(|e| format!("{e:?}")))
+            result(
+                text.update(&next, Default::default())
+                    .map_err(|e| format!("{e:?}")),
+            )
         }
     }
 }
@@ -364,9 +400,11 @@ impl World {
                     None => "no-target".into(),
                 }
             }
-            Op::MapSet { peer, key: k, value: v } => {
-                result(self.doc(*peer).get_map("m").insert(key(*k), value(*v)))
-            }
+            Op::MapSet {
+                peer,
+                key: k,
+                value: v,
+            } => result(self.doc(*peer).get_map("m").insert(key(*k), value(*v))),
             Op::MapDelete { peer, key: k } => result(self.doc(*peer).get_map("m").delete(key(*k))),
             Op::MapText { peer, key: k } => result(
                 self.doc(*peer)
@@ -374,15 +412,22 @@ impl World {
                     .insert_container(key(*k), TextHandler::new_detached())
                     .map(|t| t.id()),
             ),
-            Op::ListInsert { peer, pos, value: v } => {
+            Op::ListInsert {
+                peer,
+                pos,
+                value: v,
+            } => {
                 let list = self.doc(*peer).get_list("l");
                 result(list.insert(modulo(*pos, list.len() + 1), value(*v)))
             }
             Op::ListText { peer, pos } => {
                 let list = self.doc(*peer).get_list("l");
                 result(
-                    list.insert_container(modulo(*pos, list.len() + 1), TextHandler::new_detached())
-                        .map(|t| t.id()),
+                    list.insert_container(
+                        modulo(*pos, list.len() + 1),
+                        TextHandler::new_detached(),
+                    )
+                    .map(|t| t.id()),
                 )
             }
             Op::ListDelete { peer, pos, len } => {
@@ -391,15 +436,22 @@ impl World {
                 let pos = modulo(*pos, n + 1);
                 result(list.delete(pos, usize::from(*len).min(n - pos)))
             }
-            Op::MovInsert { peer, pos, value: v } => {
+            Op::MovInsert {
+                peer,
+                pos,
+                value: v,
+            } => {
                 let list = self.doc(*peer).get_movable_list("ml");
                 result(list.insert(modulo(*pos, list.len() + 1), value(*v)))
             }
             Op::MovText { peer, pos } => {
                 let list = self.doc(*peer).get_movable_list("ml");
                 result(
-                    list.insert_container(modulo(*pos, list.len() + 1), TextHandler::new_detached())
-                        .map(|t| t.id()),
+                    list.insert_container(
+                        modulo(*pos, list.len() + 1),
+                        TextHandler::new_detached(),
+                    )
+                    .map(|t| t.id()),
                 )
             }
             Op::MovDelete { peer, pos, len } => {
@@ -416,7 +468,11 @@ impl World {
                 }
                 result(list.mov(modulo(*from, n), modulo(*to, n)))
             }
-            Op::MovSet { peer, pos, value: v } => {
+            Op::MovSet {
+                peer,
+                pos,
+                value: v,
+            } => {
                 let list = self.doc(*peer).get_movable_list("ml");
                 let n = list.len();
                 if n == 0 {
@@ -424,7 +480,11 @@ impl World {
                 }
                 result(list.set(modulo(*pos, n), value(*v)))
             }
-            Op::TreeCreate { peer, parent, index } => {
+            Op::TreeCreate {
+                peer,
+                parent,
+                index,
+            } => {
                 let tree = self.doc(*peer).get_tree("tr");
                 let nodes = tree.nodes();
                 let parent = tree_parent(&nodes, *parent);
@@ -455,11 +515,19 @@ impl World {
                     None => "empty".into(),
                 }
             }
-            Op::TreeMeta { peer, node, key: k, value: v } => {
+            Op::TreeMeta {
+                peer,
+                node,
+                key: k,
+                value: v,
+            } => {
                 let tree = self.doc(*peer).get_tree("tr");
                 let nodes = tree.nodes();
                 match tree_node(&nodes, *node) {
-                    Some(target) => result(tree.get_meta(target).and_then(|m| m.insert(key(*k), value(*v)))),
+                    Some(target) => result(
+                        tree.get_meta(target)
+                            .and_then(|m| m.insert(key(*k), value(*v))),
+                    ),
                     None => "empty".into(),
                 }
             }
@@ -477,7 +545,10 @@ impl World {
                 "ok".into()
             }
             Op::CommitExcluded { peer } => {
-                drop(self.doc(*peer).commit_with(commit_options(EXCLUDED_ORIGIN, timestamp)));
+                drop(
+                    self.doc(*peer)
+                        .commit_with(commit_options(EXCLUDED_ORIGIN, timestamp)),
+                );
                 "ok".into()
             }
             Op::CommitEditor { peer } => {
@@ -500,7 +571,11 @@ impl World {
                 };
                 self.stats.imports += 1;
                 let r = self.doc(*to).import(&bytes);
-                format!("{} bytes; {}", bytes.len(), result(r.map(|s| s.pending.is_some())))
+                format!(
+                    "{} bytes; {}",
+                    bytes.len(),
+                    result(r.map(|s| s.pending.is_some()))
+                )
             }
             Op::SyncSnapshot { from, to } => {
                 let bytes = match self.doc(*from).export(ExportMode::Snapshot) {
@@ -509,7 +584,11 @@ impl World {
                 };
                 self.stats.imports += 1;
                 let r = self.doc(*to).import(&bytes);
-                format!("{} bytes; {}", bytes.len(), result(r.map(|s| s.pending.is_some())))
+                format!(
+                    "{} bytes; {}",
+                    bytes.len(),
+                    result(r.map(|s| s.pending.is_some()))
+                )
             }
             Op::Undo { peer } => {
                 let r = self.peers[usize::from(*peer)].undo.undo();
@@ -530,7 +609,9 @@ impl World {
                 self.peers[usize::from(*peer)].undo.group_end();
                 "ok".into()
             }
-            Op::Checkpoint { peer } => result(self.peers[usize::from(*peer)].undo.record_new_checkpoint()),
+            Op::Checkpoint { peer } => {
+                result(self.peers[usize::from(*peer)].undo.record_new_checkpoint())
+            }
             Op::DetachedEditing { peer, enable } => {
                 self.doc(*peer).set_detached_editing(*enable);
                 "ok".into()
@@ -601,27 +682,51 @@ impl World {
             {
                 let name = "snapshot".to_string();
                 let bytes = doc.export(ExportMode::Snapshot);
-                shallow.push((name.clone(), false, bytes.as_ref().map_or(String::new(), |b| decoded_fingerprint(b))));
+                shallow.push((
+                    name.clone(),
+                    false,
+                    bytes
+                        .as_ref()
+                        .map_or(String::new(), |b| decoded_fingerprint(b)),
+                ));
                 push(name, bytes);
             }
             push("all_updates".into(), doc.export(ExportMode::all_updates()));
             for (j, other) in self.peers.iter().enumerate() {
                 let vv = other.doc.oplog_vv();
-                push(format!("updates_since_peer{j}"), doc.export(ExportMode::updates(&vv)));
+                push(
+                    format!("updates_since_peer{j}"),
+                    doc.export(ExportMode::updates(&vv)),
+                );
             }
             let n = p.history.len();
             let mid = n / 2;
-            push(format!("updates_since_h{mid}"), doc.export(ExportMode::updates(&p.history_vv[mid])));
+            push(
+                format!("updates_since_h{mid}"),
+                doc.export(ExportMode::updates(&p.history_vv[mid])),
+            );
             {
                 let name = "state_only".to_string();
                 let bytes = doc.export(ExportMode::state_only(None));
-                shallow.push((name.clone(), false, bytes.as_ref().map_or(String::new(), |b| decoded_fingerprint(b))));
+                shallow.push((
+                    name.clone(),
+                    false,
+                    bytes
+                        .as_ref()
+                        .map_or(String::new(), |b| decoded_fingerprint(b)),
+                ));
                 push(name, bytes);
             }
             {
                 let name = format!("snapshot_at_h{mid}");
                 let bytes = doc.export(ExportMode::snapshot_at(&p.history[mid]));
-                shallow.push((name.clone(), false, bytes.as_ref().map_or(String::new(), |b| decoded_fingerprint(b))));
+                shallow.push((
+                    name.clone(),
+                    false,
+                    bytes
+                        .as_ref()
+                        .map_or(String::new(), |b| decoded_fingerprint(b)),
+                ));
                 push(name, bytes);
             }
             let shallow_root = doc.shallow_since_frontiers();
@@ -639,7 +744,10 @@ impl World {
                 let mut eligible = false;
                 if attached && doc.is_shallow() && f != shallow_root {
                     if let Ok(vv) = doc.frontiers_to_vv(&f).ok_or(()) {
-                        let tail: usize = latest_vv.sub_iter(&vv).map(|s| (s.counter.end - s.counter.start).unsigned_abs() as usize).sum();
+                        let tail: usize = latest_vv
+                            .sub_iter(&vv)
+                            .map(|s| (s.counter.end - s.counter.start).unsigned_abs() as usize)
+                            .sum();
                         if tail >= MIN_RETAINED_OPS_FOR_FORWARD_ROOT_STATE {
                             self.stats.cached_prefix_eligible += 1;
                             eligible = true;
@@ -679,7 +787,12 @@ impl World {
             state_frontiers: sorted_frontiers(&doc.state_frontiers()),
             shallow_since: sorted_frontiers(&doc.shallow_since_frontiers()),
             detached: doc.is_detached(),
-            undo: (p.undo.undo_count(), p.undo.redo_count(), p.undo.can_undo(), p.undo.can_redo()),
+            undo: (
+                p.undo.undo_count(),
+                p.undo.redo_count(),
+                p.undo.can_undo(),
+                p.undo.can_redo(),
+            ),
             events,
             event_from,
             event_to,
@@ -738,7 +851,9 @@ fn barrier(op: &Op) -> bool {
 
 fn touched(op: &Op) -> Vec<usize> {
     match op {
-        Op::Sync { from, to } | Op::SyncSnapshot { from, to } => vec![usize::from(*to), usize::from(*from)],
+        Op::Sync { from, to } | Op::SyncSnapshot { from, to } => {
+            vec![usize::from(*to), usize::from(*from)]
+        }
         Op::AdoptShallow { peer, from, .. } => vec![usize::from(*peer), usize::from(*from)],
         Op::Text { peer, .. }
         | Op::MapSet { peer, .. }

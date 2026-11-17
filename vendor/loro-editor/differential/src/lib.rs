@@ -63,9 +63,20 @@ pub enum TextEdit {
     /// Delete a range.
     Delete { pos: u32, len: u8, unit: Unit },
     /// Apply a style.
-    Mark { start: u32, len: u8, key: u8, value: i8, unit: Unit },
+    Mark {
+        start: u32,
+        len: u8,
+        key: u8,
+        value: i8,
+        unit: Unit,
+    },
     /// Remove a style.
-    Unmark { start: u32, len: u8, key: u8, unit: Unit },
+    Unmark {
+        start: u32,
+        len: u8,
+        key: u8,
+        unit: Unit,
+    },
     /// Replace the whole text through Loro's diff update.
     Update { s: u8, suffix: u8 },
 }
@@ -87,7 +98,11 @@ pub enum Value {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Op {
     /// Edit a text container.
-    Text { peer: u8, target: TextTarget, edit: TextEdit },
+    Text {
+        peer: u8,
+        target: TextTarget,
+        edit: TextEdit,
+    },
     /// Set a root map key.
     MapSet { peer: u8, key: u8, value: Value },
     /// Delete a root map key.
@@ -119,7 +134,12 @@ pub enum Op {
     /// Delete a selected node.
     TreeDelete { peer: u8, node: u16 },
     /// Set a key in a selected node's metadata map.
-    TreeMeta { peer: u8, node: u16, key: u8, value: Value },
+    TreeMeta {
+        peer: u8,
+        node: u16,
+        key: u8,
+        value: Value,
+    },
     /// Insert [`BULK_TEXT_LEN`] characters into root text "bulk" in one op span.
     Bulk { peer: u8 },
     /// Commit with no origin.
@@ -295,7 +315,17 @@ pub struct Stats {
 /// LORO_DIFF_LENIENT_EVENT_FROM=1 counts them instead (to keep fuzzing for
 /// other divergences while one is known).
 pub fn strict_event_from() -> bool {
-    std::env::var("LORO_DIFF_LENIENT_EVENT_FROM").map_or(true, |v| v != "1")
+    knob("LORO_DIFF_LENIENT_EVENT_FROM").is_none_or(|v| v != "1")
+}
+
+/// A test knob from the process environment. This standalone test tool has no
+/// service configuration; the workspace config macros do not apply.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "test-run knobs, not service config"
+)]
+pub fn knob(name: &str) -> Option<String> {
+    std::env::var(name).ok()
 }
 
 impl Stats {
@@ -313,7 +343,8 @@ impl Stats {
         self.imports += other.imports;
         self.shared_panics += other.shared_panics;
         self.event_from_only += other.event_from_only;
-        self.shared_panic_messages.extend(other.shared_panic_messages.iter().cloned());
+        self.shared_panic_messages
+            .extend(other.shared_panic_messages.iter().cloned());
     }
 }
 
@@ -327,7 +358,7 @@ impl Rng {
         Self(seed ^ 0x5DEE_CE66_D1CE_4E5B)
     }
     /// Next 64 bits.
-    pub fn next(&mut self) -> u64 {
+    pub fn next_u64(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.0;
         z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -336,16 +367,16 @@ impl Rng {
     }
     /// Uniform below `n` (n > 0).
     pub fn below(&mut self, n: u64) -> u64 {
-        self.next() % n
+        self.next_u64() % n
     }
     fn u8(&mut self, n: u8) -> u8 {
         self.below(u64::from(n)) as u8
     }
     fn u16(&mut self) -> u16 {
-        self.next() as u16
+        self.next_u64() as u16
     }
     fn u32(&mut self) -> u32 {
-        self.next() as u32
+        self.next_u64() as u32
     }
     fn chance(&mut self, percent: u64) -> bool {
         self.below(100) < percent
@@ -372,8 +403,16 @@ fn gen_value(rng: &mut Rng) -> Value {
 
 fn gen_text_edit(rng: &mut Rng) -> TextEdit {
     match rng.below(20) {
-        0..=8 => TextEdit::Insert { pos: rng.u32(), s: rng.u8(STRINGS.len() as u8), unit: gen_unit(rng) },
-        9..=12 => TextEdit::Delete { pos: rng.u32(), len: rng.u8(6), unit: gen_unit(rng) },
+        0..=8 => TextEdit::Insert {
+            pos: rng.u32(),
+            s: rng.u8(STRINGS.len() as u8),
+            unit: gen_unit(rng),
+        },
+        9..=12 => TextEdit::Delete {
+            pos: rng.u32(),
+            len: rng.u8(6),
+            unit: gen_unit(rng),
+        },
         13..=16 => TextEdit::Mark {
             start: rng.u32(),
             len: rng.u8(8),
@@ -387,7 +426,10 @@ fn gen_text_edit(rng: &mut Rng) -> TextEdit {
             key: rng.u8(MARK_KEYS.len() as u8),
             unit: gen_unit(rng),
         },
-        _ => TextEdit::Update { s: rng.u8(STRINGS.len() as u8), suffix: rng.u8(STRINGS.len() as u8) },
+        _ => TextEdit::Update {
+            s: rng.u8(STRINGS.len() as u8),
+            suffix: rng.u8(STRINGS.len() as u8),
+        },
     }
 }
 
@@ -417,23 +459,87 @@ pub fn generate(seed: u64, len: usize, bulk: bool) -> Case {
     for _ in 0..len {
         let peer = rng.u8(peers);
         let op = match rng.below(100) {
-            0..=21 => Op::Text { peer, target: gen_text_target(&mut rng), edit: gen_text_edit(&mut rng) },
-            22..=25 => Op::MapSet { peer, key: rng.u8(KEYS.len() as u8), value: gen_value(&mut rng) },
-            26 => Op::MapDelete { peer, key: rng.u8(KEYS.len() as u8) },
-            27 => Op::MapText { peer, key: rng.u8(KEYS.len() as u8) },
-            28..=29 => Op::ListInsert { peer, pos: rng.u16(), value: gen_value(&mut rng) },
-            30 => Op::ListText { peer, pos: rng.u16() },
-            31 => Op::ListDelete { peer, pos: rng.u16(), len: rng.u8(3) },
-            32..=33 => Op::MovInsert { peer, pos: rng.u16(), value: gen_value(&mut rng) },
-            34 => Op::MovText { peer, pos: rng.u16() },
-            35 => Op::MovDelete { peer, pos: rng.u16(), len: rng.u8(3) },
-            36..=37 => Op::MovMove { peer, from: rng.u16(), to: rng.u16() },
-            38 => Op::MovSet { peer, pos: rng.u16(), value: gen_value(&mut rng) },
-            39..=41 => Op::TreeCreate { peer, parent: rng.u16(), index: rng.u16() },
-            42 => Op::TreeMove { peer, node: rng.u16(), parent: rng.u16() },
-            43 => Op::TreeMoveAfter { peer, node: rng.u16(), other: rng.u16() },
-            44 => Op::TreeDelete { peer, node: rng.u16() },
-            45..=46 => Op::TreeMeta { peer, node: rng.u16(), key: rng.u8(KEYS.len() as u8), value: gen_value(&mut rng) },
+            0..=21 => Op::Text {
+                peer,
+                target: gen_text_target(&mut rng),
+                edit: gen_text_edit(&mut rng),
+            },
+            22..=25 => Op::MapSet {
+                peer,
+                key: rng.u8(KEYS.len() as u8),
+                value: gen_value(&mut rng),
+            },
+            26 => Op::MapDelete {
+                peer,
+                key: rng.u8(KEYS.len() as u8),
+            },
+            27 => Op::MapText {
+                peer,
+                key: rng.u8(KEYS.len() as u8),
+            },
+            28..=29 => Op::ListInsert {
+                peer,
+                pos: rng.u16(),
+                value: gen_value(&mut rng),
+            },
+            30 => Op::ListText {
+                peer,
+                pos: rng.u16(),
+            },
+            31 => Op::ListDelete {
+                peer,
+                pos: rng.u16(),
+                len: rng.u8(3),
+            },
+            32..=33 => Op::MovInsert {
+                peer,
+                pos: rng.u16(),
+                value: gen_value(&mut rng),
+            },
+            34 => Op::MovText {
+                peer,
+                pos: rng.u16(),
+            },
+            35 => Op::MovDelete {
+                peer,
+                pos: rng.u16(),
+                len: rng.u8(3),
+            },
+            36..=37 => Op::MovMove {
+                peer,
+                from: rng.u16(),
+                to: rng.u16(),
+            },
+            38 => Op::MovSet {
+                peer,
+                pos: rng.u16(),
+                value: gen_value(&mut rng),
+            },
+            39..=41 => Op::TreeCreate {
+                peer,
+                parent: rng.u16(),
+                index: rng.u16(),
+            },
+            42 => Op::TreeMove {
+                peer,
+                node: rng.u16(),
+                parent: rng.u16(),
+            },
+            43 => Op::TreeMoveAfter {
+                peer,
+                node: rng.u16(),
+                other: rng.u16(),
+            },
+            44 => Op::TreeDelete {
+                peer,
+                node: rng.u16(),
+            },
+            45..=46 => Op::TreeMeta {
+                peer,
+                node: rng.u16(),
+                key: rng.u8(KEYS.len() as u8),
+                value: gen_value(&mut rng),
+            },
             47..=49 => Op::CommitPlain { peer },
             50..=61 => Op::CommitEditor { peer },
             62..=63 => Op::CommitExcluded { peer },
@@ -450,18 +556,38 @@ pub fn generate(seed: u64, len: usize, bulk: bool) -> Case {
             83..=84 => Op::GroupStart { peer },
             85..=86 => Op::GroupEnd { peer },
             87 => Op::Checkpoint { peer },
-            88 => Op::DetachedEditing { peer, enable: rng.chance(50) },
-            89..=90 => Op::Checkout { peer, at: rng.u16() },
+            88 => Op::DetachedEditing {
+                peer,
+                enable: rng.chance(50),
+            },
+            89..=90 => Op::Checkout {
+                peer,
+                at: rng.u16(),
+            },
             91..=92 => Op::Attach { peer },
-            93 => Op::RevertTo { peer, at: rng.u16() },
-            94..=95 => Op::Reshallow { peer, at: rng.u16() },
-            96..=97 => Op::AdoptShallow { peer, from: (peer + 1 + rng.u8(peers - 1)) % peers, at: rng.u16() },
+            93 => Op::RevertTo {
+                peer,
+                at: rng.u16(),
+            },
+            94..=95 => Op::Reshallow {
+                peer,
+                at: rng.u16(),
+            },
+            96..=97 => Op::AdoptShallow {
+                peer,
+                from: (peer + 1 + rng.u8(peers - 1)) % peers,
+                at: rng.u16(),
+            },
             _ if bulk => Op::Bulk { peer },
             _ => Op::CommitEditor { peer },
         };
         ops.push(op);
     }
-    Case { seed, config: Config { merge, max_undo }, ops }
+    Case {
+        seed,
+        config: Config { merge, max_undo },
+        ops,
+    }
 }
 
 /// Run a script on both sides and return the first divergence, if any.
@@ -518,7 +644,9 @@ fn render_bytes(r: &Result<Vec<u8>, String>) -> String {
 }
 
 fn fnv(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x100_0000_01b3))
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+        (h ^ u64::from(*b)).wrapping_mul(0x100_0000_01b3)
+    })
 }
 
 fn compare(
@@ -660,10 +788,21 @@ pub fn generate_bulk(seed: u64, len: usize) -> Case {
     let split = len / 3;
     let mut ops = base.ops[..split].to_vec();
     ops.push(Op::CommitPlain { peer });
-    ops.push(Op::Reshallow { peer, at: rng.u16() });
+    ops.push(Op::Reshallow {
+        peer,
+        at: rng.u16(),
+    });
     for _ in 0..8 {
-        ops.push(Op::Text { peer, target: TextTarget::Root, edit: gen_text_edit(&mut rng) });
-        ops.push(Op::MapSet { peer, key: rng.u8(KEYS.len() as u8), value: gen_value(&mut rng) });
+        ops.push(Op::Text {
+            peer,
+            target: TextTarget::Root,
+            edit: gen_text_edit(&mut rng),
+        });
+        ops.push(Op::MapSet {
+            peer,
+            key: rng.u8(KEYS.len() as u8),
+            value: gen_value(&mut rng),
+        });
         ops.push(Op::CommitEditor { peer });
     }
     ops.push(Op::Bulk { peer });

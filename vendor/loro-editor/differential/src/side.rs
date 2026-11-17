@@ -21,7 +21,11 @@ pub mod patched {
         if suspended {
             doc.app_state().lock().start_recording();
         }
-        let mut out = EditorCommit { suppressed: suspended, projected: false, error: None };
+        let mut out = EditorCommit {
+            suppressed: suspended,
+            projected: false,
+            error: None,
+        };
         if suspended && changed {
             out.projected = true;
             if let Err(e) = undo.record_projected_checkpoint() {
@@ -40,7 +44,9 @@ pub mod patched {
             crate::MergeRegime::InjectedNever => {
                 undo.set_merge_interval(500);
                 let clock = Arc::new(AtomicI64::new(1_000));
-                undo.set_time_source(Some(Arc::new(move || clock.fetch_add(1_000, Ordering::Relaxed))));
+                undo.set_time_source(Some(Arc::new(move || {
+                    clock.fetch_add(1_000, Ordering::Relaxed)
+                })));
             }
             crate::MergeRegime::InjectedAlways => {
                 undo.set_merge_interval(500);
@@ -63,7 +69,9 @@ pub mod upstream {
 
     fn configure_clock(undo: &li::UndoManager, regime: crate::MergeRegime) {
         match regime {
-            crate::MergeRegime::Never | crate::MergeRegime::InjectedNever => undo.set_merge_interval(0),
+            crate::MergeRegime::Never | crate::MergeRegime::InjectedNever => {
+                undo.set_merge_interval(0)
+            }
             crate::MergeRegime::Always | crate::MergeRegime::InjectedAlways => {
                 undo.set_merge_interval(ALWAYS_MERGE_MS)
             }
