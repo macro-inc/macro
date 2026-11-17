@@ -52,6 +52,12 @@ releases fail on a Projects (classic) error before adding the label.
   runs. While its base is `main` the PR's diff holds its parents' commits:
   it is not to be merged then.
 - Other labels never start or cancel CI.
+- The email end-to-end suites are not in `PR CI`. For a PR that changes
+  email, calendar or those suites, also run them on the branch by hand:
+  `gh workflow run email_e2e_browser.yml --ref <branch>` and
+  `gh workflow run email_e2e.yml --ref <branch>`, then read the runs with
+  `gh run list --workflow email_e2e_browser.yml --branch <branch>`
+  (`apps/web/tests/email-e2e/README.md`, CI).
 - A label added within seconds of a push can reach GitHub before the push
   does. `Start` then fails within seconds and `CI gate` says to add the label
   again. To avoid it, add the label once `gh pr view <pr> --json headRefOid`

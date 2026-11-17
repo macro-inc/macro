@@ -197,7 +197,7 @@ and `email_e2e_full_stack.rs`):
   when a shard passes about fifteen minutes.
 
 A pull request that changes email, calendar or the suite is run by hand
-before it is merged, since `PR CI` no longer does:
+before it is merged, since `PR CI` does not:
 
 ```sh
 gh workflow run email_e2e_browser.yml --ref <branch>                  # what a push to main runs
