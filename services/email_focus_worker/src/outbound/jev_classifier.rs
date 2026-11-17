@@ -8,7 +8,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 /// Model id recorded with each classification; Jev's own name for its latest model.
-const MODEL: &str = "jev-latest";
+pub const MODEL: &str = "jev-latest";
 
 /// Jev answering Focus questions on the owner's behalf.
 pub struct JevFocusClassifier<P> {

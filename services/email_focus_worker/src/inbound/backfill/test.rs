@@ -149,7 +149,13 @@ async fn an_enrolled_inbox_fills_with_no_mail_arriving(pool: Pool<Postgres>) {
         Enrolled::owner("owner@acme.example"),
     );
     let shutdown = CancellationToken::new();
-    let backfills = tokio::spawn(run_backfills(service, 30, shutdown.clone()));
+    let metrics = FocusMetrics::default();
+    let backfills = tokio::spawn(run_backfills(
+        service,
+        30,
+        metrics.clone(),
+        shutdown.clone(),
+    ));
 
     // The seeded threads and the fixture's own signal mail in the window.
     tokio::time::timeout(
@@ -169,6 +175,9 @@ async fn an_enrolled_inbox_fills_with_no_mail_arriving(pool: Pool<Postgres>) {
         !asked.contains(&OTHERS_THREAD),
         "the other owner is not enrolled"
     );
+    let batch = metrics.take();
+    assert_eq!(batch.samples[&Metric::EnrolledInboxes], vec![1.0]);
+    assert_eq!(batch.samples[&Metric::BackfillTopFilledSeconds].len(), 1);
 }
 
 /// How fast inboxes fill with the classifier and due date latencies measured
@@ -233,7 +242,12 @@ async fn fill_speed(pool: Pool<Postgres>) {
     let service = service(pool, classifier, due_dates.clone(), Enrolled(owners));
     let shutdown = CancellationToken::new();
     let started = Instant::now();
-    let backfills = tokio::spawn(run_backfills(service, 30, shutdown.clone()));
+    let backfills = tokio::spawn(run_backfills(
+        service,
+        30,
+        FocusMetrics::default(),
+        shutdown.clone(),
+    ));
     let total = usize::try_from(inboxes).unwrap() * usize::try_from(threads).unwrap();
     // The first passes cover 3 of the 29 days seeded.
     asked

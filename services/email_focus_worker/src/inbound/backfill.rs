@@ -33,6 +33,8 @@ use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use crate::metrics::{FocusMetrics, Metric};
+
 #[cfg(test)]
 mod test;
 
@@ -168,6 +170,7 @@ type Running = FuturesUnordered<Pin<Box<dyn Future<Output = Finished> + Send>>>;
 pub async fn run_backfills<S, P, C, N, D, E>(
     service: Arc<FocusService<S, P, C, N, D, E>>,
     window_days: u16,
+    metrics: FocusMetrics,
     shutdown: CancellationToken,
 ) -> Result<(), Report>
 where
@@ -189,7 +192,7 @@ where
             biased;
             () = shutdown.cancelled() => return Ok(()),
             Some(finished) = running.next(), if !running.is_empty() => {
-                finish(&mut backfills, finished);
+                finish(&mut backfills, finished, &metrics);
             }
             _ = ticker.tick() => {
                 // Backfills go on while the look runs.
@@ -201,12 +204,15 @@ where
                         () = shutdown.cancelled() => return Ok(()),
                         enrolled = &mut look => break enrolled,
                         Some(finished) = running.next(), if !running.is_empty() => {
-                            finish(&mut backfills, finished);
+                            finish(&mut backfills, finished, &metrics);
                         }
                     }
                 };
                 match enrolled {
-                    Ok(enrolled) => backfills.found(enrolled.enrolled, Instant::now()),
+                    Ok(enrolled) => {
+                        count_look(&metrics, enrolled.enrolled.len(), enrolled.unknown);
+                        backfills.found(enrolled.enrolled, Instant::now());
+                    }
                     Err(error) => tracing::error!(error = ?error, "focus enrollment look failed"),
                 }
             }
@@ -238,8 +244,20 @@ where
     }
 }
 
+/// Record what a look found.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "inbox counts are far below 2^52"
+)]
+fn count_look(metrics: &FocusMetrics, enrolled: usize, unknown: usize) {
+    metrics.observe(Metric::EnrolledInboxes, enrolled as f64);
+    if unknown > 0 {
+        metrics.add(Metric::EnrollmentUnknown, unknown as f64);
+    }
+}
+
 /// Log how a pass went and record it.
-fn finish(backfills: &mut Backfills, finished: Finished) {
+fn finish(backfills: &mut Backfills, finished: Finished, metrics: &FocusMetrics) {
     let Finished {
         waiting,
         pass,
@@ -267,9 +285,17 @@ fn finish(backfills: &mut Backfills, finished: Finished) {
                 since_found_secs = since_found,
                 "focus backfill pass finished"
             );
+            if !report.stopped_early {
+                let filled = match pass {
+                    Pass::First => Metric::BackfillTopFilledSeconds,
+                    Pass::Rest => Metric::BackfillFilledSeconds,
+                };
+                metrics.observe(filled, since_found);
+            }
             (!report.stopped_early, report.stopped_early)
         }
         Err(error) => {
+            metrics.add(Metric::BackfillPassFailures, 1.0);
             tracing::error!(error = ?error, %link_id, pass = pass.name(), "focus backfill pass failed");
             (false, false)
         }
