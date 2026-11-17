@@ -159,7 +159,6 @@ import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchHarnessRequest } from './generated/schemas/patchHarnessRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
-import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
 import type { PostGroupedSoupAstGroupPageRequest } from './generated/schemas/postGroupedSoupAstGroupPageRequest';
 import type { PostGroupedSoupAstInitialRequest } from './generated/schemas/postGroupedSoupAstInitialRequest';
 import type { PostGroupedSoupAstRequest } from './generated/schemas/postGroupedSoupAstRequest';
@@ -1377,16 +1376,6 @@ export const storageServiceClient = {
     return (
       await dssFetch<Array<ApiActivity>>(`/channels/activity`, {
         method: 'GET',
-      })
-    ).map((result) => result);
-  },
-
-  async postActivity(args: PostActivityRequest) {
-    const { activity_type, channel_id } = args;
-    return (
-      await dssFetch<ApiActivity>(`/channels/activity`, {
-        method: 'POST',
-        body: JSON.stringify({ activity_type, channel_id }),
       })
     ).map((result) => result);
   },

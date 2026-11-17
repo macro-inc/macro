@@ -1,7 +1,3 @@
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { queryClient } from '../client';
 import { fetchGraphqlEmailThread } from '../email/graphql/thread';
 import { emailKeys } from '../email/keys';
@@ -24,11 +20,7 @@ export async function refreshEmailFollowup(threadId: string) {
     queryClient.invalidateQueries({ queryKey: emailKeys.previews._def }),
     // Reading the thread again updates its cached record, and with it every
     // list the cache maintains; only the others are read again.
-    ...(isFeatureEnabled(enableGraphqlSoup)
-      ? [
-          fetchGraphqlEmailThread(threadId),
-          refreshActiveGraphqlSoupQueries({ unmaintainedOnly: true }),
-        ]
-      : []),
+    fetchGraphqlEmailThread(threadId),
+    refreshActiveGraphqlSoupQueries({ unmaintainedOnly: true }),
   ]);
 }

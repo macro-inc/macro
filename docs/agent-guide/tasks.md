@@ -77,7 +77,7 @@ page shows `Retry` in that row and stops automatic requests for the group.
 ArrowDown waits on a group's last loaded task until the next page arrives; after
 a failure it continues into the next group. Collapsed groups load nothing. A page
 that arrives after you scroll past its group must not move the rows on screen.
-With GraphQL Soup enabled, verify a group with more than one page in both the
+Verify a group with more than one page in both the
 regular Tasks list and a project task list (scroll and ArrowDown). Both must use
 the parent Soup query's continuation owner; reaching
 the last page removes the group's paging row without hiding already loaded tasks.
@@ -1175,8 +1175,7 @@ when URL parameters are absent. Use
 `New task` to create a task in the project: the composer opens with its Project
 set to this project (change or clear it like any property), and the create
 request carries it, so there is no separate assignment step. The new row appears
-once the task is created. Verify this with GraphQL Soup both enabled and
-disabled. The section tabs
+once the task is created. The section tabs
 use the same control as Channels. Editors can choose `Add existing tasks` beside
 `New task`; both actions use bordered buttons with a background. `Add existing
 tasks` opens an anchored task-selector dropdown: search, select several, and
@@ -1216,7 +1215,7 @@ its target again.
 
 Select task rows with their leading checkboxes, choose **Actions → Delete items**,
 then confirm **Delete**. On desktop the dialog opens with Delete focused, so Enter confirms
-and Escape cancels. With GraphQL Soup enabled, selected rows disappear while
+and Escape cancels. Selected rows disappear while
 requests are pending, including rows loaded through grouped pagination. The
 confirmation closes when the whole batch succeeds. After a partial failure it
 reports how many items were deleted and keeps only failed items in the dialog for
@@ -1230,11 +1229,10 @@ of the list. If both neighbors disappeared, it falls back near the original list
 position, skipping group headers and load-more rows.
 Failed items return to Soup and search immediately, while successful removals
 remain absent from both.
-Successfully deleted items stay hidden until all enabled GraphQL Soup lists
+Successfully deleted items stay hidden until all mounted GraphQL Soup lists
 revalidate successfully, even if the first refresh fails. Refresh is attempted
 at most three times (one- and two-second retry delays); suppression expires one
-minute after deletion finishes if revalidation remains unavailable. The
-GraphQL-disabled path retains its existing behavior.
+minute after deletion finishes if revalidation remains unavailable.
 
 For verification, use disposable tasks and delay only their DELETE requests:
 rows should disappear before those requests complete. Then fail a Soup refresh:
@@ -1244,7 +1242,7 @@ only the failed items.
 
 ## Other list actions
 
-With GraphQL Soup enabled, **Rename** updates the row title before the request
+**Rename** updates the row title before the request
 finishes, as well as updating previews. **Move to folder**, **Remove from folder**,
 and **Duplicate** refresh mounted GraphQL lists after the server responds; a
 manual page reload is not required. Duplication does not show a placeholder before

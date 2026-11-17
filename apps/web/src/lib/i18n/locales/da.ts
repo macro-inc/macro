@@ -590,10 +590,6 @@ export default {
       other: '{{accepted}} af {{count}} elementer markeret som ikke færdige',
     },
     toastMarkNotDoneFailed: 'Kunne ikke markere som ikke færdig',
-    toastThreadStaysDone:
-      'Denne tråd har ingen modtagne beskeder, så den forbliver færdig',
-    toastThreadsStayDone:
-      'Disse tråde har ingen modtagne beskeder, så de forbliver færdige',
     toastCountNotRestored: {
       one: '{{count}} kunne ikke gendannes.',
       other: '{{count}} kunne ikke gendannes.',

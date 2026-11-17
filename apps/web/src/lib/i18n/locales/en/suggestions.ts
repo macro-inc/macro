@@ -70,4 +70,5 @@ export default {
   todayEmpty: 'Nothing on your calendar today.',
   todayFailed: 'Your calendar couldn’t be loaded.',
   openEvent: 'Open {{title}}',
+  eventTime: '{{title}}, {{time}}',
 };

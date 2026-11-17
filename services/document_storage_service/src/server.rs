@@ -990,6 +990,16 @@ async fn run_server() -> anyhow::Result<()> {
         passwords_agent_state.service.clone(),
         consumer_cancellation_token.clone(),
     ));
+    consumer_tracker.spawn(crate::released_attachments::run(
+        documents_hex::domain::released_attachments::ReleasedAttachmentService::new(
+            documents_hex::outbound::pg_released_attachments::PgReleasedAttachmentRepo::new(
+                db.clone(),
+            ),
+            macro_event_broker.clone(),
+        ),
+        db.clone(),
+        consumer_cancellation_token.clone(),
+    ));
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
         call::outbound::channel_threads::FlaggedChannelThreads::new(
             flags.clone(),
@@ -2785,6 +2795,15 @@ async fn run_server() -> anyhow::Result<()> {
             db.clone(),
         ),
         graphql_notification_reader,
+        graphql_active_notification_ids_context:
+            complete_graph::ActiveNotificationIdsGraphqlContext::new(
+                notification::domain::active_notification_ids::ActiveNotificationIdService::new(
+                    notification::outbound::active_notification_ids::PgActiveNotificationIdRepository(
+                        readonly_db.clone(),
+                    ),
+                    model_notifications::NotifEvent::EVENT_TYPES,
+                ),
+            ),
         // GraphQL reads the activity log through the readonly pool; the
         // Kafka consumer's writer-pool repo above is separate on purpose.
         activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
