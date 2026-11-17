@@ -17,6 +17,7 @@ import type {
 } from './context/pipelines';
 import type { PipelineEntryRecord } from './core/pipeline-entry';
 import type { CrmQueryDependencies } from './queries/dependencies';
+import { crmKeys } from './queries/keys';
 import { pipelineViewColumn } from './queries/pipeline-data';
 import {
   addPipelineEntryRow,
@@ -38,11 +39,12 @@ export function createAddToPipelineSource(
   const team = useCurrentTeamQuery();
   const teamId = () => (team.isSuccess ? team.data?.team.id : undefined);
   const pipelines = createPipelinesSource(deps, teamId);
-  // The Pipelines card's document and variables, read cache-first: on
-  // Overview the card has answered before the menu opens, so the normalized
-  // cache serves the menu without a second request (a client without that
-  // cache sends it). Elsewhere the first open reads once. An add refetches
-  // network-only, which updates both.
+  // The menu sits only in the Overview header, beside the Pipelines card, and
+  // reads the card's document and variables cache-first: the card has answered
+  // before the menu opens, so the normalized cache serves the menu without a
+  // second request (a client without that cache sends it). Both share one urql
+  // operation, so the card's cache-and-network answer keeps the menu current,
+  // and an add's network-only refetch updates both.
   const entries = createPipelineEntriesQuery(
     deps.graphql,
     record,
@@ -113,7 +115,13 @@ export function createAddToPipelineSource(
                   message: databaseWriteMessage(written.error),
                 };
         span.setAttr('crm.outcome', outcome.kind);
-        if (outcome.kind !== 'failed')
+        // A refusal may come from a stage requirement added since the menu read
+        // them once; read them again so the next try opens the form.
+        if (outcome.kind === 'failed')
+          deps.client.invalidateQueries({
+            queryKey: crmKeys.stageRequirements(pipeline.id).queryKey,
+          });
+        else
           await span.span('crm.pipeline.entries_refresh', () =>
             entries.refetch()
           );

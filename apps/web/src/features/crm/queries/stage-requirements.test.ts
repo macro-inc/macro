@@ -3,6 +3,7 @@ import { okAsync } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { CrmRecordDependencies } from './dependencies';
+import { crmKeys } from './keys';
 import { useStageRequirements } from './stage-requirements';
 
 function deps() {
@@ -70,5 +71,38 @@ it('reads once for a caller that does not poll, even when it mounts again', asyn
     expect(read).toHaveBeenCalledOnce();
   } finally {
     again.dispose();
+  }
+});
+
+it('keeps the pipeline page polling while a one-off reader shares its query', async () => {
+  const { read, deps: current } = deps();
+  const page = mount(current);
+  const menu = mount(current, { poll: false });
+  try {
+    await vi.waitFor(() =>
+      expect(menu.requirements.query.isSuccess).toBe(true)
+    );
+    const before = read.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(read.mock.calls.length - before).toBeGreaterThanOrEqual(2);
+  } finally {
+    menu.dispose();
+    page.dispose();
+  }
+});
+
+it('reads again for a one-off reader once its requirements are invalidated', async () => {
+  const { read, deps: current } = deps();
+  const menu = mount(current, { poll: false });
+  try {
+    await vi.waitFor(() =>
+      expect(menu.requirements.query.isSuccess).toBe(true)
+    );
+    await current.client.invalidateQueries({
+      queryKey: crmKeys.stageRequirements('pipeline').queryKey,
+    });
+    expect(read).toHaveBeenCalledTimes(2);
+  } finally {
+    menu.dispose();
   }
 });

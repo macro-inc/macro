@@ -240,7 +240,7 @@ it('reports a record page pipeline write with the record type', async () => {
 });
 
 /** A client over the normalized cache exchange, with an in-memory store and a counted network. */
-function cachedClient() {
+function cachedClient(added: () => boolean = () => false) {
   const stored = new Map<string, unknown>();
   const storeKey = (args: { query: string; variables?: unknown }) =>
     JSON.stringify([args.query, args.variables]);
@@ -252,7 +252,9 @@ function cachedClient() {
           items: [
             {
               __typename: 'GraphqlSoupCrmCompany',
-              pipelineEntries: [entry([])],
+              pipelineEntries: added()
+                ? [entry([]), { ...entry([]), id: 'row-2' }]
+                : [entry([])],
             },
           ],
         },
@@ -295,7 +297,8 @@ function cachedClient() {
 }
 
 it('lets a cache-first reader take the Pipelines card answer without a second request', async () => {
-  const { client, network } = cachedClient();
+  let added = false;
+  const { client, network } = cachedClient(() => added);
   const record = { type: 'company', id: 'acme' } as const;
   const state = createRoot((dispose) => {
     const card = createPipelineEntriesQuery(
@@ -322,9 +325,13 @@ it('lets a cache-first reader take the Pipelines card answer without a second re
     await vi.waitFor(() => expect(state.menu()?.entries()).toHaveLength(1));
     expect(network).toHaveBeenCalledOnce();
 
-    // An add reads again from the network, once, for both readers.
+    // An add reads again from the network, once, and both readers get it.
+    added = true;
     await state.menu()?.refetch();
-    await vi.waitFor(() => expect(network).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(state.card.entries()).toHaveLength(2));
+    expect(state.menu()?.entries()).toHaveLength(2);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(network).toHaveBeenCalledTimes(2);
   } finally {
     state.dispose();
   }
