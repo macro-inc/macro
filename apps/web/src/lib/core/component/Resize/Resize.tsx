@@ -36,6 +36,8 @@ type ZoneProps = {
   gutter?: number;
   /** Paint a divider in each gutter. Defaults to true. */
   showDividers?: boolean;
+  /** Also paint dividers for touch layouts. Defaults to false. */
+  showTouchDividers?: boolean;
   minSize?: number;
   class?: string;
   id?: string;
@@ -223,6 +225,7 @@ function Zone(props: ParentProps<ZoneProps>) {
                     index={actualIndex}
                     resizable={gutterEnabled()}
                     showDivider={props.showDividers ?? true}
+                    showTouchDivider={props.showTouchDividers}
                     nudge={solver.moveHandle}
                     onChangeStart={beginResizeChange}
                     onChangeEnd={endResizeChange}
@@ -270,6 +273,8 @@ type PanelProps = {
    */
   target?: number | PanelSizeSpec;
   collapsed?: () => boolean;
+  /** Fill the zone without taking a slot in the resize layout. */
+  overlay?: boolean;
   hidden?: () => boolean;
   /** The index position for this panel in the layout order */
   index?: number;
@@ -330,7 +335,7 @@ function Panel(props: ParentProps<PanelProps>) {
     const collapsed = props.collapsed?.() ?? false;
     const hidden = props.hidden?.() ?? false;
 
-    if (collapsed || (hidden && !props.persistent)) {
+    if (props.overlay || collapsed || (hidden && !props.persistent)) {
       ctx.unregister(next.id);
       return;
     }
@@ -364,6 +369,7 @@ function Panel(props: ParentProps<PanelProps>) {
   const size = createMemo(ctx.sizeOf(props.id));
 
   const styles = createMemo(() => {
+    if (props.overlay) return { inset: '0px', 'z-index': 1 };
     if (ctx.direction() === 'horizontal') {
       return {
         top: '0px',
@@ -413,6 +419,7 @@ type GutterProps = {
   direction: 'horizontal' | 'vertical';
   gutterSize: number;
   showDivider: boolean;
+  showTouchDivider?: boolean;
   offset: number;
   index: number;
   /** Draggable and keyboard-focusable; otherwise a static divider. */
@@ -597,8 +604,10 @@ export function Gutter(props: GutterProps) {
       {/* Match the enclosing Surface border; spaced panels can omit the divider. */}
       <Show when={props.showDivider}>
         <div
+          data-resize-divider
           class={cn(
-            'absolute border-edge touch:hidden',
+            'absolute border-edge',
+            !props.showTouchDivider && 'touch:hidden',
             horizontal() ? 'border-l-[1px]' : 'border-t-[1px]'
           )}
           style={barStyle('1px')}

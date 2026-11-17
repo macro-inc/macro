@@ -1,9 +1,3 @@
-import {
-  JsonSerializer,
-  WebsocketBuilder,
-} from '@macro-inc/collaboration/websocket';
-import type { ToWebsocketMessage } from '@service-connection/generated/schemas/toWebsocketMessage';
-import type { FromWebsocketMessage } from '@service-connection/websocket';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -21,7 +15,6 @@ vi.mock('@queries/notification/user-notifications', () => ({
   useUserNotificationsQuery: mocks.notifications,
   useMarkNotificationsAsDoneMutation: () => ({ mutateAsync: mocks.mark }),
   useMarkNotificationsAsSeenMutation: () => ({ mutateAsync: mocks.mark }),
-  optimisticInsertNotification: vi.fn(),
 }));
 vi.mock('@queries/notification/unsubscribes', () => ({
   createMutedEntitiesQuery: mocks.muted,
@@ -30,6 +23,11 @@ vi.mock('@queries/notification/unsubscribes', () => ({
 }));
 vi.mock('@queries/notification/notification-soup', () => ({
   updateSoupForNotification: vi.fn(),
+}));
+vi.mock('@queries/auth/account-scope', () => ({
+  currentQueryAccount: () => undefined,
+  isCurrentQueryAccount: () => false,
+  queryAccountSessionPending: () => false,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   mapGraphqlNotification: vi.fn(),
@@ -45,7 +43,6 @@ afterEach(() => vi.clearAllMocks());
 it('disables both feeds without reading pending data or mutating before sign-in', async () => {
   const [enabled, setEnabled] = createSignal(false);
   mocks.notifications.mockReturnValue({
-    transport: 'rest',
     get data() {
       return mocks.readData();
     },
@@ -55,14 +52,8 @@ it('disables both feeds without reading pending data or mutating before sign-in'
       return mocks.readData();
     },
   });
-  const ws = new WebsocketBuilder('ws://unused')
-    .withAutoConnect(false)
-    .withSerializer(
-      new JsonSerializer<ToWebsocketMessage, FromWebsocketMessage>()
-    )
-    .build();
   const { source, dispose } = createRoot((dispose) => ({
-    source: createNotificationSource(ws, undefined, enabled),
+    source: createNotificationSource(undefined, enabled),
     dispose,
   }));
   try {
@@ -89,7 +80,6 @@ it('disables both feeds without reading pending data or mutating before sign-in'
     expect(mocks.readData).not.toHaveBeenCalled();
   } finally {
     dispose();
-    ws.close();
   }
 });
 
@@ -99,7 +89,7 @@ it('does not expose the previous account’s muted items while the next account 
   const [muted, setMuted] = createSignal<UserUnsubscribe[] | undefined>([
     { item_id: 'alice-document', item_type: 'document' },
   ]);
-  mocks.notifications.mockReturnValue({ transport: 'graphql' });
+  mocks.notifications.mockReturnValue({});
   mocks.muted.mockReturnValue({
     get isPending() {
       return pending();
@@ -108,14 +98,8 @@ it('does not expose the previous account’s muted items while the next account 
       return muted();
     },
   });
-  const ws = new WebsocketBuilder('ws://unused')
-    .withAutoConnect(false)
-    .withSerializer(
-      new JsonSerializer<ToWebsocketMessage, FromWebsocketMessage>()
-    )
-    .build();
   const { source, dispose } = createRoot((dispose) => ({
-    source: createNotificationSource(ws, undefined, enabled),
+    source: createNotificationSource(undefined, enabled),
     dispose,
   }));
   try {
@@ -136,6 +120,5 @@ it('does not expose the previous account’s muted items while the next account 
     ]);
   } finally {
     dispose();
-    ws.close();
   }
 });

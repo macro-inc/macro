@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM released_email_attachment_documents\n            WHERE document_id = ANY(ARRAY(\n                SELECT document_id\n                FROM released_email_attachment_documents\n                ORDER BY released_at\n                LIMIT $1\n                FOR UPDATE SKIP LOCKED\n            ))\n            RETURNING document_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "63e696d7fc5e2a13ca93243d150bf90bbdda62e597ed4def3ae9b34575f0d267"
+}

@@ -10,7 +10,7 @@ use std::time::Duration;
 use axum::extract::{Path, Query, State as AxumState};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -113,6 +113,7 @@ pub(crate) fn router() -> Router<GmailEmulator> {
         .route("/mailboxes/{email}/access-tokens", post(access_token))
         .route("/mailboxes/{email}/revoke", post(revoke_grant))
         .route("/mailboxes/{email}/history/expire", post(expire_history))
+        .route("/mailboxes/{email}/signature", put(set_signature))
         .route("/mailboxes/{email}/push", post(push_now))
         .route("/mailboxes/{email}/contacts", post(upsert_contact))
         .route(
@@ -241,6 +242,19 @@ async fn revoke_grant(AxumState(emulator): Emulator, Path(email): Path<String>) 
 
 async fn expire_history(AxumState(emulator): Emulator, Path(email): Path<String>) -> Response {
     done(emulator.expire_history(&email))
+}
+
+#[derive(Deserialize)]
+struct Signature {
+    signature: String,
+}
+
+async fn set_signature(
+    AxumState(emulator): Emulator,
+    Path(email): Path<String>,
+    Json(body): Json<Signature>,
+) -> Response {
+    done(emulator.set_signature(&email, &body.signature))
 }
 
 async fn push_now(AxumState(emulator): Emulator, Path(email): Path<String>) -> Response {

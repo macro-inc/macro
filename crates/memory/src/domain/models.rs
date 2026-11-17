@@ -29,6 +29,18 @@ pub enum Granularity {
     Summary,
 }
 
+/// What a piece of memory content is, which decides the privacy rules it must pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum MemoryKind {
+    /// Private explicit memory the user asked to save.
+    Explicit,
+    /// A generated activity report teammates can read.
+    Activity,
+    /// A generated professional profile teammates can read.
+    Profile,
+}
+
 /// A privacy-reviewed activity report; period_end is inclusive.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]

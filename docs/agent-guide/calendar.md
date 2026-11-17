@@ -105,9 +105,8 @@ remain read-only and appear only when their details are shared.
 An existing Macro call can keep its schedule during point metadata edits; adding
 a new Macro call requires giving the event a duration first.
 
-Calendar reads come from the local GraphQL cache when both `enable-graphql-soup`
-and `enable-graphql-calendar` are on (PostHog in production, on by default in dev
-for the calendar flag; set `VITE_ENABLE_GRAPHQL_CALENDAR=false` to test the REST
+Calendar reads come from the local GraphQL cache when `enable-graphql-calendar`
+is on (PostHog in production, on by default in dev; set `VITE_ENABLE_GRAPHQL_CALENDAR=false` to test the REST
 path). A range the cache has covered renders with no occurrence request, and a far
 jump fetches only the uncovered weeks. Cached records survive deploys, so an
 occurrence cached by an older build can lack a field the current one selects;
@@ -1546,3 +1545,6 @@ For an Outlook invitation you attend, `Open in Outlook` below the RSVP controls
 opens the actual occurrence so you can clear your own response there.
 
 Calendar's New menus explain Event, Call, and Booking link with icons and muted descriptions. Call and Booking link keep their existing feature gates. Booking link opens the personal Scheduling workspace with an unsaved link editor; canceling creates nothing. The URL request is consumed once after the profile is ready.
+
+On touch, Calendar workspace controls float within the calendar pane, beside the
+sidebar, with an explicit safe-area top gutter. They do not cover the sidebar title.

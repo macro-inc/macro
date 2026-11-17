@@ -37,8 +37,8 @@ use entity_access::{
     },
 };
 use macro_authorization::{
-    CODE_EXECUTION_HEADER, CredentialOrigin, MacroAuthorizationExtractor,
-    MacroAuthorizationService, MacroAuthorizationState, UserOrInternal, is_agent_run,
+    CODE_EXECUTION_HEADER, CredentialAttribution, CredentialOrigin, MacroAuthorizationExtractor,
+    MacroAuthorizationService, MacroAuthorizationState, UserOrInternal, is_program_run,
 };
 use model_error_response::ErrorResponse;
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
@@ -430,12 +430,7 @@ pub async fn get_or_create_call_handler<
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     headers: HeaderMap,
 ) -> Result<Json<CallTokenResponse>, CallError> {
-    refuse_code_execution_token(&headers)?;
-    if is_agent_run(user.authorization.user.agent_id.is_some(), &headers) {
-        return Err(CallError::Forbidden(
-            "an agent-attributed start requires approval".to_string(),
-        ));
-    }
+    refuse_program_token(user.authorization.user.attribution(), &headers)?;
     let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
 
@@ -456,11 +451,30 @@ pub async fn get_or_create_call_handler<
     Ok(Json(response))
 }
 
+/// Why a program may not get a call token: it would reach the model and the
+/// transcript, and it outlives the run and cannot be revoked.
+const PROGRAM_TOKEN_REFUSAL: &str = "An agent's program cannot get a call token: it would reach you and outlive the run. Tell the user to start or join the call in Macro.";
+
+/// Refuse a call token to any program ([`is_program_run`]): its credential's
+/// signed agent or routine claim, which a program cannot shed, or the
+/// code-mode runtime's header. A person's session or API key, and an agent
+/// account's own key, join as themselves.
+pub(super) fn refuse_program_token(
+    attribution: CredentialAttribution,
+    headers: &HeaderMap,
+) -> Result<(), CallError> {
+    if is_program_run(attribution, headers) {
+        tracing::warn!(?attribution, "refused a call token to a program");
+        return Err(CallError::Forbidden(PROGRAM_TOKEN_REFUSAL.to_string()));
+    }
+    Ok(())
+}
+
+/// A guest join carries no credential, so only the code-mode runtime's header
+/// marks a program there.
 pub(super) fn refuse_code_execution_token(headers: &HeaderMap) -> Result<(), CallError> {
     if headers.contains_key(CODE_EXECUTION_HEADER) {
-        return Err(CallError::Forbidden(
-            "call tokens are unavailable in code execution".to_string(),
-        ));
+        return Err(CallError::Forbidden(PROGRAM_TOKEN_REFUSAL.to_string()));
     }
     Ok(())
 }
@@ -490,18 +504,13 @@ pub async fn start_call_handler<
     headers: HeaderMap,
     request: Option<Json<JoinCallRequest>>,
 ) -> Result<Json<CallTokenResponse>, CallError> {
-    refuse_code_execution_token(&headers)?;
+    refuse_program_token(user.authorization.user.attribution(), &headers)?;
     if !state
         .service
         .programmatic_calls_enabled(user.authorization.user.macro_user_id.clone())
         .await
     {
         return Err(CallError::NotFound("call".to_string()));
-    }
-    if is_agent_run(user.authorization.user.agent_id.is_some(), &headers) {
-        return Err(CallError::Forbidden(
-            "an agent-attributed start requires approval".to_string(),
-        ));
     }
     let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
@@ -534,7 +543,7 @@ pub async fn join_call_handler<
     headers: HeaderMap,
     request: Option<Json<JoinCallRequest>>,
 ) -> Result<Json<CallTokenResponse>, CallError> {
-    refuse_code_execution_token(&headers)?;
+    refuse_program_token(user.authorization.user.attribution(), &headers)?;
     if !user.authorization.user.is_human_session()
         && !state
             .service

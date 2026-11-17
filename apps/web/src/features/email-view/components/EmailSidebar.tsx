@@ -32,6 +32,7 @@ import {
   EMAIL_TABS,
   isEmailInboxTab,
 } from '../constants';
+import { switchesEmailTabs } from '../email-search-focus';
 import { useEmailView } from '../email-view-context';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
@@ -189,23 +190,17 @@ export function EmailSidebar() {
       isTouchDevice() ? tabIds() : EMAIL_INBOX_TAB_IDS.filter(isVisible),
     activeId: () => state.tab,
     setActiveId: setTab,
-    shouldHandleSequentialKeyEvent: (event) =>
-      !(
-        event?.target instanceof Element &&
-        event.target.closest('[role="grid"][aria-label="Email"]')
-      ),
+    shouldHandleSequentialKeyEvent: switchesEmailTabs,
   });
 
   return (
     <ViewSidebar.Root aria-label="Email navigation">
-      <Show when={!isTouchDevice()}>
-        <ViewSidebar.Header>
-          <div class="flex min-w-0 items-center gap-1">
-            <ViewSidebar.CloseButton class="shrink-0" />
-            <ViewSidebar.Title>Email</ViewSidebar.Title>
-          </div>
-        </ViewSidebar.Header>
-      </Show>
+      <ViewSidebar.Header>
+        <div class="flex min-w-0 items-center gap-1">
+          <ViewSidebar.CloseButton class="shrink-0" />
+          <ViewSidebar.Title>Email</ViewSidebar.Title>
+        </div>
+      </ViewSidebar.Header>
 
       <Show when={!isTouchDevice()}>
         <ViewSidebar.Primary>
