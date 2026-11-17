@@ -39,6 +39,6 @@ for fingerprint in "${images[@]}"; do
   rm -rf "$directory"
   mv "$staging/boot" "$directory"
   rmdir "$staging"
-  incus image set-property "$fingerprint" user.macro.boot.append "$(cat "$directory/cmdline")"
+  incus image set-property "$fingerprint" "user.macro.boot.append=$(cat "$directory/cmdline")"
   echo "boot files for $fingerprint in $directory"
 done
