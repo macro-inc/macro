@@ -201,7 +201,8 @@ with the standard SSE `Last-Event-ID` header first receives the retained events
 after it, through the same filters and access checks, then live events, with no
 event twice and none skipped. An id this process retains resumes exactly after
 that event; any other UUIDv7 (an event another replica delivered, or one minted
-from a timestamp) resumes at the time it encodes. Events older than the
+from a timestamp) resumes at the time it encodes. A `Last-Event-ID` that is not
+a UUIDv7 is ignored and the stream opens live, never refused. Events older than the
 retention, or published while the process was not consuming, are still missed.
 macrod sends its last seen id on every reconnect, and a floor minted when it
 started on its first open, so a session requested before its stream covered a

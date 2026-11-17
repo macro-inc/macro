@@ -9,6 +9,9 @@
 //! still retains after that id (see [`StreamCursor`]); events older than the
 //! retention are missed and must be resynced out of band when needed.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::models::{WebhookFilters, WebhookScope};
 use crate::domain::stream::{StreamCursor, WebhookEventStreamService, WebhookStreamError};
 use axum::{
@@ -101,16 +104,20 @@ fn parse_filters(filters: Option<String>) -> Result<WebhookFilters, WebhookStrea
 }
 
 /// The cursor a reconnecting client resumes from, sent the standard SSE way.
-fn resume_cursor(headers: &HeaderMap) -> Result<Option<StreamCursor>, WebhookStreamHandlerError> {
-    let Some(value) = headers.get(LAST_EVENT_ID_HEADER) else {
-        return Ok(None);
-    };
-    let value = value.to_str().map_err(|_| {
-        WebhookStreamHandlerError(WebhookStreamError::BadRequest(
-            "`Last-Event-ID` must be an event id".to_string(),
-        ))
-    })?;
-    Ok(Some(StreamCursor::parse(value)?))
+///
+/// One this service cannot read is no cursor: the stream opens live, as it
+/// did before resuming existed. Refusing it would stop a browser
+/// `EventSource` from ever reconnecting.
+fn resume_cursor(headers: &HeaderMap) -> Option<StreamCursor> {
+    let value = headers.get(LAST_EVENT_ID_HEADER)?;
+    let cursor = value
+        .to_str()
+        .ok()
+        .and_then(|value| StreamCursor::parse(value).ok());
+    if cursor.is_none() {
+        tracing::info!("ignoring an unreadable Last-Event-ID; the stream opens live");
+    }
+    cursor
 }
 
 /// The SSE header a reconnecting client names its last seen event with.
@@ -139,7 +146,7 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
     WebhookStreamHandlerError,
 > {
     let filters = parse_filters(query.filters)?;
-    let after = resume_cursor(&headers)?;
+    let after = resume_cursor(&headers);
 
     let events = state
         .stream_service
