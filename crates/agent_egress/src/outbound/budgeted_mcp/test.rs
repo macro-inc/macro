@@ -231,3 +231,33 @@ async fn the_transport_retries_an_exchange_the_upstream_refused() {
     assert_eq!(result["attempt"], 1);
     assert_eq!(upstream.attempts.load(Ordering::SeqCst), 2);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_listing_is_not_budgeted() {
+    let upstream = Arc::new(Upstream::new(
+        Duration::from_millis(10),
+        usize::MAX,
+        Some(Duration::from_secs(1)),
+    ));
+    let transport = BudgetedMcpTransport::new(upstream.clone(), policy());
+
+    let result = transport
+        .exchange(
+            AgentSessionId::new(),
+            MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
+            UpstreamCall::bearer(
+                url::Url::parse("https://api.githubcopilot.com/mcp/").unwrap(),
+                crate::domain::model::BearerToken::new("test-credential"),
+            )
+            .unwrap(),
+            serde_json::json!({"method": "tools/list"}),
+        )
+        .await;
+
+    assert!(matches!(result, Err(EgressError::RateLimited { .. })));
+    assert_eq!(
+        upstream.attempts.load(Ordering::SeqCst),
+        1,
+        "a listing is sent once, never retried or queued"
+    );
+}

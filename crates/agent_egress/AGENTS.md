@@ -18,7 +18,10 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   account's sessions on this instance only, so each replica grants its own
   budget: 4 in flight, starts 100 ms apart, a lane-wide `Retry-After`
   cooldown (plus jitter) after a 429, and retries until no attempt may start
-  after 25 s. It wraps only the send, so held approvals never take a permit.
+  after 25 s. It wraps only `tools/call` sends, so held approvals never take a
+  permit and listings never queue. The sandbox proxy shares the lanes: a
+  routine's burst can make the owner's interactive agent wait up to 25 s on
+  the same app, by design, since they spend one quota.
 - `src/domain/service.rs`: `EgressServiceImpl` — steps 2 and 3 (token → grant,
   grant → credential).
 - `src/domain/ports.rs`: `SessionAuthority`, `McpCredentials`, `GithubTokens`,

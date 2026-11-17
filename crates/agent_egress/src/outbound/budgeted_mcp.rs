@@ -273,14 +273,15 @@ fn exhausted(lane: &Lane) -> EgressError {
     }
 }
 
-/// An [`ActorMcpTransport`] whose exchanges run within [`CallBudget`].
+/// An [`ActorMcpTransport`] whose tool calls run within [`CallBudget`].
 pub struct BudgetedMcpTransport {
     inner: Arc<dyn ActorMcpTransport>,
     budget: CallBudget,
 }
 
 impl BudgetedMcpTransport {
-    /// Pace `inner`'s exchanges under `policy`.
+    /// Pace `inner`'s tool calls under `policy`. Listings pass straight
+    /// through: one per app, and never stuck behind a program's burst.
     pub fn new(inner: Arc<dyn ActorMcpTransport>, policy: BudgetPolicy) -> Self {
         Self {
             inner,
@@ -298,6 +299,9 @@ impl ActorMcpTransport for BudgetedMcpTransport {
         upstream: UpstreamCall,
         request: Value,
     ) -> Result<Value, EgressError> {
+        if request["method"] != "tools/call" {
+            return self.inner.exchange(session, actor, upstream, request).await;
+        }
         let lane = BudgetLane::of(actor.clone(), &upstream);
         self.budget
             .run(lane, || {
