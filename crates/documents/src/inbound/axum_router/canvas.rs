@@ -245,15 +245,13 @@ async fn canvas_service<T: DocumentService, A: RequiredPermission>(
 ) -> Result<(CanvasCaller, CanvasService<T, super::DefaultEditingWorker>), Response> {
     let caller =
         CanvasCaller::of(receipt).ok_or_else(|| DocumentError::Unauthorized.into_response())?;
-    let artifacts = (canvas.artifacts)(caller.user.clone()).await;
     let service = CanvasService::new(
         service.clone(),
         canvas.worker.clone(),
         jwt_secret.to_owned(),
         canvas.admission.clone(),
         canvas.recorder.clone(),
-    )
-    .with_artifacts(artifacts);
+    );
     Ok((caller, service))
 }
 

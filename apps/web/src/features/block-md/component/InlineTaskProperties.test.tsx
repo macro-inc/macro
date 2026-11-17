@@ -45,7 +45,6 @@ const mocks = vi.hoisted(() => ({
   open: vi.fn<typeof openPropertyEditor>(),
   kind: 'document' as MarkdownDocumentKind,
   setProperties: undefined as Setter<Property[]> | undefined,
-  projectsEnabled: false,
 }));
 const entityWrite = vi.fn();
 
@@ -62,7 +61,7 @@ vi.mock('@service-connection/websocket', () => ({
   createConnectionWebsocketEffect: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.projectsEnabled }),
+  useFeatureFlag: () => () => ({ enabled: false }),
 }));
 vi.mock('@entity', () => ({
   InlineEntity: () => null,
@@ -165,7 +164,6 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.restoreAllMocks();
   mocks.kind = 'document';
-  mocks.projectsEnabled = false;
 });
 
 const disposers: (() => void)[] = [];
@@ -255,17 +253,11 @@ it('repins an existing property without assigning it a second time', async () =>
 
 it("shows a task's Project with the other task properties, through the same pill", async () => {
   mocks.kind = 'task';
-  mocks.projectsEnabled = true;
   setup();
   // A task without a project still gets the standard pill, from a placeholder.
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Unpin Project' })).toBeTruthy()
   );
-
-  cleanup();
-  mocks.projectsEnabled = false;
-  setup();
-  expect(screen.queryByRole('button', { name: 'Unpin Project' })).toBeNull();
 });
 
 const taskDefinitions = [
@@ -378,6 +370,7 @@ it('unpins an implicit task default without dropping the other defaults', async 
   expect(editor.getEditorState().read($getPinnedProperties)).toEqual([
     taskProperties[1].propertyId,
     taskProperties[2].propertyId,
+    'pending:project',
   ]);
   expect(mocks.properties()).toEqual(taskProperties);
 });
@@ -403,7 +396,6 @@ it('updates task title chips in place when the properties emit new objects', asy
 
 it('keeps the Project chip mounted when saving assigns its placeholder an ID', async () => {
   mocks.kind = 'task';
-  mocks.projectsEnabled = true;
   setup(taskProperties);
   const project = await screen.findByRole('button', { name: 'Unpin Project' });
 
@@ -427,14 +419,15 @@ it('keeps the Project chip mounted when saving assigns its placeholder an ID', a
 it('keeps all task title pins cleared after serialization and reopening', async () => {
   mocks.kind = 'task';
   const editor = setup(taskProperties);
-  for (const item of taskProperties) {
+  for (const name of [
+    ...taskProperties.map((item) => item.displayName),
+    'Project',
+  ]) {
     await fireEvent.click(
-      screen.getByRole('button', { name: `Unpin ${item.displayName}` })
+      screen.getByRole('button', { name: `Unpin ${name}` })
     );
     await waitFor(() =>
-      expect(
-        screen.queryByRole('button', { name: `Unpin ${item.displayName}` })
-      ).toBeNull()
+      expect(screen.queryByRole('button', { name: `Unpin ${name}` })).toBeNull()
     );
   }
   expect(editor.getEditorState().read($getStoredPinnedProperties)).toEqual([]);
@@ -450,7 +443,6 @@ it('keeps all task title pins cleared after serialization and reopening', async 
 
 it('resolves a default Project placeholder after assignment and preserves its value on unpin', async () => {
   mocks.kind = 'task';
-  mocks.projectsEnabled = true;
   const pendingProject: Property = {
     ...property,
     propertyId: `pending:${SYSTEM_PROPERTY_IDS.PROJECT}`,
@@ -497,7 +489,6 @@ it('resolves a default Project placeholder after assignment and preserves its va
 
 it('clears a placeholder-backed Project pin when its assignment disappears before removal finishes', async () => {
   mocks.kind = 'task';
-  mocks.projectsEnabled = true;
   const pendingProject: Property = {
     ...property,
     propertyId: `pending:${SYSTEM_PROPERTY_IDS.PROJECT}`,

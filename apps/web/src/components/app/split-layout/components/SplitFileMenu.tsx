@@ -30,7 +30,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableEntityAppearance,
-  enableProjects,
   enableReminders,
 } from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
@@ -541,7 +540,6 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
 
   const [open, setOpen] = createSignal(false);
   const [assigningProject, setAssigningProject] = createSignal(false);
-  const projectsFlag = useFeatureFlag(enableProjects);
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const itemOperations = useItemOperations();
   const quickAccess = useQuickAccess();
@@ -885,7 +883,6 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       reminderOp(),
       addTagOp(),
       ...(props.entityKind === 'task' &&
-      projectsFlag().enabled &&
       (props.permissions === Permissions.OWNER ||
         props.permissions === Permissions.CAN_EDIT)
         ? [
@@ -978,7 +975,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
           views={props.mobileViews}
         />
       </Show>
-      <Show when={projectsFlag().enabled && assigningProject()}>
+      <Show when={assigningProject()}>
         <ProjectAssignmentDialog
           taskIds={[props.id]}
           onClose={() => setAssigningProject(false)}

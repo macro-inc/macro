@@ -41,7 +41,8 @@ export class ApiKeyNamespace {
   }
 
   /**
-   * Exchange an email address for a Macro API token, subject to server authorization.
+   * Exchange an email address for a Macro API token, subject to server
+   * authorization; refused to an agent's program (ExecuteCode, a routine).
    *
    * @write
    */

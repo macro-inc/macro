@@ -400,7 +400,6 @@ export function searchSettings(
   groups: readonly SettingsTabGroup[],
   query: string,
   options: {
-    emailSignatures?: boolean;
     outlook?: boolean;
     macroComputers?: boolean;
   } = {}
@@ -422,8 +421,6 @@ export function searchSettings(
     ...SETTINGS.filter(
       (setting) =>
         setting.tab === page.tab &&
-        (options.emailSignatures !== false ||
-          setting.title !== 'Email signatures') &&
         (options.outlook !== false || setting.title !== 'Outlook') &&
         (options.macroComputers !== false || !setting.macroComputers)
     ).map((setting) => ({

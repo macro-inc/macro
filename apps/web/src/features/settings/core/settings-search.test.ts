@@ -69,13 +69,6 @@ describe('individual settings search', () => {
       false
     );
   });
-  it('omits disabled signature controls', () => {
-    expect(
-      searchSettings(SETTINGS_TAB_GROUPS, 'signature', {
-        emailSignatures: false,
-      }).some((result) => result.title === 'Email signatures')
-    ).toBe(false);
-  });
   it('finds the team members page for inviting people', () => {
     for (const query of ['invite', 'members', 'team members', 'teammates']) {
       expect(search(query)[0]).toMatchObject({
