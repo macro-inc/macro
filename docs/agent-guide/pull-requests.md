@@ -11,6 +11,10 @@ section separate from Macro tag lists. GitHub labels are also available in
 **Filter pull requests → Label** on desktop and **Open pull request filters →
 Label** on phones.
 
+For now, PR mentions (in messages, documents and Magic Chips) and an agent
+session's PR chip open the pull request on GitHub, not this view: a new tab on
+the web, the system browser in the desktop app. Reviews still opens it here.
+
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
 side panel below the top bar. An open PR has a split button in the top bar
