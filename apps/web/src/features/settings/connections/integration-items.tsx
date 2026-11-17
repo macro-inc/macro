@@ -2,7 +2,6 @@ import { SlackImport } from '@app/features/slack-import/slack-import';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_EMAIL,
-  enableMultiInbox,
   enableSlackArchiveImport,
 } from '@core/constant/featureFlags';
 import { useEmailLinks } from '@core/email-link';
@@ -109,7 +108,6 @@ export function useEmailItems(
 ): Accessor<IntegrationItem[]> {
   const { query } = useEmailLinks();
   const connectInbox = useConnectInbox();
-  const multiInbox = useFeatureFlag(enableMultiInbox);
   const outlookOffered = useOutlookAvailable();
   const links = () => (query.isSuccess ? query.data.links : []);
   const linksFor = (provider: EmailLink['provider']) =>
@@ -118,12 +116,9 @@ export function useEmailItems(
         ? link.provider === 'OUTLOOK'
         : link.provider !== 'OUTLOOK'
     );
-  // Further inboxes are behind multi-inbox; the first is always offered.
-  const canAdd = () => links().length === 0 || multiInbox().enabled;
-
   const actionsFor = (provider: EmailLink['provider']) => () => (
     <>
-      <Show when={canAdd() && (provider !== 'OUTLOOK' || outlookOffered())}>
+      <Show when={provider !== 'OUTLOOK' || outlookOffered()}>
         <ConnectAction
           label={linksFor(provider).length > 0 ? 'Add account' : 'Connect'}
           ariaLabel={

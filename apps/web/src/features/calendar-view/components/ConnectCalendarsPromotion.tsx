@@ -7,10 +7,7 @@ import {
   SidebarPromotion,
 } from '@app/features/sidebar-promotion/sidebar-promotion';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  enableMultiInbox,
-  enableSidebarPromotions,
-} from '@core/constant/featureFlags';
+import { enableSidebarPromotions } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -44,7 +41,6 @@ type CardState = z.infer<typeof cardStateSchema>;
  */
 export function ConnectCalendarsPromotion(props: { class?: string }) {
   const promotions = useFeatureFlag(enableSidebarPromotions);
-  const multiInbox = useFeatureFlag(enableMultiInbox);
   const accounts = useLoadedCalendarAccounts();
   const userId = useUserId();
   const startAddInbox = useAddInboxFlow();
@@ -106,7 +102,6 @@ export function ConnectCalendarsPromotion(props: { class?: string }) {
       id={COPY.id}
       applies={allOf(
         flagVerdict(promotions()),
-        flagVerdict(multiInbox()),
         state() === undefined ? undefined : !state()?.satisfied
       )}
       logos={COPY.logos}

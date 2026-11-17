@@ -659,12 +659,6 @@ export const enableMicrosoftSignup = defineFlag({
   default: onInDev,
 });
 
-export const enableMultiInbox = defineFlag({
-  key: 'enable-multi-inbox',
-  env: 'ENABLE_MULTI_INBOX',
-  default: onInDev,
-});
-
 export const enableSoupGroupBy = defineFlag({
   key: 'enable-soup-group-by',
   default: onInDev,

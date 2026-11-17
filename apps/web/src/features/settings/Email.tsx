@@ -3,12 +3,10 @@ import {
   type TurnOffCalendarTarget,
 } from '@app/features/calendar/components/TurnOffCalendarDialog';
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_INBOX_RESYNC,
   ENABLE_INBOX_SYNC_STATUS,
-  enableMultiInbox,
 } from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
 import {
@@ -93,7 +91,6 @@ export function useConnectInbox(): (provider?: EmailProvider) => void {
 export function EmailCard(props: { class?: string } = {}) {
   const email = useEmail();
   const userId = useUserId();
-  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
 
   const { query: emailLinksQuery, resyncInbox } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
@@ -133,9 +130,6 @@ export function EmailCard(props: { class?: string } = {}) {
   const outlookOffered = useOutlookAvailable();
   const hasInbox = () =>
     Boolean(inboxes().primary) || inboxes().others.length > 0;
-  // Further inboxes are behind multi-inbox; the first is always offered.
-  const canAddInbox = () => !emailActive() || multiInboxFlag().enabled;
-
   const handleResyncInbox = async (linkId: string) => {
     setResyncingIds((prev) => new Set(prev).add(linkId));
     await resyncInbox(linkId).match(
@@ -265,40 +259,38 @@ export function EmailCard(props: { class?: string } = {}) {
             )}
           </For>
         </Show>
-        <Show when={canAddInbox()}>
+        <SettingsSurface>
+          <IntegrationRow
+            icon={<GmailIcon />}
+            title={
+              hasInbox()
+                ? 'Connect another Google Workspace account'
+                : 'Connect a Google Workspace account'
+            }
+            description="Sync a Gmail or Google Workspace inbox into Macro Email."
+          >
+            <ConnectAction
+              label="Connect"
+              ariaLabel="Connect a Google Workspace account"
+              onClick={() => onConnectEmail('GMAIL')}
+            />
+          </IntegrationRow>
+        </SettingsSurface>
+        <Show when={outlookOffered()}>
           <SettingsSurface>
             <IntegrationRow
-              icon={<GmailIcon />}
-              title={
-                hasInbox()
-                  ? 'Connect another Google Workspace account'
-                  : 'Connect a Google Workspace account'
-              }
-              description="Sync a Gmail or Google Workspace inbox into Macro Email."
+              icon={<OutlookIcon />}
+              title="Connect an Outlook account"
+              badge={<OutlookBetaBadge />}
+              description="Sync an Outlook.com or Microsoft 365 inbox into Macro Email."
             >
               <ConnectAction
                 label="Connect"
-                ariaLabel="Connect a Google Workspace account"
-                onClick={() => onConnectEmail('GMAIL')}
+                ariaLabel="Connect an Outlook account"
+                onClick={() => onConnectEmail('OUTLOOK')}
               />
             </IntegrationRow>
           </SettingsSurface>
-          <Show when={outlookOffered()}>
-            <SettingsSurface>
-              <IntegrationRow
-                icon={<OutlookIcon />}
-                title="Connect an Outlook account"
-                badge={<OutlookBetaBadge />}
-                description="Sync an Outlook.com or Microsoft 365 inbox into Macro Email."
-              >
-                <ConnectAction
-                  label="Connect"
-                  ariaLabel="Connect an Outlook account"
-                  onClick={() => onConnectEmail('OUTLOOK')}
-                />
-              </IntegrationRow>
-            </SettingsSurface>
-          </Show>
         </Show>
       </div>
 
