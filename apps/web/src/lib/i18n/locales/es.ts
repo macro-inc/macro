@@ -611,10 +611,6 @@ export default {
       other: '{{accepted}} de {{count}} elementos marcados como no hechos',
     },
     toastMarkNotDoneFailed: 'No se pudo marcar como no hecho',
-    toastThreadStaysDone:
-      'Este hilo no tiene mensajes recibidos, así que sigue marcado como hecho',
-    toastThreadsStayDone:
-      'Estos hilos no tienen mensajes recibidos, así que siguen marcados como hechos',
     toastCountNotRestored: {
       one: 'No se pudo restaurar {{count}} elemento.',
       many: 'No se pudieron restaurar {{count}} de elementos.',

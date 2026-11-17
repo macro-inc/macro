@@ -362,6 +362,17 @@ into view. Cells edit like the pipeline table's when you can edit that pipeline.
 `Open <pipeline>` button opens it. The `Pipelines` caret header collapses and expands the cards, like the Discussion
 header; both start expanded on each visit. The
 section is absent when the record is in no pipeline.
+When pipelines are enabled, **Add to pipeline** beside the title (a plus icon
+on phones) lists the team's pipelines of the record's type, by name; generic and
+trashed pipelines are never listed. A pipeline the record is in shows a check and
+`In <stage>`; one you can only view or comment on is greyed, with the reason in a
+tooltip (on touch, under its name). A contact cannot join a contact pipeline it
+is already in; a company can, as another deal. Hovering (on touch, tapping) a
+pipeline lists its stages under **Choose stage**, with a back row on phones.
+Choosing a stage adds the row at once and shows `Added to <pipeline> at <stage>`
+with the new card in Pipelines; a stage with required fields opens **Add deal**
+(or **Add contact**) with the record fixed and the stage chosen. With no
+matching pipelines the menu says `No company pipelines yet` (or contact).
 Team lists the contacts with `Add contact`. Emails keeps the
 `Signal`/`All` and `Team`/`Me` toggles; `Team` shows teammates' threads even to
 a viewer with no connected mailbox. Files, Tasks, and Calls list items

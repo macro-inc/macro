@@ -16,9 +16,10 @@ import {
 } from '@app/features/saved-views/queries/saved-views';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { SplitRouter } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
-import { PillTabs } from '@components/app/mobile/PillTabs';
+import { PillButton, PillTabs } from '@components/app/mobile/PillTabs';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -28,8 +29,11 @@ import {
   enableEmailWideSearch,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { triggerFocusInput } from '@core/directive/focusInput';
+import { useAndroidBackNavigation } from '@core/mobile/androidBack';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import {
   createEffect,
@@ -55,8 +59,10 @@ import {
   EMAIL_TAB_LABELS,
   isEmailInboxTab,
 } from './constants';
+import { focusEmailSearchResults } from './email-search-focus';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
+import { createEmailMobileSearch } from './primitives/create-email-mobile-search';
 import type { EmailListPane } from './reader-pane';
 import { createEmailSearchSuggestions } from './search/create-email-search-suggestions';
 import { emailTour } from './tour';
@@ -73,6 +79,7 @@ import {
   EmailSavedViewUnavailable,
   EmailSavedViewWarning,
 } from './views/email-saved-views';
+import { EmailMobileSearch } from './views/mobile/email-search';
 
 export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -114,12 +121,13 @@ function EmailListFallback() {
 function DesktopEmailPanes(props: {
   list: JSX.Element;
   focusList: () => void;
+  focusSearchResults: () => void;
   setListPane: (pane: EmailListPane | undefined) => void;
   onListWidthChange: (width: number) => void;
 }) {
   const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
-  const { state, setState, closeThread, list, source } = useEmailView();
+  const { state, setState, list, source } = useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
   const recentSearches = createEmailSearchSuggestions({
@@ -149,7 +157,6 @@ function DesktopEmailPanes(props: {
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
     canSearch: () => canSearchEmailTab(state.tab),
-    showList: closeThread,
   });
 
   const listColumn = (beside?: 'reader') => (
@@ -157,7 +164,7 @@ function DesktopEmailPanes(props: {
       <ViewTour tour={emailTour} />
       <EmailHeader
         tabOnly={beside === 'reader'}
-        focusSearchResults={props.focusList}
+        focusSearchResults={props.focusSearchResults}
         registerSearch={search.registerListSearch}
         searchSuggestions={searchSuggestions()}
       />
@@ -167,7 +174,7 @@ function DesktopEmailPanes(props: {
             suggestions={suggestions()}
             onPick={(index) => {
               suggestions().pick(index);
-              props.focusList();
+              props.focusSearchResults();
             }}
           />
         )}
@@ -239,6 +246,7 @@ function TouchEmailPanes(props: {
 function EmailLayout(props: {
   list: JSX.Element;
   focusList: () => void;
+  focusSearchResults: () => void;
   setListPane: (pane: EmailListPane | undefined) => void;
 }) {
   const { readingPane, composing } = useEmailView();
@@ -292,6 +300,7 @@ function EmailLayout(props: {
           <DesktopEmailPanes
             list={props.list}
             focusList={props.focusList}
+            focusSearchResults={props.focusSearchResults}
             setListPane={props.setListPane}
             onListWidthChange={updateListWidth}
           />
@@ -310,7 +319,41 @@ function EmailLayout(props: {
 
 function EmailMobileLayout(props: ParentProps) {
   const isVisible = useVisibleEmailTab();
-  const { state, setTab, tagViewTitle, savedViewActive } = useEmailView();
+  const { state, setState, setTab, tagViewTitle, savedViewActive } =
+    useEmailView();
+  const userId = useUserId();
+  const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
+  const suggestions = createEmailSearchSuggestions({
+    userId,
+    search: () => state.search,
+    setSearch: (query) => setState('search', query),
+  });
+  let searchInput: HTMLInputElement | undefined;
+  const mobileSearch = createEmailMobileSearch({
+    available: () => wideSearchFlag().enabled && canSearchEmailTab(state.tab),
+    search: () => state.search,
+    setSearch: (search) => setState('search', search),
+  });
+  const searching = mobileSearch.searching;
+
+  const openSearch = () => {
+    mobileSearch.open();
+    // iOS raises the keyboard only for a focus inside the tap, and the field
+    // mounts after it.
+    triggerFocusInput(() => searchInput);
+  };
+  const closeSearch = mobileSearch.close;
+  useAndroidBackNavigation(() => {
+    if (!searching()) return false;
+
+    closeSearch();
+    return true;
+  });
+
+  // Recent searches sit below the header, so the list then does not reserve
+  // the header's height again.
+  const listsRecent = () => searching() && suggestions.listed().length > 0;
+
   const inboxSelected = () => isEmailInboxTab(state.tab);
   const tabs = () =>
     inboxSelected()
@@ -323,32 +366,80 @@ function EmailMobileLayout(props: ParentProps) {
   return (
     <MobileListLayout
       header={
-        <PillTabs
-          scrollable
-          class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
-          contentClass="px-(--mobile-chrome-gutter)"
-          leading={
-            <>
-              <ViewSidebar.Toggle action="expand" presentation="pill" />
-              <EmailFilterDrawer />
-            </>
-          }
-          items={tabs()}
-          trailing={
-            <Show when={!inboxSelected()}>
-              <HeaderIsland>
-                <span class="truncate text-sm font-medium">
-                  {tagViewTitle() ?? EMAIL_TAB_LABELS[state.tab]}
-                </span>
-              </HeaderIsland>
-            </Show>
-          }
-          value={savedViewActive() ? undefined : state.tab}
-          onChange={setTab}
-        />
+        <Show when={!searching()}>
+          <PillTabs
+            scrollable
+            class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
+            contentClass="px-(--mobile-chrome-gutter)"
+            leading={
+              <>
+                <ViewSidebar.Toggle action="expand" presentation="pill" />
+                <Show
+                  when={
+                    wideSearchFlag().enabled && canSearchEmailTab(state.tab)
+                  }
+                >
+                  <PillButton
+                    active={false}
+                    iconOnly
+                    aria-label={t('emailViews.searchEmail')}
+                    onClick={openSearch}
+                  >
+                    <SearchIcon class="size-5" />
+                  </PillButton>
+                </Show>
+                <EmailFilterDrawer />
+              </>
+            }
+            items={tabs()}
+            trailing={
+              <Show when={!inboxSelected()}>
+                <HeaderIsland>
+                  <span class="truncate text-sm font-medium">
+                    {tagViewTitle() ?? EMAIL_TAB_LABELS[state.tab]}
+                  </span>
+                </HeaderIsland>
+              </Show>
+            }
+            value={savedViewActive() ? undefined : state.tab}
+            onChange={setTab}
+          />
+        </Show>
       }
     >
-      {props.children}
+      {/* The search page's field takes the pane header, so the list then
+          reserves that header's height instead of the pill row's. */}
+      <div
+        class="flex min-h-0 min-w-0 flex-1 flex-col"
+        style={
+          searching()
+            ? {
+                '--mobile-content-inset-top':
+                  'calc(var(--safe-top, 0px) + 3.75rem)',
+              }
+            : undefined
+        }
+      >
+        <Show when={searching()}>
+          <EmailMobileSearch
+            ref={(input) => {
+              searchInput = input;
+            }}
+            search={state.search}
+            setSearch={(search) => setState('search', search)}
+            suggestions={suggestions}
+            onCancel={closeSearch}
+          />
+        </Show>
+        <div
+          class="min-h-0 flex-1"
+          style={
+            listsRecent() ? { '--mobile-content-inset-top': '0px' } : undefined
+          }
+        >
+          {props.children}
+        </div>
+      </div>
     </MobileListLayout>
   );
 }
@@ -370,6 +461,8 @@ function EmailViewRoot() {
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
   const [listPane, setListPane] = createSignal<EmailListPane>();
   const focusList = () => listElement()?.focus();
+  const focusSearchResults = () =>
+    focusEmailSearchResults(panel, listElement());
 
   onMount(() => {
     panel.handle.setDisplayName('Email');
@@ -434,6 +527,7 @@ function EmailViewRoot() {
           <EmailLayout
             list={list()}
             focusList={focusList}
+            focusSearchResults={focusSearchResults}
             setListPane={setListPane}
           />
         </SplitPanel.Body>

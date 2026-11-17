@@ -32,6 +32,7 @@ import {
   EMAIL_TABS,
   isEmailInboxTab,
 } from '../constants';
+import { switchesEmailTabs } from '../email-search-focus';
 import { useEmailView } from '../email-view-context';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
@@ -189,11 +190,7 @@ export function EmailSidebar() {
       isTouchDevice() ? tabIds() : EMAIL_INBOX_TAB_IDS.filter(isVisible),
     activeId: () => state.tab,
     setActiveId: setTab,
-    shouldHandleSequentialKeyEvent: (event) =>
-      !(
-        event?.target instanceof Element &&
-        event.target.closest('[role="grid"][aria-label="Email"]')
-      ),
+    shouldHandleSequentialKeyEvent: switchesEmailTabs,
   });
 
   return (

@@ -593,11 +593,6 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'agent-replay',
-    lazy(() => import('@app/features/block-agent/debug/replay/Replay'))
-  );
-
-  registerComponent(
     'agent-progress',
     lazy(() => import('@app/features/agent-activity/debug/ProgressPlayground'))
   );

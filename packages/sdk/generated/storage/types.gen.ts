@@ -1468,6 +1468,11 @@ export type AttachmentChange = {
 };
 
 /**
+ * A kind of attachment a thread's messages carry, by MIME type.
+ */
+export type AttachmentKind = 'pdf' | 'image' | 'document';
+
+/**
  * RSVP state for an attendee.
  */
 export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
@@ -7584,6 +7589,15 @@ export type DocumentTopicEvent = {
      * A peer joined, left, or a periodic save occurred.
      */
     metadata: DocumentInteractionMetadata;
+} | {
+    event_type: 'document.email_attachments_released';
+    /**
+     * Documents whose mail is gone stopped being email attachments, in one
+     * batch: the system moved some to the Trash and left the rest. Like the
+     * documents in a trashed folder, the trashed ones are removed from open
+     * lists and trigger nothing per document.
+     */
+    metadata: EmailAttachmentsReleasedMetadata;
 };
 
 /**
@@ -9250,6 +9264,22 @@ export type EffectSpecSoftEdgeOptions = string | {
 };
 
 /**
+ * Metadata for [`DocumentTopicEvent::EmailAttachmentsReleased`]: the
+ * documents of one queue batch that lost their last email link.
+ */
+export type EmailAttachmentsReleasedMetadata = {
+    /**
+     * Documents left as they were: kept by their owner, or already in the
+     * Trash. They are no longer email attachments either.
+     */
+    kept_document_ids: Array<string>;
+    /**
+     * Documents the batch moved to the Trash.
+     */
+    trashed_document_ids: Array<string>;
+};
+
+/**
  * The audience affected by a domain exclusion.
  */
 export type EmailBlockScope = 'team' | 'personal';
@@ -9258,6 +9288,11 @@ export type EmailBlockScope = 'team' | 'personal';
  * The email filters used to filter down what emails you search over.
  */
 export type EmailFilters = {
+    /**
+     * Only threads with at least one attachment of one of these kinds, by
+     * MIME type, on any of their messages. Empty applies no constraint.
+     */
+    attachments?: Array<AttachmentKind>;
     /**
      * Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC.
      */
@@ -9290,6 +9325,12 @@ export type EmailFilters = {
      * Mutually exclusive with `crm_addresses`.
      */
     crm_domains?: Array<string>;
+    /**
+     * Filter by whether the thread is done: true for threads out of the
+     * inbox (archived), false for threads still in it. This is the mailbox
+     * state the Email view's Done filter uses, independent of notifications.
+     */
+    done?: boolean | null;
     /**
      * Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads.
      */
@@ -9340,6 +9381,7 @@ export type EmailFilters = {
      * Defaults to "exclude" (only the user's own threads).
      */
     shared?: SharedEmailFilter;
+    view?: null | EmailSearchView;
 };
 
 /**
@@ -9527,6 +9569,11 @@ export type EmailReminderSummary = {
      */
     threadId: string;
 };
+
+/**
+ * A mailbox view the Email list scopes a search to, as its tabs do.
+ */
+export type EmailSearchView = 'sent' | 'drafts';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -17787,9 +17834,13 @@ export type ReadSpreadsheetRequest = {
 
 export type RecentlyDeletedResponseData = {
     /**
-     * The items returned from the call
+     * The items returned from the call, most recently trashed first
      */
     items: Array<Item>;
+    /**
+     * Pass as `cursor` to get the next page; absent on the last page
+     */
+    next_cursor?: string | null;
 };
 
 /**
@@ -22871,9 +22922,13 @@ export type TypedSuccessResponse = {
      */
     data: {
         /**
-         * The items returned from the call
+         * The items returned from the call, most recently trashed first
          */
         items: Array<Item>;
+        /**
+         * Pass as `cursor` to get the next page; absent on the last page
+         */
+        next_cursor?: string | null;
     };
     /**
      * Indicates if an error occurred
@@ -36083,7 +36138,16 @@ export type RevertDeleteProjectResponse = RevertDeleteProjectResponses[keyof Rev
 export type RecentlyDeletedData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Page size (1-500, default 100)
+         */
+        limit?: number;
+        /**
+         * The previous page's next_cursor
+         */
+        cursor?: string;
+    };
     url: '/recents/deleted';
 };
 

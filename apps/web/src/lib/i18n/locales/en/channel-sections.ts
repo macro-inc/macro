@@ -7,6 +7,7 @@ export default {
   join: 'Join',
   muteChannel: 'Mute channel',
   unmuteChannel: 'Unmute channel',
+  onlyMentions: 'Only @mentions',
   muteIndefinitely: 'Until I turn it off',
   customMute: 'Custom…',
   unreadWhenCollapsed: 'Unread when collapsed',

@@ -4,15 +4,12 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { getEntityNotifications } from '@app/features/soup/entity-notifications';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { useIsAuthenticated } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { UnreadIndicator } from '@entity/components/UnreadIndicator';
 import {
   createEffectOnEntityTypeNotification,
-  entityHasUnreadNotifications,
   notificationIsRead,
 } from '@notifications/notification-helpers';
 import { queryReadyGate } from '@queries/gate';
@@ -25,7 +22,6 @@ import { match } from 'ts-pattern';
 /** Favorite rows share the entity's existing notification read state. */
 export function FavoriteUnreadIndicator(props: { favorite: Favorite }) {
   const source = useGlobalNotificationSource();
-  const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
   const authenticated = useIsAuthenticated();
   const fields = createMemo(() => {
     const { entityId, entityType } = props.favorite;
@@ -47,11 +43,7 @@ export function FavoriteUnreadIndicator(props: { favorite: Favorite }) {
       return { params: { limit: 1, sort_method: 'updated_at' }, body };
     },
     () => ({
-      enabled:
-        !graphqlSoup().loading &&
-        graphqlSoup().enabled &&
-        authenticated() === true &&
-        fields() !== undefined,
+      enabled: authenticated() === true && fields() !== undefined,
       keepPreviousData: false,
       showSupportedForeignEntities: true,
       graphqlCacheFirstEntities: match(props.favorite.entityType)
@@ -78,14 +70,8 @@ export function FavoriteUnreadIndicator(props: { favorite: Favorite }) {
     }
   );
   const unread = () => {
-    if (graphqlSoup().loading || authenticated() !== true) return false;
-    if (!graphqlSoup().enabled) {
-      return entityHasUnreadNotifications(source, {
-        id: props.favorite.entityId,
-        type: props.favorite.entityType,
-      });
-    }
-    if (!fields() || !queryReadyGate(entityQuery)) return false;
+    if (authenticated() !== true || !fields() || !queryReadyGate(entityQuery))
+      return false;
     const entity = entityQuery.data.entities.find(
       (entity) => entity.id === props.favorite.entityId
     );

@@ -26,19 +26,18 @@ Folder paths, list filters, and other open splits are not included.
 PDF location links retain the selected page or annotation without unrelated
 query parameters from the surrounding view.
 
-With `enable-graphql-soup` enabled, supported file/folder/chat moves, trash,
+Supported file/folder/chat moves, trash,
 restore, permanent deletion, duplication, and share-policy changes use GraphQL
 mutations. Verify moving into a folder and back to root, opening the returned
 copy, and updating team/link/channel access on desktop and touch. Call-record
 permanent deletion and team sharing also use these mutations. A denied or failed
 GraphQL write must not retry through REST or report success; mixed bulk actions
-retain successful siblings. A plan-refused chat duplicate still opens the paywall
-with either transport; it must not create a copy or retry through REST. Restore immediately after trash and confirm the row
+retain successful siblings. Chats can't be duplicated: the copy action skips them,
+and a bulk copy that includes one fails before any write. Restore immediately after trash and confirm the row
 returns without waiting for retained deletion markers to expire, even if the
 trash's background refresh failed. A delete started after the restore request
 must still hide its row. Deletion and restore overlays distinguish entity type as
 well as ID, so an unrelated conversation with the same ID remains visible.
-With the flag off, the existing REST paths remain.
 Deleting a non-owned item still only removes it from history. Forking a markdown
 history version still uses REST because GraphQL duplication copies current content.
 
@@ -69,6 +68,16 @@ no folder chip, even after a reload, and restoring the folder does not file them
 again. Databases have no view history and do not appear in **Recent** or
 **Email attachments**. Creation time orders them when the selected sort has no
 corresponding database timestamp.
+
+An email attachment's Drive copy goes to the Trash within about a minute once
+its email is gone (the message deleted at the provider, a draft sent or
+discarded, or the inbox disconnected or removed), unless its owner moved it
+into a folder, shared it, edited it or commented on it. It never shows up in
+**My Files** on its own, and it expires from the Trash like any other file.
+The app has no Trash view, so the document simply leaves **Email
+attachments**. Verify by deleting a test message whose attachment was opened,
+then checking that the document is in neither **Email attachments** nor
+**My Files**, and that its `"deletedAt"` is set.
 
 Above 720px of pane width on touch, Drive keeps its list on the left and opens
 selected files in the right preview. Before selection, that preview is empty.

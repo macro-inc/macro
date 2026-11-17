@@ -84,6 +84,7 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import { createSearchScrollReset } from '../primitives/create-search-scroll-reset';
 import { createEmailFolderRestore } from '../primitives/folder-restore';
 import { createEmailRowActionState } from '../primitives/row-action-state';
 import { createScrollAnchor } from '../primitives/scroll-anchor';
@@ -639,6 +640,12 @@ export function EmailList(props: EmailListProps) {
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
+  });
+  createSearchScrollReset({
+    query: () => state.search,
+    showsPreviousRows,
+    reset: () =>
+      setPersistedListState((current) => ({ ...current, scrollOffset: 0 })),
   });
 
   createEffect(() => {

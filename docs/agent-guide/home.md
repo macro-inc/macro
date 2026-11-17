@@ -19,13 +19,6 @@ Notifications title; the leading preview control restores the list. The Home
 composer remains desktop-only. Restored detail URLs stay inline when wide and
 redirect to standalone pages when folded.
 
-On a cold launch, notification transport follows the GraphQL Soup flag reactively:
-if the flag arrives after REST starts, the GraphQL notification query must actually
-start too. Verify a reload with delayed flags retains non-email notifications once
-loading settles, including when the list itself uses REST (notified-at sorting).
-Email alone is not sufficient verification: its inbox membership does not require
-the global notification feed.
-
 Check live Home recency with two accounts: leave the recipient on Home without
 opening the conversation, then send a DM from the other account. The row should
 move into **Last few minutes** and show unread without reloading, including when
@@ -53,7 +46,7 @@ Noise-only email activity. Each entity appears once, ordered by its latest
 notification or own action. On desktop, the funnel button to the right of **Home**
 opens **Filter Home**.
 
-With the GraphQL Soup flag on, desktop Signal reads
+Desktop Signal reads
 the server work feed (`user.workFeed` plus the `workFeedUpdates` subscription)
 instead of merging sources in the browser; Noise and touch devices keep
 the merged feed.

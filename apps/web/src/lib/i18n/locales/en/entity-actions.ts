@@ -191,6 +191,9 @@ export default {
     other: 'Unmuted {{succeeded}} of {{count}} items; {{failed}} failed',
   },
   toastUnmuteFailed: 'Failed to unmute notifications',
+  toastMentionsOnly: 'Notifying you for @mentions only',
+  toastAllMessages: 'Notifying you for all messages',
+  toastNotificationLevelFailed: 'Failed to update notifications',
   toastMarkedDone: 'Marked as done',
   toastMarkedDoneCount: {
     one: 'Marked {{count}} item as done',
@@ -224,10 +227,6 @@ export default {
     other: 'Marked {{accepted}} of {{count}} items as not done',
   },
   toastMarkNotDoneFailed: 'Failed to mark as not done',
-  toastThreadStaysDone:
-    'This thread has no received messages, so it stays done',
-  toastThreadsStayDone:
-    'These threads have no received messages, so they stay done',
   toastCountNotRestored: { other: '{{count}} could not be restored.' },
   toastNotificationsNotRestored: 'Some notifications could not be restored.',
   toastWithWarnings: '{{message}}. {{warnings}}',

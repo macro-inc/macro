@@ -25567,7 +25567,15 @@ export const getDocumentByTeamSlugResponse = zod.object({
             }),
           ])
         )
-        .describe('The items returned from the call'),
+        .describe(
+          'The items returned from the call, most recently trashed first'
+        ),
+      next_cursor: zod
+        .string()
+        .nullish()
+        .describe(
+          'Pass as `cursor` to get the next page; absent on the last page'
+        ),
     })
     .describe('Data to be returned'),
   error: zod.boolean().describe('Indicates if an error occurred'),
@@ -54742,6 +54750,18 @@ export const postItemsSoupBody = zod
       ),
     email_filters: zod
       .object({
+        attachments: zod
+          .array(
+            zod
+              .enum(['pdf', 'image', 'document'])
+              .describe(
+                "A kind of attachment a thread's messages carry, by MIME type."
+              )
+          )
+          .optional()
+          .describe(
+            'Only threads with at least one attachment of one of these kinds, by\nMIME type, on any of their messages. Empty applies no constraint.'
+          ),
         bcc: zod
           .array(zod.string())
           .optional()
@@ -54771,6 +54791,12 @@ export const postItemsSoupBody = zod
           .optional()
           .describe(
             "CRM-scoped domain filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\ndomains (in any of sender\/cc\/bcc\/recipient). Each domain is authorized\nagainst `crm_domains` + `crm_companies` (must exist for the caller's\nteam, company must not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_addresses`."
+          ),
+        done: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Filter by whether the thread is done: true for threads out of the\ninbox (archived), false for threads still in it. This is the mailbox\nstate the Email view's Done filter uses, independent of notifications."
           ),
         email_thread_ids: zod
           .array(zod.string())
@@ -54849,6 +54875,16 @@ export const postItemsSoupBody = zod
           .describe(
             'Controls whether shared email threads are included in results.'
           ),
+        view: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['sent', 'drafts'])
+              .describe(
+                'A mailbox view the Email list scopes a search to, as its tabs do.'
+              ),
+          ])
+          .optional(),
       })
       .optional()
       .describe(
@@ -82530,8 +82566,20 @@ export const revertDeleteProjectResponse = zod.object({
 });
 
 /**
- * @summary Gets the users recently deleted items.
+ * @summary Gets one page of the user's trashed documents, chats and folders, most
+recently trashed first.
  */
+export const recentlyDeletedQueryLimitMin = 0;
+
+export const recentlyDeletedQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(recentlyDeletedQueryLimitMin)
+    .optional()
+    .describe('Page size (1-500, default 100)'),
+  cursor: zod.string().optional().describe("The previous page's next_cursor"),
+});
+
 export const recentlyDeletedResponse = zod.object({
   data: zod
     .object({
@@ -82686,7 +82734,15 @@ export const recentlyDeletedResponse = zod.object({
             }),
           ])
         )
-        .describe('The items returned from the call'),
+        .describe(
+          'The items returned from the call, most recently trashed first'
+        ),
+      next_cursor: zod
+        .string()
+        .nullish()
+        .describe(
+          'Pass as `cursor` to get the next page; absent on the last page'
+        ),
     })
     .describe('Data to be returned'),
   error: zod.boolean().describe('Indicates if an error occurred'),

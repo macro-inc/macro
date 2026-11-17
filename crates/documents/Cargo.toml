@@ -9,6 +9,11 @@ name = "backfill_markdown_content_location"
 path = "src/bin/backfill_markdown_content_location.rs"
 required-features = ["backfill_binary"]
 
+[[bin]]
+name = "enqueue_orphaned_email_attachments"
+path = "src/bin/enqueue_orphaned_email_attachments.rs"
+required-features = ["backfill_binary"]
+
 [features]
 purge = [
   "ports",

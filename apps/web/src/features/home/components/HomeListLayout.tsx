@@ -3,13 +3,19 @@ import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tourTarget } from '@ui/components/Tour';
-import { type JSX, type ParentProps, Show } from 'solid-js';
+import { createSignal, type JSX, type ParentProps, Show } from 'solid-js';
 import { useHomeView } from '../home-view-context';
 import { HOME_TOUR } from '../tour';
 import { HomeFilterDropdown } from './HomeFilters';
 
 function DesktopHomeHeader(props: { onNewChat: () => void }) {
   const { state, setState, focusList } = useHomeView();
+  // A query on the list keeps its field on screen, also when the header
+  // remounts, and closing the field clears the query, as in the list headers.
+  const [searchOpened, setSearchOpened] = createSignal(
+    state.search.trim().length > 0
+  );
+  const searchOpen = () => searchOpened() || state.search.trim().length > 0;
   return (
     <SidebarCreateHeader
       title="Home"
@@ -17,6 +23,11 @@ function DesktopHomeHeader(props: { onNewChat: () => void }) {
       onCreate={props.onNewChat}
       actions={<HomeFilterDropdown />}
       searchLabel="Search Home"
+      searchOpen={searchOpen()}
+      onSearchOpenChange={(open) => {
+        setSearchOpened(open);
+        if (!open) setState('search', '');
+      }}
       search={() => (
         <ViewSidebar.Search
           label="Search Home"
