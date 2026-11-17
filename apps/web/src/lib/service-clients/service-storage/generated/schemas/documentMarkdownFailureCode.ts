@@ -14,6 +14,7 @@ export type DocumentMarkdownFailureCode =
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const DocumentMarkdownFailureCode = {
   revision_conflict: 'revision_conflict',
+  document_too_large: 'document_too_large',
   read_failed: 'read_failed',
   write_failed: 'write_failed',
 } as const;

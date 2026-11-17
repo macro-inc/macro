@@ -1,10 +1,10 @@
 //! Outbound adapter for the AI editing worker.
 
-#[cfg(feature = "ai_tools")]
-use crate::domain::ports::editing::MarkdownWrite;
 use crate::domain::ports::editing::{
     EditMode, EditResult, EditUsage, EditingWorkerService, EditorName,
 };
+#[cfg(feature = "ai_tools")]
+use crate::domain::ports::editing::{MarkdownRead, MarkdownWrite};
 use anyhow::Context;
 use macro_sync_service_jwt::DocumentPermissionToken;
 use reqwest::Client;
@@ -363,7 +363,7 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
         &self,
         document_id: &str,
         document_token: &DocumentPermissionToken,
-    ) -> anyhow::Result<crate::domain::markdown_body::DocumentMarkdown> {
+    ) -> anyhow::Result<MarkdownRead> {
         let response = self
             .markdown(
                 document_id,
@@ -372,12 +372,15 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             )
             .await?;
         let status = response.status();
+        if status == reqwest::StatusCode::PAYLOAD_TOO_LARGE {
+            return Ok(MarkdownRead::TooLarge);
+        }
         anyhow::ensure!(
             status.is_success(),
             "{} (HTTP {status})",
             worker_error(response).await
         );
-        Ok(response.json().await?)
+        Ok(MarkdownRead::Read(response.json().await?))
     }
 
     #[cfg(feature = "ai_tools")]
@@ -401,8 +404,10 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             )
             .await?;
         let status = response.status();
-        if status == reqwest::StatusCode::CONFLICT {
-            return Ok(MarkdownWrite::Conflict);
+        match status {
+            reqwest::StatusCode::CONFLICT => return Ok(MarkdownWrite::Conflict),
+            reqwest::StatusCode::PAYLOAD_TOO_LARGE => return Ok(MarkdownWrite::TooLarge),
+            _ => {}
         }
         anyhow::ensure!(
             status.is_success(),

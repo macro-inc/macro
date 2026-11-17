@@ -43,6 +43,9 @@ pub struct WriteDocumentMarkdownRequest {
 pub enum DocumentMarkdownFailureCode {
     /// The document changed since the caller read it; nothing was written.
     RevisionConflict,
+    /// The document exceeds the 4 MiB snapshot limit; nothing was written and
+    /// retrying cannot succeed.
+    DocumentTooLarge,
     /// The body could not be read.
     ReadFailed,
     /// The write failed after it was sent and may have applied.
@@ -66,6 +69,11 @@ impl IntoResponse for DocumentMarkdownError {
                 StatusCode::CONFLICT,
                 DocumentMarkdownFailureCode::RevisionConflict,
                 "The document changed since it was read; nothing was written. Read it again and write against the new revision.",
+            ),
+            DocumentMarkdownError::TooLarge => (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                DocumentMarkdownFailureCode::DocumentTooLarge,
+                "The document exceeds the 4 MiB snapshot limit; nothing was written. Retrying will not help: make the content smaller.",
             ),
             DocumentMarkdownError::ReadFailed(error) => {
                 tracing::error!(error = ?error, "document markdown read failed");
@@ -109,6 +117,7 @@ impl IntoResponse for DocumentMarkdownError {
         (status = 401, description = "Authentication required"),
         (status = 403, description = "Document access denied"),
         (status = 404, description = "Document not found"),
+        (status = 413, description = "The document exceeds the snapshot limit", body = DocumentMarkdownFailure),
         (status = 502, description = "The body could not be read", body = DocumentMarkdownFailure)
     )
 )]
@@ -150,6 +159,7 @@ pub async fn get_markdown_handler<
         (status = 403, description = "Document edit access denied"),
         (status = 404, description = "Document not found"),
         (status = 409, description = "The document changed since the revision was read; nothing was written", body = DocumentMarkdownFailure),
+        (status = 413, description = "The document or the new body exceeds the snapshot limit; nothing was written", body = DocumentMarkdownFailure),
         (status = 502, description = "The write failed and may have applied", body = DocumentMarkdownFailure)
     )
 )]

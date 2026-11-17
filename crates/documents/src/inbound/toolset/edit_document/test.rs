@@ -631,7 +631,7 @@ impl EditingWorkerService for FakeEditingWorker {
         &self,
         _document_id: &str,
         _document_token: &DocumentPermissionToken,
-    ) -> anyhow::Result<crate::domain::markdown_body::DocumentMarkdown> {
+    ) -> anyhow::Result<crate::domain::ports::editing::MarkdownRead> {
         panic!("unexpected read_markdown call")
     }
 

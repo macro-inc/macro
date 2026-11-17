@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'bun:test';
 import {
   DocumentChangedError,
+  DocumentTooLargeError,
   EditOutcomeUnknownError,
   Macro,
 } from '../src/macro';
@@ -76,6 +77,33 @@ test('a document changed since the read raises DocumentChangedError', async () =
       .documents.byId('doc-1')
       .setContent('Ship the release.', { expectedRevision: 'AQID' }),
   ).rejects.toBeInstanceOf(DocumentChangedError);
+});
+
+test('a document over the snapshot limit raises DocumentTooLargeError once, not an unknown outcome', async () => {
+  const requests: Request[] = [];
+  globalThis.fetch = (async (input, init) => {
+    requests.push(input instanceof Request ? input : new Request(input, init));
+    return Response.json(
+      {
+        error: 'document_too_large',
+        message: 'The document exceeds the 4 MiB snapshot limit.',
+      },
+      { status: 413 },
+    );
+  }) as typeof fetch;
+  const document = macro().documents.byId('doc-1');
+
+  const write = await document
+    .setContent('Ship the release.', { expectedRevision: 'AQID' })
+    .catch((error: unknown) => error);
+  const read = await document
+    .contentWithRevision()
+    .catch((error: unknown) => error);
+
+  expect(write).toBeInstanceOf(DocumentTooLargeError);
+  expect(write).not.toBeInstanceOf(EditOutcomeUnknownError);
+  expect(read).toBeInstanceOf(DocumentTooLargeError);
+  expect(requests.map((request) => request.method)).toEqual(['PUT', 'GET']);
 });
 
 test('a write with an unknown outcome is not reported as a conflict', async () => {

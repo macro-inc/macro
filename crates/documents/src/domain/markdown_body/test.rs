@@ -71,10 +71,10 @@ async fn read_returns_the_body_with_a_view_token_for_the_caller() {
             );
             assert_eq!(claims.access_level, AccessLevel::View);
             Box::pin(async {
-                Ok(DocumentMarkdown {
+                Ok(MarkdownRead::Read(DocumentMarkdown {
                     markdown: "# Plan\n\nShip the beta.".to_string(),
                     revision: "AQID".to_string(),
-                })
+                }))
             })
         });
 

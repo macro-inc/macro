@@ -71,6 +71,16 @@ pub enum CommentMarkPlacement {
     Refused(String),
 }
 
+/// What became of a markdown body read.
+#[cfg(feature = "ai_tools")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MarkdownRead {
+    /// The body and the revision it was read at.
+    Read(crate::domain::markdown_body::DocumentMarkdown),
+    /// The document exceeds the worker's snapshot limit, so it cannot be read.
+    TooLarge,
+}
+
 /// What became of a revision-checked markdown body write.
 #[cfg(feature = "ai_tools")]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,6 +89,9 @@ pub enum MarkdownWrite {
     Written(crate::domain::markdown_body::DocumentMarkdownWritten),
     /// The document changed since the expected revision; nothing was written.
     Conflict,
+    /// The document, or the body as written, exceeds the snapshot limit;
+    /// nothing was written.
+    TooLarge,
 }
 
 /// Port for applying AI-driven edits to a document via the editing worker.
@@ -142,7 +155,7 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         &self,
         document_id: &str,
         document_token: &DocumentPermissionToken,
-    ) -> impl Future<Output = anyhow::Result<crate::domain::markdown_body::DocumentMarkdown>> + Send;
+    ) -> impl Future<Output = anyhow::Result<MarkdownRead>> + Send;
 
     /// Replace a markdown document's body, only if the document is still at
     /// `expected_revision`.
