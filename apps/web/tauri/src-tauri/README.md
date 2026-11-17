@@ -622,7 +622,9 @@ before Nix evaluates either package. Both packages receive the same native versi
 OTA compatibility build number, and source commit timestamp for the embedded
 frontend. That timestamp is earlier than the OTA bundle the web deploy builds from
 the same commit (numbered by build time), so the embedded bundle manifest also
-records the commit (`GIT_SHA` from Nix), and update checks send it as
+records the commit (`prepare` writes `gitSha` into `desktop-release.json`, since
+the file it rewrites leaves the Nix flake without a rev; Nix passes it as
+`GIT_SHA`), and desktop update checks send it as
 `current_git_sha` while the embedded bundle is active: the server offers no
 update when the deployed bundle comes from that commit. Existing `vYEAR.MONTH.DAY.REVISION` tags map to
 `YEAR.MMDD.REVISION` SemVer, e.g. `v2026.10.6.1` → `2026.1006.1`. Three-part stable

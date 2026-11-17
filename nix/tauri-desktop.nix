@@ -30,8 +30,9 @@
       };
       gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
       # The embedded bundle's commit, so the updater can tell the server it
-      # already runs the bundle deployed from it. Dirty trees have none.
-      bundleGitSha = inputs.self.shortRev or "";
+      # already runs the bundle deployed from it. `desktop-release.mjs prepare`
+      # records it, because the file it rewrites leaves the flake without a rev.
+      bundleGitSha = desktopRelease.gitSha or "";
 
       # Vite inlines `import.meta.env.VITE_*` at build time, so the desktop
       # bundle only reaches PostHog — and therefore only resolves feature
