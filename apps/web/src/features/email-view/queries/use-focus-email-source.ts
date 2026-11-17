@@ -6,6 +6,7 @@ import {
   testFacets,
 } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { DateValue } from '@core/util/date';
 import {
@@ -21,6 +22,7 @@ import { createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { EmailFocusSort } from '../constants';
 import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
+import { isFocusListNarrowed, trackFocusTabVisits } from '../focus-analytics';
 import { useEmailTabAvailability } from '../tab-availability';
 import { buildFocusDateRows } from './email-results';
 import type {
@@ -146,6 +148,23 @@ export function useFocusEmailSource(
     );
   });
   const items = createSoupRowStore(built);
+
+  const analytics = useAnalytics();
+  trackFocusTabVisits(
+    {
+      showing: () => state.tab === 'focus',
+      // Rows from the cache count: they are what the tab shows.
+      loaded: () =>
+        tabAvailability('focus') === 'on' &&
+        focus.data !== undefined &&
+        ready(),
+      threads: () => emails().length,
+      rows: () => built().filter((row) => row.kind === 'entity').length,
+      narrowed: () => isFocusListNarrowed(state),
+      sort: () => state.focusSort,
+    },
+    (payload) => analytics.track('email_focus_tab_opened', payload)
+  );
 
   return {
     items,

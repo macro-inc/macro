@@ -315,6 +315,11 @@ Done hides the row at once and archives the thread; Undo brings it back. The
 worker classifies only inboxes on its `FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so
 other accounts see the empty state `You're caught up`, whose **See the rest of
 your inbox** opens Signal.
+PostHog counts each visit to the tab once its list shows
+(`email_focus_tab_opened`, with the threads shown, so an empty tab reads as
+`rows: 0`) and each thread opened from it by click, tap or Enter
+(`email_focus_thread_opened`, with its position); a thread the reading pane
+opens as the keyboard cursor moves is not counted.
 
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the
