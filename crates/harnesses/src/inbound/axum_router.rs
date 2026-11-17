@@ -215,9 +215,23 @@ pub async fn get_pairing_handler<S: HarnessService, Auth: MacroAuthorizationServ
 pub async fn approve_pairing_handler<S: HarnessService, Auth: MacroAuthorizationService>(
     State(state): State<HarnessesRouterState<S, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: axum::http::HeaderMap,
     Path(path): Path<PairingCodePath>,
     Json(req): Json<ApprovePairingRequest>,
 ) -> Result<Json<Harness>, HarnessesHandlerErr> {
+    // Approving lets the daemon claim a long-lived harness token: only a
+    // person approves, never a program (a credential signed for an agent or
+    // routine run, or the code-mode header).
+    let attribution = authorization.authorization.user.attribution();
+    if macro_authorization::is_program_run(attribution, &headers) {
+        tracing::warn!(
+            ?attribution,
+            "refused a harness pairing approval to a program"
+        );
+        return Err(HarnessesHandlerErr::Forbidden(
+            "An agent's program cannot approve a harness pairing. Tell the user to approve it in Macro, under Settings, Machines.",
+        ));
+    }
     let harness = state
         .service
         .approve_pairing(
@@ -563,19 +577,24 @@ pub enum HarnessesHandlerErr {
     /// Domain error.
     #[error(transparent)]
     Harness(#[from] HarnessError),
+    /// The caller may not do this.
+    #[error("{0}")]
+    Forbidden(&'static str),
 }
 
 impl IntoResponse for HarnessesHandlerErr {
     fn into_response(self) -> Response {
-        let Self::Harness(error) = &self;
-        let status = match error {
-            HarnessError::BadRequest(_) => StatusCode::BAD_REQUEST,
-            HarnessError::NotFound(_) => StatusCode::NOT_FOUND,
-            HarnessError::Gone(_) => StatusCode::GONE,
-            HarnessError::Unauthorized => StatusCode::UNAUTHORIZED,
-            HarnessError::Throttled => StatusCode::TOO_MANY_REQUESTS,
-            HarnessError::ComputerHarness => StatusCode::CONFLICT,
-            HarnessError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        let status = match &self {
+            Self::Forbidden(_) => StatusCode::FORBIDDEN,
+            Self::Harness(error) => match error {
+                HarnessError::BadRequest(_) => StatusCode::BAD_REQUEST,
+                HarnessError::NotFound(_) => StatusCode::NOT_FOUND,
+                HarnessError::Gone(_) => StatusCode::GONE,
+                HarnessError::Unauthorized => StatusCode::UNAUTHORIZED,
+                HarnessError::Throttled => StatusCode::TOO_MANY_REQUESTS,
+                HarnessError::ComputerHarness => StatusCode::CONFLICT,
+                HarnessError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            },
         };
         if status == StatusCode::INTERNAL_SERVER_ERROR {
             tracing::error!(error=?self, "harnesses handler error");

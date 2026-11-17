@@ -376,6 +376,7 @@ fn unified_search_span(
         search.term_matching = tracing::field::Empty,
         search.term_matching_from_cursor = tracing::field::Empty,
         search.email_shared_capped = tracing::field::Empty,
+        search.email_project_capped = tracing::field::Empty,
         search.email_state_rounds = tracing::field::Empty,
         search.email_state_threads_checked = tracing::field::Empty,
         search.email_state_threads_kept = tracing::field::Empty,
@@ -638,8 +639,7 @@ async fn search_unified_sources(
         mut filter_project_response,
         mut filter_call_record_response,
         mut filter_calendar_event_response,
-    ) = filter_responses
-        .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
+    ) = filter_responses?;
 
     // Set terms on each index's search args.
     //
@@ -665,8 +665,10 @@ async fn search_unified_sources(
             args,
             hit_states,
             shared_capped,
+            project_capped,
         }) => {
             tracing::Span::current().record("search.email_shared_capped", shared_capped);
+            tracing::Span::current().record("search.email_project_capped", project_capped);
             (args, hit_states)
         }
         None => Default::default(),

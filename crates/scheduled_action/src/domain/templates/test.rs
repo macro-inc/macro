@@ -137,6 +137,7 @@ async fn sharing_snapshots_the_routine_and_activation_points_back_at_it() {
             &CreationPrincipal::User(other_user()),
             id,
             configuration(false),
+            Requester::Person,
         )
         .await
         .unwrap();
@@ -168,9 +169,19 @@ async fn a_shared_routine_never_operates_as_whoever_activates_it() {
         "dangerously_operate_as_user": true,
     });
     let id = actions
-        .create_action(&CreationPrincipal::User(user()), routine)
+        .create_action_from(
+            &CreationPrincipal::User(user()),
+            routine,
+            crate::domain::models::RunCaller {
+                routine: None,
+                correlation: None,
+                requester: Requester::Person,
+            },
+            None,
+        )
         .await
         .unwrap()
+        .into_action()
         .id
         .unwrap();
 
@@ -236,6 +247,7 @@ async fn activating_an_unshared_routine_creates_nothing() {
             &CreationPrincipal::User(other_user()),
             id,
             configuration(false),
+            Requester::Person,
         )
         .await
         .unwrap_err();
@@ -291,6 +303,7 @@ async fn disabled_missing_or_failed_flags_block_templates_but_preserve_routines_
                 &CreationPrincipal::User(other_user()),
                 id,
                 configuration(false),
+                Requester::Person,
             )
             .await
             .unwrap();
@@ -314,6 +327,7 @@ async fn disabled_missing_or_failed_flags_block_templates_but_preserve_routines_
                     &CreationPrincipal::User(other_user()),
                     id,
                     configuration(false),
+                    Requester::Person,
                 )
                 .await
                 .unwrap_err(),
@@ -390,6 +404,7 @@ async fn templates_use_the_viewer_and_activating_users_rollout() {
                 },
                 id,
                 configuration(false),
+                Requester::Person,
             )
             .await
             .is_err()
