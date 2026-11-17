@@ -96,14 +96,19 @@ pub async fn shared_email_threads(
 /// folder's threads before the limit applies, so a requested thread is never
 /// cut off by the rest of its folder. At most `limit` threads come back.
 ///
-/// Each folder's grant is checked once, one of the caller's sources at a
-/// time. Each folder's threads are read through `idx_email_threads_project_id`
-/// and stop at `limit`, so a large granted folder is not read whole; a thread
-/// belongs to one folder, so no thread comes back twice. A thread share is one
-/// probe of `entity_access_entity_id_entity_type_idx` per thread outside the
-/// caller's inboxes in a folder not granted to them, with each of that
-/// thread's grants matched against the caller's memberships, so the cost
-/// follows the folder, not how many threads are shared with the caller.
+/// Each folder's grants are read once through
+/// `idx_entity_access_entity_text_type_source` and matched against the
+/// caller's memberships. Each folder's threads are read through
+/// `idx_email_threads_project_id` and stop at `limit`, so a large granted
+/// folder is not read whole; a thread belongs to one folder, so no thread
+/// comes back twice. A thread share outside the caller's inboxes, in a folder
+/// not granted to them, is matched against the caller's sources, listed once
+/// in the statement, so Postgres may read the caller's email-thread grants
+/// once through `idx_entity_access_source_type_entity_plain` or probe each
+/// thread through `entity_access_entity_id_entity_type_idx`. Matching each of
+/// a thread's grants with `entity_access_source_matches` instead makes
+/// Postgres hash every email-thread grant, or probe every thread of a large
+/// folder shared with no one.
 #[tracing::instrument(
     err,
     skip(pool, user_id, own_link_ids, project_ids, requested_ids),
@@ -146,15 +151,11 @@ pub async fn project_email_threads(
             FROM requested r
             WHERE EXISTS (
                 SELECT 1
-                FROM entity_access_viewer_sources($1, NULL) AS sources(source_id)
-                CROSS JOIN LATERAL (
-                    SELECT 1
-                    FROM entity_access ea
-                    WHERE ea.source_id = sources.source_id
-                      AND ea.entity_type = 'project'
-                      AND ea.entity_id::text = r.project_id
-                    LIMIT 1
-                ) g
+                FROM entity_access ea
+                WHERE ea.entity_id::text = r.project_id
+                  AND ea.entity_type = 'project'
+                  AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $1, NULL))
+                OFFSET 0
             )
         )
         SELECT f.id AS "thread_id!", f.link_id AS "link_id!"
@@ -172,7 +173,10 @@ pub async fn project_email_threads(
                       FROM entity_access ea
                       WHERE ea.entity_id = t.id
                         AND ea.entity_type = 'email_thread'
-                        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $1, NULL))
+                        AND ea.source_id = ANY(ARRAY(
+                            SELECT s.source_id
+                            FROM entity_access_viewer_sources($1, NULL) AS s(source_id)
+                        ))
                   )
               END
             LIMIT $6
@@ -198,7 +202,9 @@ pub async fn project_email_threads(
 /// granted to the caller, a channel they are in or one of their teams, with
 /// the inbox holding each: the threads the caller reads through a folder
 /// share, as the Email list's project candidates admit them. Each id is one
-/// primary-key lookup and a check of its folder's grant.
+/// primary-key lookup and one probe of its folder's grants through
+/// `idx_entity_access_entity_text_type_source`, each matched against the
+/// caller's memberships, so the cost does not grow with them.
 #[tracing::instrument(
     err,
     skip(pool, user_id, own_link_ids, thread_ids),
@@ -235,15 +241,11 @@ pub async fn project_shared_email_threads(
           AND t.link_id <> ALL($2)
           AND EXISTS (
               SELECT 1
-              FROM entity_access_viewer_sources($1, NULL) AS sources(source_id)
-              CROSS JOIN LATERAL (
-                  SELECT 1
-                  FROM entity_access ea
-                  WHERE ea.source_id = sources.source_id
-                    AND ea.entity_type = 'project'
-                    AND ea.entity_id::text = t.project_id
-                  LIMIT 1
-              ) g
+              FROM entity_access ea
+              WHERE ea.entity_id::text = t.project_id
+                AND ea.entity_type = 'project'
+                AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $1, NULL))
+              OFFSET 0
           )
         "#,
         user_id.as_ref(),
