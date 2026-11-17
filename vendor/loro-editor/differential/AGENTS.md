@@ -45,9 +45,10 @@ consumer reads shallow snapshot bytes by identity (../README.md lists them).
 
 ## CI
 
-Not run in CI: it builds outside the workspace and the default run takes
-about a minute and a half. Run it after any change under ../loro-internal; the
-regressions in `tests/regressions.rs` are the minimum.
+`just test-loro-editor-differential` (the default seeds, the regressions and
+the comparison unit tests) runs in the `loro-pair` job whenever
+vendor/loro-editor changes. Run larger seed ranges locally after changing
+../loro-internal.
 
 ## Gotchas
 

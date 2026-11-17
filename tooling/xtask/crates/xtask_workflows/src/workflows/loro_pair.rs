@@ -60,6 +60,11 @@ pub fn loro_pair() -> Workflow {
                     Step::new("Server Loro consumers pass with native-editor off")
                         .run("just test-loro-servers-upstream"),
                 )
+                // With native-editor, the editor copy must still behave like crates.io 1.17.1.
+                .add_step(
+                    Step::new("Editor Loro with native-editor matches crates.io 1.17.1")
+                        .run("just test-loro-editor-differential"),
+                )
                 .add_step(
                     Step::new("Install catalog dependencies").run("bun install --frozen-lockfile"),
                 )

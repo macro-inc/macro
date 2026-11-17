@@ -203,6 +203,10 @@ check-loro-native-editor-features:
 test-loro-servers-upstream:
   bash tooling/scripts/test-loro-servers-upstream.sh
 
+# Compare the editor Loro copy with native-editor against crates.io 1.17.1: default seeds and regressions.
+test-loro-editor-differential:
+  cargo test --locked --manifest-path vendor/loro-editor/differential/Cargo.toml
+
 # Generate or check traceability and list every uncovered P0 symbol.
 lexical-coverage *ARGS:
   bun packages/lexical-conformance/coverage/check.ts {{ARGS}}

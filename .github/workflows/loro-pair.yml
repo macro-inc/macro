@@ -88,6 +88,8 @@ jobs:
       run: just check-loro-native-editor-features
     - name: Server Loro consumers pass with native-editor off
       run: just test-loro-servers-upstream
+    - name: Editor Loro with native-editor matches crates.io 1.17.1
+      run: just test-loro-editor-differential
     - name: Install catalog dependencies
       run: bun install --frozen-lockfile
     - name: Native projection and catalog Loro compatibility
