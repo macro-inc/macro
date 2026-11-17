@@ -583,6 +583,7 @@ F-132	Send on a reply does nothing
 F-133	send and mark done does not mark the thread done
 F-134	Undo send does nothing
 F-135	a failed send does not offer what was written
+F-136	the draft of a cancelled send is never given back: restoreCancelledEmailSend in send-queue.ts returns at once, so a refused reply cancelled from its row leaves the composer empty, and a send cancelled from the panel (Cancel, then Restore draft after another device's Cancel and restore) keeps its row
 F-137	a retried send is submitted again without asking what became of the first
 F-138	choosing an alias in From keeps the main address
 F-139	a send made offline is not queued on the device
