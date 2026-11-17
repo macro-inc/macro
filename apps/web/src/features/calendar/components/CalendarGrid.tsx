@@ -4,6 +4,7 @@ import {
   useFullCalendar,
 } from '@app/lib/fullcalendar-solid';
 import type {
+  CalendarOptions,
   DateSelectArg,
   DatesSetArg,
   EventInput,
@@ -160,6 +161,14 @@ export function CalendarGrid(props: CalendarGridProps) {
   // FullCalendar only consumes initialView on mount. Tracking route changes
   // here resets every page's options before the pager can schedule changeView.
   const initialView = untrack(() => props.settings.initialView);
+  const customViewRange = createMemo(
+    (): NonNullable<CalendarOptions['views']> => {
+      const dayCount = props.settings.dayCount;
+      if (dayCount === undefined) return {};
+      const duration = { days: dayCount };
+      return { timeGridWeek: { duration }, timeGridDay: { duration } };
+    }
+  );
   const mappedEvents = createMemo<EventInput[]>(() =>
     mergeWorkingLocationEvents(props.events).map(({ event, occurrenceIds }) => {
       const mapped = mapCalendarEventToFullCalendar(event);
@@ -248,7 +257,11 @@ export function CalendarGrid(props: CalendarGridProps) {
       height="100%"
       expandRows
       fixedWeekCount={false}
-      views={{ dayGridMonth: { dayMaxEvents: true } }}
+      views={{
+        dayGridMonth: { dayMaxEvents: true },
+        // Preset durations outrank the root options; override only custom spans.
+        ...customViewRange(),
+      }}
       moreLinkClick="popover"
       handleWindowResize={false}
       allDayText="All day"

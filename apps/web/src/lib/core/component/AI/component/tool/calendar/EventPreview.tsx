@@ -190,7 +190,10 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
   const editorStart = createMemo(
     () => previewEvent()?.start ?? props.controller.state().start
   );
-  const editorAllDay = createMemo(() => props.controller.state().allDay);
+  // Out-of-office date ranges serialize as timed events; navigate their projected time kind.
+  const editorAllDay = createMemo(
+    () => previewEvent()?.allDay ?? props.controller.state().allDay
+  );
   const previewDay = createMemo(() => {
     const date = calendarToolPreviewStartDate(editorStart(), editorAllDay());
     return date ? formatLocalDate(date) : undefined;
