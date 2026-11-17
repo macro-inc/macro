@@ -918,6 +918,9 @@ with the workbook mention followed by one space; nothing sends automatically.
 The mention captures the active sheet ID/name and normalized selected range at
 click time. Changing the selection later does not change that draft attachment.
 A viewer can ask questions; editing still requires edit permission.
+On phones and tablets the header has neither Ask Macro nor Comments: Ask Macro
+is the first row of the title menu, and it attaches the active sheet and
+selection as the button does.
 
 In the local spreadsheet demo, Ask Macro first saves the entire workbook and
 waits for acknowledgement. A failed save leaves the draft editable and supports
@@ -2434,8 +2437,9 @@ and agent chat links also convert to their respective entity mentions.
 Pasting a bare GitHub pull request URL (`github.com/<owner>/<repo>/pull/<n>`,
 including subpages such as `/files`) inserts a link that becomes a PR mention
 once Macro finds the synced PR, usually within a moment. Hovering the mention
-shows its status, diff size, comments, and checks; clicking opens the PR in a
-split. A PR mention always stays on one line: a long title truncates with an
+shows its status, diff size, comments, and checks; clicking opens the PR on
+GitHub (a new tab, or the system browser in the desktop app). A PR mention
+always stays on one line: a long title truncates with an
 ellipsis before the `#N`, so read the full title from the hover card. In a sent
 message, a mention an agent wrote by URL alone shows `owner/repo#N` until its
 title loads and keeps the same width either way. A PR Macro has not synced

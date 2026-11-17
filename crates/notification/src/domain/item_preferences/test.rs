@@ -8,6 +8,7 @@ struct FakeRepository {
     writes: Mutex<Vec<(String, Option<DateTime<Utc>>)>>,
     bulk: Mutex<Vec<(String, Vec<String>, Option<DateTime<Utc>>)>>,
     removals: Mutex<Vec<(String, Vec<String>)>>,
+    mentions_only: Mutex<Vec<(String, String)>>,
 }
 
 impl ItemNotificationPreferenceRepository for FakeRepository {
@@ -21,6 +22,17 @@ impl ItemNotificationPreferenceRepository for FakeRepository {
         until: Option<DateTime<Utc>>,
     ) -> Result<(), Report> {
         self.writes.lock().unwrap().push((user.to_string(), until));
+        Ok(())
+    }
+    async fn set_mentions_only(
+        &self,
+        user: MacroUserIdStr<'_>,
+        entity: Entity<'_>,
+    ) -> Result<(), Report> {
+        self.mentions_only
+            .lock()
+            .unwrap()
+            .push((user.to_string(), entity.entity_id.to_string()));
         Ok(())
     }
     async fn set_bulk(
@@ -155,5 +167,35 @@ async fn bulk_validates_before_writing_and_deduplicates() {
     assert_eq!(
         service.repository.removals.lock().unwrap()[0].1,
         vec!["same", "other"]
+    );
+}
+
+#[tokio::test]
+async fn mentions_only_is_saved_for_channels_and_rejected_for_other_items() {
+    let service = ItemNotificationPreferenceService::new(FakeRepository::default());
+    let owner = || MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+
+    let rejected = service
+        .set_mentions_only(
+            owner(),
+            EntityType::Document.with_entity_str("document-one"),
+        )
+        .await;
+    assert!(matches!(
+        rejected,
+        Err(ItemNotificationPreferenceError::MentionsOnlyUnsupported)
+    ));
+    assert!(service.repository.mentions_only.lock().unwrap().is_empty());
+
+    service
+        .set_mentions_only(owner(), EntityType::Channel.with_entity_str("channel-one"))
+        .await
+        .unwrap();
+    assert_eq!(
+        *service.repository.mentions_only.lock().unwrap(),
+        vec![(
+            "macro|owner@example.com".to_owned(),
+            "channel-one".to_owned()
+        )]
     );
 }

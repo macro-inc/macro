@@ -10,6 +10,7 @@ import {
   useListInteractions,
 } from '@app/components/list';
 import { StickyVirtualizer } from '@app/components/list/StickyVirtualizer';
+import { ViewShellListActiveContext } from '@app/components/view-shell/view-shell-context';
 import { CommandState } from '@app/features/command/state';
 import {
   resolveEntityActionViewContext,
@@ -63,6 +64,7 @@ import {
   Show,
   Suspense,
   Switch,
+  useContext,
 } from 'solid-js';
 import type { CacheSnapshot } from 'virtua';
 import type { VirtualizerHandle } from 'virtua/solid';
@@ -321,8 +323,11 @@ export function EmailList(props: EmailListProps) {
     )
   );
   // While the reader has the keyboard the list's keys stand down.
+  const listActive = useContext(ViewShellListActiveContext);
   const listHasKeyboard = () =>
-    panel.isPanelActive() && !(props.pane?.readerHasKeyboard() ?? false);
+    listActive() &&
+    panel.isPanelActive() &&
+    !(props.pane?.readerHasKeyboard() ?? false);
 
   const [collapseEntity, setCollapseEntity] =
     createSignal<(entityId: string) => Promise<void>>();
@@ -684,7 +689,7 @@ export function EmailList(props: EmailListProps) {
 
   const listTarget = tourTarget(EMAIL_TOUR.list);
   return (
-    <MaybeSoupEntityActionDrawerManager>
+    <MaybeSoupEntityActionDrawerManager keepOnWideTouch>
       <div
         ref={(element: HTMLDivElement) => {
           setGrid(element);

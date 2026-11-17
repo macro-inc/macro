@@ -132,8 +132,20 @@ per-entity-type search plus a unified search across them — mounted into
   `email_attachments`, as the list's built-in tabs filter them, not from the
   thread flags, which saved views read and which are not backfilled
   everywhere. `email_filters.view` is search only: expanding it into a list
-  filter is an `ExpandErr`. Enrichment reads a shared hit through its owner's
-  inbox after `shared_among` confirms the grant.
+  filter is an `ExpandErr`. `project_ids` (Drive folders) is an allowlist with
+  the list's Project candidate rule (`entity_access::project_email_threads`):
+  the caller's own threads in the folders, every thread in a folder granted to
+  their sources whoever's inbox holds it, and thread shares in the folders,
+  at most `MAX_PROJECT_THREADS`, from at most `MAX_EMAIL_PROJECTS` folders
+  (more is a 400); the other thread-level filters are then checked per hit.
+  Each folder's read stops once it has the cap's worth of threads the caller
+  reads, so a granted folder is not read whole; a folder without a grant is
+  read until then or to its end under the query's 5 s statement timeout.
+  Thread shares are probed only for
+  threads in folders the caller holds no grant on. `crm_domains` and `crm_addresses` are rejected with a 400
+  (`UnsupportedEmailFilter`): they need the list's CRM team scope and consent.
+  Enrichment reads a shared hit through its owner's inbox after `shared_among`
+  confirms a grant on the thread or on its folder; a revoked grant drops it.
 
 ## Related
 

@@ -360,6 +360,7 @@ function createEditor(
       };
     },
     select,
+    selectMany: selection.selectMany,
     hitTest: (point: Point, deep = false) =>
       hitTest(document, point, deep, 3 / camera.scale),
     groupSelection(id: string) {
@@ -495,6 +496,11 @@ function createEditor(
     },
     zoomAt(anchor: Point, scale: number) {
       publish(zoomAt(camera, anchor, scale));
+    },
+    /** One camera change for a two-finger step: pan, then zoom around `anchor`. */
+    panZoomBy(pan: Point, anchor: Point, factor: number) {
+      const panned = { ...camera, x: camera.x + pan.x, y: camera.y + pan.y };
+      publish(zoomAt(panned, anchor, camera.scale * factor));
     },
     resetCamera() {
       publish(INITIAL_CAMERA);
