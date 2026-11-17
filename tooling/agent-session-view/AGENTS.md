@@ -69,8 +69,10 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   (`macro.genai.prompt.tools.eager.*`). Names come from `EAGER_TOOLS`
   (`crates/ai_tools/src/lib.rs`) and `EAGER_INTERNAL_MCP_TOOLS`
   (`crates/agent_inmem/src/rig_engine.rs`) as checked out, kept where the
-  session shows the tool; a list that can't be read shows as unknown, and a
-  shortfall against the span count is the `eager-count-mismatch` flag.
+  session shows the tool. Fewer names than the span count is normal (code
+  mode's own tools are not in those lists); a list that can't be read is the
+  `eager-names-unknown` flag, and more names than the count is
+  `eager-names-exceed-span`.
   Renaming either constant breaks this: update `EAGER_SOURCES` in
   `turn_context.py`.
 - `invoke_agent`'s `gen_ai.tool.definitions` is cut at about 25 KB, so the

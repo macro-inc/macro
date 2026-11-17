@@ -137,7 +137,8 @@ details.ctx pre { white-space: pre-wrap; }
 .flag { border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 6px; padding: 2px 8px; font-size: 12px; text-align: left; cursor: default; }
 .flag.warn { background: var(--warn-soft); border-color: var(--warn); }
 .flag[data-tools] { cursor: pointer; }
-.flag b { font-family: var(--mono); font-weight: 600; margin-right: 4px; }
+.flag code { font-family: var(--mono); font-weight: 600; font-size: 11.5px; }
+.flag .sep { color: var(--muted); margin: 0 6px; }
 .badge { display: inline-block; border-radius: 999px; padding: 0 7px; font-size: 11.5px; font-weight: 600; background: var(--warn-soft); color: var(--ink); border: 1px solid var(--warn); }
 .context { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; margin-top: 10px; }
 .card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--bg); font-size: 12.5px; min-width: 0; }
@@ -490,7 +491,7 @@ function jumpTo(dom) {
 function renderFlags(turn) {
   const row = el('div', { class: 'flags' });
   for (const found of turn.flags) {
-    const badge = el('button', { class: `flag ${found.level}`, title: found.level === 'warn' ? 'warning' : 'note' }, `<b>${esc(found.id)}</b>${esc(found.text)}`);
+    const badge = el('button', { class: `flag ${found.level}`, title: found.level === 'warn' ? 'warning' : 'note' }, `<code>${esc(found.id)}</code><span class="sep">—</span>${esc(found.text)}`);
     if (found.tools?.length) {
       badge.dataset.tools = found.tools.join(',');
       badge.innerHTML += ` <span class="muted">→ ${found.tools.map(n => '#' + n).join(' ')}</span>`;

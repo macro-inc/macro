@@ -204,7 +204,16 @@ class TurnContext(unittest.TestCase):
         ]}
         source = ["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs", "SearchTools"]
         flags = [found["id"] for found in turn_context.for_session(export, source)[0]["flags"]]
-        self.assertEqual(flags, ["eager-count-mismatch"])
+        self.assertEqual(flags, [])
+
+    def test_more_eager_names_than_the_span_counts_is_flagged(self):
+        export = {"session": {"id": "s"}, "spans": spans_for_turn(2), "frames": [
+            prompt(0), *tool_result(1, "s1", "SearchTools", {"results": [], "already_available": ["NameSearch"]}),
+            end(2),
+        ]}
+        source = ["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs", "SearchTools", "NameSearch"]
+        flags = [found["id"] for found in turn_context.for_session(export, source)[0]["flags"]]
+        self.assertEqual(flags, ["eager-names-exceed-span"])
 
     def test_unknown_eager_names_are_a_loud_flag(self):
         export = {"session": {"id": "s"}, "spans": spans_for_turn(2), "frames": [prompt(0), end(1)]}

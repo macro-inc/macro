@@ -212,10 +212,12 @@ def flags(turn, context, with_spans):
             found.append({"id": "eager-names-unknown", "level": "warn",
                           "text": f"Eager tool names unknown: the eager lists in the source could not be read "
                                   f"({count(eager['count'])} eager per span)"})
-        elif len(eager["names"]) != eager["count"]:
-            found.append({"id": "eager-count-mismatch", "level": "info",
-                          "text": f"{len(eager['names'])} eager tools named from source, "
-                                  f"{count(eager['count'])} per span"})
+        # Fewer names than the count is the norm (code mode's own tools are
+        # not in the lists); more means the source and the build disagree.
+        elif len(eager["names"]) > eager["count"]:
+            found.append({"id": "eager-names-exceed-span", "level": "warn",
+                          "text": f"{len(eager['names'])} eager tools named from source, but the span "
+                                  f"counts {count(eager['count'])}: the source differs from the build"})
     return found
 
 
