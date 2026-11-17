@@ -288,6 +288,7 @@ async fn a_teammate_with_the_folder_grant_reaches_every_thread_in_it(
         &sources,
         &[f.viewer_link],
         &[f.project.clone()],
+        &[],
         true,
         false,
         100,
@@ -325,6 +326,7 @@ async fn a_viewer_without_the_folder_grant_reaches_none_of_its_threads(
         &sources,
         &[f.third_link],
         &[f.project.clone()],
+        &[],
         true,
         true,
         100,
@@ -355,6 +357,7 @@ async fn a_revoked_folder_grant_reaches_nothing_beyond_the_viewers_own_threads(
         &sources,
         &[f.viewer_link],
         &[f.project.clone()],
+        &[],
         true,
         false,
         100,
@@ -376,20 +379,73 @@ async fn shared_only_leaves_out_own_threads_and_thread_shares_add_granted_thread
     let sources = SourceIds(vec![VIEWER.to_string(), f.channel.clone()]);
     let both = [f.project.clone(), f.other_project.clone()];
 
-    let only =
-        project_email_threads(&pool, &sources, &[f.viewer_link], &both, false, true, 100).await?;
+    let only = project_email_threads(
+        &pool,
+        &sources,
+        &[f.viewer_link],
+        &both,
+        &[],
+        false,
+        true,
+        100,
+    )
+    .await?;
     assert_eq!(
         ids(only),
         HashSet::from([f.teammate_in_folder, f.teammate_shared_elsewhere])
     );
-    let exclude =
-        project_email_threads(&pool, &sources, &[f.viewer_link], &both, true, false, 100).await?;
+    let exclude = project_email_threads(
+        &pool,
+        &sources,
+        &[f.viewer_link],
+        &both,
+        &[],
+        true,
+        false,
+        100,
+    )
+    .await?;
     assert_eq!(
         ids(exclude),
         HashSet::from([f.own_in_folder, f.teammate_in_folder])
     );
     let capped =
-        project_email_threads(&pool, &sources, &[f.viewer_link], &both, true, true, 1).await?;
+        project_email_threads(&pool, &sources, &[f.viewer_link], &both, &[], true, true, 1).await?;
     assert_eq!(capped.len(), 1);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn requested_threads_are_kept_however_full_their_folder(pool: PgPool) -> anyhow::Result<()> {
+    let f = folder(&pool).await;
+    let sources = SourceIds(vec![VIEWER.to_string(), f.channel.clone()]);
+    let project = [f.project.clone()];
+
+    for requested in [f.own_in_folder, f.teammate_in_folder] {
+        let threads = project_email_threads(
+            &pool,
+            &sources,
+            &[f.viewer_link],
+            &project,
+            &[requested],
+            true,
+            false,
+            1,
+        )
+        .await?;
+        assert_eq!(ids(threads), HashSet::from([requested]));
+    }
+    let elsewhere = project_email_threads(
+        &pool,
+        &sources,
+        &[f.viewer_link],
+        &project,
+        &[f.teammate_shared_elsewhere],
+        true,
+        true,
+        100,
+    )
+    .await?;
+    assert!(elsewhere.is_empty());
     Ok(())
 }

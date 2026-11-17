@@ -54855,7 +54855,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Drive folder (project) ids to search within: threads filed in any of\nthese folders. Besides the caller's own threads, it reaches every\nthread in a folder shared with the caller, whoever's inbox holds it,\nas the folder's list does. Search takes at most 50 folders and\nrejects more with a 400. Empty to ignore project filtering."
+            "Drive folder (project) ids to search within: threads filed in any of\nthese folders. Besides the caller's own threads, it reaches every\nthread in a folder shared with the caller, whoever's inbox holds it,\nas the folder's list does. Search takes at most 50 folders and\nrejects more with a 400, and reads at most 10,000 of their threads in\nall before it matches the query; threads past that are not searched,\nunless `email_thread_ids` names them. Empty to ignore project filtering."
           ),
         recipients: zod
           .array(zod.string())

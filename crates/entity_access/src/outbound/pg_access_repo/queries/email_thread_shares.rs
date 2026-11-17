@@ -92,8 +92,10 @@ pub async fn shared_email_threads(
 /// folder granted to one of their sources whatever inbox holds it, and, with
 /// `include_thread_shares`, threads in a folder shared with them through a
 /// grant on the thread. With `include_own` false the caller's own inboxes are
-/// left out entirely, as the list's Shared-only view leaves them out. At most
-/// `limit` threads come back.
+/// left out entirely, as the list's Shared-only view leaves them out.
+/// Non-empty `requested_ids` narrow each folder's threads before the limit
+/// applies, so a requested thread is never cut off by the rest of its folder.
+/// At most `limit` threads come back.
 ///
 /// Each folder's grant is checked once, one source at a time. Each folder's
 /// threads are read through `idx_email_threads_project_id` and stop at
@@ -104,10 +106,11 @@ pub async fn shared_email_threads(
 /// not how many threads are shared with the caller.
 #[tracing::instrument(
     err,
-    skip(pool, source_ids, own_link_ids, project_ids),
+    skip(pool, source_ids, own_link_ids, project_ids, requested_ids),
     fields(
         source_id_count = source_ids.0.len(),
         project_count = project_ids.len(),
+        requested_count = requested_ids.len(),
         thread_count = tracing::field::Empty,
     )
 )]
@@ -116,6 +119,7 @@ pub async fn project_email_threads(
     source_ids: &SourceIds,
     own_link_ids: &[Uuid],
     project_ids: &[String],
+    requested_ids: &[Uuid],
     include_own: bool,
     include_thread_shares: bool,
     limit: i64,
@@ -156,6 +160,7 @@ pub async fn project_email_threads(
             SELECT t.id, t.link_id
             FROM email_threads t
             WHERE t.project_id = r.project_id
+              AND (cardinality($7::uuid[]) = 0 OR t.id = ANY($7))
               AND CASE
                   WHEN t.link_id = ANY($2) THEN $4
                   WHEN r.project_id IN (SELECT g.project_id FROM granted g) THEN TRUE
@@ -177,6 +182,7 @@ pub async fn project_email_threads(
         include_own,
         include_thread_shares,
         limit,
+        requested_ids,
     )
     .fetch_all(&mut *tx)
     .await?;

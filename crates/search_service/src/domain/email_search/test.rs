@@ -25,7 +25,7 @@ struct Source {
     project_shared: Vec<SharedThread>,
     threads: HashMap<Uuid, Thread>,
     shared_requests: Mutex<Vec<Vec<Uuid>>>,
-    project_requests: Mutex<Vec<(Vec<String>, bool, bool)>>,
+    project_requests: Mutex<Vec<(Vec<String>, Vec<Uuid>, bool, bool)>>,
 }
 
 impl EmailSearchSource for Source {
@@ -55,18 +55,21 @@ impl EmailSearchSource for Source {
         _: &MacroUserId<Lowercase<'_>>,
         _: &[Uuid],
         project_ids: &[String],
+        requested: &[Uuid],
         include_own: bool,
         include_thread_shares: bool,
         limit: usize,
     ) -> Result<Vec<SharedThread>, Report> {
         self.project_requests.lock().unwrap().push((
             project_ids.to_vec(),
+            requested.to_vec(),
             include_own,
             include_thread_shares,
         ));
         Ok(self
             .in_projects
             .iter()
+            .filter(|(thread, _, _)| requested.is_empty() || requested.contains(&thread.thread_id))
             .filter(|(_, own, _)| include_own || !own)
             .filter(|(_, _, thread_share)| include_thread_shares || !thread_share)
             .map(|(thread, _, _)| *thread)
@@ -610,7 +613,7 @@ async fn folders_search_the_threads_the_folder_list_shows() {
     assert!(scope.user_ids.is_empty());
     assert_eq!(
         service.0.project_requests.lock().unwrap().as_slice(),
-        &[(vec!["folder".to_string()], true, false)]
+        &[(vec!["folder".to_string()], vec![], true, false)]
     );
 }
 
@@ -635,7 +638,7 @@ async fn shared_only_folders_leave_out_the_viewers_own_threads() {
     );
     assert_eq!(
         service.0.project_requests.lock().unwrap().as_slice(),
-        &[(vec!["folder".to_string()], false, true)]
+        &[(vec!["folder".to_string()], vec![], false, true)]
     );
 }
 
@@ -659,6 +662,39 @@ async fn folders_check_the_other_thread_sets_hit_by_hit() {
     assert_eq!(scope.thread_ids, vec![Uuid::from_u128(31)]);
     assert!(scope.hit_states.calendar_only);
     assert!(scope.hit_states.sent);
+}
+
+#[tokio::test]
+async fn a_requested_thread_past_the_folder_cap_is_still_searched() {
+    let last = (MAX_PROJECT_THREADS + 1) as u128;
+    let service = EmailSearchService(Source {
+        in_projects: (1..=last)
+            .map(|n| (in_folder(n, OTHER_LINK), false, false))
+            .collect(),
+        ..Default::default()
+    });
+    let filters = EmailFilters {
+        email_thread_ids: vec![Uuid::from_u128(last).to_string()],
+        ..folder_filters(SharedEmailFilter::Exclude)
+    };
+
+    let scope = threads(
+        service
+            .scope(&viewer(), &filters, &inboxes())
+            .await
+            .unwrap(),
+    );
+
+    assert_eq!(scope.thread_ids, vec![Uuid::from_u128(last)]);
+    assert_eq!(
+        service.0.project_requests.lock().unwrap().as_slice(),
+        &[(
+            vec!["folder".to_string()],
+            vec![Uuid::from_u128(last)],
+            true,
+            false
+        )]
+    );
 }
 
 #[tokio::test]

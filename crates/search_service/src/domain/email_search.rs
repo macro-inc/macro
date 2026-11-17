@@ -169,12 +169,14 @@ pub(crate) trait EmailSearchSource {
     /// The threads in the given Drive folders the caller reads, as the Email
     /// list's project candidates admit them: their own (`include_own`), every
     /// thread in a folder granted to them, and with `include_thread_shares`
-    /// threads in a folder a thread grant shares with them. At most `limit`.
+    /// threads in a folder a thread grant shares with them. Non-empty
+    /// `requested` narrows them before `limit` applies. At most `limit`.
     fn project_threads(
         &self,
         user: &MacroUserId<Lowercase<'_>>,
         own_link_ids: &[Uuid],
         project_ids: &[String],
+        requested: &[Uuid],
         include_own: bool,
         include_thread_shares: bool,
         limit: usize,
@@ -328,17 +330,14 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
                 user,
                 &inboxes.link_ids,
                 project_ids,
+                &requested,
                 !matches!(filters.shared, SharedEmailFilter::Only),
                 !matches!(filters.shared, SharedEmailFilter::Exclude),
                 MAX_PROJECT_THREADS,
             )
             .await?;
         let project_capped = in_projects.len() >= MAX_PROJECT_THREADS;
-        let mut thread_ids: Vec<Uuid> = in_projects.iter().map(|thread| thread.thread_id).collect();
-        if !requested.is_empty() {
-            let requested: HashSet<Uuid> = requested.into_iter().collect();
-            thread_ids.retain(|id| requested.contains(id));
-        }
+        let thread_ids: Vec<Uuid> = in_projects.iter().map(|thread| thread.thread_id).collect();
         if thread_ids.is_empty() {
             return Ok(EmailScope::Nothing);
         }

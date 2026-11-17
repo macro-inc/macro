@@ -9371,7 +9371,9 @@ export type EmailFilters = {
      * these folders. Besides the caller's own threads, it reaches every
      * thread in a folder shared with the caller, whoever's inbox holds it,
      * as the folder's list does. Search takes at most 50 folders and
-     * rejects more with a 400. Empty to ignore project filtering.
+     * rejects more with a 400, and reads at most 10,000 of their threads in
+     * all before it matches the query; threads past that are not searched,
+     * unless `email_thread_ids` names them. Empty to ignore project filtering.
      */
     project_ids?: Array<string>;
     /**
