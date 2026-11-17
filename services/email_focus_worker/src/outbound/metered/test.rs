@@ -123,3 +123,22 @@ fn jev_usage_counts_its_tokens_and_cost_and_is_still_recorded() {
         "only the priced model costs: {cost}"
     );
 }
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn a_price_read_from_the_pricing_table_prices_later_costs(pool: sqlx::PgPool) {
+    let prices = Arc::new(Prices::from_db(pool));
+    let amount = UsageAmount::Tokens {
+        input: 1_000_000,
+        output: 0,
+        cache_read: 0,
+        cache_write: 0,
+    };
+
+    prices.load(crate::outbound::jev_classifier::MODEL).await;
+    let cost = prices.cost(crate::outbound::jev_classifier::MODEL, amount);
+    assert!(cost.is_some_and(|cost| cost > 0.0), "{cost:?}");
+
+    // Read and found unpriced: remembered, so asking again reads nothing.
+    prices.load("no-such-model").await;
+    assert_eq!(prices.cost("no-such-model", amount), None);
+}

@@ -108,14 +108,6 @@ async fn main() -> Result<(), Report> {
     let shutdown = CancellationToken::new();
     let metrics = FocusMetrics::new(shutdown.clone());
     metrics.add(Metric::WorkerStarts, 1.0);
-    // Publishing runs apart from the loops below, so a loop's error still
-    // ends with the last batch published: a crash loop shows in the restarts.
-    let publishing = TaskTracker::new();
-    publishing.spawn(run_publisher(
-        metrics.clone(),
-        CloudWatchMetrics::new(config.environment).await,
-        shutdown.clone(),
-    ));
     let prices = Arc::new(Prices::from_db(db.clone()));
     // Read before the first classification, so its cost is counted from the
     // start; a failed read is tried again with the next.
@@ -160,6 +152,16 @@ async fn main() -> Result<(), Report> {
     let window_days = config.focus_window_days.clamp(1, MAX_WINDOW_DAYS);
     tracing::info!(window_days, "email focus worker started");
 
+    // Publishing runs apart from the loops below, so a loop's error still
+    // ends with the last batch published: a crash loop shows in the restarts.
+    // Started after every step that can fail, which can then return without
+    // stranding it; a failure before here shows only in ECS's stopped tasks.
+    let publishing = TaskTracker::new();
+    publishing.spawn(run_publisher(
+        metrics.clone(),
+        CloudWatchMetrics::new(config.environment).await,
+        shutdown.clone(),
+    ));
     tokio::spawn({
         let shutdown = shutdown.clone();
         async move {

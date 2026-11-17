@@ -296,3 +296,29 @@ async fn fill_speed(pool: Pool<Postgres>) {
         due_dates.calls.lock().unwrap()
     );
 }
+
+#[test]
+fn a_completed_pass_times_a_new_inbox_and_not_one_found_at_the_start() {
+    let metrics = FocusMetrics::default();
+    let mut backfills = Backfills::default();
+    for new in [false, true] {
+        let now = Instant::now();
+        let finished = Finished {
+            waiting: Waiting {
+                inbox: inbox(1),
+                found: now,
+                new,
+            },
+            pass: Pass::First,
+            started: now,
+            report: Ok(SweepReport::default()),
+        };
+        finish(&mut backfills, finished, &metrics);
+        let timed = metrics
+            .take()
+            .samples
+            .get(&Metric::BackfillTopFilledSeconds)
+            .map(Vec::len);
+        assert_eq!(timed, new.then_some(1), "new: {new}");
+    }
+}

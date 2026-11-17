@@ -167,6 +167,7 @@ impl FocusMetrics {
 
     /// Add `amount` to a counted metric.
     pub fn add(&self, metric: Metric, amount: f64) {
+        debug_assert!(!metric.is_sample(), "{metric:?} is sampled, not counted");
         if let Ok(mut batch) = self.batch.lock() {
             *batch.sums.entry(metric).or_default() += amount;
         }
@@ -174,6 +175,7 @@ impl FocusMetrics {
 
     /// Record one value of a sampled metric.
     pub fn observe(&self, metric: Metric, value: f64) {
+        debug_assert!(metric.is_sample(), "{metric:?} is counted, not sampled");
         if let Ok(mut batch) = self.batch.lock() {
             batch.samples.entry(metric).or_default().push(value);
         }
