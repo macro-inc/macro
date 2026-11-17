@@ -174,8 +174,9 @@ pub struct Config {
     #[macro_config_default(7)]
     pub computer_past_due_grace_days: u32,
     /// Standard Macro computers each fleet host keeps booted and enrolled in
-    /// the warm pool for purchases to take at once; 0 turns the pool off.
-    #[macro_config_default(1)]
+    /// the warm pool for purchases to take at once. Off (0) unless set, so
+    /// pool rows appear only once every reader understands them.
+    #[macro_config_default(0)]
     pub computers_pool_standard: u32,
     /// Large computers in each host's warm pool; off unless set.
     #[macro_config_default(0)]

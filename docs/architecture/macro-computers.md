@@ -152,7 +152,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
   are stamped once as `user.macro.created_at` / `macro.created_at`; missing or
   invalid timestamps prohibit orphan deletion. Never adopt unlabelled instances.
 - **Warm pool** (`domain::pool`): each host keeps `COMPUTERS_POOL_{STANDARD,LARGE,XL}`
-  (default 1, 0, 0) booted, enrolled computers that no team owns:
+  (all default 0: the pool is off until configured, after every reader of
+  `hosted_runtime` understands pool rows) booted, enrolled computers that no team owns:
   `hosted_runtime.team_id`, `created_by`, `purchase_key`, price and comp
   reason are NULL (`hosted_runtime_pool_check`), and their state's billing is
   `Billing::Pool`; a row whose ownership and billing disagree is quarantined.
