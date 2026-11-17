@@ -93,6 +93,16 @@ pub trait TeamMembership: Send + Sync + 'static {
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+
+    /// [`Self::remove_agent`] with no admin's receipt, for taking back an
+    /// agent whose computer's charge was declined. An agent no longer on
+    /// the team is success.
+    fn take_back_agent(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+        removed_by: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 }
 
 /// The agent's own Macro API key.

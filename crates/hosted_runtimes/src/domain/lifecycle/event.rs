@@ -270,6 +270,9 @@ pub enum Effect {
         /// Ready, or why it failed.
         outcome: SetupOutcome,
     },
+    /// Take back the agent teammate a declined computer was bought for, if
+    /// it was bought for one: its seat, membership, keys and repository.
+    UndoAgentInvite,
 }
 
 /// How a computer's first setup ended, as its buyer hears it.
@@ -303,6 +306,7 @@ impl Effect {
             | Self::RevokeHarness
             | Self::PageOperator { .. }
             | Self::NotifySetup { .. } => EffectWorker::Fleet,
+            Self::UndoAgentInvite => EffectWorker::Agents,
         }
     }
 }
@@ -319,6 +323,8 @@ pub enum EffectWorker {
     Fleet,
     /// Executes subscription operations.
     Billing,
+    /// Takes back agent teammates; runs where the agent teammates domain is.
+    Agents,
     /// Persists scheduled lifecycle events.
     Timers,
 }

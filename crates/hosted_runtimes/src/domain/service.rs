@@ -20,6 +20,8 @@ use crate::domain::ports::{
 };
 use crate::domain::size::ComputerSize;
 
+mod agent_invites;
+pub use agent_invites::MAX_AGENT_ATTEMPTS;
 mod billing;
 pub use billing::{ObservedItem, SubscriptionObserved, SubscriptionStatus};
 mod purchase;
@@ -367,9 +369,11 @@ impl<
         }
     }
 
-    /// The team's computers and purchases being confirmed, oldest first. Not
-    /// gated on an attached fleet: every team member's Settings lists them,
-    /// and a team without any must see an empty list rather than an outage.
+    /// The team's computers, purchases being confirmed, and computers whose
+    /// charge was declined in the last [`crate::domain::models::DECLINED_LISTED_FOR`],
+    /// oldest first. Not gated on an attached fleet: every team member's
+    /// Settings lists them, and a team without any must see an empty list
+    /// rather than an outage.
     #[tracing::instrument(skip(self), err)]
     pub async fn list(&self, team_id: Uuid) -> Result<Vec<ComputerStatus>, ComputerError> {
         let computers = self.repo.list_for_team(team_id).await.map_err(internal)?;
@@ -382,6 +386,11 @@ impl<
         let counts = self.repo.agent_counts(&ids).await.map_err(internal)?;
         let now = self.clock.now();
         let policy = self.repo.policy();
+        let declined = self
+            .repo
+            .declined_for_team(team_id, now - crate::domain::models::DECLINED_LISTED_FOR)
+            .await
+            .map_err(internal)?;
         let mut statuses: Vec<ComputerStatus> = computers
             .iter()
             .map(|computer| {
@@ -392,6 +401,10 @@ impl<
                 )
             })
             .chain(reservations.iter().map(Reservation::status))
+            .chain(declined.iter().map(|(computer, for_agent)| ComputerStatus {
+                for_agent: *for_agent,
+                ..computer.status(0, now, policy)
+            }))
             .collect();
         statuses.sort_by_key(|status| status.created_at);
         Ok(statuses)

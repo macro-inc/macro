@@ -86,6 +86,7 @@ impl From<serde_json::Error> for PgComputerError {
 enum OutboxWorker {
     Fleet,
     Billing,
+    Agents,
 }
 
 impl TryFrom<EffectWorker> for OutboxWorker {
@@ -94,6 +95,7 @@ impl TryFrom<EffectWorker> for OutboxWorker {
         match worker {
             EffectWorker::Fleet => Ok(Self::Fleet),
             EffectWorker::Billing => Ok(Self::Billing),
+            EffectWorker::Agents => Ok(Self::Agents),
             EffectWorker::Timers => Err(PgComputerError::NotAnOutboxWorker(worker)),
         }
     }
@@ -443,6 +445,40 @@ impl ComputerRepo for PgComputerRepo {
             .collect())
     }
 
+    async fn declined_for_team(
+        &self,
+        team_id: Uuid,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<(Computer, bool)>, PgComputerError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id AS "id!", agent_user_id IS NOT NULL AS "for_agent!"
+            FROM hosted_runtime
+            WHERE team_id = $1
+              AND (state->'phase'->>'phase') = 'destroying'
+              AND (state->>'failure') = 'payment'
+              AND (state->>'billing_changed_at')::timestamptz >= $2
+            ORDER BY created_at
+            "#,
+            team_id,
+            since,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let mut declined = Vec::with_capacity(rows.len());
+        for row in rows {
+            // A quarantined row has nothing to show; it is the operator's.
+            if let Some(computer) = self
+                .get(ComputerId::new_from_uuid(row.id))
+                .await?
+                .and_then(|record| record.into_healthy().ok())
+            {
+                declined.push((computer, row.for_agent));
+            }
+        }
+        Ok(declined)
+    }
+
     async fn find_by_harness(
         &self,
         harness_id: HarnessId,
@@ -622,9 +658,10 @@ impl ComputerRepo for PgComputerRepo {
     ) -> Result<Vec<PendingEffect>, PgComputerError> {
         let worker = OutboxWorker::try_from(worker)?;
         // Quarantine stops fleet work, but a billing item removal still runs:
-        // it only ever stops a charge, and its item is in the effect.
+        // it only ever stops a charge, and its item is in the effect. Taking
+        // back an agent reads only the computer's agent link.
         let healthy_ids = match worker {
-            OutboxWorker::Billing => {
+            OutboxWorker::Billing | OutboxWorker::Agents => {
                 sqlx::query_scalar!(
                     "SELECT DISTINCT computer_id FROM hosted_runtime_effect WHERE worker = $1 AND run_after <= $2",
                     worker as OutboxWorker,

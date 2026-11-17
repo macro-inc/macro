@@ -56,4 +56,20 @@ impl<Teams: TeamService> TeamMembership for TeamsMembership<Teams> {
             Err(error) => Err(TeamAgentError::internal(error)),
         }
     }
+
+    async fn take_back_agent(
+        &self,
+        team_id: uuid::Uuid,
+        agent: &MacroUserIdStr<'_>,
+        removed_by: MacroUserIdStr<'static>,
+    ) -> Result<(), TeamAgentError> {
+        match self
+            .teams
+            .take_back_team_agent(team_id, agent, removed_by)
+            .await
+        {
+            Ok(()) | Err(RemoveUserFromTeamError::UserNotInTeam) => Ok(()),
+            Err(error) => Err(TeamAgentError::internal(error)),
+        }
+    }
 }

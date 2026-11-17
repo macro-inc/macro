@@ -17,6 +17,10 @@ fn an_attached_computer_maps_to_the_agents_state() {
         (ComputerStatusKind::NeedsAttention, ComputerState::Failed),
         (ComputerStatusKind::Failed, ComputerState::Failed),
         (ComputerStatusKind::Released, ComputerState::Released),
+        (
+            ComputerStatusKind::PaymentDeclined,
+            ComputerState::PaymentDeclined,
+        ),
         (ComputerStatusKind::Purchasing, ComputerState::Purchasing),
     ] {
         assert_eq!(
@@ -40,6 +44,13 @@ fn without_a_fleet_a_live_computer_is_paused_but_terminal_ones_stay() {
     assert_eq!(
         computer_state(ComputerStatusKind::Released, FleetAttachment::Detached),
         ComputerState::Released
+    );
+    assert_eq!(
+        computer_state(
+            ComputerStatusKind::PaymentDeclined,
+            FleetAttachment::Detached
+        ),
+        ComputerState::PaymentDeclined
     );
 }
 

@@ -451,7 +451,8 @@ where
             }
             Effect::RemoveBillingItem { .. }
             | Effect::Charge { .. }
-            | Effect::ScheduleTimer { .. } => Err(ComputerError::Internal(rootcause::report!(
+            | Effect::ScheduleTimer { .. }
+            | Effect::UndoAgentInvite => Err(ComputerError::Internal(rootcause::report!(
                 "a non-fleet effect reached the fleet worker"
             ))),
         }
@@ -827,7 +828,7 @@ fn effect_failure(effect: &Effect) -> Option<Failure> {
         | Effect::RemoveBillingItem { .. }
         | Effect::Charge { .. }
         | Effect::ScheduleTimer { .. } => Some(Failure::Power),
-        Effect::NotifySetup { .. } => None,
+        Effect::NotifySetup { .. } | Effect::UndoAgentInvite => None,
     }
 }
 
@@ -850,7 +851,8 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
         | Effect::RevokeHarness
         | Effect::ScheduleTimer { .. }
         | Effect::PageOperator { .. }
-        | Effect::NotifySetup { .. } => None,
+        | Effect::NotifySetup { .. }
+        | Effect::UndoAgentInvite => None,
     }
 }
 

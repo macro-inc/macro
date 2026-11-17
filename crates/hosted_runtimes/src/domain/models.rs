@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{
-    Billing, BillingPolicy, ComputerState, HostId, Phase, Power, SubscriptionItemId,
+    Billing, BillingPolicy, ComputerState, Failure, HostId, Phase, Power, SubscriptionItemId,
 };
 use crate::domain::size::{CatalogEntryId, ComputerResources, ComputerSize};
 
@@ -409,6 +409,7 @@ impl Reservation {
             setup_completed_at: None,
             default_agent_id: None,
             agent_count: 0,
+            for_agent: false,
         }
     }
 }
@@ -630,7 +631,14 @@ pub enum ComputerStatusKind {
     Purchasing,
     /// Guest has been released.
     Released,
+    /// The purchase's charge was declined, so the computer was released.
+    /// Listed for [`DECLINED_LISTED_FOR`] after the decline.
+    PaymentDeclined,
 }
+
+/// How long a computer whose charge was declined stays in the team's list,
+/// so the buyer sees what happened to it.
+pub const DECLINED_LISTED_FOR: chrono::TimeDelta = chrono::TimeDelta::days(7);
 
 /// Where a computer's billing stands, as its team sees it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -759,6 +767,10 @@ pub struct ComputerStatus {
     /// Agents bound to the computer's live harness, teammates' private ones
     /// included: the ones releasing it deletes.
     pub agent_count: u32,
+    /// Bought for an agent teammate. Set on a declined computer, whose
+    /// agent the decline took back; omitted when false.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub for_agent: bool,
 }
 
 impl Computer {
@@ -800,6 +812,9 @@ impl Computer {
             Phase::Stopping => ComputerStatusKind::Stopping,
             Phase::Stopped => ComputerStatusKind::Stopped,
             Phase::Crashed { retry: None, .. } => ComputerStatusKind::Failed,
+            Phase::Destroying if self.state.failure == Some(Failure::Payment) => {
+                ComputerStatusKind::PaymentDeclined
+            }
             Phase::Destroying => ComputerStatusKind::Released,
             Phase::Provisioning { .. } => ComputerStatusKind::SettingUp,
         };
@@ -849,6 +864,9 @@ impl Computer {
                     .state
                     .failure
                     .map(|failure| failure.reason().to_owned()),
+                _ if status == ComputerStatusKind::PaymentDeclined => {
+                    Some(Failure::Payment.reason().to_owned())
+                }
                 _ => None,
             },
             powered_on: self.state.power == Power::On,
@@ -863,6 +881,7 @@ impl Computer {
             setup_completed_at: self.setup_completed_at,
             default_agent_id: self.default_agent_id,
             agent_count,
+            for_agent: false,
         }
     }
 
@@ -907,6 +926,7 @@ impl ComputerRecord {
                 setup_completed_at: None,
                 default_agent_id: None,
                 agent_count,
+                for_agent: false,
             },
         }
     }

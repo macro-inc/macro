@@ -261,6 +261,48 @@ where
             });
     }
 
+    /// Take back an agent whose computer's charge was declined, as removing
+    /// it does but with no admin and no computer to release (the decline
+    /// released it): revoke its keys, delete its repository, take it off the
+    /// team and delete its seat. Its account stays, since it may already own
+    /// docs or threads. Each step is idempotent and the seat goes last, so a
+    /// retry after a failed step finds the agent and finishes; an agent
+    /// already taken back, or on another team, is done.
+    #[tracing::instrument(
+        name = "team_agents.undo_declined_invite",
+        skip_all,
+        fields(team_id = %team_id, agent_user_id = %agent_credentials::telemetry_id(agent.as_ref())),
+        err
+    )]
+    pub async fn undo_declined_invite(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<(), TeamAgentError> {
+        let Some(record) = self
+            .repository
+            .get(agent)
+            .await
+            .map_err(TeamAgentError::internal)?
+            .filter(|record| record.team_id == team_id)
+        else {
+            return Ok(());
+        };
+        self.api_keys.revoke_all(&record.user_id).await?;
+        self.repos.delete(&record.user_id).await?;
+        let removed_by = record
+            .created_by
+            .clone()
+            .unwrap_or_else(|| record.user_id.clone());
+        self.membership
+            .take_back_agent(team_id, &record.user_id, removed_by)
+            .await?;
+        self.repository
+            .remove_seat(&record.user_id)
+            .await
+            .map_err(TeamAgentError::internal)
+    }
+
     /// Everything before the purchase, recording each step in `undo`.
     async fn prepare(
         &self,
@@ -619,5 +661,29 @@ where
             agent_user_id: agent,
             env,
         }))
+    }
+}
+
+/// hosted_runtimes takes back the agent of a declined computer through here.
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
+    hosted_runtimes::domain::ports::AgentInvites
+    for TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
+where
+    Repository: TeamAgentRepository,
+    Membership: TeamMembership,
+    ApiKeys: AgentApiKeys,
+    Repos: AgentRepos,
+    Computer: Computers,
+    Creators: agent_credentials::AgentCreators + 'static,
+    Flags: FeatureFlags + 'static,
+{
+    type Err = TeamAgentError;
+
+    async fn undo_declined_invite(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<(), TeamAgentError> {
+        TeamAgentServiceImpl::undo_declined_invite(self, team_id, agent).await
     }
 }

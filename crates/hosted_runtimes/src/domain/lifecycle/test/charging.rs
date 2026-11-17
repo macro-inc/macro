@@ -166,6 +166,7 @@ fn a_failed_charge_releases_the_computer_and_tells_the_buyer() {
                         failed_at: now(),
                     },
                 },
+                Effect::UndoAgentInvite,
             ],
             "{phase:?}"
         );

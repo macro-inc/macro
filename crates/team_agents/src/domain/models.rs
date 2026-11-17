@@ -35,6 +35,9 @@ pub enum TeamAgentStatus {
     Failed,
     /// Its computer is gone.
     Released,
+    /// Its computer's charge was declined, so the computer was released and
+    /// the agent is about to be taken off the team.
+    PaymentDeclined,
 }
 
 /// An agent teammate: an AI member of a team with its own Macro account and
@@ -193,6 +196,9 @@ pub enum ComputerState {
     Failed,
     /// Released and destroyed.
     Released,
+    /// Released because its charge was declined; the agent is being taken
+    /// back.
+    PaymentDeclined,
 }
 
 impl From<ComputerState> for TeamAgentStatus {
@@ -203,6 +209,7 @@ impl From<ComputerState> for TeamAgentStatus {
             ComputerState::Paused => Self::Paused,
             ComputerState::Failed => Self::Failed,
             ComputerState::Released => Self::Released,
+            ComputerState::PaymentDeclined => Self::PaymentDeclined,
         }
     }
 }

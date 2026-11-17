@@ -182,7 +182,12 @@ attempt, so a busy database never fails a computer or abandons a removal.
   `ChargeFailed`, which releases the computer (`EndsAt{now}`, Destroy and
   RevokeHarness, so its units free up; nothing was charged, so no item is
   removed) and sends the buyer `NotifySetup{Failed{Payment}}`, even after
-  setup finished. An unknown outcome retries with `BILLING_BACKOFF`; the
+  setup finished. It also queues `UndoAgentInvite` on the `agents` worker: for
+  a computer bought for an agent teammate, team_agents takes the agent back
+  as removing it does (keys, repository, membership in its inviter's name,
+  seat) and keeps its account; each step is idempotent and the effect retries.
+  The team list shows the declined computer as `payment_declined` for seven
+  days after the decline (`forAgent` when it was an agent's), with no actions. An unknown outcome retries with `BILLING_BACKOFF`; the
   charge is never abandoned: its `MAX_BILLING_ATTEMPTS`th attempt calls
   `settle_computer_add`, which fences the add and answers whether an item
   landed (success) or not (failure). While `Charging`, cancel, undo, restore

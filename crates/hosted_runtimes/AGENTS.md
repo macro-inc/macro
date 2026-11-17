@@ -70,6 +70,15 @@ read it before changing behaviour.
   (`Effect::Charge`, `Billing::Charging`); the charge is never abandoned (its
   last attempt settles), a refusal releases the computer, and a team has at
   most `MAX_UNPAID_COMPUTERS` (3) unpaid at once (`ComputerError::UnpaidComputer`).
+- A refused charge also queues `Effect::UndoAgentInvite` on the `agents`
+  worker: `ComputerService::run_agent_effects` (run by authentication_service
+  with the team_agents service as `ports::AgentInvites`) takes back the agent
+  teammate the computer was bought for, if any. It retries with
+  `BILLING_BACKOFF` and gives up after `MAX_AGENT_ATTEMPTS` with the error log
+  `declined agent invite undo abandoned` (`computer_id`, `effect_id`,
+  `attempts`); alerts key on it. The declined computer stays in the team's
+  list as `payment_declined` (with `forAgent`) for `DECLINED_LISTED_FOR` (7
+  days) after the decline (`ComputerRepo::declined_for_team`).
 - A billing removal keeps one idempotency key across retries; see
   `removal_key` and the subscription guard in `crates/teams/AGENTS.md`.
 - `PageOperator` is the log event `computer needs an operator` (error level);

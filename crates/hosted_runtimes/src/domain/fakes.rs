@@ -514,6 +514,30 @@ impl ComputerRepo for FakeRepo {
             .collect())
     }
 
+    async fn declined_for_team(
+        &self,
+        team_id: Uuid,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<(Computer, bool)>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let agents = self.agents.lock().unwrap();
+        let mut computers: Vec<(Computer, bool)> = self
+            .computers
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|computer| {
+                computer.team_id == team_id
+                    && computer.state.phase == crate::domain::lifecycle::Phase::Destroying
+                    && computer.state.failure == Some(crate::domain::lifecycle::Failure::Payment)
+                    && computer.state.billing_changed_at >= since
+            })
+            .map(|computer| (computer.clone(), agents.contains_key(&computer.id)))
+            .collect();
+        computers.sort_by_key(|(computer, _)| computer.created_at);
+        Ok(computers)
+    }
+
     async fn find_by_harness(&self, harness_id: HarnessId) -> Result<Option<Computer>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(self

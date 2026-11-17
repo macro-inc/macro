@@ -159,11 +159,155 @@ async fn a_declined_charge_releases_the_computer_and_tells_the_buyer() {
                     failed_at: now(),
                 },
             },
+            Effect::UndoAgentInvite,
         ]
     );
     // Its only unit is free again, and nothing unpaid holds the team back.
     let again = service.purchase(standard_purchase("buy-dialog-2")).await;
     assert!(matches!(again, Ok(Purchase::Ready(_))), "{again:?}");
+}
+
+/// Records every agent taken back; fails the first `failures` calls.
+#[derive(Default)]
+struct FakeInvites {
+    undone: std::sync::Mutex<Vec<(Uuid, String)>>,
+    failures: std::sync::atomic::AtomicU32,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("agent teammates unavailable")]
+struct InvitesDown;
+
+impl crate::domain::ports::AgentInvites for FakeInvites {
+    type Err = InvitesDown;
+
+    async fn undo_declined_invite(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<(), InvitesDown> {
+        use std::sync::atomic::Ordering;
+        if self
+            .failures
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
+                left.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err(InvitesDown);
+        }
+        self.undone
+            .lock()
+            .unwrap()
+            .push((team_id, agent.as_ref().to_owned()));
+        Ok(())
+    }
+}
+
+fn ada() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from("macro|ada-1@agents.macro.invalid".to_owned()).unwrap()
+}
+
+/// The buyer sees a declined computer as declined for a week, named for the
+/// agent it was bought for; then it leaves the list.
+#[tokio::test]
+async fn a_declined_computer_is_listed_as_declined_for_a_week() {
+    let service = service_with(
+        FakeRepo {
+            sold_units: 1,
+            ..FakeRepo::default()
+        },
+        FakeBilling {
+            decline: true,
+            ..FakeBilling::default()
+        },
+    );
+    let Purchase::Ready(computer_id) = service
+        .purchase(standard_purchase("buy-dialog-1"))
+        .await
+        .unwrap()
+    else {
+        panic!("expected a ready purchase");
+    };
+    service
+        .repo
+        .agents
+        .lock()
+        .unwrap()
+        .insert(computer_id, ada());
+    service.run_billing_effects().await.unwrap();
+
+    let listed = service.list(TEAM).await.unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].id, computer_id);
+    assert_eq!(listed[0].status, ComputerStatusKind::PaymentDeclined);
+    assert!(listed[0].for_agent);
+    assert_eq!(
+        listed[0].failure_reason.as_deref(),
+        Some(Failure::Payment.reason())
+    );
+
+    service
+        .repo
+        .computers
+        .lock()
+        .unwrap()
+        .get_mut(&computer_id)
+        .unwrap()
+        .state
+        .billing_changed_at = now() - chrono::Duration::days(8);
+    assert!(service.list(TEAM).await.unwrap().is_empty());
+}
+
+/// A declined computer bought for an agent takes the agent back, retrying
+/// until the agent teammates domain answers; one bought for no agent has
+/// nothing to take back.
+#[tokio::test]
+async fn a_declined_charge_takes_back_the_agent_it_was_bought_for() {
+    let service = service_with(
+        FakeRepo {
+            sold_units: 2,
+            ..FakeRepo::default()
+        },
+        FakeBilling {
+            decline: true,
+            ..FakeBilling::default()
+        },
+    );
+    let Purchase::Ready(for_agent) = service
+        .purchase(standard_purchase("buy-dialog-1"))
+        .await
+        .unwrap()
+    else {
+        panic!("expected a ready purchase");
+    };
+    service.repo.agents.lock().unwrap().insert(for_agent, ada());
+    let Purchase::Ready(plain) = service
+        .purchase(standard_purchase("buy-dialog-2"))
+        .await
+        .unwrap()
+    else {
+        panic!("expected a ready purchase");
+    };
+    service.run_billing_effects().await.unwrap();
+    let invites = FakeInvites {
+        failures: 1.into(),
+        ..FakeInvites::default()
+    };
+
+    assert_eq!(service.run_agent_effects(&invites).await.unwrap(), 2);
+    assert!(invites.undone.lock().unwrap().is_empty());
+    assert!(!effects_of(&service.repo, plain).contains(&Effect::UndoAgentInvite));
+    assert!(effects_of(&service.repo, for_agent).contains(&Effect::UndoAgentInvite));
+
+    // The retry is due later; once due, the undo goes through.
+    service.repo.effect_run_after.lock().unwrap().clear();
+    assert_eq!(service.run_agent_effects(&invites).await.unwrap(), 1);
+    assert_eq!(
+        *invites.undone.lock().unwrap(),
+        vec![(TEAM, ada().as_ref().to_owned())]
+    );
+    assert!(!effects_of(&service.repo, for_agent).contains(&Effect::UndoAgentInvite));
 }
 
 #[tokio::test]

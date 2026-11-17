@@ -133,3 +133,59 @@ async fn an_agent_gets_only_one_computer(pool: PgPool) {
         Err(ReserveError::Storage(_))
     ));
 }
+
+/// A declined charge queues taking back the agent on the agents worker, and
+/// the team lists the declined computer, for its agent, until a week passes.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_declined_computer_for_an_agent_is_listed_and_its_agent_taken_back(pool: PgPool) {
+    insert_team(&pool).await;
+    let agent = insert_agent(&pool).await;
+    let repo = PgComputerRepo::new(pool.clone(), policy());
+    host(&repo, "runtime-dev-1", 31, 7, 3).await;
+    let mut for_agent = standard(1);
+    for_agent.agent = Some(agent.clone());
+    let reservation = reserve(&repo, for_agent).await;
+    let charging = repo
+        .convert_reservation(reservation.id, now())
+        .await
+        .unwrap()
+        .unwrap();
+    changed(&repo, charging.id, Event::ChargeFailed, now()).await;
+
+    let leased = repo
+        .lease_effects(
+            EffectWorker::Agents,
+            10,
+            now(),
+            now() + Duration::minutes(1),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        leased
+            .iter()
+            .map(|pending| (pending.computer_id, pending.effect.clone()))
+            .collect::<Vec<_>>(),
+        vec![(charging.id, Effect::UndoAgentInvite)]
+    );
+    assert_eq!(repo.agent_of(charging.id).await.unwrap(), Some(agent));
+
+    let declined = repo
+        .declined_for_team(TEAM, now() - Duration::days(7))
+        .await
+        .unwrap();
+    assert_eq!(
+        declined
+            .iter()
+            .map(|(computer, for_agent)| (computer.id, *for_agent))
+            .collect::<Vec<_>>(),
+        vec![(charging.id, true)]
+    );
+    assert!(repo.list_for_team(TEAM).await.unwrap().is_empty());
+    assert!(
+        repo.declined_for_team(TEAM, now() + Duration::seconds(1))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

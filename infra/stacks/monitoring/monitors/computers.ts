@@ -8,6 +8,10 @@
 //   removing a computer's Stripe subscription item failed for its whole
 //   attempt cap and stopped retrying, so the team may still be billed for a
 //   computer it no longer has. Fields: `computer_id`, `effect_id`, `attempts`.
+// - `declined agent invite undo abandoned`, from authentication-service: a
+//   computer bought for an agent teammate was declined, and taking the agent
+//   back failed for its whole attempt cap. Fields: `computer_id`,
+//   `effect_id`, `attempts`.
 // - `computer needs an operator`, from agent-harness-service: a computer gave
 //   up restarting, a fleet effect failed for good, or its resources drifted.
 //   Fields: `computer_id`, `reason`.
@@ -32,6 +36,28 @@ ${notify({ pages: environment === 'prod', environment })}`,
       monitorThresholds: { critical: '0' },
       tags: [env, 'service:authentication-service'],
       priority: environment === 'prod' ? '2' : '3',
+      includeTags: true,
+      requireFullWindow: false,
+      renotifyInterval: RENOTIFY_MINUTES,
+      onMissingData: 'resolve',
+    },
+    { dependsOn: goalertWebhooks }
+  );
+
+  new datadog.Monitor(
+    `computer-declined-agent-undo-abandoned-${environment}`,
+    {
+      name: `[${environment.toUpperCase()}] Computers: declined agent not taken back for {{computer_id.name}}`,
+      type: 'log alert',
+      query: `logs("service:authentication-service status:error \\"declined agent invite undo abandoned\\" ${env}").index("*").rollup("count").by("@computer_id").last("1h") > 0`,
+      message: `Computer {{computer_id.name}}'s charge was declined, and taking back the agent teammate it was bought for failed for its whole retry budget. The agent may still hold its seat, membership, keys and repository with no computer.
+
+Remove the agent from the team's Members settings, or find it by hosted_runtime.agent_user_id for this computer. Search @computer_id:{{computer_id.name}} "agent effect failed" for the errors. See crates/hosted_runtimes/AGENTS.md.
+
+${notify({ pages: false, environment })}`,
+      monitorThresholds: { critical: '0' },
+      tags: [env, 'service:authentication-service'],
+      priority: '3',
       includeTags: true,
       requireFullWindow: false,
       renotifyInterval: RENOTIFY_MINUTES,

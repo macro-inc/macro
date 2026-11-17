@@ -148,6 +148,19 @@ impl TeamMembership for FakeMembership {
         self.0.record("team.remove");
         Ok(())
     }
+
+    async fn take_back_agent(
+        &self,
+        team_id: Uuid,
+        _: &MacroUserIdStr<'_>,
+        removed_by: MacroUserIdStr<'static>,
+    ) -> Result<(), TeamAgentError> {
+        self.0.record(format!(
+            "team.take_back {team_id} by {}",
+            removed_by.as_ref()
+        ));
+        Ok(())
+    }
 }
 
 struct FakeApiKeys(Journal);
@@ -479,6 +492,43 @@ async fn removing_an_agent_deactivates_it_and_keeps_its_account() {
         ]
     );
     assert!(service.list(receipt()).await.unwrap().agents.is_empty());
+}
+
+/// A declined charge takes the agent back with no admin: keys, repository,
+/// membership (removed in its inviter's name) and seat, its account kept.
+/// Taking it back again, or from another team, does nothing.
+#[tokio::test]
+async fn a_declined_invite_takes_the_agent_back_and_again_is_a_no_op() {
+    let (service, journal) = service(true, FakeComputers::default());
+    let created = service.create(receipt(), request()).await.unwrap();
+    let team_id: Uuid = TEAM.parse().unwrap();
+
+    service
+        .undo_declined_invite(Uuid::nil(), &created.user_id)
+        .await
+        .unwrap();
+    assert_eq!(journal.entries().len(), 4);
+
+    service
+        .undo_declined_invite(team_id, &created.user_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        journal.entries()[4..],
+        [
+            "api_key.revoke_all".to_owned(),
+            "repo.delete".to_owned(),
+            format!("team.take_back {team_id} by macro|admin@example.com"),
+            "seat.remove".to_owned(),
+        ]
+    );
+    assert!(service.list(receipt()).await.unwrap().agents.is_empty());
+
+    service
+        .undo_declined_invite(team_id, &created.user_id)
+        .await
+        .unwrap();
+    assert_eq!(journal.entries().len(), 8);
 }
 
 #[tokio::test]

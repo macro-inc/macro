@@ -742,7 +742,8 @@ pub fn transition(
         }
 
         // Nothing was charged, so there is no item to remove. The buyer hears
-        // even after setup finished: the computer is gone.
+        // even after setup finished: the computer is gone, and so is an agent
+        // teammate it was bought for.
         Event::ChargeFailed => {
             if state.billing == Billing::Charging {
                 next.billing = Billing::EndsAt { at: now };
@@ -754,6 +755,7 @@ pub fn transition(
                         failed_at: now,
                     },
                 });
+                effects.push(Effect::UndoAgentInvite);
             }
         }
     }

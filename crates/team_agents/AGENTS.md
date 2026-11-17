@@ -15,7 +15,12 @@ placeholder `@agents.macro.invalid` address, no sign-in) →
 repo on agent_git (served by agent_harness_service) → `ComputerService::purchase_for_agent`, the normal
 per-computer purchase with the computer linked to the agent
 (`hosted_runtime.agent_user_id`). A failure before the purchase completes
-undoes the repo, membership and account, newest first.
+undoes the repo, membership and account, newest first. The charge settles
+after the invite returns; if it is declined, hosted_runtimes calls
+`undo_declined_invite` (the `AgentInvites` port), which takes the agent back
+as removing it does, with no admin: keys, repo, membership
+(`TeamService::take_back_team_agent`, in its inviter's name) and seat, last.
+The account stays. Until then the agent's status is `payment_declined`.
 
 When the computer operator creates the guest it calls the internal
 `POST /internal/team_agent_enrollment/{computer}/{generation}`; for an agent

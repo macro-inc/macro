@@ -227,6 +227,14 @@ pub trait ComputerRepo: Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<Vec<ComputerRecord>, Self::Err>> + Send;
 
+    /// The team's computers whose charge was declined at or after `since`,
+    /// oldest first, each with whether it was bought for an agent teammate.
+    fn declined_for_team(
+        &self,
+        team_id: Uuid,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<(Computer, bool)>, Self::Err>> + Send;
+
     /// The computer whose harness this is.
     fn find_by_harness(
         &self,
@@ -364,6 +372,21 @@ pub trait ComputerRepo: Send + Sync + 'static {
 
     /// Every host with what its computers and reservations hold, by host id.
     fn allocation(&self) -> impl Future<Output = Result<Vec<HostAllocation>, Self::Err>> + Send;
+}
+
+/// Takes back an agent teammate whose computer's charge was declined: the
+/// agent teammates domain, which depends on this crate, implements it.
+pub trait AgentInvites: Send + Sync + 'static {
+    /// Undo failure; the effect is retried.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Remove `agent` from `team_id` as removing an agent does, keeping its
+    /// account. Idempotent: an agent already taken back is done.
+    fn undo_declined_invite(
+        &self,
+        team_id: Uuid,
+        agent: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Errors from billing a team.

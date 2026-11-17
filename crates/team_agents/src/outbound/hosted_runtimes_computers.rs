@@ -96,12 +96,16 @@ fn computer_state(
         }
         Kind::NeedsAttention | Kind::Failed => ComputerState::Failed,
         Kind::Released => ComputerState::Released,
+        Kind::PaymentDeclined => ComputerState::PaymentDeclined,
     };
     match (availability, state) {
         // Without a fleet nothing runs, but terminal states stay terminal.
         (
             FleetAttachment::Detached,
-            ComputerState::Purchasing | ComputerState::Failed | ComputerState::Released,
+            ComputerState::Purchasing
+            | ComputerState::Failed
+            | ComputerState::Released
+            | ComputerState::PaymentDeclined,
         ) => state,
         (FleetAttachment::Detached, _) => ComputerState::Paused,
         (FleetAttachment::Attached, state) => state,
