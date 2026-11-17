@@ -50,8 +50,8 @@ pub const GATE_DOCS_URL: &str =
 const REQUESTED: &str = "github.event.label.name == 'run-ci'";
 
 /// Job names the fork step reads back from a finished run (`ci_gate.ts`).
-const START_JOB: &str = "Start";
-const GATE_JOB: &str = "CI gate";
+pub const START_JOB: &str = "Start";
+pub const GATE_JOB: &str = "CI gate";
 
 /// A check workflow `PR CI` calls.
 struct Call {

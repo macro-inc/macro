@@ -17,6 +17,12 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
   `steps` instead of inlining labels, env, or step definitions.
 - Change a generated workflow (header `DO NOT EDIT`) by editing its source module,
   then run `cargo x workflows` and commit the regenerated YAML with it.
+- `cargo x workflows` also writes `tooling/xtask/crates/xtask_workflows/checks.lock`:
+  every check name, the required statuses (`CI gate`, `cla`), and the job names
+  scripts read. A diff there is a rename GitHub or a script will notice; keep the
+  required ones byte-identical.
+- A change meant to be formatting-only (emitter, key order, expression spelling)
+  must print `no semantic changes` from `cargo x workflows diff --base <rev>`.
 - New CI scripts are Rust or TypeScript, never Python. A step with no checkout embeds
   its script with `include_str!` and runs it on the hosted image's Node.
 - A few older workflows are still hand-written YAML. When you change one

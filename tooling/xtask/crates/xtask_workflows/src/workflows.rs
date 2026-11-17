@@ -30,6 +30,7 @@ mod cargo_workspace_dependency_check;
 mod check_generated;
 mod check_node_modules_nix;
 mod check_tauri_lockfiles;
+mod checks_lock;
 mod ci_gate_fork;
 mod ci_gate_label;
 mod ci_gate_reminder;
@@ -73,12 +74,14 @@ mod reusable_deploy_service;
 mod reusable_preview_service;
 mod runners;
 mod sdk_check;
+pub mod semantic_diff;
 mod steps;
 mod test_macrod_update;
 mod vars;
 mod web_app_check_main;
 mod web_artifact_paths;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -524,10 +527,16 @@ pub fn generate() -> Result<()> {
             .with_context(|| format!("writing {}", path.display()))?;
         println!("generated {}", path.display());
     }
+
+    let lock_path = xtask_paths::repo_root().join(checks_lock::PATH);
+    fs::write(&lock_path, render_checks_lock()?)
+        .with_context(|| format!("writing {}", lock_path.display()))?;
+    println!("generated {}", lock_path.display());
     Ok(())
 }
 
-/// Fail if any committed workflow differs from what we'd generate now.
+/// Fail if any committed workflow, or `checks.lock`, differs from what we'd
+/// generate now.
 pub fn check() -> Result<()> {
     let dir = workflows_dir()?;
     let mut stale = Vec::new();
@@ -539,6 +548,13 @@ pub fn check() -> Result<()> {
             stale.push(workflow.file_name.to_string());
         }
     }
+
+    let lock_path = xtask_paths::repo_root().join(checks_lock::PATH);
+    let lock_on_disk = fs::read_to_string(&lock_path).unwrap_or_default();
+    if lock_on_disk != render_checks_lock()? {
+        stale.push(checks_lock::PATH.to_string());
+    }
+
     if !stale.is_empty() {
         bail!(
             "generated workflows are stale: {}\nrun `cargo x workflows` from the repository root and commit the result",
@@ -547,6 +563,30 @@ pub fn check() -> Result<()> {
     }
     println!("all generated workflows are up to date");
     Ok(())
+}
+
+/// The check-name lock over every workflow GitHub runs: the generated ones as
+/// rendered now, and the hand-written ones as committed.
+fn render_checks_lock() -> Result<String> {
+    let mut workflows = BTreeMap::new();
+    for workflow in WORKFLOWS {
+        workflows.insert(workflow.file_name.to_string(), render(workflow)?);
+    }
+
+    for entry in fs::read_dir(workflows_dir()?)? {
+        let path = entry?.path();
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !file_name.ends_with(".yml") || workflows.contains_key(file_name) {
+            continue;
+        }
+        let yaml =
+            fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+        workflows.insert(file_name.to_string(), yaml);
+    }
+
+    checks_lock::render(&workflows)
 }
 
 /// Serialize a workflow to YAML and prepend the "do not edit" header.

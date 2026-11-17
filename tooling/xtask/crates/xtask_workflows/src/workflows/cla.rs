@@ -32,6 +32,9 @@ use crate::workflows::runners;
 /// the worker README together.
 const WORKER_ORIGIN: &str = "https://macro-cla.macroverse.workers.dev";
 
+/// The commit status this workflow posts, which `main`'s ruleset requires.
+pub const STATUS_CONTEXT: &str = "cla";
+
 /// Build the workflow.
 pub fn cla() -> Workflow {
     Workflow::new("CLA")
@@ -106,7 +109,7 @@ fn script() -> String {
     indoc::formatdoc! {r#"
         const WORKER_ORIGIN = '{WORKER_ORIGIN}';
         const SIGN_URL = `${{WORKER_ORIGIN}}/cla`;
-        const STATUS_CONTEXT = 'cla';
+        const STATUS_CONTEXT = '{STATUS_CONTEXT}';
         const {{ owner, repo }} = context.repo;
 
         // GET /orgs/{{org}}/members/{{username}}: 204 → member, 404 → not a
