@@ -2,11 +2,14 @@
 //! meet, each meaning what the Email list query means by the same filter.
 //!
 //! Where a filter's set of threads is bounded (shares, threads with an
-//! invitation) it is resolved in Postgres and searched as an allowlist of
-//! thread ids. Read, done and notification state can each cover most of a
-//! mailbox, so those are checked against the threads of each page of hits.
+//! invitation, a sent message or a draft) it is resolved in Postgres and
+//! searched as an allowlist of thread ids. Read, done, notification state and
+//! attachment kinds can each cover most of a mailbox, or have no index to
+//! resolve them by, so those are checked against the threads of each page of
+//! hits.
 
-use item_filters::{EmailFilters, NotificationState, SharedEmailFilter};
+use item_filters::ast::email::AttachmentKind;
+use item_filters::{EmailFilters, EmailSearchView, NotificationState, SharedEmailFilter};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use rootcause::Report;
 use std::collections::HashSet;
@@ -19,9 +22,32 @@ mod test;
 /// filter, which refuses more than 65,536.
 pub(crate) const MAX_SHARED_THREADS: usize = 10_000;
 
-/// Most threads with an invitation resolved into an allowlist. A mailbox with
-/// more has them checked against each page of hits instead.
-pub(crate) const MAX_CALENDAR_ALLOWLIST: usize = 10_000;
+/// Most threads of one [`ThreadSet`] resolved into an allowlist. A mailbox
+/// with more has the set checked against each page of hits instead.
+pub(crate) const MAX_THREAD_SET_ALLOWLIST: usize = 10_000;
+
+/// Most threads in the requested Drive folders one search reaches. Each is a
+/// term in the OpenSearch filter, which refuses more than 65,536.
+pub(crate) const MAX_PROJECT_THREADS: usize = 10_000;
+
+/// Most Drive folders one search may be scoped to.
+pub(crate) const MAX_EMAIL_PROJECTS: usize = 50;
+
+/// A bounded set of a mailbox's threads that an Email view lists, read from
+/// the partial index the view reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ThreadSet {
+    /// Threads with an invitation, the Calendar tab.
+    Calendar,
+    /// Threads with a sent message, the Sent view.
+    Sent,
+    /// Threads with a draft, the Drafts view.
+    Drafts,
+}
+
+impl ThreadSet {
+    const ALL: [ThreadSet; 3] = [ThreadSet::Calendar, ThreadSet::Sent, ThreadSet::Drafts];
+}
 
 /// A thread shared with the caller, and the inbox holding it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,6 +71,10 @@ pub(crate) struct ThreadStates {
     pub done: Option<bool>,
     pub calendar_only: bool,
     pub notification_states: Vec<NotificationState>,
+    pub sent: bool,
+    pub has_draft: bool,
+    /// The thread carries an attachment of one of these kinds.
+    pub attachments: Vec<AttachmentKind>,
 }
 
 impl ThreadStates {
@@ -55,11 +85,20 @@ impl ThreadStates {
                 notification_states.push(*state);
             }
         }
+        let mut attachments = Vec::new();
+        for kind in &filters.attachments {
+            if !attachments.contains(kind) {
+                attachments.push(*kind);
+            }
+        }
         Self {
             is_read: filters.is_read,
             done: filters.done,
             calendar_only: filters.calendar_only == Some(true),
             notification_states,
+            sent: filters.view == Some(EmailSearchView::Sent),
+            has_draft: filters.view == Some(EmailSearchView::Drafts),
+            attachments,
         }
     }
 
@@ -68,6 +107,24 @@ impl ThreadStates {
             && self.done.is_none()
             && !self.calendar_only
             && self.notification_states.is_empty()
+            && !self.sent
+            && !self.has_draft
+            && self.attachments.is_empty()
+    }
+
+    /// The states that put a thread in `set`.
+    fn of_set(set: ThreadSet) -> Self {
+        let mut states = Self::default();
+        *states.set_flag(set) = true;
+        states
+    }
+
+    fn set_flag(&mut self, set: ThreadSet) -> &mut bool {
+        match set {
+            ThreadSet::Calendar => &mut self.calendar_only,
+            ThreadSet::Sent => &mut self.sent,
+            ThreadSet::Drafts => &mut self.has_draft,
+        }
     }
 }
 
@@ -93,6 +150,8 @@ pub(crate) struct EmailThreads {
     pub hit_states: ThreadStates,
     /// The shared threads stopped at [`MAX_SHARED_THREADS`].
     pub shared_capped: bool,
+    /// The threads in the requested folders stopped at [`MAX_PROJECT_THREADS`].
+    pub project_capped: bool,
 }
 
 /// Reads the threads a filter reaches, for the caller.
@@ -107,10 +166,40 @@ pub(crate) trait EmailSearchSource {
         limit: usize,
     ) -> impl Future<Output = Result<Vec<SharedThread>, Report>> + Send;
 
-    /// Threads with an invitation in the given inboxes, at most `limit`.
-    fn calendar_threads(
+    /// The threads in the given Drive folders the caller reads, as the Email
+    /// list's project candidates admit them: their own (`include_own`), every
+    /// thread in a folder granted to them, and with `include_thread_shares`
+    /// threads in a folder a thread grant shares with them. Non-empty
+    /// `requested` narrows them before `limit` applies. At most `limit`.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument is one input of the folder query"
+    )]
+    fn project_threads(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        own_link_ids: &[Uuid],
+        project_ids: &[String],
+        requested: &[Uuid],
+        include_own: bool,
+        include_thread_shares: bool,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<SharedThread>, Report>> + Send;
+
+    /// Which of `thread_ids` outside `own_link_ids` sit in a folder granted
+    /// to the caller, and the inboxes holding them.
+    fn project_shared_threads(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        own_link_ids: &[Uuid],
+        thread_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<SharedThread>, Report>> + Send;
+
+    /// The threads of `set` in the given inboxes, at most `limit`.
+    fn threads_in_set(
         &self,
         link_ids: &[Uuid],
+        set: ThreadSet,
         limit: usize,
     ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
@@ -143,6 +232,18 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
             return Ok(EmailScope::Nothing);
         }
 
+        let mut project_ids: Vec<String> = Vec::new();
+        for id in &filters.project_ids {
+            if !id.is_empty() && !project_ids.contains(id) {
+                project_ids.push(id.clone());
+            }
+        }
+        if !project_ids.is_empty() {
+            return self
+                .project_scope(user, filters, inboxes, &project_ids, requested)
+                .await;
+        }
+
         let shared = match filters.shared {
             SharedEmailFilter::Exclude => Vec::new(),
             SharedEmailFilter::Include | SharedEmailFilter::Only => {
@@ -155,14 +256,26 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
         let shared_ids: Vec<Uuid> = shared.iter().map(|thread| thread.thread_id).collect();
 
         let mut hit_states = ThreadStates::from_filters(filters);
-        let allowlist = if hit_states.calendar_only {
-            self.calendar_allowlist(user, filters.shared, inboxes, &shared_ids)
+        let mut allowlist: Option<Vec<Uuid>> = None;
+        for set in ThreadSet::ALL {
+            if !*hit_states.set_flag(set) {
+                continue;
+            }
+            let Some(in_set) = self
+                .set_allowlist(user, set, filters.shared, inboxes, &shared_ids)
                 .await?
-        } else {
-            None
-        };
-        if allowlist.is_some() {
-            hit_states.calendar_only = false;
+            else {
+                continue;
+            };
+            *hit_states.set_flag(set) = false;
+            allowlist = Some(match allowlist {
+                None => in_set,
+                Some(mut so_far) => {
+                    let in_set: HashSet<Uuid> = in_set.into_iter().collect();
+                    so_far.retain(|id| in_set.contains(id));
+                    so_far
+                }
+            });
         }
 
         let mut threads = match (allowlist, filters.shared) {
@@ -203,11 +316,50 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
         Ok(EmailScope::Threads(threads))
     }
 
-    /// The threads with an invitation the search reaches, or `None` when the
-    /// caller's inboxes hold more than [`MAX_CALENDAR_ALLOWLIST`].
-    async fn calendar_allowlist(
+    /// The threads a search scoped to Drive folders reaches: the folders'
+    /// threads the caller reads, as an allowlist. The other thread-level
+    /// filters are checked per hit, since the folders' threads can lie in
+    /// other people's inboxes, which the per-inbox sets do not cover.
+    async fn project_scope(
         &self,
         user: &MacroUserId<Lowercase<'_>>,
+        filters: &EmailFilters,
+        inboxes: &ViewerInboxes,
+        project_ids: &[String],
+        requested: Vec<Uuid>,
+    ) -> Result<EmailScope, Report> {
+        let in_projects = self
+            .0
+            .project_threads(
+                user,
+                &inboxes.link_ids,
+                project_ids,
+                &requested,
+                !matches!(filters.shared, SharedEmailFilter::Only),
+                !matches!(filters.shared, SharedEmailFilter::Exclude),
+                MAX_PROJECT_THREADS,
+            )
+            .await?;
+        let project_capped = in_projects.len() >= MAX_PROJECT_THREADS;
+        let thread_ids: Vec<Uuid> = in_projects.iter().map(|thread| thread.thread_id).collect();
+        if thread_ids.is_empty() {
+            return Ok(EmailScope::Nothing);
+        }
+        Ok(EmailScope::Threads(EmailThreads {
+            thread_ids,
+            ids_only: true,
+            hit_states: ThreadStates::from_filters(filters),
+            project_capped,
+            ..Default::default()
+        }))
+    }
+
+    /// The threads of `set` the search reaches, or `None` when the caller's
+    /// inboxes hold more than [`MAX_THREAD_SET_ALLOWLIST`].
+    async fn set_allowlist(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        set: ThreadSet,
         shared: SharedEmailFilter,
         inboxes: &ViewerInboxes,
         shared_ids: &[Uuid],
@@ -217,24 +369,20 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
             SharedEmailFilter::Exclude | SharedEmailFilter::Include => {
                 let own = self
                     .0
-                    .calendar_threads(&inboxes.link_ids, MAX_CALENDAR_ALLOWLIST + 1)
+                    .threads_in_set(&inboxes.link_ids, set, MAX_THREAD_SET_ALLOWLIST + 1)
                     .await?;
-                if own.len() > MAX_CALENDAR_ALLOWLIST {
+                if own.len() > MAX_THREAD_SET_ALLOWLIST {
                     return Ok(None);
                 }
                 own
             }
         };
         if !shared_ids.is_empty() {
-            let calendar = ThreadStates {
-                calendar_only: true,
-                ..Default::default()
-            };
-            let shared_calendar = self
+            let shared_in_set = self
                 .0
-                .threads_in_states(user, shared_ids, &calendar)
+                .threads_in_states(user, shared_ids, &ThreadStates::of_set(set))
                 .await?;
-            allowlist.extend(shared_ids.iter().filter(|id| shared_calendar.contains(id)));
+            allowlist.extend(shared_ids.iter().filter(|id| shared_in_set.contains(id)));
         }
         Ok(Some(allowlist))
     }
@@ -252,8 +400,9 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
         self.0.threads_in_states(user, thread_ids, states).await
     }
 
-    /// Which of `thread_ids` outside the caller's inboxes a grant shares
-    /// with them, and the inboxes holding those threads.
+    /// Which of `thread_ids` outside the caller's inboxes a grant on the
+    /// thread, or on the Drive folder holding it, shares with them, and the
+    /// inboxes holding those threads.
     pub async fn shared_among(
         &self,
         user: &MacroUserId<Lowercase<'_>>,
@@ -263,8 +412,23 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
         if thread_ids.is_empty() {
             return Ok(Vec::new());
         }
-        self.0
+        let mut shared = self
+            .0
             .shared_threads(user, inbox_link_ids, thread_ids, thread_ids.len())
-            .await
+            .await?;
+        let found: HashSet<Uuid> = shared.iter().map(|thread| thread.thread_id).collect();
+        let remaining: Vec<Uuid> = thread_ids
+            .iter()
+            .filter(|id| !found.contains(id))
+            .copied()
+            .collect();
+        if !remaining.is_empty() {
+            shared.extend(
+                self.0
+                    .project_shared_threads(user, inbox_link_ids, &remaining)
+                    .await?,
+            );
+        }
+        Ok(shared)
     }
 }
