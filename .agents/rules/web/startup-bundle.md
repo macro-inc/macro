@@ -10,8 +10,11 @@ alwaysApply: false
 # Startup bundle
 
 - Everything statically reachable from `src/index.tsx` downloads and runs before
-  the first screen. Views, block components, and modals load through `lazy()` /
-  `lazyNamed` (`@core/util/lazyNamed`) inside a `<Suspense>`; never statically
+  the first screen. Views, block components, and modals load through `lazy()`
+  (`@core/util/lazy`, never Solid's: its instances share one load, so
+  unmounting the first one mid-load blanks the rest; ast-grep
+  `tsx-no-solid-lazy`) / `lazyNamed` (`@core/util/lazyNamed`) inside a
+  `<Suspense>`; never statically
   import one into a shared hub (`Root`, `Layout`, `AppProviders`,
   `componentRegistry`, `app-router-view`, `routes/shells.tsx`, block
   `definition.ts`, Lexical `init.ts`).

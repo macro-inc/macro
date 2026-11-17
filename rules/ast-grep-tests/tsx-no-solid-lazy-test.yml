@@ -1,0 +1,15 @@
+id: tsx-no-solid-lazy
+valid:
+  - |
+    import { lazy } from '@core/util/lazy';
+  - |
+    import { createSignal, Show } from 'solid-js';
+  - |
+    import { lazy } from 'other-library';
+invalid:
+  - |
+    import { lazy } from 'solid-js';
+  - |
+    import { createSignal, lazy } from 'solid-js';
+  - |
+    import type { Component, lazy } from 'solid-js';
