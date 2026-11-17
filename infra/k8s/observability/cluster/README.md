@@ -23,6 +23,11 @@ modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──
 | `storage` | `kube-system` | The default `gp3` StorageClass (EBS CSI, encrypted, expandable). |
 | `observability-namespace` | `observability` | The namespace the backends and Grafana run in, default-deny NetworkPolicies and the policies they share. |
 | `alloy-node` | `alloy` | One Alloy per node for the cluster's own node, kubelet, cAdvisor and pod-log telemetry. Collects and drops until the backends land. |
+| `reloader` | `observability` | Restarts a Deployment when a Secret it names in `secret.reloader.stakater.com/reload` changes (Grafana's rotated database password). |
+| `grafana` | `observability` | Grafana, two replicas on RDS Postgres with HA alerting between them, provisioned from the host's `nixos/grafana-provisioning`. Sends no notification until cutover, except the watchdog heartbeat (below). |
+| `edge` | `observability` | nginx, the only target of the ALB: Grafana by hostname, OTLP to `alloy-ingest`, basic-auth remote write and Loki push. Runs only in the ALB's zones. |
+| `query-gateway` | `observability` | nginx between Grafana's datasources and the backends: only query endpoints and methods pass. |
+| `alloy-ingest` | `observability` | Two Alloys running the host's `nixos/ingest.alloy`: check the OTLP token, send to Loki, Tempo and Mimir. |
 
 Charts are pinned in `charts/<repo>/<chart>/default.nix` (version and hash).
 
@@ -35,7 +40,7 @@ Run from this directory.
 | `nix run .#render` | Renders the modules into `manifests/prod/`. Commit the result with the change. |
 | `nix run .#check` | Fails when `manifests/prod/` differs from a fresh render, then validates. CI runs this (`observability_cluster.yml`). |
 | `nix run .#validate` | Validates the manifests strictly with kubeconform: core kinds against the Kubernetes schemas for the cluster's version, custom resources against the CRDs being installed. |
-| `nix run .#kind-smoke` | Bootstraps the pushed branch onto a throwaway kind cluster and waits for the applications. Every application must sync and all must be healthy except `aws-load-balancer-controller` and `external-secrets`, which need AWS (VPC lookup, the ClusterSecretStore). Pass `--delete` to remove the cluster afterwards. |
+| `nix run .#kind-smoke` | Bootstraps the pushed branch onto a throwaway kind cluster and waits for the applications. Every application must sync and be healthy except those that need AWS: `aws-load-balancer-controller` (VPC lookup), `external-secrets` (the ClusterSecretStore), `grafana`, `edge` and `alloy-ingest` (their secrets); `edge` may also stay unsynced (its TargetGroupBindings need the controller's webhook). Pass `--delete` to remove the cluster afterwards. |
 | `nix run .#bootstrap -- --context <ctx>` | The one-time bootstrap below. |
 
 ## Bootstrap (once, after the cluster exists)
@@ -85,7 +90,8 @@ The repository is public, so Argo CD clones it over HTTPS without a deploy key
   | `kube-system` | `aws-load-balancer-controller` | the controller's IAM policy |
   | `kube-system` | `ebs-csi-controller-sa` | EBS CSI |
   | `external-secrets` | `external-secrets` | read `observability/prod` |
-  | `observability` | `loki`, `tempo`, `mimir`, `grafana` | their buckets, later PRs |
+  | `observability` | `loki`, `tempo`, `mimir` | their buckets |
+  | `observability` | `grafana` | CloudWatch read, `sns:Publish` on the alerts topic |
 
 ## Adding a component
 
@@ -104,6 +110,77 @@ Loki, Tempo, Mimir, Grafana, ingest and the edge each come as one module under
 The metrics and logs backends also point the node Alloy at themselves through
 `macro.alloyNode` (`modules/platform/alloy-node.nix` shows how).
 
+## Grafana, the edge and ingest
+
+```
+ALB ─▶ edge ─┬─ grafana-next.* ──▶ grafana ──▶ query-gateway ──▶ Loki, Mimir, Tempo
+             ├─ /v1/{traces,logs,metrics} ──▶ alloy-ingest ──▶ Loki, Tempo, Mimir
+             └─ /api/v1/write, /loki/api/v1/push (basic auth) ──▶ Mimir, Loki
+```
+
+The edge, the query gateway and Alloy ingest are the host's
+`infra/stacks/observability/nixos/proxy.nix` and `ingest.alloy` with the
+cluster's addresses; Grafana runs the host's `grafana.nix` settings and
+`grafana-provisioning`. A change to those host files changes this render too
+(CI watches them).
+
+Every one runs two replicas in different zones with a PodDisruptionBudget,
+surge-first rolling updates, readiness probes and a `preStop` pause, so a
+rollout or a drained node never drops traffic. The edge's pods carry the load
+balancer controller's readiness gate: a new pod is ready only once the ALB
+sees it healthy.
+
+**Notifications.** Only one Grafana may notify, and until cutover that is
+the host's. `macro.grafana.notify = false` (`env/prod.nix`) mutes every
+notification route, so rules evaluate and show state here but nothing reaches
+GoAlert, SNS or anyone. The one exception is the watchdog: an always-firing
+rule that pings a GoAlert heartbeat monitor every two minutes, so GoAlert pages if
+this Grafana, its alerting or its path to GoAlert stops. Cutover sets
+`notify = true`. Contact points' **Test** button still sends; don't press it
+before cutover.
+
+**Secrets.** From `observability/prod` (values in Doppler `observability/prd`):
+
+| Key | Used by | Missing means |
+| --- | --- | --- |
+| `otlp_token` | `alloy-ingest` (bearer token), `edge` (basic-auth password of user `metrics`) | ingest and remote write don't start |
+| `google_client_id`, `google_client_secret`, `grafana_secret_key` | `grafana` | Grafana doesn't start |
+| `goalert_grafana_integration_key`, `goalert_grafana_notify_integration_key` | `grafana` contact points | they fail once unmuted |
+| `goalert_cluster_heartbeat_id` | the watchdog | it pings a URL that doesn't exist, and GoAlert never pages for it |
+
+The database secret is the RDS-managed one (`macro.grafana.database.secret`);
+RDS rotates it every 7 days and Reloader restarts Grafana when it changes.
+
+### Before Grafana runs
+
+Grafana stays at 0 replicas until its database is set. Each step needs someone
+with access to the system named:
+
+1. **Database** (after `../aws/` is applied): set `macro.grafana.database.host`
+   and `.secret` in `env/prod.nix` from the outputs `grafana_db_address` and
+   `grafana_db_secret_arn`, render, and merge.
+2. **Google sign-in** (a Google Workspace admin): add
+   `https://grafana-next.macro-internal.com/login/google` as an authorized
+   redirect URI of the OAuth client the host's Grafana uses.
+3. **Watchdog** (a GoAlert admin): create a heartbeat monitor on the
+   observability service, timeout 5 minutes, and put its ID as
+   `goalert_cluster_heartbeat_id` in Doppler `observability/prd` and Secrets
+   Manager `observability/prod`.
+4. **Service accounts**: Grafana service accounts and their tokens live in the
+   database, so they don't come over from the host; recreate the ones still
+   in use and hand out the new tokens.
+
+### At cutover
+
+- The host's nginx opens `/api/v2/grafana/` on `oncall.macro-internal.com` to
+  the ALB (a host change), so the GoAlert contact points can deliver.
+- `macro.grafana.notify = true`, and the host's Grafana stops notifying in the
+  same window.
+- `grafana.macro-internal.com` and `otlp.macro-internal.com` join
+  `macro.edge.grafanaHosts` / `otlpHosts`, `macro.grafana.hostname` becomes
+  `grafana.macro-internal.com` (and its Google redirect URI is already
+  registered), and the ALB's listener rules move to the target groups.
+
 ## Why it's built this way
 
 - **Rendered YAML is committed.** Argo CD needs no Nix, and a reviewer sees
@@ -118,3 +195,12 @@ The metrics and logs backends also point the node Alloy at themselves through
   mounts only `/proc`, `/sys` and `/var/log` read-only, plus its own data
   directory: with the node's whole root it could read every pod's service
   account token, so the filesystem collector is off.
+- **Grafana's provisioning in its own ConfigMaps, not chart values.** The
+  chart runs datasource and alerting values through Helm's `tpl`, which
+  would evaluate the alert annotations' own Go templates.
+- **The edge answers the ALB's health check itself.** A Grafana outage then
+  shows as 5xx on the target group instead of taking the OTLP host down with
+  it, since both hosts share the edge.
+- **Grafana's plugins come from grafana.com at startup** (`preinstall_sync`,
+  pinned versions, no auto-update): the image has none, and the host's come
+  from nixpkgs.

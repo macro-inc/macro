@@ -12,6 +12,9 @@ The [README](README.md) has the application list, bootstrap and contract with
 - `modules/cluster.nix`: cluster facts (`macro.cluster`) and the defaults every Application gets.
 - `modules/platform/observability-namespace.nix`: the default-deny pattern new components follow.
 - `env/prod.nix`: the Git target and prod values.
+- `modules/grafana.nix`, `modules/edge.nix`, `modules/ingest.nix`: Grafana, the
+  two nginx front doors and Alloy ingest, built from the host stack's files
+  (README, "Grafana, the edge and ingest").
 
 ## Scope
 
@@ -29,6 +32,12 @@ The [README](README.md) has the application list, bootstrap and contract with
   Application in `observability`, with its own NetworkPolicies (README,
   "Adding a component").
 - Route the node Alloy's telemetry: `macro.alloyNode` in `modules/platform/alloy-node.nix`.
+- Let the cluster Grafana notify (cutover only): `macro.grafana.notify = true`
+  in `env/prod.nix`. Until then only the watchdog heartbeat sends.
+- Start Grafana: set `macro.grafana.database` in `env/prod.nix` from the
+  `../aws/` outputs; it runs 0 replicas until then.
+- Change an edge or query-gateway rule: `modules/edge.nix`, and the same rule
+  in the host's `nixos/proxy.nix` while the host runs.
 
 ## Checks
 
@@ -53,6 +62,9 @@ The [README](README.md) has the application list, bootstrap and contract with
   Helm renders and kubeconform validates for it.
 - CI checks the render against `main` as of the run. If another change to this
   directory merges first, re-render on the new `main` before merging.
+- A change to the host's `nixos/grafana.nix`, `nixos/grafana-provisioning/` or
+  `nixos/ingest.alloy` changes this render; re-render with it.
+- Grafana's contact point **Test** button sends even while `notify` is false.
 - Argo CD syncs with server-side apply; ignore a field (`ignoreDifferences`) only
   after seeing it drift on a cluster.
 
