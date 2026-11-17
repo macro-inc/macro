@@ -136,15 +136,7 @@ export type OnboardingContext = {
     ownEmail: Accessor<string | undefined>;
   }): TeamDirectorySource;
   /** Rejects on failure; the capability reports its own errors. */
-  /** `allowDomainJoin` lets people on the owner's work domain join.
-   * `notifyDomain` also emails the owner's same-domain contacts that the team
-   * exists; the server sends it only to a team with an auto-join domain. */
-  createTeam(input: {
-    name: string;
-    invites: string[];
-    allowDomainJoin: boolean;
-    notifyDomain: boolean;
-  }): Promise<void>;
+  createTeam(input: { name: string; invites: string[] }): Promise<void>;
   /** Rejects on failure; the capability reports its own errors. */
   joinTeam(inviteId: string): Promise<void>;
   /**

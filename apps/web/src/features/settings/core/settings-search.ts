@@ -224,12 +224,6 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Team Members',
-    title: 'Auto-join on domain',
-    target: 'Auto-join on domain',
-    keywords: 'email workspace membership automatic',
-  },
-  {
-    tab: 'Team Members',
     title: 'Members can invite',
     target: 'Members can invite',
     keywords: 'permissions invitation',

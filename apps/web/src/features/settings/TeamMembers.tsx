@@ -38,7 +38,6 @@ import {
 } from '@queries/team/members';
 import {
   usePatchTeamMutation,
-  useToggleAutoJoinDomainMutation,
   useToggleNonAdminInvitesMutation,
 } from '@queries/team/teams';
 import {
@@ -287,7 +286,6 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const resendInviteMutation = useResendTeamInviteMutation();
   const removeUserMutation = useRemoveUserFromTeamMutation();
   const patchTeamMutation = usePatchTeamMutation();
-  const toggleAutoJoinMutation = useToggleAutoJoinDomainMutation();
   const toggleNonAdminInvitesMutation = useToggleNonAdminInvitesMutation();
 
   const [showRemoveModal, setShowRemoveModal] = createSignal<TeamMember | null>(
@@ -389,21 +387,6 @@ export function TeamMembers(props: { team: TeamSummary }) {
   });
 
   const canManageMemberRemovals = () => isAdminOrOwner();
-
-  // The team's auto-join domain doubles as the toggle state: a string means
-  // auto-join is on for that domain, null/undefined means it's off.
-  const autoJoinDomain = () => teamQuery.data?.team.auto_join_domain ?? null;
-  const autoJoinDescription = () => {
-    const domain = autoJoinDomain();
-    return domain
-      ? `New sign-ups with an @${domain} email automatically join this team.`
-      : "Automatically add new sign-ups whose email matches the team owner's domain.";
-  };
-
-  const handleToggleAutoJoin = () => {
-    if (!props.team.id || toggleAutoJoinMutation.isPending) return;
-    toggleAutoJoinMutation.mutate({ teamId: props.team.id });
-  };
 
   const handleToggleNonAdminInvites = () => {
     if (!props.team.id || toggleNonAdminInvitesMutation.isPending) return;
@@ -677,21 +660,6 @@ export function TeamMembers(props: { team: TeamSummary }) {
         <Show when={isAdminOrOwner()}>
           <SettingsSection title="Invite settings">
             <SettingsCard>
-              <SettingsRow
-                label="Auto-join on domain"
-                description={autoJoinDescription()}
-                hideDescriptionOnMobile
-              >
-                <ToggleSwitch
-                  size="md"
-                  checked={!!autoJoinDomain()}
-                  disabled={
-                    toggleAutoJoinMutation.isPending || teamQuery.isLoading
-                  }
-                  onChange={handleToggleAutoJoin}
-                />
-              </SettingsRow>
-
               <SettingsRow
                 label="Members can invite"
                 description="Let every team member invite people. When off, only admins and the owner can send invites."

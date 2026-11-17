@@ -5,7 +5,8 @@ import { For, Show } from 'solid-js';
 import type { TeamInvite } from '../context/onboarding-context';
 import { ContinueButton, SecondaryButton, SkipButton } from './controls';
 
-/** Already on a team — auto-joined by domain, or just created/joined here. */
+/** Already on a team — joined through an invite link, or just created/joined
+ * here. */
 export function OnTeamPanel(props: {
   name: string;
   /** Teammates just emailed from this step; asks for a heads-up when > 0. */
@@ -22,7 +23,7 @@ export function OnTeamPanel(props: {
           <CheckIcon class="size-5" />
         </span>
         <p class="text-sm font-medium text-ink">You're on {props.name}</p>
-        {/* Copy must stay true for auto-join, invite-accept, and the
+        {/* Copy must stay true for an invite-link join, invite-accept, and the
             optimistic mid-create flash alike. */}
         <Show
           when={(props.invited ?? 0) > 0}

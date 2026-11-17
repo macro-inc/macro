@@ -528,7 +528,7 @@ export async function createTeam(
   const answer = await askAs(user, '/auth/team', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name, allow_domain_join: false }),
+    body: JSON.stringify({ name }),
   });
   if (answer.status !== 200) {
     throw new Error(

@@ -1,21 +1,13 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import {
-  catchToResult,
-  ThrownResultError,
-  throwOnErr,
-} from '@core/util/result';
-import {
-  authServiceClient,
-  type ToggleAutoJoinDomainErrorCode,
-} from '@service-auth/client';
+import { throwOnErr } from '@core/util/result';
+import { authServiceClient } from '@service-auth/client';
 import type { CreateTeamRequest } from '@service-auth/generated/schemas/createTeamRequest';
 import type { PatchTeamRequest } from '@service-auth/generated/schemas/patchTeamRequest';
 import type { Team } from '@service-auth/generated/schemas/team';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
-import type { ToggleAutoJoinDomainResponse } from '@service-auth/generated/schemas/toggleAutoJoinDomainResponse';
 import type { ToggleNonAdminInvitesResponse } from '@service-auth/generated/schemas/toggleNonAdminInvitesResponse';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -165,84 +157,6 @@ export function usePatchTeamMutation(callbacks?: PatchTeamCallbacks) {
   }));
 }
 
-type ToggleAutoJoinDomainArgs = { teamId: string };
-type ToggleAutoJoinDomainCallbacks = MutationCallbacks<
-  ToggleAutoJoinDomainResponse,
-  Error,
-  ToggleAutoJoinDomainArgs
->;
-
-/** True when the failure is the backend rejecting a generic email provider
- *  domain (e.g. gmail.com) — the one case whose message we show verbatim. */
-function isGenericDomainError(error: Error): boolean {
-  return (
-    error instanceof ThrownResultError &&
-    error.errors.some(
-      (e) =>
-        e.code ===
-        ('GENERIC_DOMAIN_NOT_ALLOWED' satisfies ToggleAutoJoinDomainErrorCode)
-    )
-  );
-}
-
-export function useToggleAutoJoinDomainMutation(
-  callbacks?: ToggleAutoJoinDomainCallbacks
-) {
-  return useMutation(() => ({
-    mutationFn: async (_args: ToggleAutoJoinDomainArgs) =>
-      await throwOnErr(() => authServiceClient.toggleTeamAutoJoinDomain()),
-
-    ...withCallbacks<
-      ToggleAutoJoinDomainResponse,
-      Error,
-      ToggleAutoJoinDomainArgs
-    >(
-      {
-        onSuccess: (data, { teamId }) => {
-          // The response carries the authoritative new value — reflect it
-          // in the cached team right away so the switch doesn't lag behind
-          // the refetch, then invalidate as usual.
-          const applyDomain = (old: TeamWithMembers | null | undefined) =>
-            old
-              ? {
-                  ...old,
-                  team: {
-                    ...old.team,
-                    auto_join_domain: data.auto_join_domain ?? null,
-                  },
-                }
-              : old;
-          queryClient.setQueryData<TeamWithMembers | null>(
-            teamKeys.detail(teamId).queryKey,
-            applyDomain
-          );
-          queryClient.setQueryData<TeamWithMembers | null>(
-            teamKeys.currentTeam.queryKey,
-            applyDomain
-          );
-          fireAndForget(invalidateTeam(teamId), 'team-settings');
-          invalidateUserTeams();
-          toast.success(
-            data.auto_join_domain
-              ? `Auto-join enabled for @${data.auto_join_domain}`
-              : 'Auto-join disabled'
-          );
-        },
-
-        onError: (error) => {
-          console.error('Failed to toggle team auto-join', error);
-          toast.failure(
-            isGenericDomainError(error)
-              ? error.message
-              : 'Failed to update auto-join'
-          );
-        },
-      },
-      callbacks
-    ),
-  }));
-}
-
 type ToggleNonAdminInvitesArgs = { teamId: string };
 type ToggleNonAdminInvitesCallbacks = MutationCallbacks<
   ToggleNonAdminInvitesResponse,
@@ -362,30 +276,9 @@ export function useDeleteTeamMutation(callbacks?: DeleteTeamCallbacks) {
 type CreateTeamWithInvitesArgs = {
   name: string;
   invites?: { email: string }[];
-  /** Whether people on the owner's work domain join automatically. Omitted
-   * keeps the server default. */
-  allowDomainJoin?: boolean;
-  /** Whether to email the owner's same-domain contacts that the team exists.
-   * Sent only when `allowDomainJoin` is also `true` and the team got an
-   * auto-join domain; the server sends nothing to a team without one. */
-  notifyDomain?: boolean;
 };
 type CreateTeamWithInvitesContext = { previousTeams: Team[] | undefined };
 
-/** The domain notice goes out only when both domain join and the notice were
- * explicitly chosen and the server gave the team an auto-join domain (a
- * personal email domain gets none). The server also sends nothing without
- * one; checking here skips a request that can't send anything. */
-export function shouldSendDomainNotice(
-  args: Pick<CreateTeamWithInvitesArgs, 'allowDomainJoin' | 'notifyDomain'>,
-  team: Pick<Team, 'auto_join_domain'>
-): boolean {
-  return (
-    args.allowDomainJoin === true &&
-    args.notifyDomain === true &&
-    !!team.auto_join_domain
-  );
-}
 type CreateTeamWithInvitesCallbacks = MutationCallbacks<
   Team,
   Error,
@@ -397,32 +290,13 @@ export function useCreateTeamWithInvitesMutation(
   callbacks?: CreateTeamWithInvitesCallbacks
 ) {
   return useMutation(() => ({
-    mutationFn: async ({
-      name,
-      invites,
-      allowDomainJoin,
-      notifyDomain,
-    }: CreateTeamWithInvitesArgs) => {
+    mutationFn: async ({ name, invites }: CreateTeamWithInvitesArgs) => {
       const team = await throwOnErr(() =>
-        authServiceClient.createTeam({
-          name,
-          allow_domain_join: allowDomainJoin,
-        })
+        authServiceClient.createTeam({ name })
       );
 
       if (invites && invites.length > 0) {
         await throwOnErr(() => authServiceClient.inviteToTeam({ invites }));
-      }
-
-      // After the invites, so invitees aren't also sent the notice. The
-      // team already exists, so a failed notice doesn't fail creation.
-      if (shouldSendDomainNotice({ allowDomainJoin, notifyDomain }, team)) {
-        const notice = await catchToResult(() =>
-          throwOnErr(() => authServiceClient.sendTeamDomainNotice())
-        );
-        if (notice.isErr()) {
-          console.error('Failed to send team domain notice', notice);
-        }
       }
 
       return team;
@@ -455,7 +329,6 @@ export function useCreateTeamWithInvitesMutation(
               slug: 'MACRO', // optimisitc slug
               owner_id: userInfo.userId,
               crm_enabled: false,
-              auto_join_domain: null,
               enterprise: false,
               allow_non_admin_invites: true,
               default_link_share: 'TEAM',

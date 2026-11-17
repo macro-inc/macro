@@ -77,7 +77,6 @@ import type { ProfilePictures } from './generated/schemas/profilePictures';
 import type { PublicGtmInviteLink } from './generated/schemas/publicGtmInviteLink';
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
 import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQueryParams';
-import type { SendDomainNoticeResponse } from './generated/schemas/sendDomainNoticeResponse';
 import type { StatusUpdate } from './generated/schemas/statusUpdate';
 import type { SystemStatus } from './generated/schemas/systemStatus';
 import type { SystemStatusHistory } from './generated/schemas/systemStatusHistory';
@@ -86,7 +85,6 @@ import type { TeamInviteLinkResponse } from './generated/schemas/teamInviteLinkR
 import type { TeamInviteLinkTeam } from './generated/schemas/teamInviteLinkTeam';
 import type { TeamInvitesResponse } from './generated/schemas/teamInvitesResponse';
 import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
-import type { ToggleAutoJoinDomainResponse } from './generated/schemas/toggleAutoJoinDomainResponse';
 import type { ToggleNonAdminInvitesResponse } from './generated/schemas/toggleNonAdminInvitesResponse';
 import type { UserLanguage } from './generated/schemas/userLanguage';
 import type { UserLinkResponse } from './generated/schemas/userLinkResponse';
@@ -204,10 +202,6 @@ async function getAccessToken(): Promise<string | null> {
 }
 
 export type GithubReauthenticationErrorCode = 'REAUTHENTICATION_REQUIRED';
-
-/** The team owner's email domain is a generic provider (e.g. gmail.com),
- *  so auto-join cannot be enabled for it. */
-export type ToggleAutoJoinDomainErrorCode = 'GENERIC_DOMAIN_NOT_ALLOWED';
 
 /**
  * Surfaces the Cursor API key endpoints' own error message instead of a generic
@@ -1418,20 +1412,6 @@ export const authServiceClient = {
     ).map(() => undefined);
   },
 
-  /**
-   * Emails the caller's same-domain contacts who aren't on Macro yet that
-   * the caller's team exists. Call it after inviting, so invitees are
-   * skipped. Admin/Owner only; the server caps a team at 25 recipients.
-   */
-  async sendTeamDomainNotice() {
-    return (
-      await fetchWithAuth<SendDomainNoticeResponse>(
-        `${authHost}/team/domain-notice`,
-        { method: 'POST' }
-      )
-    ).map((result) => result);
-  },
-
   async inviteToTeam(args: InviteToTeamRequest) {
     return (
       await fetchWithAuth<{}>(`${authHost}/team/invite`, {
@@ -1439,46 +1419,6 @@ export const authServiceClient = {
         body: JSON.stringify(args),
       })
     ).map(() => undefined);
-  },
-
-  /**
-   * Toggles automatic domain joining for the caller's team: sets the
-   * auto-join domain from the team owner's email domain when unset,
-   * removes it when set. Returns the domain after the toggle (null when
-   * it was just disabled). Admin/Owner only.
-   */
-  async toggleTeamAutoJoinDomain() {
-    return (
-      await fetchWithAuth<
-        ToggleAutoJoinDomainResponse,
-        ToggleAutoJoinDomainErrorCode
-      >(`${authHost}/team/auto-join-domain/toggle`, {
-        method: 'POST',
-        // The backend rejects enabling auto-join for generic email
-        // provider domains (e.g. gmail.com) with a 400 whose message
-        // names the domain — keep that message so the UI can toast it
-        // verbatim.
-        errorResponseHandler: async (response) => {
-          if (response.status === 400) {
-            const message = await response
-              .json()
-              .then((body) => body?.message)
-              .catch(() => undefined);
-            return {
-              code: 'GENERIC_DOMAIN_NOT_ALLOWED',
-              message:
-                typeof message === 'string'
-                  ? message
-                  : "Auto-join isn't available for this domain",
-            };
-          }
-          return {
-            code: 'HTTP_ERROR',
-            message: `HTTP error! status: ${response.status}`,
-          };
-        },
-      })
-    ).map((result) => result);
   },
 
   /**

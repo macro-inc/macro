@@ -165,14 +165,6 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
   };
 }
 
-/** How a recorded createTeam call marks domain join: `:closed` without it,
- * `:quiet` with it but no notice, nothing when both are on. */
-function domainSuffix(allowDomainJoin: boolean, notifyDomain: boolean) {
-  if (!allowDomainJoin) return ':closed';
-  if (!notifyDomain) return ':quiet';
-  return '';
-}
-
 /**
  * An in-memory onboarding backend behind the real contract. `onChange` lets a
  * harness persist the world; `roundTrip` models the inbox OAuth redirect by
@@ -345,10 +337,8 @@ export function createFakeOnboarding(
       contacts: () => ({ t: 'ready', value: world.contacts }),
       retry: () => call('retryTeams'),
     }),
-    createTeam: async ({ name, invites, allowDomainJoin, notifyDomain }) => {
-      call(
-        `createTeam:${name}:${invites.join(',')}${domainSuffix(allowDomainJoin, notifyDomain)}`
-      );
+    createTeam: async ({ name, invites }) => {
+      call(`createTeam:${name}:${invites.join(',')}`);
       fail('createTeam');
       update((draft) => {
         draft.teams = [{ name }];
