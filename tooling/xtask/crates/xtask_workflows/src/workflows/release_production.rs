@@ -184,11 +184,12 @@ fn release_archive() -> String {
 }
 
 fn archive_dist() -> Step<Run> {
-    Step::new("Create Web App Artifact").run(format!(
-        "tar -czf {} -C {} .",
-        release_archive(),
-        xtask_paths::runtime_path!("apps/web/dist").as_str()
-    ))
+    Step::new("Create Web App Artifact")
+        .run(format!(
+            "tar -czf \"web-app-${{REF_NAME}}.tar.gz\" -C {} .",
+            xtask_paths::runtime_path!("apps/web/dist").as_str()
+        ))
+        .add_env(("REF_NAME", github().ref_name()))
 }
 
 fn attach_to_release() -> Step<Use> {

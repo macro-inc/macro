@@ -16,7 +16,7 @@
 //! recovery path. A tag pushed from here uses `GITHUB_TOKEN`, which by design
 //! does not start another workflow run, so the two never double-publish.
 
-use gh_workflow::expr::typed::{Flag, StepHandle, StepOutput, always, github};
+use gh_workflow::expr::typed::{Flag, StepHandle, StepOutput, Str, always, github};
 use gh_workflow::{Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Use, Workflow};
 
 use crate::workflows::actions::ActionsSetupNode;
@@ -71,6 +71,12 @@ fn release() -> Job {
 pub(crate) struct ResolveOutputs {
     /// Whether this push releases a new version.
     pub release: StepOutput<Flag>,
+    /// The `packages/sdk` version.
+    pub version: StepOutput<Str>,
+    /// The release's `sdk-v*` git tag.
+    pub tag: StepOutput<Str>,
+    /// The npm dist-tag to publish under.
+    pub dist_tag: StepOutput<Str>,
 }
 
 /// The step that decides whether this push is a release.
@@ -78,6 +84,9 @@ pub(crate) const RESOLVE: StepHandle<ResolveOutputs> = StepHandle::new(
     "resolve",
     ResolveOutputs {
         release: StepOutput::new("resolve", "release"),
+        version: StepOutput::new("resolve", "version"),
+        tag: StepOutput::new("resolve", "tag"),
+        dist_tag: StepOutput::new("resolve", "dist_tag"),
     },
 );
 
@@ -121,29 +130,32 @@ fn validate() -> Step<Run> {
 
 fn publish_package() -> Step<Run> {
     Step::new("Publish package")
-        .run("npm publish --access public --tag \"${{ steps.resolve.outputs.dist_tag }}\"")
+        .run("npm publish --access public --tag \"$DIST_TAG\"")
         .working_directory(xtask_paths::repo_dir!("packages/sdk"))
+        .add_env(("DIST_TAG", RESOLVE.outputs.dist_tag.read()))
 }
 
 /// Tag only once npm has the version, so a `sdk-v*` tag always names a commit
 /// that actually shipped. A lightweight tag needs no committer identity.
 fn tag_release() -> Step<Run> {
-    Step::new("Tag the release").run(indoc::indoc! {r#"
-        set -euo pipefail
-        git tag "${{ steps.resolve.outputs.tag }}" "$GITHUB_SHA"
-        git push origin "refs/tags/${{ steps.resolve.outputs.tag }}"
-    "#})
+    Step::new("Tag the release")
+        .run(indoc::indoc! {r#"
+            set -euo pipefail
+            git tag "$RELEASE_TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$RELEASE_TAG"
+        "#})
+        .add_env(("RELEASE_TAG", RESOLVE.outputs.tag.read()))
 }
 
 fn summarize() -> Step<Run> {
     Step::new("Summarize")
         .run(indoc::indoc! {r#"
-            case "${{ steps.resolve.outputs.release }}" in
+            case "$IS_RELEASE" in
               true)
-                echo "Published PACKAGE_NAME@${{ steps.resolve.outputs.version }} (${{ steps.resolve.outputs.tag }})" >> "$GITHUB_STEP_SUMMARY"
+                echo "Published PACKAGE_NAME@$RELEASE_VERSION ($RELEASE_TAG)" >> "$GITHUB_STEP_SUMMARY"
                 ;;
               false)
-                echo "No SDK release: packages/sdk version ${{ steps.resolve.outputs.version }} is already published." >> "$GITHUB_STEP_SUMMARY"
+                echo "No SDK release: packages/sdk version $RELEASE_VERSION is already published." >> "$GITHUB_STEP_SUMMARY"
                 ;;
               *)
                 echo "SDK release did not resolve; see the failed step above." >> "$GITHUB_STEP_SUMMARY"
@@ -152,4 +164,7 @@ fn summarize() -> Step<Run> {
         "#}
         .replace("PACKAGE_NAME", PACKAGE_NAME))
         .if_condition(always())
+        .add_env(("IS_RELEASE", RESOLVE.outputs.release.read()))
+        .add_env(("RELEASE_VERSION", RESOLVE.outputs.version.read()))
+        .add_env(("RELEASE_TAG", RESOLVE.outputs.tag.read()))
 }

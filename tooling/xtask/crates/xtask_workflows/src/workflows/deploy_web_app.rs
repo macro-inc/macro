@@ -133,7 +133,10 @@ fn deploy() -> Job {
         .add_step(install_infra_dependencies())
         .add_step(configure_aws_credentials())
         .add_step(pulumi_up(environment()))
-        .add_step(upload_sourcemaps(environment()))
+        .add_step(
+            upload_sourcemaps("\"$DEPLOY_ENVIRONMENT\"")
+                .add_env(("DEPLOY_ENVIRONMENT", environment())),
+        )
         .add_step(upload_production_build())
         .add_step(steps::teardown_nix())
 }
@@ -172,6 +175,8 @@ pub fn pulumi_up(environment: impl Display) -> Step<Use> {
         .add_env(Env::new("DD_HOST", "https://api.us5.datadoghq.com/"))
 }
 
+/// `environment` is shell text: a literal name, or a quoted reference to a
+/// variable the caller adds to the step's env.
 pub fn upload_sourcemaps(environment: impl Display) -> Step<Run> {
     Step::new("Upload sourcemaps to Datadog")
         .run(format!("bun run ddupload:{environment}"))

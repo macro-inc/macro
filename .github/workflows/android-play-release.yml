@@ -570,8 +570,8 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
-            const versionCode = '${{ steps.preconditions.outputs.version_code }}' || '?';
-            const releaseName = '${{ steps.metadata.outputs.release_name }}' || `version code ${versionCode}`;
+            const versionCode = process.env.VERSION_CODE || '?';
+            const releaseName = process.env.RELEASE_NAME || `version code ${versionCode}`;
             const runUrl =
               `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
               `/actions/runs/${context.runId}`;
@@ -615,5 +615,8 @@ jobs:
               body,
             });
           github-token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          VERSION_CODE: ${{ steps.preconditions.outputs.version_code }}
+          RELEASE_NAME: ${{ steps.metadata.outputs.release_name }}
 concurrency:
   group: android-play-release-${{ github.event.pull_request.number }}

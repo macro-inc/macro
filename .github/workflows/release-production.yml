@@ -150,7 +150,9 @@ jobs:
           name: web-app-dist-prod
           path: apps/web/dist
       - name: Create Web App Artifact
-        run: tar -czf web-app-${{ github.ref_name }}.tar.gz -C apps/web/dist .
+        run: tar -czf "web-app-${REF_NAME}.tar.gz" -C apps/web/dist .
+        env:
+          REF_NAME: ${{ github.ref_name }}
       - name: Upload Release Artifacts
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:

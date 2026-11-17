@@ -177,8 +177,9 @@ fn save_wasm_packages() -> Step<Use> {
 /// `build-wasm` dependency reuses every package the step above built.
 fn build() -> Step<Run> {
     Step::new("Build")
-        .run("just build-${{ inputs.environment }}")
+        .run("just \"build-$DEPLOY_ENVIRONMENT\"")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+        .add_env(("DEPLOY_ENVIRONMENT", environment()))
         .add_env(Env::new("VITE_SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY))
         .add_env(Env::new("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
         .add_env(Env::new(

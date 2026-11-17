@@ -154,16 +154,19 @@ jobs:
     steps:
       - name: Summary
         run: |
-          if [[ "${{ needs.detect-changes.outputs.has-changes }}" == "false" ]]; then
+          if [[ "$HAS_CHANGES" == "false" ]]; then
             echo "ℹ️ No services were affected by the changes in this PR"
-          elif [[ "${{ needs.preview-services.result }}" == "failure" ]]; then
+          elif [[ "$PREVIEW_SERVICES_RESULT" == "failure" ]]; then
             echo "❌ One or more Pulumi previews failed"
             exit 1
-          elif [[ "${{ needs.preview-services.result }}" == "success" ]]; then
+          elif [[ "$PREVIEW_SERVICES_RESULT" == "success" ]]; then
             echo "✅ All Pulumi previews completed successfully"
-          elif [[ "${{ needs.preview-services.result }}" == "skipped" ]]; then
+          elif [[ "$PREVIEW_SERVICES_RESULT" == "skipped" ]]; then
             echo "ℹ️ No services were affected by the changes in this PR"
           fi
+        env:
+          HAS_CHANGES: ${{ needs.detect-changes.outputs.has-changes }}
+          PREVIEW_SERVICES_RESULT: ${{ needs.preview-services.result }}
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true

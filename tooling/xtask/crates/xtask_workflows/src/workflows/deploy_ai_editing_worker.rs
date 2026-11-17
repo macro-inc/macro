@@ -106,8 +106,9 @@ fn deploy_step() -> Step<Run> {
     // sandbox before `wrangler deploy` (see
     // services/ai-editing-worker/package.json).
     Step::new("Deploy with wrangler")
-        .run(format!("bun run deploy-{}", environment()))
+        .run("bun run \"deploy-$DEPLOY_ENVIRONMENT\"")
         .working_directory(xtask_paths::repo_dir!("services/ai-editing-worker"))
+        .add_env(("DEPLOY_ENVIRONMENT", environment()))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }

@@ -96,11 +96,9 @@ fn install_deps() -> Step<Run> {
 /// the live version serving.
 fn check_secrets() -> Step<Run> {
     Step::new("Check required secrets")
-        .run(format!(
-            "node scripts/check-deploy-secrets.mjs {}",
-            environment()
-        ))
+        .run("node scripts/check-deploy-secrets.mjs \"$DEPLOY_ENVIRONMENT\"")
         .working_directory(xtask_paths::repo_dir!("services/mcp-chatgpt-worker"))
+        .add_env(("DEPLOY_ENVIRONMENT", environment()))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }
@@ -109,8 +107,9 @@ fn deploy_step() -> Step<Run> {
     // On a direct dispatch `inputs.environment` is set; callers pass it too.
     // wrangler's build command generates the SDK tool catalog first.
     Step::new("Deploy with wrangler")
-        .run(format!("bunx wrangler deploy --env {}", environment()))
+        .run("bunx wrangler deploy --env \"$DEPLOY_ENVIRONMENT\"")
         .working_directory(xtask_paths::repo_dir!("services/mcp-chatgpt-worker"))
+        .add_env(("DEPLOY_ENVIRONMENT", environment()))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }

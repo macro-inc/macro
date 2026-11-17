@@ -104,11 +104,9 @@ fn install_deps() -> Step<Run> {
 /// Fail before migrations or deployment if commenter validation cannot authenticate.
 fn check_secrets() -> Step<Run> {
     Step::new("Check required secrets")
-        .run(format!(
-            "node scripts/check-deploy-secrets.mjs {}",
-            environment()
-        ))
+        .run("node scripts/check-deploy-secrets.mjs \"$DEPLOY_ENVIRONMENT\"")
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
+        .add_env(("DEPLOY_ENVIRONMENT", environment()))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }
@@ -169,12 +167,12 @@ fn read_worker_state() -> Step<Run> {
 /// is a live error.
 fn apply_d1_migrations() -> Step<Run> {
     Step::new("Apply D1 migrations")
-        .run(format!(
-            "npx wrangler d1 migrations apply USER_PEER_MAPPING --env {} --remote",
-            environment()
-        ))
+        .run(
+            "npx wrangler d1 migrations apply USER_PEER_MAPPING --env \"$DEPLOY_ENVIRONMENT\" --remote",
+        )
         .if_condition(worker_changed())
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
+        .add_env(("DEPLOY_ENVIRONMENT", environment()))
         .add_env(("CI", "true"))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
@@ -182,12 +180,10 @@ fn apply_d1_migrations() -> Step<Run> {
 
 fn deploy_step() -> Step<Run> {
     Step::new("Deploy with wrangler")
-        .run(format!(
-            "npx wrangler deploy --env {} --message \"inputs:$WORKER_KEY\"",
-            environment()
-        ))
+        .run("npx wrangler deploy --env \"$DEPLOY_ENVIRONMENT\" --message \"inputs:$WORKER_KEY\"")
         .if_condition(worker_changed())
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
+        .add_env(("DEPLOY_ENVIRONMENT", environment()))
         .add_env(("WORKER_KEY", WORKER_KEY.outputs.key.read()))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))

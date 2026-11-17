@@ -708,7 +708,7 @@ jobs:
             const runUrl =
               `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
               `/actions/runs/${context.runId}`;
-            const success = '${{ job.status }}' === 'success';
+            const success = process.env.JOB_STATUS === 'success';
             const SUCCESS_BODY = [
               `📱 iOS ${version} (build ${build}) was uploaded to TestFlight and submitted for App Review.`,
               '',
@@ -766,5 +766,7 @@ jobs:
               body,
             });
           github-token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          JOB_STATUS: ${{ job.status }}
 concurrency:
   group: ios-app-store-release-${{ github.event.pull_request.number }}

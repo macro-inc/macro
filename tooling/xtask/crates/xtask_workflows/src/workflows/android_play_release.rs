@@ -122,6 +122,8 @@ const PRECONDITIONS: StepHandle<PreconditionsOutputs> = StepHandle::new(
 struct PrepareOutputs {
     /// The release file name, from the release metadata.
     filename: StepOutput<Str>,
+    /// The release's display name, from the release metadata.
+    release_name: StepOutput<Str>,
 }
 
 /// The [`prepare_version_and_signing`] step.
@@ -129,6 +131,7 @@ const PREPARE: StepHandle<PrepareOutputs> = StepHandle::new(
     "metadata",
     PrepareOutputs {
         filename: StepOutput::new("metadata", "filename"),
+        release_name: StepOutput::new("metadata", "release_name"),
     },
 );
 
@@ -269,8 +272,8 @@ fn pr_comment() -> Step<Use> {
         indoc::indoc! {r#"
                 const fs = require('fs');
                 const path = require('path');
-                const versionCode = '${{ steps.preconditions.outputs.version_code }}' || '?';
-                const releaseName = '${{ steps.metadata.outputs.release_name }}' || `version code ${versionCode}`;
+                const versionCode = process.env.VERSION_CODE || '?';
+                const releaseName = process.env.RELEASE_NAME || `version code ${versionCode}`;
                 const runUrl =
                   `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
                   `/actions/runs/${context.runId}`;
@@ -317,6 +320,8 @@ fn pr_comment() -> Step<Use> {
     )
     .github_token(vars::GITHUB_TOKEN)
     .step()
+    .add_env(("VERSION_CODE", version_code()))
+    .add_env(("RELEASE_NAME", PREPARE.outputs.release_name.read()))
     // Failures only: Android Play Publish comments the outcome of a
     // successful build. Not `always()` either: a run the drift workflow
     // cancelled must not post "failed, re-add the label" next to drift's

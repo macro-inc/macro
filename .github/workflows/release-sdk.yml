@@ -45,28 +45,36 @@ jobs:
         working-directory: packages/sdk
       - name: Publish package
         if: steps.resolve.outputs.release == 'true'
-        run: npm publish --access public --tag "${{ steps.resolve.outputs.dist_tag }}"
+        run: npm publish --access public --tag "$DIST_TAG"
+        env:
+          DIST_TAG: ${{ steps.resolve.outputs.dist_tag }}
         working-directory: packages/sdk
       - name: Tag the release
         if: steps.resolve.outputs.release == 'true'
         run: |
           set -euo pipefail
-          git tag "${{ steps.resolve.outputs.tag }}" "$GITHUB_SHA"
-          git push origin "refs/tags/${{ steps.resolve.outputs.tag }}"
+          git tag "$RELEASE_TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$RELEASE_TAG"
+        env:
+          RELEASE_TAG: ${{ steps.resolve.outputs.tag }}
       - name: Summarize
         if: always()
         run: |
-          case "${{ steps.resolve.outputs.release }}" in
+          case "$IS_RELEASE" in
             true)
-              echo "Published @macro-inc/sdk@${{ steps.resolve.outputs.version }} (${{ steps.resolve.outputs.tag }})" >> "$GITHUB_STEP_SUMMARY"
+              echo "Published @macro-inc/sdk@$RELEASE_VERSION ($RELEASE_TAG)" >> "$GITHUB_STEP_SUMMARY"
               ;;
             false)
-              echo "No SDK release: packages/sdk version ${{ steps.resolve.outputs.version }} is already published." >> "$GITHUB_STEP_SUMMARY"
+              echo "No SDK release: packages/sdk version $RELEASE_VERSION is already published." >> "$GITHUB_STEP_SUMMARY"
               ;;
             *)
               echo "SDK release did not resolve; see the failed step above." >> "$GITHUB_STEP_SUMMARY"
               ;;
           esac
+        env:
+          IS_RELEASE: ${{ steps.resolve.outputs.release }}
+          RELEASE_VERSION: ${{ steps.resolve.outputs.version }}
+          RELEASE_TAG: ${{ steps.resolve.outputs.tag }}
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false

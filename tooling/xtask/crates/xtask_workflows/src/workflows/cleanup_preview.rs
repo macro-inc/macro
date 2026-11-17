@@ -71,15 +71,21 @@ fn get_preview_id() -> Step<Run> {
     Step::new("Get preview ID from comments")
         .run(indoc::indoc! {r#"
             PREVIEW_ID=$(bun scripts/preview/get-or-create-id.ts \
-              --pr ${{ github.event.pull_request.number }} \
-              --repo ${{ github.repository }} \
-              --token ${{ secrets.GITHUB_TOKEN }} \
+              --pr "$PR_NUMBER" \
+              --repo "$REPOSITORY" \
+              --token "$GITHUB_TOKEN" \
               --branch "$BRANCH")
             echo "id=$PREVIEW_ID" >> "$GITHUB_OUTPUT"
             echo "Preview ID: $PREVIEW_ID"
         "#})
         .id(PREVIEW_ID.id())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+        .add_env(Env::new(
+            "PR_NUMBER",
+            github().event::<Str>("pull_request.number"),
+        ))
+        .add_env(Env::new("REPOSITORY", github().repository()))
+        .add_env(Env::new("GITHUB_TOKEN", vars::GITHUB_TOKEN))
         .add_env(Env::new("BRANCH", github().head_ref()))
 }
 
@@ -87,9 +93,10 @@ fn cleanup_preview_files() -> Step<Run> {
     Step::new("Cleanup preview")
         .run(indoc::indoc! {r#"
             bun scripts/preview/deploy.ts \
-              --preview-id ${{ steps.preview-id.outputs.id }} \
+              --preview-id "$PREVIEW_ID" \
               --cleanup
         "#})
         .if_condition(PREVIEW_ID.outputs.id.read().ne(""))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+        .add_env(Env::new("PREVIEW_ID", PREVIEW_ID.outputs.id.read()))
 }

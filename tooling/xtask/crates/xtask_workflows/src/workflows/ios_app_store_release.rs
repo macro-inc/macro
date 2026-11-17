@@ -29,7 +29,9 @@
 //! role) and optionally an Apple Distribution certificate; without the
 //! certificate xcodebuild uses cloud signing through the API key.
 
-use gh_workflow::expr::typed::{Expr, Flag, StepHandle, StepOutput, Str, failure, github, success};
+use gh_workflow::expr::typed::{
+    Expr, Flag, StepHandle, StepOutput, Str, failure, github, job_status, success,
+};
 use gh_workflow::{
     Concurrency, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use,
     Workflow,
@@ -273,7 +275,7 @@ fn pr_comment() -> Step<Use> {
                 const runUrl =
                   `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
                   `/actions/runs/${context.runId}`;
-                const success = '${{ job.status }}' === 'success';
+                const success = process.env.JOB_STATUS === 'success';
                 const SUCCESS_BODY = [
                   `📱 iOS ${version} (build ${build}) was uploaded to TestFlight and submitted for App Review.`,
                   '',
@@ -334,6 +336,7 @@ fn pr_comment() -> Step<Use> {
     )
     .github_token(vars::GITHUB_TOKEN)
     .step()
+    .add_env(("JOB_STATUS", job_status()))
     // Not `always()`: a run the drift workflow cancelled must not post
     // "failed, re-add the label" next to drift's own comment.
     .if_condition(success().or(failure()))

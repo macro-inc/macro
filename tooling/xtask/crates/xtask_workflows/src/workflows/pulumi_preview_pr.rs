@@ -258,16 +258,19 @@ fn detect_affected_services() -> Step<Run> {
 }
 
 fn summary() -> Step<Run> {
-    Step::new("Summary").run(indoc::indoc! {r#"
-        if [[ "${{ needs.detect-changes.outputs.has-changes }}" == "false" ]]; then
-          echo "ℹ️ No services were affected by the changes in this PR"
-        elif [[ "${{ needs.preview-services.result }}" == "failure" ]]; then
-          echo "❌ One or more Pulumi previews failed"
-          exit 1
-        elif [[ "${{ needs.preview-services.result }}" == "success" ]]; then
-          echo "✅ All Pulumi previews completed successfully"
-        elif [[ "${{ needs.preview-services.result }}" == "skipped" ]]; then
-          echo "ℹ️ No services were affected by the changes in this PR"
-        fi
-    "#})
+    Step::new("Summary")
+        .run(indoc::indoc! {r#"
+            if [[ "$HAS_CHANGES" == "false" ]]; then
+              echo "ℹ️ No services were affected by the changes in this PR"
+            elif [[ "$PREVIEW_SERVICES_RESULT" == "failure" ]]; then
+              echo "❌ One or more Pulumi previews failed"
+              exit 1
+            elif [[ "$PREVIEW_SERVICES_RESULT" == "success" ]]; then
+              echo "✅ All Pulumi previews completed successfully"
+            elif [[ "$PREVIEW_SERVICES_RESULT" == "skipped" ]]; then
+              echo "ℹ️ No services were affected by the changes in this PR"
+            fi
+        "#})
+        .add_env(("HAS_CHANGES", DETECT_CHANGES.outputs.has_changes.read()))
+        .add_env(("PREVIEW_SERVICES_RESULT", PREVIEW_SERVICES.result()))
 }

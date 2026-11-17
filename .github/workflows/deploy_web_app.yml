@@ -103,11 +103,12 @@ jobs:
           DD_API_KEY: ${{ secrets.DD_API_KEY }}
           DD_HOST: https://api.us5.datadoghq.com/
       - name: Upload sourcemaps to Datadog
-        run: bun run ddupload:${{ inputs.environment }}
+        run: bun run ddupload:"$DEPLOY_ENVIRONMENT"
         env:
           DATADOG_API_KEY: ${{ secrets.DD_API_KEY }}
           DATADOG_SITE: us5.datadoghq.com
           DATADOG_API_HOST: api.us5.datadoghq.com
+          DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
         working-directory: apps/web
       - name: Upload production build
         if: inputs.environment == 'prod'

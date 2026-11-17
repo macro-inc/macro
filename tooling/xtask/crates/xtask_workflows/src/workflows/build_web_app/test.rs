@@ -61,7 +61,7 @@ fn deploy_builds_mount_only_nix_and_bun_and_no_shared_cache() {
     assert!(
         steps
             .iter()
-            .any(|step| runs(step, "just build-${{ inputs.environment }}")),
+            .any(|step| runs(step, "just \"build-$DEPLOY_ENVIRONMENT\"")),
         "build still runs via just"
     );
 }
@@ -89,7 +89,7 @@ fn build_reuses_wasm_packages_only_from_the_actions_cache() {
     let wasm = job.find("just build-wasm").expect("wasm packages step");
     let save = job.find("actions/cache/save@").expect("save step");
     let build = job
-        .find("just build-${{ inputs.environment }}")
+        .find("just \"build-$DEPLOY_ENVIRONMENT\"")
         .expect("app build");
     assert!(
         restore < wasm && wasm < save && save < build,
