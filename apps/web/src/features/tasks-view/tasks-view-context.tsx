@@ -170,6 +170,8 @@ export type TasksViewContext = {
    * "filter by tag" button on entity rows.
    */
   filterByTag: (optionId: string) => void;
+  /** Filters by one assignee the same way, from an assignee's hover card. */
+  filterByAssignee: (userId: string) => void;
   setPrimarySort: (id: TaskSortId) => void;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
@@ -668,6 +670,14 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     );
   };
 
+  const filterByAssignee = (userId: string) => {
+    closeTask();
+    setState(
+      'facets',
+      reconcile(normalizeFacetSelection({ assignees: [userId] }))
+    );
+  };
+
   const isSidebarSectionOpen = (id: string) =>
     !state.collapsedSidebarSectionIds.includes(id);
 
@@ -707,6 +717,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     setTab,
     setFacets,
     filterByTag,
+    filterByAssignee,
     setPrimarySort,
     isSidebarSectionOpen,
     setSidebarSectionOpen,

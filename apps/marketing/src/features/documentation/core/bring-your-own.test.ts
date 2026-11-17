@@ -20,11 +20,12 @@ it('gives the current macrod setup steps', () => {
     '**Claude Code in herdr**',
     '**Create and pair**',
     '**Settings → Machines → New machine**',
+    '**Look up**',
     '**Approve**',
-    '**Settings → Agents**',
+    '**Settings → Agents → Add agent**',
     'choose **On your machine**',
     '## Run agents on a cloud server',
-    'You do not need a public webhook endpoint, port forwarding, or an HTTPS tunnel.',
+    'needs no public address, open port, reverse proxy, or tunnel',
   ]) {
     expect(page).toContain(step);
   }

@@ -8,6 +8,13 @@ internal API key, and the Axum JWT-decode middleware.
 
 ## Start here
 
+- `src/credential.rs`: `request_credential`, the one reading of which
+  credential a request authenticates with and every user token it carries,
+  from every source (percent-decoded `macro-api-token` query keys, bearer,
+  the access-token cookie decoded as cookie jars read it, user API key,
+  bot, harness and internal key headers), kept in the request's
+  extensions. `macro_authorization`, `agent_correlation` and
+  `AccessTokenExtractor` all read it.
 - `src/macro_api_token.rs`: the Macro API token (JWT) shape and claims.
 - `src/internal_api_key.rs`: `InternalApiKey`, the shared-secret credential
   for service-to-service calls.
