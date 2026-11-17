@@ -203,4 +203,29 @@ const ARTIFACT_OPS: ReadonlySet<CanvasOp['kind']> = new Set([
   'defineComponent',
   'presentOrder',
 ]);
-export const isArtifactOp = (op: CanvasOp) => ARTIFACT_OPS.has(op.kind);
+export const isArtifactOp = (op: CanvasCommitOp) =>
+  op.kind !== 'embedDocument' && ARTIFACT_OPS.has(op.kind);
+
+/**
+ * An embedded document node, shaped like the one the Canvas UI inserts. Only
+ * the internal embed request commits it, after its caller recorded the
+ * reference; it is deliberately not part of `canvasOpSchema`, so agent
+ * snippets can never produce it.
+ */
+export const embedDocumentOpSchema = z
+  .object({
+    kind: z.literal('embedDocument'),
+    id,
+    x: coordinate,
+    y: coordinate,
+    width: size,
+    height: size,
+    documentId: id,
+    name: z.string().max(1000),
+    fileType: z.string().min(1).max(64),
+    subpath: z.string().max(512).optional(),
+  })
+  .strict();
+export type EmbedDocumentOp = z.infer<typeof embedDocumentOpSchema>;
+/** Everything the host commits: agent operations and server-only embeds. */
+export type CanvasCommitOp = CanvasOp | EmbedDocumentOp;

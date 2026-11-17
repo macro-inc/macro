@@ -1,4 +1,4 @@
-import { createScene } from '@macro-inc/graphics';
+import { createScene, shapePayload } from '@macro-inc/graphics';
 import { describe, expect, it } from 'vitest';
 import {
   type CanvasPresentation,
@@ -7,7 +7,7 @@ import {
 } from './animation';
 import { dependencies } from './dependencies';
 import { prepareCanvasEdit } from './operations';
-import type { CanvasOp } from './schema';
+import type { CanvasCommitOp, CanvasOp } from './schema';
 
 describe('one batch concurrent presentation lanes', () => {
   it('presents three real regions together and clears all on cancellation', async () => {
@@ -120,5 +120,43 @@ describe('one batch concurrent presentation lanes', () => {
     expect(first.value.preview?.shapes.map((shape) => shape.id).sort()).toEqual(
       ['a', 'b']
     );
+  });
+});
+
+describe('bounds-only ghosts', () => {
+  it('keeps an embedded document node a valid box in every frame', () => {
+    const before = createScene();
+    const ops: CanvasCommitOp[] = [
+      {
+        kind: 'embedDocument',
+        id: 'artifact-node',
+        documentId: 'artifact-1',
+        name: 'Onboarding',
+        fileType: 'artifact',
+        x: 40,
+        y: 60,
+        width: 960,
+        height: 600,
+      },
+    ];
+    const after = prepareCanvasEdit(before, ops);
+    const shapes = canvasAnimation(
+      before,
+      after,
+      dependencies(before, after, ops)
+    ).flatMap((step) =>
+      step.kind === 'awareness' ? (step.value.preview?.shapes ?? []) : []
+    );
+
+    expect(shapes).toHaveLength(9);
+    for (const shape of shapes) {
+      expect(shape.item).toBeUndefined();
+      expect(shape.kind).toBe('rectangle');
+      // What a viewer's presence overlay renders for a ghost without a payload.
+      expect(() =>
+        shapePayload(shape.kind, { width: shape.width, height: shape.height })
+      ).not.toThrow();
+      expect([shape.width, shape.height]).toEqual([960, 600]);
+    }
   });
 });

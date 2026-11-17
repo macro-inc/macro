@@ -194,6 +194,99 @@ async fn edit_reports_the_revision_the_worker_left() {
 
 #[cfg(feature = "ai_tools")]
 #[tokio::test]
+async fn canvas_embeds_carry_the_internal_key_and_return_the_item_id() {
+    use crate::domain::canvas::CanvasDocumentEmbed;
+    use axum::{Json, Router, http::HeaderMap, routing::post};
+
+    let requests = Arc::new(std::sync::Mutex::new(Vec::<(
+        Option<String>,
+        serde_json::Value,
+    )>::new()));
+    let seen = requests.clone();
+    let app = Router::new().route(
+        "/canvas",
+        post(
+            move |headers: HeaderMap, Json(body): Json<serde_json::Value>| {
+                let seen = seen.clone();
+                async move {
+                    seen.lock().unwrap().push((
+                        headers
+                            .get("x-internal-auth-key")
+                            .and_then(|value| value.to_str().ok())
+                            .map(str::to_owned),
+                        body,
+                    ));
+                    Json(serde_json::json!({ "operationsApplied": 1 }))
+                }
+            },
+        ),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let embed = CanvasDocumentEmbed {
+        item_id: uuid::Uuid::nil(),
+        document_id: "artifact".into(),
+        name: "Onboarding".into(),
+        file_type: "artifact".into(),
+        subpath: Some("empty".into()),
+        x: 10.0,
+        y: 20.0,
+        width: 640.0,
+        height: 480.0,
+        mention_id: uuid::Uuid::max(),
+    };
+    let token = "test-token".to_owned().into();
+
+    let unkeyed = ReqwestEditingWorkerClient::new(
+        url.clone(),
+        Arc::new(Client::builder().no_proxy().build().unwrap()),
+    );
+    assert!(
+        unkeyed
+            .embed_canvas_document("canvas", &token, &embed)
+            .await
+            .is_err()
+    );
+
+    let client = ReqwestEditingWorkerClient::new(
+        url,
+        Arc::new(Client::builder().no_proxy().build().unwrap()),
+    )
+    .with_internal_auth_key(Some("internal".into()));
+    client
+        .embed_canvas_document("canvas", &token, &embed)
+        .await
+        .unwrap();
+
+    let requests = requests.lock().unwrap();
+    assert_eq!(
+        *requests,
+        vec![(
+            Some("internal".to_owned()),
+            serde_json::json!({
+                "documentId": "canvas",
+                "documentToken": "test-token",
+                "request": {
+                    "action": "embed",
+                    "itemId": "00000000-0000-0000-0000-000000000000",
+                    "documentId": "artifact",
+                    "name": "Onboarding",
+                    "fileType": "artifact",
+                    "subpath": "empty",
+                    "x": 10.0,
+                    "y": 20.0,
+                    "width": 640.0,
+                    "height": 480.0,
+                    "mentionId": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+                },
+            }),
+        )]
+    );
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
 async fn spreadsheet_statuses_keep_their_meaning() {
     use crate::domain::spreadsheet::{SpreadsheetError, SpreadsheetRequest};
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers};

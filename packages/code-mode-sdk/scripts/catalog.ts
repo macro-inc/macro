@@ -35,6 +35,7 @@ export const entityDirectories: readonly string[] = [
   'crm',
   'databases',
   'documents',
+  'artifacts',
   'email',
   'favorites',
   'foreign',

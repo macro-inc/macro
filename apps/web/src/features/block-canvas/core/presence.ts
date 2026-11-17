@@ -69,22 +69,39 @@ const presenceSchema = z.object({
       ]),
       shapes: z
         .array(
-          z.object({
-            id: z.string().max(200),
-            kind: z.enum(['rectangle', 'ellipse', 'pencil']),
-            width: finite.nonnegative(),
-            height: finite.nonnegative(),
-            world: matrix,
-            item: previewItem.optional(),
-            pencil: z
-              .object({
-                points: z.array(z.tuple([finite, finite, finite])).max(2048),
-                simulatePressure: z.boolean(),
-              })
-              .optional(),
-            strokeWidth: finite.nonnegative().optional(),
-            cornerRadius: finite.nonnegative().optional(),
-          })
+          z
+            .object({
+              id: z.string().max(200),
+              kind: z.enum(['rectangle', 'ellipse', 'pencil']),
+              width: finite.nonnegative(),
+              height: finite.nonnegative(),
+              world: matrix,
+              item: previewItem.optional(),
+              pencil: z
+                .object({
+                  points: z.array(z.tuple([finite, finite, finite])).max(2048),
+                  simulatePressure: z.boolean(),
+                })
+                .optional(),
+              strokeWidth: finite.nonnegative().optional(),
+              cornerRadius: finite.nonnegative().optional(),
+            })
+            // A ghost without a payload renders as its kind with this size or
+            // pencil stroke; admit only what that render accepts.
+            .refine((shape) => {
+              if (shape.item) return true;
+              try {
+                shapePayload(
+                  shape.kind,
+                  shape.kind === 'pencil'
+                    ? shape.pencil
+                    : { width: shape.width, height: shape.height }
+                );
+                return true;
+              } catch {
+                return false;
+              }
+            })
         )
         .max(256)
         .refine((shapes) =>

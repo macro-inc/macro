@@ -4,16 +4,18 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use chrono::{DateTime, Utc};
-
+use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
 use model::document::DocumentBasic;
 use model_owner::{CreationPrincipal, Owner};
 
 use crate::domain::models::{
-    ArtifactError, ArtifactVersion, ArtifactVersionSummary, MintedToken, ObjectBody, Sha256,
+    ArtifactError, ArtifactVersion, ArtifactVersionSummary, MintedToken, ObjectBody, Publisher,
+    Sha256,
 };
 use crate::domain::ports::{
-    ArtifactDocuments, ArtifactNotifier, ArtifactObjectStore, ArtifactRepository,
-    CreatedArtifactDocument, NewVersion, PresignedUpload, VerifiedToken, ViewTokens,
+    ArtifactCanvases, ArtifactDocuments, ArtifactNotifier, ArtifactObjectStore, ArtifactRepository,
+    CanvasDocumentNode, CreatedArtifactDocument, NewVersion, PresignedUpload, VerifiedToken,
+    ViewTokens,
 };
 
 pub(crate) const CREATED_AT: &str = "2026-11-04T12:00:00Z";
@@ -253,5 +255,61 @@ impl ArtifactNotifier for RecordingNotifier {
             .lock()
             .unwrap()
             .push((document_id.to_string(), version));
+    }
+}
+
+/// A reference the fake canvases recorded:
+/// `(mention id, canvas id, document id, user id)`.
+pub(crate) type RecordedReference = (uuid::Uuid, String, String, String);
+
+/// Canvases that keep references by mention id and nodes by item id, so a
+/// repeated write leaves one of each, as the real adapters do.
+/// `refuse_embed` makes every embed fail, as a canvas refusing the write would.
+#[derive(Default)]
+pub(crate) struct FakeCanvases {
+    pub(crate) refuse_embed: bool,
+    pub(crate) references: Mutex<Vec<RecordedReference>>,
+    pub(crate) embedded: Mutex<Vec<(String, Publisher, CanvasDocumentNode)>>,
+}
+
+impl ArtifactCanvases for FakeCanvases {
+    async fn record_reference(
+        &self,
+        mention_id: uuid::Uuid,
+        canvas_id: &str,
+        document_id: &str,
+        user_id: &str,
+    ) -> Result<(), ArtifactError> {
+        let mut references = self.references.lock().unwrap();
+        if !references.iter().any(|(id, ..)| *id == mention_id) {
+            references.push((
+                mention_id,
+                canvas_id.to_string(),
+                document_id.to_string(),
+                user_id.to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    async fn embed(
+        &self,
+        canvas: EntityAccessReceipt<EditAccessLevel>,
+        publisher: &Publisher,
+        node: CanvasDocumentNode,
+    ) -> Result<(), ArtifactError> {
+        if self.refuse_embed {
+            return Err(ArtifactError::BadRequest(
+                "the canvas refused the node".to_string(),
+            ));
+        }
+        let mut embedded = self.embedded.lock().unwrap();
+        if !embedded
+            .iter()
+            .any(|(_, _, existing)| existing.item_id == node.item_id)
+        {
+            embedded.push((canvas.entity().entity_id.clone(), publisher.clone(), node));
+        }
+        Ok(())
     }
 }

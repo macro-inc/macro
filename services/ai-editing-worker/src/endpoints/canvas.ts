@@ -5,6 +5,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { editCanvas } from '../canvas/agent';
 import { applyCanvasCode } from '../canvas/direct';
+import { canvasEmbedRequest, embedCanvasDocument } from '../canvas/embed';
 import { canvasRenderOptions, createCanvasRenderer } from '../canvas/render';
 import { canvasRevision } from '../canvas/revision';
 import {
@@ -63,6 +64,7 @@ const body = z
           editorName: z.string().trim().min(1).max(200).optional(),
         })
         .strict(),
+      canvasEmbedRequest,
     ]),
   })
   .strict();
@@ -73,10 +75,20 @@ app.post('/', zValidator('json', body), async (c) => {
   // Comment tokens can connect and send some updates. Do not let them edit a scene.
   // A forged edit claim still fails signature verification on initial sync, before the model starts.
   if (
-    ['edit', 'apply'].includes(request.action) &&
+    ['edit', 'apply', 'embed'].includes(request.action) &&
     !['edit', 'owner'].includes(tokenAccessLevel(documentToken) ?? '')
   )
     return c.json({ error: 'Editing a canvas requires edit access.' }, 403);
+  // Embeds come only from services that recorded the reference first, never
+  // from a caller holding just a document token.
+  if (request.action === 'embed') {
+    const internalKey = getEnv(c.env).INTERNAL_API_KEY;
+    if (!internalKey || c.req.header('x-internal-auth-key') !== internalKey)
+      return c.json(
+        { error: 'Embedding a document requires internal authorization.' },
+        401
+      );
+  }
   const signal = AbortSignal.any([
     c.req.raw.signal,
     AbortSignal.timeout(120_000),
@@ -149,6 +161,16 @@ app.post('/', zValidator('json', body), async (c) => {
             undefined,
             artifacts
           );
+        if (request.action === 'embed') {
+          span.setAttr('canvas.embedded_document_id', request.documentId);
+          const result = await withCanvasSession(
+            createWorkerSyncSource(url.toString(), documentId, signal),
+            signal,
+            (session) => embedCanvasDocument(session, request)
+          );
+          span.setAttr('canvas.item_id', result.itemId);
+          return result;
+        }
         if (request.action === 'apply')
           return withCanvasSession(
             createWorkerSyncSource(url.toString(), documentId, signal),

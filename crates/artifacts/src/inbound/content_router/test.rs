@@ -9,7 +9,8 @@ use crate::domain::models::{
 };
 use crate::domain::service::ArtifactServiceImpl;
 use crate::testing::{
-    FakeTokens, MemoryDocuments, MemoryObjectStore, MemoryRepository, RecordingNotifier,
+    FakeCanvases, FakeTokens, MemoryDocuments, MemoryObjectStore, MemoryRepository,
+    RecordingNotifier,
 };
 
 const DOCUMENT_ID: &str = "0193f3a4-7d1e-7c2a-9f00-5a1b2c3d4e5f";
@@ -81,6 +82,7 @@ fn router() -> Router {
         MemoryDocuments::new(DOCUMENT_ID),
         FakeTokens::default(),
         RecordingNotifier::default(),
+        FakeCanvases::default(),
         origin.clone(),
     );
 

@@ -211,9 +211,19 @@ export function canvasAnimation(
       const world = worldMatrix(after.items[id] ? after : before, id);
       const start = source ? worldMatrix(before, id) : world;
       const bounds = shapeDefinition(item.type).bounds(item);
+      const drawn =
+        item.type === 'rectangle' ||
+        item.type === 'ellipse' ||
+        item.type === 'text' ||
+        item.type === 'connector';
+      // New drawn items grow from nothing; viewers clamp their payload's size.
+      // A bounds-only ghost (documents, media) is a bare box that must keep a
+      // positive size, so a new one appears at its final size.
       const oldBounds = isShape(source)
         ? shapeDefinition(source.type).bounds(source)
-        : { width: 0, height: 0 };
+        : drawn
+          ? { width: 0, height: 0 }
+          : bounds;
       shapes.push({
         id,
         kind: item.type === 'ellipse' ? 'ellipse' : 'rectangle',

@@ -9,8 +9,8 @@ use model_owner::CreationPrincipal;
 
 use super::models::{
     Artifact, ArtifactError, ArtifactVersion, ArtifactVersionSummary, ContentRequest,
-    ContentResponse, CreateArtifact, Manifest, MintedToken, ObjectBody, PublishVersion, Publisher,
-    Sha256, UploadInput, UploadTarget, ViewUrl, ViewUrlRequest,
+    ContentResponse, CreateArtifact, Manifest, MintedToken, ObjectBody, PlaceArtifact, Placement,
+    PublishVersion, Publisher, Sha256, UploadInput, UploadTarget, ViewUrl, ViewUrlRequest,
 };
 
 /// A version to insert.
@@ -165,6 +165,56 @@ pub trait ArtifactNotifier: Send + Sync + 'static {
     fn published(&self, document_id: &str, version: i32) -> impl Future<Output = ()> + Send;
 }
 
+/// A document node to add to a canvas, as the canvas UI inserts one.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CanvasDocumentNode {
+    /// The node's canvas item id; committing it again is a no-op.
+    pub item_id: uuid::Uuid,
+    /// The embedded document.
+    pub document_id: String,
+    /// Its name, shown on the node.
+    pub name: String,
+    /// Its file type.
+    pub file_type: String,
+    /// Host navigation state inside the document: the scene id of an artifact.
+    pub subpath: Option<String>,
+    /// World x of the top-left corner.
+    pub x: f64,
+    /// World y of the top-left corner.
+    pub y: f64,
+    /// Width.
+    pub width: f64,
+    /// Height.
+    pub height: f64,
+    /// The canvas's entity mention of the document, which the canvas tracks
+    /// next to the node so its own reference bookkeeping sees it as recorded.
+    pub mention_id: uuid::Uuid,
+}
+
+/// Canvases, as placing an artifact on one uses them.
+pub trait ArtifactCanvases: Send + Sync + 'static {
+    /// Record that `canvas_id` references `document_id` as mention
+    /// `mention_id`, through the same entity mention the canvas UI records
+    /// when it inserts a document node. A mention already recorded under
+    /// that id is kept, so retries record it once.
+    fn record_reference(
+        &self,
+        mention_id: uuid::Uuid,
+        canvas_id: &str,
+        document_id: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<(), ArtifactError>> + Send;
+
+    /// Commit `node` to the live canvas through the canvas editing path. A
+    /// node already committed under its item id is left as it is.
+    fn embed(
+        &self,
+        canvas: EntityAccessReceipt<EditAccessLevel>,
+        publisher: &Publisher,
+        node: CanvasDocumentNode,
+    ) -> impl Future<Output = Result<(), ArtifactError>> + Send;
+}
+
 /// Artifact use cases.
 pub trait ArtifactService: Send + Sync + 'static {
     /// An artifact document's metadata for the access extractors. Documents
@@ -230,6 +280,22 @@ pub trait ArtifactService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         request: ViewUrlRequest,
     ) -> impl Future<Output = Result<ViewUrl, ArtifactError>> + Send;
+
+    /// A canvas document's metadata for the access extractors. Documents of
+    /// other file types are refused.
+    fn load_canvas(
+        &self,
+        canvas_id: &str,
+    ) -> impl Future<Output = Result<DocumentBasic, ArtifactError>> + Send;
+
+    /// Place the artifact, or one of its scenes, on a canvas.
+    fn place(
+        &self,
+        artifact: EntityAccessReceipt<ViewAccessLevel>,
+        canvas: EntityAccessReceipt<EditAccessLevel>,
+        publisher: &Publisher,
+        request: PlaceArtifact,
+    ) -> impl Future<Output = Result<Placement, ArtifactError>> + Send;
 
     /// One file of a version, for a request on the artifact's origin.
     fn content(

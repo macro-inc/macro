@@ -9,7 +9,7 @@ origin pages are served from. How it works: [architecture](../../docs/architectu
 ## Start here
 
 - `src/domain/manifest.rs`: every bundle rule (paths, limits, content types, scenes, digests).
-- `src/domain/service.rs`: create, publish, restore, uploads, `view_url`, content.
+- `src/domain/service.rs`: create, publish, restore, uploads, `view_url`, content, `place`.
 - `src/inbound/content_router.rs`: the artifact origin, its headers and `dispatch_by_host`.
 
 ## Scope
@@ -19,13 +19,14 @@ origin pages are served from. How it works: [architecture](../../docs/architectu
 - Not here: the artifact document itself (creation, sharing, deletion) →
   `crates/documents`; deleting its objects → DSS's delete document worker,
   which removes the `s3_key::build_artifact_document_prefix` prefix; the token encoding → `macro_sync_service_jwt::artifact_content`;
-  canvas placement and web/SDK surfaces → later layers.
+  the canvas node itself → `documents::domain::canvas::CanvasEmbedder` and the
+  editing worker, behind the `ArtifactCanvases` port.
 
 ## Boundaries
 
 - Depends on: `entity_access` (document receipts), `entity_registry` (creation principal).
 - Used by: `services/document_storage_service`, which implements
-  `ArtifactDocuments` and `ViewTokens` in `src/outbound/artifacts.rs`, mounts the
+  `ArtifactDocuments`, `ViewTokens` and `ArtifactCanvases` in `src/outbound/artifacts.rs`, mounts the
   API at `/artifacts` and dispatches content hosts before its own router.
 
 ## Checks

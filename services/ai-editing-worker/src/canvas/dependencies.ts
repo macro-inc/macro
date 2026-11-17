@@ -4,7 +4,7 @@ import {
   worldBounds,
 } from '@macro-inc/graphics';
 import { presenceItemState } from '@macro-inc/graphics/loro';
-import type { CanvasOp } from './schema';
+import type { CanvasCommitOp } from './schema';
 
 export type CanvasDependencies = {
   reads: Set<string>;
@@ -26,7 +26,7 @@ export function overlaps(a: Bounds, b: Bounds): boolean {
 export function dependencies(
   before: GraphicsDocument,
   after: GraphicsDocument,
-  ops: CanvasOp[]
+  ops: readonly CanvasCommitOp[]
 ): CanvasDependencies {
   const reads = new Set<string>();
   const writes = new Set<string>();
