@@ -42,11 +42,12 @@ pub(in crate::api) async fn handler(
         _ => CredentialAttribution::Person,
     };
     if is_program_run(attribution, &parts.headers) {
-        tracing::warn!(
-            path = parts.uri.path(),
-            ?attribution,
-            "refused an email sign-in to a program"
-        );
+        // The route template, never the path: the callback's path is the code.
+        let route = parts
+            .extensions
+            .get::<axum::extract::MatchedPath>()
+            .map_or("unmatched", axum::extract::MatchedPath::as_str);
+        tracing::warn!(route, ?attribution, "refused an email sign-in to a program");
         return (StatusCode::FORBIDDEN, PROGRAM_SIGN_IN_REFUSAL).into_response();
     }
     next.run(Request::from_parts(parts, body)).await
