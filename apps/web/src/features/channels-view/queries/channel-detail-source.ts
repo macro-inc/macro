@@ -1,3 +1,4 @@
+import { isResponseFreeNetworkError } from '@core/util/request-error';
 import type { ChannelEntity, EntityData } from '@entity/types/entity';
 import { type Accessor, createMemo, on } from 'solid-js';
 import type { ChannelDetailSource } from '../context/channel-detail-source';
@@ -40,19 +41,28 @@ export function createChannelDetailSource(options: {
     load: () => {
       const id = options.channelId();
       if (!id) return { status: 'pending' };
-      if (query.isEnabled && query.error)
-        return { status: 'error', error: query.error };
+      const held = () =>
+        query.data?.entities.find(
+          (entity): entity is ChannelEntity =>
+            entity.type === 'channel' && entity.id === id
+        );
+      if (query.isEnabled && query.error) {
+        // A request that got no response, as without a connection, says
+        // nothing against a channel the device holds.
+        const channel = isResponseFreeNetworkError(query.error)
+          ? held()
+          : undefined;
+        return channel
+          ? { status: 'ready', channel }
+          : { status: 'error', error: query.error };
+      }
       if (!refreshOnOpen() && options.cached()) {
         return { status: 'ready', channel: options.cached() };
       }
       if (!query.isEnabled) return { status: 'pending' };
       if (query.isPending || query.isLoading || query.isFetching)
         return { status: 'pending' };
-      const channel = query.data?.entities.find(
-        (entity): entity is ChannelEntity =>
-          entity.type === 'channel' && entity.id === id
-      );
-      return { status: 'ready', channel };
+      return { status: 'ready', channel: held() };
     },
     refresh: () => query.refresh(),
   };
