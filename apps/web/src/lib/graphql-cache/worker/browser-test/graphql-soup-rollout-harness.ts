@@ -81,7 +81,6 @@ function overrideRolloutFlags(
 ): void {
   analytics.posthog.featureFlags.overrideFeatureFlags({
     flags: {
-      'enable-graphql-soup': true,
       'disable-browser-turso-cache': disabled,
     },
     suppressWarning: true,
@@ -90,19 +89,6 @@ function overrideRolloutFlags(
 
 const api = {
   resources,
-  async resolveDefaultOff(): Promise<{
-    cacheEnabled: boolean;
-    cacheHostPresent: boolean;
-    resources: ReturnType<typeof resources>;
-  }> {
-    const soup = await loadSoup();
-    soup.getGraphqlSoupClient();
-    return {
-      cacheEnabled: soup.graphqlCacheEnabled(),
-      cacheHostPresent: soup.getGraphqlCacheHost() !== undefined,
-      resources: resources(),
-    };
-  },
   async tryTreatment(): Promise<
     | {
         overrideApplied: false;
@@ -122,9 +108,8 @@ const api = {
     const analytics = await initializeLocalPosthog();
     overrideRolloutFlags(analytics, false);
     const overrideApplied =
-      analytics.posthog.isFeatureEnabled('enable-graphql-soup') === true &&
       analytics.posthog.isFeatureEnabled('disable-browser-turso-cache') ===
-        false;
+      false;
     if (!overrideApplied) {
       return {
         overrideApplied: false,

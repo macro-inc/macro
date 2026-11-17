@@ -59,6 +59,15 @@ pub const AGENT_NAME: &str = "gen_ai.agent.name";
 pub const CONVERSATION_ID: &str = "gen_ai.conversation.id";
 /// Low-cardinality error class when the operation failed.
 pub const ERROR_TYPE: &str = "error.type";
+/// The processing tier an OpenAI request asked for (`service_tier`).
+pub const OPENAI_REQUEST_SERVICE_TIER: &str = "openai.request.service_tier";
+
+/// Macro-specific: the reasoning effort the provider request carried
+/// (OpenAI `reasoning.effort`/`reasoning_effort`, Anthropic
+/// `output_config.effort`). Absent when the request left it to the provider.
+pub const MACRO_REQUEST_REASONING_EFFORT: &str = "macro.genai.request.reasoning_effort";
+/// Macro-specific: the Anthropic inference speed the request asked for.
+pub const MACRO_REQUEST_SPEED: &str = "macro.genai.request.speed";
 
 /// Macro-specific: how many of the oldest messages were dropped from
 /// [`INPUT_MESSAGES`] to fit the size budget (see [`crate::Limits`]).
