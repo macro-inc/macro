@@ -51,7 +51,8 @@ ready notice (same notification id as the operator's, so an older operator's
 send dedupes). `outbound/setup_notices.rs` (`IngressSetupNotices`) builds that
 notification for both senders: the auth service's `AgentReadyNotices` and the
 computer operator's `SetupNotices` in agent_harness_service, which sends nothing
-on macrod connect for an agent's computer. Not tied to the starter agent: any
+on macrod connect for an agent's computer unless the agent already counts as
+online (one invited before reports, backfilled; its workspace never reports). Not tied to the starter agent: any
 agent runtime reports the same way.
 
 ## Start here

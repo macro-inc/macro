@@ -63,6 +63,7 @@ export default {
     "Couldn't set up the agent's workspace. Nothing was charged. Try again.",
   failed: "Couldn't invite the agent. Try again.",
   statusProvisioning: 'Setting up',
+  statusStarting: 'Starting',
   statusRunning: 'Running',
   statusPaused: 'Paused',
   statusFailed: 'Needs attention',

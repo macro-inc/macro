@@ -2,7 +2,8 @@
  * Tells Macro the agent is up (`POST /team_agents/me/online` on the auth
  * service). Until the first report its row reads "Starting" and its inviter
  * hasn't been told it is ready. Called each time presence opens; reports
- * once per run, retrying with a doubling wait until the server answers.
+ * once per run, retrying with a doubling wait (capped at a minute) until
+ * the server takes it.
  */
 import { nextWait } from './presence.ts';
 
@@ -32,13 +33,14 @@ export const reportsOnline = ({
   const attempt = (): void => {
     void post().then(
       (status) => {
-        // 404: not an agent teammate of its team (or a server without the
-        // route); retrying won't change that.
-        if (status < 300 || status === 404) {
+        if (status < 300) {
           state = 'done';
-          log({ online: status < 300 ? 'reported' : 'not_an_agent', status });
+          log({ online: 'reported', status });
           return;
         }
+        // A 404 too: this code can ship before the auth service that has
+        // the route. The wait caps at a minute, so an account that isn't an
+        // agent teammate costs one request a minute.
         again({ status });
       },
       (error: unknown) =>

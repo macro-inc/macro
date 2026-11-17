@@ -60,13 +60,14 @@ struct Delivery {
 impl<Ingress: NotificationIngress, Agents: TeamAgentRepository>
     IngressSetupNotices<Ingress, Agents>
 {
-    /// Who hears about an agent's computer, and the agent it names: the
-    /// agent's inviter. `None` when there is no one left to tell: the agent
-    /// was removed, or its inviter's account is gone.
+    /// Who hears about an agent's computer, the agent it names, and whether
+    /// the agent has reported itself online: the agent's inviter. `None`
+    /// when there is no one left to tell: the agent was removed, or its
+    /// inviter's account is gone.
     async fn agent_audience(
         &self,
         agent_user_id: &MacroUserIdStr<'static>,
-    ) -> Result<Option<(MacroUserIdStr<'static>, ComputerSetupAgent)>, SetupNoticeError> {
+    ) -> Result<Option<(MacroUserIdStr<'static>, ComputerSetupAgent, bool)>, SetupNoticeError> {
         let record = self
             .agents
             .get(agent_user_id)
@@ -83,7 +84,7 @@ impl<Ingress: NotificationIngress, Agents: TeamAgentRepository>
             user_id: agent_user_id.as_ref().to_owned(),
             name: record.persona_seed.name,
         };
-        Ok(Some((inviter, agent)))
+        Ok(Some((inviter, agent, record.first_online_at.is_some())))
     }
 
     async fn deliver(&self, delivery: Delivery) -> Result<(), SetupNoticeError> {
@@ -115,13 +116,19 @@ impl<Ingress: NotificationIngress, Agents: TeamAgentRepository> SetupNotices
         let notification_id = notification_id(notice.computer_id, &notice.outcome);
         let (recipient, agent) = match &notice.agent {
             None => (notice.buyer.clone(), None),
-            // macrod connecting doesn't start the agent: its ready notice
-            // waits for the agent's own online report.
-            Some(_) if matches!(notice.outcome, SetupOutcome::Ready) => return Ok(()),
             Some(agent_user_id) => {
-                let Some((inviter, agent)) = self.agent_audience(agent_user_id).await? else {
+                let Some((inviter, agent, came_online)) =
+                    self.agent_audience(agent_user_id).await?
+                else {
                     return Ok(());
                 };
+                // macrod connecting doesn't start the agent: its ready notice
+                // waits for the agent's own online report. An agent counted
+                // as online already (one invited before reports, whose
+                // workspace never sends one) is told about here as before.
+                if matches!(notice.outcome, SetupOutcome::Ready) && !came_online {
+                    return Ok(());
+                }
                 (inviter, Some(agent))
             }
         };

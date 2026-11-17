@@ -175,6 +175,25 @@ fn ada_is_up() -> AgentReady {
 }
 
 #[tokio::test]
+async fn an_agent_invited_before_online_reports_is_still_told_about_when_macrod_connects() {
+    // Backfilled as online: its workspace never reports, so the operator's
+    // ready notice is the only one it gets.
+    let legacy = TeamAgentRecord {
+        first_online_at: Some(chrono::DateTime::UNIX_EPOCH),
+        ..ada(Some("macro|inviter@example.com"))
+    };
+
+    let sent = sent(agent_ready(), vec![legacy]).await;
+
+    assert_eq!(sent.len(), 1);
+    assert_eq!(
+        sent[0]["req"]["recipient_ids"],
+        json!(["macro|inviter@example.com"])
+    );
+    assert_eq!(sent[0]["uuid_to_write"], json!(id(&agent_ready())));
+}
+
+#[tokio::test]
 async fn an_agent_computer_is_not_ready_when_macrod_connects_but_when_its_agent_is_up() {
     // macrod connecting doesn't start the agent; nothing is sent for it.
     assert_eq!(

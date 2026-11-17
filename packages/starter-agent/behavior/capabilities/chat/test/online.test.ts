@@ -44,12 +44,15 @@ test('retries a failed report until the server takes it', async () => {
   expect(log.at(-1)).toEqual({ online: 'reported', status: 204 });
 });
 
-test('stops when the account is not an agent teammate', async () => {
-  let calls = 0;
+test('keeps retrying a 404, for an auth service that has no route yet', async () => {
+  // The agent's code can ship before the auth service that answers it.
+  const answers = [404, 404, 204];
+  const sent: number[] = [];
   const online = reportsOnline({
     post: async () => {
-      calls += 1;
-      return 404;
+      const status = answers.shift() ?? 204;
+      sent.push(status);
+      return status;
     },
     log: () => {},
     wait: 1,
@@ -58,5 +61,5 @@ test('stops when the account is not an agent teammate', async () => {
   online.report();
   await settled();
 
-  expect(calls).toBe(1);
+  expect(sent).toEqual([404, 404, 204]);
 });
