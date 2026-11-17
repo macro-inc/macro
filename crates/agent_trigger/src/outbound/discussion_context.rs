@@ -587,9 +587,10 @@ struct Selection<'a> {
     messages_omitted: bool,
 }
 
-/// Whether a message is live and says something.
+/// Whether a message is live and says something: text, or a shared file.
 fn readable(message: &Message) -> bool {
-    message.deleted_at.is_none() && !message.content.trim().is_empty()
+    let says_something = !message.content.trim().is_empty() || !message.attachments.is_empty();
+    message.deleted_at.is_none() && says_something
 }
 
 /// The prompt's discussion from its root through the prompt. Replies posted
@@ -607,7 +608,7 @@ fn prompt_thread<'a>(discussion: &'a MessageThread, prompt: &'a Message) -> Sele
             break;
         }
     }
-    if !reached_prompt && !prompt.content.trim().is_empty() {
+    if !reached_prompt && readable(prompt) {
         messages.push(prompt);
     }
 

@@ -4,7 +4,8 @@ use super::models::{CalendarNotice, FocusAnswers, FocusCategory, FocusSignals, F
 
 /// The rule's version, stored with each verdict. Bump it when [`decide`] or the
 /// signals change: the next sweep re-decides rows stored under an older version
-/// from their stored answers, without asking Jev again.
+/// from their stored answers, without asking Jev again. A new answer that stored
+/// rows read as 0, and that decides nothing at 0, needs no bump.
 pub const FOCUS_RULE_VERSION: i16 = 1;
 
 /// A "yes" from Jev.
@@ -38,6 +39,15 @@ const FOLLOW_UP_FLOOR: u8 = 55;
 const KEY_FLOOR: u8 = 50;
 const FOCUS_FLOOR: u8 = 30;
 
+/// How far apart Jev's two time answers must be before importance moves at all.
+/// On labelled synthetic threads, nearly all that shouldn't move stayed under this
+/// and nearly all that should were past 0.5. Repeat runs shift answers by up to 0.1.
+const TIME_DEAD_BAND: f32 = 0.4;
+/// Share of the distance left that importance covers per day, as a percent, when
+/// Jev is certain. Any faster and mid-range threads reach 100 or 0 within the list's
+/// 30 days.
+const MOST_PERCENT_PER_DAY: f32 = 10.0;
+
 /// Decide whether a thread belongs in Focus, why, and how important it is.
 ///
 /// Key mail is always in: mail waiting on the owner's reply, and mail from recent
@@ -60,6 +70,10 @@ const FOCUS_FLOOR: u8 = 30;
 /// reads, since nothing reclassifies a thread as it ages. Its labels and importance
 /// are set for those moments here, and the read calls a held thread Calendar, so
 /// Calendar in Focus only ever means a change still ahead of its event.
+///
+/// How importance moves with time is set here too and applied by the read. The
+/// floors below only set where it starts: fading can take a thread under them.
+/// Membership and labels never depend on it.
 pub fn decide(answers: &FocusAnswers, signals: &FocusSignals) -> FocusVerdict {
     let calendar_hold_until = signals.calendar_change_until();
     let left_out = match signals.calendar {
@@ -144,7 +158,19 @@ pub fn decide(answers: &FocusAnswers, signals: &FocusSignals) -> FocusVerdict {
         needs_follow_up,
         awaiting_reply: signals.awaiting_reply,
         importance,
+        importance_rate: importance_rate(answers),
     }
+}
+
+/// One signed rate from Jev's two time answers. Only a clear lean moves a thread:
+/// sure of both, or of neither, it stays flat.
+fn importance_rate(answers: &FocusAnswers) -> i8 {
+    let lean = answers.grows_with_time - answers.fades_with_time;
+    if lean.abs() < TIME_DEAD_BAND {
+        return 0;
+    }
+
+    (lean.clamp(-1.0, 1.0) * MOST_PERCENT_PER_DAY).round() as i8
 }
 
 #[cfg(test)]

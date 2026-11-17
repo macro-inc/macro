@@ -44,6 +44,7 @@ impl PresentationFiles for NoPresentationFiles {
 
 /// A slide or shape an edit created.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreatedItem {
     /// Slide id.
@@ -58,6 +59,7 @@ pub struct CreatedItem {
 
 /// What an edit did.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct PresentationEditOutcome {
     /// The edited document (clients reload open editors of it).

@@ -17,6 +17,7 @@ const token: MeetingCredentials = {
   serverUrl: 'wss://example.com',
   token: 'scoped-rtc-token',
   participantId: 'guest-1',
+  started: false,
   shareToken: 'meeting-secret',
 };
 const preferences = { microphoneEnabled: false, cameraEnabled: false };

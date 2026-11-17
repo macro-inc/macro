@@ -5,6 +5,9 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import type { NotificationType } from '@core/types';
 import CheckIcon from '@icon/system/regular/check.svg';
+import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
+import EnvelopeOpenIcon from '@icon/system/regular/envelope-open.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { openNotification, type UnifiedNotification } from '@notifications';
 import { Button, cn } from '@ui';
@@ -84,6 +87,11 @@ function NotificationRowContent(props: {
       <Match when={tag() === 'channel_invite'}>
         <span class="text-xs text-ink-muted/80 italic">
           to join the channel
+        </span>
+      </Match>
+      <Match when={tag() === 'channel_access_requested'}>
+        <span class="text-xs text-ink-muted/80 italic">
+          approve or deny it in the channel
         </span>
       </Match>
       <Match when={tag() === 'invite_to_team'}>
@@ -378,15 +386,18 @@ export function NotificationRow(props: NotificationRowProps) {
             <Show when={canMarkDone()}>
               <MenuItem
                 text={t('entityActions.markDone')}
+                icon={CheckCircleIcon}
                 onClick={() => handleMarkAsDone()}
               />
             </Show>
             <MenuItem
               text={t('entityActions.markRead')}
+              icon={EnvelopeOpenIcon}
               onClick={handleMarkAsRead}
             />
             <MenuItem
               text={t('entityActions.copyLink')}
+              icon={LinkIcon}
               onClick={handleCopyLink}
             />
           </ContextMenuContent>

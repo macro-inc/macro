@@ -40,6 +40,7 @@ fn incoming(name: &str, mut metadata: Value) -> IncomingEvent {
     IncomingEvent {
         event_id: Uuid::parse_str(EVENT_ID).unwrap(),
         schema_version: 1,
+        routine_id: None,
         payload,
     }
 }
@@ -183,6 +184,18 @@ fn missing_creation_attribution_and_delegation_are_not_human_authorship() {
 }
 
 #[test]
+fn a_message_a_routine_posted_as_its_owner_starts_no_routine() {
+    // Posted by a person, with no agent attribution: a routine operating as
+    // its owner. Only the routine stamp on the event tells it apart.
+    let mut posted = incoming("channel.message_posted", metadata());
+    assert!(posted.normalize().is_ok());
+
+    posted.routine_id = Some(Uuid::from_u128(5));
+
+    assert_eq!(posted.normalize(), Err(EventRejection::RoutineWrite));
+}
+
+#[test]
 fn update_prefers_explicit_actor_and_requires_a_fallback_when_absent() {
     let mut data = metadata();
     data["actor_user_id"] = Value::Null;
@@ -224,6 +237,7 @@ fn every_non_allowlisted_variant_is_rejected() {
         let event = IncomingEvent {
             event_id: Uuid::parse_str(EVENT_ID).unwrap(),
             schema_version: 1,
+            routine_id: None,
             payload: EventPayload::Message(message_fact(name, metadata())),
         };
         assert_eq!(event.normalize(), Err(EventRejection::UnsupportedEvent));
@@ -406,6 +420,30 @@ fn multiple_triggers_preserve_event_filters_and_choose_the_next_schedule() {
 }
 
 #[test]
+fn schedules_use_the_zones_2026_rules() {
+    // These zones stopped changing clocks in 2026 (IANA tzdata 2026b–2026e).
+    for (timezone, next) in [
+        ("America/Edmonton", "2026-11-02T15:00:00+00:00"),
+        ("America/Inuvik", "2026-11-02T15:00:00+00:00"),
+        ("America/Vancouver", "2026-11-02T16:00:00+00:00"),
+        ("America/Winnipeg", "2026-11-02T14:00:00+00:00"),
+    ] {
+        let trigger: ActionTrigger = serde_json::from_value(
+            json!({"type": "cron", "schedule": "0 0 9 * * *", "timezone": timezone}),
+        )
+        .unwrap();
+        let after = chrono::DateTime::parse_from_rfc3339("2026-11-01T20:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        assert_eq!(
+            trigger.next_run_after(after).unwrap().to_rfc3339(),
+            next,
+            "{timezone}"
+        );
+    }
+}
+
+#[test]
 fn event_groups_must_be_combined_and_external_webhooks_are_rejected() {
     let events = serde_json::json!({"type":"events", "filters":[{"events":["document.created"]}]});
     assert!(
@@ -423,6 +461,7 @@ fn property_event(name: &str, metadata: Value) -> IncomingEvent {
     IncomingEvent {
         event_id: Uuid::parse_str(EVENT_ID).unwrap(),
         schema_version: 1,
+        routine_id: None,
         payload: EventPayload::Property(
             serde_json::from_value(json!({
                 "event_type": name, "metadata": metadata
@@ -632,6 +671,7 @@ fn call_event(event_type: &str, participants: &[&str]) -> IncomingEvent {
     IncomingEvent {
         event_id: Uuid::parse_str(EVENT_ID).unwrap(),
         schema_version: 1,
+        routine_id: None,
         payload: EventPayload::Call(
             serde_json::from_value(json!({
                 "event_type": event_type, "metadata": {
@@ -701,6 +741,7 @@ fn email_receipts_keep_only_ids_and_exclude_spam_and_backfills() {
     let mut event = IncomingEvent {
         event_id: Uuid::parse_str(EVENT_ID).unwrap(),
         schema_version: 1,
+        routine_id: None,
         payload: EventPayload::Email(
             serde_json::from_value(json!({
                 "event_type":"email.message_received", "metadata": {
@@ -773,6 +814,7 @@ fn github_deliveries_normalize_with_their_payload_and_reject_odd_names() {
     let incoming = |event: &str| IncomingEvent {
         event_id: macro_uuid::generate_uuid_v7(),
         schema_version: 1,
+        routine_id: None,
         payload: EventPayload::Github(github::broker::GithubWebhookTopicEvent::Received(
             serde_json::from_value(json!({
                 "event": event,

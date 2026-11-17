@@ -84,6 +84,7 @@ fn rerun_live_checks() -> Step<Run> {
     Step::new("Re-run the check on PRs whose release is live")
         .run(concat!(
             include_str!("scripts/android_git_fetch.sh"),
+            include_str!("scripts/pr_ci_run.sh"),
             include_str!("scripts/android_play_statuses.sh"),
             include_str!("scripts/android_release_watch.sh")
         ))

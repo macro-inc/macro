@@ -97,6 +97,9 @@ fn viewer(id: &str) -> Viewer {
 
 struct Fixture {
     workflows: Workflows,
+    pipelines: Arc<Pipelines>,
+    crm: Arc<Crm>,
+    access: Arc<Access>,
     acme: Uuid,
     globex: Uuid,
     sam: Uuid,
@@ -176,7 +179,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
     let sam = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO crm_contacts (id, company_id, email, name, first_interaction, last_interaction)
-         VALUES ($1, $2, 'sam@acme.com', 'Sam Lee', now(), now())",
+         VALUES ($1, $2, 'sam@acme.example.com', 'Sam Lee', now(), now())",
         sam,
         acme
     )
@@ -191,7 +194,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
         NoOpTableEventPublisher,
         NoopMacroEventBroker,
     ));
-    let pipelines = Pipelines::new(
+    let pipelines = Arc::new(Pipelines::new(
         PgPipelineRepo::new(
             pool.clone(),
             PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone())),
@@ -199,13 +202,16 @@ async fn fixture(pool: &PgPool) -> Fixture {
         databases,
         access.clone(),
         Stages,
-    );
-    let crm = Crm::new(
+    ));
+    let crm = Arc::new(Crm::new(
         CompaniesRepositoryImpl::new(pool.clone()),
         NoOpCompanyMetadataResolver,
-    );
+    ));
     Fixture {
-        workflows: Workflows::new(Arc::new(pipelines), Arc::new(crm), access),
+        workflows: Workflows::new(pipelines.clone(), crm.clone(), access.clone()),
+        pipelines,
+        crm,
+        access,
         acme,
         globex,
         sam,
@@ -238,7 +244,7 @@ async fn sales(workflows: &Workflows, sharing: PipelineSharing) -> PipelineOverv
             &viewer(OWNER),
             NewPipeline {
                 name: "Sales".into(),
-                record_type: PipelineRecordType::Company,
+                record_type: Some(PipelineRecordType::Company),
                 sharing,
                 stages: Vec::new(),
                 fields: Vec::new(),
@@ -265,7 +271,14 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
             .iter()
             .map(|f| f.name.as_str())
             .collect::<Vec<_>>(),
-        ["Company", "Stage", "Owner", "Revenue"]
+        [
+            "Company",
+            "Stage",
+            "Outcome",
+            "Owner",
+            "Revenue",
+            "Revenue currency"
+        ]
     );
 
     let added = workflows
@@ -274,7 +287,7 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
             id,
             vec![
                 EntryAddition {
-                    record: RecordTarget::Id(acme),
+                    record: Some(RecordTarget::Id(acme)),
                     set: vec![
                         set("stage", "prospect"),
                         set("Owner", "me"),
@@ -282,7 +295,7 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
                     ],
                 },
                 EntryAddition {
-                    record: RecordTarget::Id(globex),
+                    record: Some(RecordTarget::Id(globex)),
                     set: Vec::new(),
                 },
             ],
@@ -292,8 +305,14 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
         .unwrap();
     assert_eq!(added.added.len(), 2);
     let acme_entry = &added.added[0];
-    assert_eq!(acme_entry.record.name.as_deref(), Some("Acme"));
-    assert_eq!(acme_entry.record.detail.as_deref(), Some("acme.com"));
+    assert_eq!(
+        acme_entry.record.as_ref().unwrap().name.as_deref(),
+        Some("Acme")
+    );
+    assert_eq!(
+        acme_entry.record.as_ref().unwrap().detail.as_deref(),
+        Some("acme.com")
+    );
     assert_eq!(field(acme_entry, "Stage"), labels("Prospect").as_ref());
     assert_eq!(
         field(acme_entry, "Owner"),
@@ -310,7 +329,7 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
             &owner,
             id,
             vec![EntryAddition {
-                record: RecordTarget::Id(acme),
+                record: Some(RecordTarget::Id(acme)),
                 set: Vec::new(),
             }],
             false,
@@ -332,7 +351,7 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
         .unwrap();
     assert_eq!(prospects.matched, 1);
     assert!(prospects.complete);
-    assert_eq!(prospects.entries[0].record.id, acme);
+    assert_eq!(prospects.entries[0].record.as_ref().unwrap().id, acme);
     let all = workflows
         .find(&owner, id, query(Vec::new(), None))
         .await
@@ -348,13 +367,20 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
         ]
     );
     assert_eq!(stages.empty, 1);
-    assert_eq!(all.totals, [(String::from("Revenue"), 48_000.0)]);
+    assert_eq!(
+        all.totals,
+        [crm::domain::pipeline_workflows::FieldTotal {
+            field: "Revenue".into(),
+            currency: Some("USD".into()),
+            sum: 48_000.0
+        }]
+    );
     let found = workflows
         .find(&owner, id, query(Vec::new(), Some("GLOB")))
         .await
         .unwrap();
     assert_eq!(found.entries.len(), 1);
-    assert_eq!(found.entries[0].record.id, globex);
+    assert_eq!(found.entries[0].record.as_ref().unwrap().id, globex);
     let mine = workflows
         .find(&owner, id, query(vec![set("Owner", "me")], None))
         .await
@@ -381,7 +407,10 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
     let change = &moved.updated[0].changes[0];
     assert_eq!(change.before, labels("Prospect"));
     assert_eq!(change.after, labels("Won"));
-    assert_eq!(moved.updated[0].record.name.as_deref(), Some("Acme"));
+    assert_eq!(
+        moved.updated[0].record.as_ref().unwrap().name.as_deref(),
+        Some("Acme")
+    );
     // Every write is the user's, made by the agent acting for them.
     let changes = sqlx::query!(
         "SELECT actor, acting_bot FROM database_changes WHERE database_id = $1",
@@ -436,7 +465,7 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
     );
     let by_name = workflows.search_entries(&owner, "acme", 50).await.unwrap();
     assert_eq!(by_name.len(), 1);
-    assert_eq!(by_name[0].entries[0].record.id, acme);
+    assert_eq!(by_name[0].entries[0].record.as_ref().unwrap().id, acme);
     assert!(
         workflows
             .search_entries(&owner, "nobody", 50)
@@ -449,7 +478,7 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
         .remove(&owner, id, vec![EntryTarget::Record(globex)])
         .await
         .unwrap();
-    assert_eq!(removed.removed[0].record.id, globex);
+    assert_eq!(removed.removed[0].record.as_ref().unwrap().id, globex);
     let left = workflows
         .find(&owner, id, query(Vec::new(), None))
         .await
@@ -485,7 +514,7 @@ async fn contacts_are_added_by_email_and_a_record_with_two_deals_needs_an_entry_
             &owner,
             NewPipeline {
                 name: "Partners".into(),
-                record_type: PipelineRecordType::Contact,
+                record_type: Some(PipelineRecordType::Contact),
                 sharing: PipelineSharing::Private,
                 stages: Vec::new(),
                 fields: Vec::new(),
@@ -498,28 +527,31 @@ async fn contacts_are_added_by_email_and_a_record_with_two_deals_needs_an_entry_
             &owner,
             people.pipeline.pipeline.id,
             vec![EntryAddition {
-                record: RecordTarget::Email("SAM@acme.com".into()),
+                record: Some(RecordTarget::Email("SAM@acme.example.com".into())),
                 set: Vec::new(),
             }],
             false,
         )
         .await
         .unwrap();
-    assert_eq!(added.added[0].record.id, sam);
-    assert_eq!(added.added[0].record.name.as_deref(), Some("Sam Lee"));
+    assert_eq!(added.added[0].record.as_ref().unwrap().id, sam);
+    assert_eq!(
+        added.added[0].record.as_ref().unwrap().name.as_deref(),
+        Some("Sam Lee")
+    );
 
     // In a company pipeline, a contact's email adds its company.
     let sales = sales(&workflows, PipelineSharing::Private).await;
     let id = sales.pipeline.pipeline.id;
     let email = || EntryAddition {
-        record: RecordTarget::Email("sam@acme.com".into()),
+        record: Some(RecordTarget::Email("sam@acme.example.com".into())),
         set: Vec::new(),
     };
     let added = workflows
         .add(&owner, id, vec![email()], false)
         .await
         .unwrap();
-    assert_eq!(added.added[0].record.id, acme);
+    assert_eq!(added.added[0].record.as_ref().unwrap().id, acme);
     let second = workflows
         .add(&owner, id, vec![email()], true)
         .await
@@ -557,7 +589,7 @@ async fn contacts_are_added_by_email_and_a_record_with_two_deals_needs_an_entry_
                 &owner,
                 id,
                 vec![EntryAddition {
-                    record: RecordTarget::Id(Uuid::now_v7()),
+                    record: Some(RecordTarget::Id(Uuid::now_v7())),
                     set: Vec::new(),
                 }],
                 false,
@@ -576,7 +608,7 @@ async fn pipelines_are_created_with_stages_and_edited_by_name(pool: PgPool) {
             &owner,
             NewPipeline {
                 name: "Hiring".into(),
-                record_type: PipelineRecordType::Contact,
+                record_type: Some(PipelineRecordType::Contact),
                 sharing: PipelineSharing::Team,
                 stages: vec!["Sourced".into(), "Interview".into(), "Hired".into()],
                 fields: vec![
@@ -681,3 +713,162 @@ async fn pipelines_are_created_with_stages_and_edited_by_name(pool: PgPool) {
             .is_err()
     );
 }
+
+#[path = "pipeline_workflows/commercial.rs"]
+mod commercial;
+
+#[path = "pipeline_workflows/requirements.rs"]
+mod requirements;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_generic_pipeline_takes_entries_by_their_fields(pool: PgPool) {
+    let Fixture { workflows, .. } = fixture(&pool).await;
+    let owner = viewer(OWNER);
+    let launch = workflows
+        .create(
+            &owner,
+            NewPipeline {
+                name: "Launch".into(),
+                record_type: None,
+                sharing: PipelineSharing::Private,
+                stages: vec!["Planned".into(), "Done".into()],
+                fields: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    let id = launch.pipeline.pipeline.id;
+    let names: Vec<&str> = launch.fields.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["Name", "Stage"]);
+    assert_eq!(launch.field("Name").unwrap().kind, FieldKind::Text);
+    assert!(!launch.field("Name").unwrap().required);
+
+    let site = |name: &str| EntryAddition {
+        record: None,
+        set: vec![
+            ("Name".into(), FieldInput::One(name.into())),
+            ("Stage".into(), FieldInput::One("Planned".into())),
+        ],
+    };
+    let added = workflows
+        .add(
+            &owner,
+            id,
+            vec![site("Site"), site("Site"), site("Docs")],
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(added.added.len(), 3, "rows name no record, so none repeats");
+    assert_eq!(added.added[0].record, None);
+    assert_eq!(
+        added.added[0].fields[0],
+        ("Name".to_owned(), FieldValue::Text("Site".into()))
+    );
+
+    assert!(matches!(
+        workflows
+            .add(
+                &owner,
+                id,
+                vec![EntryAddition {
+                    record: Some(RecordTarget::Id(Uuid::now_v7())),
+                    set: site("Site").set,
+                }],
+                false,
+            )
+            .await,
+        Err(WorkflowError::Invalid(_))
+    ));
+    let blank = workflows
+        .add(
+            &owner,
+            id,
+            vec![EntryAddition {
+                record: None,
+                set: Vec::new(),
+            }],
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        blank.added.len(),
+        1,
+        "a row may start empty, as in the editor"
+    );
+
+    let found = workflows
+        .find(
+            &owner,
+            id,
+            EntryQuery {
+                search: Some("doc".into()),
+                limit: 10,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(found.matched, 1);
+    let docs = found.entries[0].entry_id;
+
+    let updated = workflows
+        .update(
+            &owner,
+            id,
+            vec![EntryUpdate {
+                target: EntryTarget::Entry(docs),
+                set: vec![("Stage".into(), FieldInput::One("Done".into()))],
+            }],
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated.updated[0].record, None);
+
+    let removed = workflows
+        .remove(&owner, id, vec![EntryTarget::Entry(docs)])
+        .await
+        .unwrap();
+    assert_eq!(removed.removed.len(), 1);
+
+    let listed = workflows.pipelines(&owner).await.unwrap();
+    assert!(listed.iter().any(|o| o.pipeline.pipeline.id == id));
+    let edited = workflows
+        .edit(
+            &owner,
+            id,
+            PipelineEdit {
+                remove_fields: vec!["Name".into()],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(edited.field("Name").is_err());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_tracked_pipeline_still_requires_a_record(pool: PgPool) {
+    let Fixture { workflows, .. } = fixture(&pool).await;
+    let deals = sales(&workflows, PipelineSharing::Private).await;
+    assert!(matches!(
+        workflows
+            .add(
+                &viewer(OWNER),
+                deals.pipeline.pipeline.id,
+                vec![EntryAddition {
+                    record: None,
+                    set: vec![("Stage".into(), FieldInput::One("Lead".into()))],
+                }],
+                false,
+            )
+            .await,
+        Err(WorkflowError::Invalid(_))
+    ));
+}
+
+#[cfg(feature = "inbound")]
+#[path = "pipeline_workflows/http.rs"]
+mod http;

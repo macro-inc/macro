@@ -131,7 +131,7 @@ async fn read_through(
     .read(
         receipt(AccessLevel::View),
         &user(),
-        "macro|ai@macro.com",
+        Some("macro|ai@macro.com"),
         None,
         None,
     )
@@ -241,7 +241,7 @@ async fn reads_mint_only_view_access_for_the_delegated_actor() {
         .read(
             receipt(AccessLevel::View),
             &user(),
-            "macro|ai@macro.com",
+            Some("macro|ai@macro.com"),
             Some(3),
             None,
         )
@@ -294,7 +294,7 @@ async fn edits_mint_edit_access_and_are_attributed_to_the_user() {
         .edit(
             receipt(AccessLevel::Edit),
             &user(),
-            "macro|ai@macro.com",
+            Some("macro|ai@macro.com"),
             vec![rename("a"), rename("b")],
             WordEditOptions {
                 track_changes: Some(true),
@@ -316,7 +316,7 @@ async fn a_user_without_a_name_is_named_by_their_email() {
         .edit(
             receipt(AccessLevel::Edit),
             &user(),
-            "macro|ai@macro.com",
+            Some("macro|ai@macro.com"),
             vec![rename("a"), rename("b")],
             WordEditOptions::default(),
         )
@@ -336,7 +336,7 @@ async fn an_explicit_author_replaces_the_user() {
         .edit(
             receipt(AccessLevel::Edit),
             &user(),
-            "macro|ai@macro.com",
+            Some("macro|ai@macro.com"),
             vec![rename("a"), rename("b")],
             WordEditOptions {
                 track_changes: Some(false),
@@ -357,7 +357,7 @@ async fn authors_are_one_short_line() {
             .edit(
                 receipt(AccessLevel::Edit),
                 &user(),
-                "macro|ai@macro.com",
+                Some("macro|ai@macro.com"),
                 vec![rename("a")],
                 WordEditOptions {
                     track_changes: None,
@@ -380,7 +380,7 @@ async fn other_file_types_never_reach_the_worker() {
             .read(
                 receipt(AccessLevel::View),
                 &user(),
-                "macro|ai@macro.com",
+                Some("macro|ai@macro.com"),
                 None,
                 None,
             )
@@ -400,7 +400,7 @@ async fn edits_need_between_one_and_fifty_operations() {
             .edit(
                 receipt(AccessLevel::Edit),
                 &user(),
-                "macro|ai@macro.com",
+                Some("macro|ai@macro.com"),
                 operations,
                 WordEditOptions::default(),
             )

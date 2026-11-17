@@ -99,7 +99,7 @@ pub(crate) async fn upsert_email_message(
     Ok(())
 }
 
-#[tracing::instrument(skip(client, messages), err)]
+#[tracing::instrument(skip(client, messages))]
 pub(crate) async fn bulk_upsert_email_messages(
     client: &opensearch::OpenSearch,
     messages: &[UpsertEmailArgs],

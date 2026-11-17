@@ -5,7 +5,13 @@ import { For } from 'solid-js';
 import { Avatar } from './Avatar';
 import { Badge, type BadgeVariant } from './Badge';
 
-const VARIANTS: BadgeVariant[] = ['ghost', 'outline'];
+const VARIANTS: BadgeVariant[] = [
+  'ghost',
+  'outline',
+  'accent',
+  'violet',
+  'success',
+];
 
 // #region demo:variants
 function VariantsDemo() {

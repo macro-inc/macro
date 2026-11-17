@@ -311,7 +311,8 @@ def run_case(case, releases, v1, v2):
     base = f"http://127.0.0.1:{gateway.port}"
     workspace = os.path.join(work, "workspace")
     os.makedirs(workspace)
-    with open(os.path.join(workspace, "macrod.toml"), "w") as config:
+    os.makedirs(os.path.join(home, ".macrod"))
+    with open(os.path.join(home, ".macrod", "macrod.toml"), "w") as config:
         config.write(f"""
 [macro]
 api_url = "{base}"
@@ -321,7 +322,6 @@ web_url = "{base}"
 [credentials]
 harness_id = "00000000-0000-0000-0000-0000004a125a"
 token = "mhns_e2e"
-scope = "user"
 
 [harness]
 command = "{sys.executable}"

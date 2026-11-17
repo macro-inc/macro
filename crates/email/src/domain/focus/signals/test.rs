@@ -24,6 +24,7 @@ fn message(from: &str, minutes: i64, is_sent: bool, body: &str) -> FocusMessage 
         calendar_part: None,
         body: Some(body.to_owned()),
         snippet: None,
+        date_header: None,
     }
 }
 

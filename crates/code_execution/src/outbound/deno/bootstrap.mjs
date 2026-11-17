@@ -1,4 +1,4 @@
-import { Macro, observeRequests } from "@macro-inc/sdk";
+import { Macro, gateRequests, observeRequests, sendVerbHeaders } from "@macro-inc/sdk";
 
 // Trusted bootstrap: credentials arrive once on stdin, then user code is imported
 // dynamically so module reads are checked against the scratch-only read grant.
@@ -12,6 +12,8 @@ const decoder = new TextDecoder();
 const isArray = Array.isArray;
 const entries = Object.entries;
 const hasOwn = Object.hasOwn;
+// Calls of one operation that, unfinished at the deadline, read as a loop.
+const LOOP_HINT_CALLS = 50;
 function emit(frame) {
   const bytes = encoder.encode(`${stringify(frame)}\n`);
   let offset = 0;
@@ -66,6 +68,8 @@ globalThis.console = {
 // turn. A worker would bring fresh timers; imports of node timer modules are
 // remapped to timers.mjs.
 // A function, not an arrow, so `new Worker(...)` reaches the throw.
+// The bootstrap keeps one timer for itself: the loop report before the deadline.
+const bootstrapTimeout = globalThis.setTimeout.bind(globalThis);
 const sleepBanned = (name) => function () {
   throw new Error(`${name} is unavailable in ExecuteCode: do not sleep or poll in a program. Finish this execution, and to check back later create a routine with macro.routines.create.`);
 };
@@ -73,47 +77,145 @@ for (const name of ["setTimeout", "setInterval", "setImmediate", "Worker"]) glob
 AbortSignal.timeout = sleepBanned("AbortSignal.timeout");
 Atomics.wait = sleepBanned("Atomics.wait");
 Atomics.waitAsync = sleepBanned("Atomics.waitAsync");
+// A static import of a blocked built-in fails to link before unavailable.mjs
+// can throw; the catch below explains it the same way.
+const unavailable = new Set(entries(parse(Deno.readTextFileSync(new URL("./imports.json", import.meta.url))).imports)
+  .filter(([, target]) => target === "./unavailable.mjs").map(([specifier]) => specifier));
 try {
-  const {maxResultBytes, ...context} = await new Response(Deno.stdin.readable).json();
+  const {maxResultBytes, maxCallsPerOperation, remainingMs, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
+  // A dry run answers each write with an empty result, so it shows what the
+  // program would do. Operations missing from the catalog count as writes.
+  const dryRun = unattended?.dryRun === true;
+  const catalog = new Map((operations ?? []).map(operation => [operation.key, operation]));
+  const routes = (operations ?? []).map(operation => ({
+    ...operation,
+    pattern: new RegExp(`${operation.path.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{[^}]+\}/g, "[^/]+")}$`),
+  }));
+  // A program stuck in a loop (reading the same thread over and over, walking
+  // every page of a search for a match that never comes) would call one API
+  // until the deadline and end with only "timed out", which tells the agent
+  // nothing. So the run stops, naming the operation, when one operation passes
+  // its budget, or near the deadline if one has been called often enough to
+  // look like a loop. Either way it stops at once, even if the program catches
+  // errors: a catch-and-retry loop must not spin on to the deadline.
+  const calls = new Map();
+  const mostCalled = () => {
+    let top = ["", 0];
+    for (const entry of calls) if (entry[1] > top[1]) top = entry;
+    return top;
+  };
+  const advice = "Calls already started, writes included, may have taken effect: check what they did before running anything again. Then rewrite the program: stop iterating once you have what you need (break out of for await loops), read each item once and reuse it, prefer list and batch reads over one read per item, or narrow the search.";
+  const stop = (message) => {
+    emit({type: "error", message});
+    exit(0);
+  };
+  gateRequests(({service, operation}) => {
+    const key = `${service}.${operation}`;
+    const count = (calls.get(key) ?? 0) + 1;
+    if (count > maxCallsPerOperation) {
+      stop(`Stopped: this program called ${key} more than ${maxCallsPerOperation} times, so it is probably looping. ${advice} A job that truly needs more calls of one operation must be split into smaller jobs.`);
+    }
+    calls.set(key, count);
+    if (dryRun && catalog.get(key)?.write !== false) return {skip: {data: {}}};
+    return undefined;
+  });
+  if (remainingMs > 0) {
+    const timer = bootstrapTimeout(() => {
+      const [key, count] = mostCalled();
+      if (count >= LOOP_HINT_CALLS) {
+        stop(`Stopped near the deadline: this program called ${key} ${count} times and did not finish, so it may be looping, or the job is too big for one run. ${advice}`);
+      }
+    }, remainingMs - Math.min(1500, remainingMs / 4));
+    Deno.unrefTimer(timer);
+  }
   const originalFetch = globalThis.fetch.bind(globalThis);
+  sendVerbHeaders(true);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
   globalThis.fetch = (input, init) => {
     const request = new Request(input, init);
-    if (request.headers.has("authorization") && origins.has(new URL(request.url).origin)) {
+    // Every request to an SDK origin, whatever credential it carries.
+    if (origins.has(new URL(request.url).origin)) {
       for (const [name, value] of Object.entries(context.traceHeaders ?? {})) {
         if (name === "traceparent" || name === "tracestate") request.headers.set(name, value);
       }
       // Marks the request as a program's, not a person's in the app, so an API
       // can ask it to confirm what a person would have chosen by opening it.
       request.headers.set("x-macro-code-execution", "1");
+      // A dry run's backstop: a request to an SDK origin that didn't come
+      // through the gate is sent only if a read matches its route.
+      if (dryRun && request.method !== "GET" && request.method !== "HEAD") {
+        const path = new URL(request.url).pathname;
+        const read = routes.some(route => route.method === request.method && route.pattern.test(path) && !route.write);
+        if (!read) return Promise.reject(new Error("A dry run doesn't send changes."));
+      }
     }
     return originalFetch(request);
   };
   const activeRequests = new Set();
   let observedRequests = 0;
   observeRequests(value => {
-    if (value.status === "started") {
+    // A gated operation reports once, as skipped or refused, with no start.
+    if (value.status === "started" || value.status === "skipped" || value.status === "refused") {
       if (++observedRequests > 128) {
         if (observedRequests === 129) emit({type: "progress", value: {truncated: true}});
         return;
       }
-      activeRequests.add(value.id);
+      if (value.status === "started") activeRequests.add(value.id);
     } else if (!activeRequests.delete(value.id)) return;
     emit({type: "progress", value});
   });
-  const macro = new Macro({token: context.token, hosts: context.hosts});
-  const session = context.sessionId ? macro.agentSessions.byId(context.sessionId) : undefined;
-  const execution = session && context.executionId ? session.codeExecutions.byId(context.executionId) : undefined;
+  const macro = new Macro({token: context.token, hosts: context.hosts, webAppUrl: context.webAppUrl});
   // A literal dynamic import joins Deno's initial static graph, bypassing read
   // permissions. Compute this specifier so the entire generated graph is loaded
   // at runtime and every local module read requires the scratch permission.
-  const program = new URL("./main.mjs", import.meta.url).href;
+  const program = new URL(unattended ? "./main.ts" : "./main.mjs", import.meta.url).href;
+  // Every request must go through the fetch above, which marks it as the
+  // program's and holds back a dry run's writes. Nothing else may reach the
+  // network (raw sockets, listeners, websockets), start a realm with its own
+  // fetch (workers), or reach Node's or Deno's internals past the import map.
+  for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket"]) {
+    Object.defineProperty(Deno, name, {value: undefined});
+  }
+  delete Deno[Deno.internal];
+  for (const name of ["WebSocket", "EventSource"]) globalThis[name] = undefined;
+  // An unattended program gets no Worker at all; an attended one keeps the
+  // Worker above, which throws like a timer.
+  if (unattended) globalThis.Worker = undefined;
+  // `node:process` exports its own getBuiltinModule, so the import map blocks
+  // that module too.
+  if (globalThis.process) {
+    for (const name of ["getBuiltinModule", "binding"]) globalThis.process[name] = undefined;
+  }
   const { main } = await import(program);
-  if (typeof main !== "function") throw new Error("Export an async main({macro, session, execution}) function.");
-  const value = await main({...context, macro, session, execution});
-  emit(resultFrame(value ?? null, maxResultBytes));
+  let value;
+  if (unattended) {
+    if (typeof main !== "function") throw new Error("Export an async main(context: StepContext) function.");
+    // Never the credential, hosts or trace context: only the SDK and the step's inputs.
+    value = await main({...unattended.arguments, macro});
+  } else {
+    const session = context.sessionId ? macro.agentSessions.byId(context.sessionId) : undefined;
+    const execution = session && context.executionId ? session.codeExecutions.byId(context.executionId) : undefined;
+    if (typeof main !== "function") throw new Error("Export an async main({macro, session, execution}) function.");
+    value = await main({...context, macro, session, execution});
+  }
+  if (unattended) {
+    // A step's output feeds later steps whole; one too large fails instead
+    // of being summarized.
+    const bytes = encoder.encode(stringify(value ?? null) ?? "null").length;
+    if (bytes > maxResultBytes) {
+      emit({type: "error", message: `The step's output is ${Math.ceil(bytes / 1024)} KB as JSON; a step's output can be at most ${Math.floor(maxResultBytes / 1024)} KB. Return only what later steps need.`});
+      exit(0);
+    }
+    emit({type: "result", value: value ?? null});
+  } else {
+    emit(resultFrame(value ?? null, maxResultBytes));
+  }
   exit(0);
 } catch (error) {
-  emit({type: "error", message: String(error)});
+  const link = /^SyntaxError: The requested module '([^']+)' does not provide an export named/.exec(String(error));
+  const message = link && unavailable.has(link[1])
+    ? `Error: ${link[1]} is unavailable in ExecuteCode. Make requests with fetch or the macro SDK.`
+    : String(error);
+  emit({type: "error", message});
   exit(0);
 }

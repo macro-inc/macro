@@ -39,3 +39,5 @@ the email domain and use normalized mailbox facts, not Gmail-only label names.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+- Scheduled-message models retain optional agent correlation for delayed delivery; older rows decode without attribution.

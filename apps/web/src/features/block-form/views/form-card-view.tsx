@@ -30,10 +30,7 @@ function PollCardBody(props: {
     formAvailability(props.detail.form, props.detail.tableGone, new Date());
   const open = () => availability().kind === 'open';
   const mine = context.responses.createMine(() => props.detail.form.id);
-  const tally = context.responses.createTally(
-    () => props.detail.form.id,
-    () => props.detail.form.tallyVisible || isEditor()
-  );
+  const tally = context.responses.createTally(() => props.detail.form.id);
   const voting = createPollVoting({
     poll: () => props.poll,
     anonymous: () => props.detail.form.anonymous,
@@ -57,11 +54,7 @@ function PollCardBody(props: {
         pending={voting.pending()}
         summary={voting.summary()}
         hiddenNote={
-          tally.failure()
-            ? 'Results couldn’t be loaded.'
-            : props.detail.form.tallyVisible || isEditor()
-              ? 'Loading results…'
-              : 'Only the poll’s editors see the counts.'
+          tally.failure() ? 'Results couldn’t be loaded.' : 'Loading results…'
         }
         onVote={(optionId) =>
           fireAndForget(voting.vote(optionId), 'poll-voting')

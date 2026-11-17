@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Proyek',
     newProject: 'Proyek baru',
     contentAlreadyOpen: 'Konten sudah terbuka',
-    unableToOpenConversation: 'Tidak dapat membuka percakapan. Coba lagi.',
     mobileSearchPlaceholder: 'Cari…',
     closeSearch: 'Tutup penelusuran',
     searchFullTextFor: 'Cari teks lengkap untuk “{{query}}”',
@@ -574,10 +573,6 @@ export default {
       other: '{{accepted}} dari {{count}} item ditandai belum selesai',
     },
     toastMarkNotDoneFailed: 'Gagal menandai belum selesai',
-    toastThreadStaysDone:
-      'Utas ini belum menerima pesan apa pun, jadi tetap selesai',
-    toastThreadsStayDone:
-      'Utas-utas ini belum menerima pesan apa pun, jadi tetap selesai',
     toastCountNotRestored: {
       other: '{{count}} item tidak dapat dipulihkan.',
     },
@@ -740,7 +735,7 @@ export default {
     tabMobileApp: 'Aplikasi seluler',
     tabTags: 'Tag',
     tabIntegrations: 'Integrasi',
-    tabRuntimes: 'Runtime',
+    tabRuntimes: 'Mesin',
     tabMcpServer: 'Server MCP',
     tabApiKeys: 'Kunci API',
     tabBots: 'Bot',

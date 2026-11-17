@@ -330,6 +330,9 @@ pub struct ScheduledMessage {
     /// The authenticated user who initiated the send, as a principal string
     /// (`macro|…`). `None` for rows created before actor tracking existed.
     pub actor_id: Option<String>,
+    /// Code-mode invocation that scheduled this delivery.
+    #[serde(default)]
+    pub agent_correlation_id: Option<Uuid>,
 }
 
 impl From<db::message::ScheduledMessage> for ScheduledMessage {
@@ -341,6 +344,7 @@ impl From<db::message::ScheduledMessage> for ScheduledMessage {
             sent: other.sent,
             processing: other.processing,
             actor_id: other.actor_id,
+            agent_correlation_id: other.agent_correlation_id,
         }
     }
 }
@@ -442,4 +446,35 @@ impl HasContactInfo for MessageToSend {
     fn get_bcc(&self) -> &[ContactInfo] {
         self.bcc.as_deref().unwrap_or(&[])
     }
+}
+
+/// One message from the top of a user's inbox, read straight from Gmail or
+/// Outlook rather than from Macro's synced copy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentInboxMessage {
+    /// The inbox address the message arrived in.
+    pub inbox: String,
+    pub from: Option<ContactInfo>,
+    /// Recipient addresses.
+    pub to: Vec<String>,
+    /// Copied addresses.
+    pub cc: Vec<String>,
+    /// At most 200 characters.
+    pub subject: Option<String>,
+    /// A preview of the body: the provider's, at most 300 characters by
+    /// default, or up to 500 from the body when a caller asks for more.
+    pub snippet: Option<String>,
+    pub received_at: Option<DateTime<Utc>>,
+    /// The message's labels or folders, by name.
+    #[serde(default)]
+    pub labels: Vec<String>,
+    /// The body as plain text, for a longer preview; never sent.
+    #[serde(skip)]
+    pub body: Option<String>,
+}
+
+/// The newest messages across a user's own inboxes, newest first.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RecentInboxMessagesResponse {
+    pub messages: Vec<RecentInboxMessage>,
 }

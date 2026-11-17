@@ -123,6 +123,17 @@ export const TOKENS = {
     close: 'tabs.close',
     next: 'tabs.next',
     previous: 'tabs.previous',
+    goTo: {
+      '1': 'tabs.goTo.1',
+      '2': 'tabs.goTo.2',
+      '3': 'tabs.goTo.3',
+      '4': 'tabs.goTo.4',
+      '5': 'tabs.goTo.5',
+      '6': 'tabs.goTo.6',
+      '7': 'tabs.goTo.7',
+      '8': 'tabs.goTo.8',
+      '9': 'tabs.goTo.9',
+    },
   },
 
   // sidebar navigation
@@ -130,6 +141,7 @@ export const TOKENS = {
     goToLeader: 'sidebar.goToLeader',
     goTo: {
       home: 'sidebar.goTo.home',
+      notifications: 'sidebar.goTo.notifications',
       recent: 'sidebar.goTo.recent',
       activity: 'sidebar.goTo.activity',
       calendar: 'sidebar.goTo.calendar',
@@ -157,7 +169,6 @@ export const TOKENS = {
     sendAndMarkDone: 'email.sendAndMarkDone',
     archive: 'email.archive',
     reply: 'email.reply',
-    replyAll: 'email.replyAll',
     forward: 'email.forward',
     previousMessage: 'email.previousMessage',
     nextMessage: 'email.nextMessage',
@@ -211,6 +222,8 @@ export const TOKENS = {
     },
     focusSplitRight: 'window.focusSplitRight',
     focusSplitLeft: 'window.focusSplitLeft',
+    focusSplitDown: 'window.focusSplitDown',
+    focusSplitUp: 'window.focusSplitUp',
   },
 
   // canvas

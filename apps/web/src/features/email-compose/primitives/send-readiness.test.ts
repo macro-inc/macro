@@ -75,7 +75,7 @@ describe('sendRefusalAfterSave', () => {
     expect(sendRefusalAfterSave(ready)).toBeUndefined();
   });
 
-  it('refuses while autosave is latched, whatever the identity', () => {
+  it('refuses a legacy send while autosave is latched, whatever the identity', () => {
     expect(sendRefusalAfterSave({ ...ready, autosaveAllowed: false })).toBe(
       'draft-not-confirmed'
     );
@@ -87,6 +87,26 @@ describe('sendRefusalAfterSave', () => {
         unqueuedHandleMaySend: true,
       })
     ).toBe('draft-not-confirmed');
+  });
+
+  it('allows an outbox send after a draft sync failed', () => {
+    expect(
+      sendRefusalAfterSave({
+        ...ready,
+        queueActive: true,
+        autosaveAllowed: false,
+        identity: { ...handle, queued: true },
+        attachments: [],
+      })
+    ).toBeUndefined();
+    expect(
+      sendRefusalAfterSave({
+        ...ready,
+        queueActive: true,
+        autosaveAllowed: false,
+        attachments: [pending],
+      })
+    ).toBe('attachment-not-uploaded');
   });
 
   it('refuses a server draft whose latest save is still queued', () => {

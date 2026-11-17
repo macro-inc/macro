@@ -20,6 +20,7 @@ mod sync_content;
 
 fn make_test_metadata() -> DocumentMetadata {
     DocumentMetadata {
+        appearance: None,
         document_id: "doc-1".to_string(),
         document_version_id: 1,
         owner: Owner::from_principal_str("macro|user@user.com").unwrap(),
@@ -2194,6 +2195,7 @@ async fn copy_document_best_effort_bumps_inherited_project_and_publishes_event()
 struct RecordingUploadUrlPort {
     copies: Arc<Mutex<Vec<(String, String)>>>,
     deletions: Arc<Mutex<Vec<String>>>,
+    uploads: Arc<Mutex<Vec<(String, String)>>>,
     fail_delete: bool,
 }
 
@@ -2207,10 +2209,14 @@ impl PresignedUploadUrlPort for RecordingUploadUrlPort {
     }
     async fn put_document_storage_presigned_url(
         &self,
-        _key: &str,
-        _sha: &str,
+        key: &str,
+        sha: &str,
         _content_type: ContentType,
     ) -> anyhow::Result<String> {
+        self.uploads
+            .lock()
+            .unwrap()
+            .push((key.to_string(), sha.to_string()));
         Ok(String::new())
     }
 
@@ -2944,6 +2950,100 @@ async fn create_document_reuse_skips_content_url_and_created_event() {
         DocumentContent::ready(DocumentContentLocation::ObjectStorage),
     );
     assert!(event_broker.published().lock().unwrap().is_empty());
+}
+
+/// Imports an attachment that reuses `metadata`, whose content is `content`,
+/// and returns the response with the uploads it signed.
+async fn reimport_email_document(
+    metadata: DocumentMetadata,
+    content: DocumentContent,
+    file_type: FileType,
+) -> (CreateDocumentResponseData, Vec<(String, String)>) {
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_import_email_attachment_document()
+        .returning(move |_, _| {
+            Box::pin(std::future::ready(Ok(EmailImportRepoOutcome::Reused(
+                metadata.clone(),
+            ))))
+        });
+    repo.expect_set_document_content().times(0);
+    repo.expect_get_persisted_document_content()
+        .return_once(|_| Box::pin(std::future::ready(Ok(Some(content)))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    let uploads = RecordingUploadUrlPort::default();
+    let service = DocumentServiceImpl::new(
+        repo,
+        test_cloudfront_config(),
+        sync_service_client::SyncServiceClient::new(
+            "test-sync-key".to_string(),
+            "http://sync-service.test".to_string(),
+        ),
+        uploads.clone(),
+        TestTaskPropertiesPort,
+        TestConnectionService::default(),
+        TestEntityAccessManagementService::default(),
+        TestForeignEntityService::default(),
+        TestEventBroker::default(),
+    );
+    let args = ImportEmailAttachmentRepoArgs {
+        email_attachment_id: uuid::Uuid::from_u128(9),
+        owner: test_user(),
+        document: new_document(file_type),
+    };
+    let response = crate::domain::ports::DocumentService::import_email_attachment(&service, args)
+        .await
+        .unwrap();
+    let signed = uploads.uploads.lock().unwrap().clone();
+    (response, signed)
+}
+
+fn pending_email_document(file_type: &str, sha: &str) -> (DocumentMetadata, DocumentContent) {
+    let mut metadata = make_test_metadata();
+    metadata.file_type = Some(file_type.to_string());
+    metadata.sha = Some(sha.to_string());
+    (
+        metadata,
+        DocumentContent::pending_at(DocumentContentLocation::ObjectStorage),
+    )
+}
+
+#[tokio::test]
+async fn reusing_a_pending_email_document_signs_its_upload_again() {
+    let (metadata, content) = pending_email_document("pdf", "sha");
+    let key = build_cloud_storage_bucket_document_key(&metadata.owner, "doc-1", 1);
+    // The attachment's own declared type must not change the signed content type.
+    let (response, signed) = reimport_email_document(metadata, content, FileType::Txt).await;
+
+    assert!(response.document_response.presigned_url.is_some());
+    assert_eq!(response.content_type, "application/pdf");
+    assert_eq!(response.file_type.as_deref(), Some("pdf"));
+    assert_eq!(signed, [(key, "sha".to_string())]);
+}
+
+#[tokio::test]
+async fn different_bytes_cannot_replace_a_pending_email_document() {
+    let (metadata, content) = pending_email_document("pdf", "other-sha");
+    let (response, signed) = reimport_email_document(metadata, content, FileType::Pdf).await;
+
+    assert!(response.document_response.presigned_url.is_none());
+    assert!(signed.is_empty());
+}
+
+#[tokio::test]
+async fn reusing_a_converting_docx_does_not_sign_an_upload() {
+    let (metadata, _) = pending_email_document("docx", "sha");
+    let (response, signed) = reimport_email_document(
+        metadata,
+        DocumentContent::pending_at(DocumentContentLocation::ConvertedPdf),
+        FileType::Docx,
+    )
+    .await;
+
+    assert!(response.document_response.presigned_url.is_none());
+    assert!(signed.is_empty());
 }
 
 #[tokio::test]
@@ -3812,4 +3912,131 @@ async fn a_document_without_dates_marks_its_folder_updated_now() {
     )
     .await
     .unwrap();
+}
+
+#[tokio::test]
+async fn appearance_rejects_non_markdown_and_special_document_types() {
+    for (file_type, sub_type, deleted_at) in [
+        ("pdf", None, None),
+        ("md", Some(DocumentSubType::Task), None),
+        ("md", Some(DocumentSubType::Skill), None),
+        ("md", Some(DocumentSubType::InitiativeDescription), None),
+        ("md", None, Some(chrono::Utc::now())),
+    ] {
+        let mut repo = make_mock_repo();
+        let mut document = task_document_context("doc-1");
+        document.file_type = Some(file_type.into());
+        document.sub_type = sub_type;
+        document.deleted_at = deleted_at;
+        repo.expect_get_basic_document()
+            .return_once(move |_| Box::pin(async { Ok(document) }));
+        let service = make_test_service(repo);
+        assert!(matches!(
+            service
+                .set_appearance(
+                    edit_receipt("doc-1"),
+                    model_entity::EntityAppearance::default()
+                )
+                .await,
+            Err(DocumentError::BadRequest(_))
+        ));
+    }
+}
+
+#[tokio::test]
+async fn appearance_validates_before_persistence() {
+    let service = make_test_service(make_mock_repo());
+    let invalid = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Macro {
+            name: "invalid-icon".into(),
+        }),
+        color: None,
+    };
+    assert!(matches!(
+        service.set_appearance(edit_receipt("doc-1"), invalid).await,
+        Err(DocumentError::BadRequest(_))
+    ));
+}
+
+#[tokio::test]
+async fn appearance_emits_history_only_for_changes() {
+    for sub_type in [None, Some(DocumentSubType::Snippet)] {
+        for changed in [false, true] {
+            let mut repo = make_mock_repo();
+            let mut document = task_document_context("doc-1");
+            document.sub_type = sub_type;
+            repo.expect_get_basic_document()
+                .return_once(move |_| Box::pin(async { Ok(document) }));
+            repo.expect_set_appearance()
+                .withf(|id, update| {
+                    id == "doc-1"
+                        && update.appearance.color == Some(model_entity::AppearanceColor::Blue)
+                        && update.attribution.is_some()
+                })
+                .return_once(move |_, _| {
+                    Box::pin(
+                        async move { Ok(changed.then(model_entity::EntityAppearance::default)) },
+                    )
+                });
+            let (service, broker) = make_test_service_with_event_broker(repo);
+            let appearance = model_entity::EntityAppearance {
+                icon: None,
+                color: Some(model_entity::AppearanceColor::Blue),
+            };
+            assert_eq!(
+                service
+                    .set_appearance(edit_receipt("doc-1"), appearance.clone())
+                    .await
+                    .unwrap(),
+                appearance
+            );
+            let published = broker.published();
+            let events = published.lock().unwrap();
+            assert_eq!(events.len(), usize::from(changed));
+            if changed {
+                assert_eq!(
+                    events[0].payload["metadata"]["appearance_change"][1]["color"],
+                    "blue"
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn appearance_records_team_and_channel_bot_attribution() {
+    for scope in [
+        bot_receipt_scope(),
+        BotReceiptScope::Channel {
+            channel_id: Uuid::now_v7(),
+        },
+    ] {
+        let mut repo = make_mock_repo();
+        let mut document = task_document_context("doc-1");
+        document.sub_type = None;
+        repo.expect_get_basic_document()
+            .return_once(move |_| Box::pin(async { Ok(document) }));
+        repo.expect_set_appearance()
+            .withf(|_, update| {
+                update.attribution == Some(Attribution::direct(Actor::new_from_bot(bot_id())))
+            })
+            .return_once(|_, _| Box::pin(async { Ok(Some(Default::default())) }));
+        let service = make_test_service(repo);
+        let receipt = EntityAccessReceipt::dangerously_assert_bot(
+            bot_id().into_storage_id(),
+            scope,
+            "doc-1",
+            EntityType::Document,
+        );
+        service
+            .set_appearance(
+                receipt,
+                model_entity::EntityAppearance {
+                    icon: None,
+                    color: Some(model_entity::AppearanceColor::Blue),
+                },
+            )
+            .await
+            .unwrap();
+    }
 }

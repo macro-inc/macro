@@ -50,17 +50,34 @@ by policy.
 
 `ValidatedIdentity` contains identity facts; `ValidatedCredential` and
 `MacroUserAuthentication` additionally carry `CredentialOrigin` (session, Macro API
-JWT, user API key, or the acting user of a bot, harness or internal caller), set
-where the credential is verified. Every `JwtValidator` implements
+JWT, scoped Macro API JWT, user API key, or the acting user of a bot, harness or
+internal caller), set where the credential is verified. Every `JwtValidator` implements
 `validate_credential` (`validate` derives from it) and every
 `MacroAuthorizationService` implements `authorize_identity`; neither has a default
 that assumes a session. Session-only fakes use `ValidatedCredential::session`. The
 production `MacroAuthJwtValidator` derives origin from the verified token enum in
 one decode.
 Personal-session-only capabilities match `origin == Session` (and no agent
-attribution) instead of sniffing request headers. `authorize_identity` retains
+attribution) instead of sniffing request headers. A Macro API token's signed
+`agent_id` and `routine_id` reach `MacroUserAuthentication`;
+`attribution()` reads them as `CredentialAttribution`. Routes where only a
+person may decide, answer or approve (review decisions, elicitation and
+permission answers, held tool-call approvals) refuse anything but `Person`
+through `is_program_run(attribution, headers)`. Routes that only ask a program
+to confirm (email send, calendar create, call tokens) use `is_agent_run`,
+which leaves owner routine steps (`Routine`) alone so scheduled sends keep
+working. A routine step running as its owner signs only `routine_id`, so
+never test `agent_id` alone for "is this a person". `authorize_identity` retains
 verified origin and signed agent attribution on user authentication. It
 does not turn a user credential into bot authority or change endpoint policies.
+
+An account manager's credential arrives as a normal `x-macro-user-api-key` and
+authenticates as the managed account, with `CredentialOrigin::AccountManager`
+naming the grant and the agent holding it. `AccountHolderOrInternal` is
+`UserOrInternal` minus that credential and `ScopedMacroApiJwt` (a Macro API token
+that signs `agent_scope`, held by a scoped code-mode run): use it on anything that
+mints credentials, changes who can sign in, deletes the account, or changes its
+managers.
 
 ## Gotchas
 

@@ -67,7 +67,6 @@ const SOMEONE_ELSE = 'macro|someone-else@example.com';
 const mocks = vi.hoisted(() => ({
   sendToChannel: vi.fn(),
   sendToUsers: vi.fn(),
-  graphql: false,
   graphqlShare: vi.fn(),
   mobile: false,
   hasTeam: false,
@@ -107,7 +106,6 @@ vi.mock('@app/features/crm/sharing-adapter', () => ({
 }));
 vi.mock('@queries/storage/entity-mutations', () => ({
   usesGraphqlSharePolicy: (type: string) =>
-    mocks.graphql &&
     ['document', 'chat', 'project', 'email', 'call'].includes(type),
   updateEntitySharePolicy: mocks.graphqlShare,
 }));
@@ -174,9 +172,6 @@ vi.mock('@core/hotkey/hotkeys', () => ({
   useHotkeyDOMScope: () => [vi.fn(), 'share-scope'],
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mocks.mobile }));
-vi.mock('@core/signal/useCombinedRecipient', () => ({
-  useCombinedRecipients: () => ({ all: () => [] }),
-}));
 vi.mock('@core/util/channels', () => ({ useSendMessageToPeople: () => mocks }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {
@@ -431,7 +426,6 @@ beforeEach(() => {
   mocks.blockEditPermissionEnabled = true;
   mocks.mobile = false;
   mocks.hasTeam = false;
-  mocks.graphql = false;
   mocks.graphqlShare.mockResolvedValue(ok(undefined));
   mocks.callRecordShared = true;
   mocks.callRecordChannelId = 'channel-1';
@@ -926,7 +920,7 @@ describe('agent session sharing', () => {
     expect(mocks.sendToChannel).toHaveBeenCalledOnce();
   });
   it('keeps context identity for existing forwarding callers without overrides', async () => {
-    render(() => <ForwardToChannel name="Document" hideAccessLevelSelector />);
+    render(() => <ForwardToChannel name="Document" />);
     await selectChannel();
     share();
     expect(mocks.sendToChannel).toHaveBeenCalledWith(
@@ -940,12 +934,7 @@ describe('agent session sharing', () => {
   it('uses the current explicit identity if it changes while mounted', async () => {
     const [id, setId] = createSignal('old-session');
     render(() => (
-      <ForwardToChannel
-        name="Session"
-        blockName="agent"
-        blockId={id()}
-        hideAccessLevelSelector
-      />
+      <ForwardToChannel name="Session" blockName="agent" blockId={id()} />
     ));
     setId('new-session');
     await selectChannel();
@@ -1140,7 +1129,6 @@ describe('chat team sharing', () => {
   it.each([false, true])(
     'uses GraphQL for team and link changes on mobile=%s',
     async (mobile) => {
-      mocks.graphql = true;
       mocks.mobile = mobile;
       mocks.hasTeam = true;
       mountChatShare();
@@ -1164,7 +1152,7 @@ describe('chat team sharing', () => {
     }
   );
 
-  it('lets the owner share the chat with their team through the chat permissions endpoint', async () => {
+  it('lets the owner share the chat with their team', async () => {
     mocks.hasTeam = true;
     mountChatShare();
 
@@ -1186,9 +1174,8 @@ describe('chat team sharing', () => {
     );
 
     await vi.waitFor(() =>
-      expect(mocks.updateChatPermissions).toHaveBeenCalledWith({
-        chat_id: 'chat-1',
-        sharePermission: { teamShareAccessLevel: 'edit' },
+      expect(mocks.graphqlShare).toHaveBeenCalledWith('chat', 'chat-1', {
+        teamShareAccessLevel: 'edit',
       })
     );
     expect(mocks.getDocumentPermissions).not.toHaveBeenCalled();
@@ -1203,9 +1190,8 @@ describe('chat team sharing', () => {
     );
 
     await vi.waitFor(() =>
-      expect(mocks.updateChatPermissions).toHaveBeenCalledWith({
-        chat_id: 'chat-1',
-        sharePermission: { teamShareAccessLevel: null },
+      expect(mocks.graphqlShare).toHaveBeenCalledWith('chat', 'chat-1', {
+        teamShareAccessLevel: null,
       })
     );
   });
@@ -1273,9 +1259,8 @@ describe('project team sharing', () => {
     );
 
     await vi.waitFor(() =>
-      expect(mocks.editProject).toHaveBeenCalledWith({
-        id: 'project-1',
-        sharePermission: { teamShareAccessLevel: 'edit' },
+      expect(mocks.graphqlShare).toHaveBeenCalledWith('project', 'project-1', {
+        teamShareAccessLevel: 'edit',
       })
     );
     expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
@@ -1291,9 +1276,8 @@ describe('project team sharing', () => {
     );
 
     await vi.waitFor(() =>
-      expect(mocks.editProject).toHaveBeenCalledWith({
-        id: 'project-1',
-        sharePermission: { teamShareAccessLevel: null },
+      expect(mocks.graphqlShare).toHaveBeenCalledWith('project', 'project-1', {
+        teamShareAccessLevel: null,
       })
     );
   });

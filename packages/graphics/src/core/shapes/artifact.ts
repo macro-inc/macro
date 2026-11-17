@@ -16,6 +16,10 @@ export type ArtifactGeometry = BoxGeometry &
     presentOrder: string;
   }>;
 
+/** Authoring limit for hosts and AI edits. Stored scenes are not rejected over
+ * it, so one oversized artifact can never stop a canvas from opening. */
+export const ARTIFACT_HTML_MAX_LENGTH = 256_000;
+
 const positive = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) && value > 0;
 

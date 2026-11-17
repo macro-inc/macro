@@ -56,6 +56,11 @@ pub(super) fn describe_channel_event(event: &ChannelTopicEvent) -> ChannelEventD
             channel_id: metadata.channel_id,
             event_type: "channel.participant_removed",
         },
+        ChannelTopicEvent::AccessRequested(metadata) => ChannelEventDescription {
+            action: ChannelIndexAction::Ignore,
+            channel_id: metadata.channel_id,
+            event_type: "channel.access_requested",
+        },
     }
 }
 

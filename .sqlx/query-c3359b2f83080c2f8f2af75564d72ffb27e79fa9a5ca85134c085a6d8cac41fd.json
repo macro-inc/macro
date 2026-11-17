@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT d.id\n        FROM \"Document\" d\n        WHERE d.id IN (\n                SELECT ea.entity_id::text\n                FROM entity_access ea\n                WHERE ea.source_id = ANY($2)\n                    AND ea.entity_type = 'document'\n            )\n            AND d.\"deletedAt\" IS NULL\n            AND (NOT $3 OR d.owner != $1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c3359b2f83080c2f8f2af75564d72ffb27e79fa9a5ca85134c085a6d8cac41fd"
+}

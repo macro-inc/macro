@@ -19,7 +19,7 @@ export function createCrmUserCardAction(
   // a card that suspends takes its hover surface or sheet down with it.
   const team = () =>
     currentTeamQuery.isSuccess ? currentTeamQuery.data?.team : undefined;
-  const crmEnabled = () => crmFlag().enabled && team()?.crm_enabled === true;
+  const crmEnabled = () => crmFlag().enabled && !!team();
   const contactQuery = useCrmContactByEmailQuery(
     () => team()?.id ?? '',
     () => email() ?? '',

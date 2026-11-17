@@ -15,6 +15,7 @@ use strum::{AsRefStr, Display, EnumString};
     Serialize,
     Deserialize,
     JsonSchema,
+    utoipa::ToSchema,
     AsRefStr,
     Display,
     EnumString,
@@ -28,8 +29,20 @@ pub enum Granularity {
     Summary,
 }
 
+/// What a piece of memory content is, which decides the privacy rules it must pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum MemoryKind {
+    /// Private explicit memory the user asked to save.
+    Explicit,
+    /// A generated activity report teammates can read.
+    Activity,
+    /// A generated professional profile teammates can read.
+    Profile,
+}
+
 /// A privacy-reviewed activity report; period_end is inclusive.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Activity {
     pub granularity: Granularity,
@@ -38,8 +51,38 @@ pub struct Activity {
     pub content: String,
 }
 
+/// One reviewed component of a day's generation, kept until the day commits.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Piece {
+    Activity(Activity),
+    Profile(String),
+}
+
+/// The reviewed pieces an earlier attempt at a day already produced.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct StagedPieces {
+    pub activity: Vec<Activity>,
+    pub profile: Option<String>,
+}
+
+impl StagedPieces {
+    pub fn is_empty(&self) -> bool {
+        self.activity.is_empty() && self.profile.is_none()
+    }
+
+    pub fn activity(&self, granularity: Granularity) -> Option<&Activity> {
+        self.activity.iter().find(|r| r.granularity == granularity)
+    }
+}
+
+/// Activity reports for one user, ordered by period.
+#[derive(Debug, Clone, Serialize, JsonSchema, utoipa::ToSchema)]
+pub struct ActivityReports {
+    pub reports: Vec<Activity>,
+}
+
 /// A private explicit memory document and its optimistic concurrency token.
-#[derive(Debug, Clone, Default, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExplicitMemory {
     pub content: String,
@@ -48,7 +91,7 @@ pub struct ExplicitMemory {
 
 /// An edit to one one-based line. A revision is required to prevent replay
 /// or concurrent edits from inserting twice or deleting a different line.
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, JsonSchema, utoipa::ToSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum MemoryEdit {
     Insert { line: usize, content: String },

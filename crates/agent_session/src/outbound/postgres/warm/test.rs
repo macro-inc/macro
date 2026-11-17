@@ -53,9 +53,16 @@ async fn dm_contexts_stay_hidden_and_cannot_be_claimed_or_expired(pool: PgPool) 
         );
         assert_eq!(repo.get(id).await.unwrap().id, id);
         assert_eq!(
-            repo.claim(id, &dm.owner_id, bot, &dm.model, None)
-                .await
-                .unwrap(),
+            repo.claim(
+                id,
+                &dm.owner_id,
+                bot,
+                &dm.model,
+                None,
+                &trigger_context::TriggerOrigin::Unknown
+            )
+            .await
+            .unwrap(),
             WarmClaim::Missed(WarmMissReason::NotWarm)
         );
     }
@@ -78,9 +85,16 @@ async fn dm_contexts_stay_hidden_and_cannot_be_claimed_or_expired(pool: PgPool) 
         let dm = repo.get(id).await.unwrap();
         assert_eq!(dm.status, SessionStatus::NoMessages);
         assert_eq!(
-            repo.claim(id, &dm.owner_id, bot, &dm.model, None)
-                .await
-                .unwrap(),
+            repo.claim(
+                id,
+                &dm.owner_id,
+                bot,
+                &dm.model,
+                None,
+                &trigger_context::TriggerOrigin::Unknown
+            )
+            .await
+            .unwrap(),
             WarmClaim::Missed(WarmMissReason::NotWarm)
         );
     }
@@ -262,9 +276,16 @@ async fn an_old_claimant_cannot_leave_a_visible_session_eligible_for_cleanup(poo
     .await
     .unwrap();
     assert_eq!(
-        repo.claim(session.id, &session.owner_id, bot, &session.model, None)
-            .await
-            .unwrap(),
+        repo.claim(
+            session.id,
+            &session.owner_id,
+            bot,
+            &session.model,
+            None,
+            &trigger_context::TriggerOrigin::Unknown
+        )
+        .await
+        .unwrap(),
         WarmClaim::Missed(WarmMissReason::NotWarm)
     );
     sqlx::query!(

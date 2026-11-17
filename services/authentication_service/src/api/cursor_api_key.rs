@@ -52,6 +52,10 @@ pub struct CursorApiKeyStatus {
     /// chosen one. `None` means the deployment default is in effect — the
     /// settings dropdown shows that as its resting value.
     pub default_model_id: Option<String>,
+    /// The reasoning effort those sessions start on, as the value of the
+    /// default model's effort parameter (e.g. `high`). `None` means the
+    /// model's own default; never set without `default_model_id`.
+    pub default_effort: Option<String>,
     /// When the stored key was last replaced, if there is one.
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }

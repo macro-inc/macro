@@ -1,4 +1,6 @@
 import '../../../index.css';
+import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
+import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { createScene, type ShapeItem, translation } from '@macro-inc/graphics';
 import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
@@ -36,17 +38,21 @@ const editable = new URLSearchParams(location.search).has('edit');
 render(
   () => (
     <div style={{ width: '100vw', height: '100vh' }}>
-      <QueryClientProvider client={queryClient}>
-        <DragDropProvider>
-          <CanvasDocument
-            documentId="canvas"
-            file={file}
-            canEdit={editable}
-            isNested={!editable}
-            view={editable ? { x: 0, y: 0, scale: 100 } : undefined}
-          />
-        </DragDropProvider>
-      </QueryClientProvider>
+      <AnalyticsContextProvider>
+        <PosthogProvider>
+          <QueryClientProvider client={queryClient}>
+            <DragDropProvider>
+              <CanvasDocument
+                documentId="canvas"
+                file={file}
+                canEdit={editable}
+                isNested={!editable}
+                view={editable ? { x: 0, y: 0, scale: 100 } : undefined}
+              />
+            </DragDropProvider>
+          </QueryClientProvider>
+        </PosthogProvider>
+      </AnalyticsContextProvider>
     </div>
   ),
   document.getElementById('app')!

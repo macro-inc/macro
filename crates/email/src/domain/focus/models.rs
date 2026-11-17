@@ -1,6 +1,6 @@
 //! Focus value objects.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
@@ -55,6 +55,14 @@ pub struct FocusAnswers {
     pub needs_response: f32,
     /// Is there an open loop the owner should come back to?
     pub needs_follow_up: f32,
+    /// Does it get more pressing the longer it sits untouched? Reads 0 on rows
+    /// stored before Jev was asked, which leaves them flat.
+    #[serde(default)]
+    pub grows_with_time: f32,
+    /// Does it matter less the longer it sits untouched? Reads 0 on rows stored
+    /// before Jev was asked, which leaves them flat.
+    #[serde(default)]
+    pub fades_with_time: f32,
 }
 
 impl FocusAnswers {
@@ -69,6 +77,8 @@ impl FocusAnswers {
             needs_decision,
             needs_response,
             needs_follow_up,
+            grows_with_time,
+            fades_with_time,
         ] = <[f32; FocusQuestion::ALL.len()]>::try_from(probabilities).ok()?;
         Some(Self {
             focus,
@@ -79,6 +89,8 @@ impl FocusAnswers {
             needs_decision,
             needs_response,
             needs_follow_up,
+            grows_with_time,
+            fades_with_time,
         })
     }
 }
@@ -191,8 +203,11 @@ pub struct FocusVerdict {
     pub needs_follow_up: bool,
     /// The owner sent the latest message and expects an answer.
     pub awaiting_reply: bool,
-    /// How much the thread matters, 0 to 100.
+    /// How much the thread matters at its classified message, 0 to 100.
     pub importance: u8,
+    /// How fast importance moves after that message, as a percent of the distance
+    /// left per day: positive towards 100, negative towards 0, 0 is flat.
+    pub importance_rate: i8,
 }
 
 /// One message as the classifier needs it.
@@ -224,6 +239,8 @@ pub struct FocusMessage {
     pub body: Option<String>,
     /// Provider snippet.
     pub snippet: Option<String>,
+    /// The `Date` header, whose offset tells which day the writer's clock showed.
+    pub date_header: Option<String>,
 }
 
 /// A message the owner sent to one of the thread's senders, anywhere in the inbox.
@@ -248,6 +265,8 @@ pub struct StoredClassification {
     pub answers: Option<FocusAnswers>,
     /// The model that answered.
     pub model: String,
+    /// The day the classified mail says the thread is due.
+    pub due_on: Option<NaiveDate>,
 }
 
 /// Where a thread lives and how it stands; read before any message content.
@@ -346,18 +365,32 @@ pub struct FocusRecord {
     pub model: String,
     /// When the classification was made.
     pub classified_at: DateTime<Utc>,
+    /// The day the classified mail says the thread is due. No mail text or
+    /// extracted span is ever stored with it.
+    pub due_on: Option<NaiveDate>,
+}
+
+/// Which way a thread's importance is moving.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportanceTrend {
+    /// Rising, towards 100.
+    Up,
+    /// Falling, towards 0.
+    Down,
+    /// Not moving.
+    Flat,
 }
 
 /// A stored classification as it stands when read: who wrote last, how long the
-/// owner has waited and whether a changed event is over are applied to what was
-/// stored.
+/// owner has waited, whether a changed event is over and how far importance has
+/// moved are applied to what was stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThreadFocus {
     /// Whether the thread belongs in Focus.
     pub is_focus: bool,
     /// The Focus category, or why the thread was left out.
     pub category: FocusCategory,
-    /// How much the thread matters, 0 to 100.
+    /// How much the thread matters right now, 0 to 100.
     pub importance: u8,
     /// The latest message is someone else's and waits on the owner's answer.
     pub needs_reply: bool,
@@ -366,4 +399,29 @@ pub struct ThreadFocus {
     pub needs_follow_up: bool,
     /// When the classification was made.
     pub classified_at: DateTime<Utc>,
+    /// Which way `importance` is moving.
+    pub importance_trend: ImportanceTrend,
+    /// The day the classified mail says the thread is due, as a calendar date so no
+    /// time zone can shift it.
+    pub due_on: Option<NaiveDate>,
+}
+
+/// One message as the due date extractor reads it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DueDateMessage {
+    /// The local calendar day it was written; its relative dates count from here.
+    pub written_on: NaiveDate,
+    /// Sent by the owner.
+    pub from_owner: bool,
+    /// Its own words, without quoted history.
+    pub text: String,
+}
+
+/// What the due date extractor reads about a thread.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DueDateInput {
+    /// The thread's subject, as context.
+    pub subject: Option<String>,
+    /// The thread's latest messages with words of their own, oldest first.
+    pub messages: Vec<DueDateMessage>,
 }

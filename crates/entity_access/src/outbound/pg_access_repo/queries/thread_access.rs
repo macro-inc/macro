@@ -59,7 +59,7 @@ pub async fn get_owned_email_thread_ids(
 }
 
 /// Get the highest access level a user has for an email thread.
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, source_ids, user_id))]
 pub async fn get_thread_access(
     pool: &PgPool,
     thread_id: &Uuid,
@@ -177,9 +177,9 @@ pub async fn get_thread_access(
     .fetch_all(pool);
 
     // Team CRM access: a teammate of the thread owner gets Comment access when
-    // they share a CRM-enabled team with the owner, the thread has at least
-    // one external participant, and no external participant carries an
-    // opt-out signal on that team.
+    // they share a team with the owner, that mailbox has explicit consent,
+    // the thread has an external participant, and no participant is excluded
+    // by the team's or the contributor's domain blocks.
     //
     // Opt-out signals are role-aware:
     //   * email_sync=false on a tracked company is a HARD opt-out — the
@@ -190,7 +190,7 @@ pub async fn get_thread_access(
     //     owners see hidden CRM rows; only plain members are blocked. A
     //     contact without a company opts out through its own hidden flag.
     //
-    // Untracked external addresses default to allowed.
+    // Untracked external addresses remain subject to both domain blocklists.
     let crm_fut = sqlx::query_scalar!(
         r#"
         WITH thread_owner AS (
@@ -200,14 +200,14 @@ pub async fn get_thread_access(
             WHERE t.id = $1::uuid
         ),
         shared_teams AS (
-            -- Teams the requester shares with the owner that have CRM enabled.
-            SELECT tcs.team_id, requester.team_role
+            -- Shared teams with an eligible contribution from this mailbox.
+            SELECT requester.team_id, requester.team_role
             FROM team_user requester
             JOIN team_user owner_member ON owner_member.team_id = requester.team_id
             JOIN thread_owner o ON o.macro_id = owner_member.user_id
-            JOIN team_crm_settings tcs ON tcs.team_id = requester.team_id
             WHERE requester.user_id = $2
-              AND tcs.crm_enabled
+              AND (requester.crm_access OR requester.team_role <> 'member')
+              AND crm_email_thread_allowed(requester.team_id, $1::uuid)
         ),
         participants AS (
             -- Distinct addresses across from + to/cc/bcc on the thread.
@@ -239,10 +239,28 @@ pub async fn get_thread_access(
                   -- only block plain members.
                   SELECT 1
                   FROM participants p
-                  JOIN crm_contacts ct ON ct.email = p.email
+                  -- Fence address and primary-key lookups so stale statistics
+                  -- cannot turn one thread's participants into a team-wide scan.
+                  CROSS JOIN LATERAL (
+                      SELECT ce.contact_id
+                      FROM crm_contact_emails ce
+                      WHERE ce.email = p.email
+                      OFFSET 0
+                  ) held
+                  CROSS JOIN LATERAL (
+                      SELECT ct.team_id, ct.company_id, ct.hidden
+                      FROM crm_contacts ct
+                      WHERE ct.id = held.contact_id
+                      OFFSET 0
+                  ) ct
                   -- Contacts without a company opt out through their own
                   -- hidden flag; email_sync is a company setting.
-                  LEFT JOIN crm_companies c ON c.id = ct.company_id
+                  LEFT JOIN LATERAL (
+                      SELECT c.email_sync, c.hidden
+                      FROM crm_companies c
+                      WHERE c.id = ct.company_id
+                      OFFSET 0
+                  ) c ON TRUE
                   WHERE ct.team_id = st.team_id
                     AND split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)
                     AND (
@@ -273,7 +291,7 @@ pub async fn get_thread_access(
 }
 
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, source_ids, user_id))]
 pub async fn explain_thread_access(
     pool: &PgPool,
     thread_id: &Uuid,
@@ -456,13 +474,13 @@ async fn explain_thread_crm(
             WHERE t.id = $1::uuid
         ),
         shared_teams AS (
-            SELECT tcs.team_id, requester.team_role
+            SELECT requester.team_id, requester.team_role
             FROM team_user requester
             JOIN team_user owner_member ON owner_member.team_id = requester.team_id
             JOIN thread_owner o ON o.macro_id = owner_member.user_id
-            JOIN team_crm_settings tcs ON tcs.team_id = requester.team_id
             WHERE requester.user_id = $2
-              AND tcs.crm_enabled
+              AND (requester.crm_access OR requester.team_role <> 'member')
+              AND crm_email_thread_allowed(requester.team_id, $1::uuid)
         ),
         participants AS (
             SELECT DISTINCT LOWER(ec.email_address) AS email
@@ -486,8 +504,25 @@ async fn explain_thread_crm(
           AND NOT EXISTS (
               SELECT 1
               FROM participants p
-              JOIN crm_contacts ct ON ct.email = p.email
-              LEFT JOIN crm_companies c ON c.id = ct.company_id
+              -- Keep the participant-first lookup order even with stale statistics.
+              CROSS JOIN LATERAL (
+                  SELECT ce.contact_id
+                  FROM crm_contact_emails ce
+                  WHERE ce.email = p.email
+                  OFFSET 0
+              ) held
+              CROSS JOIN LATERAL (
+                  SELECT ct.team_id, ct.company_id, ct.hidden
+                  FROM crm_contacts ct
+                  WHERE ct.id = held.contact_id
+                  OFFSET 0
+              ) ct
+              LEFT JOIN LATERAL (
+                  SELECT c.email_sync, c.hidden
+                  FROM crm_companies c
+                  WHERE c.id = ct.company_id
+                  OFFSET 0
+              ) c ON TRUE
               WHERE ct.team_id = st.team_id
                 AND split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)
                 AND (

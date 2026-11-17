@@ -266,6 +266,117 @@ fn it_expands_email_thread_ids() {
 }
 
 #[test]
+fn it_expands_email_done_to_inbox_visibility() {
+    for (done, inbox_visible) in [(true, false), (false, true)] {
+        let f = EntityFilters {
+            email_filters: crate::EmailFilters {
+                done: Some(done),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let ast = Arc::into_inner(
+            EntityFilterAst::new_from_filters(f)
+                .unwrap()
+                .unwrap()
+                .email_filter
+                .tree
+                .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            serde_json::to_value(ast).unwrap(),
+            json!({ "l": { "InboxVisible": inbox_visible } })
+        );
+    }
+}
+
+#[test]
+fn email_filters_without_done_are_empty() {
+    assert!(crate::EmailFilters::default().is_empty());
+    assert!(
+        !crate::EmailFilters {
+            done: Some(false),
+            ..Default::default()
+        }
+        .is_empty()
+    );
+}
+
+#[test]
+fn it_expands_email_attachments_to_any_of_the_kinds() {
+    use crate::ast::email::AttachmentKind;
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            attachments: vec![
+                AttachmentKind::Pdf,
+                AttachmentKind::Image,
+                AttachmentKind::Pdf,
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .email_filter
+            .tree
+            .unwrap(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        serde_json::to_value(ast).unwrap(),
+        serde_json::to_value(Expr::or(
+            Expr::Literal(email::EmailLiteral::Attachment(AttachmentKind::Pdf)),
+            Expr::Literal(email::EmailLiteral::Attachment(AttachmentKind::Image)),
+        ))
+        .unwrap()
+    );
+}
+
+#[test]
+fn expanding_an_email_view_into_a_list_filter_is_an_error() {
+    for view in [crate::EmailSearchView::Sent, crate::EmailSearchView::Drafts] {
+        let f = EntityFilters {
+            email_filters: crate::EmailFilters {
+                view: Some(view),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert!(matches!(
+            EntityFilterAst::new_from_filters(f),
+            Err(ExpandErr::SearchOnlyEmailView)
+        ));
+    }
+}
+
+#[test]
+fn email_filters_with_a_view_or_attachments_are_not_empty() {
+    assert!(
+        !crate::EmailFilters {
+            view: Some(crate::EmailSearchView::Drafts),
+            ..Default::default()
+        }
+        .is_empty()
+    );
+    assert!(
+        !crate::EmailFilters {
+            attachments: vec![crate::ast::email::AttachmentKind::Document],
+            ..Default::default()
+        }
+        .is_empty()
+    );
+}
+
+#[test]
 fn it_expands_email_thread_ids_with_sender() {
     let thread_id = Uuid::new_v4();
     let f = EntityFilters {
@@ -1951,4 +2062,44 @@ fn agent_session_visibility_literals_use_the_column_values() {
     );
     assert_eq!(<&str>::from(AgentSessionVisibility::Listed), "listed");
     assert_eq!("unlisted".parse(), Ok(AgentSessionVisibility::Unlisted));
+}
+
+#[test]
+fn email_subject_literal_trims_and_bounds_its_text() {
+    use crate::ast::email::EmailLiteral;
+
+    let tree: Expr<EmailLiteral> =
+        serde_json::from_value(json!({ "l": { "Subject": "  FYI  " } })).unwrap();
+    assert_matches!(&tree, Expr::Literal(EmailLiteral::Subject(query)) => {
+        assert_eq!(query.as_str(), "FYI");
+    });
+    assert_eq!(
+        serde_json::to_value(&tree).unwrap(),
+        json!({ "l": { "Subject": "FYI" } })
+    );
+
+    for rejected in [json!("   "), json!("x".repeat(201))] {
+        let result: Result<Expr<EmailLiteral>, _> =
+            serde_json::from_value(json!({ "l": { "Subject": rejected } }));
+        assert!(result.is_err());
+    }
+    let longest: Expr<EmailLiteral> =
+        serde_json::from_value(json!({ "l": { "Subject": "é".repeat(200) } })).unwrap();
+    assert_matches!(longest, Expr::Literal(EmailLiteral::Subject(_)));
+}
+
+#[test]
+fn email_attachment_literal_names_kinds_in_snake_case() {
+    use crate::ast::email::{AttachmentKind, EmailLiteral};
+
+    let tree: Expr<EmailLiteral> =
+        serde_json::from_value(json!({ "l": { "Attachment": "document" } })).unwrap();
+    assert_matches!(
+        tree,
+        Expr::Literal(EmailLiteral::Attachment(AttachmentKind::Document))
+    );
+    assert!(
+        serde_json::from_value::<Expr<EmailLiteral>>(json!({ "l": { "Attachment": "zip" } }))
+            .is_err()
+    );
 }

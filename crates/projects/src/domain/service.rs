@@ -19,7 +19,9 @@ use model::project::{
     WithProjectId,
 };
 use model_owner::{CreationPrincipal, Owner};
-use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
+use models_bulk_upload::{
+    UploadExtractFolderRequest, UploadExtractFolderResponseData, UploadExtractStatusResponseData,
+};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{
@@ -40,8 +42,8 @@ use super::models::{
     RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 use super::ports::{
-    BulkUploadRequestPort, ProjectRepo, ProjectSearchIndexer, ProjectService, ProjectUploadUrlPort,
-    ShaCounterPort,
+    BulkUploadRequestPort, FiledItemsUnfiler, ProjectRepo, ProjectSearchIndexer, ProjectService,
+    ProjectUploadUrlPort, ShaCounterPort,
 };
 use super::upload::{build_destination_map, build_root_folder};
 
@@ -50,6 +52,15 @@ mod purge_owned;
 mod tests;
 
 const MAX_PROJECT_NAME_GRAPHEMES: usize = 100;
+
+/// Record how large a trashed, restored or purged folder tree was on the
+/// current `project.trash` / `project.restore` / `project.purge` span.
+fn record_tree_counts(projects: usize, documents: usize, chats: usize) {
+    let span = tracing::Span::current();
+    span.record("project.count", projects);
+    span.record("document.count", documents);
+    span.record("chat.count", chats);
+}
 
 /// The user id to attribute a project lifecycle event to, when the caller is an
 /// authenticated user.
@@ -63,7 +74,7 @@ fn event_actor_user_id(auth: &EntityAccessAuth) -> Option<MacroUserIdStr<'static
 }
 
 /// Concrete project service backed by repository and external-system ports.
-pub struct ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
+pub struct ProjectServiceImpl<R, U, D, Sha, Eam, Idx, Unf, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -71,6 +82,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    Unf: FiledItemsUnfiler,
     B: MacroEventBroker,
 {
     /// Project repository.
@@ -85,13 +97,15 @@ where
     pub entity_access_management_service: Eam,
     /// Document search and deletion queue publisher.
     pub search_indexer: Idx,
+    /// Returns a trashed folder's databases and forms to the root.
+    pub filed_items_unfiler: Unf,
     /// Project lifecycle event broker.
     pub macro_event_broker: B,
     /// Optional deterministic upload request ID used by local development.
     pub fixed_upload_request_id: Option<Uuid>,
 }
 
-impl<R, U, D, Sha, Eam, Idx, B> ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
+impl<R, U, D, Sha, Eam, Idx, Unf, B> ProjectServiceImpl<R, U, D, Sha, Eam, Idx, Unf, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -99,6 +113,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    Unf: FiledItemsUnfiler,
     B: MacroEventBroker,
 {
     /// Create a project service from its repository and external-system ports.
@@ -110,6 +125,7 @@ where
         sha_counter: Sha,
         entity_access_management_service: Eam,
         search_indexer: Idx,
+        filed_items_unfiler: Unf,
         fixed_upload_request_id: Option<Uuid>,
         macro_event_broker: B,
     ) -> Self {
@@ -120,6 +136,7 @@ where
             sha_counter,
             entity_access_management_service,
             search_indexer,
+            filed_items_unfiler,
             macro_event_broker,
             fixed_upload_request_id,
         }
@@ -250,7 +267,8 @@ where
     }
 }
 
-impl<R, U, D, Sha, Eam, Idx, B> ProjectService for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
+impl<R, U, D, Sha, Eam, Idx, Unf, B> ProjectService
+    for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, Unf, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -258,6 +276,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    Unf: FiledItemsUnfiler,
     B: MacroEventBroker,
 {
     async fn list_projects(
@@ -583,6 +602,17 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(
+        name = "project.trash",
+        skip_all,
+        fields(
+            project.id = %project.id,
+            project.count = tracing::field::Empty,
+            document.count = tracing::field::Empty,
+            chat.count = tracing::field::Empty,
+        ),
+        err
+    )]
     async fn soft_delete_project(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
@@ -594,10 +624,28 @@ where
             .soft_delete_project(&receipt.entity().entity_id)
             .await
             .map_err(|error| internal_error(error, "unable to delete project"))?;
+        record_tree_counts(
+            deleted.project_ids.len(),
+            deleted.document_ids.len(),
+            deleted.chat_ids.len(),
+        );
 
         if let Some(parent_id) = project.parent_id.as_deref() {
             self.bump_project_modified(parent_id).await;
         }
+        // Databases and forms are not trashed with their folder; like a purge,
+        // trashing it files them at the root.
+        let _ = self
+            .filed_items_unfiler
+            .unfile_from_projects(deleted.project_ids.clone())
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    project_ids = ?deleted.project_ids,
+                    "unable to return a trashed folder's databases and forms to the root"
+                );
+            });
 
         let project_id = receipt.entity().entity_id.clone();
         self.publish_project_event(&ProjectMacroEvent::deleted(
@@ -616,6 +664,17 @@ where
         Ok(deleted)
     }
 
+    #[tracing::instrument(
+        name = "project.purge",
+        skip_all,
+        fields(
+            project.id = %project.id,
+            project.count = tracing::field::Empty,
+            document.count = tracing::field::Empty,
+            chat.count = tracing::field::Empty,
+        ),
+        err
+    )]
     async fn permanently_delete_project(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
@@ -626,6 +685,11 @@ where
             .purge_deleted_project_tree(&receipt.entity().entity_id)
             .await
             .map_err(|error| internal_error(error, "unable to permanently delete project"))?;
+        record_tree_counts(
+            purged.project_ids.len(),
+            purged.documents.len(),
+            purged.chat_ids.len(),
+        );
         let result = purged.clone();
 
         if !purged.bom_shas.is_empty() {
@@ -675,6 +739,17 @@ where
         Ok(result)
     }
 
+    #[tracing::instrument(
+        name = "project.restore",
+        skip_all,
+        fields(
+            project.id = %project.id,
+            project.count = tracing::field::Empty,
+            document.count = tracing::field::Empty,
+            chat.count = tracing::field::Empty,
+        ),
+        err
+    )]
     async fn revert_delete_project(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
@@ -686,6 +761,11 @@ where
             .revert_delete_project(&receipt.entity().entity_id, parent_project_id.clone())
             .await
             .map_err(|error| internal_error(error, "unable to revert project"))?;
+        record_tree_counts(
+            restored.project_ids.len(),
+            restored.document_ids.len(),
+            restored.chat_ids.len(),
+        );
         let result = restored.clone();
 
         let project_id = receipt.entity().entity_id.clone();
@@ -820,6 +900,29 @@ where
         Ok(UploadExtractFolderResponseData {
             request_id: request_id.to_string(),
             presigned_url,
+        })
+    }
+
+    async fn get_upload_extract_status(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        upload_request_id: &str,
+    ) -> Result<UploadExtractStatusResponseData, ProjectError> {
+        let request = self
+            .bulk_upload_service
+            .find_bulk_upload_request(upload_request_id)
+            .await
+            .map_err(|error| internal_error(error, "unable to read upload request"))?;
+
+        // Someone else's request reads as missing, so ids can't be probed.
+        let Some(request) = request.filter(|request| request.user_id == actor.as_ref()) else {
+            return Err(ProjectError::NotFound(upload_request_id.to_string()));
+        };
+
+        Ok(UploadExtractStatusResponseData {
+            status: request.status,
+            project_id: request.root_project_id,
+            progress: request.progress,
         })
     }
 

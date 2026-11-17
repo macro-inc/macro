@@ -54,6 +54,7 @@ export type ShapeItem<K extends ShapeKind = ShapeKind> = {
 export type RectangleItem = ShapeItem<'rectangle'>;
 export type EllipseItem = ShapeItem<'ellipse'>;
 export type PencilItem = ShapeItem<'pencil'>;
+export type ArtifactItem = ShapeItem<'artifact'>;
 export type GroupItem = SpatialNode & Readonly<{ type: 'group' }>;
 export type SurfaceItem = Readonly<{ id: string; type: 'surface' }>;
 export type GraphicsItem = ShapeItem | GroupItem | SurfaceItem;

@@ -17,6 +17,7 @@ import { useDriveView } from '../context/drive-context';
 import { DRIVE_SORT_OPTIONS } from '../core/types';
 import { DriveCreateMenu } from '../drive-create-menu';
 import { DriveFilterMenu } from './drive-filter-menu';
+import { DriveFolderPath } from './drive-folder-hierarchy';
 import { DriveMobileTabs } from './drive-mobile-tabs';
 
 export function DriveHeader() {
@@ -80,6 +81,7 @@ export function DriveHeader() {
               label="Search Drive"
               placeholder="Search files"
               value={state.value().search}
+              focusResults={() => panel.panelRef()?.focus()}
               onValueChange={state.setSearch}
               registerFocus={(focus) => {
                 focusSearch = focus;
@@ -102,8 +104,9 @@ export function DriveHeader() {
         />
       </ViewShell.TopBar>
       <ViewShell.Header>
-        <div class="flex min-w-0 flex-col gap-3">
+        <div class="flex min-w-0 flex-col gap-1">
           <DriveMobileTabs />
+          <DriveFolderPath />
         </div>
       </ViewShell.Header>
     </Show>

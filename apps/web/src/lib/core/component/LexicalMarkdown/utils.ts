@@ -20,6 +20,7 @@ import {
   mergeRegister,
 } from '@lexical/utils';
 import {
+  $isAccountManagerRequestNode,
   $isDocumentMentionNode,
   $isMentionNode,
   $isWatermarkNode,
@@ -1205,6 +1206,17 @@ const $singleLineNode = (node: ElementNode): ElementNode | null => {
   return p;
 };
 
+/** A one-line preview has no room for a card with its own controls. */
+function $replaceAccountManagerCardsWithText(parent: ElementNode) {
+  for (const child of parent.getChildren()) {
+    if ($isAccountManagerRequestNode(child)) {
+      child.replace($createTextNode(child.getTextContent()));
+    } else if ($isElementNode(child)) {
+      $replaceAccountManagerCardsWithText(child);
+    }
+  }
+}
+
 export function forceSingleLine(editor: LexicalEditor) {
   editor.update(
     () => {
@@ -1225,6 +1237,7 @@ export function forceSingleLine(editor: LexicalEditor) {
       root.clear();
       if (firstChild) {
         root.append(firstChild);
+        $replaceAccountManagerCardsWithText(firstChild);
       } else {
         root.append($createParagraphNode().append($createTextNode('')));
       }

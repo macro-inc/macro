@@ -1,9 +1,11 @@
 use super::*;
 
 fn service(
-    repo: MockCallRepository,
+    mut repo: MockCallRepository,
     rtc: MockCallRtcClient,
 ) -> BaseWebhookCallService<StubConnectionService> {
+    repo.expect_archive_call_if_program_only()
+        .returning(|_| Box::pin(async { Ok(None) }));
     CallServiceImpl::new(
         repo,
         rtc,
@@ -121,6 +123,7 @@ async fn prepared_room_skips_external_creation_and_a_concurrent_join_does_not_de
             .prepare_meeting_call(&meeting)
             .await
             .unwrap()
+            .0
             .id,
         call_id
     );
@@ -273,7 +276,7 @@ async fn meeting_allocation_does_not_wait_for_recording_or_transcription() {
     .await
     .expect("room allocation must not wait for media services")
     .unwrap();
-    assert_eq!(prepared.id, call_id);
+    assert_eq!(prepared.0.id, call_id);
     // The recording progresses even though transcription is still blocked.
     release_recorder.send(()).unwrap();
     tokio::time::timeout(Duration::from_secs(2), attachment)

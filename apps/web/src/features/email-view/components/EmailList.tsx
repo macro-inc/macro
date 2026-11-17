@@ -1,3 +1,4 @@
+import { TutorialRow } from '@app/features/video-tutorials';
 import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
@@ -71,7 +72,7 @@ import {
   soupNavigationTouchHighlight,
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { openEntityInSplitFromUnifiedList } from '../../next-soup/utils';
-import { isExcludedEmailFolder } from '../constants';
+import { canSearchEmailTab, isExcludedEmailFolder } from '../constants';
 import {
   type EmailListActivationMetadata,
   useEmailView,
@@ -81,6 +82,7 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import { createSearchScrollReset } from '../primitives/create-search-scroll-reset';
 import { createEmailFolderRestore } from '../primitives/folder-restore';
 import { createEmailRowActionState } from '../primitives/row-action-state';
 import { createScrollAnchor } from '../primitives/scroll-anchor';
@@ -140,6 +142,9 @@ export function EmailList(props: EmailListProps) {
     filterByTag,
   } = useEmailView();
   usePending('email.list.items', () => source.isLoading());
+  // The wait is still a wait when the previous rows stay on screen for it.
+  const showsPreviousRows = () => source.showsPreviousRows?.() ?? false;
+  usePending('email.list.search_results', showsPreviousRows);
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
 
@@ -222,8 +227,8 @@ export function EmailList(props: EmailListProps) {
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacer);
   // The virtualizer's item offsets exclude this; its scroll offset includes it.
-  const listStartMargin = () =>
-    isTouchDevice() ? (topSpacerSize.height ?? 0) : 0;
+  // The top spacer holds the touch inset and the pinned tutorial row.
+  const listStartMargin = () => topSpacerSize.height ?? 0;
   const [emptyViewport, setEmptyViewport] = createSignal<HTMLDivElement>();
   const [grid, setGrid] = createSignal<HTMLDivElement>();
   // Coming back from a thread, or toggling the reading pane, remounts the
@@ -564,6 +569,10 @@ export function EmailList(props: EmailListProps) {
   }
 
   const hasEmailRows = () => rows().some((row) => row.kind === 'entity');
+  // The tutorial introduces the inbox; search results are not the inbox.
+  const showsTutorial = () =>
+    state.tab === 'important' &&
+    !(canSearchEmailTab(state.tab) && state.search.trim());
 
   function showsEmptyViewport() {
     return (
@@ -626,6 +635,12 @@ export function EmailList(props: EmailListProps) {
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
+  });
+  createSearchScrollReset({
+    query: () => state.search,
+    showsPreviousRows,
+    reset: () =>
+      setPersistedListState((current) => ({ ...current, scrollOffset: 0 })),
   });
 
   createEffect(() => {
@@ -775,6 +790,12 @@ export function EmailList(props: EmailListProps) {
                   ref={setEmptyViewport}
                   class="min-h-0 flex-1 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
                 >
+                  {/* New inboxes start empty, which is when the tutorial
+                      matters most. Touch devices show no tutorial, so there
+                      the empty state keeps its own top inset. */}
+                  <Show when={showsTutorial()}>
+                    <TutorialRow tutorial="mail" />
+                  </Show>
                   <EmailEmptyState />
                 </div>
               </Match>
@@ -785,14 +806,20 @@ export function EmailList(props: EmailListProps) {
                     setViewport(element);
                     soupNavigationTouchHighlight(element);
                   }}
-                  class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none"
+                  aria-busy={showsPreviousRows()}
+                  classList={{ 'opacity-50': showsPreviousRows() }}
+                  class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none transition-opacity"
                 >
                   {/* Keep insets inside the scroller so rows slide under the floating chrome. */}
-                  <div
-                    ref={setTopSpacer}
-                    aria-hidden="true"
-                    class="h-0 touch:h-(--mobile-content-inset-top)"
-                  />
+                  <div ref={setTopSpacer}>
+                    <div
+                      aria-hidden="true"
+                      class="h-0 touch:h-(--mobile-content-inset-top)"
+                    />
+                    <Show when={showsTutorial()}>
+                      <TutorialRow tutorial="mail" />
+                    </Show>
+                  </div>
                   {/* A row subtree that suspends (the project crumb's preview query, say)
                       detaches only itself, not the list and its scroll position. */}
                   <Suspense>
@@ -863,13 +890,11 @@ export function EmailList(props: EmailListProps) {
                                       metaEnd={
                                         <EmailFocusScore
                                           entity={entityRow().entity}
-                                          sort={state.focusSort}
                                         />
                                       }
                                       previewLeading={
                                         <EmailFocusPreviewLeading
                                           entity={entityRow().entity}
-                                          sort={state.focusSort}
                                         />
                                       }
                                       scheduleStatus={
@@ -1074,7 +1099,6 @@ export function EmailList(props: EmailListProps) {
           >
             <Show when={isExcludedEmailFolder(state.tab)}>
               <Button
-                size="sm"
                 disabled={restoreFolder.isPending}
                 onClick={() =>
                   fireAndForget(

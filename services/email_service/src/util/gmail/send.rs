@@ -9,15 +9,13 @@ use uuid::Uuid;
 pub async fn generate_email_threading_headers(
     db: &PgPool,
     replying_to_db_id: Option<Uuid>,
-    link_id: Uuid,
 ) -> (Option<String>, Option<Vec<String>>) {
     if let Some(replying_to_db_id) = replying_to_db_id {
-        // Fetch headers from the parent message
+        // Fetch headers from the parent message, whichever inbox holds it
         let (parent_id_header, parent_references_header) =
             email_db_client::messages::get::get_message_threading_headers(
                 db,
                 replying_to_db_id,
-                link_id,
             )
                 .await
                 .unwrap_or_else(|e| {

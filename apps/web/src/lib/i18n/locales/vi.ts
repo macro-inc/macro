@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Dự án',
     newProject: 'Dự án mới',
     contentAlreadyOpen: 'Nội dung đã được mở',
-    unableToOpenConversation: 'Không thể mở cuộc trò chuyện. Vui lòng thử lại.',
     mobileSearchPlaceholder: 'Tìm kiếm…',
     closeSearch: 'Đóng tìm kiếm',
     searchFullTextFor: 'Tìm toàn văn “{{query}}”',
@@ -570,10 +569,6 @@ export default {
       other: 'Đã đánh dấu {{accepted}}/{{count}} mục là chưa xong',
     },
     toastMarkNotDoneFailed: 'Không thể đánh dấu là chưa xong',
-    toastThreadStaysDone:
-      'Chuỗi này chưa nhận được tin nhắn nào nên vẫn ở trạng thái xong',
-    toastThreadsStayDone:
-      'Các chuỗi này chưa nhận được tin nhắn nào nên vẫn ở trạng thái xong',
     toastCountNotRestored: {
       other: 'Không thể khôi phục {{count}} mục.',
     },
@@ -736,7 +731,7 @@ export default {
     tabMobileApp: 'Ứng dụng di động',
     tabTags: 'Thẻ',
     tabIntegrations: 'Tích hợp',
-    tabRuntimes: 'Môi trường chạy',
+    tabRuntimes: 'Máy',
     tabMcpServer: 'Máy chủ MCP',
     tabApiKeys: 'Khóa API',
     tabBots: 'Bot',

@@ -19,7 +19,6 @@ import { CompanyPropertiesSection } from './company-properties-section';
 import { CompanySharingSection } from './company-sharing-section';
 import {
   RecordCallsSection,
-  RecordDatabasesSection,
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
@@ -66,7 +65,7 @@ function CompanyContent(props: CompanyProps) {
   );
   const listsEnabled = context.listsEnabled();
   const pipelinesEnabled = context.pipelinesEnabled();
-  const { company, contacts, query } = useCompanyQuery(() => props.companyId);
+  const { company, query } = useCompanyQuery(() => props.companyId);
   usePending('crm.record', () => query.isLoading);
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
@@ -107,7 +106,6 @@ function CompanyContent(props: CompanyProps) {
             <Match when={section() === 'team'}>
               <CompanyContactsSection
                 company={company()}
-                contacts={contacts()}
                 onOpenContact={props.onOpenContact}
               />
             </Match>
@@ -126,9 +124,6 @@ function CompanyContent(props: CompanyProps) {
                   {(current) => <context.RecordTasks scope={current()} />}
                 </Show>
               </Suspense>
-            </Match>
-            <Match when={section() === 'databases'}>
-              <RecordDatabasesSection scope={scope()} />
             </Match>
             <Match when={section() === 'calls'}>
               <RecordCallsSection scope={scope()} />

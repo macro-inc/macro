@@ -56,10 +56,11 @@ async fn get_access_token(
         .map_err(|e| links_error_response(e, fusionauth_user_id, identity_provider_name))?;
 
     // a fusionauth user can have multiple links to the same identity provider with different email
-    // addresses, but can only have one link with a given email
+    // addresses, but can only have one link with a given email. FusionAuth preserves
+    // Google's email capitalization, while Macro stores lowercase addresses.
     let link = links
         .into_iter()
-        .find(|l| l.display_name.as_str() == email)
+        .find(|l| l.display_name.eq_ignore_ascii_case(email))
         .ok_or_else(|| {
             // NOTE: this is going to be something we encounter a lot until users reauthenticate
             // their gmail so I'm downgrading to a debug to not overflow logs
@@ -163,6 +164,12 @@ fn refresh_error_response(
         // handles by asking the user to reauthorize.
         FusionAuthClientError::InvalidGrant => {
             tracing::warn!(error=?error, "refresh token rejected for userid {}", fusionauth_user_id);
+            StatusCode::FORBIDDEN
+        }
+        // The user's organization blocks Macro. Callers treat it like a
+        // revoked grant, so they ask for reauthorization instead of retrying.
+        FusionAuthClientError::GrantBlocked { reason } => {
+            tracing::warn!(reason = %reason, "{} grant blocked by policy for userid {}", identity_provider_name, fusionauth_user_id);
             StatusCode::FORBIDDEN
         }
         _ => {

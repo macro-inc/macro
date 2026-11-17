@@ -2,6 +2,7 @@ use super::*;
 use crate::domain::service::test::{
     TestService, USER, configuration, service, stored_actions, user,
 };
+use entity_access::domain::models::EntityType;
 use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
@@ -26,6 +27,7 @@ impl RoutineTemplateRepo for FakeTemplates {
             active_count: 0,
             created_at: now,
             updated_at: now,
+            appearance: snapshot.appearance,
         };
         self.templates
             .lock()
@@ -101,6 +103,16 @@ async fn sharing_snapshots_the_routine_and_activation_points_back_at_it() {
     let actions = service(false);
     let templates = templates(&actions);
     let id = create_routine(&actions).await;
+    let appearance = EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "🌿".into()
+        }),
+        color: Some(model_entity::AppearanceColor::Green),
+    };
+    actions
+        .set_appearance(owner_receipt(user(), id), appearance.clone())
+        .await
+        .unwrap();
 
     let shared = templates
         .share_template(owner_receipt(user(), id), share_input())
@@ -110,6 +122,11 @@ async fn sharing_snapshots_the_routine_and_activation_points_back_at_it() {
     assert_eq!(shared.name, "routine");
     assert_eq!(shared.description, "Summarizes the week");
     assert_eq!(shared.task, configuration(false).task);
+    assert_eq!(shared.appearance, appearance);
+    actions
+        .set_appearance(owner_receipt(user(), id), EntityAppearance::default())
+        .await
+        .unwrap();
     assert_eq!(
         templates.get_template(&other_user(), id).await.unwrap().id,
         id
@@ -125,6 +142,49 @@ async fn sharing_snapshots_the_routine_and_activation_points_back_at_it() {
         .unwrap();
     assert_eq!(activated.template_id, Some(id));
     assert!(activated.owner.is_user(&other_user()));
+    assert_eq!(activated.appearance, appearance);
+    assert_eq!(
+        actions
+            .get_action(&owner_receipt(other_user(), activated.id.unwrap()))
+            .await
+            .unwrap()
+            .appearance,
+        appearance
+    );
+    assert_eq!(
+        activated.configuration_revision,
+        crate::domain::event_runs::ConfigurationRevision::INITIAL
+    );
+    assert_eq!(activated.created_at, activated.updated_at);
+}
+
+#[tokio::test]
+async fn a_shared_routine_never_operates_as_whoever_activates_it() {
+    let actions = service(false);
+    let templates = templates(&actions);
+    let mut routine = configuration(false);
+    routine.task = serde_json::json!({
+        "steps": [{ "type": "agent", "model": "model", "instructions": "Summarize" }],
+        "dangerously_operate_as_user": true,
+    });
+    let id = actions
+        .create_action(&CreationPrincipal::User(user()), routine)
+        .await
+        .unwrap()
+        .id
+        .unwrap();
+
+    let shared = templates
+        .share_template(owner_receipt(user(), id), share_input())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        shared.task,
+        serde_json::json!({
+            "steps": [{ "type": "agent", "model": "model", "instructions": "Summarize" }],
+        })
+    );
 }
 
 #[tokio::test]
@@ -281,7 +341,7 @@ async fn disabled_missing_or_failed_flags_block_templates_but_preserve_routines_
         assert_eq!(copies.len(), 1);
         assert_eq!(copies[0].id, activated.id);
         assert_eq!(copies[0].enabled, activated.enabled);
-        assert!(actions.get_action(id).await.is_ok());
+        assert!(actions.get_action(&owner_receipt(user(), id)).await.is_ok());
 
         templates
             .unshare_template(owner_receipt(user(), id))
@@ -295,7 +355,12 @@ async fn disabled_missing_or_failed_flags_block_templates_but_preserve_routines_
                 .unwrap()
                 .is_none()
         );
-        assert!(actions.get_action(activated.id.unwrap()).await.is_ok());
+        assert!(
+            actions
+                .get_action(&owner_receipt(other_user(), activated.id.unwrap()))
+                .await
+                .is_ok()
+        );
     }
 }
 

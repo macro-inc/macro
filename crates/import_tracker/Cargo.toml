@@ -20,3 +20,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 anyhow = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
+
+[package.metadata.cargo-shear]
+# Used by `import_tracker/test_support.rs`, included through `#[path]`.
+ignored = ["anyhow"]

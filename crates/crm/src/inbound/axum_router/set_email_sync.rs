@@ -20,18 +20,16 @@ use super::CrmRouterState;
 /// Request body for `PUT /crm/companies/{company_id}/email-sync`.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SetEmailSyncRequest {
-    /// New value for `crm_companies.email_sync`. Purely a read-side
-    /// visibility/permission gate — `soup` queries and email-permission
-    /// checks require `email_sync = true` before exposing the
-    /// company's emails team-wide. Populate continues to write CRM
-    /// history regardless, so toggling never destroys data and
-    /// re-enabling never requires a backfill.
+    /// Allow eligible email contributions for this company's domains.
+    /// Disabling excludes new ingestion and CRM thread access while preserving
+    /// records. Re-enabling requires an admin, removes exact team exclusions,
+    /// and schedules backfill only for explicitly consenting primary mailboxes.
+    /// Personal and broader team exclusions continue to apply.
     pub email_sync: bool,
 }
 
-/// Toggle `email_sync` on a CRM company. Purely a visibility flag —
-/// it gates whether team members can see each other's emails with
-/// this company. Existing CRM data is unaffected.
+/// Toggle email contribution for a CRM company without archiving its records.
+/// Individual consent and all remaining exclusions still apply.
 #[utoipa::path(
     put,
     path = "/crm/companies/{company_id}/email-sync",

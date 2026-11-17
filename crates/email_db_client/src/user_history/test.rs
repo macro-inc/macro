@@ -330,3 +330,94 @@ async fn get_thread_summary_info_skips_discarded_drafts(pool: Pool<Postgres>) ->
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("get_thread_summary_info"))
+)]
+async fn get_thread_summary_info_latest_message_without_sender_contact(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
+    let healthy_thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000301")?;
+    let no_contact_thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000310")?;
+    let deleted_contact_thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000311")?;
+    let deleted_contact_id = Uuid::parse_str("00000000-0000-0000-0000-0000000c0030")?;
+
+    // A message stored without a sender contact, and one whose contact is
+    // later deleted (`from_contact_id` is `ON DELETE SET NULL`).
+    sqlx::query!(
+        "INSERT INTO email_threads (id, link_id) VALUES ($1, $3), ($2, $3)",
+        no_contact_thread_id,
+        deleted_contact_thread_id,
+        link_id
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, 'carol@example.com')",
+        deleted_contact_id,
+        link_id
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_messages (id, thread_id, link_id, is_draft, is_sent, from_contact_id,
+                                    internal_date_ts, sent_at, subject)
+        VALUES ('00000000-0000-0000-0000-0000000e0624', $1, $3, false, false, NULL,
+                '2025-01-12 10:00:00 +00:00', '2025-01-12 10:00:00 +00:00', 'No contact'),
+               ('00000000-0000-0000-0000-0000000e0625', $2, $3, false, false, $4,
+                '2025-01-12 11:00:00 +00:00', '2025-01-12 11:00:00 +00:00', 'Deleted contact')
+        "#,
+        no_contact_thread_id,
+        deleted_contact_thread_id,
+        link_id,
+        deleted_contact_id
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "DELETE FROM email_contacts WHERE id = $1",
+        deleted_contact_id
+    )
+    .execute(&pool)
+    .await?;
+
+    let result = get_thread_summary_info(
+        &pool,
+        &[link_id],
+        &[
+            healthy_thread_id,
+            no_contact_thread_id,
+            deleted_contact_thread_id,
+        ],
+    )
+    .await?;
+
+    assert_eq!(
+        result.len(),
+        3,
+        "a thread without a sender must not drop the batch"
+    );
+    for thread_id in [no_contact_thread_id, deleted_contact_thread_id] {
+        let info = result.get(&thread_id).unwrap();
+        assert_eq!(info.sender, "");
+        assert_eq!(info.pretty_sender, "");
+    }
+    assert_eq!(
+        result
+            .get(&no_contact_thread_id)
+            .unwrap()
+            .subject
+            .as_deref(),
+        Some("No contact")
+    );
+    let healthy = result.get(&healthy_thread_id).unwrap();
+    assert!(!healthy.sender.is_empty());
+    assert!(!healthy.pretty_sender.is_empty());
+
+    Ok(())
+}

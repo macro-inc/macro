@@ -262,6 +262,8 @@ export function createTaskComposerProperties(args: {
   values?: Accessor<Record<string, PropertyApiValues>>;
   additionalPropertyIds?: Accessor<string[]>;
   initialVisiblePropertyIds?: string[];
+  /** Properties a host edits with its own control: no pill, not addable. */
+  hiddenPropertyIds?: readonly string[];
   allDefinitions?: boolean;
 }) {
   const [propertyValues, setPropertyValues] = createStore<
@@ -351,7 +353,7 @@ export function createTaskComposerProperties(args: {
       ],
       availableDefinitions(),
       projects().enabled
-    );
+    ).filter((id) => !args.hiddenPropertyIds?.includes(id));
   const addableDefinitions = () =>
     availableDefinitions().filter(
       (definition) =>
@@ -376,7 +378,9 @@ export function createTaskComposerProperties(args: {
     availableDefinitions()
       .filter(
         (definition) =>
-          definition.id !== SYSTEM_PROPERTY_IDS.PROJECT || projects().enabled
+          (definition.id !== SYSTEM_PROPERTY_IDS.PROJECT ||
+            projects().enabled) &&
+          !args.hiddenPropertyIds?.includes(definition.id)
       )
       .map((definition) =>
         toPropertyDefinitionDomain(definition, options().get(definition.id))

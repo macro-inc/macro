@@ -3,6 +3,15 @@ import { type IUser, useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EmailEntity } from '@entity';
 import { createEmailsInfiniteQuery } from '@entity';
+import { usePinnedContactUsers } from '@queries/contacts/use-directory';
+import { useSearchSoupQuery } from '@queries/soup/search';
+import { debounce } from '@solid-primitives/scheduled';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+} from 'solid-js';
 import {
   type CombinedEntity,
   createEntitySearchConfig,
@@ -15,25 +24,22 @@ import {
   threadMapper,
   useQuickAccessEntities,
   userToEntity,
-} from '@property';
-import type { Property, PropertyDefinitionDomain } from '@property/types';
-import { useSearchSoupQuery } from '@queries/soup/search';
-import { debounce } from '@solid-primitives/scheduled';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createSignal,
-} from 'solid-js';
+} from '../../editors/selectors/entityUtils';
+import type { Property, PropertyDefinitionDomain } from '../../types';
+
+type EntityPropertyOptions = {
+  /** Explicit USER pool replacing Quick Access people. */
+  users?: Accessor<IUser[] | undefined>;
+  /** Keep selected entities available beyond the initial result limit. */
+  selectedIds?: Accessor<string[] | undefined>;
+  /** Resolve personal selection labels independently of the suggestion window. */
+  selectedUserIds?: Accessor<Iterable<string>>;
+};
 
 export function useEntitiesForProperty(
   property: Accessor<Property | PropertyDefinitionDomain | undefined>,
   searchQuery: Accessor<string>,
-  options?: {
-    /** Explicit pool for USER pickers (e.g. company owner → team members);
-     * when it returns a list, it replaces the quick-access people list. */
-    users?: Accessor<IUser[] | undefined>;
-  }
+  options?: EntityPropertyOptions
 ) {
   const [searchTerm, setSearchTerm] = createSignal('');
 
@@ -57,8 +63,11 @@ export function useEntitiesForProperty(
   const specificEntityType = () => property()?.specificEntityType;
 
   // Get items from quickAccess based on entity type
-  const { items: quickAccessItems } =
-    useQuickAccessEntities(specificEntityType);
+  const { items: quickAccessItems } = useQuickAccessEntities(
+    specificEntityType,
+    searchTerm,
+    () => !(specificEntityType() === 'USER' && options?.users?.() !== undefined)
+  );
 
   // Email queries for THREAD type or generic ENTITY (no specific type)
   const needsEmailSearch = () =>
@@ -95,6 +104,13 @@ export function useEntitiesForProperty(
       .map((entity) => threadMapper(entity as EmailEntity));
   });
 
+  const pinnedUsers = usePinnedContactUsers(
+    () => options?.selectedUserIds?.() ?? [],
+    () =>
+      (!specificEntityType() || specificEntityType() === 'USER') &&
+      options?.users?.() === undefined
+  );
+
   // Convert quickAccess items to CombinedEntity format
   const entities = createMemo((): CombinedEntity[] => {
     const entityType = specificEntityType();
@@ -116,9 +132,11 @@ export function useEntitiesForProperty(
 
     // Convert quickAccess items to CombinedEntity
     const items = quickAccessItems();
-    const converted: CombinedEntity[] = [];
+    const converted: CombinedEntity[] = pinnedUsers().map(userToEntity);
+    const pinnedIds = new Set(converted.map((item) => item.id));
 
     for (const item of items) {
+      if (pinnedIds.has(item.id)) continue;
       // Augment users with DM activity
       if (item.kind === 'user') {
         const augmentedUser = augmentUserWithDmActivity(item.data);
@@ -158,7 +176,20 @@ export function useEntitiesForProperty(
 
     // When no search query, sort self to top BEFORE slicing
     if (!query) {
-      return sortEntitiesWithSelfFirst(available, userId).slice(0, MAX_RESULTS);
+      const visible = sortEntitiesWithSelfFirst(available, userId).slice(
+        0,
+        MAX_RESULTS
+      );
+      const selectedIds = options?.selectedIds?.();
+      if (selectedIds) {
+        for (const entity of available) {
+          if (!selectedIds.includes(entity.id)) continue;
+          if (visible.some((item) => item.id === entity.id)) continue;
+
+          visible.push(entity);
+        }
+      }
+      return visible;
     }
 
     const localResults = entitySearch(available, query)

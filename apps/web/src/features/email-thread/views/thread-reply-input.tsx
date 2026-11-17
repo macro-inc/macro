@@ -1,4 +1,4 @@
-import { decodeBase64Utf8 } from '@app/features/email-compose/core/decode-base64';
+import { draftEditorHtml } from '@app/features/email-compose/core/draft-editor-html';
 import { plainTextToHtml } from '@app/features/email-compose/core/plain-text-to-html';
 import { ReplyInputView } from '@app/features/email-compose/views/reply-input';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
@@ -60,14 +60,11 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
   );
 
   const draftHTML = createMemo(() => {
-    const encoded = props.draft?.body_html_sanitized;
-    if (!encoded) {
-      const plainText = props.draft?.body_text;
-      if (!plainText) return '';
-      return plainTextToHtml(plainText);
-    }
-    const decodedHtml = decodeBase64Utf8(encoded);
-    return decodedHtml;
+    const draft = props.draft;
+    if (!draft) return '';
+    const html = draftEditorHtml(draft);
+    if (html) return html;
+    return draft.body_text ? plainTextToHtml(draft.body_text) : '';
   });
 
   function focusMessage(id: string) {
@@ -119,6 +116,7 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
               session={{
                 thread: ctx.thread,
                 recipientOptions: ctx.recipientOptions,
+                ownsThreadInbox: () => ctx.permissions().isOwner,
                 isPersonalReply: () => {
                   const message = props.replyingTo();
                   return (

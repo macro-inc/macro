@@ -1,8 +1,10 @@
 //! The yes/no questions Jev answers about every thread.
 //!
 //! The wording was tested against four months of real signal mail; change it
-//! only together with a re-run of that comparison. Each question stays under
-//! Jev's 500-character limit.
+//! only together with a re-run of that comparison. The two time questions came
+//! later and have only been tested on labelled synthetic threads, where adding
+//! them moved the other answers no more than repeating a request does. Each
+//! question stays under Jev's 500-character limit.
 
 /// One Focus question. [`FocusQuestion::ALL`] fixes the order answers come back in.
 ///
@@ -26,11 +28,15 @@ pub enum FocusQuestion {
     NeedsResponse,
     /// Is there an open loop the owner should come back to?
     NeedsFollowUp,
+    /// Does it get more pressing the longer it sits untouched?
+    GrowsWithTime,
+    /// Does it matter less the longer it sits untouched?
+    FadesWithTime,
 }
 
 impl FocusQuestion {
     /// Every question, in the order Jev is asked and answers.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 10] = [
         Self::Focus,
         Self::Outreach,
         Self::Automated,
@@ -39,6 +45,8 @@ impl FocusQuestion {
         Self::NeedsDecision,
         Self::NeedsResponse,
         Self::NeedsFollowUp,
+        Self::GrowsWithTime,
+        Self::FadesWithTime,
     ];
 
     /// The question as Jev reads it.
@@ -86,6 +94,18 @@ impl FocusQuestion {
                  signature or scheduled next step, or a question they asked that the other side has not \
                  answered yet? Answer no if the thread is resolved, or it is unsolicited outreach, a mass \
                  email, or an automated notice."
+            }
+            Self::GrowsWithTime => {
+                "Does leaving this email unanswered make things worse the longer it sits: someone stays \
+                 blocked waiting on the recipient, a deadline with real consequences gets closer, a \
+                 problem keeps growing, or a customer or payment keeps waiting? Answer no if it can wait \
+                 without harm, or if missing it only means an optional invitation or offer passes by."
+            }
+            Self::FadesWithTime => {
+                "Does this email stop mattering to the recipient the longer it sits untouched: an \
+                 invitation, offer or other time-bound moment simply passes, the news in it goes stale, \
+                 or others will handle it without them? Answer no if it would still deserve the same \
+                 attention later, including a request with no deadline, and no if waiting makes it worse."
             }
         }
     }

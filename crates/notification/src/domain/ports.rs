@@ -125,6 +125,16 @@ pub trait NotificationRepository: Send + Sync + 'static {
         done: bool,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
 
+    /// Atomically reopen done notifications: those in `unseen` return to unseen,
+    /// the rest to seen, so an undo restores the state each had before its done.
+    /// Notifications no longer done are left alone. Return the updated rows.
+    fn reopen_notifications(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        unseen: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
+
     /// Get non-deleted, user-owned notification IDs associated with any primary or secondary
     /// entity that need the requested status transition or an initial viewing timestamp.
     fn get_notification_ids_for_entities(
@@ -422,10 +432,12 @@ use crate::domain::models::queue_message::EmailContent;
 
 /// Port for email delivery.
 pub trait EmailSender: Send + Sync + 'static {
-    /// Send an email with pre-built content to a user.
+    /// Send an email with pre-built content to a user. `notification_type` is the type name
+    /// of the notification the email delivers.
     fn send_email(
         &self,
         recipient: MacroUserIdStr<'_>,
+        notification_type: &str,
         content: &EmailContent,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }

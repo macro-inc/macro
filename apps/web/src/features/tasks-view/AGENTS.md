@@ -31,6 +31,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Edit priority then status through leading `TaskPropertyControl` icons on desktop and mobile; place status directly beside the title, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
 - Order trailing task properties as Due date, Project, then Assignees in wide and narrow rows and title pills; show both avatars for exactly two compact assignees, otherwise one avatar plus the remaining count, anchored left in a fixed-width slot so overflow grows right.
 - At container widths up to 840px, use tooltip-labeled icons for Project, Assignees, Due date, and Updated headers; keep Project at 32px and Assignees at 44px, with the assignee header aligned to the first avatar and collapsed property pills padded 4px on both axes.
+- While a text search keeps the search service's order (`TasksDataSource.sortsSearchResults` false), column headers stop sorting and show a static Updated descending arrow; CRM's scoped search reruns the list's query and keeps sortable headers. The Sort dropdown and S hotkey drop out during any search. Never change the stored sort for search.
 - Size Updated from its measured, untruncated header with a 56px content minimum for single-line timestamps; share the width across rows, retain existing Created by spacing, and fade/collapse Updated over 160ms at 600px, disabling motion for reduced-motion preferences.
 - Keep Created by visible above 600px alongside Updated, with a 16px user-plus header icon, unclipped 20px owner avatars at container widths up to 840px, and a keyboard-focusable “Created by” tooltip; show the title's shared badge only while the creator column is hidden, with a 4px layout gap after the title.
 - Scope task-only column widths with `.task-grid-row.task-grid-icon-creator` so shared Soup `.task-grid-row` rules cannot override them when stylesheets load in a different order.
@@ -46,6 +47,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Save filters, relative due dates or valid calendar bounds, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.
 - Label the semantic viewer token Me, explain it with “Matches whoever opens this saved view,” and resolve it only when executing a filter; a selected fixed user stays fixed.
+- Limit new Assignee choices to team members and available agents without contact discovery; reuse existing selected-first ordering at opening and keep rows stable while selecting; preserve selected outsiders, the semantic Me token, Unassigned, and broad Created by options.
 - Keep saved views on All Tasks with every restriction in editable facets; accept only the final v1 person-filter format, without a separate Scope control.
 - Do not persist temporary saved-view filters, including due-date predicates, in entry snapshots; detail navigation discards those edits but retains the saved-view ID.
 - Pass saved-view state through the existing Tasks search codec; split URLs namespace it as `s0.tasks.savedView`.
@@ -58,6 +60,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Group the shared sidebar and picker empty state in a subtly bordered, rounded container with 12px padding, the inherited background, and no shadow: “Your go-to views”, “Save your setup for next time.” and a `secondary`, `sm` Create view button with a leading plus icon, without a separate illustration; keep the sidebar header's icon-only plus available in every section state, and isolate both creation buttons' keyboard scopes from task-list selection shortcuts.
 - Keep mobile pills in a flex wrapper inside the header so their shadow margins cannot collapse the header and overlap task content.
 - Keep desktop list-header filters, layout, sort, and grouping at `md` / `icon-md` (32px), matching New and Search; preserve the mobile filter drawer.
+- The Title sort sends Soup's `name` method, ascending until the viewer reverses it. Keep `sortTasks`'s local comparator on the same order — `compareSoupNames` (lower-cased ICU root order, matching the server's `und-x-icu`), unnamed last, newest update then descending ID — so loaded rows do not move while a page revalidates.
 - Show one local New view draft row after creation starts; prefill its save dialog with New view, replace the row on confirmed save, and remove it on cancellation or navigation without adding fake cached records.
 - Close the selected-view menu before opening a dialog, discard deferred actions after account or selection changes, and close dialogs after account, saved-view, or built-in-tab navigation.
 - Own mobile action dialogs outside closing drawers; finish drawer closure before opening a dialog, and reopen filters after cancellation only within the same navigation scope.
@@ -71,6 +74,10 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Block ordinary definition saves while unsupported settings remain; only explicit banner cleanup removes them, and metadata writes leave the definition unchanged.
 
 - Mark task row notifications through `notifications/mark-row-seen.ts` when opening inline details or a split, including board and Gantt rows; keep the mounted Markdown marker for direct routes.
+- Keep Assignee menus team/agent-scoped with selected outsiders; build Created by menus with lazy contact sources on desktop and mobile. Resolve saved-summary labels from that summary's explicit IDs, not active filters or a directory map.
+- Keep semantic `@viewer` outside contact lookup and distinct from fixed self; preserve unknown selected IDs and group-local Only behavior.
+- Extract AI person references without a prompt catalog, then resolve complete per-label evidence; reject the entire plan for unknown, ambiguous or incomplete people rather than dropping constraints. Preserve model array boundaries, literal addresses and viewer-token semantics.
+- Fence planner completions by account/session, navigation and filter edits; returning to an earlier state does not revive an old request.
 
 ## Checks
 
@@ -78,6 +85,7 @@ Run from `apps/web`:
 
 - `bun run test src/features/tasks-view`
 - `bun run type-check`
+- Bounded filters/planner browser regression: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts task-filters.browser.e2e.ts` (synthetic transport, real controls and reference reader).
 - Project grouping browser regression: `bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts project-grouping.browser.e2e.ts`.
 
 ## Related

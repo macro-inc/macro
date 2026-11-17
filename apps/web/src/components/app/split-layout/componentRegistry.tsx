@@ -14,9 +14,7 @@ import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
-  enableChatV3Agents,
   enableProjects,
-  isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -38,9 +36,21 @@ import {
 } from './split-router/app-route-shell';
 
 // Views load as their own chunks the first time a split opens them.
+const ForYouRouteView = lazyNamed(
+  () => import('@app/features/suggestions/route-views'),
+  'ForYouRouteView'
+);
+const PasswordsRouteView = lazyNamed(
+  () => import('@app/features/passwords/route-views'),
+  'PasswordsRouteView'
+);
 const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
+);
+const NotificationsRouteView = lazyNamed(
+  () => import('@app/features/notifications-inbox/route-views'),
+  'NotificationsRouteView'
 );
 const AgentsRouteView = lazyNamed(
   () => import('@app/features/agents-view/route-views'),
@@ -323,20 +333,28 @@ registerComponent(
 );
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
+registerComponent(
+  'for-you',
+  () => <ForYouRouteView />,
+  () => composableLayout()
+);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent(
-  'routines',
-  () => <AgentsRouteView />,
+  'passwords',
+  () => <PasswordsRouteView />,
   () => composableLayout()
 );
 registerComponent(
-  'agents',
-  () => <AgentsRouteView />,
-  () =>
-    isFeatureEnabled(enableChatV3Agents)
-      ? { splitPanelLayout: 'composable' }
-      : undefined
+  'notifications',
+  () => <NotificationsRouteView />,
+  () => composableLayout()
 );
+registerComponent('routines', () => <AgentsRouteView />, {
+  splitPanelLayout: 'composable',
+});
+registerComponent('agents', () => <AgentsRouteView />, {
+  splitPanelLayout: 'composable',
+});
 registerComponent(
   'mail',
   () => <MailRouteView />,
@@ -408,9 +426,9 @@ registerComponent('email-compose', (params) => {
 });
 registerComponent('routine-compose', (params) => (
   <RoutineCreator
-    onCreated={
-      typeof params.onCreated === 'function'
-        ? (params.onCreated as (id: string) => void)
+    onStart={
+      typeof params.onStart === 'function'
+        ? (params.onStart as () => void)
         : undefined
     }
   />
@@ -513,16 +531,8 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'chat-attachment',
-    lazy(() => import('@core/component/AI/component/debug/Attachment'))
-  );
-  registerComponent(
     'chat-tool',
     lazy(() => import('@core/component/AI/component/debug/Tool'))
-  );
-  registerComponent(
-    'http-stream',
-    lazy(() => import('@core/component/AI/component/debug/HttpStream'))
   );
   registerComponent(
     'static-markdown-stream',
@@ -585,11 +595,6 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'agent-replay',
-    lazy(() => import('@app/features/block-agent/debug/replay/Replay'))
-  );
-
-  registerComponent(
     'agent-progress',
     lazy(() => import('@app/features/agent-activity/debug/ProgressPlayground'))
   );
@@ -632,13 +637,6 @@ if (DEV_MODE_ENV) {
       lazy(
         () => import('@app/features/next-soup/debug/DocumentWherePlayground')
       )
-    )
-  );
-
-  registerComponent(
-    'projection-playground',
-    withAuth(
-      lazy(() => import('@app/features/devtools/debug/ProjectionPlayground'))
     )
   );
 

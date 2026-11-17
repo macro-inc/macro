@@ -10,6 +10,33 @@ export type ClientOptions = {
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
 /**
+ * A privacy-reviewed activity report; period_end is inclusive.
+ */
+export type Activity = {
+    content: string;
+    granularity: Granularity;
+    periodEnd: string;
+    periodStart: string;
+};
+
+/**
+ * Error body for activity reads.
+ */
+export type ActivityErrorBody = {
+    /**
+     * Error description.
+     */
+    error: string;
+};
+
+/**
+ * Activity reports for one user, ordered by period.
+ */
+export type ActivityReports = {
+    reports: Array<Activity>;
+};
+
+/**
  * Request body for adding a new MCP server.
  */
 export type AddServerRequest = {
@@ -27,7 +54,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation' | 'email_focus';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'agent_activity_summary' | 'dictation' | 'image_generation' | 'email_focus' | 'web_search' | 'non_billable_agent_session';
 
 /**
  * A structured part within an assistant message.
@@ -404,6 +431,11 @@ export type CompleteOnboardingRequest = {
 };
 
 /**
+ * How much a model may think before it gives a structured answer.
+ */
+export type CompletionThinking = 'default' | 'low';
+
+/**
  * User and feature attribution for one invocation.
  */
 export type CompletionUsage = {
@@ -619,7 +651,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * Error response body.
@@ -643,9 +675,12 @@ export type ErrorResponse = {
 };
 
 /**
- * How long a projection remains active without being requested.
+ * A private explicit memory document and its optimistic concurrency token.
  */
-export type Expiry = 'day' | 'week' | 'month';
+export type ExplicitMemory = {
+    content: string;
+    revision: number;
+};
 
 /**
  * Recorded invocations and total for one feature.
@@ -822,6 +857,11 @@ export type GetChatsForAttachmentResponse = {
 };
 
 /**
+ * Fixed calendar granularity, always in UTC, with Monday-start weeks.
+ */
+export type Granularity = 'day' | 'week' | 'month' | 'summary';
+
+/**
  * HTTP request payload for sending a chat message.
  * Unlike the WebSocket payload, this does not include stream_id as it's generated server-side.
  */
@@ -854,6 +894,16 @@ export type HttpSendChatMessageRequest = {
      * Which toolset to use. Defaults to `all`
      */
     toolset?: ToolSet;
+};
+
+/**
+ * The caller's ledger rows.
+ */
+export type ImportEntitiesResponse = {
+    /**
+     * The caller's own rows and their team's imported rows, newest first.
+     */
+    entities: Array<ImportEntity>;
 };
 
 /**
@@ -946,6 +996,35 @@ export type ImportEntity = {
 export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel';
 
 /**
+ * Body for importing one Notion page.
+ */
+export type ImportNotionPageRequest = {
+    /**
+     * The Notion page URL or 32-character page id.
+     */
+    page: string;
+};
+
+/**
+ * The outcome of importing a Notion page, with its ledger row.
+ */
+export type ImportNotionPageResponse = {
+    /**
+     * The row behind the outcome; `entity_id` is the document once imported.
+     */
+    entity: ImportEntity;
+    /**
+     * What happened.
+     */
+    outcome: ImportNotionPageResult;
+};
+
+/**
+ * What importing one Notion page did.
+ */
+export type ImportNotionPageResult = 'imported' | 'already_imported' | 'already_imported_by_teammate' | 'previously_declined' | 'import_in_progress';
+
+/**
  * Discovery-run state for one user × source.
  */
 export type ImportRun = {
@@ -958,6 +1037,10 @@ export type ImportRun = {
      * presented while it is still `running`; rows staged after that take it.
      */
     review_id?: string | null;
+    /**
+     * The agent session presenting that review.
+     */
+    review_session_id?: string | null;
     scanned?: null | ScanCounts;
     /**
      * The source this run discovered from.
@@ -1057,6 +1140,23 @@ export type LinkShare = 'PUBLIC' | 'TEAM';
 
 export type MacroUserIdStr = string;
 
+/**
+ * An edit to one one-based line. A revision is required to prevent replay
+ * or concurrent edits from inserting twice or deleting a different line.
+ */
+export type MemoryEdit = {
+    action: 'insert';
+    content: string;
+    line: number;
+} | {
+    action: 'replace';
+    content: string;
+    line: number;
+} | {
+    action: 'delete';
+    line: number;
+};
+
 export type MemoryErrorBody = {
     /**
      * Error description.
@@ -1083,7 +1183,7 @@ export type MessageWithAttachments = {
 /**
  * The requested inference speed. Standard is backward compatible with old clients.
  */
-export type ModelSpeed = 'standard' | 'fast' | 'ultrafast';
+export type ModelSpeed = 'standard' | 'priority' | 'fast' | 'ultrafast';
 
 export type NewAttachment = {
     attachment_id: string;
@@ -1635,27 +1735,31 @@ export type PipedreamUpdateRequest = {
  */
 export type Price = {
     /**
-     * Price per audio minute (USD), absent for token billing.
+     * Price per audio minute (USD), absent for token and credit billing.
      */
     price_per_audio_minute?: number | null;
     /**
      * Price per million cache-read input tokens (USD), absent when the model
-     * has no published rate and for audio billing.
+     * has no published rate and for audio and credit billing.
      */
     price_per_million_cache_read?: number | null;
     /**
      * Price per million cache-write input tokens (USD), absent when the model
-     * has no published rate and for audio billing.
+     * has no published rate and for audio and credit billing.
      */
     price_per_million_cache_write?: number | null;
     /**
-     * Price per million input tokens (USD); zero for audio billing.
+     * Price per million input tokens (USD); zero for audio and credit billing.
      */
     price_per_million_in: number;
     /**
-     * Price per million output tokens (USD); zero for audio billing.
+     * Price per million output tokens (USD); zero for audio and credit billing.
      */
     price_per_million_out: number;
+    /**
+     * Price per vendor credit (USD), absent for token and audio billing.
+     */
+    price_per_provider_credit?: number | null;
     /**
      * Total cost (USD).
      */
@@ -1663,45 +1767,18 @@ export type Price = {
 };
 
 /**
- * The current state of a user's projection instance.
+ * Response from [`ReadActivity`].
  */
-export type ProjectionStateResponse = {
+export type ReadActivityResponse = {
     /**
-     * The cached result, if any. JSON-encoded when the projection defines an
-     * `output_schema`.
+     * Matching activity events, newest first.
      */
-    data?: string | null;
+    activities: Array<ToolActivityEvent>;
     /**
-     * The most recent materialization error, if any.
+     * Whether more than 100 events matched the requested range.
      */
-    error?: string | null;
-    /**
-     * When the result was generated.
-     */
-    generated_at?: string | null;
-    /**
-     * The projection id.
-     */
-    id: string;
-    /**
-     * When the result becomes stale.
-     */
-    stale_at?: string | null;
-    /**
-     * The materialization status.
-     */
-    status: ProjectionStatus;
+    truncated: boolean;
 };
-
-/**
- * The materialization status of a user's projection instance.
- */
-export type ProjectionStatus = 'loading' | 'cold' | 'ready' | 'refreshing' | 'error';
-
-/**
- * How frequently an active projection is regenerated.
- */
-export type RefreshCadence = 'high' | 'medium' | 'low';
 
 /**
  * Request body for rejecting a pending tool call.
@@ -1870,6 +1947,10 @@ export type SetPricingRequest = {
      * New price per million output tokens (USD). Required for token pricing.
      */
     price_per_mil_out?: number | null;
+    /**
+     * Price per vendor credit (USD), or null unless the model bills in credits.
+     */
+    price_per_provider_credit?: number | null;
 };
 
 export type SharePermissionV2 = {
@@ -1888,6 +1969,84 @@ export type SharePermissionV2 = {
      */
     owner: string;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * A skill's complete instructions.
+ */
+export type SkillContentResponse = {
+    /**
+     * Whether this is a built-in skill, with no document behind it.
+     */
+    builtIn: boolean;
+    /**
+     * The skill's full markdown instructions.
+     */
+    content: string;
+    /**
+     * The skill's id.
+     */
+    id: string;
+    /**
+     * The skill's name.
+     */
+    name: string;
+};
+
+/**
+ * Machine-readable failure of a skill request.
+ */
+export type SkillErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Explanation without backend diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * One skill the caller can read.
+ */
+export type SkillListing = {
+    /**
+     * Whether this is a built-in skill, with no document behind it.
+     */
+    builtIn: boolean;
+    /**
+     * When to use the skill, when it says.
+     */
+    description?: string | null;
+    /**
+     * The skill document's id, or a built-in skill's well-known id.
+     */
+    id: string;
+    /**
+     * The skill's name.
+     */
+    name: string;
+    /**
+     * When the skill document was last updated; built-in skills have none.
+     */
+    updatedAt?: string | null;
+};
+
+/**
+ * How search terms are matched against skill names.
+ */
+export type SkillsMatchType = 'partial' | 'exact';
+
+/**
+ * The skills matching a listing or search, most recently updated first,
+ * built-in skills last.
+ */
+export type SkillsResponse = {
+    /**
+     * The matching skills.
+     */
+    skills: Array<SkillListing>;
 };
 
 /**
@@ -2035,6 +2194,11 @@ export type StructuredCompletionRequest = {
     model: string;
     output_schema: DynamicSchema;
     prompt: string;
+    /**
+     * How much the model may think first; `low` answers faster. Applies to
+     * completions without tools.
+     */
+    thinking?: CompletionThinking;
     toolset?: ToolSet;
 };
 
@@ -2055,9 +2219,112 @@ export type StructuredToolActivity = {
 };
 
 /**
- * The kind of entity a projection is materialized for.
+ * One activity action returned to the AI.
  */
-export type TargetType = 'user' | 'team';
+export type ToolActivityAction = {
+    type: 'created';
+} | {
+    type: 'edited';
+} | {
+    type: 'opened';
+} | {
+    type: 'deleted';
+} | {
+    type: 'messaged';
+} | {
+    type: 'sent';
+} | {
+    type: 'responded';
+} | {
+    /**
+     * The previous value, when known.
+     */
+    from?: unknown;
+    /**
+     * Previous select/tag option ids resolved to display labels.
+     */
+    from_labels?: Array<string> | null;
+    /**
+     * The property definition id.
+     */
+    property: string;
+    /**
+     * The property definition's human-readable display name, when it is
+     * still visible to the caller.
+     */
+    property_name?: string | null;
+    /**
+     * The property's canonical data type, including `tag` for tag sets.
+     */
+    property_type?: string | null;
+    /**
+     * The new value, or `None` when cleared.
+     */
+    to?: unknown;
+    /**
+     * New select/tag option ids resolved to display labels.
+     */
+    to_labels?: Array<string> | null;
+    type: 'propertyChanged';
+} | {
+    /**
+     * The added principal.
+     */
+    participant: string;
+    type: 'participantAdded';
+} | {
+    /**
+     * The removed principal.
+     */
+    participant: string;
+    type: 'participantRemoved';
+} | {
+    /**
+     * The started call's id.
+     */
+    call_id: string;
+    type: 'callStarted';
+} | {
+    type: 'taskAdded';
+} | {
+    type: 'taskRemoved';
+} | {
+    /**
+     * The stored payload, verbatim.
+     */
+    payload?: unknown;
+    /**
+     * The stored action tag.
+     */
+    tag: string;
+    type: 'unknown';
+};
+
+/**
+ * One activity event returned by [`ReadActivity`].
+ */
+export type ToolActivityEvent = {
+    /**
+     * What the principal did.
+     */
+    action: ToolActivityAction;
+    /**
+     * The principal that mechanically performed the action.
+     */
+    actorId: string;
+    /**
+     * The entity acted on.
+     */
+    entityId: string;
+    /**
+     * The kind of entity acted on.
+     */
+    entityType: string;
+    /**
+     * When the action occurred.
+     */
+    occurredAt: string;
+};
 
 export type ToolOutcome = {
     changes: DatabaseChange;
@@ -2076,6 +2343,62 @@ export type ToolSet = {
     type: 'databases_read_only';
 };
 
+/**
+ * Body for tracking one external item in the ledger.
+ */
+export type TrackImportEntityRequest = {
+    /**
+     * The Macro entity created from the item; required when `status` is
+     * `imported`.
+     */
+    entityId?: string | null;
+    /**
+     * Stable id of the item in its source: a Linear identifier such as
+     * `ENG-142`, a Notion page URL or id, or a Slack channel id.
+     */
+    foreignId: string;
+    /**
+     * Per-source metadata. Linear: `{identifier, title, …}`; Notion:
+     * `{title, url?, summary?}`; Slack: `{name, …}`.
+     */
+    metadata: {
+        [key: string]: unknown;
+    };
+    /**
+     * The external system the item comes from.
+     */
+    source: ImportSource;
+    /**
+     * `staged` to propose the item, `imported` to record an entity already
+     * created from it.
+     */
+    status: TrackImportStatus;
+};
+
+/**
+ * The outcome of tracking an item, with its ledger row.
+ */
+export type TrackImportEntityResponse = {
+    /**
+     * The row behind the outcome.
+     */
+    entity: ImportEntity;
+    /**
+     * What happened.
+     */
+    outcome: TrackImportOutcome;
+};
+
+/**
+ * What tracking an item did.
+ */
+export type TrackImportOutcome = 'staged' | 'recorded_imported' | 'already_imported' | 'already_imported_by_teammate' | 'previously_declined' | 'import_in_progress';
+
+/**
+ * Whether a tracked item is a candidate or an import already made.
+ */
+export type TrackImportStatus = 'staged' | 'imported';
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -2087,6 +2410,20 @@ export type UpdateChannelSharePermission = {
      * You can add, remove or replace and existing permission
      */
     operation: UpdateOperation;
+};
+
+/**
+ * One explicit memory edit at the revision it was based on.
+ */
+export type UpdateExplicitMemoryRequest = {
+    /**
+     * The one-based line edit to apply.
+     */
+    edit: MemoryEdit;
+    /**
+     * The revision returned by the last read or successful edit.
+     */
+    revision: number;
 };
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
@@ -2156,70 +2493,19 @@ export type UpdateToolResponseRequest = {
 };
 
 /**
- * Request body for getting or creating an ai projection. The concrete target
- * id is resolved from the authenticated user, so only the target type is sent.
- */
-export type UpsertProjectionRequest = {
-    /**
-     * When `true` and generation is needed (cold instance or `regenerate`),
-     * the server generates inline and responds with the finished result
-     * instead of returning immediately and pushing an update through the
-     * connection gateway.
-     */
-    await?: boolean;
-    /**
-     * How long the projection remains active without being requested.
-     */
-    expiry: Expiry;
-    /**
-     * The frontend-defined projection id (e.g. `notification_important_widget`).
-     */
-    id: string;
-    /**
-     * Optional `provider/model` id used for generation (e.g.
-     * `cerebras/llama-3.3-70b`). The default model is used when absent.
-     */
-    model?: string | null;
-    /**
-     * Optional JSON schema the generated result must conform to. When set,
-     * `data` holds the JSON serialization of a conforming value. Enforcement
-     * is prompted (non-strict), so it works across providers.
-     */
-    output_schema?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * The prompt used to materialize the projection.
-     */
-    prompt: string;
-    /**
-     * How frequently the projection should be regenerated.
-     */
-    refresh_cadence: RefreshCadence;
-    /**
-     * When `true`, regenerate even if a cached result exists.
-     */
-    regenerate?: boolean;
-    /**
-     * Whether the projection is materialized for the requesting user or their team.
-     */
-    target_type: TargetType;
-};
-
-/**
  * Measured usage for one invocation.
  */
 export type Usage = {
     /**
-     * Audio duration in seconds, absent for token billing.
+     * Audio duration in seconds, absent for token and credit billing.
      */
     audio_seconds?: number | null;
     /**
-     * Input tokens read from a prompt cache; zero for audio billing.
+     * Input tokens read from a prompt cache; zero for audio and credit billing.
      */
     cache_read_input_tokens: number;
     /**
-     * Input tokens written to a prompt cache; zero for audio billing.
+     * Input tokens written to a prompt cache; zero for audio and credit billing.
      */
     cache_write_input_tokens: number;
     /**
@@ -2227,7 +2513,7 @@ export type Usage = {
      */
     created_at: string;
     /**
-     * Uncached input tokens; zero for audio billing.
+     * Uncached input tokens; zero for audio and credit billing.
      */
     input_tokens: number;
     /**
@@ -2235,10 +2521,14 @@ export type Usage = {
      */
     model: string;
     /**
-     * Output tokens; zero for audio billing.
+     * Output tokens; zero for audio and credit billing.
      */
     output_tokens: number;
     price?: null | Price;
+    /**
+     * Vendor credits consumed, absent for token and audio billing.
+     */
+    provider_credits?: number | null;
 };
 
 /**
@@ -2324,9 +2614,169 @@ export type WebCitation = {
     url: string;
 };
 
+/**
+ * Machine-readable failure of a web request.
+ */
+export type WebErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Explanation without provider diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * Read one public web page.
+ */
+export type WebFetch = {
+    /**
+     * Most characters of page text to return, 1 to 100,000 (default 20,000).
+     */
+    maxChars?: number | null;
+    /**
+     * The `http` or `https` URL of the page.
+     */
+    url: string;
+};
+
+/**
+ * The text of a fetched page.
+ */
+export type WebFetchResponse = {
+    /**
+     * The page text as Markdown, cut to `maxChars`.
+     */
+    content: string;
+    /**
+     * The page title, when the provider reports one.
+     */
+    title?: string | null;
+    /**
+     * Whether `content` was cut to `maxChars`.
+     */
+    truncated: boolean;
+    /**
+     * The URL that was read.
+     */
+    url: string;
+};
+
+/**
+ * Search the public web.
+ */
+export type WebSearch = {
+    /**
+     * Only return pages from these domains, e.g. `["docs.rs", "github.com"]`.
+     */
+    domains?: Array<string> | null;
+    /**
+     * Never return pages from these domains.
+     */
+    excludeDomains?: Array<string> | null;
+    /**
+     * Also return each page's text as Markdown (up to 8,000 characters per result).
+     */
+    includeContent?: boolean | null;
+    /**
+     * How many results to return, 1 to 20 (default 5).
+     */
+    maxResults?: number | null;
+    /**
+     * What to search for, in natural language or keywords (at most 400 characters).
+     */
+    query: string;
+    /**
+     * Only return pages published on or after this date (`YYYY-MM-DD`).
+     */
+    since?: string | null;
+    topic?: null | WebSearchTopic;
+};
+
+/**
+ * The pages a search found, best match first.
+ */
+export type WebSearchResponse = {
+    /**
+     * Results, best match first. Empty when nothing matched.
+     */
+    results: Array<WebSearchResult>;
+};
+
+/**
+ * One page a search found.
+ */
+export type WebSearchResult = {
+    /**
+     * The page text as Markdown, when `includeContent` was set.
+     */
+    content?: string | null;
+    /**
+     * When the page was published, as the search provider reports it.
+     */
+    publishedAt?: string | null;
+    /**
+     * The part of the page most relevant to the query.
+     */
+    snippet: string;
+    /**
+     * The page title.
+     */
+    title: string;
+    /**
+     * The page URL; cite it when you use the result.
+     */
+    url: string;
+};
+
+/**
+ * The kind of results a search favours.
+ */
+export type WebSearchTopic = 'general' | 'news';
+
 export type WithChatId = {
     chat_id: string;
 };
+
+export type ReadMyActivityData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Inclusive start, RFC 3339.
+         */
+        from: string;
+        /**
+         * Exclusive end, RFC 3339; must be after `from`.
+         */
+        to: string;
+    };
+    url: '/activity';
+};
+
+export type ReadMyActivityErrors = {
+    /**
+     * `from` is not before `to`
+     */
+    400: ActivityErrorBody;
+    /**
+     * Internal server error
+     */
+    500: ActivityErrorBody;
+};
+
+export type ReadMyActivityError = ReadMyActivityErrors[keyof ReadMyActivityErrors];
+
+export type ReadMyActivityResponses = {
+    /**
+     * Activity in the range
+     */
+    200: ReadActivityResponse;
+};
+
+export type ReadMyActivityResponse = ReadMyActivityResponses[keyof ReadMyActivityResponses];
 
 export type SetPricingHandlerData = {
     body: SetPricingRequest;
@@ -2392,27 +2842,6 @@ export type GetUsageHandlerResponses = {
 
 export type GetUsageHandlerResponse = GetUsageHandlerResponses[keyof GetUsageHandlerResponses];
 
-export type UpsertAiProjectionData = {
-    body: UpsertProjectionRequest;
-    path?: never;
-    query?: never;
-    url: '/ai-projections';
-};
-
-export type UpsertAiProjectionErrors = {
-    400: ErrorResponse;
-    403: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UpsertAiProjectionError = UpsertAiProjectionErrors[keyof UpsertAiProjectionErrors];
-
-export type UpsertAiProjectionResponses = {
-    200: ProjectionStateResponse;
-};
-
-export type UpsertAiProjectionResponse = UpsertAiProjectionResponses[keyof UpsertAiProjectionResponses];
-
 export type GetChatsForAttachmentHandlerData = {
     body?: never;
     path: {
@@ -2438,6 +2867,46 @@ export type GetChatsForAttachmentHandlerResponses = {
 };
 
 export type GetChatsForAttachmentHandlerResponse = GetChatsForAttachmentHandlerResponses[keyof GetChatsForAttachmentHandlerResponses];
+
+export type CreateConfirmedCalendarEventData = {
+    /**
+     * CreateConfirmedCalendarEvent arguments: CreateCalendarEvent's, plus userConfirmation
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/calendar/events/create-confirmed';
+};
+
+export type CreateConfirmedCalendarEventErrors = {
+    /**
+     * Malformed, or missing userConfirmation
+     */
+    400: GenericErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Not created: a blank confirmation, a calendar the user cannot write, or a provider failure
+     */
+    422: GenericErrorResponse;
+};
+
+export type CreateConfirmedCalendarEventError = CreateConfirmedCalendarEventErrors[keyof CreateConfirmedCalendarEventErrors];
+
+export type CreateConfirmedCalendarEventResponses = {
+    /**
+     * ToolCalendarEvent
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type CreateConfirmedCalendarEventResponse = CreateConfirmedCalendarEventResponses[keyof CreateConfirmedCalendarEventResponses];
 
 export type DeleteChatData = {
     body?: never;
@@ -2921,6 +3390,46 @@ export type DecisionsResponses = {
 
 export type DecisionsResponse = DecisionsResponses[keyof DecisionsResponses];
 
+export type SendConfirmedEmailData = {
+    /**
+     * SendConfirmedEmail arguments: SendEmail's, plus userConfirmation
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/email/send-confirmed';
+};
+
+export type SendConfirmedEmailErrors = {
+    /**
+     * Malformed, or missing userConfirmation
+     */
+    400: GenericErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Not sent: a blank confirmation, an inbox or attachment the user cannot use, or a delivery failure
+     */
+    422: GenericErrorResponse;
+};
+
+export type SendConfirmedEmailError = SendConfirmedEmailErrors[keyof SendConfirmedEmailErrors];
+
+export type SendConfirmedEmailResponses = {
+    /**
+     * SendEmailResponse
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type SendConfirmedEmailResponse = SendConfirmedEmailResponses[keyof SendConfirmedEmailResponses];
+
 export type HealthHandlerData = {
     body?: never;
     path?: never;
@@ -2990,6 +3499,99 @@ export type GenerateImageResponses = {
 
 export type GenerateImageResponse2 = GenerateImageResponses[keyof GenerateImageResponses];
 
+export type ListImportEntitiesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only rows from this source.
+         */
+        source?: ImportSource;
+        /**
+         * Only rows in this status.
+         */
+        status?: ImportStatus;
+    };
+    url: '/import/entities';
+};
+
+export type ListImportEntitiesErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ListImportEntitiesResponses = {
+    200: ImportEntitiesResponse;
+};
+
+export type ListImportEntitiesResponse = ListImportEntitiesResponses[keyof ListImportEntitiesResponses];
+
+export type TrackImportEntityData = {
+    body: TrackImportEntityRequest;
+    path?: never;
+    query?: never;
+    url: '/import/entities';
+};
+
+export type TrackImportEntityErrors = {
+    /**
+     * Invalid item or metadata
+     */
+    400: unknown;
+    /**
+     * The import service refused the item
+     */
+    422: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type TrackImportEntityResponses = {
+    200: TrackImportEntityResponse;
+};
+
+export type TrackImportEntityResponse2 = TrackImportEntityResponses[keyof TrackImportEntityResponses];
+
+export type DeclineImportEntityData = {
+    body?: never;
+    path: {
+        /**
+         * Ledger row id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/import/entities/{id}';
+};
+
+export type DeclineImportEntityErrors = {
+    /**
+     * No such row belongs to the caller
+     */
+    404: unknown;
+    /**
+     * Only staged rows can be declined
+     */
+    409: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DeclineImportEntityResponses = {
+    /**
+     * Declined
+     */
+    204: void;
+};
+
+export type DeclineImportEntityResponse = DeclineImportEntityResponses[keyof DeclineImportEntityResponses];
+
 export type NotionReportHandlerData = {
     body?: never;
     path?: never;
@@ -3032,6 +3634,34 @@ export type CancelNotionHandlerResponses = {
 };
 
 export type CancelNotionHandlerResponse = CancelNotionHandlerResponses[keyof CancelNotionHandlerResponses];
+
+export type ImportNotionPageData = {
+    body: ImportNotionPageRequest;
+    path?: never;
+    query?: never;
+    url: '/import/notion/pages';
+};
+
+export type ImportNotionPageErrors = {
+    /**
+     * No page given
+     */
+    400: unknown;
+    /**
+     * Not a page that can be imported, or Notion is not connected
+     */
+    422: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ImportNotionPageResponses = {
+    200: ImportNotionPageResponse;
+};
+
+export type ImportNotionPageResponse2 = ImportNotionPageResponses[keyof ImportNotionPageResponses];
 
 export type RunImportHandlerData = {
     body: RunImportRequest;
@@ -3331,6 +3961,118 @@ export type GetMemoryHandlerResponses = {
 };
 
 export type GetMemoryHandlerResponse = GetMemoryHandlerResponses[keyof GetMemoryHandlerResponses];
+
+export type GetUserActivityData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * A `macro|` user id; omit for the caller.
+         */
+        user?: string;
+        /**
+         * Inclusive first UTC date.
+         */
+        start: string;
+        /**
+         * Inclusive last UTC date, at most 366 days after `start`.
+         */
+        end: string;
+    };
+    url: '/memory/activity';
+};
+
+export type GetUserActivityErrors = {
+    /**
+     * Invalid user id or date range
+     */
+    400: MemoryErrorBody;
+    /**
+     * The user is not the caller or a current teammate
+     */
+    403: MemoryErrorBody;
+    /**
+     * Internal server error
+     */
+    500: MemoryErrorBody;
+};
+
+export type GetUserActivityError = GetUserActivityErrors[keyof GetUserActivityErrors];
+
+export type GetUserActivityResponses = {
+    /**
+     * Activity reports in the range
+     */
+    200: ActivityReports;
+};
+
+export type GetUserActivityResponse = GetUserActivityResponses[keyof GetUserActivityResponses];
+
+export type ReadExplicitMemoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/memory/explicit';
+};
+
+export type ReadExplicitMemoryErrors = {
+    /**
+     * Internal server error
+     */
+    500: MemoryErrorBody;
+};
+
+export type ReadExplicitMemoryError = ReadExplicitMemoryErrors[keyof ReadExplicitMemoryErrors];
+
+export type ReadExplicitMemoryResponses = {
+    /**
+     * The caller's explicit memory
+     */
+    200: ExplicitMemory;
+};
+
+export type ReadExplicitMemoryResponse = ReadExplicitMemoryResponses[keyof ReadExplicitMemoryResponses];
+
+export type EditExplicitMemoryData = {
+    body: UpdateExplicitMemoryRequest;
+    path?: never;
+    query?: never;
+    url: '/memory/explicit';
+};
+
+export type EditExplicitMemoryErrors = {
+    /**
+     * Invalid line or content
+     */
+    400: MemoryErrorBody;
+    /**
+     * The revision is stale
+     */
+    409: MemoryErrorBody;
+    /**
+     * Rejected by privacy review
+     */
+    422: MemoryErrorBody;
+    /**
+     * Internal server error
+     */
+    500: MemoryErrorBody;
+    /**
+     * Privacy review is unavailable; nothing was saved
+     */
+    503: MemoryErrorBody;
+};
+
+export type EditExplicitMemoryError = EditExplicitMemoryErrors[keyof EditExplicitMemoryErrors];
+
+export type EditExplicitMemoryResponses = {
+    /**
+     * The edited explicit memory
+     */
+    200: ExplicitMemory;
+};
+
+export type EditExplicitMemoryResponse = EditExplicitMemoryResponses[keyof EditExplicitMemoryResponses];
 
 export type GetStateHandler2Data = {
     body?: never;
@@ -3662,6 +4404,95 @@ export type GetBatchPreviewResponses = {
 
 export type GetBatchPreviewResponse2 = GetBatchPreviewResponses[keyof GetBatchPreviewResponses];
 
+export type ListSkillsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Words from the skill's name, matched as one adjacent phrase. Omit to
+         * list the 100 most recently updated skills.
+         */
+        query?: string;
+        /**
+         * How `query` is matched; `partial` when omitted.
+         */
+        matchType?: SkillsMatchType;
+    };
+    url: '/skills';
+};
+
+export type ListSkillsErrors = {
+    /**
+     * Blank query
+     */
+    400: SkillErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Listing failed
+     */
+    500: SkillErrorBody;
+    /**
+     * Search failed
+     */
+    502: SkillErrorBody;
+};
+
+export type ListSkillsError = ListSkillsErrors[keyof ListSkillsErrors];
+
+export type ListSkillsResponses = {
+    /**
+     * Matching skills, most recently updated first
+     */
+    200: SkillsResponse;
+};
+
+export type ListSkillsResponse = ListSkillsResponses[keyof ListSkillsResponses];
+
+export type ReadSkillData = {
+    body?: never;
+    path: {
+        /**
+         * The skill's id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/skills/{id}';
+};
+
+export type ReadSkillErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * No skill the caller can view has this id
+     */
+    404: SkillErrorBody;
+    /**
+     * Reading failed
+     */
+    500: SkillErrorBody;
+    /**
+     * Access check unavailable
+     */
+    503: SkillErrorBody;
+};
+
+export type ReadSkillError = ReadSkillErrors[keyof ReadSkillErrors];
+
+export type ReadSkillResponses = {
+    /**
+     * The skill's instructions
+     */
+    200: SkillContentResponse;
+};
+
+export type ReadSkillResponse = ReadSkillResponses[keyof ReadSkillResponses];
+
 export type SendChatMessageData = {
     body: HttpSendChatMessageRequest;
     path?: never;
@@ -3776,3 +4607,105 @@ export type StructuredCompletionResponses = {
 };
 
 export type StructuredCompletionResponse2 = StructuredCompletionResponses[keyof StructuredCompletionResponses];
+
+export type FetchWebPageData = {
+    body: WebFetch;
+    path?: never;
+    query?: never;
+    url: '/web/fetch';
+};
+
+export type FetchWebPageErrors = {
+    /**
+     * Invalid URL or length
+     */
+    400: WebErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: WebErrorBody;
+    /**
+     * Web fetch is not configured in this deployment
+     */
+    404: WebErrorBody;
+    /**
+     * The page could not be read
+     */
+    422: WebErrorBody;
+    /**
+     * Per-user hourly rate limit exceeded
+     */
+    429: unknown;
+    /**
+     * The fetch provider failed
+     */
+    502: WebErrorBody;
+    /**
+     * Web fetch busy, or usage validation unavailable
+     */
+    503: WebErrorBody;
+};
+
+export type FetchWebPageError = FetchWebPageErrors[keyof FetchWebPageErrors];
+
+export type FetchWebPageResponses = {
+    /**
+     * The page text
+     */
+    200: WebFetchResponse;
+};
+
+export type FetchWebPageResponse = FetchWebPageResponses[keyof FetchWebPageResponses];
+
+export type SearchWebData = {
+    body: WebSearch;
+    path?: never;
+    query?: never;
+    url: '/web/search';
+};
+
+export type SearchWebErrors = {
+    /**
+     * Invalid query or filters
+     */
+    400: WebErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: WebErrorBody;
+    /**
+     * Web search is not configured in this deployment
+     */
+    404: WebErrorBody;
+    /**
+     * Per-user hourly rate limit exceeded
+     */
+    429: unknown;
+    /**
+     * The search provider failed
+     */
+    502: WebErrorBody;
+    /**
+     * Web search busy, or usage validation unavailable
+     */
+    503: WebErrorBody;
+};
+
+export type SearchWebError = SearchWebErrors[keyof SearchWebErrors];
+
+export type SearchWebResponses = {
+    /**
+     * Results, best match first
+     */
+    200: WebSearchResponse;
+};
+
+export type SearchWebResponse = SearchWebResponses[keyof SearchWebResponses];

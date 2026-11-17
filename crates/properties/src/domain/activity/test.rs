@@ -20,6 +20,7 @@ fn envelope(event: PropertyTopicEvent) -> Event<PropertyTopicEvent> {
 
 fn update(actor: Option<MacroUserIdStr<'static>>) -> EntityPropertyUpdatedMetadata {
     EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
         entity_property_id: Uuid::from_u128(4),
         entity_id: "task-1".to_string(),
         entity_type: PropertyEntityType::Task,

@@ -1,6 +1,6 @@
 //! Deterministic, per-user feature flags for consumer tests.
 
-use crate::{FeatureFlags, FlagSnapshot};
+use crate::{FeatureFlags, FlagSnapshot, ServiceContext, ServiceFeatureFlags};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::collections::HashMap;
@@ -12,10 +12,15 @@ mod test;
 /// Unconfigured users fail explicitly to expose missing test setup.
 #[derive(Default)]
 pub struct FakeFeatureFlags {
+    services: HashMap<ServiceContext, Result<FlagSnapshot, String>>,
     users: HashMap<MacroUserIdStr<'static>, Result<FlagSnapshot, String>>,
 }
 
 impl FakeFeatureFlags {
+    /// Configure a service result independently of authenticated user results.
+    pub fn set_service(&mut self, context: ServiceContext, result: Result<FlagSnapshot, String>) {
+        self.services.insert(context, result);
+    }
     /// Configure a user's result. An error message simulates a load failure.
     pub fn set(&mut self, user_id: MacroUserIdStr<'static>, result: Result<FlagSnapshot, String>) {
         self.users.insert(user_id, result);
@@ -29,6 +34,18 @@ impl FeatureFlags for FakeFeatureFlags {
             Some(Err(message)) => Err(rootcause::report!("{message}")),
             None => Err(rootcause::report!(
                 "No feature flag result configured for user"
+            )),
+        }
+    }
+}
+
+impl ServiceFeatureFlags for FakeFeatureFlags {
+    async fn load_service(&self, context: ServiceContext) -> Result<FlagSnapshot, Report> {
+        match self.services.get(&context) {
+            Some(Ok(snapshot)) => Ok(snapshot.clone()),
+            Some(Err(message)) => Err(rootcause::report!("{message}")),
+            None => Err(rootcause::report!(
+                "No feature flag result configured for service"
             )),
         }
     }

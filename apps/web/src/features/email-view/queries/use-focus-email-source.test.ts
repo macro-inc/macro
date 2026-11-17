@@ -62,6 +62,7 @@ function email(
       importance: 50,
       needsReply: false,
       needsFollowUp: false,
+      importanceTrend: 'FLAT',
       ...focus,
     },
     ...overrides,
@@ -177,7 +178,7 @@ describe('selectFocusEmails', () => {
     ]);
   });
 
-  it('ignores Status and Done filters, which Focus does not offer', () => {
+  it('ignores Read status and Done filters, which Focus does not offer', () => {
     const [report, ...rest] = EMAILS;
     expect(
       select({ facets: { read: ['read'], done: ['done'] } }, [

@@ -27,12 +27,31 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   quarantine, deferral and the standalone message write. Senders are resolved
   first (`resolve_sender_in`): WhatsApp's from-me flag means the account's own
   identity; a LID-only sender takes its phone number from the account's roster
-  pair. Only what is still LID-only is quarantined.
+  pair. Only what is still LID-only is quarantined. A sender's name is the
+  newest one a message brought (`external_chat_person.display_name`; the
+  session fills a missing push name from its contact store); a roster read
+  names people still unnamed (`groups.rs` `name_people_in`), and
+  `GroupRepository::people` names the rest at read time (roster name, the
+  owner's chat with them, else their phone number). Each stored sender
+  records a `whatsapp.ingest.person` span (chat kind, LID or not, paired,
+  `message_named`, `person_created`, `person_named`; no names or addresses).
 - Structured content (`external_chat::domain::rich::RichContent`: poll, poll
   vote, location, contact cards, event, system line) is stored in
   `external_chat_message.rich`; `kind = 'system'` rows never notify or count
-  as unread. `GroupRepository::people` names the WhatsApp ids in mentions,
-  system lines and votes for `external_chat`'s timeline view. Poll votes are
+  as unread. `GroupRepository::people` names the WhatsApp ids in mentions and
+  system lines and the stored senders, reactors and voters for
+  `external_chat`'s timeline view, and `chat_roster` the members, both through
+  `src/domain/people.rs` (`ChatNames`): the owner's chat-list name for any
+  alias, else the stored WhatsApp name, else the phone number, with the
+  profile picture the owner's account stored under any alias
+  (`whatsapp_profile_picture` with a `static_file_id`). A group's or direct
+  chat's own picture (`pictures`) is the row under its `remote_id`. A
+  person's picture is only ever under their own JIDs: the chat's stand-in
+  person (who writes as the `remote_id`) goes by it, so a direct chat's other
+  person shows the chat's picture, and nobody else ever does.
+  Never read the session's LID store for this. DSS stores staged pictures
+  as static files (`src/domain/pictures.rs`, woken by
+  `whatsapp_picture_staged`), after its other work. Poll votes are
   stored per voter in `external_chat_poll_vote` through the reaction path of
   `reserve_in`. A re-ingested message fills in `rich`/`mentions`/`forwarded`
   an earlier copy lacked (re-importing history upgrades old placeholders).
@@ -58,6 +77,28 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   found number joins the chat list so `adopt` accepts it unchanged. Pending
   past `LOOKUP_EXPIRY_SECONDS` reads `failed`; rows go with the account's
   consent and after the window.
+- `src/outbound/pg/pictures.rs`: profile pictures
+  (`whatsapp_profile_picture`, per observing account and JID, because
+  WhatsApp's privacy settings differ per viewer; a chat shows what its
+  owner's account sees). Adoption tracks the added group or direct chat by
+  `remote_id`, and ingest each new non-Macro group sender by one of their
+  aliases (LID when known), for the chat owner's account; the unadded chat
+  list never is. `*_whatsapp_profile_picture_backfill.sql` tracked what was
+  added before. Detaching a chat drops the rows no other added chat of the
+  owner shows (`release_detached_pictures_in`), releasing their files. The read path joins a chat's picture on `remote_id` and a
+  person's on their `whatsapp_identity_alias` rows. The session claims due checks
+  within `PICTURE_QUERIES_PER_HOUR` / `PICTURE_QUERIES_PER_DAY`
+  (`models.rs`), counted in `whatsapp_picture_query` so the budget survives
+  replica moves; `complete_picture_check` stages a new picture's bytes
+  (`staged`, ≤ 1 MiB, signals `whatsapp_picture_staged`), keeps an unchanged
+  one, and drops a hidden (401) or unset one, rescheduling about a week out
+  (two for hidden); failures back off, then `failed` waits a week.
+  `picture_changed` re-checks a tracked picture with another id and drops a
+  removed one. DSS's `PictureRepository` claims staged rows and records the
+  static file (`picture_stored`, false and the new file queued for deletion
+  when the row moved on) or a failed import. `static_file_id` is the only
+  column the read path joins on; a released file is queued in
+  `external_chat_file_deletion` by a trigger.
 - `src/outbound/pg/sends.rs`: enqueue, claim, dispatch fence, outcome. A
   repeated intent key returns the stored send before any other check.
 - `src/signals.rs`: the DSS ↔ session-service `NOTIFY` channels; payloads,
@@ -73,7 +114,9 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   tables, the view rule `external_chat_access_level` that entity_access also
   calls, and `whatsapp_roster`/`whatsapp_chat_membership`; released files
   queue in `external_chat_file_deletion`) and its entity type validation, then
-  `*_whatsapp_lookup.sql` (phone-number lookups).
+  `*_whatsapp_lookup.sql` (phone-number lookups), then
+  `*_whatsapp_profile_picture.sql` (pictures and their query budget) and
+  its `_backfill`.
   Deleting a user cascades to their account,
   chats (with their grants, entity record and sharing settings) and sends;
   aliases outlive the account that saw them.

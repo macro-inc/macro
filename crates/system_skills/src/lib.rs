@@ -16,6 +16,7 @@ use prompt::Section;
 use uuid::Uuid;
 
 pub mod catch_me_up;
+pub mod compose_routines;
 pub mod configure_agent;
 pub mod what_i_did_yesterday;
 
@@ -56,6 +57,7 @@ pub static SYSTEM_SKILLS: &[&SystemSkill] = &[
     &catch_me_up::SKILL,
     &what_i_did_yesterday::SKILL,
     &configure_agent::SKILL,
+    &compose_routines::SKILL,
 ];
 
 /// Look up a system skill by its well-known id.

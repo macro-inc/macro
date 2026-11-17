@@ -1,8 +1,8 @@
-import CaretRight from '@phosphor/caret-right.svg';
-import Hash from '@phosphor/hash.svg';
-import Phone from '@phosphor/phone.svg';
-import Plus from '@phosphor/plus.svg';
-import Sparkle from '@phosphor/sparkle.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import Phone from '@icon/system/regular/phone.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
 import { Button } from '@ui';
 import {
   type Accessor,
@@ -40,6 +40,7 @@ export function WorkspaceChannel(props: {
   onTaskMessage?: (message: WorkspaceComment) => void;
   scriptedReply?: Accessor<string | undefined>;
   stableComposer?: boolean;
+  agentActivity?: JSX.Element;
   onComposerReady?: (
     handle: ChannelComposerHandle | undefined,
     thread?: string
@@ -395,7 +396,9 @@ export function WorkspaceChannel(props: {
                         <ChannelComposer
                           richMentions
                           label="Thread reply"
-                          compact={props.stableComposer ? true : undefined}
+                          compact={
+                            props.stableComposer !== false ? true : undefined
+                          }
                           onReady={(handle) =>
                             props.onComposerReady?.(handle, message.id)
                           }
@@ -425,6 +428,7 @@ export function WorkspaceChannel(props: {
               </div>
             )}
           </For>
+          {props.agentActivity}
         </Show>
       </div>
       <Show when={tab() === 'Messages'}>
@@ -432,7 +436,7 @@ export function WorkspaceChannel(props: {
           <ChannelComposer
             richMentions
             label={`Message #${w.channel()}`}
-            compact={props.stableComposer ? true : undefined}
+            compact={props.stableComposer !== false ? true : undefined}
             onReady={(handle) => props.onComposerReady?.(handle)}
             placeholder={`Type @ to share with ${channel()?.person ? homepagePeople[channel()!.person!].shortName : `#${name()}`}`}
             onSend={(body) => {

@@ -30,7 +30,8 @@ schema types (entity type, owner type, property filters).
   `model-entity`, `model_owner`, `models_properties`.
 - Used by: every `graphql_*` domain adapter crate (favorite, initiative,
   calendar, email, notification, soup_filter_input, entity_mutation,
-  properties, crm, soup, channel, work_feed, activity) and `complete_graph`
+  properties, crm, soup, channel, work_feed, notification_inbox, activity) and
+  `complete_graph`
   (the schema that composes them all).
 
 ## Recipes
@@ -47,6 +48,7 @@ schema types (entity type, owner type, property filters).
 - `cargo test -p graphql_common`.
 
 - `ExternalChat` (`EXTERNAL_CHAT`) is a canonical GraphQL entity type; Soup registration remains deferred.
+- Build `GraphqlSoupEntityType` only with `try_new`, which is `None` outside Soup; never fall back to another Soup type. `OUTSIDE_SOUP` exists only for the deprecated notification `entityType` and is rejected as input.
 
 ## Related
 

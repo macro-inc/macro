@@ -5,9 +5,9 @@ set -euo pipefail
 # (`merge` is GitHub's test merge commit; the gate hashes the same). When it
 # is, mark the PR head `android-play/live` (the gate cannot ask Play, so it
 # reads that status), and if the PR's latest `Android Native Check` job (of
-# the web app PR checks run) failed — it fails until the release is live —
-# re-run that job so the gate, and the `Web App Status Check` that depends on
-# it, go green without anyone clicking "Re-run". GH_TOKEN needs actions:write,
+# the PR CI run) failed — it fails until the release is live — re-run the
+# run's failed jobs so the gate, and the `CI gate` status that depends on it,
+# go green without anyone clicking "Re-run". GH_TOKEN needs actions:write,
 # pull-requests:write and statuses:write; GOOGLE_PLAY_ACCESS_TOKEN the
 # androidpublisher scope.
 cd apps/web
@@ -42,21 +42,20 @@ check_pr() {
     echo "  marked ${sha:0:10} android-play/live"
   fi
 
-  run=$(gh run list --workflow web-app-check-main.yml --commit "$sha" \
-    --json databaseId,status,url --limit 1 --jq '.[0] // empty')
+  run=$(pr_ci_run "$sha")
   if [[ -z "$run" ]]; then
-    echo "  no Web App Pr Checks run for this commit; skipping"
+    echo "  no PR CI run for this commit; skipping"
     return 0
   fi
   run_id=$(jq -r '.databaseId' <<<"$run")
   status=$(jq -r '.status' <<<"$run")
   run_url=$(jq -r '.url' <<<"$run")
   if [[ "$status" != "completed" ]]; then
-    echo "  Web App Pr Checks run ${run_id} is ${status}; skipping"
+    echo "  PR CI run ${run_id} is ${status}; skipping"
     return 0
   fi
   job=$(gh run view "$run_id" --json jobs \
-    --jq '.jobs[] | select(.name == "Android Native Check") | {id: .databaseId, conclusion}')
+    --jq '.jobs[] | select(.name == "Web App / Android Native Check") | {id: .databaseId, conclusion}')
   if [[ -z "$job" ]]; then
     echo "  run ${run_id} has no Android Native Check job; skipping"
     return 0
@@ -79,8 +78,10 @@ check_pr() {
     echo "  Android Native Check already re-run ${reruns} times and still failing; not re-running again — see ${run_url}"
     return 0
   fi
+  # Re-run the failed jobs, not just this one: the CI gate job that sets the
+  # required status depends on it from outside the called web workflow.
   echo "  re-running Android Native Check (job ${job_id} of run ${run_id}; ${reruns} automatic re-runs so far)"
-  gh run rerun --job "$job_id"
+  gh run rerun "$run_id" --failed
   gh pr comment "$number" --body "🤖 Android version code ${version_code} is live on Google Play. Re-ran the **Android Native Check** ([run](${run_url})); this PR can merge once it passes."
 }
 

@@ -135,6 +135,8 @@ fn build_text_query_string(terms: &[String], match_type: &str) -> String {
 
 pub(crate) struct EmailQueryBuilder {
     inner: SearchQueryBuilder<EmailSearchConfig>,
+    /// Threads every hit must belong to, on top of the access filter
+    required_thread_ids: Vec<String>,
     /// link ids to query over
     link_ids: Vec<String>,
     /// The sender of the email message
@@ -165,6 +167,7 @@ impl EmailQueryBuilder {
     pub fn new(terms: Vec<String>) -> Self {
         Self {
             inner: SearchQueryBuilder::new(terms),
+            required_thread_ids: Vec::new(),
             link_ids: Vec::new(),
             sender: Vec::new(),
             cc: Vec::new(),
@@ -189,6 +192,11 @@ impl EmailQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+    }
+
+    pub fn required_thread_ids(mut self, required_thread_ids: Vec<String>) -> Self {
+        self.required_thread_ids = required_thread_ids;
+        self
     }
 
     pub fn link_ids(mut self, link_ids: Vec<String>) -> Self {
@@ -278,6 +286,13 @@ impl EmailQueryBuilder {
         }
 
         // CUSTOM ATTRIBUTES SECTION
+        if !self.required_thread_ids.is_empty() {
+            content_bool_query.filter(QueryType::terms(
+                "entity_id",
+                self.required_thread_ids.clone(),
+            ));
+        }
+
         // If link_ids are provided, add them to the query
         if !self.link_ids.is_empty() {
             content_bool_query.filter(QueryType::terms("link_id", self.link_ids.clone()));
@@ -423,6 +438,7 @@ pub struct EmailSearchArgs {
     pub user_id: String,
     pub user_ids: Vec<String>,
     pub thread_ids: Vec<String>,
+    pub required_thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
     pub sender: Vec<String>,
     pub cc: Vec<String>,
@@ -450,6 +466,7 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .user_id(&args.user_id)
             .user_ids(args.user_ids)
             .ids(args.thread_ids)
+            .required_thread_ids(args.required_thread_ids)
             .link_ids(args.link_ids)
             .sender(args.sender)
             .cc(args.cc)

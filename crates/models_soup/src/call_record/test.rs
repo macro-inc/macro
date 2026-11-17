@@ -9,6 +9,9 @@ use uuid::Uuid;
 fn record_with_participants(user_ids: &[&str]) -> CallRecord {
     let now = Utc::now();
     CallRecord {
+        discussion: call::domain::models::CallDiscussion::CallChat {
+            call_id: uuid::Uuid::nil(),
+        },
         call_id: Uuid::now_v7(),
         channel_id: Some(Uuid::now_v7()),
         room_name: Some("room".to_string()),

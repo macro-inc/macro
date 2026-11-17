@@ -1,10 +1,18 @@
+import type { SpreadsheetCellValue } from '@macro-inc/spreadsheet/ai-types';
 import { TABLE_COLUMN_TYPES } from '@macro-inc/spreadsheet/sheet-tables';
 import { z } from 'zod';
 
 const sheetId = z.string().min(1).max(64);
 const range = z.string().min(1).max(24);
+// Typed as ZodType: without strictNullChecks, zod infers a union as an optional key.
+const cellValue: z.ZodType<SpreadsheetCellValue> = z.union([
+  z.string().max(10_000),
+  z.number().finite(),
+  z.boolean(),
+  z.null(),
+]);
 const cell = z
-  .object({ address: z.string().min(2).max(8), value: z.string().max(10_000) })
+  .object({ address: z.string().min(2).max(8), value: cellValue })
   .strict();
 const color = z.string().regex(/^(#[0-9a-fA-F]{6})?$/);
 const borderStyle = z.enum([
@@ -81,7 +89,8 @@ const style = z
   })
   .strict();
 const name = z.string().min(1).max(31);
-const operation = z.discriminatedUnion('type', [
+/** One EditSpreadsheet operation; the writer model's batch uses it too. */
+export const spreadsheetOperationSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('set_cells'),
@@ -219,7 +228,7 @@ export const spreadsheetRequestSchema = z.discriminatedUnion('action', [
     .object({
       action: z.literal('edit'),
       expectedRevision: z.string().min(1).max(100_000),
-      operations: z.array(operation).min(1).max(25),
+      operations: z.array(spreadsheetOperationSchema).min(1).max(25),
     })
     .strict(),
 ]);

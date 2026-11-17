@@ -105,7 +105,7 @@ export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
           >
             <For each={company().domains}>
               {(domain) => (
-                <Badge variant="outline" size="sm">
+                <Badge variant="ghost" size="sm">
                   <GlobeIcon class="size-3" />
                   {domain.domain}
                 </Badge>
@@ -116,7 +116,7 @@ export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
             <Show when={company().updatedAt}>
               {(lastInteraction) => (
                 <Tooltip label={formatDateAndTime(lastInteraction())}>
-                  <Badge variant="outline" size="sm">
+                  <Badge variant="ghost" size="sm">
                     <ClockIcon class="size-3" />
                     Last interacted {formatRelativeTimestamp(lastInteraction())}
                   </Badge>

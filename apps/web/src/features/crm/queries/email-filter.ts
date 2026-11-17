@@ -1,9 +1,7 @@
 /**
  * Builders for the soup `/soup/ast` raw email-filter tree (`ef`). Mirrors
  * the Rust `Expr<EmailLiteral>` serialization so the FE can construct an
- * any-direction OR-tree for the "Me" tab (which intentionally drops the
- * `ecd` / `eca` CRM-scope widener, so the default per-user mailbox scope
- * applies).
+ * email-filter tree composed with the `ecd` / `eca` CRM scope.
  *
  * Wire shape:
  *   Or(a, b) → { "|": [a, b] }

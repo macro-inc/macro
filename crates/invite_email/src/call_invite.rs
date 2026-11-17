@@ -32,10 +32,10 @@ impl Notification for CallInvite {
 
 impl NotificationExtEmail for CallInvite {
     fn format_email(&self) -> EmailContent {
-        EmailContent {
-            subject: format!("{} invited you to {}", self.sender_display(), self.title),
-            body: self.render().expect("CallInvite template must render"),
-        }
+        EmailContent::new(
+            format!("{} invited you to {}", self.sender_display(), self.title),
+            self.render().expect("CallInvite template must render"),
+        )
     }
 
     fn rate_limit_config() -> RateLimitConfig {

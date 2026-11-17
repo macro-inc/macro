@@ -34,7 +34,6 @@ export function ReviewStack(props: {
 }) {
   const controller = createReviewController(() => props.review, props.actions);
   const [index, setIndex] = createSignal(0);
-  const [generation, setGeneration] = createSignal(0);
   const [preparing, setPreparing] = createSignal(false);
   const [navigating, setNavigating] = createSignal(false);
   const [submittedBatch, setSubmittedBatch] = createSignal<string[]>();
@@ -104,13 +103,15 @@ export function ReviewStack(props: {
       setNavigating(false);
     }
   }
-  async function reload() {
-    if (!(await controller.reload())) return;
-    readDraft = undefined;
-    readSubmit = undefined;
-    setIndex(Math.min(index(), Math.max(0, record().items.length - 1)));
-    setGeneration((value) => value + 1);
-  }
+  // Editors remount on drafts saved elsewhere or reloaded, and register their
+  // readers again; the selection stays put while that item still exists.
+  createEffect(
+    on(
+      controller.generation,
+      () => setIndex(Math.min(index(), Math.max(0, record().items.length - 1))),
+      { defer: true }
+    )
+  );
   async function submitAll(items: string[]) {
     if (locked() || pending() === 0) return;
     setPreparing(true);
@@ -190,7 +191,7 @@ export function ReviewStack(props: {
     ]
       .filter(Boolean)
       .join(' · ');
-  const mountKey = () => `${current()?.id}:${generation()}`;
+  const mountKey = () => `${current()?.id}:${controller.generation()}`;
   return (
     <section
       ref={section}
@@ -228,7 +229,7 @@ export function ReviewStack(props: {
             variant="secondary"
             size="sm"
             disabled={working()}
-            onClick={() => fireAndForget(reload(), 'agent-reviews')}
+            onClick={() => fireAndForget(controller.reload(), 'agent-reviews')}
           >
             Reload saved review
           </Button>

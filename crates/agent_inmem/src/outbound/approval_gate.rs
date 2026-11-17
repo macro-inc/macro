@@ -8,7 +8,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use agent_egress::domain::approval::{
-    InProcessCall, MACRO_SERVER_SLUG, ToolApprovalService, refusal, spends_owner_access,
+    InProcessCall, MACRO_SERVER_SLUG, OwnerApprovals, ToolApprovalService, refusal,
+    spends_owner_access,
 };
 use agent_egress::domain::ports::{ToolApprovalAnnouncer, ToolApprovalSignals, ToolApprovalStore};
 use agent_session::domain::model::AgentSessionId;

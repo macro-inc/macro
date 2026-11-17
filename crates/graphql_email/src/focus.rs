@@ -3,9 +3,10 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_graphql::{Context, Enum, SimpleObject, dataloader::DataLoader, dataloader::Loader};
-use email::domain::focus::{FocusCategory, FocusQueries, FocusStore, ThreadFocus};
+use email::domain::focus::{FocusCategory, FocusQueries, FocusStore, ImportanceTrend, ThreadFocus};
 use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;
+use tracing::Instrument;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -92,6 +93,28 @@ impl From<FocusCategory> for GraphqlEmailFocusCategory {
     }
 }
 
+/// Which way a thread's importance is moving.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum)]
+#[graphql(name = "GraphqlEmailImportanceTrend")]
+pub enum GraphqlEmailImportanceTrend {
+    /// Rising, towards 100.
+    Up,
+    /// Falling, towards 0.
+    Down,
+    /// Not moving.
+    Flat,
+}
+
+impl From<ImportanceTrend> for GraphqlEmailImportanceTrend {
+    fn from(trend: ImportanceTrend) -> Self {
+        match trend {
+            ImportanceTrend::Up => Self::Up,
+            ImportanceTrend::Down => Self::Down,
+            ImportanceTrend::Flat => Self::Flat,
+        }
+    }
+}
+
 /// The Focus classification of one email thread.
 #[derive(Debug, Clone, SimpleObject)]
 #[graphql(name = "GraphqlEmailThreadFocus")]
@@ -100,7 +123,7 @@ pub struct GraphqlEmailThreadFocus {
     is_focus: bool,
     /// The Focus category, or why the thread was left out.
     category: GraphqlEmailFocusCategory,
-    /// How much the thread matters, 0 to 100.
+    /// How much the thread matters right now, 0 to 100.
     importance: i32,
     /// Someone else sent the latest message and it waits on the owner's answer.
     /// Never true together with `needs_follow_up`.
@@ -111,6 +134,11 @@ pub struct GraphqlEmailThreadFocus {
     needs_follow_up: bool,
     /// When the classification was made, in RFC 3339 format.
     classified_at: String,
+    /// Which way `importance` is moving.
+    importance_trend: GraphqlEmailImportanceTrend,
+    /// The day the thread's mail says it is due, as `YYYY-MM-DD`: a calendar date
+    /// the viewer's time zone never shifts. Absent when it names no open deadline.
+    due_on: Option<String>,
 }
 
 impl From<ThreadFocus> for GraphqlEmailThreadFocus {
@@ -122,6 +150,10 @@ impl From<ThreadFocus> for GraphqlEmailThreadFocus {
             needs_reply: focus.needs_reply,
             needs_follow_up: focus.needs_follow_up,
             classified_at: focus.classified_at.to_rfc3339(),
+            importance_trend: focus.importance_trend.into(),
+            due_on: focus
+                .due_on
+                .map(|due_on| due_on.format("%Y-%m-%d").to_string()),
         }
     }
 }
@@ -153,8 +185,10 @@ pub fn email_thread_focus_loader(
     user_id: MacroUserIdStr<'static>,
     reader: Arc<dyn EmailFocusReader>,
 ) -> DataLoader<EmailThreadFocusLoader> {
-    let loader = DataLoader::new(EmailThreadFocusLoader { user_id, reader }, tokio::spawn)
-        .max_batch_size(MAX_FOCUS_KEYS);
+    let loader = DataLoader::new(EmailThreadFocusLoader { user_id, reader }, |batch| {
+        tokio::spawn(batch.in_current_span())
+    })
+    .max_batch_size(MAX_FOCUS_KEYS);
     // Subscription connection data outlives one payload; never serve a stale verdict.
     loader.enable_all_cache(false);
     loader

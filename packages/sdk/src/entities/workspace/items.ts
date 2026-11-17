@@ -3,6 +3,7 @@ import type {
   SoupProperty,
 } from '../../../generated/storage/types.gen';
 import type { MacroClient } from '../../utils/client';
+import { AgentSession } from '../agent-sessions/agent-session';
 import { CalendarEvent } from '../calendar/event';
 import { CallRecord } from '../calls/call-record';
 import { Channel } from '../channels/channel';
@@ -21,14 +22,18 @@ export function properties(item: SoupApiItem): SoupProperty[] {
   return [];
 }
 
-/** @internal */
-export function workspaceItem(
-  client: MacroClient,
-  item: SoupApiItem,
+/**
+ * The caller-visible labels of an item's tag properties, deduplicated; option
+ * ids outside the caller's tag sets are left out.
+ *
+ * @internal
+ */
+export function visibleTags(
+  properties: readonly Pick<SoupProperty, 'definition' | 'value'>[],
   tagMap: Map<string, WorkspaceTag>,
-): WorkspaceItem {
+): WorkspaceTag[] {
   const tags: WorkspaceTag[] = [];
-  for (const property of properties(item)) {
+  for (const property of properties) {
     if (
       property.definition.data_type !== 'TAG' ||
       property.value?.type !== 'SelectOption'
@@ -46,6 +51,16 @@ export function workspaceItem(
         tags.push(tag);
     }
   }
+  return tags;
+}
+
+/** @internal */
+export function workspaceItem(
+  client: MacroClient,
+  item: SoupApiItem,
+  tagMap: Map<string, WorkspaceTag>,
+): WorkspaceItem {
+  const tags = visibleTags(properties(item), tagMap);
   switch (item.tag) {
     case 'document':
       return {
@@ -131,6 +146,18 @@ export function workspaceItem(
         conferenceUrl: item.data.conferenceUrl,
         conferenceProvider: item.data.conferenceProvider,
         time: item.data.time,
+      };
+    case 'agentSession':
+      return {
+        type: 'agent_session',
+        id: item.data.id,
+        entity: AgentSession.byId(client, item.data.id),
+        snapshot: item,
+        tags,
+        name: item.data.name,
+        archivedAt: item.data.archivedAt,
+        pullRequestUrl: item.data.pullRequestUrl,
+        repoUrl: item.data.repoUrl,
       };
     case 'foreignEntity':
       return {

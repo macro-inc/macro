@@ -67,6 +67,7 @@ fn prepared() -> PreparedSend {
             provider_thread_id: None,
             replying_to_id: None,
             subject: input.subject.clone(),
+            from_name: None,
             to: vec![],
             cc: vec![],
             bcc: vec![],
@@ -316,6 +317,9 @@ fn service(
         sent_undo_delay_secs: 5,
         sender_provider: std::sync::Arc::new(
             crate::domain::senders::UnavailableEmailSenderProvider,
+        ),
+        shared_thread_replies: std::sync::Arc::new(
+            crate::domain::shared_thread_replies::NoSharedThreadReplies,
         ),
     }
 }

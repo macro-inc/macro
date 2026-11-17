@@ -139,6 +139,7 @@ function mount(
             inbox_visible: true,
           }),
           recipientOptions: () => [],
+          ownsThreadInbox: () => true,
           isPersonalReply: () => false,
           onDraftRemoved() {},
           exitToThread: () => false,

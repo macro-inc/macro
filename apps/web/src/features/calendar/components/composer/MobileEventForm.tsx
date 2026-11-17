@@ -35,7 +35,8 @@ export function MobileEventForm(
     // already separates the title from the handle.
     <EventFormParts.Root form={form} class={cn('-mt-4', props.class)}>
       <Portal mount={props.headerMount}>
-        <div class="flex justify-end px-4 pb-1">
+        <div class="flex items-center justify-end gap-3 px-4 pb-1">
+          <EventFormParts.Status />
           <EventFormParts.Submit />
         </div>
         {/* Under the action that failed, so it shows however far the form

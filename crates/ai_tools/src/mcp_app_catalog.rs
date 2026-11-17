@@ -65,7 +65,9 @@ pub fn connect_adapter(customer_key: Option<&str>) -> anyhow::Result<Option<Arc<
 
 /// Pipedream plus Macro Connect when this process has credentials for both
 /// (Connect is optional), otherwise `None`.
-pub fn connector_backends_from_env() -> anyhow::Result<Option<Arc<ConnectorBackends>>> {
+pub fn connector_backends_from_env(
+    environment: Environment,
+) -> anyhow::Result<Option<Arc<ConnectorBackends>>> {
     let Some(pipedream) = pipedream_client_from_env()? else {
         return Ok(None);
     };
@@ -79,6 +81,7 @@ pub fn connector_backends_from_env() -> anyhow::Result<Option<Arc<ConnectorBacke
     if let Some(rollout) = macro_connect_rollout(
         env.posthog_api_key.as_ref().and_then(|value| value.value()),
         env.posthog_host.as_ref().and_then(|value| value.value()),
+        environment,
     )? {
         backends = backends.with_rollout(rollout);
     }
@@ -99,6 +102,7 @@ const ROLLOUT_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 pub fn macro_connect_rollout(
     api_key: Option<&str>,
     host: Option<&str>,
+    environment: Environment,
 ) -> anyhow::Result<Option<ConnectRollout>> {
     let Some(api_key) = api_key.filter(|key| !key.is_empty()) else {
         return Ok(None);
@@ -107,12 +111,50 @@ pub fn macro_connect_rollout(
         host.unwrap_or("https://us.i.posthog.com"),
         api_key.to_owned(),
         std::time::Duration::from_secs(3),
+        environment,
     )
     .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
-    Ok(Some(rollout_from(flags)))
+    Ok(Some(rollout_from(flags, MACRO_CONNECT_FLAG)))
 }
 
-fn rollout_from<F>(flags: F) -> ConnectRollout
+/// The PostHog flag for Canvas artifacts. Keep in sync with the web flag of the
+/// same key.
+pub const CANVAS_ARTIFACTS_FLAG: &str = "enable-canvas-artifacts";
+
+/// The Canvas artifacts rollout read from PostHog, or `None` without a PostHog
+/// key (off for everyone). Answers are cached like [`macro_connect_rollout`], and
+/// a failed read answers `false`.
+pub fn canvas_artifacts_rollout(
+    api_key: Option<&str>,
+    host: Option<&str>,
+    environment: Environment,
+) -> anyhow::Result<Option<documents::domain::canvas::CanvasArtifactsRollout>> {
+    let Some(api_key) = api_key.filter(|key| !key.is_empty()) else {
+        return Ok(None);
+    };
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        host.unwrap_or("https://us.i.posthog.com"),
+        api_key.to_owned(),
+        std::time::Duration::from_secs(3),
+        environment,
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    Ok(Some(rollout_from(flags, CANVAS_ARTIFACTS_FLAG)))
+}
+
+/// [`canvas_artifacts_rollout`] from this process's PostHog configuration.
+pub fn canvas_artifacts_rollout_from_env(
+    environment: Environment,
+) -> anyhow::Result<Option<documents::domain::canvas::CanvasArtifactsRollout>> {
+    let env = PipedreamCatalogEnv::new();
+    canvas_artifacts_rollout(
+        env.posthog_api_key.as_ref().and_then(|value| value.value()),
+        env.posthog_host.as_ref().and_then(|value| value.value()),
+        environment,
+    )
+}
+
+fn rollout_from<F>(flags: F, flag: &'static str) -> ConnectRollout
 where
     F: feature_flags::FeatureFlags + Clone + 'static,
 {
@@ -129,9 +171,9 @@ where
                 return on;
             }
             let on = match flags.load(&user_id).await {
-                Ok(snapshot) => snapshot.is_enabled(MACRO_CONNECT_FLAG),
+                Ok(snapshot) => snapshot.is_enabled(flag),
                 Err(error) => {
-                    tracing::warn!(error = ?error, "could not read the macro-connect flag; using Pipedream");
+                    tracing::warn!(error = ?error, flag, "could not read a rollout flag; treating it as off");
                     return false;
                 }
             };

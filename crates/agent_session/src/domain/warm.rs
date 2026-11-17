@@ -51,6 +51,7 @@ pub trait WarmSessionLifecycle: Send + Sync {
         bot: BotId,
         model: &'a str,
         instructions: Option<&'a str>,
+        origin: &'a trigger_context::TriggerOrigin,
     ) -> Pin<Box<dyn Future<Output = Result<WarmClaim>> + Send + 'a>>;
     /// Mark expired hidden sessions disconnected, returning ids for routed deletion.
     /// Claimed sessions are never selected. Work is bounded per sweep.

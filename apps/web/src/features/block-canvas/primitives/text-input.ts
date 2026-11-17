@@ -1,3 +1,7 @@
+import {
+  enableCanvasArtifacts,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { screenToWorld, textTargetAt } from '@macro-inc/graphics';
 import type { CanvasState } from './create-canvas-state';
 /** Canvas text gestures stay separate from geometric drawing and pointer capture. */
@@ -37,6 +41,10 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
       if (item.geometry.display === 'embed') state.embeds.enter(item.id);
       return;
     }
+    if (item?.type === 'artifact') {
+      if (isFeatureEnabled(enableCanvasArtifacts)) state.embeds.enter(item.id);
+      return;
+    }
     const id = textTargetAt(state.editor.document, p);
     if (id) state.text.edit(id);
     else state.text.begin(p);
@@ -46,7 +54,7 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
     if (
       !(target instanceof Element) ||
       target.closest(
-        '[data-canvas-document], [data-canvas-text-editor], [aria-label="Text style"]'
+        '[data-canvas-document], [data-canvas-artifact], [data-canvas-text-editor], [aria-label="Text style"]'
       )
     )
       return;
@@ -129,7 +137,7 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
     if (
       !(event.target instanceof Element) ||
       event.target.closest(
-        '[data-canvas-document], [data-canvas-text-editor], [data-graphics-connector-end]'
+        '[data-canvas-document], [data-canvas-artifact], [data-canvas-text-editor], [data-graphics-connector-end]'
       ) ||
       !event.target.closest('[aria-label="Graphics canvas"]')
     )

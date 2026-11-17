@@ -24,6 +24,7 @@ pub enum OpensearchOperation {
     BulkUpsertSingleChunk,
     UpdateDocumentMetadata,
     UpdateDocumentProperties,
+    BulkUpdateDocumentEmailAttachment,
     UpsertChannelMessage,
     UpsertChatMessageParent,
     UpsertChatMessageChild,
@@ -113,6 +114,13 @@ impl TransportFailure {
                 return Some(Self::ConnectionClosed);
             }
         }
+        // Over HTTP/2 a recycled connection arrives as GOAWAY or RST_STREAM, and
+        // `h2::Error` exposes no source for the I/O failure it wraps.
+        if let Some(error) = cause.downcast_ref::<h2::Error>()
+            && (error.is_go_away() || error.is_reset() || error.is_io())
+        {
+            return Some(Self::ConnectionClosed);
+        }
         if let Some(error) = cause.downcast_ref::<std::io::Error>() {
             use std::io::ErrorKind;
             return match error.kind() {
@@ -130,6 +138,28 @@ impl TransportFailure {
         }
         None
     }
+}
+
+/// Why OpenSearch refused a write to protect itself.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    strum::Display,
+    strum::AsRefStr,
+    strum::IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum WriteRefusal {
+    /// A 429: a full write queue or a tripped circuit breaker.
+    TooManyRequests,
+    /// A `cluster_block_exception`, such as the read-only block OpenSearch puts
+    /// on an index once a node crosses the flood-stage disk watermark.
+    ClusterBlock,
 }
 
 #[derive(thiserror::Error, Debug, serde::Serialize, PartialEq)]
@@ -153,14 +183,26 @@ pub enum OpensearchClientError {
         operation: OpensearchOperation,
     },
 
-    /// The request produced no response: connect, TLS, timeout, or a
-    /// connection closed or reset before the response arrived.
+    /// The request produced no complete response: connect, TLS, timeout, or a
+    /// connection closed or reset before the response finished.
     #[error(
         "request to opensearch failed. operation: {operation} cause: {cause} details: {details}"
     )]
     RequestFailed {
         details: String,
         cause: TransportFailure,
+        operation: OpensearchOperation,
+    },
+
+    /// OpenSearch refused the write to protect itself. Sending it again adds
+    /// to the load that caused the refusal, so callers stop and resume later
+    /// instead of retrying.
+    #[error(
+        "opensearch refused the write. operation: {operation} cause: {cause} details: {details}"
+    )]
+    WritesRefused {
+        details: String,
+        cause: WriteRefusal,
         operation: OpensearchOperation,
     },
 
@@ -211,13 +253,32 @@ impl OpensearchClientError {
         }
     }
 
-    /// A response body that could not be read or parsed, including one cut
-    /// off by a dropped connection.
+    /// A response body that could not be read or parsed. A body cut off by a
+    /// dropped connection or deadline is a request failure with that cause.
     pub(crate) fn deserialization_failed(operation: OpensearchOperation, error: &Error) -> Self {
-        Self::DeserializationFailed {
-            details: error_chain(error),
-            operation,
+        match TransportFailure::classify(error) {
+            TransportFailure::Other => Self::DeserializationFailed {
+                details: error_chain(error),
+                operation,
+            },
+            cause => Self::RequestFailed {
+                details: error_chain(error),
+                cause,
+                operation,
+            },
         }
+    }
+
+    /// The connection closed or refused before a complete response, so the same
+    /// request can succeed on a new connection.
+    pub(crate) fn lost_connection(&self) -> bool {
+        matches!(
+            self,
+            Self::RequestFailed {
+                cause: TransportFailure::ConnectionClosed | TransportFailure::Connect,
+                ..
+            }
+        )
     }
 }
 

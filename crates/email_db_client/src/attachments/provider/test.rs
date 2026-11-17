@@ -1,4 +1,6 @@
-use crate::attachments::provider::fetch_db_attachments_in_bulk;
+use crate::attachments::provider::{
+    LinkedAttachmentDocument, fetch_db_attachments_in_bulk, get_document_by_att_id,
+};
 use anyhow::Result;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::types::Uuid;
@@ -257,6 +259,85 @@ async fn insert_attachments_sets_then_clears_calendar_flag(pool: Pool<Postgres>)
     crate::attachments::provider::insert_attachments(&mut tx, message_id, &mut attachments).await?;
     tx.commit().await?;
     assert!(!fetch_calendar_flag(&pool, thread_id).await?);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sync_thread_calendar_flag"))
+)]
+async fn insert_attachments_maintains_attachment_kind_flags(pool: Pool<Postgres>) -> Result<()> {
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-00000000b203")?;
+    let message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000b504")?;
+    let kind_flags = || async {
+        let row = sqlx::query!(
+            "SELECT has_pdf_attachment, has_image_attachment FROM email_threads WHERE id = $1",
+            thread_id
+        )
+        .fetch_one(&pool)
+        .await?;
+        Ok::<_, sqlx::Error>((row.has_pdf_attachment, row.has_image_attachment))
+    };
+
+    let mut tx = pool.begin().await?;
+    let mut attachments = vec![service_attachment(
+        "notes.pdf",
+        "application/pdf",
+        "prov-pdf-1",
+    )];
+    crate::attachments::provider::insert_attachments(&mut tx, message_id, &mut attachments).await?;
+    tx.commit().await?;
+    assert_eq!(kind_flags().await?, (true, false));
+
+    // Re-sync with only an image: the PDF is orphan-deleted.
+    let mut tx = pool.begin().await?;
+    let mut attachments = vec![service_attachment("photo.jpg", "image/jpeg", "prov-jpg-1")];
+    crate::attachments::provider::insert_attachments(&mut tx, message_id, &mut attachments).await?;
+    tx.commit().await?;
+    assert_eq!(kind_flags().await?, (false, true));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("get_document_by_att_id"))
+)]
+async fn get_document_by_att_id_reports_documents_awaiting_their_upload(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let attachment =
+        |last: &str| Uuid::parse_str(&format!("00000000-0000-0000-0000-00000000{last}"));
+    let linked = |document_id: &str, awaiting_upload| {
+        Some(LinkedAttachmentDocument {
+            document_id: document_id.to_string(),
+            awaiting_upload,
+        })
+    };
+
+    // A PDF that never finished uploading is the only state to repair.
+    assert_eq!(
+        get_document_by_att_id(&pool, attachment("a001")?).await?,
+        linked("doc-pending", true)
+    );
+    assert_eq!(
+        get_document_by_att_id(&pool, attachment("a002")?).await?,
+        linked("doc-uploaded", false)
+    );
+    // A DOCX is not uploaded until its conversion finishes.
+    assert_eq!(
+        get_document_by_att_id(&pool, attachment("a003")?).await?,
+        linked("doc-docx", false)
+    );
+    assert_eq!(
+        get_document_by_att_id(&pool, attachment("a004")?).await?,
+        None
+    );
+    assert_eq!(
+        get_document_by_att_id(&pool, attachment("a005")?).await?,
+        None
+    );
 
     Ok(())
 }

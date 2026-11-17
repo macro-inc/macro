@@ -84,6 +84,8 @@ macro_rules! maybe_404 {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WebSocketMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_correlation_id: Option<uuid::Uuid>,
     pub user_id: Option<String>,
     pub access_level: AccessLevel,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -188,8 +190,12 @@ impl<'a> Wsm<'a> {
         let ws_id = self.get_ws_id()?.to_string();
         let map = self.dss.ws_meta_map.lock("Wsm::edit_attribution");
         let meta = map.get(&ws_id).context("missing ws metadata")?;
-        DocumentAttribution::from_session_claims(meta.actor.clone(), meta.user_id.clone())
-            .context("invalid signed websocket attribution")
+        DocumentAttribution::from_session_claims(
+            meta.actor.clone(),
+            meta.user_id.clone(),
+            meta.agent_correlation_id,
+        )
+        .context("invalid signed websocket attribution")
     }
 
     pub async fn write_access(&mut self) -> Result<WriteAccess> {
@@ -635,6 +641,7 @@ impl SyncSession {
                 .accept_websocket_with_tags(&pair.server, &[&ws_id]);
 
             let ws_meta = WebSocketMetadata {
+                agent_correlation_id: claims.agent_correlation_id,
                 user_id: claims.user_id,
                 access_level: claims.access_level,
                 actor: claims.actor,

@@ -37,8 +37,10 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
   lockfiles: run `cargo metadata --format-version 1 > /dev/null` here as well as
   in `..`. A new git dependency also needs its `outputHashes` entry on both
   vendor dirs in `nix/tauri-desktop.nix`. The `check tauri lockfiles` PR
-  workflow (`nix build .#checks.x86_64-linux.tauri-cargo-lockfiles`) fails
-  when either lockfile is stale; otherwise only the macOS release build would.
+  workflow fails when either lockfile is stale (`cargo update --workspace
+  --locked`); otherwise only the macOS release build would. When a lockfile or
+  Nix input changes it also builds the vendor dirs
+  (`nix build .#checks.x86_64-linux.tauri-cargo-lockfiles`).
 - `../src-tauri` must resolve `tauri` through `[patch.crates-io]` (a version
   requirement, not a git dependency) so this workspace can repoint it.
 - The `cef` feature of `../src-tauri` adds no dependencies; it switches the

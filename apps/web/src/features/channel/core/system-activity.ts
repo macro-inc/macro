@@ -11,8 +11,22 @@ export type SystemActivity = {
     | { kind: 'participant_added'; participants: string[] }
     | { kind: 'participant_removed'; participant: string }
     | { kind: 'call_ended'; durationMs: number }
+    /** `requesterName` is their profile name when they asked; older events lack it. */
+    | { kind: 'access_requested'; requestId: string; requesterName?: string }
     | { kind: 'unknown' };
 };
+
+/** Like a mention: the requester's current name once it has loaded, else the
+ * name stored with the event, so the entry mounts at its final height. Older
+ * events have none and use `fallback` (the email until names load). */
+export function requesterLabel(
+  current: { firstName: string; lastName: string; fullName: string },
+  stored: string | undefined,
+  fallback: string
+): string {
+  if (current.firstName || current.lastName) return current.fullName;
+  return stored || fallback;
+}
 
 export function callDuration(durationMs: number): string {
   const seconds = Math.max(0, Math.floor(durationMs / 1000));
@@ -59,6 +73,9 @@ export function systemActivityDescription(
     )
     .with({ kind: 'call_ended' }, ({ durationMs }) => ({
       verb: `started a call that lasted ${callDuration(durationMs)}`,
+    }))
+    .with({ kind: 'access_requested' }, () => ({
+      verb: 'asked to join the channel',
     }))
     .with({ kind: 'unknown' }, () => ({ verb: 'updated the channel' }))
     .exhaustive();

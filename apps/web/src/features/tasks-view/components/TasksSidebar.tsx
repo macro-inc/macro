@@ -1,6 +1,5 @@
 import {
   CollapsibleSection,
-  SearchBar,
   useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
@@ -8,6 +7,8 @@ import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateBut
 import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
 import { useParams } from '@app/lib/split-router';
 import {
@@ -89,6 +90,7 @@ function FavoriteRow(props: {
           <FavoriteIcon favorite={props.favorite} class="size-4" />
         </ViewSidebar.Icon>
         <span class="truncate">{name()}</span>
+        <FavoriteUnreadIndicator favorite={props.favorite} />
       </ViewSidebar.Item>
     </FavoriteContextMenu>
   );
@@ -155,7 +157,6 @@ export function TasksSidebar() {
   const panel = useSplitPanelOrThrow();
   const {
     state,
-    setState,
     projectsEnabled,
     setTab,
     selectedTask,
@@ -183,15 +184,6 @@ export function TasksSidebar() {
     <ViewSidebar.Root aria-label="Tasks navigation" class="relative">
       <SidebarCreateHeader
         title="Tasks"
-        searchLabel="Search tasks"
-        search={() => (
-          <SearchBar
-            label="Search tasks"
-            placeholder="Search tasks"
-            value={state.search}
-            onValueChange={(search) => setState('search', search)}
-          />
-        )}
         createAction={
           !isTouchDevice() ? (
             <TasksCreateAction
@@ -210,6 +202,7 @@ export function TasksSidebar() {
       />
 
       <ViewSidebar.Content>
+        <SidebarRoutineSuggestions surface="tasks" />
         <TasksNavigation
           items={BUILT_IN_TASK_TABS}
           label={t('viewMenus.taskViews')}

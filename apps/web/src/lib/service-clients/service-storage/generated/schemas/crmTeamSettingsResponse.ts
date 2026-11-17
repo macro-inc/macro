@@ -12,8 +12,8 @@ import type { CrmTeamSettingsResponseLegacyStageIds } from './crmTeamSettingsRes
 
 /**
  * The team's CRM configuration (everything on `team_crm_settings`
-except the `crm_enabled` killswitch, which is managed via
-`PATCH /team/crm` on the auth service).
+except the retired `crm_enabled` flag). Email contribution consent and
+exclusions are managed separately through `/crm/email-privacy`.
  */
 export interface CrmTeamSettingsResponse {
   /** Stage option ids counting as closed deals; absent = the client

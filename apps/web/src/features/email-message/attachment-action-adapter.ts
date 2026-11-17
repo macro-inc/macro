@@ -40,7 +40,9 @@ export async function downloadEmailAttachment(attachment: EmailAttachment) {
     );
     if (blob.isErr()) {
       span.error('Attachment download failed');
-      toast.failure('Failed to download attachment. Please try again.');
+      toast.failure('Download failed', {
+        subtext: 'Please try again',
+      });
       return;
     }
     await downloadFile(
@@ -70,7 +72,9 @@ export function createEmailAttachmentOpener() {
     }
     const response = await getEmailAttachmentDocument(dbId);
     if (response.isErr()) {
-      toast.failure('Failed to get attachment. Please try again.');
+      toast.failure('Attachment unavailable', {
+        subtext: 'Please try again',
+      });
       return Telemetry.error(
         new Error(
           'Failed to get or create attachment document id: ' + response.error
@@ -81,7 +85,9 @@ export function createEmailAttachmentOpener() {
 
     const maybeDocumentMetadata = await getEmailAttachmentMetadata(document_id);
     if (maybeDocumentMetadata.isErr()) {
-      toast.failure('Failed to get attachment. Please try again.');
+      toast.failure('Attachment unavailable', {
+        subtext: 'Please try again',
+      });
       return Telemetry.error(
         new Error(
           'Failed to get or create attachment document metadata: ' +

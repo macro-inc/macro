@@ -85,7 +85,7 @@ describe('browser notification prompt', () => {
     renderPrompt();
 
     expect(mocks.custom).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Enable Browser Notifications' }),
+      expect.objectContaining({ title: 'Enable notifications' }),
       expect.objectContaining({
         persistent: true,
         region: 'mobile-prompt-region',

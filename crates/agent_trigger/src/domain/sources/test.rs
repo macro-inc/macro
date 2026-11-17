@@ -104,6 +104,7 @@ fn a_task_joining_a_project_decodes_as_a_project_addition() {
     let project = InitiativeId::generate();
     let user = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
     let event = PropertyMacroEvent::entity_property_updated(EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
         entity_property_id: Uuid::now_v7(),
         entity_id: "task-a".to_owned(),
         entity_type: EntityType::Task,

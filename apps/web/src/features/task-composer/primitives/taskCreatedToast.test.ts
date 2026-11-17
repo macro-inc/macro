@@ -65,12 +65,10 @@ it('offers a new split on desktop and dismisses the toast before opening it', ()
 
   const [, options] = vi.mocked(toast.success).mock.calls[0];
   expect(options?.actions?.map((action) => action.label)).toEqual([
+    'Open split',
     'Open',
-    'Open (New Split)',
   ]);
-  options?.actions
-    ?.find((action) => action.label === 'Open (New Split)')
-    ?.onClick();
+  options?.actions?.find((action) => action.label === 'Open split')?.onClick();
   expect(toast.dismiss).toHaveBeenCalledWith(7);
   expect(openTask).toHaveBeenCalledWith(
     { id: 'task-1', optimisticSnapshot: undefined },

@@ -102,6 +102,11 @@ vi.mock('@ui', async (importOriginal) => {
         <div role="menu">{props.children}</div>
       ),
       Group: (props: { children?: JSX.Element }) => <div>{props.children}</div>,
+      CopyItem: (props: { children?: JSX.Element; onCopy: () => unknown }) => (
+        <div role="menuitem" onClick={props.onCopy}>
+          {props.children}
+        </div>
+      ),
       Item: (props: { children?: JSX.Element; onSelect?: () => void }) => (
         <div role="menuitem" onClick={() => props.onSelect?.()}>
           {props.children}
@@ -230,16 +235,21 @@ it('reserves a poll’s height across suspended metadata loading', async () => {
       </MarkdownHostContext.Provider>
     );
   });
+  // The suspended card shows the question, so it wraps as the loaded header
+  // does, above a body of the reserved height.
   const placeholder = await screen.findByRole('status');
+  expect(placeholder.style.minHeight).toBe('16.375rem');
   expect(
-    placeholder.closest<HTMLElement>('[data-slot="card"]')?.style.height
-  ).toBe('20.25rem');
+    placeholder.closest('[data-slot="card"].rounded-xl')?.textContent
+  ).toContain('Lunch?');
   release?.();
   const content = await screen.findByText('form-1');
-  // The loaded card keeps the reservation as a floor and grows to its content.
-  const card = content.closest<HTMLElement>('.rounded-xl');
-  expect(card?.style.minHeight).toBe('20.25rem');
-  expect(card?.style.height).toBe('auto');
+  // The loaded body keeps the reservation as a floor and grows to its content.
+  const body = content.closest<HTMLElement>('.rounded-lg');
+  expect(body?.style.minHeight).toBe('16.375rem');
+  expect(content.closest<HTMLElement>('.rounded-xl')?.style.height).toBe(
+    'auto'
+  );
   expect(screen.queryByRole('status')).toBeNull();
 });
 
@@ -259,7 +269,9 @@ it('reserves no poll height once the form turns out to be unavailable', async ()
     </MarkdownHostContext.Provider>
   ));
   const message = await screen.findByText('You don’t have access to this poll');
-  expect(message.closest<HTMLElement>('.rounded-xl')?.style.minHeight).toBe('');
+  const card = message.closest<HTMLElement>('.rounded-xl');
+  expect(card?.style.minHeight).toBe('');
+  expect(card?.querySelector('.rounded-lg')).toBeNull();
 });
 
 it.each(['code', 'canvas', 'pdf'] as const)(

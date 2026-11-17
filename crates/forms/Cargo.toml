@@ -15,7 +15,6 @@ entity_mutation = ["dep:entity_mutation", "ports"]
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
   "dep:utoipa",
   "databases/ports",
   "entity_access/inbound",
@@ -29,7 +28,7 @@ ports = ["dep:schemars", "models_forms/schema", "models_databases/schema", "data
 # Branding images read through the static-file service.
 static_files = ["dep:anyhow", "dep:static_file_service_client", "outbound"]
 # Postgres persistence for forms, layouts and the submission ledger.
-postgres = ["dep:entity_access_db_utils", "dep:serde_json", "dep:sqlx", "outbound"]
+postgres = ["activity/outbound", "dep:entity_access_db_utils", "dep:serde_json", "dep:sqlx", "outbound"]
 
 [dependencies]
 base64 = { workspace = true, optional = true }
@@ -58,7 +57,6 @@ macro_event_broker = { path = "../macro_event_broker", default-features = false 
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
-model-error-response = { path = "../model-error-response", optional = true }
 models_databases = { path = "../models_databases" }
 models_forms = { path = "../models_forms" }
 models_permissions = { path = "../models_permissions" }

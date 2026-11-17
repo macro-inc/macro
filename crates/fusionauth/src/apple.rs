@@ -63,7 +63,7 @@ async fn login(
 
 impl FusionAuthClient {
     /// Performs an Apple login using the provided identity provider ID, id token, and code.
-    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    #[tracing::instrument(skip(self, id_token, code), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn apple_login(
         &self,
         apple_identity_provider_id: &str,

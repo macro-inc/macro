@@ -3,31 +3,18 @@
  */
 
 import { withDocumentTabItemScope } from '@app/features/next-soup/soup-view/document-tab-scope';
+import type { UnifiedNotification } from '@notifications/types';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import type { InfiniteData } from '@tanstack/solid-query';
-import { QueryClient } from '@tanstack/solid-query';
+import { QueryClient, QueryObserver } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let testQueryClient: QueryClient;
 
 const getSoupItemsMock = vi.hoisted(() => vi.fn());
 const refreshActiveGraphqlSoupQueriesMock = vi.hoisted(() => vi.fn());
-const graphqlSoup = vi.hoisted(() => ({ enabled: false }));
-
-vi.mock('@core/constant/featureFlags', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@core/constant/featureFlags')>();
-  return {
-    ...actual,
-    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
-      flag === actual.enableGraphqlSoup
-        ? graphqlSoup.enabled
-        : actual.isFeatureEnabled(flag),
-  };
-});
-
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { getSoupItems: getSoupItemsMock },
 }));
@@ -78,7 +65,6 @@ import {
   refetchSoupEntity,
   removeSearchEntities,
   removeSoupEntities,
-  removeSoupEntitiesFromDoneFilteredQueries,
   restoreSoupEntityToDoneFilteredQueries,
 } from './operations';
 
@@ -204,7 +190,6 @@ function getSearchQuery() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  graphqlSoup.enabled = false;
   getSoupItemsMock.mockResolvedValue({
     isErr: () => false,
     value: { items: [] },
@@ -313,19 +298,18 @@ describe('refetchSoupEntity', () => {
     await refetchSoupEntity('task-1', 'document', { refreshGraphql: true });
 
     expect(refreshActiveGraphqlSoupQueriesMock).toHaveBeenCalledOnce();
-    expect(getSoupItemsMock).toHaveBeenCalledOnce();
+    expect(getSoupItemsMock).not.toHaveBeenCalled();
   });
 
   it('does not refresh GraphQL Soup queries for legacy-only refetches', async () => {
     await refetchSoupEntity('task-1', 'document');
 
     expect(refreshActiveGraphqlSoupQueriesMock).not.toHaveBeenCalled();
-    expect(getSoupItemsMock).toHaveBeenCalledOnce();
+    expect(getSoupItemsMock).not.toHaveBeenCalled();
   });
 
   describe('when GraphQL owns the soup lists', () => {
     beforeEach(() => {
-      graphqlSoup.enabled = true;
       getSoupItemsMock.mockResolvedValue({
         isErr: () => false,
         value: { items: [mockDocumentItem('doc-new')] },
@@ -380,6 +364,180 @@ describe('refetchSoupEntity', () => {
         'doc-new',
         'd-1',
       ]);
+    });
+
+    describe('for a new notification', () => {
+      const notifiedKey = [
+        ...soupKeys.astItems._def,
+        { params: { sort_method: 'notified_at' } },
+      ];
+      const notifiedPages = () =>
+        testQueryClient.getQueryData<
+          InfiniteData<SoupAstItemsFlatPage, unknown>
+        >(notifiedKey);
+      const notification = {
+        id: 'notification-1',
+        entity_id: 'doc-new',
+        entity_type: 'document',
+        created_at: '2026-01-02T00:00:00.000Z',
+        state: 'unseen',
+        notification_metadata: { tag: 'commented_on_document', content: {} },
+      } as unknown as UnifiedNotification;
+
+      beforeEach(() => {
+        testQueryClient.setQueryData(notifiedKey, {
+          pages: [
+            {
+              kind: 'flat',
+              items: [mockDocumentItem('d-1')],
+              nextCursor: null,
+            },
+          ],
+          pageParams: [null],
+        });
+      });
+
+      const mountNotifiedList = () =>
+        new QueryObserver(testQueryClient, {
+          queryKey: notifiedKey,
+          queryFn: () => notifiedPages() ?? null,
+          staleTime: Number.POSITIVE_INFINITY,
+        }).subscribe(() => {});
+
+      it('adds a row a mounted notified_at list does not have yet', async () => {
+        const unmount = mountNotifiedList();
+
+        updateSoupForNotification(notification);
+
+        await vi.waitFor(() => {
+          expect(notifiedPages()?.pages[0].items.map(getSoupItemId)).toEqual([
+            'doc-new',
+            'd-1',
+          ]);
+        });
+        unmount();
+      });
+
+      it('reads a list again when its first read predates the notification', async () => {
+        const pagesOf = (...ids: string[]) => ({
+          pages: [
+            {
+              kind: 'flat',
+              items: ids.map((id) => mockDocumentItem(id)),
+              nextCursor: null,
+            },
+          ],
+          pageParams: [null],
+        });
+        let settleFirstRead = (_data: unknown) => {};
+        const queryFn = vi
+          .fn()
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                settleFirstRead = resolve;
+              })
+          )
+          .mockResolvedValue(pagesOf('doc-new', 'd-1'));
+        testQueryClient.removeQueries({ queryKey: notifiedKey });
+        const unmount = new QueryObserver(testQueryClient, {
+          queryKey: notifiedKey,
+          queryFn,
+          staleTime: Number.POSITIVE_INFINITY,
+        }).subscribe(() => {});
+
+        updateSoupForNotification(notification);
+        await vi.waitFor(() => {
+          expect(getSoupItemsMock).toHaveBeenCalledOnce();
+        });
+        await getSoupItemsMock.mock.results[0]?.value;
+        await new Promise((resolve) => setTimeout(resolve));
+        settleFirstRead(pagesOf('d-1'));
+
+        await vi.waitFor(() => {
+          expect(notifiedPages()?.pages[0].items.map(getSoupItemId)).toEqual([
+            'doc-new',
+            'd-1',
+          ]);
+        });
+        unmount();
+      });
+
+      it('reads each list again as soon as its own first read settles', async () => {
+        const never = () => new Promise(() => {});
+        const slowKey = [
+          ...soupKeys.astItems._def,
+          { params: { sort_method: 'notified_at' }, body: { slow: true } },
+        ];
+        let settleFirstRead = (_data: unknown) => {};
+        const queryFn = vi
+          .fn()
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                settleFirstRead = resolve;
+              })
+          )
+          .mockResolvedValue({
+            pages: [
+              {
+                kind: 'flat',
+                items: [mockDocumentItem('doc-new')],
+                nextCursor: null,
+              },
+            ],
+            pageParams: [null],
+          });
+        testQueryClient.removeQueries({ queryKey: notifiedKey });
+        const unmountFast = new QueryObserver(testQueryClient, {
+          queryKey: notifiedKey,
+          queryFn,
+          staleTime: Number.POSITIVE_INFINITY,
+        }).subscribe(() => {});
+        const unmountSlow = new QueryObserver(testQueryClient, {
+          queryKey: slowKey,
+          queryFn: never,
+          staleTime: Number.POSITIVE_INFINITY,
+        }).subscribe(() => {});
+
+        updateSoupForNotification(notification);
+        await vi.waitFor(() => {
+          expect(getSoupItemsMock).toHaveBeenCalledOnce();
+        });
+        await getSoupItemsMock.mock.results[0]?.value;
+        await new Promise((resolve) => setTimeout(resolve));
+        settleFirstRead({
+          pages: [
+            {
+              kind: 'flat',
+              items: [mockDocumentItem('d-1')],
+              nextCursor: null,
+            },
+          ],
+          pageParams: [null],
+        });
+
+        await vi.waitFor(() => {
+          expect(queryFn).toHaveBeenCalledTimes(2);
+        });
+        unmountFast();
+        unmountSlow();
+      });
+
+      it('fetches nothing when no notified_at list is mounted', async () => {
+        await refetchSoupEntity('doc-new', 'document', { notified: true });
+
+        expect(getSoupItemsMock).not.toHaveBeenCalled();
+      });
+
+      it('fetches nothing for a change that is not a notification', async () => {
+        const unmount = mountNotifiedList();
+
+        await refetchSoupEntity('doc-new', 'document');
+
+        expect(getSoupItemsMock).not.toHaveBeenCalled();
+        unmount();
+      });
     });
   });
 });
@@ -463,86 +621,6 @@ describe('removeSoupEntities', () => {
     const restored = getSoupQuery()!;
     expect(restored.pages[0].items).toHaveLength(2);
     expect(getSoupItemId(restored.pages[0].items[0])).toBe('d-1');
-  });
-});
-
-describe('removeSoupEntitiesFromDoneFilteredQueries', () => {
-  const emailItem = (id: string): SoupApiItem =>
-    ({
-      tag: 'emailThread',
-      data: { id, inboxVisible: true },
-      frecency_score: 1,
-    }) as unknown as SoupApiItem;
-
-  // Query keys carry the compiled filter body; done-excluding views embed
-  // `emailView: 'inbox'` or a compiled `*Done: false` literal.
-  const inboxViewKey = [...soupKeys.items._def, { emailView: 'inbox' }];
-  const doneFilterKey = [
-    ...soupKeys.items._def,
-    {
-      ef: [
-        {
-          '|': [
-            { l: { NotificationState: 'unseen' } },
-            { l: { NotificationState: 'seen' } },
-          ],
-        },
-      ],
-    },
-  ];
-  const ndFilterKey = [
-    ...soupKeys.items._def,
-    { df: [{ '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }] }] },
-  ];
-  const allViewKey = [...soupKeys.items._def, { emailView: 'all' }];
-
-  const itemsAt = (key: unknown[]) =>
-    testQueryClient
-      .getQueryData<InfiniteData<SoupPage, unknown>>(key)!
-      .pages[0].items.map(getSoupItemId);
-
-  it('does not treat negated or mixed-OR state filters as active-only', () => {
-    const active = { l: { ns: 'unseen' } };
-    const cases = [
-      { '!': active },
-      { '|': [active, { l: { ns: 'done' } }] },
-      { '|': [active, { l: { id: 'e-1' } }] },
-      { l: { ns: 'done' } },
-    ];
-    for (const ast of cases) {
-      const key = [...soupKeys.items._def, { df: ast }];
-      testQueryClient.setQueryData(key, mockSoupCache([[emailItem('e-1')]]));
-      removeSoupEntitiesFromDoneFilteredQueries(new Set(['e-1']));
-      expect(itemsAt(key)).toEqual(['e-1']);
-    }
-  });
-
-  it('removes from done-filtered queries and keeps done-inclusive ones', () => {
-    const data = () => mockSoupCache([[emailItem('e-1'), mockChatItem('c-1')]]);
-    testQueryClient.setQueryData(inboxViewKey, data());
-    testQueryClient.setQueryData(doneFilterKey, data());
-    testQueryClient.setQueryData(ndFilterKey, data());
-    testQueryClient.setQueryData(allViewKey, data());
-
-    removeSoupEntitiesFromDoneFilteredQueries(new Set(['e-1']));
-
-    expect(itemsAt(inboxViewKey)).toEqual(['c-1']);
-    expect(itemsAt(doneFilterKey)).toEqual(['c-1']);
-    expect(itemsAt(ndFilterKey)).toEqual(['c-1']);
-    expect(itemsAt(allViewKey)).toEqual(['e-1', 'c-1']);
-  });
-
-  it('rollback restores removed rows', () => {
-    testQueryClient.setQueryData(
-      inboxViewKey,
-      mockSoupCache([[emailItem('e-1'), mockChatItem('c-1')]])
-    );
-
-    const tx = removeSoupEntitiesFromDoneFilteredQueries(new Set(['e-1']));
-    expect(itemsAt(inboxViewKey)).toEqual(['c-1']);
-
-    tx.rollback();
-    expect(itemsAt(inboxViewKey)).toEqual(['e-1', 'c-1']);
   });
 });
 
@@ -795,6 +873,7 @@ import {
   soupItemMatchesProjectMembership,
   soupItemMatchesQuery,
 } from '@app/features/next-soup/filters/query-filters';
+import { updateSoupForNotification } from '../../notification/notification-soup';
 import type { GroupByField, GroupMeta } from '../grouped/types';
 import { NOT_SET_GROUP_KEY } from '../grouped/types';
 import type { SoupAstItemsFlatPage, SoupAstItemsGroupedPage } from '../items';
@@ -2001,4 +2080,23 @@ describe('raw grouped entity IDs', () => {
     expect(removed[1].group.itemIds).toEqual([]);
     expect(removed[1].group.totalCount).toBe(4);
   });
+});
+
+it('notification-only Team skips generic refetch and timestamp cache mutation', async () => {
+  await refetchSoupEntity('team-1', 'team', {
+    refreshGraphql: true,
+    ownTouch: true,
+    notified: true,
+  });
+  expect(getSoupItemsMock).not.toHaveBeenCalled();
+  expect(refreshActiveGraphqlSoupQueriesMock).not.toHaveBeenCalled();
+  const team: SoupApiItem = {
+    tag: 'team',
+    data: { id: 'team-1', name: 'Synthetic team', ownerId: 'viewer' },
+    frecency_score: 0,
+    is_favorited: false,
+  };
+  mockNormalizer.getObjectById.mockReturnValueOnce(team);
+  optimisticUpdateSoupItemUpdatedAt('team-1', 'team', '2026-11-13T00:00:00Z');
+  expect(mockNormalizer.setNormalizedData).not.toHaveBeenCalled();
 });

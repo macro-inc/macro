@@ -47,19 +47,15 @@ function soupInput(cursor: string | null, limit: number): SoupInput {
       };
 }
 
-/** Flattens and deduplicates notifications returned across Soup entity pages. */
+/** Flattens and deduplicates active notifications across Soup entity pages. */
 export function selectGraphqlNotifications(
-  pages: SoupNotificationsQuery[],
-  done = false
+  pages: SoupNotificationsQuery[]
 ): UnifiedNotification[] {
   const notificationsById = new Map<string, UnifiedNotification>();
   for (const page of pages) {
     for (const entity of page.user.soup.items) {
       for (const record of entity.notifications) {
-        if (
-          (record.state === 'DONE') === done &&
-          !notificationsById.has(record.id)
-        ) {
+        if (record.state !== 'DONE' && !notificationsById.has(record.id)) {
           notificationsById.set(record.id, mapGraphqlNotification(record));
         }
       }
@@ -87,7 +83,6 @@ export type GraphqlNotificationsQuery = UrqlInfiniteQueryResult<
 /** Arguments accepted by the GraphQL notification query. */
 export type GraphqlNotificationsQueryArgs = {
   limit?: number;
-  done?: boolean;
 };
 
 /** Reactive options accepted by the GraphQL notification query. */
@@ -114,9 +109,12 @@ export function createGraphqlNotificationsQuery(
       getNextPageParam: (lastPage) => lastPage.user.soup.nextCursor,
       enabled: options?.().enabled !== false,
       requestPolicy: 'cache-and-network',
+      // App state, not a list on screen: its 500 entities are read again
+      // behind the views the user is looking at, most of all after the cache
+      // engine restarts.
+      context: { backgroundReader: true },
       keepPreviousData: false,
-      select: ({ pages }) =>
-        selectGraphqlNotifications(pages, queryArgs.done ?? false),
+      select: ({ pages }) => selectGraphqlNotifications(pages),
     };
   });
 
@@ -134,7 +132,7 @@ export function createGraphqlNotificationsQuery(
   return query;
 }
 
-/** Variables accepted by the transport-neutral notification mutation facade. */
+/** Variables accepted by the notification mutation facade. */
 export type UpdateNotificationsInput = {
   notificationIds: string[];
 };

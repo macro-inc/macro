@@ -3,6 +3,7 @@ use super::*;
 #[test]
 fn document_grants_enforce_scope_and_minimum_permission() {
     let token = AuthToken {
+        agent_correlation_id: None,
         user_id: None,
         document_id: "document-a".into(),
         access_level: AccessLevel::View,
@@ -33,6 +34,7 @@ fn document_grants_enforce_scope_and_minimum_permission() {
 #[test]
 fn admin_grants_cannot_cross_document_scope_on_atomic_operations() {
     let token = AuthToken {
+        agent_correlation_id: None,
         user_id: None,
         document_id: "document-a".into(),
         access_level: AccessLevel::Admin,

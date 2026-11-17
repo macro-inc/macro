@@ -1,4 +1,8 @@
-import { insertShapesCommand, type Point } from '@macro-inc/graphics';
+import {
+  insertShapesCommand,
+  nextPresentOrder,
+  type Point,
+} from '@macro-inc/graphics';
 import { createSignal, onCleanup } from 'solid-js';
 import type {
   CanvasAsset,
@@ -8,6 +12,11 @@ import type {
 } from '../core/assets';
 import { canEmbedDocument } from '../core/document-display';
 import type { CanvasState } from './create-canvas-state';
+
+const STARTER_ARTIFACT_HTML = `<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; font: 48px sans-serif; color: var(--color-ink); background: var(--color-panel); }
+</style>
+<h1>New artifact</h1>`;
 
 export function createAssetState(
   state: CanvasState,
@@ -124,6 +133,31 @@ export function createAssetState(
       ),
     media: (asset: CanvasAsset, point: Point) =>
       load([() => source.media(asset)], point),
+    artifact: (point: Point) => {
+      const width = 640;
+      const height = 360;
+      state.chooseTool('select');
+      state.editor.execute(insertShapesCommand, [
+        {
+          item: {
+            id: crypto.randomUUID(),
+            type: 'artifact',
+            appearance,
+            geometry: {
+              title: 'Untitled artifact',
+              html: STARTER_ARTIFACT_HTML,
+              width,
+              height,
+              designWidth: 1280,
+              designHeight: 720,
+              presentOrder: nextPresentOrder(state.editor.document),
+            },
+          },
+          point: { x: point.x - width / 2, y: point.y - height / 2 },
+        },
+      ]);
+      state.setNotice('Inserted artifact');
+    },
     document: (
       asset: CanvasAsset,
       point: Point,

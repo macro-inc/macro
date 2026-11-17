@@ -9,6 +9,7 @@ name = "macrod"
 path = "src/main.rs"
 
 [dependencies]
+pairing_id = { path = "../pairing_id" }
 agent_fold = { path = "../folds/agent_fold", default-features = false }
 claude_fold = { path = "../folds/claude_fold" }
 codex_fold = { path = "../folds/codex_fold" }
@@ -27,17 +28,23 @@ trigger_context = { path = "../trigger_context" }
 chrono = { workspace = true }
 clap = { workspace = true }
 crossterm = { workspace = true }
-dashmap = { workspace = true }
 eventsource-stream = { workspace = true }
 futures = { workspace = true }
 harness_id = { path = "../harness_id" }
 harnesses = { path = "../harnesses", default-features = false }
 hex = { workspace = true }
+hosted_runtimes = { path = "../hosted_runtimes", default-features = false }
 lazy-regex = { workspace = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_env_var = { path = "../macro_env_var" }
+macro_service_urls = { path = "../macro_service_urls" }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["trace", "rt-tokio"] }
+opentelemetry-otlp = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 ratatui = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 rootcause = { workspace = true }
@@ -63,6 +70,7 @@ uuid = { workspace = true }
 webbrowser = { workspace = true }
 webhook = { path = "../webhook", default-features = false }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true }
@@ -74,7 +82,9 @@ tar = { workspace = true }
 
 # Stripe (agent_session -> ai_billing) reaches native-tls, which is OpenSSL on
 # Linux, and a musl build has no system OpenSSL to link: compile it in.
+# mimalloc is the musl release's allocator (see `src/main.rs`).
 [target.'cfg(target_env = "musl")'.dependencies]
+mimalloc = { workspace = true }
 openssl-sys = { workspace = true, features = ["vendored"] }
 
 [target.'cfg(windows)'.dependencies]
@@ -94,3 +104,8 @@ chrono = { workspace = true }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "net", "test-util"] }
+wiremock = { workspace = true }
+
+[package.metadata.cargo-shear]
+# Linked for its `vendored` feature on musl, never named in code.
+ignored = ["openssl-sys"]

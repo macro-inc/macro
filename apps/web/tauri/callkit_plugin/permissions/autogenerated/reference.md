@@ -218,6 +218,32 @@ Denies the open_full_screen_intent_settings command without any pre-configured s
 <tr>
 <td>
 
+`call-kit:allow-open-microphone-settings`
+
+</td>
+<td>
+
+Enables the open_microphone_settings command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-open-microphone-settings`
+
+</td>
+<td>
+
+Denies the open_microphone_settings command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `call-kit:allow-prepare-join`
 
 </td>
@@ -289,6 +315,32 @@ Enables the remove_listener command without any pre-configured scope.
 <td>
 
 Denies the remove_listener command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-request-microphone-permission`
+
+</td>
+<td>
+
+Enables the request_microphone_permission command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-request-microphone-permission`
+
+</td>
+<td>
+
+Denies the request_microphone_permission command without any pre-configured scope.
 
 </td>
 </tr>

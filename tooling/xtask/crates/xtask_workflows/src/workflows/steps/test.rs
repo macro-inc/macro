@@ -53,20 +53,21 @@ fn default_dev_shell_does_not_pass_a_shell_input() {
 }
 
 #[test]
-fn web_build_cache_volume_includes_wasm_pack_and_cargo() {
-    let step = mount_web_build_cache_volume();
-    let with = step.value.with.expect("cache volume should set paths");
-    let path = with
-        .0
-        .get("path")
-        .and_then(|value| value.as_str())
-        .expect("path list");
-    assert!(path.contains("/home/runner/.bun/install/cache"));
-    assert!(path.contains("/home/runner/.cargo/registry"));
-    assert!(path.contains("/home/runner/.cargo/git"));
-    assert!(path.contains("/home/runner/.cache/.wasm-pack"));
-    assert_eq!(
-        with.0.get("cache").and_then(|value| value.as_str()),
-        Some("nix")
-    );
+fn namespace_sccache_allows_a_slow_backend_check_at_startup() {
+    let run = configure_namespace_sccache("test-cache")
+        .value
+        .run
+        .expect("Namespace sccache setup should be a run step");
+
+    let write = run
+        .find("echo 'server_startup_timeout_ms = 60000' > \"$sccache_conf\"")
+        .expect("the startup limit should be written to a config file");
+    let export = run
+        .find("echo \"SCCACHE_CONF=$sccache_conf\" >> \"$GITHUB_ENV\"")
+        .expect("later steps should read the config file");
+    let stop = run
+        .find("sccache --stop-server")
+        .expect("the server should restart with the new backend");
+
+    assert!(write < export && export < stop);
 }

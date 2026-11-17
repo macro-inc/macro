@@ -38,8 +38,13 @@ impl<N> AdmittedAgentSessionNameGenerator<N> {
     }
 
     /// Whether the session's owner may spend on naming. Naming must not
-    /// invent a billing identity for a non-user owner.
+    /// invent a billing identity for a non-user owner, and a background
+    /// session (such as a routine draft) is never listed, so its name
+    /// is never read: it isn't named at all.
     async fn admitted(&self, session: &AgentSession) -> bool {
+        if session.is_background() {
+            return false;
+        }
         let Ok(owner) = session.owner_user() else {
             return false;
         };
@@ -148,7 +153,8 @@ impl<N: AgentSessionNameGenerator, C: YesNoClassifier> AgentSessionNameGenerator
         let question = YesNoQuestion::try_from(TITLE_NO_LONGER_FITS)
             .expect("the retitle question is nonblank and under the length limit");
         let usage = UsageContext::new(AiFeature::ChatRename, owner.clone())
-            .with_entity(Some(session.id.as_uuid()));
+            .with_entity(Some(session.id.as_uuid()))
+            .with_agent_session(Some(session.id.as_uuid()));
         let probability = classifier
             .classify(usage, &input, &[question])
             .await

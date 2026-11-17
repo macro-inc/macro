@@ -1,10 +1,10 @@
 set -euo pipefail
-# Re-run the $JOB_NAME job of the web app PR checks run for $HEAD_SHA (waiting
-# for that run to finish first: a run in progress saw the labels as they were
-# when it started). GitHub re-runs the dependent `Web App Status Check` with
-# it. A push after the label event starts a fresh run that reads the labels
-# itself, and would also have cancelled this head's run (the web suite
-# cancels in-progress runs per PR): nothing to re-run then.
+# Re-run the $JOB_NAME job of the PR CI run for $HEAD_SHA (waiting for that run
+# to finish first: a run in progress saw the labels as they were when it
+# started). GitHub re-runs the jobs that depend on it with it, up to the
+# CI gate job that sets the required status. A newer CI request starts a fresh
+# run that reads the labels itself, and cancels this head's run: nothing to
+# re-run then.
 current=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefOid --jq '.headRefOid')
 if [[ "$current" != "$HEAD_SHA" ]]; then
   echo "PR head moved from ${HEAD_SHA:0:10} to ${current:0:10}; its run reads the labels itself. Nothing to re-run."
@@ -12,16 +12,15 @@ if [[ "$current" != "$HEAD_SHA" ]]; then
 fi
 deadline=$(( $(date +%s) + 25 * 60 ))
 while true; do
-  run=$(gh run list --repo "$GH_REPO" --workflow web-app-check-main.yml --commit "$HEAD_SHA" \
-    --json databaseId,status,conclusion --limit 1 --jq '.[0] // empty')
+  run=$(pr_ci_run "$HEAD_SHA")
   if [[ -z "$run" ]]; then
-    echo "No Web App Pr Checks run for ${HEAD_SHA:0:10} yet; nothing to re-run (the next push runs the gate with the current labels)."
+    echo "No PR CI run for ${HEAD_SHA:0:10} yet; nothing to re-run (the next run reads the current labels)."
     exit 0
   fi
   run_id=$(jq -r '.databaseId' <<<"$run")
   status=$(jq -r '.status' <<<"$run")
   if [[ "$status" == "completed" ]]; then
-    if [[ "$(jq -r '.conclusion' <<<"$run")" == "cancelled" ]]; then
+    if [[ "$(gh run view "$run_id" --repo "$GH_REPO" --json conclusion --jq '.conclusion')" == "cancelled" ]]; then
       echo "Run ${run_id} was cancelled (superseded); nothing to re-run."
       exit 0
     fi
@@ -35,9 +34,9 @@ while true; do
   sleep 30
 done
 job_id=$(gh run view "$run_id" --repo "$GH_REPO" --json jobs \
-  --jq ".jobs[] | select(.name == \"${JOB_NAME}\") | .databaseId")
+  --jq ".jobs[] | select(.name == \"Web App / ${JOB_NAME}\") | .databaseId")
 if [[ -z "$job_id" ]]; then
-  echo "Run ${run_id} has no ${JOB_NAME} job; nothing to re-run."
+  echo "Run ${run_id} has no Web App / ${JOB_NAME} job; nothing to re-run."
   exit 0
 fi
 echo "Re-running ${JOB_NAME} (job ${job_id} of run ${run_id}) with the current labels."

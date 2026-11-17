@@ -10,7 +10,7 @@
 use std::{sync::Arc, time::Duration};
 
 use email::domain::focus::{
-    FocusClassifier, FocusNotifier, FocusService, FocusStore, ProfileSource,
+    DueDateExtractor, FocusClassifier, FocusNotifier, FocusService, FocusStore, ProfileSource,
 };
 use rootcause::Report;
 use tokio_util::sync::CancellationToken;
@@ -19,8 +19,8 @@ use tokio_util::sync::CancellationToken;
 const SWEEP_LIMIT: i64 = 2_000;
 
 /// Sweep every `interval` over the last `window_days` until `shutdown`.
-pub async fn run_sweeps<S, P, C, N>(
-    service: Arc<FocusService<S, P, C, N>>,
+pub async fn run_sweeps<S, P, C, N, D>(
+    service: Arc<FocusService<S, P, C, N, D>>,
     interval: Duration,
     window_days: u16,
     shutdown: CancellationToken,
@@ -30,6 +30,7 @@ where
     P: ProfileSource,
     C: FocusClassifier,
     N: FocusNotifier,
+    D: DueDateExtractor,
 {
     let window = chrono::Duration::days(i64::from(window_days));
     let mut ticker = tokio::time::interval(interval);

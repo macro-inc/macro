@@ -56,7 +56,7 @@ where
 }
 
 /// Add a custom MCP server to the user's connections.
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ConnectMcpServer",
@@ -80,7 +80,7 @@ impl ToolAnnotated for ConnectMcpServer {
 }
 
 /// Response from [`ConnectMcpServer`].
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectMcpServerResponse {
     /// The server's URL.

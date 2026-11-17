@@ -3,6 +3,7 @@ pub mod clairic;
 pub mod temporal;
 #[cfg(test)]
 mod test;
+pub mod thread_due_date;
 use crate::domain::{
     ExtractInputRequest, FIELD_EXTRACTION_GUIDANCE, FieldExtractor, InputError, InputIntent,
     InputSuggestions,

@@ -267,14 +267,14 @@ async fn create_contact_hidden_company_semantics(pool: PgPool) -> anyhow::Result
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn create_contact_requires_crm_enabled(pool: PgPool) -> anyhow::Result<()> {
+async fn create_contact_is_available_without_email_consent(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, "macro|owner@example.com").await?;
-    // Company exists but no team_crm_settings row: killswitch off.
+    // Records are available without legacy settings or mailbox consent.
     let company_id = insert_company(&pool, team_id, true, &["example.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
-    let err = repo
+    let contact = repo
         .create_contact_for_company(
             &team_id,
             &company_id,
@@ -283,9 +283,8 @@ async fn create_contact_requires_crm_enabled(pool: PgPool) -> anyhow::Result<()>
             Utc::now(),
             false,
         )
-        .await
-        .unwrap_err();
-    assert!(matches!(err, CrmError::CrmDisabledForTeam));
+        .await?;
+    assert_eq!(contact.company_id, Some(company_id));
     Ok(())
 }
 
@@ -313,6 +312,8 @@ async fn populate_merges_into_manual_contact(pool: PgPool) -> anyhow::Result<()>
     // A populate for the same email upserts onto the manual row: the
     // manual name wins (first non-NULL), no second contact appears.
     let now = Utc::now();
+    consent_to_mailbox(&pool, team_id, link_id).await?;
+    insert_interaction(&pool, link_id, "jane@example.com", Utc::now(), true).await?;
     repo.populate_contact(
         &team_id,
         &link_id,
@@ -437,5 +438,63 @@ async fn shared_email_preserves_every_company_opt_out(pool: PgPool) -> anyhow::R
     assert!(after.addresses[0].contact_hidden);
     assert!(after.addresses[0].company_hidden);
     assert!(!after.addresses[0].email_sync);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn company_less_address_scope_preserves_visibility_and_duplicate_opt_outs(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, "macro|owner@example.com").await?;
+    let contact = Uuid::now_v7();
+    sqlx::query!("INSERT INTO crm_contacts (id, team_id, email, first_interaction, last_interaction) VALUES ($1, $2, 'person@example.com', now(), now())", contact, team).execute(&pool).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let addresses = vec!["person@example.com".to_owned()];
+    let before = repo.crm_scope_precheck(&team, &[], &addresses).await?;
+    assert!(before.addresses[0].exists);
+    assert!(before.addresses[0].email_sync);
+    assert!(!before.addresses[0].contact_hidden);
+    assert!(!before.addresses[0].company_hidden);
+    sqlx::query!(
+        "UPDATE crm_contacts SET hidden = TRUE WHERE id = $1",
+        contact
+    )
+    .execute(&pool)
+    .await?;
+    let hidden = repo.crm_scope_precheck(&team, &[], &addresses).await?;
+    assert!(hidden.addresses[0].contact_hidden);
+    sqlx::query!(
+        "UPDATE crm_contacts SET hidden = FALSE WHERE id = $1",
+        contact
+    )
+    .execute(&pool)
+    .await?;
+    let disabled = insert_company(&pool, team, false, &["other.example.com"]).await?;
+    repo.create_contact_for_company(
+        &team,
+        &disabled,
+        Some("person@example.com"),
+        "Person",
+        Utc::now(),
+        false,
+    )
+    .await?;
+    assert!(
+        !repo
+            .crm_scope_precheck(&team, &[], &addresses)
+            .await?
+            .addresses[0]
+            .email_sync
+    );
+    let other_team = Uuid::now_v7();
+    seed_team(&pool, other_team, "macro|other@example.com").await?;
+    assert!(
+        !repo
+            .crm_scope_precheck(&other_team, &[], &addresses)
+            .await?
+            .addresses[0]
+            .exists
+    );
     Ok(())
 }

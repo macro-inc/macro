@@ -935,6 +935,16 @@ const shortcutSections: ShortcutSection[] = [
         description: 'Focus split to the right',
       },
       {
+        keys: ['shift+arrowup'],
+        codes: ['ShiftLeft', 'ArrowUp'],
+        description: 'Focus split above',
+      },
+      {
+        keys: ['shift+arrowdown'],
+        codes: ['ShiftLeft', 'ArrowDown'],
+        description: 'Focus split below',
+      },
+      {
         keys: ['cmd+escape'],
         codes: ['MetaLeft', 'Escape'],
         description: 'Back to list / close split',
@@ -1012,7 +1022,6 @@ const shortcutSections: ShortcutSection[] = [
   {
     title: 'Email',
     items: [
-      { keys: ['/'], codes: ['Slash'], description: 'Search email' },
       { keys: ['s'], codes: ['KeyS'], description: 'Star or unstar' },
       {
         keys: ['shift+m'],

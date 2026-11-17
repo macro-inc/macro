@@ -50,6 +50,10 @@ export default {
   sortLastViewed: 'Last viewed',
   sortLastUpdated: 'Last updated',
   sortDateCreated: 'Date created',
+  sortTitle: 'Title',
+  sortName: 'Name',
+  sortAToZ: 'A to Z',
+  sortZToA: 'Z to A',
 
   // Group options
   groupNone: 'None',
@@ -80,6 +84,9 @@ export default {
   groupList: 'Group list',
   filterList: 'Filter list',
   clearFilters: 'Clear filters',
+  showHiddenRoutineRuns: 'Show hidden routine runs',
+  nextOptions: 'Next options',
+  retryOptions: 'Retry options',
 
   // Filter menu
   filter: 'Filter',
@@ -122,6 +129,8 @@ export default {
   filterByTag: 'Filter by tag...',
   searchAssignees: 'Search assignees...',
   searchAssigneesLabel: 'Search assignees',
+  loadingTeamMembers: 'Loading team members…',
+  teamMembersUnavailable: 'Team members could not be loaded.',
   createdBy: 'Created by',
   searchCreators: 'Search creators...',
   searchCreatorsLabel: 'Search creators',
@@ -155,4 +164,7 @@ export default {
   draft: 'Draft',
   sharedWithTeam: '{{name}}, shared with team',
   viewActions: 'Actions for {{name}}',
+  savedViewWithStatus: '{{name}}, {{status}}',
+  moveUp: 'Move up',
+  moveDown: 'Move down',
 };

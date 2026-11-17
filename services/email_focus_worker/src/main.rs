@@ -3,8 +3,9 @@
 //!
 //! Reads `macro.email` for new and sent messages, asks Jev about each signal
 //! thread and key mail in an allowlisted inbox with the owner's stored memory
-//! as context, stores the verdict in `email_thread_focus`, and tells the inbox's
-//! readers through the connection gateway. An hourly sweep catches what the
+//! as context, asks the agent harness for the day a thread that can be in Focus
+//! is due, stores both in `email_thread_focus`, and tells the inbox's readers
+//! through the connection gateway. An hourly sweep catches what the
 //! event stream missed.
 
 mod config;
@@ -14,17 +15,19 @@ mod inbound {
 }
 mod outbound {
     pub mod gateway_notifier;
+    pub mod harness_due_dates;
     pub mod jev_classifier;
     pub mod memory_profile;
 }
 
 use std::{sync::Arc, time::Duration};
 
+use calendar_events::outbound::pg::PgCalendarRepository;
 use connection_gateway_client::ConnectionGatewayClient;
 use email::{domain::focus::FocusService, outbound::FocusPgRepository};
 use jev::{domain::JevClassifier, outbound::SystemOneJev};
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
-use macro_service_urls::ConnectionGatewayUrl;
+use macro_service_urls::{AgentHarnessServiceUrl, ConnectionGatewayUrl};
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use rootcause::Report;
 use sqlx::postgres::PgPoolOptions;
@@ -35,6 +38,7 @@ use crate::{
     inbound::{kafka_consumer::run_focus_consumer, sweep::run_sweeps},
     outbound::{
         gateway_notifier::{CoalescingNotifier, GatewayDelivery},
+        harness_due_dates::HarnessDueDates,
         jev_classifier::JevFocusClassifier,
         memory_profile::MemoryProfiles,
     },
@@ -75,7 +79,10 @@ async fn main() -> Result<(), Report> {
     );
     let service = Arc::new(FocusService::new(
         FocusPgRepository(db.clone()),
-        MemoryProfiles::new(PgMemoryRepo::new(db.clone())),
+        MemoryProfiles::new(
+            PgMemoryRepo::new(db.clone()),
+            PgCalendarRepository::new(db.clone()),
+        ),
         JevFocusClassifier::new(JevClassifier::new(
             provider,
             ai_usage::pg_recorder_with_enforcement(db.clone(), enforcement),
@@ -85,6 +92,10 @@ async fn main() -> Result<(), Report> {
             notifications.clone(),
             shutdown.clone(),
         ),
+        HarnessDueDates::new(
+            AgentHarnessServiceUrl::new()?.as_ref(),
+            config.internal_api_key.as_ref(),
+        )?,
         domains,
     ));
     tracing::info!(

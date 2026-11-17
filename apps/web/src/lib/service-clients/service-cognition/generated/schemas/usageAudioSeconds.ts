@@ -6,6 +6,6 @@
  */
 
 /**
- * Audio duration in seconds, absent for token billing.
+ * Audio duration in seconds, absent for token and credit billing.
  */
 export type UsageAudioSeconds = number | null;

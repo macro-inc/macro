@@ -89,6 +89,7 @@ where
         &self,
         owner: &MacroUserIdStr<'static>,
         _agent: bot_id::BotId,
+        _session: uuid::Uuid,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
         // Macro's own server is the composition root's to layer on with

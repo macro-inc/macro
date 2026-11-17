@@ -15,8 +15,10 @@
 //! always a superset of the ones it displaced.
 //!
 //! The called workflows already avoid redundant work internally (the service
-//! matrix is Nix-cached and Pulumi no-ops unchanged stacks), so the cost of
-//! dropping the gate is small next to a silently undeployed commit.
+//! matrix is Nix-cached, Pulumi no-ops unchanged stacks, and the sync worker
+//! compares its inputs with the live version), so the cost of dropping the gate
+//! is small next to a silently undeployed commit. Those checks are safe because
+//! they compare with what is deployed, not with the previous push.
 //!
 //! Replaces the separate `deploy_cloud_storage_on_push` and
 //! `deploy_web_app_dev_push` workflows. Generated into `deploy_on_push.yml`
@@ -58,8 +60,9 @@ pub const NOTICE: &str = indoc::indoc! {"
     # Deploying everything unconditionally makes the coalescing lossless: the
     # surviving run always deploys a superset of the runs it displaced. The
     # called workflows already avoid redundant work internally (Nix-cached
-    # builds, Pulumi no-ops on unchanged stacks), so the cost is small next to
-    # an undeployed commit.
+    # builds, Pulumi no-ops on unchanged stacks, the sync worker comparing its
+    # inputs with the live version), so the cost is small next to an undeployed
+    # commit. Those checks compare with what is deployed, never the last push.
     #
 "};
 

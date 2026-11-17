@@ -2,7 +2,11 @@
 
 A skill is a markdown document (sub type `skill`) of instructions an agent
 follows. Built-in system skills (`crates/system_skills`) work the same way but
-have no document.
+have no document, and are never routed. A system skill can instead come with
+an SDK area's guide (`agent_code_mode`'s `attached_skill`): Compose Routines
+follows the routines guide wherever code mode hands that guide out, so a
+session asked for a routine has it without looking; hosts without code get its
+routine-tools form.
 
 ## Descriptions
 
@@ -30,7 +34,8 @@ turn ─┬─ memory, SDK docs, auto model ...
            list ≤256 of the user's skills (soup, access-checked), newest first,
              with descriptions; skip ones this session loaded or the request @mentions
            ceil(n/32) parallel Jev calls (≤8): "Would skill X help? <description>"
-           1 s deadline; any failure loads nothing and the turn runs as usual
+           1 s deadline; a late or failed call loses only its own skills, and
+             when none answers nothing loads and the turn runs as usual
            load ≥0.8 (≥0.95 without a description), at most 2, most relevant first
            read bodies through ReadSkill's access check, 1 s
       ▼

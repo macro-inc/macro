@@ -2,6 +2,8 @@ import { ROUTER_BASE } from '@app/constants/routerBase';
 import { SERVER_HOSTS } from '@core/constant/servers';
 
 export const GOOGLE_GMAIL_IDP = 'google_gmail';
+/** FusionAuth's Microsoft sign-in identity provider (work, school, and personal accounts). */
+export const MICROSOFT_IDP = 'microsoft';
 type IDPName = 'google_gmail';
 
 type EmailAuthParams = {

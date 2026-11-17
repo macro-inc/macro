@@ -4,7 +4,11 @@ use reqwest::Method;
 use serde_json::json;
 use uuid::Uuid;
 
-use super::{OutlookApiClientRepository, transport::invalid_response, wire};
+use super::{
+    OutlookApiClientRepository,
+    transport::{invalid_response, read_json},
+    wire,
+};
 use crate::domain::models::{
     AccessToken, Attention, EmailApiError, FolderRole, MailFolder, MailboxMessage, MailboxState,
     MessageAction, MessageWithCalendarParts, MessageWriteReceipt, ProviderId, StreamToken,
@@ -13,6 +17,9 @@ use crate::domain::models::{
 use crate::domain::ports::{MailboxActionWriter, MailboxCalendarClient, MailboxContentReader};
 
 const MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,changeKey,internetMessageId,subject,bodyPreview,body,from,toRecipients,ccRecipients,bccRecipients,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime,createdDateTime,lastModifiedDateTime,internetMessageHeaders,webLink";
+
+/// Enough to read who wrote and what about, without bodies or headers.
+const RECENT_MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,subject,bodyPreview,from,toRecipients,ccRecipients,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime";
 
 const ARCHIVE_ROLE_PROPERTY: &str =
     "String {81f532e3-7ace-4e0b-bae9-312ce0d50c8c} Name MacroFolderRole";
@@ -32,7 +39,7 @@ impl OutlookApiClientRepository {
         let mut visited = std::collections::HashSet::new();
         loop {
             if !visited.insert(url.as_str().to_owned()) {
-                return Err(invalid_response());
+                return Err(invalid_response("archive folder pages repeat"));
             }
             let page: wire::Page<wire::Folder> = self.get(token, url).await?;
             if let Some(folder) = page.value.into_iter().min_by(|a, b| a.id.cmp(&b.id)) {
@@ -50,17 +57,15 @@ impl OutlookApiClientRepository {
             .map(|m| m.link_id.simple().to_string())
             .unwrap_or_else(|| "macro".into());
         let body = json!({"displayName":format!("Macro Archive ({})",&suffix[..suffix.len().min(8)]),"singleValueExtendedProperties":[{"id":ARCHIVE_ROLE_PROPERTY,"value":"archive"}]});
-        let folder: wire::Folder = self
+        let response = self
             .request(
                 token,
                 Method::POST,
                 self.endpoint(&["me", "mailFolders"])?,
                 Some(&body),
             )
-            .await?
-            .json()
-            .await
-            .map_err(|_| invalid_response())?;
+            .await?;
+        let folder: wire::Folder = read_json(response).await?;
         ProviderId::new(folder.id)
     }
 }
@@ -120,7 +125,7 @@ impl MailboxContentReader for OutlookApiClientRepository {
                 );
             loop {
                 if !visited_pages.insert(url.as_str().to_owned()) {
-                    return Err(invalid_response());
+                    return Err(invalid_response("mailFolders pages repeat"));
                 }
                 let page: wire::Page<wire::Folder> = self.get(token, url).await?;
                 for folder in page.value {
@@ -154,6 +159,7 @@ impl MailboxContentReader for OutlookApiClientRepository {
                         name: folder.display_name,
                         role,
                         has_children: folder.child_folder_count > 0,
+                        total_items: folder.total_item_count,
                     });
                 }
                 match page.next {
@@ -196,7 +202,7 @@ impl MailboxContentReader for OutlookApiClientRepository {
         let mut visited_pages = std::collections::HashSet::new();
         loop {
             if !visited_pages.insert(url.as_str().to_owned()) {
-                return Err(invalid_response());
+                return Err(invalid_response("attachments pages repeat"));
             }
             let page: wire::Page<wire::Attachment> = self.get(token, url).await?;
             attachments.extend(page.value.into_iter().map(|a| {
@@ -230,13 +236,46 @@ impl MailboxContentReader for OutlookApiClientRepository {
                     .is_some_and(|mime| mime.eq_ignore_ascii_case("text/calendar"))
             });
         let calendar_parts = if has_invitation {
-            self.get_calendar_parts(token, id.as_str()).await?
+            match self.get_calendar_parts(token, id.as_str()).await {
+                Ok(parts) => Some(parts),
+                // Throttling and credentials concern the mailbox, so the read
+                // fails and is retried as a whole.
+                Err(
+                    error @ (EmailApiError::RateLimited { .. }
+                    | EmailApiError::AuthRequired
+                    | EmailApiError::CredentialsUnavailable { .. }),
+                ) => return Err(error),
+                // Graph answers 500 on some invitations' `$value` every time;
+                // the message itself still reads. The caller decides whether
+                // to wait for the parts or import without them.
+                Err(_) => None,
+            }
         } else {
-            Vec::new()
+            Some(Vec::new())
         };
         let mut normalized = normalize(message, attachments, link_id, folders)?;
-        normalized.content.calendar_parts = calendar_parts;
+        normalized.calendar_parts_unavailable = calendar_parts.is_none();
+        normalized.content.calendar_parts = calendar_parts.unwrap_or_default();
         Ok(Some(normalized))
+    }
+
+    async fn recent_inbox_messages(
+        &self,
+        token: &AccessToken,
+        link_id: Uuid,
+        limit: u16,
+        folders: &[MailFolder],
+    ) -> Result<Vec<MailboxMessage>, EmailApiError> {
+        let mut url = self.endpoint(&["me", "mailFolders", "inbox", "messages"])?;
+        url.query_pairs_mut()
+            .append_pair("$select", RECENT_MESSAGE_FIELDS)
+            .append_pair("$orderby", "receivedDateTime desc")
+            .append_pair("$top", &limit.to_string());
+        let page: wire::Page<wire::Message> = self.get(token, url).await?;
+        page.value
+            .into_iter()
+            .map(|message| normalize(message, Vec::new(), link_id, folders))
+            .collect()
     }
 
     async fn attachment(
@@ -297,12 +336,16 @@ fn reference_url(web_link: Option<&str>) -> String {
         .unwrap_or_else(|| "https://outlook.office.com/mail/".into())
 }
 
-fn contact(recipient: wire::Recipient) -> ContactInfo {
-    ContactInfo {
-        email: recipient.email_address.address,
-        name: recipient.email_address.name,
+/// A sender or recipient without an address can't be written to or matched to
+/// a contact, so it is left out, as an address header without an address is
+/// for Gmail.
+fn contact(recipient: wire::Recipient) -> Option<ContactInfo> {
+    let wire::Address { address, name } = recipient.email_address?;
+    Some(ContactInfo {
+        email: address.filter(|address| !address.trim().is_empty())?,
+        name,
         photo_url: None,
-    }
+    })
 }
 
 pub(super) fn normalize(
@@ -345,8 +388,8 @@ pub(super) fn normalize(
         body_text.as_deref(),
     )
     .or(source.body_preview);
-    let headers =
-        serde_json::to_value(source.internet_message_headers).map_err(|_| invalid_response())?;
+    let headers = serde_json::to_value(source.internet_message_headers)
+        .map_err(|_| invalid_response("internetMessageHeaders do not serialize"))?;
     let now = Utc::now();
     let message = Message {
         db_id: Uuid::now_v7(),
@@ -381,10 +424,22 @@ pub(super) fn normalize(
         is_draft: state.is_draft,
         scheduled_send_time: None,
         has_attachments: !attachments.is_empty(),
-        from: source.from.map(contact),
-        to: source.to_recipients.into_iter().map(contact).collect(),
-        cc: source.cc_recipients.into_iter().map(contact).collect(),
-        bcc: source.bcc_recipients.into_iter().map(contact).collect(),
+        from: source.from.and_then(contact),
+        to: source
+            .to_recipients
+            .into_iter()
+            .filter_map(contact)
+            .collect(),
+        cc: source
+            .cc_recipients
+            .into_iter()
+            .filter_map(contact)
+            .collect(),
+        bcc: source
+            .bcc_recipients
+            .into_iter()
+            .filter_map(contact)
+            .collect(),
         labels: Vec::new(),
         body_text,
         body_html_sanitized,
@@ -406,6 +461,7 @@ pub(super) fn normalize(
             message,
             calendar_parts: Vec::new(),
         },
+        calendar_parts_unavailable: false,
         state,
         folder_id,
         tags: source.categories,
@@ -465,7 +521,7 @@ impl MailboxActionWriter for OutlookApiClientRepository {
                 result
                     .get("id")
                     .and_then(serde_json::Value::as_str)
-                    .ok_or_else(invalid_response)?,
+                    .ok_or_else(|| invalid_response("message action response has no id"))?,
             )?,
             // Move actions do not document conditional-write support. Their
             // response cannot prove an unchanged draft baseline.

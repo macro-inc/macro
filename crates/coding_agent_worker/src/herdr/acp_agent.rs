@@ -38,6 +38,7 @@ use agent_client_protocol::schema::v1::{
     ListSessionsRequest, ListSessionsResponse, SessionId, SessionInfo,
 };
 use agent_fold::domain::transcript::{Fold, LogEvent};
+use agent_runtime_protocol::domain::turn::{FailureNotice, FailureNoticeKind};
 use claude_fold::ClaudeLog;
 use codex_fold::CodexLog;
 
@@ -179,6 +180,7 @@ pub(crate) struct AdapterOptions {
 struct RpcError {
     code: i64,
     message: String,
+    data: Option<Value>,
 }
 
 impl RpcError {
@@ -186,6 +188,7 @@ impl RpcError {
         Self {
             code: -32603,
             message: message.into(),
+            data: None,
         }
     }
 
@@ -193,6 +196,23 @@ impl RpcError {
         Self {
             code: -32602,
             message: message.into(),
+            data: None,
+        }
+    }
+
+    /// A prompt that was stopped before it was typed into the TUI. Answering
+    /// `cancelled` would read in Macro as a message the agent saw.
+    fn not_delivered() -> Self {
+        let notice = FailureNotice {
+            kind: FailureNoticeKind::PromptNotDelivered,
+            title: "Message not delivered".to_owned(),
+            body: "The turn running in Herdr was stopped before this message was typed in, so the agent never received it. Send it again.".to_owned(),
+            link: None,
+        };
+        Self {
+            code: -32603,
+            message: "the prompt was stopped before it reached the native agent".to_owned(),
+            data: serde_json::to_value(notice).ok(),
         }
     }
 }
@@ -375,11 +395,13 @@ impl Adapter {
     fn respond(&self, id: Value, result: Result<Value, RpcError>) {
         self.send(match result {
             Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
-            Err(error) => json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "error": {"code": error.code, "message": error.message},
-            }),
+            Err(error) => {
+                let mut body = json!({"code": error.code, "message": error.message});
+                if let Some(data) = error.data {
+                    body["data"] = data;
+                }
+                json!({"jsonrpc": "2.0", "id": id, "error": body})
+            }
         });
     }
 
@@ -500,6 +522,7 @@ impl Adapter {
             _ => Err(RpcError {
                 code: -32601,
                 message: format!("{method} is not supported"),
+                data: None,
             }),
         }
     }
@@ -508,7 +531,9 @@ impl Adapter {
     /// first, in `cwd` when given. Read-only: the client's following
     /// `session/load` attaches them. A closed agent is not live, so it is
     /// never reopened; other lookup failures are retried before a session is
-    /// left out.
+    /// left out. Each carries `updatedAt`, its transcript's last write, when
+    /// it has one: the client restores recently active sessions at once, so
+    /// work typed into the agent's pane keeps reaching Macro.
     async fn list_sessions(&self, cwd: Option<&Path>) -> ListSessionsResponse {
         use futures::StreamExt as _;
         let Some(herdr) = &self.herdr else {
@@ -540,7 +565,10 @@ impl Adapter {
         ListSessionsResponse::new(
             records
                 .into_iter()
-                .map(|record| SessionInfo::new(SessionId::new(record.id), record.cwd))
+                .map(|record| {
+                    let updated_at = record.transcript.as_deref().and_then(last_written);
+                    SessionInfo::new(SessionId::new(record.id), record.cwd).updated_at(updated_at)
+                })
                 .collect(),
         )
     }
@@ -815,12 +843,13 @@ impl Adapter {
             let wait = tracing::info_span!(
                 "macrod.herdr.prompt_wait",
                 session_id = %session.id,
-                native_turns = 0u32,
-                exit_dismissed = false,
+                native_turns = tracing::field::Empty,
+                exit_dismissed = tracing::field::Empty,
                 outcome = tracing::field::Empty,
             );
-            let waited = async {
-                let mut native_turns = 0u32;
+            let mut native_turns = 0u32;
+            let mut exit_dismissed = false;
+            let waited: Result<_, RpcError> = async {
                 loop {
                     if cancel.is_cancelled() {
                         return Ok(None);
@@ -835,13 +864,13 @@ impl Adapter {
                     if info.as_ref().is_ok_and(|info| info.status == "blocked")
                         && self.stay(herdr, &live.name).await?
                     {
-                        tracing::Span::current().record("exit_dismissed", true);
+                        exit_dismissed = true;
                         continue;
                     }
                     native_turns += 1;
-                    tracing::Span::current().record("native_turns", native_turns);
                     // An interrupted native turn ends "cancelled" too; only a
-                    // Stop from Macro drops the waiting prompt.
+                    // Stop from Macro drops the waiting prompt, which then
+                    // answers as not delivered.
                     self.follow(herdr, session, live, &cancel, true).await?;
                     if cancel.is_cancelled() {
                         return Ok(None);
@@ -849,14 +878,16 @@ impl Adapter {
                 }
             }
             .instrument(wait.clone())
-            .await
-            .inspect_err(|error: &RpcError| {
+            .await;
+            wait.record("native_turns", native_turns);
+            wait.record("exit_dismissed", exit_dismissed);
+            let waited = waited.inspect_err(|error| {
                 wait.record("outcome", "failed");
                 tracing::warn!(parent: &wait, error = %error.message, "queued prompt failed while waiting");
             })?;
             let Some(info) = waited else {
-                wait.record("outcome", "cancelled");
-                return Ok("cancelled");
+                wait.record("outcome", "not_delivered");
+                return Err(RpcError::not_delivered());
             };
             wait.record("outcome", "ready");
             match info {
@@ -904,7 +935,7 @@ impl Adapter {
             }
         }
         if cancel.is_cancelled() {
-            return Ok("cancelled");
+            return Err(RpcError::not_delivered());
         }
         // The observer cannot acquire this session until the turn ends. Publish
         // native settings now, while the freshly started composer is visible.
@@ -1317,6 +1348,16 @@ async fn interrupt(herdr: &HerdrCli, name: &str) -> Result<bool, HerdrError> {
     }
     span.record("stopped", false);
     Ok(false)
+}
+
+/// When `transcript` was last written, as RFC 3339, or `None` when it cannot
+/// be read.
+fn last_written(transcript: &Path) -> Option<String> {
+    let modified = std::fs::metadata(transcript).ok()?.modified().ok()?;
+    Some(
+        chrono::DateTime::<chrono::Utc>::from(modified)
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+    )
 }
 
 pub(crate) fn agent_name(session: &str) -> String {

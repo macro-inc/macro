@@ -115,5 +115,11 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'form' }, () => {
       throw new Error('forms do not support properties');
     })
+    .with({ type: 'harness' }, () => {
+      throw new Error('runtimes do not support properties');
+    })
+    .with({ type: 'team' }, () => {
+      throw new Error('teams do not support properties');
+    })
     .exhaustive();
 }

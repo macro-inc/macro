@@ -15,6 +15,9 @@ note: |-
   The shared @core/util/base64 codec, cron helpers, and dateSearch/parseTime parser are pure utilities and may be reused.
   Block-agent names its rendering layers `ui/` and `component/`.
 files:
+  - apps/web/src/features/entity-appearance/core/**
+  - apps/web/src/features/passwords/core/**
+  - apps/web/src/features/notifications-inbox/core/**
   - apps/web/src/features/command/core/**
   - apps/web/src/features/document-composer/core/**
   - apps/web/src/features/task-composer/core/**
@@ -29,6 +32,7 @@ files:
   - apps/web/src/features/billing-lab/core/**
   - apps/web/src/features/calendar-team/core/**
   - apps/web/src/features/tasks-view/core/task-board*
+  - apps/web/src/features/sharing/share-delivery/core/**
   - apps/web/src/features/routines/core/**
   - apps/web/src/features/scheduling/core/**
   - apps/web/src/features/usage/core/**

@@ -1,5 +1,5 @@
 //! `Cleanup Preview` — removes a PR's preview files from S3 when the PR
-//! closes (companion to `deploy_preview`). Generated into
+//! closes (companion to the web `Build` job's preview steps). Generated into
 //! `cleanup_preview.yml` (replaces the hand-written `cleanup-preview.yml`).
 
 use gh_workflow::{

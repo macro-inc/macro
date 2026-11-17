@@ -51,7 +51,36 @@ projects.
   `OpensearchOperation`: add a variant for a new request rather than passing a
   name. `request_failed` classifies the cause as a `TransportFailure` (timeout,
   connect, connection closed, other) and keeps the full source chain in
-  `details`; reqwest's `Display` alone drops the cause.
+  `details`; reqwest's `Display` alone drops the cause. A body cut off by a
+  transport failure also becomes `RequestFailed`, not `DeserializationFailed`.
+- Workspace feature unification enables reqwest's HTTP/2, so every request
+  from one process multiplexes over one connection, and a recycled connection
+  fails them all at once. Wrap each public `OpensearchClient` method's request
+  in `retry::resend_on_lost_connection`, which resends twice on a connection
+  closed or refused before a complete response, never on a timeout or an
+  error status. Every request must stay safe to resend: write by explicit id
+  or by query.
+- Put `instrument(err)` on the public method, not the inner function it
+  retries, so a recovered attempt does not record an error span.
+- Requests time out after five minutes (`REQUEST_TIMEOUT`); delete-by-query
+  across a large mailbox runs for minutes.
+- The request-level `_source` filter does not reach `has_child` inner hits:
+  each one returns the child's whole document unless its `InnerHits` names
+  `source_fields`. Every join query names the fields its hit's `_source`
+  struct decodes; do the same for a new one, or each child comes back with
+  its full `content`.
+- Fetch time and response size follow the number of inner hits returned,
+  because the plain highlighter re-analyses each one. The content clauses
+  of a document, chat, agent session or call share one budget per result
+  (`INNER_HITS_PER_RESULT`, divided by `split_inner_hits_budget`), so a
+  result carries at most that many matches, not every match; do not give
+  each term its own.
+- Document content has two matching shapes (`DocumentTermMatching`). `All`
+  is one `has_child` per term: every term somewhere in the document, each a
+  prefix. `Dynamic` is one `has_child` for queries of three or more terms:
+  most non-stopword terms in the same chunk, only the last term a prefix.
+  It both adds and removes matches (terms scattered over several chunks no
+  longer match), so callers opt in per request.
 
 ## Related
 

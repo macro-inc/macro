@@ -192,22 +192,25 @@ async fn a_connection_closed_without_a_response_reports_the_transport_cause() {
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
+    // One connection per attempt, since a lost connection is resent twice.
     let server = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        let mut reader = std::io::BufReader::new(&mut stream);
-        let mut content_length = 0;
-        loop {
-            let mut line = String::new();
-            reader.read_line(&mut line).unwrap();
-            if line == "\r\n" {
-                break;
+        for _ in 0..3 {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = std::io::BufReader::new(&mut stream);
+            let mut content_length = 0;
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                if line == "\r\n" {
+                    break;
+                }
+                if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                    content_length = value.trim().parse::<usize>().unwrap();
+                }
             }
-            if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
-                content_length = value.trim().parse::<usize>().unwrap();
-            }
+            reader.read_exact(&mut vec![0; content_length]).unwrap();
+            // Dropping the stream closes the connection before any response.
         }
-        reader.read_exact(&mut vec![0; content_length]).unwrap();
-        // Dropping the stream closes the connection before any response.
     });
     let client =
         crate::OpensearchClient::new(format!("http://{address}"), "".into(), "".into()).unwrap();

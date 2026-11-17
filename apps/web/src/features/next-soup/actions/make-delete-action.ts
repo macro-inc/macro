@@ -42,6 +42,8 @@ function reportTrashedEmails(
       ? t('entityActions.toastMovedCountToTrash', { count })
       : t('entityActions.toastMovedToTrash'),
     {
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
       actions: [
         {
           label: t('entityActions.undo'),

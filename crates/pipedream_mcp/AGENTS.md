@@ -69,6 +69,9 @@ listings, and calls all go through Connect, with no Pipedream fallback.
   and records nothing; the app polls `/pipedream/mcp/connect/complete`, which
   trusts only Connect's own connection list.
 
+- Completing a connection (Pipedream, its recovery, or Connect) turns the app
+  on, even over a row the user disabled: the app reads a disabled result as a
+  failed connect, and agent discovery reports a disabled app as unconnected.
 - A Macro Connect grant outranks an overlay: the store returns it, and
   status checks read it before the overlay's native connection.
 - Overlaying an app hides its Pipedream grant from every reader, including

@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO account_manager_grants\n                (id, managed_user_id, manager_user_id, requested_by, status, expires_at)\n            VALUES ($1, $2, $3, $4, 'pending', $5)\n            ON CONFLICT (managed_user_id, manager_user_id) WHERE status = 'pending' DO NOTHING\n            RETURNING id, managed_user_id, manager_user_id, requested_by, status, expires_at,\n                created_at, claimed_at, last_used_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "managed_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "manager_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "requested_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "claimed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_used_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "45bf2bd3d2a375b9482b8eb5e201b9858cbeeb1a29152f213543f06489b6cca7"
+}

@@ -21,7 +21,7 @@ import type {
   PipelinesSource,
   PipelineTransfer,
 } from '../context/pipelines';
-import type { Pipeline } from '../core/pipeline';
+import { isTrackedPipeline, type Pipeline } from '../core/pipeline';
 import { createPipelineExport } from '../primitives/pipeline-transfer';
 import { PipelineImport } from './pipeline-import';
 
@@ -53,6 +53,8 @@ export function PipelineView(props: {
   let mobileNameInput: HTMLInputElement | undefined;
   const canEdit = () => ['owner', 'edit'].includes(props.pipeline.grant);
   const isOwner = () => props.pipeline.grant === 'owner';
+  const tracked = () =>
+    isTrackedPipeline(props.pipeline) ? props.pipeline : undefined;
   // A host supplies one transfer for the page's lifetime.
   const transfer = props.transfer;
   const exporter =
@@ -139,7 +141,7 @@ export function PipelineView(props: {
             <Dropdown placement="bottom-start">
               <Dropdown.Trigger
                 variant="ghost"
-                size="icon-md"
+                size="icon-sm"
                 aria-label="Pipeline actions"
                 class="shrink-0"
                 disabled={pending()}
@@ -162,7 +164,7 @@ export function PipelineView(props: {
                       <DownloadIcon class="size-4" />
                       Export CSV
                     </Dropdown.Item>
-                    <Show when={canEdit()}>
+                    <Show when={canEdit() && tracked()}>
                       <Dropdown.Item onSelect={() => setImporting(true)}>
                         <UploadIcon class="size-4" />
                         Import CSV
@@ -276,7 +278,7 @@ export function PipelineView(props: {
                 <DownloadIcon class="size-4" />
                 Export CSV
               </Button>
-              <Show when={canEdit()}>
+              <Show when={canEdit() && tracked()}>
                 <Button
                   variant="ghost"
                   class="w-full justify-start"
@@ -329,11 +331,15 @@ export function PipelineView(props: {
       </Dialog>
       <Show when={importing() && transfer}>
         {(current) => (
-          <PipelineImport
-            pipeline={props.pipeline}
-            transfer={current().source}
-            onClose={() => setImporting(false)}
-          />
+          <Show when={tracked()}>
+            {(pipeline) => (
+              <PipelineImport
+                pipeline={pipeline()}
+                transfer={current().source}
+                onClose={() => setImporting(false)}
+              />
+            )}
+          </Show>
         )}
       </Show>
       <DeleteDialog
@@ -343,8 +349,11 @@ export function PipelineView(props: {
         title="Trash pipeline?"
         body={
           <p>
-            The pipeline and its entries will move to trash. The companies and
-            contacts remain in your CRM.
+            The pipeline and its entries will move to trash.
+            <Show when={tracked()}>
+              {' '}
+              The companies and contacts remain in your CRM.
+            </Show>
           </p>
         }
         onDelete={() =>

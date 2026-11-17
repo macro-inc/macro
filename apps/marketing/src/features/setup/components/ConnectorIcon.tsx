@@ -1,4 +1,4 @@
-import PlugIcon from '@phosphor/plug.svg';
+import PlugIcon from '@icon/system/regular/plug.svg';
 import { Show } from 'solid-js';
 import { FEATURED_MCP_SERVERS } from '../core/featuredIntegrations';
 

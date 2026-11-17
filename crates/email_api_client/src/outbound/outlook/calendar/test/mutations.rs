@@ -11,12 +11,12 @@ use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
 use wiremock::{Request, Respond, matchers::path_regex};
 
-const OWNER: &str = "macro|olivia@example.com";
+pub(super) const OWNER: &str = "macro|olivia@example.com";
 const INBOX: &str = "olivia@example.com";
-const TOKEN: &str = "graph-access-token";
+pub(super) const TOKEN: &str = "graph-access-token";
 const EVENTS: &str = r"^/v1\.0/me/(calendars/[^/]+/)?events(/|$)";
 
-struct IssuedToken;
+pub(super) struct IssuedToken;
 
 impl CalendarAccessTokenProvider for IssuedToken {
     async fn fetch_access_token(
@@ -27,7 +27,7 @@ impl CalendarAccessTokenProvider for IssuedToken {
     }
 }
 
-struct NoOpenClients;
+pub(super) struct NoOpenClients;
 
 impl CalendarRefreshNotifier for NoOpenClients {
     async fn calendar_changed(&self, _: &str, _: Uuid, _: bool) {}
@@ -76,10 +76,13 @@ impl Respond for GraphEvent {
     }
 }
 
-async fn connected_mailbox(
+/// A connected Outlook inbox with calendar access whose Graph mailbox
+/// answers with `settings` and `calendars`, before its calendars are
+/// discovered.
+pub(super) async fn linked_mailbox(
     pool: &PgPool,
     server: &MockServer,
-    api: &OutlookApiClientRepository,
+    settings: Value,
     calendars: Value,
 ) -> PgCalendarRepository {
     let macro_user_id = Uuid::now_v7();
@@ -120,9 +123,7 @@ async fn connected_mailbox(
     .unwrap();
     Mock::given(method("GET"))
         .and(path("/v1.0/me/mailboxSettings"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(json!({"timeZone":"Pacific Standard Time"})),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_json(settings))
         .mount(server)
         .await;
     Mock::given(method("GET"))
@@ -130,17 +131,33 @@ async fn connected_mailbox(
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":calendars})))
         .mount(server)
         .await;
-    let repo = PgCalendarRepository::new(pool.clone());
+    PgCalendarRepository::new(pool.clone())
+}
+
+pub(super) async fn connected_mailbox(
+    pool: &PgPool,
+    server: &MockServer,
+    api: &OutlookApiClientRepository,
+    calendars: Value,
+) -> PgCalendarRepository {
+    let repo = linked_mailbox(
+        pool,
+        server,
+        mailbox_settings(Some("Pacific Standard Time")),
+        calendars,
+    )
+    .await;
     let discovery = repo
         .claim_outlook_calendar(
             Uuid::now_v7(),
             OccurrenceRange::maintenance_horizon(Utc::now()),
+            OutlookApiClientRepository::READER_REVISION,
         )
         .await
         .unwrap()
         .unwrap();
     let discovered = api.calendars(TOKEN, discovery.binding).await.unwrap();
-    repo.commit_outlook_calendars(&discovery, discovered)
+    repo.commit_outlook_calendars(&discovery, discovered.calendars)
         .await
         .unwrap();
     repo
@@ -151,18 +168,22 @@ async fn sync_event(repo: &PgCalendarRepository, api: &OutlookApiClientRepositor
         .claim_outlook_calendar(
             Uuid::now_v7(),
             OccurrenceRange::maintenance_horizon(Utc::now()),
+            OutlookApiClientRepository::READER_REVISION,
         )
         .await
         .unwrap()
         .unwrap();
-    let upsert = api
+    let OutlookEventRefresh::Refreshed { upsert, skipped } = api
         .refresh_calendar_event(TOKEN, lease.target.as_ref().unwrap(), graph_id)
         .await
         .unwrap()
-        .unwrap();
+    else {
+        panic!("{graph_id} should be readable");
+    };
+    assert!(skipped.is_empty(), "{graph_id} is read whole");
     repo.upsert_event(CalendarEventWrite::OutlookSync {
         lease: Box::new(lease),
-        upsert,
+        upsert: *upsert,
     })
     .await
     .unwrap();
@@ -602,4 +623,358 @@ async fn deleting_a_synced_outlook_event_deletes_it_in_graph_and_drops_it_from_t
             .unwrap()
             .is_empty()
     );
+}
+
+/// One series in Graph: its master, and its instances as `instances`
+/// returns them, which Macro patches, deletes or answers one at a time.
+#[derive(Clone)]
+struct GraphSeries(Arc<Mutex<(Value, Vec<Value>)>>);
+
+impl Respond for GraphSeries {
+    fn respond(&self, request: &Request) -> ResponseTemplate {
+        let mut series = self.0.lock().unwrap();
+        let (master, instances) = &mut *series;
+        let segments: Vec<String> = request
+            .url
+            .path_segments()
+            .unwrap()
+            .skip(2)
+            .map(str::to_owned)
+            .collect();
+        let segments: Vec<&str> = segments.iter().map(String::as_str).collect();
+        let is_master = |id: &str| master["id"].as_str() == Some(id);
+        match (request.method.as_str(), segments.as_slice()) {
+            ("GET", ["events", id, "instances"]) if is_master(id) => {
+                let value: Vec<_> = instances
+                    .iter()
+                    .map(|instance| as_graph_returns(instance, request))
+                    .collect();
+                ResponseTemplate::new(200).set_body_json(json!({ "value": value }))
+            }
+            ("GET", ["calendars", _, "events", id] | ["events", id]) if is_master(id) => {
+                ResponseTemplate::new(200).set_body_json(master.clone())
+            }
+            ("PATCH", ["events", id]) => {
+                let patch: serde_json::Map<String, Value> =
+                    serde_json::from_slice(&request.body).unwrap();
+                let series_patch = is_master(id);
+                let event = if series_patch {
+                    &mut *master
+                } else {
+                    let Some(instance) = instances.iter_mut().find(|i| i["id"] == *id) else {
+                        return ResponseTemplate::new(404);
+                    };
+                    instance["type"] = json!("exception");
+                    instance
+                };
+                for (key, value) in patch {
+                    event[key.as_str()] = value;
+                }
+                event["@odata.etag"] = json!("W/\"2\"");
+                let patched = event.clone();
+                // A series given an end date no longer lists the meetings after it.
+                if series_patch && master["recurrence"]["range"]["type"] == "endDate" {
+                    let end: chrono::NaiveDate = master["recurrence"]["range"]["endDate"]
+                        .as_str()
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+                    instances.retain(|instance| {
+                        let start: chrono::DateTime<Utc> =
+                            instance["originalStart"].as_str().unwrap().parse().unwrap();
+                        start.with_timezone(&Los_Angeles).date_naive() <= end
+                    });
+                }
+                ResponseTemplate::new(200).set_body_json(patched)
+            }
+            ("DELETE", ["events", id]) => {
+                instances.retain(|instance| instance["id"] != *id);
+                ResponseTemplate::new(204)
+            }
+            ("POST", ["events", id, action]) => {
+                let Some(instance) = instances.iter_mut().find(|i| i["id"] == *id) else {
+                    return ResponseTemplate::new(404);
+                };
+                instance["type"] = json!("exception");
+                instance["responseStatus"]["response"] = json!(match *action {
+                    "tentativelyAccept" => "tentativelyAccepted",
+                    "decline" => "declined",
+                    _ => "accepted",
+                });
+                ResponseTemplate::new(202)
+            }
+            _ => ResponseTemplate::new(404),
+        }
+    }
+}
+
+/// A synced daily series of two meetings the mailbox organizes, or attends
+/// as a guest, and the original-start key of its second meeting. Its meetings
+/// are occurrences only, so it reads the same before and after Graph's
+/// `originalStart` is selected, and only finding one meeting depends on it.
+async fn synced_series(
+    pool: &PgPool,
+    is_organizer: bool,
+) -> (
+    MockServer,
+    OutlookApiClientRepository,
+    PgCalendarRepository,
+    Uuid,
+    String,
+) {
+    let (server, api) = setup().await;
+    let repo = connected_mailbox(
+        pool,
+        &server,
+        &api,
+        json!([{"id":"AAMkCalendar","name":"Calendar","canEdit":true,"isDefaultCalendar":true}]),
+    )
+    .await;
+    let organizer = if is_organizer {
+        INBOX
+    } else {
+        "ada@example.com"
+    };
+    let (mut master, mut instances) = upcoming_series("AAMkDaily", organizer, is_organizer);
+    instances.truncate(2);
+    let guest = if is_organizer {
+        "ada@example.com"
+    } else {
+        INBOX
+    };
+    for event in std::iter::once(&mut master).chain(instances.iter_mut()) {
+        event["attendees"] = json!([{
+            "type":"required",
+            "status":{"response":"none","time":"0001-01-01T00:00:00Z"},
+            "emailAddress":{"name":"Guest","address":guest}
+        }]);
+    }
+    Mock::given(path_regex(r"^/v1\.0/me/(calendars/[^/]+/)?events/"))
+        .respond_with(GraphSeries(Arc::new(Mutex::new((master, instances)))))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"mail":INBOX})))
+        .mount(&server)
+        .await;
+    sync_event(&repo, &api, "AAMkDaily").await;
+    let listed = CalendarService::new(repo.clone())
+        .list_occurrences(OWNER, two_weeks(), None, 100)
+        .await
+        .unwrap();
+    assert_eq!(listed.len(), 2);
+    let event_id = listed[1].event.id;
+    let key = listed[1].occurrence.occurrence_key.clone();
+    (server, api, repo, event_id, key)
+}
+
+/// The id Graph gives the series' meeting whose original start is `key`.
+fn instance_id(key: &str) -> String {
+    let start: chrono::DateTime<Utc> = key.parse().unwrap();
+    format!(
+        "AAMkDaily-{}",
+        start.with_timezone(&Los_Angeles).date_naive()
+    )
+}
+
+async fn writes(server: &MockServer) -> Vec<(String, String, Value)> {
+    server
+        .received_requests()
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|r| r.method.as_str() != "GET")
+        .map(|r| {
+            (
+                r.method.to_string(),
+                r.url.path().to_owned(),
+                serde_json::from_slice(&r.body).unwrap_or(Value::Null),
+            )
+        })
+        .collect()
+}
+
+fn mutations(
+    repo: PgCalendarRepository,
+    api: OutlookApiClientRepository,
+) -> CalendarMutationServiceImpl<
+    PgCalendarRepository,
+    OutlookApiClientRepository,
+    IssuedToken,
+    NoopMacroEventBroker,
+    NoOpenClients,
+> {
+    CalendarMutationServiceImpl::new(repo, api, IssuedToken, NoopMacroEventBroker, NoOpenClients)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn editing_one_meeting_of_a_synced_outlook_series_patches_only_that_meeting(pool: PgPool) {
+    let (server, api, repo, event_id, key) = synced_series(&pool, true).await;
+    mutations(repo, api)
+        .update_event(
+            OWNER,
+            event_id,
+            None,
+            CalendarEventPatch {
+                title: Some("Standup with the new hire".into()),
+                ..Default::default()
+            },
+            CalendarUpdateScope::ThisEvent {
+                recurrence_id: key.clone(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        writes(&server).await,
+        [(
+            "PATCH".into(),
+            format!("/v1.0/me/events/{}", instance_id(&key)),
+            json!({"subject":"Standup with the new hire"})
+        )]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn answering_one_meeting_of_an_outlook_series_answers_only_that_meeting(pool: PgPool) {
+    let (server, api, repo, event_id, key) = synced_series(&pool, false).await;
+    mutations(repo, api)
+        .respond_to_event(
+            OWNER,
+            event_id,
+            None,
+            AttendeeResponseStatus::Accepted,
+            CalendarRsvpScope::ThisEvent {
+                recurrence_id: key.clone(),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        writes(&server).await,
+        [(
+            "POST".into(),
+            format!("/v1.0/me/events/{}/accept", instance_id(&key)),
+            json!({"sendResponse":true})
+        )]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deleting_one_meeting_of_an_outlook_series_deletes_only_that_meeting(pool: PgPool) {
+    let (server, api, repo, event_id, key) = synced_series(&pool, true).await;
+    mutations(repo.clone(), api)
+        .delete_event(
+            OWNER,
+            event_id,
+            None,
+            CalendarDeletionScope::ThisEvent {
+                recurrence_id: key.clone(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        writes(&server).await,
+        [(
+            "DELETE".into(),
+            format!("/v1.0/me/events/{}", instance_id(&key)),
+            Value::Null
+        )]
+    );
+    let left: Vec<_> = CalendarService::new(repo)
+        .list_occurrences(OWNER, two_weeks(), None, 100)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|listed| listed.occurrence.occurrence_key)
+        .collect();
+    assert_eq!(left.len(), 1);
+    assert!(!left.contains(&key));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn ending_an_outlook_series_at_one_meeting_ends_it_the_day_before(pool: PgPool) {
+    let (server, api, repo, event_id, key) = synced_series(&pool, true).await;
+    let reads = CalendarService::new(repo.clone());
+    let first = reads
+        .list_occurrences(OWNER, two_weeks(), None, 100)
+        .await
+        .unwrap()[0]
+        .occurrence
+        .occurrence_key
+        .clone();
+    mutations(repo, api)
+        .delete_event(
+            OWNER,
+            event_id,
+            None,
+            CalendarDeletionScope::ThisAndFollowing {
+                recurrence_id: key.clone(),
+            },
+        )
+        .await
+        .unwrap();
+    let writes = writes(&server).await;
+    assert_eq!(writes.len(), 1);
+    let (method, path, body) = &writes[0];
+    assert_eq!(
+        (method.as_str(), path.as_str()),
+        ("PATCH", "/v1.0/me/events/AAMkDaily")
+    );
+    let start: chrono::DateTime<Utc> = key.parse().unwrap();
+    assert_eq!(
+        body["recurrence"]["range"]["endDate"],
+        (start.with_timezone(&Los_Angeles).date_naive() - Days::new(1)).to_string()
+    );
+    let left: Vec<_> = reads
+        .list_occurrences(OWNER, two_weeks(), None, 100)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|listed| listed.occurrence.occurrence_key)
+        .collect();
+    assert_eq!(left, [first], "only the meeting before it is left");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn inviting_a_guest_to_one_meeting_of_an_outlook_series_writes_only_that_meeting(
+    pool: PgPool,
+) {
+    let (server, api, repo, event_id, key) = synced_series(&pool, true).await;
+    mutations(repo, api)
+        .invite_guests(
+            OWNER,
+            event_id,
+            None,
+            vec![CalendarAttendeeInput {
+                email: "grace@example.com".into(),
+                is_optional: false,
+                response_status: None,
+            }],
+            CalendarUpdateScope::ThisEvent {
+                recurrence_id: key.clone(),
+            },
+        )
+        .await
+        .unwrap();
+    let writes = writes(&server).await;
+    assert_eq!(writes.len(), 1);
+    let (method, path, body) = &writes[0];
+    assert_eq!(
+        (method.as_str(), path.as_str()),
+        (
+            "PATCH",
+            format!("/v1.0/me/events/{}", instance_id(&key)).as_str()
+        )
+    );
+    let invited: Vec<_> = body["attendees"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|attendee| attendee["emailAddress"]["address"].as_str().unwrap())
+        .collect();
+    assert_eq!(invited, ["ada@example.com", "grace@example.com"]);
 }

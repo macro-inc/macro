@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
+import type { AcceptSuggestionData, AcceptSuggestionErrors, AcceptSuggestionResponses, ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, AddSuggestionData, AddSuggestionErrors, AddSuggestionResponses, AttachSuggestionDraftData, AttachSuggestionDraftErrors, AttachSuggestionDraftResponses, CheckScheduledActionData, CheckScheduledActionErrors, CheckScheduledActionResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DetachScheduledActionData, DetachScheduledActionErrors, DetachScheduledActionResponses, DiscardRoutineDraftJobData, DiscardRoutineDraftJobErrors, DiscardRoutineDraftJobResponses, DismissRoutineSuggestionData, DismissRoutineSuggestionErrors, DismissRoutineSuggestionResponses, DismissSuggestionData, DismissSuggestionErrors, DismissSuggestionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetRoutineDraftJobData, GetRoutineDraftJobErrors, GetRoutineDraftJobResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, GetSuggestionGenerationData, GetSuggestionGenerationErrors, GetSuggestionGenerationResponses, ListRoutineDraftJobsData, ListRoutineDraftJobsErrors, ListRoutineDraftJobsResponses, ListRoutineSuggestionsData, ListRoutineSuggestionsErrors, ListRoutineSuggestionsResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ListSuggestionsData, ListSuggestionsErrors, ListSuggestionsResponses, RecordSuggestionsSeenData, RecordSuggestionsSeenErrors, RecordSuggestionsSeenResponses, RecordSuggestionsViewedData, RecordSuggestionsViewedErrors, RecordSuggestionsViewedResponses, RegenerateSuggestionsData, RegenerateSuggestionsErrors, RegenerateSuggestionsResponses, RestoreSuggestionData, RestoreSuggestionErrors, RestoreSuggestionResponses, RetireRoutineSuggestionData, RetireRoutineSuggestionErrors, RetireRoutineSuggestionResponses, RetireSuggestionData, RetireSuggestionErrors, RetireSuggestionResponses, ReviewRoutineSuggestionsData, ReviewRoutineSuggestionsErrors, ReviewRoutineSuggestionsResponses, ReviewSuggestionsData, ReviewSuggestionsErrors, ReviewSuggestionsResponses, RewriteSuggestionData, RewriteSuggestionErrors, RewriteSuggestionResponses, RoutineCatalogData, RoutineCatalogErrors, RoutineCatalogResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionAppearanceData, SetScheduledActionAppearanceErrors, SetScheduledActionAppearanceResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, StartRoutineDraftJobData, StartRoutineDraftJobErrors, StartRoutineDraftJobResponses, StartSuggestionGenerationData, StartSuggestionGenerationErrors, StartSuggestionGenerationResponses, SuggestRoutineData, SuggestRoutineErrors, SuggestRoutineResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -65,9 +65,114 @@ export class Sdk extends HeyApiClient {
         return (options?.client ?? this.client).get<ListScheduledActionsResponses, ListScheduledActionsErrors, ThrowOnError>({ url: '/scheduled-actions', ...options });
     }
 
+    /**
+     * Create a routine. A create made by a routine's run, from its code step
+     * or its Ask AI step's session, makes that routine's sub-routine: the
+     * caller's credential says so, never the body.
+     */
     public createScheduledAction<ThrowOnError extends boolean = false>(options: Options<CreateScheduledActionData, ThrowOnError>): RequestResult<CreateScheduledActionResponses, CreateScheduledActionErrors, ThrowOnError> {
         return (options.client ?? this.client).post<CreateScheduledActionResponses, CreateScheduledActionErrors, ThrowOnError>({
             url: '/scheduled-actions',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public routineCatalog<ThrowOnError extends boolean = false>(options: Options<RoutineCatalogData, ThrowOnError>): RequestResult<RoutineCatalogResponses, RoutineCatalogErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<RoutineCatalogResponses, RoutineCatalogErrors, ThrowOnError>({ url: '/scheduled-actions/catalog', ...options });
+    }
+
+    /**
+     * What saving this routine would find wrong, without saving it: the same
+     * checks as creating it. A routine draft's session hands its draft back
+     * this way.
+     */
+    public checkScheduledAction<ThrowOnError extends boolean = false>(options: Options<CheckScheduledActionData, ThrowOnError>): RequestResult<CheckScheduledActionResponses, CheckScheduledActionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CheckScheduledActionResponses, CheckScheduledActionErrors, ThrowOnError>({
+            url: '/scheduled-actions/check',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public listRoutineDraftJobs<ThrowOnError extends boolean = false>(options?: Options<ListRoutineDraftJobsData, ThrowOnError>): RequestResult<ListRoutineDraftJobsResponses, ListRoutineDraftJobsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListRoutineDraftJobsResponses, ListRoutineDraftJobsErrors, ThrowOnError>({ url: '/scheduled-actions/draft-jobs', ...options });
+    }
+
+    public startRoutineDraftJob<ThrowOnError extends boolean = false>(options: Options<StartRoutineDraftJobData, ThrowOnError>): RequestResult<StartRoutineDraftJobResponses, StartRoutineDraftJobErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<StartRoutineDraftJobResponses, StartRoutineDraftJobErrors, ThrowOnError>({
+            url: '/scheduled-actions/draft-jobs',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public discardRoutineDraftJob<ThrowOnError extends boolean = false>(options: Options<DiscardRoutineDraftJobData, ThrowOnError>): RequestResult<DiscardRoutineDraftJobResponses, DiscardRoutineDraftJobErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DiscardRoutineDraftJobResponses, DiscardRoutineDraftJobErrors, ThrowOnError>({ url: '/scheduled-actions/draft-jobs/{id}', ...options });
+    }
+
+    public getRoutineDraftJob<ThrowOnError extends boolean = false>(options: Options<GetRoutineDraftJobData, ThrowOnError>): RequestResult<GetRoutineDraftJobResponses, GetRoutineDraftJobErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetRoutineDraftJobResponses, GetRoutineDraftJobErrors, ThrowOnError>({ url: '/scheduled-actions/draft-jobs/{id}', ...options });
+    }
+
+    public draftRoutine<ThrowOnError extends boolean = false>(options: Options<DraftRoutineData, ThrowOnError>): RequestResult<DraftRoutineResponses, DraftRoutineErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<DraftRoutineResponses, DraftRoutineErrors, ThrowOnError>({
+            url: '/scheduled-actions/drafts',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public listRoutineSuggestions<ThrowOnError extends boolean = false>(options?: Options<ListRoutineSuggestionsData, ThrowOnError>): RequestResult<ListRoutineSuggestionsResponses, ListRoutineSuggestionsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListRoutineSuggestionsResponses, ListRoutineSuggestionsErrors, ThrowOnError>({ url: '/scheduled-actions/suggestions', ...options });
+    }
+
+    /**
+     * Hand back one routine suggestion from a routine suggestion session, the
+     * way a draft's session checks its routine: a catalog routine with knob
+     * values, or a drafted routine, checked as saving checks it.
+     */
+    public suggestRoutine<ThrowOnError extends boolean = false>(options: Options<SuggestRoutineData, ThrowOnError>): RequestResult<SuggestRoutineResponses, SuggestRoutineErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<SuggestRoutineResponses, SuggestRoutineErrors, ThrowOnError>({
+            url: '/scheduled-actions/suggestions',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * What a routines generation session reads before managing suggestions.
+     */
+    public reviewRoutineSuggestions<ThrowOnError extends boolean = false>(options?: Options<ReviewRoutineSuggestionsData, ThrowOnError>): RequestResult<ReviewRoutineSuggestionsResponses, ReviewRoutineSuggestionsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ReviewRoutineSuggestionsResponses, ReviewRoutineSuggestionsErrors, ThrowOnError>({ url: '/scheduled-actions/suggestions/review', ...options });
+    }
+
+    public dismissRoutineSuggestion<ThrowOnError extends boolean = false>(options: Options<DismissRoutineSuggestionData, ThrowOnError>): RequestResult<DismissRoutineSuggestionResponses, DismissRoutineSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<DismissRoutineSuggestionResponses, DismissRoutineSuggestionErrors, ThrowOnError>({ url: '/scheduled-actions/suggestions/{id}/dismiss', ...options });
+    }
+
+    /**
+     * Retire an open suggestion that no longer fits, from a routines
+     * generation session.
+     */
+    public retireRoutineSuggestion<ThrowOnError extends boolean = false>(options: Options<RetireRoutineSuggestionData, ThrowOnError>): RequestResult<RetireRoutineSuggestionResponses, RetireRoutineSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RetireRoutineSuggestionResponses, RetireRoutineSuggestionErrors, ThrowOnError>({
+            url: '/scheduled-actions/suggestions/{id}/retire',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -93,6 +198,29 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+
+    public setScheduledActionAppearance<ThrowOnError extends boolean = false>(options: Options<SetScheduledActionAppearanceData, ThrowOnError>): RequestResult<SetScheduledActionAppearanceResponses, SetScheduledActionAppearanceErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<SetScheduledActionAppearanceResponses, SetScheduledActionAppearanceErrors, ThrowOnError>({
+            url: '/scheduled-actions/{id}/appearance',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public listScheduledActionCodeUpgrades<ThrowOnError extends boolean = false>(options: Options<ListScheduledActionCodeUpgradesData, ThrowOnError>): RequestResult<ListScheduledActionCodeUpgradesResponses, ListScheduledActionCodeUpgradesErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ListScheduledActionCodeUpgradesResponses, ListScheduledActionCodeUpgradesErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/code-upgrades', ...options });
+    }
+
+    /**
+     * Keep a sub-routine as the owner's own routine: it moves to the main list
+     * and no longer follows the routine whose run created it.
+     */
+    public detachScheduledAction<ThrowOnError extends boolean = false>(options: Options<DetachScheduledActionData, ThrowOnError>): RequestResult<DetachScheduledActionResponses, DetachScheduledActionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<DetachScheduledActionResponses, DetachScheduledActionErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/detach', ...options });
     }
 
     public setScheduledActionEnabled<ThrowOnError extends boolean = false>(options: Options<SetScheduledActionEnabledData, ThrowOnError>): RequestResult<SetScheduledActionEnabledResponses, SetScheduledActionEnabledErrors, ThrowOnError> {
@@ -136,6 +264,148 @@ export class Sdk extends HeyApiClient {
     public activateScheduledActionTemplate<ThrowOnError extends boolean = false>(options: Options<ActivateScheduledActionTemplateData, ThrowOnError>): RequestResult<ActivateScheduledActionTemplateResponses, ActivateScheduledActionTemplateErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ActivateScheduledActionTemplateResponses, ActivateScheduledActionTemplateErrors, ThrowOnError>({
             url: '/scheduled-actions/{id}/template/activate',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * The caller's feed, for them or their own agent.
+     */
+    public listSuggestions<ThrowOnError extends boolean = false>(options?: Options<ListSuggestionsData, ThrowOnError>): RequestResult<ListSuggestionsResponses, ListSuggestionsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListSuggestionsResponses, ListSuggestionsErrors, ThrowOnError>({ url: '/suggestions', ...options });
+    }
+
+    /**
+     * Add a suggestion from a suggestions generation session, or a new version of the
+     * one with its dedup key.
+     */
+    public addSuggestion<ThrowOnError extends boolean = false>(options: Options<AddSuggestionData, ThrowOnError>): RequestResult<AddSuggestionResponses, AddSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<AddSuggestionResponses, AddSuggestionErrors, ThrowOnError>({
+            url: '/suggestions',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Start the caller's onboarding generation, once their inbox is connected.
+     */
+    public startSuggestionGeneration<ThrowOnError extends boolean = false>(options: Options<StartSuggestionGenerationData, ThrowOnError>): RequestResult<StartSuggestionGenerationResponses, StartSuggestionGenerationErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<StartSuggestionGenerationResponses, StartSuggestionGenerationErrors, ThrowOnError>({ url: '/suggestions/generate', ...options });
+    }
+
+    /**
+     * The caller's suggestion generations now.
+     */
+    public getSuggestionGeneration<ThrowOnError extends boolean = false>(options?: Options<GetSuggestionGenerationData, ThrowOnError>): RequestResult<GetSuggestionGenerationResponses, GetSuggestionGenerationErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetSuggestionGenerationResponses, GetSuggestionGenerationErrors, ThrowOnError>({ url: '/suggestions/generation', ...options });
+    }
+
+    /**
+     * Start fresh suggestions for the caller: at most once an hour, and not
+     * while one of their generations runs.
+     */
+    public regenerateSuggestions<ThrowOnError extends boolean = false>(options: Options<RegenerateSuggestionsData, ThrowOnError>): RequestResult<RegenerateSuggestionsResponses, RegenerateSuggestionsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RegenerateSuggestionsResponses, RegenerateSuggestionsErrors, ThrowOnError>({ url: '/suggestions/regenerate', ...options });
+    }
+
+    /**
+     * What a suggestions generation session reads before managing suggestions.
+     */
+    public reviewSuggestions<ThrowOnError extends boolean = false>(options?: Options<ReviewSuggestionsData, ThrowOnError>): RequestResult<ReviewSuggestionsResponses, ReviewSuggestionsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ReviewSuggestionsResponses, ReviewSuggestionsErrors, ThrowOnError>({ url: '/suggestions/review', ...options });
+    }
+
+    /**
+     * The caller loaded the app in their time zone.
+     */
+    public recordSuggestionsSeen<ThrowOnError extends boolean = false>(options: Options<RecordSuggestionsSeenData, ThrowOnError>): RequestResult<RecordSuggestionsSeenResponses, RecordSuggestionsSeenErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RecordSuggestionsSeenResponses, RecordSuggestionsSeenErrors, ThrowOnError>({ url: '/suggestions/seen', ...options });
+    }
+
+    /**
+     * The caller opened their feed: what it showed as new no longer is. The app
+     * sends it once the feed is on screen.
+     */
+    public recordSuggestionsViewed<ThrowOnError extends boolean = false>(options?: Options<RecordSuggestionsViewedData, ThrowOnError>): RequestResult<RecordSuggestionsViewedResponses, RecordSuggestionsViewedErrors, ThrowOnError> {
+        return (options?.client ?? this.client).post<RecordSuggestionsViewedResponses, RecordSuggestionsViewedErrors, ThrowOnError>({ url: '/suggestions/viewed', ...options });
+    }
+
+    /**
+     * Change an open suggestion from a suggestions generation session.
+     */
+    public rewriteSuggestion<ThrowOnError extends boolean = false>(options: Options<RewriteSuggestionData, ThrowOnError>): RequestResult<RewriteSuggestionResponses, RewriteSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<RewriteSuggestionResponses, RewriteSuggestionErrors, ThrowOnError>({
+            url: '/suggestions/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * The caller, or someone acting for them, acts on a suggestion: a background
+     * prompt suggestion starts its run when the person accepts it in the app (anyone
+     * else only takes it on); a note or prompt is done once they act on it (open its
+     * item or the composer), and shows in the feed's `done`. A routine suggestion is
+     * refused: the person saves its routine in the app, which makes it done.
+     */
+    public acceptSuggestion<ThrowOnError extends boolean = false>(options: Options<AcceptSuggestionData, ThrowOnError>): RequestResult<AcceptSuggestionResponses, AcceptSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<AcceptSuggestionResponses, AcceptSuggestionErrors, ThrowOnError>({
+            url: '/suggestions/{id}/accept',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * The caller, or their own agent, isn't interested in an open suggestion.
+     */
+    public dismissSuggestion<ThrowOnError extends boolean = false>(options: Options<DismissSuggestionData, ThrowOnError>): RequestResult<DismissSuggestionResponses, DismissSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<DismissSuggestionResponses, DismissSuggestionErrors, ThrowOnError>({ url: '/suggestions/{id}/dismiss', ...options });
+    }
+
+    /**
+     * Make a reply draft a suggestions generation session wrote the draft of an
+     * open reply suggestion. Nothing is sent.
+     */
+    public attachSuggestionDraft<ThrowOnError extends boolean = false>(options: Options<AttachSuggestionDraftData, ThrowOnError>): RequestResult<AttachSuggestionDraftResponses, AttachSuggestionDraftErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<AttachSuggestionDraftResponses, AttachSuggestionDraftErrors, ThrowOnError>({
+            url: '/suggestions/{id}/draft',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * The caller, or their own agent, takes back dismissing a suggestion, within
+     * five minutes of it.
+     */
+    public restoreSuggestion<ThrowOnError extends boolean = false>(options: Options<RestoreSuggestionData, ThrowOnError>): RequestResult<RestoreSuggestionResponses, RestoreSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RestoreSuggestionResponses, RestoreSuggestionErrors, ThrowOnError>({ url: '/suggestions/{id}/restore', ...options });
+    }
+
+    /**
+     * Retire an open suggestion from a suggestions generation session.
+     */
+    public retireSuggestion<ThrowOnError extends boolean = false>(options: Options<RetireSuggestionData, ThrowOnError>): RequestResult<RetireSuggestionResponses, RetireSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RetireSuggestionResponses, RetireSuggestionErrors, ThrowOnError>({
+            url: '/suggestions/{id}/retire',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

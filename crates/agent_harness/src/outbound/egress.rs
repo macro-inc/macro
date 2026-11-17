@@ -60,9 +60,13 @@ where
         self
     }
 
+    /// The connected apps and custom servers a session with `selection` is
+    /// given: the agent author's explicit list, or every app the owner
+    /// connected. Code executions read this too, so a program reaches exactly
+    /// the apps its agent was given.
     // Both runtime hosts use mcp_select's provider policy. This adapter only
     // loads owner-scoped rows and converts the result to proxy addresses.
-    async fn advertised_all(
+    pub async fn advertised_all(
         &self,
         owner: &MacroUserIdStr<'static>,
         selection: &AgentMcpServers,

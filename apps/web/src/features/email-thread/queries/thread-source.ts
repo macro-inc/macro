@@ -1,4 +1,5 @@
 import { invalidateInvitationScheduling } from '@queries/calendar/invitations';
+import { isListedLocalDraft } from '@queries/email/local-draft-entities';
 import { createLocalDraftSource } from '@queries/email/local-draft-source';
 import { localDraftMessage } from '@queries/email/local-drafts';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
@@ -140,12 +141,10 @@ export function createEmailThreadSource(
       };
     }
   );
-  const local = createLocalDraftSource(() => query.transport === 'graphql');
-  const discoveringDrafts = () =>
-    query.transport === 'graphql' && !local.ready();
+  const local = createLocalDraftSource(() => true);
+  const discoveringDrafts = () => !local.ready();
   const thread = () => {
     const base = snapshot().thread;
-    if (query.transport !== 'graphql') return base;
     // Establish the recovered draft before a reply editor can latch its seed.
     if (discoveringDrafts()) return undefined;
     const requested = threadId();
@@ -156,15 +155,7 @@ export function createEmailThreadSource(
           [draft.threadId, draft.serverThreadId].includes(requested) ||
           (base && [draft.threadId, draft.serverThreadId].includes(base.db_id))
       );
-    const edits = copies.filter(
-      (draft) =>
-        draft.status !== 'synced' &&
-        !(
-          draft.status === 'deleting' &&
-          draft.queuedAttemptId &&
-          draft.queuedAttemptId === draft.latestAttemptId
-        )
-    );
+    const edits = copies.filter(isListedLocalDraft);
     const messages = edits.map(localDraftMessage);
     if (!base) {
       const draft = edits.find((draft) => !draft.content.replying_to_id);
@@ -235,7 +226,6 @@ export function createEmailThreadSource(
     // A first-use working copy may not have reached the mutation queue, so
     // its temporary thread ID can still return NOT_FOUND from the server.
     isLocalDraft: () =>
-      query.transport === 'graphql' &&
       query.resolvedThreadId === threadId() &&
       !!thread() &&
       local
@@ -248,11 +238,8 @@ export function createEmailThreadSource(
             !draft.content.replying_to_id &&
             draft.status !== 'synced'
         ),
-    isError: () =>
-      query.isError && (query.transport !== 'graphql' || !thread()),
-    isLoading: () =>
-      discoveringDrafts() ||
-      (query.isLoading && (query.transport !== 'graphql' || !thread())),
+    isError: () => query.isError && !thread(),
+    isLoading: () => discoveringDrafts() || (query.isLoading && !thread()),
     isFetching: () => query.isFetching,
     isFetchingOlder: () => query.isFetchingNextPage,
     hasMore: () => query.hasNextPage,

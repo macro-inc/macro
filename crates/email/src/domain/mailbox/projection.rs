@@ -31,6 +31,8 @@ pub enum ProjectionEvent {
     },
     Message {
         #[serde(default)]
+        agent_correlation_id: Option<Uuid>,
+        #[serde(default)]
         actor: Option<MacroUserIdStr<'static>>,
         message_id: Uuid,
         thread_id: Uuid,
@@ -51,6 +53,8 @@ pub enum ProjectionEvent {
         thread_id: Uuid,
     },
     Organization {
+        #[serde(default)]
+        agent_correlation_id: Option<Uuid>,
         thread_id: Uuid,
         #[serde(default)]
         actor: Option<MacroUserIdStr<'static>>,
@@ -61,6 +65,22 @@ pub enum ProjectionEvent {
         actor_id: String,
         is_new: bool,
     },
+}
+
+impl ProjectionEvent {
+    fn agent_correlation_id(&self) -> Option<Uuid> {
+        match self {
+            Self::Message {
+                agent_correlation_id,
+                ..
+            }
+            | Self::Organization {
+                agent_correlation_id,
+                ..
+            } => *agent_correlation_id,
+            _ => None,
+        }
+    }
 }
 
 pub struct ProjectionLease {
@@ -228,9 +248,13 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
+            outlook.effect = tracing::field::Empty,
+            outlook.attachment_id = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );
-        self.project_leased(&lease).instrument(span).await
+        let correlation = lease.event.agent_correlation_id();
+        agent_correlation::context::scope(correlation, self.project_leased(&lease).instrument(span))
+            .await
     }
 
     async fn project_leased(&self, lease: &ProjectionLease) -> Result<bool, MailboxError> {
@@ -363,6 +387,7 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                 thread_id,
                 actor,
                 action,
+                ..
             } => {
                 if let (Some(actor), Some(action)) = (actor, action) {
                     self.effects

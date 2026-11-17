@@ -14,12 +14,11 @@ outbound-gmail = [
   "dep:gmail_client",
   "dep:html-escape",
   "dep:http",
-  "dep:lol_html",
   "dep:mailparse",
   "dep:serde_json",
 ]
 microsoft-gate = ["ports", "dep:redis"]
-outbound-outlook = ["dep:scraper", "dep:html-escape", "dep:calendar_events", "dep:chrono-tz", "ports", "dep:sha2", "dep:base64", "dep:reqwest", "dep:serde_json", "dep:url", "dep:httpdate", "dep:mailparse"]
+outbound-outlook = ["dep:macro_service_urls", "dep:scraper", "dep:html-escape", "dep:calendar_events", "dep:chrono-tz", "ports", "dep:sha2", "dep:base64", "dep:reqwest", "dep:serde_json", "dep:url", "dep:httpdate", "dep:mailparse", "dep:serde_path_to_error"]
 
 [dependencies]
 scraper = { workspace = true, optional = true }
@@ -35,12 +34,13 @@ gmail_client = { path = "../gmail_client", optional = true }
 html-escape = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 httpdate = { workspace = true, optional = true }
-lol_html = { workspace = true, optional = true }
-mail-builder = "0.4.3"
-mailparse = { version = "0.16.1", optional = true }
+macro_service_urls = { path = "../macro_service_urls", optional = true }
+mail-builder = { workspace = true }
+mailparse = { workspace = true, optional = true }
 models_email = { path = "../models_email" }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
+serde_path_to_error = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 thiserror = { workspace = true }

@@ -5,6 +5,7 @@ input_file: crates/folds/agent_fold/fixtures/real/subagent_opencode.jsonl
 ---
 SessionMetadata {
     notifications: [],
+    review_revisions: [],
     noop_turn: None,
     harness: OpenCode,
     model: Some(

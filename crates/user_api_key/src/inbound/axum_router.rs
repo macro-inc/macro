@@ -10,7 +10,8 @@ use axum::{
     routing::{delete, get, post},
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    AccountHolderOrInternal, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState,
 };
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
@@ -114,7 +115,7 @@ pub struct DeleteUserApiKeyParams {
 #[tracing::instrument(err, skip_all)]
 pub async fn create_user_api_key_handler<S, Auth>(
     State(state): State<UserApiKeyRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
     Json(body): Json<CreateUserApiKeyRequest>,
 ) -> Result<(StatusCode, Json<CreatedUserApiKey>), UserApiKeyError>
 where
@@ -143,7 +144,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn list_user_api_keys_handler<S, Auth>(
     State(state): State<UserApiKeyRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
 ) -> Result<Json<UserApiKeysList>, UserApiKeyError>
 where
     S: UserApiKeyService,
@@ -173,7 +174,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn delete_user_api_key_handler<S, Auth>(
     State(state): State<UserApiKeyRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
     Path(params): Path<DeleteUserApiKeyParams>,
 ) -> Result<StatusCode, UserApiKeyError>
 where

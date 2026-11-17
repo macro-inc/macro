@@ -1,5 +1,7 @@
 //! Outbound adapters for the MCP OAuth broker.
 
+/// Emailed sign-in codes through the authentication service.
+pub mod email_sign_in;
 /// FusionAuth-backed upstream OAuth provider.
 pub mod fusionauth;
 /// Postgres-backed store for all broker state.

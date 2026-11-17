@@ -49,6 +49,9 @@ pub enum FailureNoticeKind {
     /// The provider ended the run in failure; its own page for the run is
     /// where any detail it kept lives.
     ProviderRunFailed,
+    /// The runtime accepted the prompt but never handed it to the agent;
+    /// the fix is to send it again.
+    PromptNotDelivered,
 }
 
 /// An external page where the person can act on a [`FailureNotice`].

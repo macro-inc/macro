@@ -18,6 +18,7 @@ use uuid::Uuid;
   request_body = PutFileRequest,
   responses(
     (status = 200, body=PutFileResponse),
+    (status = 400, body=String),
     (status = 401, body=String),
     (status = 500, body=String),
   ),
@@ -28,6 +29,14 @@ pub async fn put_presigned_url(
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(request): Json<PutFileRequest>,
 ) -> Result<Response, Response> {
+    // Checked before any metadata is written, so a rejected request leaves no row.
+    if request
+        .content_length
+        .is_some_and(|length| i64::try_from(length).is_err())
+    {
+        return Err((StatusCode::BAD_REQUEST, "content length is out of range").into_response());
+    }
+
     let content_type = if let Some(content_type) = request.content_type {
         Ok(content_type)
     } else {
@@ -46,6 +55,8 @@ pub async fn put_presigned_url(
                     .into_response()
             })
     }?;
+
+    let request_content_length = request.content_length;
 
     let id: String = Uuid::new_v4().to_string();
     let static_file_key = s3_key::StaticFileKey::new(&id);
@@ -75,7 +86,7 @@ pub async fn put_presigned_url(
 
     let upload_url = ctx
         .storage_client
-        .put_presigned_url(s3_key.clone(), content_type.clone())
+        .put_presigned_url(s3_key.clone(), content_type.clone(), request_content_length)
         .await
         .map_err(|err| {
             tracing::error!(error=?err, "could not create presigned url");

@@ -44,8 +44,9 @@ AI system prompts: one module per prompt section, each exporting a
 
 - Direct session-aware search/listing stays available in code mode; do not route conversation work to legacy chat tools or SDK namespaces.
 
-- Canvas live reads/edits stay on `ReadCanvas`/`ApplyCanvasEdits`/`EditCanvas`, including code mode;
-  the public SDK document content endpoint does not represent the shared scene.
+- Code mode reads and edits canvases through the SDK's `document.canvas()` handle, never
+  `content()`, which does not represent the shared scene, and sees one by returning
+  `images: [await canvas.render()]`, which reach the model as image blocks.
 The agent-session prompt distinguishes typed `<m-notifications>` system facts
 from user requests and defines the notification-only `<noop/>` contract.
 In-app replies use `m-document-mention` with `blockName: "routine"` for routines;
@@ -54,7 +55,7 @@ A form for a channel is a poll (one required select question, tally visible),
 posted once as `<m-document-card>` with `blockName: "form"`; the card's message
 reference grants the channel View, so no second message or link is needed.
 
-- `src/privacy.rs` supplies generation/judge privacy policy; `compose` joins runtime memory sections without static lifetimes.
+- `src/privacy.rs` supplies the memory generation privacy policy (the memory judge asks its rules as Jev questions); `compose` joins runtime memory sections without static lifetimes.
 
 ## Checks
 

@@ -357,6 +357,12 @@ impl EntityItem {
             SoupItem::DatabaseRow(_) => {
                 unreachable!("ListEntities tool does not surface DatabaseRow rows")
             }
+            SoupItem::Harness(_) => {
+                unreachable!("ListEntities tool does not surface runtimes")
+            }
+            SoupItem::Team(_) => {
+                unreachable!("ListEntities tool does not surface teams")
+            }
             SoupItem::ForeignEntity(foreign_entity) => EntityItem::ForeignEntity {
                 id: foreign_entity.id,
                 foreign_entity_id: foreign_entity.foreign_entity_id,
@@ -409,7 +415,9 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             | SoupItem::CrmContact(_)
             | SoupItem::ForeignEntity(_)
             | SoupItem::AgentSession(_)
-            | SoupItem::DatabaseRow(_) => return false,
+            | SoupItem::DatabaseRow(_)
+            | SoupItem::Harness(_)
+            | SoupItem::Team(_) => return false,
         };
         properties
             .iter()

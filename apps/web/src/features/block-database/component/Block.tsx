@@ -2,6 +2,7 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { toQuerySchema } from '@app/features/database-query/queries/query-source';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { createSearchParams } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -23,6 +24,7 @@ import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import {
   onDatabaseBatchCommitted,
   undoDatabaseChange,
@@ -59,7 +61,12 @@ import { createDatabaseSearch } from '../../database/primitives/database-search'
 import { createDatabaseUndo } from '../../database/primitives/undo-controller';
 import { createViewCreation } from '../../database/primitives/view-creation';
 import { databaseChat } from '../core/chat-context';
-import { createDatabaseViewSelection } from '../primitives/view-selection';
+import { databaseDetailSearch } from '../database-route';
+import {
+  createDatabaseViewSelection,
+  followRouteLocation,
+  selectLocation,
+} from '../primitives/view-selection';
 import { searchDatabase } from '../queries/database-search';
 import { toViewColumn } from '../queries/table-rows';
 import { trashDatabase } from '../queries/trash-database';
@@ -130,14 +137,23 @@ const Block: Component = () => {
     // Another table's grid takes the request when it mounts.
     openRequestedRecord();
   }
+  const [routeSearch, setRouteSearch] =
+    createSearchParams(databaseDetailSearch);
+  followRouteLocation(
+    {
+      tableId: () => routeSearch.tableId,
+      viewId: () => routeSearch.viewId,
+    },
+    userId,
+    setSelection,
+    () => setRouteSearch({}, { mode: 'replace', history: 'replace' })
+  );
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: (params: Record<string, string>) => {
-      if (params.tableId && params.viewId)
-        setSelection((current) => ({
-          ...current,
-          tableId: params.tableId,
-          views: { ...current.views, [params.tableId]: params.viewId },
-        }));
+      // A link opened in the app (`webUrl()` on a table or view) names a
+      // table and maybe a view; a related record names its row instead.
+      if (params.tableId && !params.rowId)
+        selectLocation(setSelection, params.tableId, params.viewId);
       if (params.tableId && params.rowId)
         fireAndForget(
           openRelated({
@@ -234,7 +250,13 @@ const Block: Component = () => {
       onCleanup(stop);
     },
     offer: (label, undo) =>
-      toast.success(label, { actions: [{ label: 'Undo', onClick: undo }] }),
+      toast.success(label, {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
+        actions: [
+          { label: 'Undo', icon: ArrowCounterClockwise, onClick: undo },
+        ],
+      }),
   });
   // Without input focus, so a cell editor keeps Ctrl+Z for its own text.
   registerHotkey({
@@ -452,6 +474,7 @@ const Block: Component = () => {
                           </Show>
                           <DatabaseGrid
                             host="block"
+                            schema="opened"
                             databaseId={databaseId}
                             table={table()}
                             canEdit={canEdit() && !activeCreation()}

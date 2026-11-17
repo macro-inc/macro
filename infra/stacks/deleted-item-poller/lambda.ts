@@ -127,6 +127,20 @@ export class DeleteItemPoller extends pulumi.ComponentResource {
       {
         rule: this.rule.name,
         arn: this.lambda.arn,
+        retryPolicy: { maximumEventAgeInSeconds: 60, maximumRetryAttempts: 0 },
+      },
+      { parent: this }
+    );
+
+    // The next scheduled run picks up whatever a failed run left in trash.
+    // A retry would queue again the documents the failed run already queued
+    // for deletion, before the delete worker has removed them.
+    new aws.lambda.FunctionEventInvokeConfig(
+      `${LAMBDA_BASE_NAME}-async-policy`,
+      {
+        functionName: this.lambda.name,
+        maximumEventAgeInSeconds: 60,
+        maximumRetryAttempts: 0,
       },
       { parent: this }
     );

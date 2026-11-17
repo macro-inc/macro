@@ -39,6 +39,8 @@ export type ComponentDoc = {
   /** One or two sentences on what the component is for. */
   description: string;
   status?: DocStatus;
+  /** Allow side-by-side previews at their real application widths. */
+  wide?: boolean;
   /** Import line shown above the demos. */
   import?: string;
   /**

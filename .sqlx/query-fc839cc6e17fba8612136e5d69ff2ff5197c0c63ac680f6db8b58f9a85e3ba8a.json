@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO scheduled_action_code_upgrade\n                (id, action_id, from_sdk, to_sdk, outcome, previous_task)\n            VALUES ($1, $2, $3, $4, 'running', $5)\n            ON CONFLICT (action_id, to_sdk) DO UPDATE\n            SET outcome = 'running', previous_task = EXCLUDED.previous_task,\n                from_sdk = EXCLUDED.from_sdk, task = NULL, reason = NULL, updated_at = now()\n            WHERE scheduled_action_code_upgrade.outcome = 'running'\n              AND scheduled_action_code_upgrade.updated_at\n                  < now() - make_interval(mins => $6::int)\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fc839cc6e17fba8612136e5d69ff2ff5197c0c63ac680f6db8b58f9a85e3ba8a"
+}

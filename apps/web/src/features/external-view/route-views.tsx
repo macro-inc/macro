@@ -12,14 +12,12 @@ import {
 import { enableWhatsappLinked } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import { Button } from '@ui';
-import { lazy, onMount, Show } from 'solid-js';
+import { onMount, Show } from 'solid-js';
+import { ExternalChatEntry } from '../external-chat/external-chat-entry';
+import { ExternalView } from './external-view';
 import { ExternalViewSkeleton } from './external-view-skeleton';
-
-const ExternalView = lazy(async () => ({
-  default: (await import('./external-view')).ExternalView,
-}));
 
 function DisabledExternalRoute() {
   const navigate = useNavigate();
@@ -50,11 +48,6 @@ export const ExternalRouteView = withAuth(() => {
     </Show>
   );
 }, ExternalViewSkeleton);
-
-const ExternalChatEntry = lazy(async () => ({
-  default: (await import('../external-chat/external-chat-entry'))
-    .ExternalChatEntry,
-}));
 
 /** Touch drills into a group full-screen; Back returns to External's list. */
 function BackToExternal() {

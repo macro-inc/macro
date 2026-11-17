@@ -1,8 +1,4 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
@@ -479,18 +475,6 @@ export function removeSoupEntitiesFromQueriesReferencing(
 }
 
 /**
- * Remove entities from soup queries that filter out done content, leaving
- * them in place everywhere else (e.g. mail "All", which shows done threads).
- * Use with an entity-level done patch so the remaining rows reflect the new
- * state.
- */
-export function removeSoupEntitiesFromDoneFilteredQueries(
-  entityIds: Set<string>
-): SoupTransaction {
-  return removeSoupEntitiesWhere(entityIds, soupQueryExcludesDone);
-}
-
-/**
  * Prepend a cached entity to the done-excluding soup queries (see
  * `soupQueryExcludesDone`) whose pages don't contain it. A fresh notification
  * puts its entity back into those feeds server-side, but the client row may
@@ -745,6 +729,9 @@ export function removeSearchEntities(
  * `created` marks an entity that did not exist a moment ago, so it sorts first
  * in newest-first lists. It is inserted into the REST lists whose filters admit
  * it, without refetching any list, in either transport.
+ *
+ * `notified` marks a new notification about the entity, which a mounted
+ * `notified_at` list must show even if the entity isn't cached yet.
  */
 export async function refetchSoupEntity(
   entityId: string,
@@ -754,19 +741,23 @@ export async function refetchSoupEntity(
     ownTouch?: boolean;
     refreshGraphql?: boolean;
     created?: boolean;
+    notified?: boolean;
   }
 ): Promise<void> {
+  // Team notifications hydrate through their inbox feed, never the generic REST cache.
+  if (entityType === 'team') return;
+
   if (options?.refreshGraphql) {
     fireAndForget(refreshActiveGraphqlSoupQueries(), 'soup-normalized-cache');
   }
 
   // GraphQL lists never read this cache, so a miss means no REST list shows
   // the entity. Own-touch inserts still land because Home's touched_by_me
-  // feed stays on REST.
+  // feed stays on REST, and notified ones because notified_at lists do.
   if (
     !options?.ownTouch &&
     !options?.created &&
-    isFeatureEnabled(enableGraphqlSoup) &&
+    !(options?.notified && mountedNotifiedLists().length > 0) &&
     !hasSoupEntity(entityId)
   ) {
     return;
@@ -807,8 +798,40 @@ export async function refetchSoupEntity(
       } else {
         invalidateAllSoup();
       }
+      if (options?.notified) {
+        fireAndForget(
+          rereadNotifiedListsAfterFirstRead(),
+          'soup-normalized-cache'
+        );
+      }
     }
   }
+}
+
+/** Lists on screen ordered by `notified_at`, which only REST serves. */
+function mountedNotifiedLists() {
+  return queryClient
+    .getQueryCache()
+    .findAll({ queryKey: soupKeys.astItems._def, type: 'active' })
+    .filter((query) => JSON.stringify(query.queryKey).includes('notified_at'));
+}
+
+/**
+ * A list's first read has no pages to insert into, and invalidating reuses it
+ * rather than restarting it, so its response can predate a new notification.
+ * Read each of those lists again once its own first read settles.
+ */
+async function rereadNotifiedListsAfterFirstRead(): Promise<void> {
+  const firstReads = mountedNotifiedLists().filter(
+    (query) =>
+      query.state.data === undefined && query.state.fetchStatus === 'fetching'
+  );
+  await Promise.allSettled(
+    firstReads.map(async (query) => {
+      await Promise.allSettled([query.promise]);
+      queryClient.invalidateQueries({ queryKey: query.queryKey, exact: true });
+    })
+  );
 }
 
 /**
@@ -899,6 +922,12 @@ export function buildSingleEntityFilter(
     .with('crmContact', () => {
       throw new Error('CRM contacts are read through GraphQL Soup only');
     })
+    .with('harness', () => {
+      throw new Error('Runtimes are read through GraphQL Soup only');
+    })
+    .with('team', () => {
+      throw new Error('Teams are notification-only GraphQL Soup entries');
+    })
     .exhaustive(() => {
       throw new Error(`Unknown soup entity type: ${entityType}`);
     });
@@ -962,7 +991,7 @@ export function optimisticUpdateSoupItemUpdatedAt(
   updatedAt: string
 ): SoupTransaction | undefined {
   const current = getSoupEntityById(itemId);
-  if (!current || current.tag !== tag) return;
+  if (!current || current.tag !== tag || current.tag === 'team') return;
 
   if (current.tag === 'channel') {
     if (

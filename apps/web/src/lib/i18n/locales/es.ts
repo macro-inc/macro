@@ -53,8 +53,6 @@ export default {
     projectBadge: 'Proyecto',
     newProject: 'Nuevo proyecto',
     contentAlreadyOpen: 'El contenido ya está abierto',
-    unableToOpenConversation:
-      'No se pudo abrir la conversación. Inténtalo de nuevo.',
     mobileSearchPlaceholder: 'Buscar…',
     closeSearch: 'Cerrar búsqueda',
     searchFullTextFor: 'Buscar en todo el texto “{{query}}”',
@@ -613,10 +611,6 @@ export default {
       other: '{{accepted}} de {{count}} elementos marcados como no hechos',
     },
     toastMarkNotDoneFailed: 'No se pudo marcar como no hecho',
-    toastThreadStaysDone:
-      'Este hilo no tiene mensajes recibidos, así que sigue marcado como hecho',
-    toastThreadsStayDone:
-      'Estos hilos no tienen mensajes recibidos, así que siguen marcados como hechos',
     toastCountNotRestored: {
       one: 'No se pudo restaurar {{count}} elemento.',
       many: 'No se pudieron restaurar {{count}} de elementos.',
@@ -792,7 +786,7 @@ export default {
     tabMobileApp: 'App móvil',
     tabTags: 'Etiquetas',
     tabIntegrations: 'Integraciones',
-    tabRuntimes: 'Entornos de ejecución',
+    tabRuntimes: 'Máquinas',
     tabMcpServer: 'Servidor MCP',
     tabApiKeys: 'Claves de API',
     tabBots: 'Bots',

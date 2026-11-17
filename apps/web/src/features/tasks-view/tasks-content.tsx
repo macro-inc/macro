@@ -37,6 +37,7 @@ export function TasksContent(props: TaskListProps) {
             emptyContent={props.emptyContent}
             loadingContent={props.loadingContent}
             errorContent={props.errorContent}
+            listStart={props.listStart}
           />
         </Match>
       </Switch>

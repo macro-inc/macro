@@ -236,15 +236,20 @@ async fn insert_foreign_entity_notification(
     let seen_at: Option<chrono::NaiveDateTime> = seen.then(|| Utc::now().naive_utc());
     sqlx::query!(
         r#"
-        INSERT INTO user_notification (user_id, notification_id, state, seen_at)
+        INSERT INTO user_notification (
+            user_id, notification_id, state, seen_at,
+            event_item_type, event_item_id, notification_event_type
+        )
         VALUES ($1, $2, CASE WHEN $3::bool THEN 'done'::notification_state
             WHEN $4::timestamp IS NOT NULL THEN 'seen'::notification_state
-            ELSE 'unseen'::notification_state END, $4)
+            ELSE 'unseen'::notification_state END, $4,
+            'foreign_entity', $5, 'github_pr_status_changed')
         "#,
         user_id,
         notification_id,
         done,
         seen_at,
+        foreign_entity_id.to_string(),
     )
     .execute(pool)
     .await

@@ -128,8 +128,10 @@ async fn word_document_requests_carry_the_token_and_surface_agent_errors() {
         .await
         .unwrap_err();
     assert_eq!(
-        error.to_string(),
-        "No paragraph or block has id x. (HTTP 422 Unprocessable Entity)"
+        error
+            .downcast_ref::<crate::domain::word_document::WordDocumentRejected>()
+            .map(ToString::to_string),
+        Some("No paragraph or block has id x.".to_owned())
     );
 
     let bodies = bodies.lock().unwrap();
@@ -188,4 +190,103 @@ async fn edit_reports_the_revision_the_worker_left() {
     assert_eq!(result.edits_applied, 2);
     assert_eq!(result.clarification, None);
     assert_eq!(result.revision.as_deref(), Some("AQID"));
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn spreadsheet_statuses_keep_their_meaning() {
+    use crate::domain::spreadsheet::{SpreadsheetError, SpreadsheetRequest};
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
+
+    let worker = MockServer::start().await;
+    for (prefix, status, error) in [
+        (
+            "/conflict",
+            409,
+            "The spreadsheet changed since it was read.",
+        ),
+        ("/invalid", 400, "Unknown sheet Forecast."),
+        (
+            "/unavailable",
+            502,
+            "The spreadsheet sync service is unavailable. Please retry.",
+        ),
+    ] {
+        Mock::given(matchers::method("POST"))
+            .and(matchers::path(format!("{prefix}/spreadsheet")))
+            .respond_with(
+                ResponseTemplate::new(status).set_body_json(serde_json::json!({ "error": error })),
+            )
+            .mount(&worker)
+            .await;
+    }
+    let request = SpreadsheetRequest::Edit {
+        expected_revision: "seen".into(),
+        operations: vec![],
+    };
+    let token = "token".to_owned().into();
+
+    let conflict = ReqwestEditingWorkerClient::from_url(format!("{}/conflict", worker.uri()))
+        .spreadsheet("document", &token, &request)
+        .await
+        .unwrap_err();
+    let invalid = ReqwestEditingWorkerClient::from_url(format!("{}/invalid", worker.uri()))
+        .spreadsheet("document", &token, &request)
+        .await
+        .unwrap_err();
+    let unavailable = ReqwestEditingWorkerClient::from_url(format!("{}/unavailable", worker.uri()))
+        .spreadsheet("document", &token, &request)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        &conflict,
+        SpreadsheetError::RevisionConflict(message)
+            if message == "The spreadsheet changed since it was read."
+    ));
+    assert!(matches!(
+        &invalid,
+        SpreadsheetError::Invalid(message) if message == "Unknown sheet Forecast."
+    ));
+    assert!(matches!(unavailable, SpreadsheetError::Failed(_)));
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn spreadsheet_instructions_carry_usage_with_every_outcome() {
+    use crate::domain::spreadsheet::SpreadsheetWriterOutcome;
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
+
+    let worker = MockServer::start().await;
+    Mock::given(matchers::method("POST"))
+        .and(matchers::path("/spreadsheet/instructions"))
+        .and(matchers::body_partial_json(serde_json::json!({
+            "documentId": "document",
+            "instructions": "Total the Revenue sheet.",
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "outcome": "refused",
+            "reason": "There is no Revenue sheet.",
+            "usage": [{"model": "claude-sonnet-5-5", "inputTokens": 400, "outputTokens": 30}],
+        })))
+        .mount(&worker)
+        .await;
+
+    let result = ReqwestEditingWorkerClient::from_url(worker.uri())
+        .spreadsheet_instructions(
+            "document",
+            &"token".to_owned().into(),
+            "Total the Revenue sheet.",
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result.outcome,
+        SpreadsheetWriterOutcome::Refused { reason } if reason == "There is no Revenue sheet."
+    ));
+    assert_eq!(result.usage.len(), 1);
+    assert_eq!(result.usage[0].model, "claude-sonnet-5-5");
+    assert_eq!(result.usage[0].input_tokens, 400);
+    assert_eq!(result.usage[0].output_tokens, 30);
 }

@@ -20,6 +20,8 @@ const policies = {
     'authoritative: revision and sharing need server confirmation',
   DeleteSavedView:
     'authoritative: revision-checked deletion and collection revalidation',
+  ReorderSavedViews:
+    'authoritative: per-viewer order; revalidate the ordered cursor chain',
   MarkEmailThreadSeen: 'resolver',
   MarkEmailThreadUnread: 'resolver',
   SetEmailThreadArchived: 'resolver',
@@ -61,8 +63,19 @@ const policies = {
     'authoritative: exact affected notification IDs required for undo',
   UndoWorkFeedItemsDone:
     'authoritative: the server returns the restored feed entries',
-  MoveEntities:
-    'authoritative: destination authorization and membership refresh',
+  MarkNotificationInboxRowsDone:
+    'custom: inbox rows stay hidden until the server removes them',
+  ClearNotificationInbox:
+    'custom: rows the stored clear covers stay hidden while the server works through it',
+  UndoNotificationInboxClear:
+    'custom: cleared rows show again at once; the server restores each state',
+  MarkNotificationInboxNotificationDone:
+    'custom: the notification stays hidden until the server returns its row',
+  UndoNotificationInboxRowsDone:
+    'authoritative: the server returns the restored inbox entries',
+  MarkNotificationInboxRowsSeen:
+    'custom: inbox rows read as seen until the server returns their entries',
+  MoveEntities: 'resolver',
   UpdateEntitySharePolicies:
     'authoritative: permission changes require server confirmation',
   TrashEntities:

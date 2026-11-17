@@ -4,6 +4,7 @@
 //! session of every agent bound to this harness.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::watch;
@@ -12,6 +13,7 @@ use tokio_retry::strategy::ExponentialBackoff;
 use tokio_tungstenite::tungstenite;
 use tokio_util::task::AbortOnDropHandle;
 
+use crate::computer::Computer;
 use crate::config::{Harness, HarnessCredentials, MacroApi};
 use crate::harness::{self, BridgeEnd, Handoffs, LineTap};
 use crate::outbound::acp_process::RunningAgent;
@@ -22,6 +24,11 @@ use crate::turns::ActiveTurns;
 mod test;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long one dial may take before it is retried.
+const DIAL_TIMEOUT: Duration = Duration::from_secs(5);
+/// A connection that lasted this long was healthy: its loss is redialed at
+/// once rather than after a backoff step.
+const HEALTHY_CONNECTION: Duration = Duration::from_secs(10);
 const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(30);
 
 /// The daemon's connection to its harness's sessions.
@@ -47,6 +54,7 @@ impl Runtime {
         turns: ActiveTurns,
         adopted: Option<RunningAgent>,
         handoffs: Handoffs,
+        computer: Option<Arc<Computer>>,
     ) -> Self {
         let (connected_tx, connected) = watch::channel(false);
         let task = tokio::spawn(serve(
@@ -59,11 +67,17 @@ impl Runtime {
             connected_tx,
             adopted,
             handoffs,
+            computer,
         ));
         Self {
             connected,
             _task: AbortOnDropHandle::new(task),
         }
+    }
+
+    /// Follows whether the runtime connection is currently up.
+    pub fn connection_state(&self) -> watch::Receiver<bool> {
+        self.connected.clone()
     }
 
     /// Wait briefly for the supervisor to connect before dispatching a prompt.
@@ -100,11 +114,13 @@ async fn serve(
     connected: watch::Sender<bool>,
     mut adopted: Option<RunningAgent>,
     mut handoffs: Handoffs,
+    computer: Option<Arc<Computer>>,
 ) {
     let mut backoff = reconnect_strategy();
     loop {
+        let mut lasted = None;
         let dialed = tokio::select! {
-            dialed = tokio::time::timeout(CONNECT_TIMEOUT, link::dial(&gateway_url, &token)) => dialed,
+            dialed = tokio::time::timeout(DIAL_TIMEOUT, link::dial(&gateway_url, &token)) => dialed,
             request = handoffs.next() => {
                 answer_between_bridges(request, adopted.take(), &turns);
                 return;
@@ -123,6 +139,7 @@ async fn serve(
                     &turns,
                     adopted.take(),
                     &mut handoffs,
+                    computer.clone(),
                 )
                 .await
                 {
@@ -138,9 +155,7 @@ async fn serve(
                     }
                 }
                 connected.send_replace(false);
-                if started.elapsed() >= MAX_RECONNECT_DELAY {
-                    backoff = reconnect_strategy();
-                }
+                lasted = Some(started.elapsed());
             }
             Ok(Err(error)) => {
                 if !worth_redialing(&error) {
@@ -152,7 +167,7 @@ async fn serve(
             Err(_) => tracing::warn!("runtime connection timed out; reconnecting"),
         }
         tokio::select! {
-            () = tokio::time::sleep(backoff.next().unwrap_or(MAX_RECONNECT_DELAY)) => {}
+            () = tokio::time::sleep(redial_delay(lasted, &mut backoff)) => {}
             request = handoffs.next() => {
                 answer_between_bridges(request, adopted.take(), &turns);
                 return;
@@ -200,6 +215,16 @@ fn worth_redialing(error: &tungstenite::Error) -> bool {
     !status.is_client_error()
         || status == tungstenite::http::StatusCode::REQUEST_TIMEOUT
         || status == tungstenite::http::StatusCode::TOO_MANY_REQUESTS
+}
+
+/// How long to wait before the next dial, given how long the last
+/// connection lasted (`None` when the dial itself failed).
+fn redial_delay(lasted: Option<Duration>, backoff: &mut ExponentialBackoff) -> Duration {
+    if lasted.is_some_and(|lasted| lasted >= HEALTHY_CONNECTION) {
+        *backoff = reconnect_strategy();
+        return Duration::ZERO;
+    }
+    backoff.next().unwrap_or(MAX_RECONNECT_DELAY)
 }
 
 fn reconnect_strategy() -> ExponentialBackoff {

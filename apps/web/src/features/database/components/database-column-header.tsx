@@ -33,6 +33,7 @@ import {
   type DatabaseColumnCastsSource,
   type DatabaseColumnConversion,
   type DatabaseColumnTypeChange,
+  type DatabaseRelationTargets,
   type DatabaseSchemaChange,
 } from '../core/column-schema';
 import { type DatabaseViewColumn, isOptionColumn } from '../core/database-view';
@@ -63,7 +64,7 @@ export type DatabaseColumnHeaderProps = {
     conversion: DatabaseColumnConversion
   ) => DatabaseSchemaChange<string>;
   onDelete?: (columnId: string) => DatabaseSchemaChange;
-  relationTables?: { id: string; name: string }[];
+  relationTables?: DatabaseRelationTargets;
   /** The type menu's dry run; without it every type is offered as is. */
   columnCasts?: DatabaseColumnCastsSource;
   dragHandle?: JSX.HTMLAttributes<HTMLDivElement>;
@@ -122,7 +123,8 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
     mounted = false;
     props.registerRename?.(undefined);
   });
-  const canRename = () => !!props.canRename && !!props.onRename;
+  const canRename = () =>
+    !props.column.fixedOptions && !!props.canRename && !!props.onRename;
   const focusHeader = () => header?.isConnected && header.focus();
   const restoreFocus = () => queueMicrotask(focusHeader);
   const columnRename = createInlineRename({
@@ -389,6 +391,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                 <PropertyIcon
                   relation={!!props.column.relation}
                   formula={!!props.column.formula}
+                  percentage={!!props.column.percentage}
                   type={props.column.dataType}
                   entityType={props.column.specificEntityType}
                 />
@@ -469,7 +472,8 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                                 group === 'edit' &&
                                 props.onChangeType &&
                                 canRename() &&
-                                !props.column.formula
+                                (!props.column.formula ||
+                                  props.column.dataType === 'NUMBER')
                               }
                             >
                               <ColumnTypeMenu
@@ -482,16 +486,17 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                                   fireAndForget(changeType(change), 'database')
                                 }
                                 onFormula={
-                                  formulas &&
-                                  (() => {
-                                    const replace = formulaReplaces();
-                                    requested = () =>
-                                      setFormulaEditing({
-                                        kind: 'create',
-                                        replace,
-                                      });
-                                    setMenuOpen(false);
-                                  })
+                                  formulas && !props.column.formula
+                                    ? () => {
+                                        const replace = formulaReplaces();
+                                        requested = () =>
+                                          setFormulaEditing({
+                                            kind: 'create',
+                                            replace,
+                                          });
+                                        setMenuOpen(false);
+                                      }
+                                    : undefined
                                 }
                                 onConvertToNewColumn={
                                   props.onConvert &&
@@ -519,6 +524,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
               <PropertyIcon
                 relation={!!props.column.relation}
                 formula={!!props.column.formula}
+                percentage={!!props.column.percentage}
                 type={props.column.dataType}
                 entityType={props.column.specificEntityType}
               />

@@ -4,15 +4,20 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { QueryDefinition } from './queryDefinition';
+import type { SaveQueryChart } from './saveQueryChart';
 
 /**
- * Request body for saving a query.
+ * Request body for saving a question.
  */
 export interface SaveQueryRequest {
+  /** The result columns a chart of the answer plots, checked against what
+the `SELECT` returns. The chart itself lives with the answer's block. */
+  chart?: SaveQueryChart;
   /** The database whose tables win name resolution. The caller must be
 able to see it. */
   databaseId?: string;
-  /** What the query asks: `{"version": 1, "query": "<SELECT>"}`. */
+  /** What the question asks: `{"version": 1, "query": "<SELECT>"}`. */
   definition: QueryDefinition;
 }

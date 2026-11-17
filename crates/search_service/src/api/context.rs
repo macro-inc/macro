@@ -23,6 +23,8 @@ pub type SearchAuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwt
 pub struct SearchHandlerState {
     /// Read-only database connection for search queries
     pub db: ReadOnlyPool,
+    /// Primary database for fresh CRM authorization.
+    pub crm_db: sqlx::PgPool,
     /// OpenSearch client for full-text search
     pub opensearch_client: Arc<OpensearchClient>,
     /// Resolves the caller's team membership to mint CRM capability receipts.
@@ -40,9 +42,24 @@ pub struct SearchHandlerState {
     /// Says whose calendar each event hit is on and what the caller is there,
     /// by the rule every calendar reader shares.
     pub calendar_event_labels: Arc<dyn CalendarEventLabelReader>,
+    /// Which callers get dynamic multi-term matching on document content.
+    pub term_matching_rollout: Arc<dyn crate::TermMatchingRollout>,
 }
 
 impl SearchHandlerState {
+    /// Assemble the email search scoping use case from read-only adapters.
+    pub(crate) fn email_search(
+        &self,
+    ) -> crate::domain::email_search::EmailSearchService<
+        crate::outbound::email_search::EmailSearchPgSource,
+    > {
+        crate::domain::email_search::EmailSearchService(
+            crate::outbound::email_search::EmailSearchPgSource {
+                db: self.db.clone(),
+            },
+        )
+    }
+
     /// Assemble the agent-session search use case from read-only adapters.
     pub(crate) fn agent_session_search(
         &self,

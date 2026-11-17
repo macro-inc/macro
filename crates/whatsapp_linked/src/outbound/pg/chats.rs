@@ -25,6 +25,24 @@ fn merge(into: &mut ChatUpdate, update: &ChatUpdate) {
     }
 }
 
+/// Serializes recording chat anchors with adding chats, per user. Under read
+/// committed each would otherwise miss the other's uncommitted write: a group
+/// added while the replica records its first message would wait for a
+/// message forever.
+pub(super) async fn lock_anchors_in(
+    tx: &mut Transaction<'_, Postgres>,
+    user: &str,
+) -> ExternalChatResult<()> {
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended('external-chat:whatsapp-anchors:' || $1, 0))",
+        user
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failure)?;
+    Ok(())
+}
+
 /// Upsert chat-list rows in a few statements for the whole batch; signal the
 /// owner's list once if any row changed. A message for an added chat that was
 /// waiting for one makes it ready to import (`waiting_for_phone`).
@@ -48,6 +66,9 @@ pub(super) async fn update_chats_in(
                 merged.insert(chat.jid.clone(), chat);
             }
         }
+    }
+    if merged.values().any(|chat| chat.anchor.is_some()) {
+        lock_anchors_in(tx, &account.user_id).await?;
     }
     let (created, updated): (Vec<&ChatUpdate>, Vec<&ChatUpdate>) =
         merged.values().partition(|chat| chat.create);

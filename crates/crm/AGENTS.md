@@ -9,13 +9,29 @@ tools/HTTP/GraphQL surfaces over them.
 ## Start here
 
 - `src/domain/service.rs`, `src/domain/pipelines.rs`: core use cases.
+- `src/domain/pipeline_commercial.rs`: protected Outcome and amount/currency
+  identities, insert defaults and write validation, for pipelines that track a
+  record; `apply_ops` runs it before stage-requirement validation. A generic
+  pipeline, or one from a writer older than the migration, has no such fields.
+  See the [outcome/currency design](../../docs/design/crm-outcome-currency.md)
+  for migration assumptions.
+- `src/domain/pipelines/requirements.rs`: stage-entry rules keyed by column and
+  option IDs. `apply_ops` validates every pipeline write under the pipeline write
+  guard; agent/CSV workflows use the same service. Deletions cascade rules.
 - `src/domain/pipeline_workflows/`: pipeline entry/field/record ops built on
   the shared `databases` engine (Sales pipelines are a `databases` consumer).
 - `src/domain/crm_csv.rs`, `src/domain/crm_transfer.rs`: CSV import/export for
-  agents (companies, pipeline entries, pipeline exports). Writes go through the
+  agents and the SDK (companies, pipeline entries, pipeline exports as text or
+  a saved file). Writes go through the
   pipeline workflows and `CrmService`; CSV files reach documents through the
   `CsvFiles` port, implemented in `ai_tools::crm_csv_files`.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
+- `src/inbound/pipeline_workflows.rs`: HTTP routes over the pipeline workflows
+  and CSV transfers (entries by record, fields by name, options by label),
+  merged into `/crm` beside `src/inbound/pipelines.rs`; the SDK's pipeline
+  entry methods call them, and `GET /crm/pipelines/details` (every pipeline
+  with its fields and version, as `ListPipelines` sees them) backs
+  `crm.pipelines.listWithFields()`.
 - `src/inbound/toolset.rs` (+ `toolset/*.rs`): AI tool definitions.
 - `src/outbound/companies_repo.rs`: the Postgres adapter for companies/contacts.
 - `SALES_BACKFILL.md`: how the legacy-CRM-to-Sales migration behaves.
@@ -53,7 +69,10 @@ tools/HTTP/GraphQL surfaces over them.
 
 - `cargo test -p crm` (`SQLX_OFFLINE` unset; needs a local MacroDB — see
   `.agents/rules/rust/guardrails.md`). After query/migration changes, run
-  `nix develop --command just prepare_db` from the repository root.
+  `just sqlx::prepare_db "$DATABASE_URL"` from the repository root inside Nix,
+  using the same isolated database as the tests.
+- For member-access changes, also run `cargo test -p crm --all-features member_access`;
+  the HTTP, search and tool revocation test requires the `search` feature.
 - After tool input or description changes, regenerate frontend tool types and
   public MCP reference pages using the
   [entity creation guide](../../docs/guides/add-entity.md#13-ai-and-mcp-tools);
@@ -61,6 +80,31 @@ tools/HTTP/GraphQL surfaces over them.
 
 ## Gotchas
 
+- Selected-email policy types live in `domain/email_rules.rs`; their validation
+  checks format/resource bounds only. Target authorization and activation are
+  separate operations. Selected storage keeps legacy `enabled` false;
+  recognize `enabled OR selected_enabled` for compatible grant readers without
+  bypassing legacy-write guards. Keep the scalar predicate, set-based ingestion
+  and inlined Team reader in parity; live contact/company selectors follow
+  same-team role visibility and retain every exclusion veto. Activation remains
+  unavailable until the policy API and generation-safe backfill are ready.
+  Private rule controls use the membership boundary of `/crm/email-privacy`,
+  including after CRM viewing denial; resolving CRM details still needs record access.
+
+- A generic pipeline has `record_type: None` and an unprotected primary column,
+  which can change type or be deleted, leaving `primary_column_id` naming no
+  column; `referencing_rows` reads tracked pipelines only. Don't add `ON DELETE`
+  actions touching the pipeline row: they wait on the row lock the write guard
+  holds, and the request hangs.
+- The Pipelines card (`entries`) starts from the records: `referencing_rows`
+  reaches primary cells through `idx_ep_database_row_references_gin` (keep its
+  literal `entity_type`/`type` predicates, the guarded uuid cast, and the
+  materialized CTE that keeps a generic plan from probing once per pipeline),
+  grants are read for the holding pipelines only (`get_pipelines_access`, fenced
+  per pipeline), and one `lock_live_many` guard
+  covers every pipeline while `storage_tables_rows` reads their columns and
+  cells. Never start it from the viewer's pipelines or lock them one at a time:
+  that cost grew with every pipeline the viewer can see.
 - Pipeline board-position reads require a pipeline View receipt, hold its live
   lifecycle guard, and scope the view to its backing table/database through
   `DatabaseStorage::storage_view_positions`.
@@ -68,23 +112,114 @@ tools/HTTP/GraphQL surfaces over them.
   and email-driven contact population. Cover legitimate company-domain
   exceptions with regression tests when correcting the blocklist.
 - `resolve_association` also accepts `CrmAssociation::Activity`: all records in
-  CRM-enabled teams within the viewer/verified-bot scope, excluding hidden rows
+  teams within the viewer/verified-bot scope, excluding hidden rows
   even for admins. Preserve distinct contact IDs that share an email; returned
   domains and addresses constrain the viewer's mailbox, not team email access.
+  `activity_property_edges` returns the items whose Companies or Contacts
+  property names a record of the same scope: it reads only the scope's visible
+  company and contact ids and probes each property's partial GIN index once
+  per id, so its cost follows the scope's records (about 2.6 us and 2.4
+  buffers each warm: 38 ms for 4k companies and 10k contacts), never other
+  teams' property rows. Keep each probe a fenced lateral: as a plain join, a
+  selective kind filter flipped the plan into testing every record against
+  every property row (1.8 s). Revisit if a team's records near 40k (100 ms).
+  Keep its visibility rules identical to the Activity arm's. It reads the
+  pool `with_activity_edges_replica` names, the replica for DSS's list Soup,
+  after checking the viewer's current permitted teams on the primary. Record
+  data lags like the rest of a list: a record hidden moments ago can still
+  match, and a record just added may not yet. Membership removal and CRM access
+  revocation take effect on the next request. Each item still passes its own
+  source's access check. Every other CRM read and write stays on the primary.
+- An archived call links to the companies whose domain a participant's address
+  is at, and separately to every visible contact of the team holding the
+  address as any of its addresses, with or without a company, together with
+  that contact's company (`src/outbound/call_link.rs`). A contact under a
+  hidden company links neither, and a team's own members never match its CRM. Calendar events and
+  bookings have no link by attendee address: they reach a record only through
+  a Companies or Contacts property someone set, a reference, or the call held
+  for them.
 
 - Manual companies require a name and accept an optional domain; explicit
   contact creation accepts any valid email, including personal providers.
   Email population still infers companies by domain. Do not apply manual
   creation rules to capture/consent; see `docs/design/crm-contact-creation.md`.
-- Keep CRM write locks ordered: domain advisory locks, parent team `KEY SHARE`,
-  settings `SHARE`, then company/contact rows. Hold them through commit so
-  disable/purge and team deletion cannot race creation.
+- Contact setters add or remove an address, choose the primary, link/switch
+  company for a personal-provider primary, or unlink a company; the rules live
+  in `src/domain/contact_update.rs`. Validate under the contact lock and reject
+  same-team duplicates without disclosing restricted matches. A new address
+  must be free across the team; a link, switch or unlink re-checks every
+  address the contact holds. Preserve ID, archive and sources.
+- A company-domain contact has a company and an address on one of that
+  company's `crm_domains` (`CrmContact::company_domain_emails`; there is no
+  stored marker). It cannot be unlinked or moved, and its last such address
+  cannot be removed. Read queries and the edit path compute it with the same
+  SQL expression; keep them identical.
+- Removing an address deletes only its `crm_contact_emails` row. Mailbox sources
+  stay, removed addresses are not remembered, and later mail from one may file a
+  fresh contact. Removing the primary promotes the oldest address left.
+- Personal sync and cleanup resolve one same-team/email contact across all companies,
+  including hidden rows; skip ambiguous identities and preserve manual company choices.
+- Serialize single and bulk source teardown company-before-source/contact, and
+  re-read the target after waiting; orphan deletion must not cascade a new manual link.
+- CRM availability requires current membership and effective `team_user.crm_access`;
+  admins/owners always qualify. Recheck `CrmTeamReceipt::check_access` on CRM
+  record and shared-setting operations; aggregate Soup/search paths return no
+  denied records. Entity receipts and requester-side email grants use the same
+  primary-backed predicate.
+  Contribution consent is independent and remains manageable after CRM denial.
+  Team preference writes remain disabled by the rollout gate until old removal
+  writers have drained; that gate never weakens these read checks.
+  `/crm/member-access` reads authority even for a denied viewer; storage's response
+  opt-in response hint lets an open client retire stale snapshots. Only that
+  hint has a three-second per-instance cache; receipts and the authority endpoint
+  stay fresh. See `docs/CRM_EMAIL_PRIVACY.md` for the request header and latency.
+- Population is independent of the contributor's CRM viewing permission.
+  Population takes the shared `crm-email:{team}` advisory lock, then the
+  `crm-contact:{team}:{link}:{email}` lock (which `depopulate_contact` also
+  takes before its domain lock), parent team `KEY SHARE`, the mailbox scan,
+  then the domain advisory lock and entity rows. Never run the mailbox scan
+  under a domain lock: a team backfill queues every population of the domain
+  behind it. Population transactions set a five-second `lock_timeout` and
+  return `CrmError::Contended` so their job is deferred, not held. Privacy changes
+  take the exclusive privacy lock before domain/entity locks. Keep locks through
+  commit; never wait on a domain or privacy lock after acquiring CRM entity
+  rows. Only shared team, mailbox and member row locks may precede a domain lock,
+  and no domain-lock holder may lock those rows exclusively.
+  Manual creation retains domain/parent/entity ordering without email consent.
+  Contact field edits take exclusive privacy coordination before discovery/domain
+  locks because reassignment changes contribution eligibility; they never require
+  consent or enable sync. Assigned personal contacts under disabled parent sync
+  retain their identity/company but receive no email-derived source/history writes.
+  Legacy enable is a compatibility no-op; disable/purge is retired.
+- Bound pipeline read- and write-guard waits, and contact population lock waits,
+  with a transaction-local five-second timeout so waiters release pool
+  connections needed by the holder's work.
 - When depopulating an email, prefer its domain-linked contact over a manual
   unfiled record so mailbox-source teardown reaches the synced contact.
-- Serialize domain visibility updates on the owning company row before reading
-  all its blocked domains; take no further domain locks after that row lock.
+- Thread exceptions live in `crm_email_thread_exclusions`, scoped to one
+  team/member/mailbox/thread; mutations and paginated listing are owner-only.
+  Keep these contribution controls available to members denied CRM viewing,
+  like mailbox consent; use membership authority without `check_access`.
+  Require `enable-crm-thread-exclusions` in the domain before set/clear, failing
+  closed when unavailable; keep rollout off until ingestion and Team email readers
+  understand exceptions. Keep `crm_email_thread_excluded`, the Team reader's
+  `ALLOWED` rule and the set-based interaction scan in parity.
+  Another contributor's copy remains eligible. Restore queues backfill; exclusion
+  preserves records and prior interaction dates, like personal blocked domains.
+- Domain exclusions affect contribution and CRM email reads, never record
+  visibility. Preserve archive state on block/unblock and consent withdrawal.
 - Keep ambiguous CSV contact lookups unresolved without creating records for
   them; continue valid rows, but propagate lookup storage and authorization failures.
+
+- `POST /crm/previews` titles up to 100 companies and 100 contacts in one
+  read for web chips (`src/outbound/companies_repo/previews.rs`). It must
+  answer each record as `GET /crm/companies/{id}` and `GET /crm/contacts/{id}`
+  do (current membership and effective CRM access; members see no hidden company, hidden contact, or
+  contact under a hidden company; the name and first domain the read returns,
+  domains ordered by `created_at`, then id), and leave out any record the
+  reads refuse (401, for a missing record too). Change both together;
+  `companies_repo/test/previews.rs` compares them for every role and caller,
+  including revocation and regrant on the same session and contact-page route.
 
 - Company names/logos live in the global `crm_domain_directory`. Only the
   email pubsub workers carry a real `CompanyMetadataResolver`, using public
@@ -99,14 +234,35 @@ tools/HTTP/GraphQL surfaces over them.
 - Contacts carry their own `team_id`; `company_id` and `email` are optional.
   Scope contact reads by `ct.team_id` and LEFT JOIN the company for its
   `hidden` flag and name. Email sync files personal-provider addresses
-  (`is_personal_email_domain`) as company-less contacts only when the team
+  (`is_personal_email_domain`) as company-less contacts when no identity exists and the team
   turns `exclude_personal_emails` off; `crm_blocked_domains` stops sync per
-  domain. CRM-scoped previews still require a company contact. Company-less
-  contacts add no thread-access grant, but hidden ones suppress their team's
+  domain. CRM-scoped previews accept eligible company-less contacts using
+  their team and email address. Company-less contacts add no independent
+  thread-access grant, but hidden ones suppress their team's
   CRM-derived grant for members; independent access grants still apply.
+- Every address a contact is known by is a row in `crm_contact_emails`, stored
+  trimmed and lowercased. `crm_contacts.email` is the primary address, and a
+  trigger records it in that table. Find a contact by address through
+  `crm_contact_emails` (sync, teardown, email scope, thread access, call
+  linking, the activity scope); read `crm_contacts.email` only to display the
+  primary. Contact search and listing still match the primary only.
+  The table has no team column, so a read by address starts from the address
+  index and a read by team probes it once per contact: keep both behind their
+  `OFFSET 0` fences, or the planner joins against every team's addresses.
+  Company-domain population still
+  upserts on company and primary, but first looks for a contact that holds the
+  address as a further one and refreshes it instead: under the domain's
+  company, or anywhere in the team when nobody is filed under the domain with
+  it. A mailbox source is recorded per contact and mailbox, not per address:
+  `depopulate_contact` keeps it while that mailbox still has mail with another
+  of the contact's addresses (`other_address_mail.sql`), checked before the
+  domain lock like population's mailbox scan.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.
+- The pipeline `edit` route refuses `sharing` from a scoped agent session
+  (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
+  joins that check.
 
 ## Related
 

@@ -15,29 +15,44 @@ import { PipelineView } from '../views/pipeline';
 // Real creation, navigation and column-header controls. Persistence is
 // local; the Rust integration suite exercises the same contract against Postgres.
 function Editor(props: { pipeline: Pipeline }) {
-  const [columns, setColumns] = createSignal<DatabaseViewColumn[]>([
-    {
-      id: 'primary',
-      name: props.pipeline.recordType === 'company' ? 'Company' : 'Contact',
-      dataType: 'ENTITY',
-      specificEntityType:
-        props.pipeline.recordType === 'company' ? 'COMPANY' : 'CONTACT',
-      primary: true,
-      protections: ['delete', 'change_type'],
-      nullable: false,
-      writable: true,
-      isMultiSelect: false,
-      options: [],
-    },
-    {
-      id: 'stage',
-      name: 'Stage',
-      dataType: 'STRING',
-      writable: true,
-      isMultiSelect: false,
-      options: [],
-    },
-  ]);
+  const generic: DatabaseViewColumn = {
+    id: 'primary',
+    name: 'Name',
+    dataType: 'STRING',
+    primary: true,
+    protections: ['delete', 'change_type'],
+    writable: true,
+    isMultiSelect: false,
+    options: [],
+  };
+  const [columns, setColumns] = createSignal<DatabaseViewColumn[]>(
+    props.pipeline.recordType === null
+      ? [generic]
+      : [
+          {
+            id: 'primary',
+            name:
+              props.pipeline.recordType === 'company' ? 'Company' : 'Contact',
+            dataType: 'ENTITY',
+            specificEntityType:
+              props.pipeline.recordType === 'company' ? 'COMPANY' : 'CONTACT',
+            primary: true,
+            protections: ['delete', 'change_type'],
+            nullable: false,
+            writable: true,
+            isMultiSelect: false,
+            options: [],
+          },
+          {
+            id: 'stage',
+            name: 'Stage',
+            dataType: 'STRING',
+            writable: true,
+            isMultiSelect: false,
+            options: [],
+          },
+        ]
+  );
   return (
     <div class="flex border-b border-edge-muted" role="row">
       <For each={columns()}>

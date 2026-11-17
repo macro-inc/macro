@@ -1,9 +1,11 @@
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ImportIcon from '@icon/system/regular/tray-arrow-down.svg';
 import { useExternalChatsQuery } from '@queries/external-chats';
 import { useExternalChatListsSync } from '@queries/external-chats/sync';
 import { queryReadyGate } from '@queries/gate';
@@ -42,6 +44,9 @@ export function WhatsAppHistoryImportPrompt() {
     itemsLoaded: () => chats.isSuccess && userId() !== undefined,
     toast: (group) => ({
       title: 'Import WhatsApp history',
+      icon: ImportIcon,
+      color: 'var(--color-accent)',
+      dismissLabel: t('common.notNow'),
       content(): string {
         return historyPromptText(group);
       },

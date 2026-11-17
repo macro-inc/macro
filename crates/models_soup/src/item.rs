@@ -7,8 +7,10 @@ use crate::database_row::SoupDatabaseRow;
 use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::foreign_entity::SoupForeignEntity;
+use crate::harness::SoupHarness;
 use crate::initiative::SoupInitiative;
 use crate::project::SoupProject;
+use crate::team::SoupTeam;
 use crate::{
     chat::SoupChat,
     comms::{SoupChannel, SoupChannelThread},
@@ -56,6 +58,10 @@ pub enum SoupItem<T = ()> {
     AgentSession(SoupAgentSession<T>),
     /// Database row item.
     DatabaseRow(SoupDatabaseRow<T>),
+    /// Paired runtime, listed only by attention feeds.
+    Harness(SoupHarness),
+    /// Team, listed only by attention feeds.
+    Team(SoupTeam),
 }
 
 impl<T> SoupItem<T> {
@@ -104,6 +110,10 @@ impl<T> SoupItem<T> {
             SoupItem::DatabaseRow(row) => {
                 EntityType::DatabaseRow.with_entity_string(row.id.to_string())
             }
+            SoupItem::Harness(harness) => {
+                EntityType::Harness.with_entity_string(harness.id.to_string())
+            }
+            SoupItem::Team(team) => EntityType::Team.with_entity_string(team.id.to_string()),
         }
     }
 
@@ -129,6 +139,34 @@ impl<T> SoupItem<T> {
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
             SoupItem::AgentSession(session) => session.updated_at,
             SoupItem::DatabaseRow(row) => row.updated_at,
+            SoupItem::Harness(harness) => harness.updated_at,
+            // Teams have no timestamps; only attention feeds list them.
+            SoupItem::Team(_) => DateTime::<Utc>::UNIX_EPOCH,
+        }
+    }
+
+    /// Returns the item's own name, as a name-sorted Soup page orders on it.
+    ///
+    /// `None` for the kinds that have no name of their own; those sort after
+    /// every named item.
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            SoupItem::Document(document) => Some(document.name.as_str()),
+            SoupItem::Chat(chat) => Some(chat.name.as_str()),
+            SoupItem::Project(project) => Some(project.name.as_str()),
+            SoupItem::Initiative(initiative) => Some(initiative.name.as_str()),
+            SoupItem::CalendarEvent(event) => Some(event.title.as_str()),
+            SoupItem::Channel(channel) => channel.channel.channel.name.as_deref(),
+            SoupItem::AgentSession(session) => Some(session.name.as_str()),
+            SoupItem::CrmCompany(company) => company.name.as_deref(),
+            SoupItem::CrmContact(contact) => contact.name.as_deref(),
+            SoupItem::Harness(harness) => Some(harness.name.as_str()),
+            SoupItem::Team(team) => Some(team.name.as_str()),
+            SoupItem::EmailThread(_)
+            | SoupItem::ChannelThread(_)
+            | SoupItem::Call(_)
+            | SoupItem::ForeignEntity(_)
+            | SoupItem::DatabaseRow(_) => None,
         }
     }
 
@@ -249,6 +287,9 @@ impl<T> SoupItem<T> {
                 SoupItem::DatabaseRow(row),
                 SimpleSortMethod::UpdatedAt | SimpleSortMethod::ViewedUpdated,
             ) => row.updated_at,
+            (SoupItem::Harness(harness), SimpleSortMethod::CreatedAt) => harness.created_at,
+            (SoupItem::Harness(harness), _) => harness.updated_at,
+            (SoupItem::Team(_), _) => DateTime::<Utc>::UNIX_EPOCH,
         }
     }
 
@@ -293,6 +334,7 @@ impl<T> SoupItem<T> {
             )),
             SoupItem::CrmContact(_) => None,
             SoupItem::ForeignEntity(_) => None,
+            SoupItem::Harness(_) | SoupItem::Team(_) => None,
             // Agent sessions have no properties entity type yet.
             SoupItem::AgentSession(_) => None,
             SoupItem::DatabaseRow(row) => Some(EntityReference::new(
@@ -309,6 +351,7 @@ impl<T> SoupItem<T> {
     {
         match self {
             SoupItem::Document(SoupDocument {
+                appearance,
                 id,
                 document_version_id,
                 owner_id,
@@ -326,6 +369,7 @@ impl<T> SoupItem<T> {
                 deleted_at,
                 extra,
             }) => SoupItem::Document(SoupDocument {
+                appearance,
                 id,
                 document_version_id,
                 owner_id,
@@ -369,6 +413,7 @@ impl<T> SoupItem<T> {
                 extra: f(extra),
             }),
             SoupItem::Initiative(SoupInitiative {
+                appearance,
                 id,
                 name,
                 owner_id,
@@ -377,6 +422,7 @@ impl<T> SoupItem<T> {
                 viewed_at,
                 extra,
             }) => SoupItem::Initiative(SoupInitiative {
+                appearance,
                 id,
                 name,
                 owner_id,
@@ -554,6 +600,8 @@ impl<T> SoupItem<T> {
             SoupItem::ForeignEntity(soup_foreign_entity) => {
                 SoupItem::ForeignEntity(soup_foreign_entity)
             }
+            SoupItem::Harness(harness) => SoupItem::Harness(harness),
+            SoupItem::Team(team) => SoupItem::Team(team),
             SoupItem::AgentSession(SoupAgentSession {
                 id,
                 name,
@@ -645,6 +693,8 @@ impl<T> Identify for SoupItem<T> {
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,
             SoupItem::AgentSession(session) => session.id,
             SoupItem::DatabaseRow(row) => row.id,
+            SoupItem::Harness(harness) => harness.id,
+            SoupItem::Team(team) => team.id,
         }
     }
 }

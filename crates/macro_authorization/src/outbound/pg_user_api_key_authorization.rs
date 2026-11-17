@@ -8,7 +8,10 @@ use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use thiserror::Error;
 
-use crate::domain::{models::ResolvedApiKeyUser, ports::UserApiKeyAuthorizationRepo};
+use crate::domain::{
+    models::{AccountManagerCredential, ResolvedApiKeyUser},
+    ports::UserApiKeyAuthorizationRepo,
+};
 
 /// SHA-256 of a raw user API key's UTF-8 bytes.
 ///
@@ -52,6 +55,8 @@ struct ApiKeyUserRow {
     id: String,
     fusion_user_id: Option<uuid::Uuid>,
     organization_id: Option<i32>,
+    account_manager_grant_id: Option<uuid::Uuid>,
+    manager_user_id: Option<String>,
 }
 
 impl TryFrom<ApiKeyUserRow> for ResolvedApiKeyUser {
@@ -64,11 +69,20 @@ impl TryFrom<ApiKeyUserRow> for ResolvedApiKeyUser {
             .fusion_user_id
             .ok_or(PgUserApiKeyAuthorizationRepoError::InvalidUserIdentity)?
             .to_string();
+        let account_manager = match (row.account_manager_grant_id, row.manager_user_id) {
+            (Some(grant_id), Some(manager_user_id)) => Some(AccountManagerCredential {
+                grant_id,
+                manager_user_id: MacroUserIdStr::try_from(manager_user_id)
+                    .map_err(|_| PgUserApiKeyAuthorizationRepoError::InvalidUserIdentity)?,
+            }),
+            _ => None,
+        };
 
         Ok(Self {
             macro_user_id,
             fusion_user_id,
             organization_id: row.organization_id,
+            account_manager,
         })
     }
 }
@@ -82,12 +96,25 @@ impl UserApiKeyAuthorizationRepo for PgUserApiKeyAuthorizationRepo {
             ApiKeyUserRow,
             r#"
             SELECT
-                u.id,
+                u.id AS "id!",
                 u.macro_user_id AS "fusion_user_id?",
-                u."organizationId" AS "organization_id?"
+                u."organizationId" AS "organization_id?",
+                NULL::uuid AS "account_manager_grant_id?",
+                NULL::text AS "manager_user_id?"
             FROM "UserApiKey" k
             JOIN "User" u ON u.id = k.user_id
             WHERE k.hash = $1
+            UNION ALL
+            SELECT
+                u.id,
+                u.macro_user_id,
+                u."organizationId",
+                g.id,
+                g.manager_user_id
+            FROM account_manager_grants g
+            JOIN "User" u ON u.id = g.managed_user_id
+            WHERE g.key_hash = $1
+              AND g.status = 'active'
             "#,
             &key_hash[..],
         )
@@ -95,5 +122,27 @@ impl UserApiKeyAuthorizationRepo for PgUserApiKeyAuthorizationRepo {
         .await?;
 
         row.map(ResolvedApiKeyUser::try_from).transpose()
+    }
+
+    async fn mark_account_manager_grant_used(&self, grant_id: uuid::Uuid) -> Result<(), Self::Err> {
+        // Throttled, and skips a row another request is updating, so a busy
+        // credential never queues its requests on the row lock.
+        sqlx::query!(
+            r#"
+            UPDATE account_manager_grants
+            SET last_used_at = now()
+            WHERE id = (
+                SELECT id FROM account_manager_grants
+                WHERE id = $1
+                  AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')
+                FOR UPDATE SKIP LOCKED
+            )
+            "#,
+            grant_id,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }

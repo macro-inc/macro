@@ -8,6 +8,7 @@ version = "0.1.0"
 toolset = ["inbound", "dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:bot_id", "dep:schemars"]
 default = ["ports", "postgres"]
 inbound = [
+  "dep:agent_correlation",
   "dep:axum",
   "dep:macro_authorization",
   "dep:model-error-response",
@@ -19,15 +20,16 @@ outbound = ["ports"]
 resources = ["outbound", "dep:properties", "dep:system_properties"]
 ports = ["dep:entity_access", "dep:tracing"]
 postgres = [
+  "activity/outbound",
   "dep:sqlx",
   "dep:entity_access_db_utils",
   "dep:share_permission_db_utils",
-  "dep:model-entity",
   "dep:macro_uuid",
   "outbound",
 ]
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation", optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
@@ -46,7 +48,7 @@ macro_event_broker = { path = "../macro_event_broker", default-features = false 
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
-model-entity = { path = "../model-entity", optional = true }
+model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 models_permissions = { path = "../models_permissions" }
 rootcause = { workspace = true }
@@ -64,9 +66,11 @@ mockall = { workspace = true }
 
 [dev-dependencies]
 activity = { path = "../activity", default-features = false, features = ["outbound"] }
+agent_correlation = { path = "../agent_correlation" }
 entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
 anyhow = { workspace = true }
 http-body-util = { workspace = true }
+log = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }
 properties = { path = "../properties", default-features = false, features = ["outbound"] }
@@ -74,3 +78,4 @@ serde_json = { workspace = true }
 system_properties = { path = "../system_properties" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }
+tracing-subscriber = { workspace = true }

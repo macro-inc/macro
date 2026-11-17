@@ -33,6 +33,7 @@ function capabilities(
     ],
     startDaemon: async () => RUNNING,
     waitForRunning: async () => RUNNING,
+    allowPermissionBypass: async () => {},
     listAgents: async () => [],
     loadModels: async () => ({
       status: 'available',

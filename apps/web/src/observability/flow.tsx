@@ -300,6 +300,22 @@ function openNode(
  * Names and attributes are static categories, ids, and counts; never user
  * content.
  */
+/**
+ * The scope a flow hands its subtree. Built outside the component so its
+ * getter closes over the node alone: requests carry the scope in their
+ * context and can outlive the view (a cached query another view still
+ * reads), and a closure sharing the component's scope would keep its props,
+ * and with them the view's whole tree, alive.
+ */
+function flowScope(current: Accessor<FlowNode>): FlowScope {
+  return {
+    get node() {
+      return untrack(current);
+    },
+    current,
+  };
+}
+
 export function TraceFlow(props: {
   name: string;
   attributes?: Attributes;
@@ -317,12 +333,7 @@ export function TraceFlow(props: {
       untrack(() => props.sampling)
     );
   const [current, setCurrent] = createSignal(start());
-  const scope: FlowScope = {
-    get node() {
-      return untrack(current);
-    },
-    current,
-  };
+  const scope = flowScope(current);
   const releaseMount = scope.node.hold();
   // Effects of this subtree run in the same flush; let them hold first.
   onMount(() => queueMicrotask(releaseMount));

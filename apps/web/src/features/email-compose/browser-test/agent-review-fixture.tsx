@@ -1,4 +1,5 @@
 import '@app/index.css';
+import type { ReviewUpdates } from '@app/features/agent-reviews/queries/reviews';
 import { PersistedReview } from '@app/features/agent-reviews/views/persisted-review';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
@@ -18,10 +19,20 @@ import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 
 /**
- * A saved agent email review, polled from the routed review API, beside the
- * app's global Create hotkey. Typing that escapes the draft presses `c`.
+ * A saved agent email review from the routed review API, beside the app's
+ * global Create hotkey. Typing that escapes the draft presses `c`. The card
+ * polls, or with `?updates=announced` hears each saved revision from a
+ * `review-updated` window event, as the session log announces it.
  */
 function Fixture() {
+  const [announced, setAnnounced] = createSignal<number>();
+  window.addEventListener('review-updated', (event) => {
+    if (event instanceof CustomEvent) setAnnounced(Number(event.detail));
+  });
+  const updates: ReviewUpdates =
+    new URLSearchParams(location.search).get('updates') === 'announced'
+      ? { kind: 'announced', revision: announced }
+      : { kind: 'polled' };
   useHotKeyRoot();
   attachGlobalDOMScope(document.body);
   const [created, setCreated] = createSignal(0);
@@ -48,6 +59,7 @@ function Fixture() {
                         sessionId="019a0000-0000-7000-8000-000000000001"
                         reviewId="019a0000-0000-7000-8000-000000000005"
                         canAct
+                        updates={updates}
                       />
                       <output data-testid="created">{created()}</output>
                     </main>

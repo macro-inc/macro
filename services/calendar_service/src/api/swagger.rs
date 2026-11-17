@@ -26,6 +26,16 @@ use utoipa::OpenApi;
         calendar_events::inbound::mutation_router::invite_calendar_event_guests,
         calendar_events::inbound::mutation_router::copy_calendar_event,
         calendar_events::inbound::mutation_router::respond_to_join_request,
+        calendar_scheduling::inbound::router::settings,
+        calendar_scheduling::inbound::router::save,
+        calendar_scheduling::inbound::router::bookings,
+        calendar_scheduling::inbound::router::manage,
+        calendar_scheduling::inbound::router::insights,
+        calendar_scheduling::inbound::router::change,
+        calendar_scheduling::inbound::router::host_slots,
+        calendar_scheduling::inbound::router::list_links,
+        calendar_scheduling::inbound::router::create_link,
+        calendar_scheduling::inbound::router::edit_link,
     ),
     components(schemas(
         calendar_events::inbound::team_router::TeamCalendarSharingBody,
@@ -59,6 +69,9 @@ use utoipa::OpenApi;
         calendar_events::domain::models::EventTransparency,
         calendar_events::domain::models::RefreshCalendarEvent,
     )),
-    tags((name = "calendar_events", description = "Macro Calendar Service"))
+    tags(
+        (name = "calendar_events", description = "Macro Calendar Service"),
+        (name = "scheduling", description = "Booking links, bookings and booking settings"),
+    )
 )]
 pub struct ApiDoc;

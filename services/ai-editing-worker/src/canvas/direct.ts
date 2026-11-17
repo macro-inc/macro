@@ -4,6 +4,7 @@ import type { CanvasMeasurer } from './render';
 import { canvasRevision } from './revision';
 import {
   CanvasConflictError,
+  CanvasRejectedError,
   type CanvasSession,
   describeCanvas,
 } from './session';
@@ -25,7 +26,14 @@ export async function applyCanvasCode(
       'Canvas revision changed. ReadCanvas and reconsider this batch; nothing was committed.'
     );
   const ops = await Telemetry.span('canvas.ai.sandbox', async (span) => {
-    const ops = await runCanvasInSandbox(request.code, request.snippets);
+    const ops = await runCanvasInSandbox(request.code, request.snippets).catch(
+      (error: unknown) => {
+        throw new CanvasRejectedError(
+          `Canvas code failed: ${error instanceof Error ? error.message : String(error)}. Nothing was committed.`,
+          { cause: error }
+        );
+      }
+    );
     span.setAttr('edit.ops_total', ops.length);
     return ops;
   });

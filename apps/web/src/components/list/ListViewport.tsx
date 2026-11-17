@@ -1,3 +1,4 @@
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, type JSX, Suspense } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { StickyVirtualizer } from './StickyVirtualizer';
@@ -10,9 +11,13 @@ export function ListViewport<T>(props: {
   viewportRef?: (element: HTMLDivElement) => void;
   onScroll?: () => void;
   isSticky?: (item: T) => boolean;
+  /** Scrolls above the rows, outside them, so list focus skips it. */
+  start?: JSX.Element;
   children: (item: T) => JSX.Element;
 }) {
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  const [start, setStart] = createSignal<HTMLDivElement>();
+  const startSize = createElementSize(start);
   return (
     <div
       ref={(element) => {
@@ -21,12 +26,14 @@ export function ListViewport<T>(props: {
       }}
       class="min-h-0 flex-1 overflow-auto overscroll-none"
     >
+      <div ref={setStart}>{props.start}</div>
       <Suspense>
         <StickyVirtualizer
           ref={props.ref}
           data={props.items}
           isSticky={props.isSticky}
           scrollRef={viewport()}
+          startMargin={startSize.height ?? 0}
           bufferSize={240}
           itemSize={44}
           keepMounted={

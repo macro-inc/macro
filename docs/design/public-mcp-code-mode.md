@@ -1,6 +1,6 @@
 # Code mode on the public MCP
 
-Status: implemented behind `ai-code-mode`. The agent guide's "Code mode on the
+Status: implemented, on for every client but ChatGPT. The agent guide's "Code mode on the
 public MCP" section is the current behaviour; this document keeps the reasoning.
 
 Sources:
@@ -12,8 +12,8 @@ Sources:
 
 Give external MCP clients (Claude, ChatGPT, Cursor) the code mode that agent
 sessions already have: write one JavaScript module against the real Macro SDK
-instead of chaining many tool calls. Only users with the `ai-code-mode` flag
-see it.
+instead of chaining many tool calls. Every client but ChatGPT sees it: ChatGPT's
+plugin directory refuses generic executors.
 
 ## What exists
 
@@ -58,8 +58,8 @@ then. Agent sessions get the `task` field too.
 
 ### 2. Flagged tool surface
 
-Evaluate `ai-code-mode` for the OAuth user in `initialize`, `list_tools` and `call_tool`,
-reusing `agent_inmem::domain::tool_mode::FlaggedToolMode`.
+Choose the surface per client in `initialize`, `list_tools` and `call_tool`
+(rolled out behind `ai-code-mode`, since removed).
 
 - Off: unchanged.
 - On: `tools/list` is `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` only
@@ -68,7 +68,7 @@ reusing `agent_inmem::domain::tool_mode::FlaggedToolMode`.
   request) replaces the standard tool-catalog instructions with code-mode
   instructions.
 - `call_tool` rejects `ExecuteCode` / `DescribeCodeTools` for unflagged users.
-  Hidden native tools stay callable; they are the same tools.
+  A native tool called by name in code mode is refused.
 
 The public MCP is stateless, so each request loads flags. `PostHogFeatureFlags`
 does not cache; add a short per-user TTL cache in front of it rather than a
@@ -119,9 +119,14 @@ selection status. Trace headers already reach SDK calls.
 
 ## Decisions
 
-- **Email send.** Allowed. The SDK's `email.send` works over MCP code mode;
-  the MCP client's own approval before each `ExecuteCode` call is the gate, as
-  it is for every other MCP write.
+- **Email send and event creation.** Only on the user's quoted approval. The
+  email and calendar routes refuse a program's `email.send`, thread reply,
+  unconfirmed draft send or schedule, and `calendar.createEvent`; MCP code
+  mode has no reviews, so a program uses `email.sendConfirmed`,
+  `EmailMessage.forwardConfirmed`, `EmailDraft.send`/`schedule` or
+  `calendar.createConfirmed`, quoting the user's reply approving that action.
+  The MCP client's approval of an `ExecuteCode` call does not show the user
+  the email or event itself.
 - **Tool-result budget.** 32 KiB of references per task response. A first
   local run at 80 KiB produced an 87K-character response that Claude Code moved
   out of context into a file. Entities that do not fit whole fall back to their

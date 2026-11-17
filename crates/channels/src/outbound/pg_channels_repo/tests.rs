@@ -377,16 +377,15 @@ async fn seed_channel_list_notifications(pool: &Pool<Postgres>) -> anyhow::Resul
 }
 
 #[test]
-fn channel_list_pending_states_read_the_user_notifications_once() {
+fn channel_list_states_seek_the_viewer_entity_index() {
     use item_filters::NotificationState::{Done, Seen, Unseen};
 
-    for state in [Unseen, Seen] {
+    for state in [Unseen, Seen, Done] {
         let sql = super::build_channel_notification_state_clause(state);
-        assert!(sql.contains("= ANY(ARRAY("), "{sql}");
-        assert!(!sql.contains("n.event_item_id = (c.id)"), "{sql}");
+        assert!(sql.contains("un.event_item_id = (c.id)::text"), "{sql}");
+        assert!(!sql.contains("ARRAY("), "{sql}");
+        assert!(!sql.contains("JOIN notification"), "{sql}");
     }
-    let done = super::build_channel_notification_state_clause(Done);
-    assert!(done.contains("n.event_item_id = (c.id)::text"), "{done}");
 }
 
 #[sqlx::test(
@@ -1686,15 +1685,22 @@ async fn insert_user_notification(
 ) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
-        INSERT INTO user_notification (user_id, notification_id, created_at, seen_at, state)
-        VALUES (
+        INSERT INTO user_notification (
+            user_id, notification_id, created_at, seen_at, state,
+            event_item_type, event_item_id, notification_event_type
+        )
+        SELECT
             $1,
-            $2,
+            n.id,
             '2024-01-02 00:00:00'::timestamp,
             CASE WHEN $3::bool THEN '2024-01-02 00:00:00'::timestamp ELSE NULL END,
             CASE WHEN $4::bool THEN 'done'::notification_state
-                 WHEN $3 THEN 'seen'::notification_state ELSE 'unseen'::notification_state END
-        )
+                 WHEN $3 THEN 'seen'::notification_state ELSE 'unseen'::notification_state END,
+            n.event_item_type,
+            n.event_item_id,
+            n.notification_event_type
+        FROM notification n
+        WHERE n.id = $2
         "#,
         user_id,
         notification_id,
@@ -2921,4 +2927,169 @@ async fn channel_picture_round_trips_through_batched_previews(pool: Pool<Postgre
         assert_eq!(previews[0].profile_picture_id, picture);
         assert!(previews[0].has_access);
     }
+}
+
+/// Home's unread presence filter: `done = false`, a scope literal, `seen = false`.
+fn home_unread<T>(
+    state: impl Fn(item_filters::NotificationState) -> Expr<T>,
+    scope: Expr<T>,
+) -> Expr<T> {
+    use item_filters::NotificationState::{Seen, Unseen};
+    Expr::and(
+        Expr::and(Expr::or(state(Unseen), state(Seen)), scope),
+        state(Unseen),
+    )
+}
+
+fn assert_same(actual: Expr<ChannelLiteral>, expected: Expr<ChannelLiteral>) {
+    assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+}
+
+#[test]
+fn implied_notification_conjuncts_are_dropped() {
+    use item_filters::NotificationState::{Done, Seen, Unseen};
+    let state_of = super::channel_literal_state;
+    let participant = Expr::val(ChannelLiteral::IsParticipant(true));
+
+    assert_same(
+        super::drop_implied_notification_conjuncts(
+            &home_unread(channel_state, participant.clone()),
+            state_of,
+        ),
+        Expr::and(participant.clone(), channel_state(Unseen)),
+    );
+    // Two states on one chain can be witnessed by different notifications.
+    let both = Expr::and(channel_state(Unseen), channel_state(Seen));
+    assert_same(
+        super::drop_implied_notification_conjuncts(&both, state_of),
+        both,
+    );
+    let repeated = Expr::and(channel_state(Done), channel_state(Done));
+    assert_same(
+        super::drop_implied_notification_conjuncts(&repeated, state_of),
+        channel_state(Done),
+    );
+    let negated = Expr::and(
+        Expr::is_not(channel_state(Done)),
+        Expr::or(channel_state(Unseen), channel_state(Seen)),
+    );
+    assert_same(
+        super::drop_implied_notification_conjuncts(&negated, state_of),
+        negated,
+    );
+    let mixed = Expr::and(
+        Expr::or(channel_state(Unseen), participant.clone()),
+        channel_state(Unseen),
+    );
+    assert_same(
+        super::drop_implied_notification_conjuncts(&mixed, state_of),
+        mixed,
+    );
+}
+
+#[test]
+fn home_unread_channel_list_reads_notifications_once() {
+    let filter = home_unread(
+        channel_state,
+        Expr::val(ChannelLiteral::IsParticipant(true)),
+    );
+    let sql = super::build_channel_list_query(&Some(Arc::new(filter)))
+        .sql()
+        .to_owned();
+    assert_eq!(sql.matches("FROM user_notification").count(), 1, "{sql}");
+    assert!(!sql.contains("JOIN notification"), "{sql}");
+    assert!(!sql.contains("team_user"), "{sql}");
+}
+
+#[test]
+fn home_unread_thread_feed_reads_notifications_once() {
+    let state = |state| Expr::val(ChannelThreadLiteral::NotificationState(state));
+    let filter = home_unread(
+        state,
+        Expr::val(ChannelThreadLiteral::Participant(macro_user_id(USER_A))),
+    );
+    let params = thread_rows_request(
+        USER_A,
+        Some(Arc::new(filter)),
+        SimpleSortMethod::UpdatedAt,
+        50,
+    )
+    .into_params();
+    let sql = super::build_channel_thread_rows_query(&params)
+        .sql()
+        .to_owned();
+    assert_eq!(sql.matches("FROM user_notification").count(), 1, "{sql}");
+    assert!(!sql.contains("INTERSECT"), "{sql}");
+    assert!(!sql.contains("UNION"), "{sql}");
+    // Matches idx_user_notification_channel_threads' predicate.
+    assert!(
+        sql.contains("un.notification_event_type <> 'channel_message_send'"),
+        "{sql}"
+    );
+    assert!(!sql.contains("tm.id = m.id OR"), "{sql}");
+    assert!(
+        sql.contains("ON c.id = m.channel_message_parent_id"),
+        "{sql}"
+    );
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn home_unread_channel_list_matches_unseen_participant_channels(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use item_filters::NotificationState::Unseen;
+
+    seed_channel_list_notifications(&pool).await?;
+    let repo = repo(pool);
+    let participant = || Expr::val(ChannelLiteral::IsParticipant(true));
+
+    // c13 has a seen and an unseen notification; c11's is unseen; left-user
+    // left c12, and c21's unseen one is soft-deleted.
+    let home =
+        channel_ids_matching(&repo, LEFT_USER, home_unread(channel_state, participant())).await;
+    assert_eq!(home, HashSet::from([TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL]));
+    assert_eq!(
+        home,
+        channel_ids_matching(
+            &repo,
+            LEFT_USER,
+            Expr::and(channel_state(Unseen), participant())
+        )
+        .await
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn home_unread_thread_feed_matches_unseen_participant_threads(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_channel_thread_notification(&pool, USER_A, CH1, MSG3, false, false).await?;
+    insert_channel_thread_notification(&pool, USER_A, CH1, MSG1, false, true).await?;
+    insert_channel_thread_notification(&pool, USER_A, CH1, MSG31, true, false).await?;
+    insert_channel_thread_notification(&pool, USER_B, CH1, MSG1, false, false).await?;
+
+    let state = |state| Expr::val(ChannelThreadLiteral::NotificationState(state));
+    let participant = || Expr::val(ChannelThreadLiteral::Participant(macro_user_id(USER_A)));
+    let home = thread_ids_matching(pool.clone(), USER_A, home_unread(state, participant())).await?;
+    assert_eq!(home, vec![MSG3]);
+    assert_eq!(
+        home,
+        thread_ids_matching(
+            pool,
+            USER_A,
+            Expr::and(
+                state(item_filters::NotificationState::Unseen),
+                participant()
+            ),
+        )
+        .await?
+    );
+    Ok(())
 }

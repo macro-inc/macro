@@ -1,0 +1,13 @@
+{
+  "results": [
+    {
+      "url": "https://tokio.rs/blog/2025-10-tokio-1-48",
+      "raw_content": "# Announcing Tokio 1.48\n\nTokio 1.48 ships a faster multi-threaded scheduler.",
+      "images": []
+    }
+  ],
+  "failed_results": [],
+  "response_time": 0.48,
+  "usage": { "credits": 1 },
+  "request_id": "0c7f6a8e-6d2a-4c1e-8f5b-2b9d1e7a3c55"
+}

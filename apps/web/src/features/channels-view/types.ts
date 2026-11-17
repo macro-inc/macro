@@ -15,6 +15,8 @@ export type ChannelSectionKey = ChannelsRailSection | `label:${string}`;
 export type ChannelSectionPreferences = {
   sort?: ChannelListSort | 'name' | 'manual';
   unreadOnly?: boolean;
+  /** Keep unread conversations visible below a collapsed heading; on by default. */
+  unreadWhenCollapsed?: boolean;
   /** Preferred expanded body height in pixels; absent means size to content. */
   height?: number;
 };
@@ -41,7 +43,6 @@ export type ChannelsViewState = {
   >;
   /** Personal display order, independent of shared section membership. */
   sectionOrder: ChannelSectionKey[];
-  asideWidth: number;
 };
 
 export type ChannelsViewStateOptions = Partial<

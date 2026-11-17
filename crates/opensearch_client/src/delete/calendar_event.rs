@@ -9,7 +9,7 @@ use crate::{
 /// `_id` = event id, so this is a direct delete. A missing-doc 404 is a no-op
 /// — the event was never indexed or is already gone. A missing-index 404
 /// (`index_not_found_exception`) is a real outage and must propagate.
-#[tracing::instrument(skip(client), err)]
+#[tracing::instrument(skip(client))]
 pub async fn delete_calendar_event_by_id(
     client: &opensearch::OpenSearch,
     event_id: &str,

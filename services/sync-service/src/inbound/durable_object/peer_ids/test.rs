@@ -6,6 +6,7 @@ use std::collections::BTreeSet;
 #[test]
 fn signed_actor_filters_random_agent_ids_and_preserves_legacy_ai_filter() {
     let mut metadata = WebSocketMetadata {
+        agent_correlation_id: None,
         user_id: Some("user".into()),
         access_level: AccessLevel::Edit,
         actor: Some("bot|agent".into()),

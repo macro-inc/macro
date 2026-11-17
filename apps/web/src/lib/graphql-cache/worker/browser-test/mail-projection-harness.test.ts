@@ -60,5 +60,8 @@ it.each(['entityFilter', 'readRecordsByKeys'] as const)(
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(result.getAttribute('data-status')).toBe('ready');
     expect(result.textContent).toBe('0 cached emails shown');
-  }
+  },
+  // Each test re-imports the harness after resetModules, which can pass 5 s on a
+  // busy runner. A late import then runs into the next test and fails it too.
+  30_000
 );

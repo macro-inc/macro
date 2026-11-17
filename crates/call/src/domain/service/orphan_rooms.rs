@@ -25,6 +25,8 @@ pub(super) enum RoomParticipant<'a> {
     User(MacroUserIdStr<'a>),
     /// A non-account meeting guest.
     Guest(GuestId),
+    /// An authenticated bot.
+    Bot(bot_id::BotId),
 }
 
 impl RoomParticipant<'_> {
@@ -33,6 +35,7 @@ impl RoomParticipant<'_> {
         match self {
             Self::User(_) => "user",
             Self::Guest(_) => "guest",
+            Self::Bot(_) => "bot",
         }
     }
 }
@@ -90,6 +93,7 @@ where
             RoomParticipant::Guest(guest_id) => {
                 self.rtc_client.remove_guest(room_name, guest_id).await
             }
+            RoomParticipant::Bot(bot_id) => self.rtc_client.remove_bot(room_name, bot_id).await,
         };
         removed
             .inspect_err(|error| {

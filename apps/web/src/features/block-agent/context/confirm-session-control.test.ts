@@ -1,6 +1,27 @@
 import type { AgentSession } from '@core/agent-session/AgentSession';
 import { err, ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const spanAttributes = vi.hoisted(() => new Map<string, unknown>());
+// A span takes attributes until its callback settles, as an ended one would.
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: {
+    span: async (_name: string, run: (span: unknown) => Promise<void>) => {
+      let ended = false;
+      try {
+        return await run({
+          setAttr: (name: string, value: unknown) => {
+            if (!ended) spanAttributes.set(name, value);
+          },
+          error: () => undefined,
+        });
+      } finally {
+        ended = true;
+      }
+    },
+  },
+}));
+
 import { confirmSessionControl } from './confirm-session-control';
 
 function session() {
@@ -62,7 +83,10 @@ const flush = async () => {
   await Promise.resolve();
   await Promise.resolve();
 };
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  spanAttributes.clear();
+});
 describe('confirmed session controls', () => {
   it('waits past HTTP acceptance and unrelated actions for the correlated runtime outcome', async () => {
     const test = session();
@@ -123,6 +147,31 @@ describe('confirmed session controls', () => {
     expect(test.retract).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(60_000);
     expect(test.refresh).toHaveBeenCalledOnce();
+  });
+  it('records a settle the refetched log folded as the reread, not the feed', async () => {
+    vi.useFakeTimers();
+    const test = session();
+    // The session tells its listeners about the refetched log well before the
+    // refresh resolves, as `AgentSession.refresh` does: it still drains and
+    // may fetch again.
+    test.refresh.mockImplementation(async () => {
+      test.outcome('accepted');
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    const result = confirmSessionControl(test.value, action);
+    await vi.advanceTimersByTimeAsync(10_050);
+    await result;
+    expect(spanAttributes.get('agent.control.settled_by')).toBe('refresh');
+    expect(spanAttributes.get('agent.control.refreshes')).toBe(1);
+  });
+  it('records a settle the live feed delivered as the feed', async () => {
+    const test = session();
+    const result = confirmSessionControl(test.value, action);
+    await flush();
+    test.outcome('accepted');
+    await result;
+    expect(spanAttributes.get('agent.control.settled_by')).toBe('feed');
+    expect(spanAttributes.get('agent.control.refreshes')).toBe(0);
   });
   it('fails immediately on HTTP rejection', async () => {
     const test = session();

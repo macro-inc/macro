@@ -11,6 +11,8 @@ self-hosted-runner:
     - namespace-profile-linux-tiny-no-cache
     - namespace-profile-linux-rust-ci
     - namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    - namespace-profile-linux-large-build
+    - namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     - nscloud-macos-sequoia-arm64-6x14
     - nscloud-macos-sequoia-arm64-12x28-with-cache
     - nscloud-cache-tag-macro-desktop-macos

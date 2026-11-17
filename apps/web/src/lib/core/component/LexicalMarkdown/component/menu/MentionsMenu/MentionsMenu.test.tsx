@@ -15,18 +15,27 @@ const mocks = vi.hoisted(() => ({
   whatsappUserIds: [] as string[],
   mobile: false,
   requestedBuckets: [] as string[],
+  searchedLists: [] as { buckets: string[]; enabled?: () => boolean }[],
   contacts: [] as import('@core/context/quickAccess').EntityItem[],
+  contactSourceEnabled: undefined as (() => boolean) | undefined,
+  setContactSearchDisabled: (_value: boolean) => {},
   hasMoreContacts: false,
+  peopleLoading: (): boolean => false,
   loadMoreContacts: vi.fn(async () => {}),
   calendarEvents:
     [] as import('../../../utils/mentionsUtils').CalendarEventMentionItem[],
 }));
 
 vi.mock('@app/features/crm/record-adapter', () => ({
-  useCrmContactMentionSource: () => {
+  useCrmContactMentionSource: (
+    _search: () => string,
+    enabled: () => boolean
+  ) => {
     mocks.requestedBuckets.push('crm_contact');
+    mocks.contactSourceEnabled = enabled;
     return {
       entities: () => mocks.contacts,
+      users: () => [],
       totalCount: () => mocks.contacts.length,
       hasMore: () => mocks.hasMoreContacts,
       isLoadingMore: () => false,
@@ -52,19 +61,31 @@ vi.mock('@app/features/routines/routine-mentions', () => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
+vi.mock('@app/lib/analytics/posthog', async () => {
+  const { createSignal } = await import('solid-js');
+  const [disabled, setDisabled] = createSignal(false);
+  mocks.setContactSearchDisabled = setDisabled;
+  return {
+    useFeatureFlag: () => () => ({ enabled: disabled(), loading: false }),
+  };
+});
 vi.mock('@app/signal/splitLayout', () => ({ globalSplitManager: () => null }));
 vi.mock('@core/block', () => ({
   useMaybeBlockId: () => undefined,
   useMaybeBlockName: () => undefined,
 }));
 vi.mock('@core/constant/featureFlags', () => {
+  const disableCrmContactSearch = { name: 'disable-crm-contact-search' };
   const enableCrm = { name: 'crm' };
   const enableWhatsappLinked = { name: 'whatsapp' };
   return {
+    disableCrmContactSearch,
     enableCrm,
     enableWhatsappLinked,
-    isFeatureEnabled: (flag: unknown) =>
-      flag === enableWhatsappLinked ? mocks.whatsappEnabled : mocks.crmEnabled,
+    isFeatureEnabled: (flag: unknown) => {
+      if (flag === enableWhatsappLinked) return mocks.whatsappEnabled;
+      return mocks.crmEnabled;
+    },
     ENABLE_BEARER_TOKEN_AUTH: false,
   };
 });
@@ -108,20 +129,24 @@ vi.mock('@queries/external-chats', () => ({
 }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
+    interactionForUser: () => undefined,
     usesRecordSelection: () => false,
     usesSearchProjection: () => false,
     useList: (...args: unknown[]) => {
       const [first] = args;
       if (first && typeof first === 'object') {
-        mocks.requestedBuckets.push(
-          ...(first as { buckets: string[] }).buckets
-        );
+        const options = first as {
+          buckets: string[];
+          enabled?: () => boolean;
+        };
+        mocks.requestedBuckets.push(...options.buckets);
+        mocks.searchedLists.push(options);
       }
       return {
         items: () => [],
         totalCount: () => 0,
         hasMore: () => false,
-        isLoading: () => false,
+        isLoading: () => mocks.peopleLoading(),
         isLoadingMore: () => false,
         loadMore: async () => {},
       };
@@ -166,6 +191,13 @@ vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@ui', () => ({
   Surface: (props: ParentProps) => <div>{props.children}</div>,
+  Button: (
+    props: ParentProps<{ onClick?: () => void; disabled?: boolean }>
+  ) => (
+    <button onClick={props.onClick} disabled={props.disabled}>
+      {props.children}
+    </button>
+  ),
   cn: (...classes: unknown[]) =>
     classes.filter((c) => typeof c === 'string').join(' '),
 }));
@@ -191,8 +223,12 @@ afterEach(() => {
   mocks.whatsappUserIds = [];
   mocks.mobile = false;
   mocks.requestedBuckets = [];
+  mocks.searchedLists = [];
   mocks.contacts = [];
+  mocks.contactSourceEnabled = undefined;
+  mocks.setContactSearchDisabled(false);
   mocks.hasMoreContacts = false;
+  mocks.peopleLoading = () => false;
   mocks.loadMoreContacts.mockClear();
   mocks.calendarEvents = [];
   cleanup();
@@ -354,6 +390,71 @@ it('leaves a category list on the first desktop Escape and closes on the second'
   expect(menu.isOpen()).toBe(false);
 });
 
+it('opens an empty continuation and keeps the editor menu open while paging', async () => {
+  mocks.crmEnabled = true;
+  mocks.hasMoreContacts = true;
+  mockNoEmails();
+  const menu = createMenuOperations();
+  const editor = createEditor();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      editor={editor}
+      users={() => []}
+      sources={['crm']}
+    />
+  ));
+
+  menu.openMenu();
+  expect(screen.queryByText('No results')).toBeNull();
+  fireEvent.click(screen.getByText('View all'));
+  const next = screen.getByText('Next options');
+  const callsBeforeClick = mocks.loadMoreContacts.mock.calls.length;
+  const pointer = new MouseEvent('pointerdown', {
+    bubbles: true,
+    cancelable: true,
+  });
+  next.dispatchEvent(pointer);
+  expect(pointer.defaultPrevented).toBe(true);
+  const mouse = new MouseEvent('mousedown', {
+    bubbles: true,
+    cancelable: true,
+  });
+  next.dispatchEvent(mouse);
+  expect(mouse.defaultPrevented).toBe(true);
+  fireEvent.click(next);
+
+  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(callsBeforeClick + 1);
+  expect(menu.isOpen()).toBe(true);
+});
+
+it('keeps every search source idle while the menu is closed', () => {
+  mocks.crmEnabled = true;
+  mockNoEmails();
+  const menu = createMenuOperations();
+  render(() => (
+    <MentionsMenu menu={menu} editor={createEditor()} users={() => []} />
+  ));
+  // Each composer mounts a closed menu; an enabled list would re-run its
+  // cache search on every cache change.
+  expect(mocks.searchedLists.map((list) => list.buckets)).toEqual(
+    expect.arrayContaining([['channel', 'dm'], ['crm_company']])
+  );
+  const emailSearch = vi.mocked(useEmailSearchMention).mock.calls[0][0];
+  expect(mocks.searchedLists.map((list) => list.enabled?.())).not.toContain(
+    true
+  );
+  expect(mocks.searchedLists.every((list) => list.enabled)).toBe(true);
+  expect(emailSearch.enabled?.()).toBe(false);
+
+  menu.openMenu();
+  const entityLists = mocks.searchedLists.filter(
+    (list) => !list.buckets.includes('person')
+  );
+  expect(entityLists.map((list) => list.enabled?.())).not.toContain(false);
+  expect(emailSearch.enabled?.()).toBe(true);
+});
+
 it('only paginates an open mobile menu and resumes on reopen', async () => {
   mocks.mobile = true;
   mocks.crmEnabled = true;
@@ -412,6 +513,51 @@ it('offers CRM companies and contacts', () => {
   ));
   expect(mocks.requestedBuckets).toContain('crm_company');
   expect(mocks.requestedBuckets).toContain('crm_contact');
+});
+
+it('stops contact queries and results when the kill switch turns on while open', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  mocks.crmEnabled = true;
+  mocks.contacts = [
+    {
+      kind: 'entity',
+      bucket: 'crm_contact',
+      id: 'contact-1',
+      searchText: 'Acme contact',
+      sortTimestamp: 0,
+      timestamps: {},
+      data: {
+        type: 'crm_contact',
+        id: 'contact-1',
+        ownerId: 'team',
+        companyId: 'company',
+        name: 'Acme contact',
+        email: 'contact@example.com',
+        hidden: false,
+        lastInteraction: '2026-01-01T00:00:00Z',
+      },
+    },
+  ];
+  mockNoEmails();
+  const menu = createMenuOperations();
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      sources={['crm']}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.getByText('Acme contact')).toBeTruthy();
+  expect(mocks.contactSourceEnabled?.()).toBe(true);
+
+  mocks.setContactSearchDisabled(true);
+
+  expect(menu.isOpen()).toBe(true);
+  expect(mocks.contactSourceEnabled?.()).toBe(false);
+  expect(screen.queryByText('Acme contact')).toBeNull();
 });
 
 it('offers calendar events and picks one', () => {
@@ -591,4 +737,81 @@ it('marks an offline agent and refuses to mention it', () => {
   fireEvent.click(screen.getByTitle('Dev box agent — offline'));
   expect(onPick).not.toHaveBeenCalled();
   expect(menu.isOpen()).toBe(true);
+});
+
+it('says it is searching only for a slow search, and never that there are no results before sources answer', async () => {
+  vi.useFakeTimers();
+  mockNoEmails();
+  const [loading, setLoading] = createSignal(true);
+  mocks.peopleLoading = loading;
+  const menu = createMenuOperations();
+  menu.setSearchTerm('jacob');
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  // A quick answer shows neither label.
+  await vi.advanceTimersByTimeAsync(200);
+  expect(screen.queryByText('Searching…')).toBeNull();
+  expect(screen.queryByText('No results')).toBeNull();
+
+  await vi.advanceTimersByTimeAsync(300);
+  expect(screen.getByText('Searching…')).toBeTruthy();
+  expect(screen.queryByText('No results')).toBeNull();
+
+  // Once shown it stays long enough to read, then gives the answer.
+  setLoading(false);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(screen.getByText('Searching…')).toBeTruthy();
+  await vi.advanceTimersByTimeAsync(500);
+  expect(screen.getByText('No results')).toBeTruthy();
+  expect(screen.queryByText('Searching…')).toBeNull();
+});
+
+it('picks the highlighted mention on Enter at once, even while typing continues', async () => {
+  vi.useFakeTimers();
+  mockNoEmails();
+  Element.prototype.scrollIntoView = vi.fn();
+  const ana: IUser = {
+    id: 'macro|ana@macro.com',
+    name: 'Ana Lima',
+    email: 'ana@macro.com',
+  };
+  const bo: IUser = {
+    id: 'macro|bo@macro.com',
+    name: 'Bo Chen',
+    email: 'bo@macro.com',
+  };
+  const menu = createMenuOperations();
+  menu.setSearchTerm('bo');
+  menu.openMenu();
+  const onPick = vi.fn();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => [ana, bo]}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+    />
+  ));
+  await vi.advanceTimersByTimeAsync(100);
+  expect(screen.getByTitle('Bo Chen bo@macro.com')).toBeTruthy();
+
+  // Typed past the listed term and pressed Enter within the debounce, then
+  // kept typing: the pick is for the typed text and is not lost.
+  menu.setSearchTerm('ana');
+  fireEvent.keyDown(document, { key: 'Enter' });
+  expect(onPick).toHaveBeenCalledOnce();
+  expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ data: ana }));
+  menu.setSearchTerm('ana!');
+  await vi.advanceTimersByTimeAsync(200);
+  expect(onPick).toHaveBeenCalledOnce();
 });

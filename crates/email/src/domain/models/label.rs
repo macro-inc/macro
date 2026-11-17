@@ -69,6 +69,25 @@ pub struct LinkLabel {
     pub type_: LabelType,
 }
 
+impl LinkLabel {
+    /// The label called `name` among one inbox's labels: a system label by
+    /// its provider id (INBOX, UNREAD, STARRED, ...), otherwise any label by
+    /// its display name. Case and surrounding whitespace are ignored.
+    pub fn find<'a>(labels: &'a [LinkLabel], name: &str) -> Option<&'a LinkLabel> {
+        let name = name.trim().to_lowercase();
+        labels
+            .iter()
+            .find(|label| {
+                label.type_ == LabelType::System && label.provider_label_id.to_lowercase() == name
+            })
+            .or_else(|| {
+                labels
+                    .iter()
+                    .find(|label| label.name.trim().to_lowercase() == name)
+            })
+    }
+}
+
 /// Result of updating labels on a thread's messages.
 #[derive(Debug, Clone)]
 pub struct UpdateThreadLabelsResult {

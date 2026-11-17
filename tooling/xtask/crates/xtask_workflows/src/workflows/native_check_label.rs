@@ -1,14 +1,14 @@
 //! `Native Check Label` — re-runs the `iOS Native Check` or `Android Native
-//! Check` job of the web app PR checks when the matching `skip-ios-update` /
+//! Check` job of the PR's `PR CI` run when the matching `skip-ios-update` /
 //! `skip-android-update` label is added to or removed from a PR. The gates
-//! live in that workflow (so the required `Web App Status Check` covers
-//! them), and re-running the whole web suite on every label event would be
-//! wasteful, so this re-runs just the one job; GitHub re-runs the status
-//! check that depends on it. A run still in progress saw the labels as they
-//! were when it started, so it is waited for first; a run cancelled by a
-//! later push, or a head that has since moved, is left alone (the newer run
-//! reads the labels itself). This job is not a required check: it can take
-//! up to 25 minutes while waiting, and the release preconditions ignore it.
+//! live in the web workflow that run calls (so the required `CI gate` covers
+//! them), and re-running all of CI on every label event would be wasteful, so
+//! this re-runs just the one job; GitHub re-runs the jobs that depend on it.
+//! A run still in progress saw the labels as they were when it started, so it
+//! is waited for first; a superseded run, or a head that has since moved, is
+//! left alone (the newer run reads the labels itself). This job is not a
+//! required check: it can take up to 25 minutes while waiting, and the release
+//! preconditions ignore it.
 
 use gh_workflow::{
     Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Step, Workflow,
@@ -53,7 +53,10 @@ fn rerun_job() -> Job {
         ))
         .add_step(
             Step::new("Re-run the gate job for this head")
-                .run(include_str!("scripts/native_check_rerun.sh"))
+                .run(concat!(
+                    include_str!("scripts/pr_ci_run.sh"),
+                    include_str!("scripts/native_check_rerun.sh")
+                ))
                 .shell("bash"),
         )
 }

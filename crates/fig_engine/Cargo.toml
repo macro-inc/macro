@@ -42,7 +42,6 @@ zune-jpeg = { workspace = true }
 # rather than behind a feature so a native build never resolves any of it.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = { workspace = true }
-js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
 
 [package.metadata.wasm-pack.profile.release]

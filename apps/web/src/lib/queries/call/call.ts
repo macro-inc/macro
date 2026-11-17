@@ -10,10 +10,7 @@ import type { SharePermissionV2 } from '@service-storage/generated/schemas/share
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import {
-  updateEntitySharePolicy,
-  usesGraphqlSharePolicy,
-} from '../storage/entity-mutations';
+import { updateEntitySharePolicy } from '../storage/entity-mutations';
 import { callKeys } from './keys';
 
 function activeCallQueryOptions(channelId: string) {
@@ -29,14 +26,19 @@ export function useActiveCallQuery(channelId: Accessor<string>) {
   return useQuery(() => activeCallQueryOptions(channelId()));
 }
 
-/** Fresh lookups keep recovery from re-creating a call that already ended. */
+/** Fresh lookups resolve channel-only joins and verify recovery targets. */
 export function fetchActiveCall(channelId: string) {
   return throwOnErr(() => callServiceClient.checkActiveCall(channelId));
 }
 
-/** Each join attempt owns its request, including retries after a timeout. */
-export function requestCallToken(channelId: string) {
+/** Only explicit Start actions may create a call. */
+export function requestStartCallToken(channelId: string) {
   return throwOnErr(() => callServiceClient.getOrCreateCall(channelId));
+}
+
+/** Each join attempt is bound to one session, including retries. */
+export function requestCallToken(callId: string) {
+  return throwOnErr(() => callServiceClient.joinCall(callId));
 }
 
 /**
@@ -265,16 +267,11 @@ export function buildCallTeamSharePayload(
 }
 
 export function updateCallTeamShare(callId: string, shared: boolean) {
-  if (usesGraphqlSharePolicy('call'))
-    return updateEntitySharePolicy(
-      'call',
-      callId,
-      buildCallTeamSharePayload(shared)
-    );
-  return callServiceClient.editCallRecord({
+  return updateEntitySharePolicy(
+    'call',
     callId,
-    sharePermission: buildCallTeamSharePayload(shared),
-  });
+    buildCallTeamSharePayload(shared)
+  );
 }
 
 function patchCachedCallTeamShare(

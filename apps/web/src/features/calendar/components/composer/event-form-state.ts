@@ -24,6 +24,8 @@ export interface EventFormProps {
   guestsReadOnlyReason?: string;
   /** An action beside the guests, such as forwarding the invitation. */
   guestsAction?: JSX.Element;
+  /** Shown left of the form's actions, such as a loading indicator. */
+  status?: JSX.Element;
   /** The organizer hides the guest list, so the seeded guests are not all of them. */
   guestListHidden?: boolean;
   /** Whether the viewer may set what guests may do, as the organizer. */

@@ -13,6 +13,9 @@ use macro_uuid::Uuid;
 
 use secretsmanager_client::LocalOrRemoteSecret;
 
+#[cfg(test)]
+mod test;
+
 macro_env_var::env_vars!(
     /// Local static file bucket, read only when using local AWS.
     pub struct StaticStorageBucket;
@@ -44,6 +47,14 @@ macro_env_var::env_vars!(
     /// Dedicated KMS key the public MCP OAuth broker encrypts the upstream
     /// tokens behind its authorization codes with.
     pub struct McpOauthKmsKeyId;
+    /// The authentication service's internal key for billing settlement and
+    /// linked GitHub token lookups.
+    pub struct AuthenticationServiceSecretKey;
+    /// LiveKit project key the speech gateway signs inference-only tokens
+    /// with.
+    pub struct LivekitApiKey;
+    /// LiveKit project secret; never leaves the speech gateway.
+    pub struct LivekitApiSecret;
 );
 
 macro_env_var::maybe_env_vars!(
@@ -59,11 +70,11 @@ macro_env_var::maybe_env_vars!(
     pub struct CodexOauthKmsKeyId;
     /// Rollout gate for sessions owned by a bot.
     pub struct EnableNonUserOwners;
-    /// The authentication service's own internal key, which settlement
-    /// requests for counted usage present. Required while
-    /// `ENABLE_AI_USAGE_BILLING` is true; otherwise unused.
-    pub struct AuthenticationServiceSecretKey;
 );
+
+/// The shortest idle timeout a deployment may set; see
+/// [`Config::agent_session_idle_timeout`].
+pub const MIN_AGENT_SESSION_IDLE_TIMEOUT_SECS: u64 = 30;
 
 /// The Pipedream project environment matching this deployment: production in
 /// prd, development everywhere else.
@@ -104,13 +115,19 @@ pub struct Config {
     pub openai_domain_verification_token: OpenaiDomainVerificationToken,
     /// Browser-reachable FusionAuth origin, when different from the API.
     pub fusionauth_public_url: FusionauthPublicUrl,
-    /// Additional trusted client callback hosts, overriding the built-in list.
+    /// MCP client callback hosts trusted without the consent screen, overriding
+    /// the built-in list.
     pub mcp_allowed_redirect_hosts: McpAllowedRedirectHosts,
 
     /// Hide agent DM contexts from standalone lists. Enable only after all
     /// replicas use the independent for_warming lifecycle marker.
     #[macro_config_default(false)]
     pub hide_agent_dm_sessions: bool,
+    /// Seconds a session's command worker waits for its next command before
+    /// it releases the quiet session from memory and exits. Lowered only to
+    /// exercise the release end to end.
+    #[macro_config_default(900)]
+    pub agent_session_idle_timeout_secs: u64,
     /// Backend feature flags, evaluated using the authenticated session owner.
     pub posthog_api_key: PosthogApiKey,
     /// Same regional origin as the frontend's PostHog project.
@@ -128,8 +145,8 @@ pub struct Config {
     /// service's own policy decides whether it does.
     #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
     pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
-    /// Key settlement requests present to the authentication service.
-    pub authentication_service_secret_key: AuthenticationServiceSecretKey,
+    /// Required authentication service key or deployed Secrets Manager name.
+    pub authentication_service_secret_key: LocalOrRemoteSecret<AuthenticationServiceSecretKey>,
     /// The free plan's hard monthly AI cap, in cents at provider cost.
     /// Mandatory; set in Doppler.
     pub ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -145,6 +162,17 @@ pub struct Config {
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
+    /// Optional physical fleet selection; absence attaches no computer fleet.
+    pub computers_fleet: Option<ComputerFleetKind>,
+    /// Days a Macro computer whose billing ended keeps its disk before it is
+    /// destroyed; the timers the fleet operator fires use it. The same value
+    /// authentication_service reads.
+    #[macro_config_default(14)]
+    pub computer_retention_days: u32,
+    /// Days a Macro computer keeps running on a past-due subscription before
+    /// it is turned off.
+    #[macro_config_default(7)]
+    pub computer_past_due_grace_days: u32,
     /// Dedicated OAuth encryption key; absent deployments keep Codex unavailable.
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.
@@ -175,6 +203,10 @@ pub struct Config {
     /// sandboxes advertise no models and managed sessions cannot prompt.
     #[macro_config_default(String::new())]
     pub anthropic_api_key: String,
+    /// LiveKit project key for agent call speech.
+    pub livekit_api_key: LivekitApiKey,
+    /// LiveKit project secret for agent call speech.
+    pub livekit_api_secret: LivekitApiSecret,
     /// Run sandboxes on the local Docker daemon instead of Daytona.
     ///
     /// Default off: a deployed harness must keep using Daytona even if this
@@ -231,6 +263,13 @@ pub struct Config {
     /// Port the control routes are served on.
     #[macro_config_default(8101)]
     pub port: u16,
+    /// Directory holding agent teammates' bare repos: the EFS volume every
+    /// replica mounts in AWS, a compose volume locally. Must exist.
+    pub repo_storage_root: std::path::PathBuf,
+    /// Pushes to an agent repo are refused once it reaches this size.
+    pub max_repo_size_bytes: u64,
+    /// Push budget per agent repo, shared by every replica.
+    pub pushes_per_minute: u32,
     /// Port the sandbox-facing egress proxy is served on.
     ///
     /// The shared gateway forwards `/agent-harness-egress/*` to this listener.
@@ -302,6 +341,24 @@ impl Config {
             .filter(|value| !value.trim().is_empty())
     }
 
+    /// How long a session's command worker waits for its next command before
+    /// it releases the quiet session and exits. Shorter than
+    /// [`MIN_AGENT_SESSION_IDLE_TIMEOUT_SECS`] is refused rather than
+    /// clamped: a session could then release between any two of its commands
+    /// and every prompt would rebuild it from the log.
+    pub fn agent_session_idle_timeout(&self) -> anyhow::Result<std::time::Duration> {
+        if self.agent_session_idle_timeout_secs < MIN_AGENT_SESSION_IDLE_TIMEOUT_SECS {
+            anyhow::bail!(
+                "AGENT_SESSION_IDLE_TIMEOUT_SECS must be at least \
+                 {MIN_AGENT_SESSION_IDLE_TIMEOUT_SECS} seconds, got {}",
+                self.agent_session_idle_timeout_secs
+            );
+        }
+        Ok(std::time::Duration::from_secs(
+            self.agent_session_idle_timeout_secs,
+        ))
+    }
+
     /// The parsed `ENABLE_NON_USER_OWNERS` gate. Missing is disabled.
     pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {
         NonUserOwners::from_config_value(self.enable_non_user_owners.value())
@@ -309,45 +366,34 @@ impl Config {
     }
 
     /// Where this host's settlement requests go: the authentication service
-    /// while `ENABLE_AI_USAGE_BILLING` is true, which then requires
-    /// `AUTHENTICATION_SERVICE_SECRET_KEY`; nowhere otherwise.
+    /// while `ENABLE_AI_USAGE_BILLING` is true; nowhere otherwise.
     pub fn settlement_route(&self) -> anyhow::Result<ai_billing::composition::SettlementRoute> {
         Ok(ai_billing::composition::SettlementRoute::from_policy(
             self.enable_ai_usage_billing,
-            self.auth_service_client()?.map(std::sync::Arc::new),
+            Some(std::sync::Arc::new(self.auth_service_client()?)),
         )?)
     }
 
-    /// The authentication service client, when
-    /// `AUTHENTICATION_SERVICE_SECRET_KEY` is set.
+    /// The authentication service client, using the required resolved key.
     pub fn auth_service_client(
         &self,
-    ) -> anyhow::Result<Option<authentication_service_client::AuthServiceClient>> {
-        self.authentication_service_secret_key
-            .value()
-            .filter(|key| !key.trim().is_empty())
-            .map(|key| {
-                anyhow::Ok(authentication_service_client::AuthServiceClient::new(
-                    key.to_owned(),
-                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
-                ))
-            })
-            .transpose()
+    ) -> anyhow::Result<authentication_service_client::AuthServiceClient> {
+        Ok(authentication_service_client::AuthServiceClient::new(
+            self.authentication_service_secret_key.as_ref().to_owned(),
+            macro_service_urls::AuthServiceUrl::new()?.to_string(),
+        ))
     }
 
     /// Reads GitHub account-link tokens, so GitHub's MCP server needs no
-    /// separate authorization. `None` without the authentication service.
+    /// separate authorization.
     pub fn linked_github_tokens(
         &self,
-    ) -> anyhow::Result<Option<std::sync::Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>>>
-    {
-        Ok(self.auth_service_client()?.map(|client| {
-            std::sync::Arc::new(
-                mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
-                    client,
-                ),
-            ) as std::sync::Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>
-        }))
+    ) -> anyhow::Result<std::sync::Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>> {
+        Ok(std::sync::Arc::new(
+            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+                self.auth_service_client()?,
+            ),
+        ))
     }
 
     /// Load the configuration from the environment.
@@ -386,4 +432,177 @@ macro_env_var::maybe_env_vars! {
     pub struct FusionauthPublicUrl;
     /// Optional public MCP OAuth configuration.
     pub struct McpAllowedRedirectHosts;
+}
+
+/// Explicit selection shared by startup and Doppler validation.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ComputerFleetKind {
+    Incus,
+    Docker,
+}
+
+/// Required settings for the selected fleet; unselected groups are not loaded.
+pub enum ComputerFleetConfig {
+    Incus(IncusFleetSettings),
+    Docker(DockerFleetSettings),
+}
+
+impl Config {
+    /// Docker fleets are local infrastructure, never a deployed fallback.
+    pub fn validate_fleet_selection(&self) -> macro_config::MacroConfigResult<()> {
+        if matches!(self.computers_fleet, Some(ComputerFleetKind::Docker))
+            && !matches!(self.environment, Environment::Local)
+        {
+            return Err(macro_config::MacroConfigError::Deserialize(
+                "COMPUTERS_FLEET=docker is only available in local environments".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Macro computers' retention and past-due grace.
+    pub fn computer_billing_policy(
+        &self,
+    ) -> macro_config::MacroConfigResult<hosted_runtimes::domain::lifecycle::BillingPolicy> {
+        hosted_runtimes::domain::lifecycle::BillingPolicy::from_days(
+            self.computer_retention_days,
+            self.computer_past_due_grace_days,
+        )
+        .map_err(|error| macro_config::MacroConfigError::Deserialize(error.to_string()))
+    }
+
+    /// Load only the required settings for the explicitly selected fleet.
+    pub fn computer_fleet(&self) -> macro_config::MacroConfigResult<Option<ComputerFleetConfig>> {
+        self.validate_fleet_selection()?;
+        match self.computers_fleet {
+            Some(ComputerFleetKind::Incus) => {
+                let settings: IncusFleetSettings = macro_config::load()?;
+                settings.validate()?;
+                Ok(Some(ComputerFleetConfig::Incus(settings)))
+            }
+            Some(ComputerFleetKind::Docker) => {
+                let settings: DockerFleetSettings = macro_config::load()?;
+                settings.validate()?;
+                Ok(Some(ComputerFleetConfig::Docker(settings)))
+            }
+            None => Ok(None),
+        }
+    }
+}
+
+/// Required Incus fleet configuration.
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub struct IncusFleetSettings {
+    pub computers_control_plane_id: String,
+    pub computers_host_name: String,
+    pub computers_image: String,
+    pub computers_agent_image: String,
+    pub computers_host_reserve_gb: u32,
+    pub computers_oversell_factor: u32,
+    pub computers_incus_request_timeout_secs: u64,
+    pub computers_incus_connect_timeout_secs: u64,
+    pub computers_incus_operation_wait_secs: u32,
+    pub computers_incus_state_change_timeout_secs: u32,
+    pub computers_incus_operation_waits: u32,
+    pub computers_incus_shutdown_grace_secs: u64,
+    pub computers_incus_profile: String,
+    pub computers_incus_storage_pool: String,
+    pub computers_incus_url: String,
+    pub computers_incus_client_cert: String,
+    pub computers_incus_client_key: String,
+    pub computers_incus_server_cert: String,
+}
+
+/// Required Docker fleet configuration.
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub struct DockerFleetSettings {
+    pub computers_control_plane_id: String,
+    pub computers_host_name: String,
+    pub computers_image: String,
+    pub computers_agent_image: String,
+    pub computers_host_reserve_gb: u32,
+    pub computers_oversell_factor: u32,
+    pub computers_docker_network: String,
+    pub computers_docker_enrollment_dir: String,
+    pub computers_docker_memory_gb: u32,
+}
+
+impl IncusFleetSettings {
+    pub fn validate(&self) -> macro_config::MacroConfigResult<()> {
+        for (name, value) in [
+            (
+                "COMPUTERS_CONTROL_PLANE_ID",
+                self.computers_control_plane_id.as_str(),
+            ),
+            ("COMPUTERS_HOST_NAME", self.computers_host_name.as_str()),
+            ("COMPUTERS_IMAGE", self.computers_image.as_str()),
+            ("COMPUTERS_AGENT_IMAGE", self.computers_agent_image.as_str()),
+            (
+                "COMPUTERS_INCUS_PROFILE",
+                self.computers_incus_profile.as_str(),
+            ),
+            (
+                "COMPUTERS_INCUS_STORAGE_POOL",
+                self.computers_incus_storage_pool.as_str(),
+            ),
+            ("COMPUTERS_INCUS_URL", self.computers_incus_url.as_str()),
+            (
+                "COMPUTERS_INCUS_CLIENT_CERT",
+                self.computers_incus_client_cert.as_str(),
+            ),
+            (
+                "COMPUTERS_INCUS_CLIENT_KEY",
+                self.computers_incus_client_key.as_str(),
+            ),
+            (
+                "COMPUTERS_INCUS_SERVER_CERT",
+                self.computers_incus_server_cert.as_str(),
+            ),
+        ] {
+            if value.trim().is_empty() {
+                return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
+            }
+        }
+        if self.computers_oversell_factor == 0 {
+            return Err(macro_config::MacroConfigError::Deserialize(
+                "COMPUTERS_OVERSELL_FACTOR must be positive".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl DockerFleetSettings {
+    pub fn validate(&self) -> macro_config::MacroConfigResult<()> {
+        for (name, value) in [
+            (
+                "COMPUTERS_CONTROL_PLANE_ID",
+                self.computers_control_plane_id.as_str(),
+            ),
+            ("COMPUTERS_HOST_NAME", self.computers_host_name.as_str()),
+            ("COMPUTERS_IMAGE", self.computers_image.as_str()),
+            ("COMPUTERS_AGENT_IMAGE", self.computers_agent_image.as_str()),
+            (
+                "COMPUTERS_DOCKER_NETWORK",
+                self.computers_docker_network.as_str(),
+            ),
+            (
+                "COMPUTERS_DOCKER_ENROLLMENT_DIR",
+                self.computers_docker_enrollment_dir.as_str(),
+            ),
+        ] {
+            if value.trim().is_empty() {
+                return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
+            }
+        }
+        if self.computers_oversell_factor == 0 {
+            return Err(macro_config::MacroConfigError::Deserialize(
+                "COMPUTERS_OVERSELL_FACTOR must be positive".into(),
+            ));
+        }
+        Ok(())
+    }
 }

@@ -16,24 +16,46 @@ write; deletion always remains possible. A replay of a successful edit fails wit
 a revision conflict instead of applying it twice. User corrections take precedence
 over generated context. Generation cannot invoke memory mutation tools.
 
+Cognition serves the same operations over HTTP for the SDK (`macro.memory.read()`,
+`macro.memory.edit()`, `User.activity()`): `GET`/`PATCH /memory/explicit` and
+`GET /memory/activity`. They admit any principal with an acting user, including
+code-mode agent tokens, and act as that user. A stale revision answers 409 and a
+rejected addition 422. Code mode hides the three tools in favour of the SDK.
+
 `GetUserActivity` reads a bounded date interval for the caller or a current
 teammate, including reviewed professional history from before they joined the
 same team. Team associations record generation provenance; they do not restrict
 reports to the team at the time of generation. Shared output describes professional work; source messages, sensitive
 personal information, credentials, compensation, and other private details are
-excluded by generation instructions and a separate, fail-closed judge. Model
-privacy review is probabilistic, so this is not a deterministic redaction system.
+excluded by generation instructions and a separate, fail-closed judge: one
+TypeSafe Jev call per piece, asking one yes/no question per privacy rule, each
+with its own probability threshold (`crates/memory/src/outbound/jev_judge.rs`).
+Explicit memory is held only to the sensitive-information rules. Model privacy
+review is probabilistic, so this is not a deterministic redaction system.
 
 Memory reads enroll users in `memory_refresh_job`; migration also enrolls existing
 memory users. The cognition service runs an internal scheduled Rust closure on
 startup and every five minutes outside the local environment. The closure claims
 one user at a time with `FOR UPDATE SKIP LOCKED` and a 25-minute lease. A batch is
-bounded to 25 claims; a user's model work is bounded to 20 minutes. Failures keep
-their lease until it expires and do not prevent the remaining users from running.
+bounded to 25 claims; a user's model work is bounded to 20 minutes. Each claim of
+the same day counts as an attempt, including one whose worker crashed. A failed
+attempt is claimed again after 1, then 2 hours; the third failure gives the day
+up: the pieces that passed review commit, the profile stays as it was, and the
+user moves on to the next day. Failures do not prevent the remaining users from
+running.
+While the PostHog flag `disable-memory-refresh` is on for the service context
+`memory-refresh`, no new user is claimed: the flag is read before every claim, so a
+batch stops after the user in progress. A failed flag read keeps generation running.
 Shutdown cancels and drains the tracked task. The CLI awaits one user's generation
 and can be used locally with the existing provider and service configuration.
 
-Each claim targets the first unprocessed completed UTC day. An unenriched user's
+Each claim targets the first unprocessed UTC day that ended at least an hour ago,
+so activity still arriving from Kafka is counted. Before any model
+call, the activity log (`activity_events`, views and appearance changes excluded)
+is checked for that day; a day without activity commits with no report and no
+new profile. Each piece (daily, weekly, monthly, summary, profile) is stored in
+`memory_refresh_piece` as soon as it passes review, and later attempts at the
+same day reuse it instead of regenerating it; the day's commit deletes them. An unenriched user's
 first date is the UTC day before enrollment, preserved across failed first runs.
 Later days cannot leapfrog a missing day. The initial rollout does not synthesize
 historical activity predating enrollment.
@@ -57,6 +79,7 @@ removes access on the next read. The latest persisted report of each granularity
 remains available if generation is delayed, with its actual dates in the context.
 
 The scheduler's closure API is internal and does not expose arbitrary executable
-code or AWS Lambda targets through routine configuration. No new deployment or
-provider credentials are required. Local scheduled generation is disabled; use the
+code or AWS Lambda targets through routine configuration. The privacy judge needs
+`TYPESAFE_API_KEY` on every host that saves memory; a host without it refuses every
+save (503 for explicit edits). Local scheduled generation is disabled; use the
 awaited CLI when testing model behavior intentionally.

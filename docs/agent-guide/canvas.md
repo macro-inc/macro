@@ -1,5 +1,7 @@
 # Canvas
 
+An editable canvas with nothing on it shows the Canvas `TutorialPill` (from `features/video-tutorials`) in the middle of the board, once that video is in its catalog. It goes away when the first item is added or a drawing tool is picked, and read-only and embedded canvases never show it.
+
 ## Canvas colors
 
 To check the default canvas color, create a rectangle and a text box without
@@ -24,6 +26,21 @@ on desktop and uses the native share sheet on supported mobile devices.
 Controls are disabled while resolving the image source or running an action.
 Check an uploaded image and a workspace image, and confirm both actions disappear
 for multiple selections, groups, videos, and non-image shapes.
+
+## Artifacts
+
+Artifacts are behind the `enable-canvas-artifacts` flag. **Insert** offers
+**Artifact**, which places a node with starter HTML. The Canvas inspector edits its
+title and HTML. The document runs in a sandboxed frame; **Interact** or a
+double-click passes pointer input to it, and **Done** or a click elsewhere returns
+to the canvas. With the flag off, an artifact shows only its title and no script runs.
+The inspector also adds and edits styles and components shared across the canvas;
+HTML uses them with `<macro-style name="…">` and `<macro-component name="…">`.
+**Present** on a node opens the artifacts full screen in presentation order, which
+**Earlier** and **Later** in the inspector change. Check arrow keys and Esc both
+before and after clicking inside the frame. For an agent, `ReadCanvas` returns
+`artifactGuide` when the flag is on for the user, and artifact SDK operations in
+`ApplyCanvasEdits` fail without changing anything when it is off.
 
 ## Multiplayer canvas
 

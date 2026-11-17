@@ -61,6 +61,10 @@ pub fn route_agent_trigger(
     runtime: Option<AgentRuntimeConfig>,
     links: &StaticFileLinks,
 ) -> Result<RoutedTrigger, Skipped> {
+    let trigger_origin = match &event {
+        AgentTriggerTopicEvent::New(new) => new.origin(),
+        AgentTriggerTopicEvent::Existing(_) => trigger_context::TriggerOrigin::Unknown,
+    };
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::ConversationMessage(event)) => {
             let Some(runtime) = runtime else {
@@ -82,6 +86,7 @@ pub fn route_agent_trigger(
                     bot_id: event.bot_id,
                     runtime,
                     origin: SessionOrigin::Mention(MentionOrigin {
+                        trigger_origin,
                         reply_placement: super::model::ReplyPlacement::Timeline,
                         parent: event.message.parent,
                         thread_id: event.message.thread_id.unwrap_or(event.message.message_id),
@@ -104,6 +109,7 @@ pub fn route_agent_trigger(
                     bot_id: assigned.bot_id,
                     runtime,
                     origin: SessionOrigin::TaskAssignment(TaskAssignmentOrigin {
+                        trigger_origin,
                         // The task travels in the context; the prompt is only
                         // what to do with it. Events from producers that
                         // predate the context carry the whole brief instead.
@@ -142,6 +148,7 @@ pub fn route_agent_trigger(
                     bot_id,
                     runtime,
                     origin: SessionOrigin::Mention(MentionOrigin {
+                        trigger_origin,
                         reply_placement: Default::default(),
                         parent: message.parent,
                         // A top-level mention roots its own thread; a mention

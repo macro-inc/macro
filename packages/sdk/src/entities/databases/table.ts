@@ -6,6 +6,7 @@ import { MacroNotFoundError } from '../../utils';
 import { DatabaseColumn } from './column';
 import type { AddColumnOptions, Database } from './database';
 import { DatabaseRow } from './row';
+import type { SavedQuery, SaveQueryOptions } from './saved-query';
 import { DatabaseView } from './view';
 import type { DatabaseWebhook } from './webhook';
 
@@ -32,6 +33,8 @@ export class DatabaseTable {
   /**
    * The table's record as the API returns it: the table, its columns, and
    * its views.
+   *
+   * @readonly
    */
   async detail(): Promise<TableDetail> {
     const { tables } = await this.database.schema();
@@ -44,12 +47,21 @@ export class DatabaseTable {
     return found;
   }
 
-  /** The table's display name. */
+  /**
+   * The table's display name.
+   *
+   * @readonly
+   */
   async name(): Promise<string> {
     return (await this.detail()).table.name;
   }
 
-  /** Rename only if the last-read display name is still current. */
+  /**
+   * Rename only if the last-read display name is still current.
+   *
+   * @write
+   * @idempotent
+   */
   async rename(name: string): Promise<DatabaseTable> {
     await this.database.renameTable(this, name);
     return this;
@@ -60,55 +72,113 @@ export class DatabaseTable {
    * schema or rows. Schema edits such as {@link reorderColumns} send it as
    * the base version they were made against, so a table that moved since
    * refuses the edit with a 409.
+   *
+   * @readonly
    */
   async version(): Promise<TableVersion> {
     return (await this.detail()).table.version;
   }
 
-  /** The table's fractional index within the database's tab order. */
+  /**
+   * The table's fractional index within the database's tab order.
+   *
+   * @readonly
+   */
   async position(): Promise<string> {
     return (await this.detail()).table.position;
   }
 
-  /** The table's columns, in display order. */
+  /**
+   * The table's columns, in display order.
+   *
+   * @readonly
+   */
   async columns(): Promise<DatabaseColumn[]> {
     const { columns } = await this.detail();
     return columns.map((column) => DatabaseColumn.byId(this, column.column.id));
   }
 
-  /** Add a column to this table. See {@link Database.addColumn}. */
+  /**
+   * Add a column to this table. See {@link Database.addColumn}.
+   *
+   * @write
+   */
   addColumn(options: AddColumnOptions): Promise<DatabaseColumn> {
     return this.database.addColumn(this, options);
   }
 
-  /** Persist a new column order. See {@link Database.reorderColumns}. */
+  /**
+   * Persist a new column order. See {@link Database.reorderColumns}.
+   *
+   * @write
+   * @idempotent
+   */
   async reorderColumns(columns: DatabaseColumn[]): Promise<DatabaseTable> {
     await this.database.reorderColumns(this, columns);
     return this;
   }
 
-  /** A handle to one of the table's rows, by the id an insert answered. */
+  /**
+   * A handle to one of the table's rows, by the id an insert answered.
+   *
+   * @readonly
+   */
   row(id: string): DatabaseRow {
     return DatabaseRow.byId(this, id);
   }
 
-  /** The table's views, in their order. */
+  /**
+   * The table's views, in their order.
+   *
+   * @readonly
+   */
   async views(): Promise<DatabaseView[]> {
     const { views } = await this.detail();
     return views.map((view) => DatabaseView.byId(this, view.id));
   }
 
-  /** Create a webhook that inserts rows here. See {@link Database.createWebhook}. */
+  /**
+   * Create a webhook that inserts rows here. See {@link Database.createWebhook}.
+   *
+   * @write
+   */
   createWebhook(): Promise<{ webhook: DatabaseWebhook; token: string }> {
     return this.database.createWebhook(this);
   }
 
-  /** Delete this table. See {@link Database.deleteTable}. */
+  /**
+   * Save a `SELECT` about this table as a live question. See {@link Database.saveQuery}.
+   *
+   * @write
+   */
+  saveQuery(options: SaveQueryOptions): Promise<SavedQuery> {
+    return this.database.saveQuery({ ...options, table: this });
+  }
+
+  /**
+   * Delete this table. See {@link Database.deleteTable}.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.database.deleteTable(this);
   }
 
-  toJSON(): { id: string; databaseId: string } {
-    return { id: this.id, databaseId: this.database.id };
+  /**
+   * This table's URL in the Macro web app: the database, opened on this
+   * table. Hand it to users as the link to a table you built or changed.
+   *
+   * @readonly
+   */
+  webUrl(): string {
+    const url = new URL(this.database.webUrl());
+    url.searchParams.set('tableId', this.id);
+    return url.toString();
+  }
+
+  /** Identity and {@link webUrl}, so serialized handles carry their link. */
+  toJSON(): { id: string; databaseId: string; url: string } {
+    return { id: this.id, databaseId: this.database.id, url: this.webUrl() };
   }
 }

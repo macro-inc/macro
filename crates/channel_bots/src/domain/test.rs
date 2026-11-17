@@ -60,6 +60,7 @@ pub(super) fn parent() -> MessageParent {
 }
 pub(crate) fn message(id: u128, thread: Option<Uuid>, body: &str) -> Message {
     Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: Uuid::from_u128(id),
         parent: parent(),
         thread_id: thread,

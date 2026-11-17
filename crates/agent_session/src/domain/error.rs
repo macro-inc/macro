@@ -8,8 +8,19 @@ use thiserror::Error;
 
 pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 
+/// The `code` of a refusal of a prompt the agent may not run on its registered
+/// runtime: on the session API's 403 and on its `command_rejected` event.
+pub const NO_RUNTIME_ACCESS_CODE: &str = "no_runtime_access";
+
+/// Why no session opens on an agent teammate's computer, as callers show it.
+pub const TEAM_AGENT_COMPUTER_MESSAGE: &str =
+    "This computer belongs to an agent teammate. Message them instead.";
+
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// Invalid session activity paging input.
+    #[error("{0}")]
+    InvalidActivityQuery(&'static str),
     /// Speculative sessions cannot belong to a conversation or a message.
     #[error("a warm session cannot have conversation or message provenance")]
     InvalidSessionPurpose,
@@ -51,6 +62,10 @@ pub enum AgentSessionError {
     /// is not in a state to serve it. Says what the operator has to fix.
     #[error("{0}")]
     RuntimeUnavailable(&'static str),
+    /// The bot's harness is an agent teammate's computer: people message the
+    /// agent, and no session is started there.
+    #[error("{}", TEAM_AGENT_COMPUTER_MESSAGE)]
+    TeamAgentComputer,
     #[error("this bot already has a session for this thread")]
     ThreadSessionExists,
     /// A create named an id a session already holds. Ids are minted by the
@@ -85,6 +100,11 @@ pub enum AgentSessionError {
     TooManyPullRequests(usize),
     #[error("the caller may not control this agent session")]
     Forbidden,
+    /// A prompt may not run on the agent's registered runtime: a resident's
+    /// owner, or a coding agent's prompter, has no User access to it. The
+    /// text says which, for the person prompting.
+    #[error("{0}")]
+    NoRuntimeAccess(String),
     #[error("no queued action with this id; it may already have been dispatched")]
     QueuedControlNotFound,
     #[error("only queued prompts can be edited")]

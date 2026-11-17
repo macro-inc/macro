@@ -127,8 +127,11 @@ export class NotificationService extends pulumi.ComponentResource {
                 'ses:SendRawEmail',
                 'ses:SendTemplatedEmail',
               ],
+              // A send that names a configuration set (SES_CONFIGURATION_SET)
+              // is also authorized against that set.
               Resource: [
                 `arn:aws:ses:us-east-1:569036502058:identity/notification.macro.com`,
+                `arn:aws:ses:us-east-1:569036502058:configuration-set/*`,
               ],
               Effect: 'Allow',
             },

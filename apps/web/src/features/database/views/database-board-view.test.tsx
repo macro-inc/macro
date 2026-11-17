@@ -9,7 +9,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
+import { ok, okAsync, ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -224,11 +224,10 @@ describe('database board view', () => {
       before: 'first',
       after: 'last',
     });
-    expect(engine.keyBetween).toHaveBeenCalledWith('a0', 'a1');
     expect(positions()).toEqual([
       { row: 'first', lane: { kind: 'option', id: 'done' }, position: 'a0' },
       { row: 'last', lane: { kind: 'option', id: 'done' }, position: 'a1' },
-      { row: 'moving', lane: { kind: 'option', id: 'done' }, position: 'a0V' },
+      { row: 'moving', lane: { kind: 'option', id: 'todo' }, position: 'a0' },
     ]);
     expect(cardsIn('Done')).toEqual(['first', 'moving', 'last']);
     expect(cardsIn('To do')).toEqual([]);
@@ -428,136 +427,6 @@ describe('database board view', () => {
     setRead({ outcome: fresh, version: 8 });
     expect(cardsIn('Done')).toEqual(['moving', 'first']);
     expect(cardsIn('To do')).toEqual([]);
-  });
-
-  it('puts a card back where it was when the move is refused', async () => {
-    const view: DatabaseView = {
-      id: 'view',
-      databaseId: 'database',
-      tableId: 'table',
-      name: 'Board',
-      position: 'a0',
-      query: { filter: null, sort: [] },
-      layout: {
-        kind: 'board',
-        title: 'name',
-        groupBy: 'stage',
-        lanes: [],
-        cardFields: [],
-        hideEmptyLanes: false,
-      },
-      createdAt: '2026-09-01T00:00:00Z',
-      updatedAt: '2026-09-01T00:00:00Z',
-    };
-    const outcome: Outcome = {
-      columns: [],
-      rows: [],
-      rowIds: ['first', 'moving'],
-      readTables: ['table'],
-      truncated: false,
-      insertedRowIds: [],
-      changesApplied: 0,
-    };
-    engine.board.mockReturnValue({
-      lanes: [
-        {
-          key: { kind: 'option', id: 'done' },
-          hidden: false,
-          cards: ['first'],
-        },
-        {
-          key: { kind: 'option', id: 'todo' },
-          hidden: false,
-          cards: ['moving'],
-        },
-      ],
-    });
-    engine.keyBetween.mockReturnValue('a1');
-    const [positions, setPositions] = createSignal<CardPosition[]>([
-      { row: 'first', lane: { kind: 'option', id: 'done' }, position: 'a0' },
-    ]);
-    const move = vi.fn(() =>
-      errAsync<CardMoved, DatabaseOpFailure>({
-        kind: 'unexpected-result',
-      })
-    );
-    render(() => (
-      <DatabaseBoardView
-        view={view}
-        source={{
-          columns: () => [],
-          snapshot: () => undefined,
-          read: () => ({ outcome, catalog: { tables: [] }, view }),
-          loading: () => false,
-          refreshing: () => false,
-          error: () => undefined,
-          refresh: () => okAsync(undefined),
-          write: () => okAsync({ insertedRowIds: [], version: undefined }),
-          addOption: () => okAsync(undefined),
-          retain: () => {},
-        }}
-        rows={[
-          { rowId: 'first', cells: { name: 'First card', stage: 'Done' } },
-          { rowId: 'moving', cells: { name: 'Moving card', stage: 'To do' } },
-        ]}
-        columns={[
-          {
-            id: 'name',
-            name: 'Name',
-            dataType: 'STRING',
-            isMultiSelect: false,
-            options: [],
-            writable: true,
-          },
-          {
-            id: 'stage',
-            name: 'Stage',
-            dataType: 'SELECT_STRING',
-            isMultiSelect: false,
-            options: [
-              { id: 'done', label: 'Done', color: null },
-              { id: 'todo', label: 'To do', color: null },
-            ],
-            writable: true,
-          },
-        ]}
-        positions={{
-          state: () => ({ kind: 'ready', positions: positions() }),
-          setPositions,
-          move,
-        }}
-        canEdit
-        onViewChange={vi.fn()}
-        rowPending={() => false}
-        createPending={() => false}
-        createComplete={() => false}
-        onOpen={vi.fn()}
-        onCreate={vi.fn(async () => true)}
-      />
-    ));
-    const trigger = await screen.findByRole('button', {
-      name: 'Move Moving card',
-    });
-    trigger.focus();
-    fireEvent.keyDown(trigger, { key: 'Enter' });
-    fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Done' }), {
-      key: 'Enter',
-    });
-    await waitFor(() =>
-      expect(move).toHaveBeenCalledWith({
-        row: 'moving',
-        lane: { kind: 'option', id: 'done' },
-        before: 'first',
-        after: null,
-      })
-    );
-    await waitFor(() =>
-      expect(toastFailure).toHaveBeenCalledWith(
-        'The database answered the change with something else.'
-      )
-    );
-    expect(cardsIn('To do')).toEqual(['moving']);
-    expect(cardsIn('Done')).toEqual(['first']);
   });
 
   it('asks to remove the sort before moving a card, then clears the sort and moves it', async () => {

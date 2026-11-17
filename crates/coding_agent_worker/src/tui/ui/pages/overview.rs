@@ -1,4 +1,3 @@
-use harnesses::domain::models::HarnessOwner;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize as _};
@@ -18,9 +17,10 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
     let mut lines: Vec<Line> = Vec::new();
     match &app.snapshot.harness {
         Some(harness) => {
-            let scope = match &harness.owner {
-                HarnessOwner::User { .. } => Span::styled("private", Style::new().fg(WARN)),
-                HarnessOwner::Team { .. } => Span::styled("team", Style::new().fg(ACCENT)),
+            let scope = if harness.shared_team_ids.is_empty() {
+                Span::styled("private", Style::new().fg(WARN))
+            } else {
+                Span::styled("team", Style::new().fg(ACCENT))
             };
             lines.push(field(
                 "Name",
@@ -56,7 +56,7 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
             lines.push(Line::raw(""));
             lines.push(Line::styled(
                 if app.serving() {
-                    "Serving from this window; the dot turns green when the runtime connects."
+                    "Serving from this window; the dot turns green when this machine connects."
                 } else {
                     "The daemon is not running; check the Logs tab for why."
                 },

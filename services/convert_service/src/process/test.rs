@@ -436,3 +436,210 @@ mod job_cleanup {
         check(|job| std::fs::write(job, b"not a folder").unwrap(), false);
     }
 }
+
+mod process_message_span {
+    //! Exports `process_message` spans with the error-event-to-status mapping
+    //! the service's OTel layer uses, so a span's status here matches what
+    //! Datadog counts as a span error.
+
+    use aws_sdk_sqs::types::{Message, MessageAttributeValue};
+    use opentelemetry::trace::{Status, TracerProvider as _};
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider, SpanData};
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    use crate::process::convert::process_message;
+
+    fn s3() -> s3_client::S3 {
+        let config = aws_sdk_s3::Config::builder()
+            .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
+            .region(aws_sdk_s3::config::Region::new("us-east-1"))
+            .build();
+        s3_client::S3::new(aws_sdk_s3::Client::from_conf(config))
+    }
+
+    fn lambda() -> lambda_client::Lambda {
+        let config = aws_sdk_lambda::Config::builder()
+            .behavior_version(aws_sdk_lambda::config::BehaviorVersion::latest())
+            .region(aws_sdk_lambda::config::Region::new("us-east-1"))
+            .build();
+        lambda_client::Lambda::new(aws_sdk_lambda::Client::from_conf(config))
+    }
+
+    fn worker() -> sqs_worker::SQSWorker {
+        let config = aws_sdk_sqs::Config::builder()
+            .behavior_version(aws_sdk_sqs::config::BehaviorVersion::latest())
+            .region(aws_sdk_sqs::config::Region::new("us-east-1"))
+            .build();
+        sqs_worker::SQSWorker::new(
+            aws_sdk_sqs::Client::from_conf(config),
+            "https://sqs.us-east-1.amazonaws.com/0/convert".to_string(),
+            1,
+            0,
+        )
+    }
+
+    /// A queue message for `job_id` converting `from_key` to `to_key`.
+    fn message(job_id: &str, from_key: &str, to_key: &str) -> Message {
+        let body = serde_json::json!({
+            "job_id": job_id,
+            "from_bucket": "from-bucket",
+            "to_bucket": "to-bucket",
+            "from_key": from_key,
+            "to_key": to_key,
+        });
+        Message::builder()
+            .message_id("message")
+            .message_attributes(
+                "job_id",
+                MessageAttributeValue::builder()
+                    .data_type("String")
+                    .string_value(job_id)
+                    .build()
+                    .unwrap(),
+            )
+            .body(body.to_string())
+            .build()
+    }
+
+    /// Runs `process_message` and returns its result and exported span.
+    async fn run(message: &Message) -> (anyhow::Result<()>, SpanData) {
+        let exporter = InMemorySpanExporter::default();
+        let provider = SdkTracerProvider::builder()
+            .with_simple_exporter(exporter.clone())
+            .build();
+        let layer = tracing_opentelemetry::layer()
+            .with_tracer(provider.tracer("test"))
+            .with_error_events_to_status(true);
+        let result = {
+            let _guard =
+                tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
+            tracing::callsite::rebuild_interest_cache();
+            process_message(&worker(), &s3(), &lambda(), message).await
+        };
+
+        let span = exporter
+            .get_finished_spans()
+            .unwrap()
+            .into_iter()
+            .find(|span| span.name == "process_message")
+            .expect("process_message span");
+        (result, span)
+    }
+
+    #[tokio::test]
+    async fn a_job_that_fails_before_creating_its_folder_errors_the_span_by_its_failure() {
+        let job_id = "process-message-span-unsupported";
+        let (result, span) = run(&message(job_id, "uploads/notes.txt", "uploads/notes.pdf")).await;
+
+        assert!(result.is_err());
+        assert!(!std::path::Path::new(job_id).exists());
+        let Status::Error { description } = &span.status else {
+            panic!("expected an errored span, got {:?}", span.status);
+        };
+        assert!(
+            description.contains("unsupported conversion"),
+            "span error should be the conversion failure: {description}"
+        );
+        let events: Vec<_> = span.events.iter().map(|event| &*event.name).collect();
+        assert!(
+            !events.contains(&"unable to cleanup folder"),
+            "cleaning up a missing folder must not log an error: {events:?}"
+        );
+    }
+}
+
+mod job_updates {
+    //! What a finished conversion reports to the job update handler, which
+    //! rejects updates for jobs it does not track.
+
+    use model::convert::ConvertQueueMessage;
+    use serde_json::json;
+
+    use crate::process::convert::job_update;
+
+    #[test]
+    fn a_tracked_docx_conversion_reports_completion() {
+        let req: ConvertQueueMessage = serde_json::from_value(json!({
+            "job_id": "job-1",
+            "from_bucket": "docx-upload",
+            "to_bucket": "doc-storage",
+            "from_key": "owner/doc/1.docx",
+            "to_key": "owner/doc/converted.pdf",
+            "notify_job": true,
+        }))
+        .unwrap();
+
+        let update = serde_json::to_value(job_update("job-1", &req, true)).unwrap();
+
+        assert_eq!(update["jobId"], "job-1");
+        assert_eq!(update["status"], "Completed");
+        assert_eq!(update["jobType"], "docx_upload");
+        assert_eq!(update["data"]["error"], false);
+        assert_eq!(update["data"]["data"]["converted"], true);
+    }
+
+    #[test]
+    fn a_tracked_docx_conversion_reports_failure() {
+        let req: ConvertQueueMessage = serde_json::from_value(json!({
+            "job_id": "job-1",
+            "from_bucket": "docx-upload",
+            "to_bucket": "doc-storage",
+            "from_key": "owner/doc/1.docx",
+            "to_key": "owner/doc/converted.pdf",
+            "notify_job": true,
+        }))
+        .unwrap();
+
+        let update = serde_json::to_value(job_update("job-1", &req, false)).unwrap();
+
+        assert_eq!(update["status"], "Failed");
+        assert_eq!(update["data"]["error"], true);
+        assert_eq!(update["data"]["message"], "error converting document");
+    }
+
+    #[test]
+    fn a_conversion_without_a_job_reports_nothing() {
+        let req: ConvertQueueMessage = serde_json::from_value(json!({
+            "job_id": "minted",
+            "from_bucket": "docx-upload",
+            "to_bucket": "doc-storage",
+            "from_key": "owner/doc/1.docx",
+            "to_key": "owner/doc/converted.pdf",
+            "notify_job": false,
+        }))
+        .unwrap();
+
+        assert!(job_update("minted", &req, true).is_none());
+        assert!(job_update("minted", &req, false).is_none());
+    }
+
+    #[test]
+    fn messages_from_older_producers_still_report() {
+        let req: ConvertQueueMessage = serde_json::from_value(json!({
+            "job_id": "job-1",
+            "from_bucket": "docx-upload",
+            "to_bucket": "doc-storage",
+            "from_key": "owner/doc/1.docx",
+            "to_key": "owner/doc/converted.pdf",
+        }))
+        .unwrap();
+
+        assert!(job_update("job-1", &req, false).is_some());
+    }
+
+    #[test]
+    fn non_docx_conversions_report_nothing() {
+        let req: ConvertQueueMessage = serde_json::from_value(json!({
+            "job_id": "job-1",
+            "from_bucket": "doc-storage",
+            "to_bucket": "doc-storage",
+            "from_key": "owner/doc/13664129",
+            "to_key": "owner/doc/upgraded.docx",
+            "from_file_type": "doc",
+            "to_file_type": "docx",
+        }))
+        .unwrap();
+
+        assert!(job_update("job-1", &req, true).is_none());
+    }
+}

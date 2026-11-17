@@ -52,7 +52,7 @@ export class ExternalChatMessage extends MacroEntity<ExternalChatMessageRecord> 
   readonly editedAt = this.field('editedAt');
   /** Deleted for everyone. */
   readonly deleted = this.field('deleted');
-  /** Grouped emoji counts and caller's own reaction. */
+  /** Reactions by emoji: who reacted, and whether the caller did. */
   readonly reactions = this.field('reactions');
   /** Caller-owned send's delivery state, when present. */
   readonly deliveryState = this.field('deliveryState');

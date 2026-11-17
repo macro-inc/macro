@@ -32,7 +32,9 @@ export type LoadOutcome =
   /** The fetch or the fold failed. */
   | 'failed'
   /** Still unsettled at {@link STALL_THRESHOLD_MS} — reported, not concluded. */
-  | 'stalled';
+  | 'stalled'
+  /** Already loaded when acquired, so nothing was fetched or folded. */
+  | 'reused';
 
 /** Why a load ended `failed`, bounded so failures group. */
 export type LoadFailure =
@@ -350,7 +352,7 @@ export class SessionLoadTrace {
       this.#set('agent.session.load.failure', this.#failure ?? 'unknown');
     }
     // Nothing will paint for a load that did not land.
-    if (outcome !== 'loaded') this.#frames?.stop();
+    if (outcome !== 'loaded' && outcome !== 'reused') this.#frames?.stop();
     try {
       performance.measure('agent.session.load', {
         start: this.#startedAt,
@@ -381,6 +383,31 @@ export class SessionLoadTrace {
     } catch {
       // See the module comment.
     }
+  }
+}
+
+/**
+ * The log subscription ended and is being reopened: the server closed it
+ * (a subscriber that fell behind, a refused session) or the transport gave
+ * up. Every frame published until the new one is up reaches the session only
+ * through the refetch that follows, so a burst of these is a live feed that
+ * keeps dying.
+ */
+export function traceFollowResumed(
+  sessionId: string,
+  reason: 'error' | 'ended',
+  attempt: number,
+  delayMs: number
+): void {
+  const span = start('agent.session.log.follow_resumed', sessionId);
+  if (!span) return;
+  try {
+    span.setAttr('agent.session.log.follow.reason', reason);
+    span.setAttr('agent.session.log.follow.attempt', attempt);
+    span.setAttr('agent.session.log.follow.delay_ms', delayMs);
+    span.end();
+  } catch {
+    // See the module comment.
   }
 }
 

@@ -55,9 +55,16 @@ function setup(recordType: Pipeline['recordType'] = 'company') {
       ok({ id: `${email}-id` })
     ),
     applyCrmPipelineOps: vi.fn(
-      async (_id: string, request: { ops: DatabaseOp[] }) => {
+      async (
+        _id: string,
+        request: { ops: DatabaseOp[] }
+      ): Promise<
+        Awaited<
+          ReturnType<CrmRecordDependencies['storage']['applyCrmPipelineOps']>
+        >
+      > => {
         applied.push(request.ops);
-        return ok({ results: [] });
+        return ok({ results: [], changes: [] });
       }
     ),
   };
@@ -73,6 +80,60 @@ function setup(recordType: Pipeline['recordType'] = 'company') {
 }
 
 describe('pipeline transfer', () => {
+  it('isolates refused entries and only remembers options from committed writes', async () => {
+    const { transfer, storage } = setup();
+    const saved: DatabaseOp[][] = [];
+    storage.applyCrmPipelineOps.mockImplementation(async (_id, request) => {
+      const insert = request.ops.find((op) => op.kind === 'rows');
+      if (insert?.kind !== 'rows' || insert.change.kind !== 'insert')
+        throw new Error('Missing insert');
+      if (
+        insert.change.rows.some((row) =>
+          row.some((cell) => cell.column === 'bad')
+        )
+      )
+        return err([
+          {
+            code: 'INVALID_OP',
+            refusal: null,
+            message: 'Fill in Amount before entering Lead.',
+          },
+        ]);
+      saved.push(request.ops);
+      return ok({ results: [], changes: [] });
+    });
+    const stageCell = {
+      column: 'stage',
+      value: { type: 'options' as const, value: [{ label: 'Negotiation' }] },
+    };
+    const rejected = vi.fn();
+    await transfer.insertRows(
+      [
+        [stageCell, { column: 'bad', value: { type: 'clear' } }],
+        [stageCell],
+        [stageCell],
+      ],
+      [stage],
+      rejected
+    );
+    expect(rejected).toHaveBeenCalledExactlyOnceWith(
+      0,
+      'Fill in Amount before entering Lead.'
+    );
+    expect(
+      saved.flatMap((ops) => ops.filter((op) => op.kind === 'column'))
+    ).toHaveLength(1);
+    expect(
+      saved.flatMap((ops) =>
+        ops.flatMap((op) =>
+          op.kind === 'rows' && op.change.kind === 'insert'
+            ? op.change.rows
+            : []
+        )
+      )
+    ).toHaveLength(2);
+  });
+
   it('matches companies by domain and creates the missing ones once', async () => {
     const { transfer, storage } = setup();
     const ids = await transfer.resolveRecords(

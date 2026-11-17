@@ -184,6 +184,7 @@ async fn process_docx(
                 to_key: to_key.clone(),
                 from_file_type: None,
                 to_file_type: None,
+                notify_job: false,
             }));
         }
 

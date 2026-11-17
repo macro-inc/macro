@@ -39,7 +39,8 @@ export type PipelineTransfer = {
   /** Appends rows, first adding the select options they name that columns lack. */
   insertRows(
     rows: readonly CellWrite[][],
-    columns: readonly DatabaseViewColumn[]
+    columns: readonly DatabaseViewColumn[],
+    onRejected?: (row: number, reason: string) => void
   ): Promise<void>;
   /** Shows the new rows and records everywhere they appear. */
   refresh(): Promise<void>;

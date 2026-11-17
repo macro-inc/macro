@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Progetto',
     newProject: 'Nuovo progetto',
     contentAlreadyOpen: 'Contenuto già aperto',
-    unableToOpenConversation: 'Impossibile aprire la conversazione. Riprova.',
     mobileSearchPlaceholder: 'Cerca…',
     closeSearch: 'Chiudi ricerca',
     searchFullTextFor: 'Cerca nel testo completo «{{query}}»',
@@ -611,10 +610,6 @@ export default {
       other: '{{accepted}} su {{count}} elementi segnati come non completati',
     },
     toastMarkNotDoneFailed: 'Impossibile segnare come non completato',
-    toastThreadStaysDone:
-      'Questo thread non ha messaggi ricevuti, quindi resta completato',
-    toastThreadsStayDone:
-      'Questi thread non hanno messaggi ricevuti, quindi restano completati',
     toastCountNotRestored: {
       one: 'Impossibile ripristinare {{count}} elemento.',
       many: 'Impossibile ripristinare {{count}} di elementi.',
@@ -789,7 +784,7 @@ export default {
     tabMobileApp: 'App mobile',
     tabTags: 'Tag',
     tabIntegrations: 'Integrazioni',
-    tabRuntimes: 'Runtime',
+    tabRuntimes: 'Macchine',
     tabMcpServer: 'Server MCP',
     tabApiKeys: 'Chiavi API',
     tabBots: 'Bot',

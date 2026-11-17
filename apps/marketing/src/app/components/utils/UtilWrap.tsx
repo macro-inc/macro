@@ -1,5 +1,6 @@
 import { type ParentProps, Suspense } from 'solid-js';
 import { viewportWidth } from '../../utils/utilBreakpoint';
+import '../../../features/marketing/components/page-aura.css';
 
 export function UtilWrap(props: ParentProps) {
   return (

@@ -7,7 +7,13 @@ import {
   PriorityCollapseOverflowSensor,
 } from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
 import { ViewShell } from '@app/components/view-shell';
-import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
+import { AccountManagerRequestButton } from '@app/features/account-manager/account-manager-request-button';
+import {
+  DmWorkPanel,
+  DmWorkProvider,
+  DmWorkToggle,
+} from '@app/features/agent-work/views/dm-work';
+import { TeamAgentDmStatusChip } from '@app/features/settings/views/team-agent-dm-status';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { TraceFlow } from '@app/observability/flow';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
@@ -17,6 +23,7 @@ import { CallEventSync } from '@channel/Call/CallEventSync';
 import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
 import { ChannelCallButton } from '@channel/Call/ChannelCallButton';
 import { ChannelCallTab } from '@channel/Call/ChannelCallTab';
+import type { CallJoinIntent } from '@channel/Call/call-lifecycle';
 import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
@@ -40,6 +47,7 @@ import {
 import { isMobile } from '@core/mobile/isMobile';
 import { createMethodRegistration } from '@core/orchestrator';
 import { lazyNamed } from '@core/util/lazyNamed';
+import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { Tabs } from '@ui';
 import {
   type Accessor,
@@ -54,6 +62,10 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import {
+  ActiveCallHeader,
+  JoinableCallStatus,
+} from '../Call/views/ActiveCallHeader';
 import { ChannelLoading } from './ChannelLoading';
 import {
   ChannelMessages,
@@ -65,8 +77,8 @@ import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
 import { withChannelTabIcons } from './channel-tab-icons';
 import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from './channel-tabs';
 import {
-  isJoinCallRequested,
   isOpenCallTabRequested,
+  parseCallJoinIntent,
   toChannelTargetRequest,
   URL_PARAMS,
 } from './link';
@@ -96,6 +108,13 @@ export type ChannelDetailProps = {
   fallbackName?: string;
   /** Whether the composer grabs focus on mount. Defaults to false. */
   autofocus?: boolean;
+  /** Focus the composer each time this changes after mount. */
+  composerFocusRequest?: number;
+  /**
+   * Esc on the message list (the composer's Esc lands there) hands focus back
+   * to the list this conversation was opened from. Returns whether it did.
+   */
+  onEscapeToList?: () => boolean;
   /** Render the host's header and register any host-specific breadcrumbs. */
   children: (context: ChannelDetailContext) => JSX.Element;
 };
@@ -146,7 +165,7 @@ export function ChannelDetailTabs(props: {
   return (
     <Tabs
       aria-label="Channel sections"
-      size="md"
+      size="sm"
       touch="inset"
       class="shrink-0"
       options={isCollapsed() ? withChannelTabIcons(tabs()) : tabs()}
@@ -164,23 +183,34 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   const call = useCall(() => props.channelId);
   const { activeTab } = useChannelTab();
 
-  // Seed for "Ask Macro": a new chat with this channel @mentioned.
-  const askMacroEntity = () => {
-    const type = channelType();
-    if (!type) return undefined;
-    return {
-      type: 'channel' as const,
-      id: props.channelId,
-      name: channelName() ?? 'New Channel',
-      channelType: type,
-    };
-  };
-
   return (
     <div class="header-actions ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
+      <Show when={channelType() === ChannelType.direct_message}>
+        <DebugSuspense name="ChannelDetail.agent-status">
+          <TeamAgentDmStatusChip channelId={props.channelId} />
+        </DebugSuspense>
+      </Show>
+      <Show when={activeTab() !== 'call'}>
+        <DmWorkToggle />
+      </Show>
       <DebugSuspense name="ChannelDetail.live-indicators">
         <ChannelLiveIndicators channelId={props.channelId} />
       </DebugSuspense>
+      <Show when={call.isInThisChannel()}>
+        <DebugSuspense name="ChannelDetail.active-call">
+          <ActiveCallHeader
+            channelId={props.channelId}
+            link={activeTab() === 'call'}
+          />
+        </DebugSuspense>
+      </Show>
+      <Show
+        when={!call.isInThisChannel() && ENABLE_CALLS && !channel()?.agent_dm}
+      >
+        <DebugSuspense name="ChannelDetail.joinable-call">
+          <JoinableCallStatus channelId={props.channelId} />
+        </DebugSuspense>
+      </Show>
       <HeaderActionGroup label="Conversation actions">
         <Show
           when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
@@ -189,18 +219,12 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
             <ChannelCallButton grouped channelId={props.channelId} />
           </DebugSuspense>
         </Show>
-        <Show when={askMacroEntity()}>
-          {(entity) => (
-            <DebugSuspense name="ChannelDetail.ask-macro">
-              <ChatWithAgentButton
-                grouped
-                entity={entity()}
-                label="Ask Macro"
-              />
-            </DebugSuspense>
-          )}
-        </Show>
       </HeaderActionGroup>
+      <Show when={channelType() === ChannelType.direct_message}>
+        <DebugSuspense name="ChannelDetail.account-manager">
+          <AccountManagerRequestButton channelId={props.channelId} />
+        </DebugSuspense>
+      </Show>
       <Show
         when={!isMobile() || activeTab() !== 'call' || !call.isInThisChannel()}
       >
@@ -228,7 +252,10 @@ export function ChannelDetailTopBar(
   const collapse = createPriorityCollapseController();
 
   return (
-    <ViewShell.TopBar ref={collapse.setRow} class="gap-3 py-0">
+    <ViewShell.TopBar
+      ref={collapse.setRow}
+      class="@container/channel-header gap-3 py-0"
+    >
       {/* Reserve room for the tab outline inside the clipped, measured region. */}
       <PriorityCollapseOverflowSensor
         controller={collapse}
@@ -285,6 +312,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const channelId = props.channelId;
   const conversationChannel = useChannel(channelId);
   const canCall = useChannelCanCall(channelId);
+  const conversationType = useChannelType(channelId);
   const channelName = useChannelName(channelId, props.fallbackName);
   useSplitDisplayName(() => channelName() ?? 'New Channel');
   const analytics = useAnalytics();
@@ -350,7 +378,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
     )
       setActiveTabInternal(DEFAULT_CHANNEL_TAB);
   });
-  const [pendingJoinCall, setPendingJoinCall] = createSignal(false);
+  const [pendingJoinCall, setPendingJoinCall] = createSignal<CallJoinIntent>();
 
   // A new target within the already-mounted channel (a notification jump)
   // must land on the messages pane, whichever tab is open.
@@ -380,9 +408,10 @@ function ChannelDetailContent(props: ChannelDetailProps) {
           return;
         }
 
-        if (isJoinCallRequested(params[URL_PARAMS.joinCall])) {
+        const intent = parseCallJoinIntent(params[URL_PARAMS.joinCall]);
+        if (intent) {
           setActiveTab(getCallJoinTab());
-          setPendingJoinCall(true);
+          setPendingJoinCall(intent);
         }
       },
       goToLatest: async () => {
@@ -414,74 +443,88 @@ function ChannelDetailContent(props: ChannelDetailProps) {
             canCall={canCall}
             channelId={channelId}
             pendingJoinCall={pendingJoinCall}
-            onHandled={() => setPendingJoinCall(false)}
+            onHandled={() => setPendingJoinCall(undefined)}
           />
         </DebugSuspense>
-        <div class="flex size-full min-h-0 flex-col">
-          <DebugSuspense name="ChannelDetail.header">
-            <ChannelDetailHeader
-              render={props.children}
-              context={{
-                channelId,
-                name: () => channelName() ?? 'New Channel',
-              }}
-            />
-          </DebugSuspense>
-          <div
-            class="flex min-h-0 flex-1 flex-col px-2"
-            data-channel-tab-content
-          >
-            <Switch>
-              <Match when={activeTab() === 'messages'}>
-                <DebugSuspense
-                  name="ChannelDetail.messages"
-                  fallback={<ChannelLoading />}
-                >
-                  <TraceFlow name="channel.messages.view">
-                    <ChannelMessages autofocus={props.autofocus ?? false} />
-                  </TraceFlow>
-                </DebugSuspense>
-              </Match>
-              <Match when={activeTab() === 'attachments'}>
-                <DebugSuspense name="ChannelDetail.attachments">
-                  <TraceFlow name="channel.attachments.view">
-                    <ChannelAttachmentsTab channelId={channelId} />
-                  </TraceFlow>
-                </DebugSuspense>
-              </Match>
-              <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
-                <DebugSuspense name="ChannelDetail.calls">
-                  <TraceFlow name="channel.calls.view">
-                    <ChannelCallsTab channelId={channelId} />
-                  </TraceFlow>
-                </DebugSuspense>
-              </Match>
-              <Match when={activeTab() === 'participants'}>
-                <DebugSuspense name="ChannelDetail.participants">
-                  <TraceFlow name="channel.participants.view">
-                    <ChannelParticipantsTab
-                      channelId={channelId}
-                      botManagementEnabled={botManagement.enabled()}
-                      onCreateBot={botManagement.openCreateBot}
-                      inviteBotFocusRequest={botManagement.inviteFocusRequest()}
-                      onOpenBot={botManagement.openBot}
-                    />
-                  </TraceFlow>
-                </DebugSuspense>
-              </Match>
-              <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
-                <DebugSuspense name="ChannelDetail.call">
-                  <TraceFlow name="channel.call.view">
-                    <ChannelCallTab
-                      channelId={channelId}
-                      pendingJoin={pendingJoinCall}
-                    />
-                  </TraceFlow>
-                </DebugSuspense>
-              </Match>
-            </Switch>
+        <DmWorkProvider
+          isDirectMessage={conversationType() === 'direct_message'}
+          participantIds={
+            conversationChannel()?.participants.map(
+              (participant) => participant.user_id
+            ) ?? []
+          }
+        >
+          <div class="flex size-full min-h-0 flex-col">
+            <DebugSuspense name="ChannelDetail.header">
+              <ChannelDetailHeader
+                render={props.children}
+                context={{
+                  channelId,
+                  name: () => channelName() ?? 'New Channel',
+                }}
+              />
+            </DebugSuspense>
+            <div
+              class="relative flex min-h-0 flex-1 flex-col px-2"
+              data-channel-tab-content
+            >
+              <DmWorkPanel />
+              <Switch>
+                <Match when={activeTab() === 'messages'}>
+                  <DebugSuspense
+                    name="ChannelDetail.messages"
+                    fallback={<ChannelLoading />}
+                  >
+                    <TraceFlow name="channel.messages.view">
+                      <ChannelMessages
+                        autofocus={props.autofocus ?? false}
+                        composerFocusRequest={props.composerFocusRequest}
+                        onEscapeToList={props.onEscapeToList}
+                      />
+                    </TraceFlow>
+                  </DebugSuspense>
+                </Match>
+                <Match when={activeTab() === 'attachments'}>
+                  <DebugSuspense name="ChannelDetail.attachments">
+                    <TraceFlow name="channel.attachments.view">
+                      <ChannelAttachmentsTab channelId={channelId} />
+                    </TraceFlow>
+                  </DebugSuspense>
+                </Match>
+                <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
+                  <DebugSuspense name="ChannelDetail.calls">
+                    <TraceFlow name="channel.calls.view">
+                      <ChannelCallsTab channelId={channelId} />
+                    </TraceFlow>
+                  </DebugSuspense>
+                </Match>
+                <Match when={activeTab() === 'participants'}>
+                  <DebugSuspense name="ChannelDetail.participants">
+                    <TraceFlow name="channel.participants.view">
+                      <ChannelParticipantsTab
+                        channelId={channelId}
+                        botManagementEnabled={botManagement.enabled()}
+                        onCreateBot={botManagement.openCreateBot}
+                        inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                        onOpenBot={botManagement.openBot}
+                      />
+                    </TraceFlow>
+                  </DebugSuspense>
+                </Match>
+                <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
+                  <DebugSuspense name="ChannelDetail.call">
+                    <TraceFlow name="channel.call.view">
+                      <ChannelCallTab
+                        channelId={channelId}
+                        pendingJoin={() => !!pendingJoinCall()}
+                      />
+                    </TraceFlow>
+                  </DebugSuspense>
+                </Match>
+              </Switch>
+            </div>
           </div>
-        </div>
+        </DmWorkProvider>
       </ChannelTabProvider>
     </ChannelSurface>
   );

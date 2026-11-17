@@ -16,6 +16,7 @@ fn message(id: u128) -> MessageListItem {
     let id = Uuid::from_u128(id);
     MessageListItem {
         message: Message {
+            kind: MessageKind::Message,
             guest_name: None,
             id,
             parent: MessageParent::Channel(Uuid::from_u128(100)),

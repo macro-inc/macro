@@ -221,7 +221,7 @@ pub struct ChannelSearchResults {
     pub total: i64,
 }
 
-#[tracing::instrument(skip(client, args), err)]
+#[tracing::instrument(skip(client, args))]
 pub(crate) async fn search_channel(
     client: &opensearch::OpenSearch,
     args: ChannelSearchArgs,

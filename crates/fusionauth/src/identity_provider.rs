@@ -63,7 +63,7 @@ impl FusionAuthClient {
     }
 
     /// Completes the identity provider login
-    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    #[tracing::instrument(skip(self, code), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn complete_identity_provider_login(
         &self,
         idp_id: &str,

@@ -6,7 +6,7 @@ pub mod sort;
 pub use sort::{DynamicSort, DynamicSortValue};
 
 #[cfg(feature = "ports")]
-mod exclusions;
+pub(crate) mod exclusions;
 
 #[cfg(all(test, feature = "ports"))]
 mod test;
@@ -477,8 +477,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
         let entity_ast = self.entity_ast();
         let crm_scope = entity_ast.and_then(|a| a.email_filter.crm_scope.clone());
 
-        // A CRM scope reads teammates' threads, which email authorizes against
-        // the scope, so a viewer without a mailbox of their own still sees them.
+        // CRM access is separate from mailbox contribution: a viewer without a
+        // mailbox still reads team-contributed threads, which email authorizes
+        // against the CRM scope and filters by consent and exclusions.
         if self.link_ids.is_empty() && crm_scope.is_none() {
             return None;
         }
@@ -629,7 +630,8 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     /// Returns `None` (skipping the CRM sub-request) for no-team users,
-    /// Frecency cursors, or a malformed team-receipt uuid.
+    /// Frecency cursors, a malformed team-receipt uuid, or a company filter
+    /// pinned to the nil id.
     pub(crate) fn build_crm_company_request(
         &self,
         team_receipt: &Option<EntityAccessReceipt<MemberTeamRole>>,
@@ -693,6 +695,17 @@ impl SoupRequest<Option<EntityFilterAst>> {
         {
             // Fail closed: unsupported AST shape would widen the result
             // set. Skip the CRM sub-request rather than over-include.
+            return None;
+        }
+        // The CRM query matches `id = ANY(ids)` when ids are given, so ids that
+        // are all nil match no company. Read the extract rather than the tree:
+        // it flattens `And` into the id list, and the skip must answer exactly
+        // what the query would have. A request for hidden companies must still
+        // reach the CRM service's admin check.
+        if extract.hidden != Some(true)
+            && !extract.ids.is_empty()
+            && extract.ids.iter().all(Uuid::is_nil)
+        {
             return None;
         }
 

@@ -1,5 +1,9 @@
 .feature-page .email-page-hero {
   padding: 132px 24px 64px;
+  display: grid;
+  grid-template-columns: minmax(0, max-content);
+  justify-content: center;
+  justify-items: center;
 }
 
 .email-page-hero::before {
@@ -27,45 +31,86 @@
 }
 
 .feature-page .email-page-hero h1 {
+  max-width: 100%;
   margin: 0 0 24px;
   font-family: 'Roboto Slab Variable', display, serif;
-  font-size: clamp(44px, 5vw, 72px);
-  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
+  font-size: 40px;
+  white-space: normal;
+  text-wrap: balance;
+  font-weight: calc(320 + var(--cream-slab-weight-increase, 0));
   line-height: 1.06;
   letter-spacing: -.04em;
 }
 
-.email-page-hero h1 span {
-  display: block;
-}
-
-.email-page-hero h1 span:last-child {
-  color: var(--color-ink-muted);
-}
-
 .feature-page .email-page-hero > .email-page-hero-description {
-  width: 100%;
-  max-width: 540px;
-  color: var(--color-ink-muted);
-  font-size: 17px;
+  contain: inline-size;
+  width: calc(100% - 10px);
+  max-width: 100%;
+  white-space: normal;
+  color: var(--feature-copy-color, var(--color-ink-muted));
+  font-size: 17.5px;
   line-height: 1.65;
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 .email-page-hero .feature-page-cta {
-  margin-top: 28px;
   padding-inline: 26px;
+}
+
+/* The mail providers the inbox connects to, under the call to action. */
+.email-page-hero-providers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 8px;
+  margin-top: 20px;
+  color: var(--feature-copy-color, var(--color-ink-muted));
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.email-page-hero-providers span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-ink);
+}
+
+.email-page-hero-providers svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+/* Get started, then the Block's "Watch demo" tutorial. */
+.feature-page-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 28px;
 }
 
 @media (max-width: 699px) {
   .feature-page .email-page-hero {
-    padding: 114px 18px 44px;
+    padding: 114px 8px 44px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Product pages add their own gutter; give the hero the same width there. */
+  .feature-page .product-page .email-page-hero {
+    margin-inline: -10px;
+    padding-inline: 0;
   }
 
   .feature-page .email-page-hero h1 {
-    font-size: clamp(34px, 7.8vw, 50px);
+    font-size: clamp(38px, 11vw, 46px);
+    white-space: normal;
+    text-wrap: balance;
     letter-spacing: -.035em;
-    line-height: 1.1;
+    line-height: 1.08;
   }
 
   .feature-page .email-page-hero > .email-page-hero-label {
@@ -73,14 +118,12 @@
     font-size: 11px;
   }
 
+  /* Fill the phone's width; balanced lines leave the summary a narrow column. */
   .feature-page .email-page-hero > .email-page-hero-description {
-    max-width: 340px;
-    font-size: 15px;
+    width: 100%;
+    text-wrap: pretty;
   }
 
-  .email-page-hero-break {
-    display: none;
-  }
 }
 
 .product-home-link {
@@ -96,3 +139,5 @@
   outline: 2px solid currentColor;
   outline-offset: 5px;
 }
+
+.feature-page-hero-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-top: 28px; }

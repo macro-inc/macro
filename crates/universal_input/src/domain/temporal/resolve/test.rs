@@ -28,7 +28,9 @@ fn next_weekdays_follow_calendar_weeks_instead_of_model_computed_dates() {
         .reference_time
         .with_timezone(&chrono_tz::America::New_York);
     assert_eq!(
-        date(&expression, &request, reference).unwrap().to_string(),
+        date(&expression, &request.text, reference.date_naive())
+            .unwrap()
+            .to_string(),
         "2026-11-06"
     );
     let mut fields = InputSuggestions::Task(TaskSuggestions {
@@ -102,8 +104,8 @@ fn invalid_dates_clocks_and_unbacked_spans_are_rejected() {
                 month: 2,
                 day: 30
             },
-            &request,
-            reference
+            &request.text,
+            reference.date_naive()
         )
         .is_err()
     );
@@ -454,8 +456,8 @@ fn absolute_dates_reject_numeric_facts_that_are_not_in_their_source() {
                 month: 12,
                 day: 31
             },
-            &request,
-            reference
+            &request.text,
+            reference.date_naive()
         )
         .is_err()
     );
@@ -467,8 +469,8 @@ fn absolute_dates_reject_numeric_facts_that_are_not_in_their_source() {
                 month: 5,
                 day: 15
             },
-            &request,
-            reference
+            &request.text,
+            reference.date_naive()
         )
         .is_err()
     );
@@ -480,8 +482,8 @@ fn absolute_dates_reject_numeric_facts_that_are_not_in_their_source() {
                 month: 12,
                 day: 31
             },
-            &request,
-            reference
+            &request.text,
+            reference.date_naive()
         )
         .unwrap()
         .to_string(),

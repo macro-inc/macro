@@ -139,10 +139,7 @@ impl Notification for EmailDigestNotification {
 
 impl NotificationExtEmail for EmailDigestNotification {
     fn format_email(&self) -> EmailContent {
-        EmailContent {
-            subject: self.subject.clone(),
-            body: self.inner_html_string.clone(),
-        }
+        EmailContent::new(self.subject.clone(), self.inner_html_string.clone())
     }
 
     fn rate_limit_config() -> RateLimitConfig {

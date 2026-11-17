@@ -1,7 +1,5 @@
 use super::*;
 
-const DISPLAY_NAME_MAX_CHARS: usize = 64;
-
 /// Tells someone whose address matches a team's auto-join domain that a team now exists for their
 /// organization and that signing up with their work email joins it. It is an informational,
 /// one-time notice that names who set the team up rather than announcing a sign-up.
@@ -21,19 +19,7 @@ pub struct ColleagueJoinedMacro {
 
 impl ColleagueJoinedMacro {
     fn display_name(&self) -> Option<String> {
-        let words: Vec<&str> = self
-            .joined_name
-            .as_deref()?
-            .split(|c: char| c.is_whitespace() || c.is_control())
-            .filter(|word| !word.is_empty())
-            .collect();
-        let capped: String = words
-            .join(" ")
-            .chars()
-            .take(DISPLAY_NAME_MAX_CHARS)
-            .collect();
-        let name = capped.trim_end();
-        (!name.is_empty()).then(|| name.to_owned())
+        single_line_name(self.joined_name.as_deref())
     }
 
     fn joined_email(&self) -> &str {
@@ -60,12 +46,11 @@ impl Notification for ColleagueJoinedMacro {
 
 impl NotificationExtEmail for ColleagueJoinedMacro {
     fn format_email(&self) -> EmailContent {
-        EmailContent {
-            subject: "A team has been created for your organization".to_string(),
-            body: self
-                .render()
+        EmailContent::new(
+            "A team has been created for your organization".to_string(),
+            self.render()
                 .expect("ColleagueJoinedMacro template render failed in format_email"),
-        }
+        )
     }
 
     fn rate_limit_config() -> RateLimitConfig {

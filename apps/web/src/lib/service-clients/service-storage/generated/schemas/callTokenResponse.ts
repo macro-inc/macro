@@ -23,6 +23,8 @@ export interface CallTokenResponse {
   serverUrl: string;
   /** Meeting link capability, when joined using a link. */
   shareToken?: CallTokenResponseShareToken;
+  /** Whether this request allocated the call. */
+  started: boolean;
   /** The RTC token for connecting to the room. */
   token: string;
 }

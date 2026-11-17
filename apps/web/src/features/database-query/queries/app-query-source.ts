@@ -185,9 +185,9 @@ export function createSavedQuestionSource(
 }
 
 /**
- * Saved queries are immutable: every new SQL text becomes a new row. The
- * service stores it as given, so it is compiled against the viewer's
- * catalog first, and only a read is saved.
+ * Saved queries are immutable: every new SQL text becomes a new row. It is
+ * compiled against the viewer's catalog here first, for an immediate error;
+ * the service compiles it again and saves only a read.
  */
 export function saveQuestionSql(input: {
   sql: string;

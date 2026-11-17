@@ -4,5 +4,5 @@ pub mod api_client;
 pub mod fs;
 /// Host async runtime integration.
 pub mod runtime;
-/// System information queries (version, arch, target, cache dir).
+/// System information queries (version, arch, target, bundle storage dir).
 pub mod system_info;

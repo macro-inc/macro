@@ -1,6 +1,7 @@
 # universal_input
 
-Read-only intent classification and editable field extraction for Command K.
+Read-only intent classification and editable field extraction for Command K, and
+the due date read from an email thread for Focus.
 
 - `src/domain.rs` owns admission, draft bounds, verbatim note preservation,
   and event timestamp validation/defaults. `domain/temporal` resolves typed, source-backed
@@ -18,6 +19,16 @@ Read-only intent classification and editable field extraction for Command K.
   `outbound/temporal.rs` extracts temporal facts with Nemotron.
 - `src/inbound/axum_router.rs` owns authenticated HTTP routes. The harness root
   composes providers and mounts the router under `/universal_input`.
+- `domain/temporal/thread_due_date.rs` and `outbound/thread_due_date.rs` read a
+  thread's due date for `email_focus_worker`, which has no model credentials:
+  the model states deadline and closure facts per message; Rust resolves each
+  against the day its own message was written and picks the one still standing.
+  Anything uncertain resolves to no date, since a wrong date costs more than a
+  missing one. `/universal_input/thread-due-date` is internal-only and meters
+  against the acting user as `AiFeature::EmailFocus`, which no allowance pays for:
+  never open it to user credentials, or it becomes a free model proxy. It has no
+  OpenAPI entry for the same reason. Mail is untrusted data: it stays in the user
+  message, and the fixed system prompt says so.
 - Suggestions contain display text, never authorized entity identifiers.
   Submission and permission checks belong to the destination services.
 - `eval/baseline.json` and `eval/compare.py` compare live classification and
@@ -58,3 +69,5 @@ See `eval/README.md` for read-only local quality and latency evaluation.
   `cargo test -p universal_input search_query_excludes_consumed_filters -- --ignored`.
 - `python3 -m unittest discover -s crates/universal_input/eval -p 'test_*.py'`
   checks the baseline comparison logic without calling providers.
+- With model credentials configured, measure the thread due date's quality with
+  `cargo run -p universal_input --example thread_due_date_eval`.

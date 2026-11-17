@@ -176,7 +176,10 @@ fn native_effort_profiles_preserve_defaults_and_provider_boundaries() {
         "anthropic/claude-opus-5-5",
         "openai/gpt-5.5",
         "openai/gpt-5-mini",
+        "openai/gpt-6.1-sol",
+        "openai/gpt-6-astra",
     ] {
+        assert!(!ReasoningEffort::supported(model).is_empty(), "{model}");
         for effort in ReasoningEffort::supported(model) {
             let params = match router.route(model).unwrap() {
                 RoutedModel::Anthropic(model) => model.thinking_params(Some(*effort)).unwrap(),
@@ -197,4 +200,31 @@ fn native_effort_profiles_preserve_defaults_and_provider_boundaries() {
             }
         }
     }
+}
+
+#[test]
+fn brief_structured_answers_lower_only_gemini_thinking() {
+    use crate::structured_output::CompletionThinking;
+    let gemini = gemini::Client::builder()
+        .api_key("test-gemini-key")
+        .build()
+        .unwrap();
+    let router = test_router().with_gemini_client(gemini);
+    let params = |model: &str, thinking: CompletionThinking| {
+        thinking.params_for(&router.route_or_default(model))
+    };
+    assert_eq!(
+        params("google/gemini-3.8-flash", CompletionThinking::Low),
+        Some(serde_json::json!({
+            "generationConfig": { "thinkingConfig": { "thinkingLevel": "low" } }
+        }))
+    );
+    assert_eq!(
+        params("google/gemini-3.8-flash", CompletionThinking::Default),
+        None
+    );
+    assert_eq!(
+        params("anthropic/claude-sonnet-5-5", CompletionThinking::Low),
+        None
+    );
 }

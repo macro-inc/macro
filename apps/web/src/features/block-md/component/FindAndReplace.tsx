@@ -3,6 +3,7 @@ import {
   DO_REPLACE_ONCE_COMMAND,
   DO_SEARCH_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
+import { REVEAL_NODE_COMMAND } from '@core/component/LexicalMarkdown/plugins/heading-folds';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import ReplaceAll from '@icon/system/regular/arrow-bend-double-up-right.svg';
@@ -93,6 +94,8 @@ export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
     );
     if (!offset) return;
 
+    // A match inside a folded section unfolds it before we scroll to it.
+    editorInstance.dispatchCommand(REVEAL_NODE_COMMAND, offset.key);
     const element = editorInstance.getElementByKey(offset.key);
     return element?.parentElement ?? element ?? undefined;
   };

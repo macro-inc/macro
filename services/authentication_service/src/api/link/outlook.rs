@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use macro_middleware::tracking::ClientIp;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
@@ -116,7 +116,7 @@ pub async fn init_outlook_link_handler(
         reconnect_link_id,
     }): Query<InitOutlookLinkQueryParams>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
 ) -> Result<Json<InitOutlookLinkResponse>, InitOutlookLinkError> {
     let service = ctx
         .microsoft_auth
@@ -220,7 +220,7 @@ pub async fn email_connection_providers(
     Query(EmailConnectionProvidersQueryParams { original_url }): Query<
         EmailConnectionProvidersQueryParams,
     >,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
 ) -> Result<Json<EmailConnectionProviders>, InitOutlookLinkError> {
     if original_url
         .as_ref()

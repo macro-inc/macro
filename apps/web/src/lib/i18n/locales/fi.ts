@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Projekti',
     newProject: 'Uusi projekti',
     contentAlreadyOpen: 'Sisältö on jo auki',
-    unableToOpenConversation: 'Keskustelua ei voitu avata. Yritä uudelleen.',
     mobileSearchPlaceholder: 'Hae…',
     closeSearch: 'Sulje haku',
     searchFullTextFor: 'Hae koko tekstistä ”{{query}}”',
@@ -591,10 +590,6 @@ export default {
       other: '{{accepted}}/{{count}} kohdetta merkitty keskeneräisiksi',
     },
     toastMarkNotDoneFailed: 'Keskeneräiseksi merkitseminen epäonnistui',
-    toastThreadStaysDone:
-      'Tässä ketjussa ei ole vastaanotettuja viestejä, joten se pysyy valmiina',
-    toastThreadsStayDone:
-      'Näissä ketjuissa ei ole vastaanotettuja viestejä, joten ne pysyvät valmiina',
     toastCountNotRestored: {
       one: '{{count}} kohdetta ei voitu palauttaa.',
       other: '{{count}} kohdetta ei voitu palauttaa.',
@@ -763,7 +758,7 @@ export default {
     tabMobileApp: 'Mobiilisovellus',
     tabTags: 'Tunnisteet',
     tabIntegrations: 'Integraatiot',
-    tabRuntimes: 'Suoritusympäristöt',
+    tabRuntimes: 'Koneet',
     tabMcpServer: 'MCP-palvelin',
     tabApiKeys: 'API-avaimet',
     tabBots: 'Botit',

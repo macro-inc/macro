@@ -47,6 +47,7 @@ use super::*;
 mod agent_metadata;
 mod attention;
 mod crm_association;
+mod crm_scope;
 mod exclusions;
 mod favorites;
 
@@ -247,6 +248,9 @@ fn call_record(
     started_at: DateTime<Utc>,
 ) -> call::domain::models::CallRecord {
     call::domain::models::CallRecord {
+        discussion: call::domain::models::CallDiscussion::CallChat {
+            call_id: uuid::Uuid::nil(),
+        },
         call_id,
         channel_id: Some(channel_id),
         room_name: None,
@@ -452,6 +456,7 @@ fn soup_document_with_is_completed(
     is_completed: Option<bool>,
 ) -> SoupDocument {
     SoupDocument {
+        appearance: None,
         id,
         document_version_id: 1,
         owner_id: Owner::from_principal_str("macro|test@example.com").unwrap(),
@@ -1478,6 +1483,124 @@ async fn grouped_properties_are_populated_by_the_service() {
     });
 }
 
+/// Two groups, two rows in the first: what the grouped candidate query
+/// returns for the without-properties comparison below.
+fn grouped_rows() -> Vec<ItemGroupingInfo> {
+    [
+        ("todo", 2, 1, "doc-1"),
+        ("todo", 2, 2, "doc-2"),
+        ("done", 1, 1, "doc-3"),
+    ]
+    .into_iter()
+    .map(|(key, total, index, id)| ItemGroupingInfo {
+        sort_key: None,
+        display_order: None,
+        document_server_facts: None,
+        item: SoupItem::Document(soup_document(id)),
+        key: key.to_string(),
+        total_group_count: total,
+        index_in_group: index,
+    })
+    .collect()
+}
+
+fn grouped_service(
+    populate_calls: usize,
+) -> SoupImpl<
+    MockSoupRepo,
+    FrecencyQueryServiceImpl<MockFrecencyStorage>,
+    NoopEmailPreviewService,
+    NoopCommsService,
+    NoopCallRecordQueryService,
+    NoOpCrmService,
+    NoopPullRequestListing,
+> {
+    let mut repo = MockSoupRepo::new();
+    repo.expect_expanded_grouped_cursor_soup()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(grouped_rows().into_iter()) }));
+    repo.expect_populate_properties()
+        .times(populate_calls)
+        .returning(|_, items| {
+            Box::pin(async move {
+                Ok(items
+                    .into_iter()
+                    .map(|item| item.map_extra(|()| SoupPropertiesField::default()))
+                    .collect())
+            })
+        });
+    SoupImpl::new(
+        repo,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopPullRequestListing,
+    )
+}
+
+fn grouped_request() -> GroupedSortRequest<'static> {
+    GroupedSortRequest {
+        limit: 20,
+        cursor: Query::Sort(
+            SimpleSortMethod::UpdatedAt.into(),
+            EntityFilterAst::mock_empty(),
+        ),
+        user_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        grouping: GroupingConfig {
+            field: GroupByField::EntityType,
+            group_key: None,
+            per_group_limit: None,
+        },
+    }
+}
+
+fn placement<T>(
+    key: &str,
+    total: usize,
+    index: usize,
+    item: &SoupItem<T>,
+) -> (String, usize, usize, Uuid) {
+    let SoupItem::Document(document) = item else {
+        panic!("document row")
+    };
+    (key.to_string(), total, index, document.id)
+}
+
+/// Grouped pages without properties never read them, and place the same
+/// items in the same groups, counts and order as the grouped read.
+#[tokio::test]
+async fn grouped_without_properties_skips_the_property_read() {
+    let without: Vec<_> = grouped_service(0)
+        .get_user_soup_grouped_without_properties(grouped_request())
+        .await
+        .unwrap()
+        .map(|item| {
+            placement(
+                &item.key,
+                item.total_group_count,
+                item.index_in_group,
+                &item.item,
+            )
+        })
+        .collect();
+    let with: Vec<_> = grouped_service(1)
+        .get_user_soup_grouped(grouped_request())
+        .await
+        .unwrap()
+        .map(|item| {
+            placement(
+                &item.key,
+                item.total_group_count,
+                item.index_in_group,
+                &item.item,
+            )
+        })
+        .collect();
+    assert_eq!(without.len(), 3);
+    assert_eq!(without, with);
+}
 #[tokio::test]
 async fn it_should_query_frecency() {
     let mut frecency_mock = MockFrecencyStorage::new();

@@ -65,27 +65,35 @@ fn health_router(ready: tokio::sync::watch::Receiver<bool>) -> Router {
 pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes> {
     read: AgentSessionRouterState<T, Access, Auth>,
     control: AgentSessionControlState<R, Access, Auth>,
-    create: CreateSessionState<Opener, Bots, Requests, Auth>,
+    create: CreateSessionState<Opener, Bots, Requests, R, Auth>,
     gateway: RuntimeGatewayState<Auth>,
     models: AgentModelsRouterState<Models, Auth>,
     repositories: AgentRepositoriesRouterState<Auth>,
     public_mcp: Router,
+    correlation: Option<agent_correlation::inbound::CorrelationState>,
     listening: Option<tokio::sync::watch::Sender<bool>>,
     cognition: Router,
     universal_input: Router,
     scheduling: Router,
     preview: Router,
+    agent_git: Router,
     sharing: Router,
     routine_sessions: Router,
     coding_agents: Router,
+    claude_access: Router,
     capabilities: Router,
+    voices: Router,
     mode_choice: Router,
     conversations: Router,
     pull_requests: Router,
+    session_tasks: Router,
+    updates: Router,
     auto_archive: Router,
+    work_registrations: Router,
     tool_approvals: Router,
     app_connections: Router,
     code_executions: Router,
+    activity: Router,
     notifications: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
 }
@@ -93,17 +101,27 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
 impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
 {
+    /// Validate and propagate signed invocation attribution across every mounted API.
+    pub fn with_agent_correlation(
+        mut self,
+        state: agent_correlation::inbound::CorrelationState,
+    ) -> Self {
+        self.correlation = Some(state);
+        self
+    }
+
     /// Group the independently constructed route states for the HTTP server.
     pub fn new(
         read: AgentSessionRouterState<T, Access, Auth>,
         control: AgentSessionControlState<R, Access, Auth>,
-        create: CreateSessionState<Opener, Bots, Requests, Auth>,
+        create: CreateSessionState<Opener, Bots, Requests, R, Auth>,
         gateway: RuntimeGatewayState<Auth>,
         models: AgentModelsRouterState<Models, Auth>,
         repositories: AgentRepositoriesRouterState<Auth>,
         changes: AgentChangesRouterState<Changes, Access, Auth>,
     ) -> Self {
         Self {
+            correlation: None,
             read,
             control,
             create,
@@ -116,17 +134,24 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             universal_input: Router::new(),
             scheduling: Router::new(),
             preview: Router::new(),
+            agent_git: Router::new(),
             sharing: Router::new(),
             routine_sessions: Router::new(),
             coding_agents: Router::new(),
+            claude_access: Router::new(),
             capabilities: Router::new(),
+            voices: Router::new(),
             mode_choice: Router::new(),
             conversations: Router::new(),
             pull_requests: Router::new(),
+            session_tasks: Router::new(),
+            updates: Router::new(),
             auto_archive: Router::new(),
+            work_registrations: Router::new(),
             tool_approvals: Router::new(),
             app_connections: Router::new(),
             code_executions: Router::new(),
+            activity: Router::new(),
             notifications: Router::new(),
             changes,
         }
@@ -174,6 +199,19 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
         self
     }
 
+    /// Attach the team admin's agent voice catalog and samples.
+    pub fn with_voices(mut self, router: Router) -> Self {
+        self.voices = router;
+        self
+    }
+
+    /// Attach agent teammates' repos (`/agent-git`), outside the gzip layer:
+    /// pack streams are already compressed.
+    pub fn with_agent_git(mut self, router: Router) -> Self {
+        self.agent_git = router;
+        self
+    }
+
     /// Attach model-specific harness capability discovery routes.
     pub fn with_capabilities(mut self, router: Router) -> Self {
         self.capabilities = router;
@@ -193,6 +231,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     }
 
     /// Attach session-authorized code execution records.
+    /// Attach the session-authorized activity history.
+    pub fn with_activity(mut self, router: Router) -> Self {
+        self.activity = router;
+        self
+    }
+
     pub fn with_code_executions(mut self, router: Router) -> Self {
         self.code_executions = router;
         self
@@ -210,6 +254,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
         self
     }
 
+    /// Attach Macro computer Claude sign-in routes.
+    pub fn with_claude_access(mut self, router: Router) -> Self {
+        self.claude_access = router;
+        self
+    }
+
     /// Attach session-sharing routes with their independent domain service.
     pub fn with_sharing(mut self, router: Router) -> Self {
         self.sharing = router;
@@ -222,9 +272,27 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
         self
     }
 
+    /// Attach the route linking a session to the Macro task it works on.
+    pub fn with_session_tasks(mut self, router: Router) -> Self {
+        self.session_tasks = router;
+        self
+    }
+
+    /// Attach the route listing the caller's sessions waiting for them or stalled.
+    pub fn with_updates(mut self, router: Router) -> Self {
+        self.updates = router;
+        self
+    }
+
     /// Attach the caller's auto-archive defaults and per-session choices.
     pub fn with_auto_archive(mut self, router: Router) -> Self {
         self.auto_archive = router;
+        self
+    }
+
+    /// Attach the routes registering sessions as the caller's work.
+    pub fn with_work_registrations(mut self, router: Router) -> Self {
+        self.work_registrations = router;
         self
     }
 
@@ -241,23 +309,30 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     }
 }
 
-/// Serve session egress and Macro Internal MCP on the existing egress listener.
+/// Serve session egress, Macro Internal MCP, and the Anthropic gateway on the
+/// existing egress listener.
 ///
-/// Both authenticate session credentials; internal tools also serve external
-/// runtimes. No browser-facing CORS layer or Swagger is needed.
+/// All authenticate session credentials and also serve external runtimes. No
+/// browser-facing CORS layer or Swagger is needed.
 pub async fn serve_egress<Service>(
     service: std::sync::Arc<Service>,
     internal_mcp: Router,
+    anthropic_gateway: Router,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
 where
     Service: EgressService + 'static,
 {
-    let app = egress_app(EgressRouterState::new(service)).merge(mount_at_root_and_prefix(
-        internal_mcp,
-        EGRESS_GATEWAY_PATH_PREFIX,
-    ));
+    let app = egress_app(EgressRouterState::new(service))
+        .merge(mount_at_root_and_prefix(
+            internal_mcp,
+            EGRESS_GATEWAY_PATH_PREFIX,
+        ))
+        .merge(mount_at_root_and_prefix(
+            anthropic_gateway,
+            EGRESS_GATEWAY_PATH_PREFIX,
+        ));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
@@ -289,11 +364,19 @@ where
     Models: AgentModelsService,
     Changes: AgentChanges,
 {
+    // Every request's agent attribution is validated here: routes that tell
+    // an agent from the person (suggestions, session scopes) rely on it, so the
+    // service never serves without it.
+    let correlation = states
+        .correlation
+        .clone()
+        .context("agent correlation validation is not configured")?;
     let listening = states.listening.clone();
     let public_mcp = states.public_mcp.clone();
     let cognition = states.cognition.clone();
     let scheduling = states.scheduling.clone();
     let preview = states.preview.clone();
+    let agent_git = states.agent_git.clone();
     let inner = api_router(states)
         .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
         .merge(health_router(runtime_commands_ready))
@@ -311,12 +394,18 @@ where
         .merge(cognition)
         .merge(scheduling)
         .merge(preview)
+        .merge(agent_git)
         .merge(public_mcp)
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .merge(SwaggerUi::new("/agent-harness/docs").url(
             "/agent-harness/api-doc/openapi.json",
             swagger::ApiDoc::openapi(),
         ));
+
+    let app = app.layer(axum::middleware::from_fn_with_state(
+        correlation,
+        agent_correlation::inbound::propagate,
+    ));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
@@ -356,9 +445,12 @@ where
         .merge(agent_session_create_router(states.create))
         .merge(states.sharing)
         .merge(states.pull_requests)
+        .merge(states.session_tasks)
+        .merge(states.updates)
         .merge(states.tool_approvals)
         .merge(states.app_connections)
         .merge(states.code_executions)
+        .merge(states.activity)
         .merge(states.notifications)
         .merge(agent_changes_router(states.changes));
     Router::new()
@@ -367,11 +459,14 @@ where
         .merge(agent_sandbox_size_router(states.read.clone()))
         .merge(agent_coding_preferences_router(states.read))
         .merge(states.auto_archive)
+        .merge(states.work_registrations)
         .merge(agent_models_router(states.models))
         .merge(agent_repositories_router(states.repositories))
         .merge(states.routine_sessions)
         .merge(states.coding_agents)
+        .merge(states.claude_access)
         .merge(states.capabilities)
+        .merge(states.voices)
         .merge(states.mode_choice)
         .merge(states.conversations)
         .nest("/universal_input", states.universal_input)

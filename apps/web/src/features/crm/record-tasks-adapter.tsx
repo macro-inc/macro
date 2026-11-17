@@ -6,10 +6,6 @@ import {
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import {
-  enableCrmActivity,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
 import { Show } from 'solid-js';
@@ -83,17 +79,13 @@ function RecordTasksBody(props: { scope: CrmRecordScope }) {
   let listElement: HTMLDivElement | undefined;
 
   const composeTask = () => {
-    const context = crmTaskComposerContext(props.scope);
-    const adaptive = isFeatureEnabled(enableCrmActivity);
     layout.popoverSplit({
       type: 'component',
       id: 'task-compose',
       params: {
-        // Record identity/associations must survive a restart even with the
-        // standard property row; they cannot live only in a create callback.
-        composerContext: adaptive
-          ? context
-          : { ...context, visiblePropertyIds: undefined },
+        // Record identity/associations must survive a restart; they cannot
+        // live only in a create callback.
+        composerContext: crmTaskComposerContext(props.scope),
       },
     });
   };

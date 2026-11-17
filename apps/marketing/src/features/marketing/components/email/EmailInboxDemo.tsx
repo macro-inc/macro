@@ -1,6 +1,6 @@
-import Funnel from '@phosphor/funnel-simple.svg';
-import Signal from '@phosphor/wave-sine.svg';
-import Noise from '@phosphor/waveform.svg';
+import Funnel from '@icon/system/regular/funnel-simple.svg';
+import Signal from '@icon/system/regular/wave-sine.svg';
+import Noise from '@icon/system/regular/waveform.svg';
 import { Button } from '@ui';
 import { createSignal, For, lazy, Show, Suspense } from 'solid-js';
 import type { EmailTagId } from '../../core/demo-email';

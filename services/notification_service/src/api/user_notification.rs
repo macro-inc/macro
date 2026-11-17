@@ -52,14 +52,19 @@ pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = Laz
         CommentedOnDocumentMetadata::TYPE_NAME,
         model_notifications::EntityAccessRequestedMetadata::TYPE_NAME,
         model_notifications::EntityAccessGrantedMetadata::TYPE_NAME,
+        model_notifications::ChannelAccessRequestedMetadata::TYPE_NAME,
         InitiativeDiscussionMetadata::TYPE_NAME,
         CrmDiscussionMetadata::TYPE_NAME,
         CalendarEventReminderMetadata::TYPE_NAME,
         model_notifications::CalendarEventJoinRequestMetadata::TYPE_NAME,
+        model_notifications::PasswordAccessRequestedMetadata::TYPE_NAME,
         AgentSessionSettledMetadata::TYPE_NAME,
         AgentSessionWaitingForInputMetadata::TYPE_NAME,
         AgentSessionMentionedMetadata::TYPE_NAME,
         model_notifications::RoutineRunFinishedMetadata::TYPE_NAME,
+        model_notifications::AgentSignInExpiryMetadata::TYPE_NAME,
+        model_notifications::ComputerSetupMetadata::TYPE_NAME,
+        model_notifications::RuntimeAccessRemovedMetadata::TYPE_NAME,
     ])
 });
 

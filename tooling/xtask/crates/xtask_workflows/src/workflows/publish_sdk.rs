@@ -79,7 +79,7 @@ fn install_dependencies() -> Step<Run> {
 
 fn validate() -> Step<Run> {
     Step::new("Validate SDK")
-        .run("bun run check && bun test && bun run coverage && bun run build")
+        .run("bun run check && bun test && bun run coverage && bun run build && bun run check:pack")
         .working_directory(xtask_paths::repo_dir!("packages/sdk"))
 }
 

@@ -322,3 +322,39 @@ async fn folder_dates_and_shared_scope_use_the_selected_folder(
     }
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_outlook_threads", "email_all_mail")
+    )
+)]
+async fn outlook_mailbox_states_report_the_messages_they_change(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use super::thread_archive::{RecordingEnqueuer, service_with_enqueuer};
+    use crate::domain::models::mailbox_action::MailboxAction;
+
+    let service = service_with_enqueuer(pool.clone(), RecordingEnqueuer::default());
+    // `email_all_mail` gives the Outlook inbox this owner.
+    let owner = MacroUserIdStr::parse_from_str("macro|mail@example.com")?.into_owned();
+    let thread = uuid::uuid!("0a000000-0000-0000-0000-0000000000a1");
+    // A second received message in the same conversation, also read and in
+    // the Inbox.
+    sqlx::query(
+        "INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_read, is_starred, is_sent, is_draft, has_attachments, internal_date_ts, mailbox_state, created_at, updated_at)
+         VALUES ('0a000000-0000-0000-0000-0000000000b3', $1, '0a000000-0000-0000-0000-000000000001', 'outlook-message-3', true, false, false, false, false, '2025-01-02T10:00:00Z',
+             '{\"in_inbox\":true,\"in_trash\":false,\"in_junk\":false,\"attention\":\"primary\"}', NOW(), NOW())",
+    )
+    .bind(thread)
+    .execute(&pool)
+    .await?;
+
+    let change = |action| service.change_thread_mailbox_state_impl(owner.clone(), thread, action);
+    assert_eq!(change(MailboxAction::Flagged(true)).await?, 2);
+    // Both are already read: nothing to change.
+    assert_eq!(change(MailboxAction::Read(true)).await?, 0);
+    assert_eq!(change(MailboxAction::Archived(true)).await?, 2);
+    Ok(())
+}

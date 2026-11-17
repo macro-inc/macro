@@ -2,6 +2,7 @@ import { analytics } from '@app/lib/analytics';
 import { compareTimelinePositions } from '@core/util/message-timeline';
 import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import type {
+  CallEntryStatus,
   Message as EntityMessage,
   MessageListItem,
   MessageParent,
@@ -441,7 +442,7 @@ export function mapMessageTimelineItems(
   const pages = data.pages.map((page) => {
     let pageChanged = false;
     const entries = page.entries.map((entry) => {
-      if (entry.type !== 'message') return entry;
+      if (entry.type === 'activity') return entry;
       const message = updater(entry.message);
       if (message === entry.message) return entry;
       didChange = true;
@@ -463,7 +464,7 @@ function filterMessageTimelineItems(
 
   const pages = data.pages.map((page) => {
     const entries = page.entries.filter((entry) => {
-      if (entry.type !== 'message') return true;
+      if (entry.type === 'activity') return true;
       const message = entry.message;
       const keep = predicate(message);
       if (!keep) didChange = true;
@@ -552,9 +553,9 @@ function getTopLevelMessageSnapshot(
 
   for (const page of data.pages) {
     const entry = page.entries.find(
-      (entry) => entry.type === 'message' && entry.message.id === messageId
+      (entry) => entry.type !== 'activity' && entry.message.id === messageId
     );
-    if (entry?.type !== 'message') continue;
+    if (!entry || entry.type === 'activity') continue;
     return { message: entry.message };
   }
 }
@@ -762,9 +763,11 @@ export function buildMessageIndex(
   const entries: (MessageTimelineEntry & { id: string })[] = [];
   /** Every rendered row, messages and activity. */
   const entryKeys: string[] = [];
-  /** Message ids only: selection and navigation skip activity. */
+  /** Message ids only: selection and navigation skip activity and calls. */
   const keys: string[] = [];
   const byId = new Map<string, MessageListItem>();
+  /** The life of each row that is a call, keyed like `byId`. */
+  const callStatusByKey = new Map<string, CallEntryStatus>();
   /** Each activity row's newest activity. */
   const activityByKey = new Map<string, TimelineActivity>();
   /** Every activity of a row that merged several, oldest first. */
@@ -776,6 +779,7 @@ export function buildMessageIndex(
       entryKeys,
       keys,
       byId,
+      callStatusByKey,
       activityByKey,
       activityGroupByKey,
     };
@@ -813,12 +817,24 @@ export function buildMessageIndex(
       }
       entries.push({ ...entry, id: key });
       entryKeys.push(key);
-      keys.push(key);
       byId.set(key, entry.message);
+      if (entry.type === 'call') {
+        callStatusByKey.set(key, entry.status);
+        continue;
+      }
+      keys.push(key);
     }
   }
 
-  return { entries, entryKeys, keys, byId, activityByKey, activityGroupByKey };
+  return {
+    entries,
+    entryKeys,
+    keys,
+    byId,
+    callStatusByKey,
+    activityByKey,
+    activityGroupByKey,
+  };
 }
 
 /** A reactive index over a timeline query's cached pages. */

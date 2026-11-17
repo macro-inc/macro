@@ -21,6 +21,7 @@ fn chat_open_command() -> OpenSession {
 fn assignment_open_command() -> OpenSession {
     let mut command = chat_open_command();
     command.origin = SessionOrigin::TaskAssignment(TaskAssignmentOrigin {
+        trigger_origin: trigger_context::TriggerOrigin::Unknown,
         parent: messages::domain::models::MessageParent::parse("document", "task-1").unwrap(),
         discussion_id: macro_uuid::generate_uuid_v7(),
         actor: sender(),
@@ -507,6 +508,7 @@ mod elicitation {
                     action_id: None,
                     actor: Some(sender()),
                     context: None,
+                    client: None,
                 })),
             )
             .await

@@ -56,6 +56,7 @@ export function mountReplyComposer(
             inbox_visible: thread.inboxVisible ?? false,
           }),
           recipientOptions: () => [],
+          ownsThreadInbox: () => true,
           isPersonalReply: () => false,
           onDraftRemoved() {},
           exitToThread: () => false,

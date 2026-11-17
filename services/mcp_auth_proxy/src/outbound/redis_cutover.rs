@@ -226,6 +226,12 @@ where
         self.postgres.insert_pending(session_id, pending).await
     }
 
+    /// Postgres only: the flows that need this are email sign-ins, which no
+    /// build ever wrote to Redis.
+    async fn find_pending(&self, session_id: &str) -> anyhow::Result<Option<PendingAuthorization>> {
+        self.postgres.find_pending(session_id).await
+    }
+
     async fn take_pending(&self, session_id: &str) -> anyhow::Result<Option<PendingAuthorization>> {
         if let Some(pending) = self.postgres.take_pending(session_id).await? {
             return Ok(Some(pending));

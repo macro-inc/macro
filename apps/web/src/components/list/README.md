@@ -72,6 +72,8 @@ mounted, pins the real header with an opaque backing, and pushes it away at the
 next group. Header selection uses measured offsets rather than fixed row heights.
 The exposed scroll handle keeps keyboard targets below the destination header;
 `stickyInset` reserves persistent chrome separately from `startMargin`.
+`ListViewport.start` scrolls above the rows (a block's tutorial row) and
+becomes their `startMargin`, so list focus and sticky headers skip it.
 
 ### Boundary pagination
 

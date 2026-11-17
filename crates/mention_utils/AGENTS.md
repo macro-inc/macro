@@ -9,8 +9,10 @@ AI editors, lexical, and notification text.
 
 ## Start here
 
-- `src/parse.rs`: `nom` parsers for each mention chip XML tag.
-- `src/serialize.rs`: renders mentions back to chip XML or plain text.
+- `src/parse.rs`: `nom` parsers for each mention chip XML tag, and the
+  formatters (`PlainTextFormatter`) that turn tagged text into plain text for
+  notification bodies, digests, and search.
+- `src/serialize.rs`: writes mentions as chip XML.
 - `src/tests.rs`: round-trip parse/serialize cases.
 
 ## Scope
@@ -41,3 +43,7 @@ AI editors, lexical, and notification text.
 
 - New chip parsers should use `nom`, matching the rest of this crate, rather
   than hand-rolled string scanning.
+- Agents leave `documentName` empty or omit it (the app shows the live name),
+  so `PlainTextFormatter` writes a nameless document mention as its kind in
+  angle brackets (`<task>`, `<message>`). Escape that text wherever it lands
+  in HTML.

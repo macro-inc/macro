@@ -126,6 +126,10 @@ pub struct EntityPropertyUpdatedMetadata {
     /// The outside event behind the change, when an integration made it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<PropertyChangeSource>,
+    /// The project whose agents this change inherited, when a task joining it
+    /// made the change rather than someone setting the value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inherited_from_project: Option<Uuid>,
     /// Full value after the update, or `None` when cleared without deleting the row.
     pub value: Option<PropertyValue>,
     /// Full value before the update: `None` when the property was newly

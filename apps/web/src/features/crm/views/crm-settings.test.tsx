@@ -21,6 +21,9 @@ const state = vi.hoisted(() => ({
   blocked: [] as string[],
 }));
 
+vi.mock('./email-privacy', () => ({
+  CrmEmailPrivacySettings: () => <div>Email contribution settings</div>,
+}));
 vi.mock('../components/stage-icon', () => ({ CrmStageIcon: () => null }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({ feedback: { success: vi.fn() } }),
@@ -95,52 +98,20 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-function teamCrmSwitch() {
-  return screen.getByRole('switch', { name: 'Team CRM' });
-}
-
-it('asks an admin how to start the CRM before turning it on', async () => {
+it('keeps records and stage settings available without legacy team enablement', () => {
   state.crmEnabled = false;
   render(() => <Crm />);
-
-  fireEvent.click(teamCrmSwitch());
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Backfill existing emails' })
-  );
-
-  expect(state.patch).toHaveBeenCalledWith(
-    { enabled: true, backfill: true },
-    expect.anything()
-  );
-  expect(screen.queryByText('Stages')).toBeNull();
-});
-
-it('turns the CRM off only after the phrase is typed', async () => {
-  render(() => <Crm />);
-
-  fireEvent.click(teamCrmSwitch());
-  const confirm = await screen.findByRole('button', { name: 'Disable CRM' });
-  expect(confirm).toHaveProperty('disabled', true);
-
-  fireEvent.input(screen.getByPlaceholderText('Disable CRM'), {
-    target: { value: 'Disable CRM' },
-  });
-  fireEvent.click(confirm);
-
-  expect(state.patch).toHaveBeenCalledWith(
-    { enabled: false, backfill: false },
-    expect.anything()
-  );
+  expect(screen.getByText('Email contribution settings')).toBeTruthy();
+  expect(screen.getByText('Demo')).toBeTruthy();
+  expect(screen.queryByRole('switch', { name: 'Team CRM' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Disable CRM' })).toBeNull();
+  expect(state.patch).not.toHaveBeenCalled();
 });
 
 it('shows members the stages without letting them change anything', () => {
   state.role = 'member';
   render(() => <Crm />);
 
-  expect(teamCrmSwitch()).toHaveProperty('disabled', true);
-  expect(
-    screen.getByText(/Only team admins can turn it on or off/)
-  ).toBeTruthy();
   expect(screen.getByText(/Only team admins can change them/)).toBeTruthy();
   expect(screen.getByText('Demo')).toBeTruthy();
   expect(screen.queryByRole('textbox')).toBeNull();

@@ -7,9 +7,9 @@ import { ComposeSubjectField } from '../../email-compose/components/compose-subj
 import { FromInboxSelector } from '../../email-compose/components/from-inbox-selector';
 import { fromInboxOptions } from '../../email-compose/core/email-sender';
 import type { InputDisplay } from '../context/capabilities';
+import { createRecipientSelection } from '../primitives/recipient-selection';
 import type { UniversalInputController } from '../primitives/universal-input';
 import {
-  composerRecipientOptions,
   composerRecipients,
   recipientAddresses,
 } from '../queries/composer-recipients';
@@ -21,7 +21,6 @@ export function EmailDraft(props: {
 }) {
   const s = props.state;
   const a = props.actions;
-  const options = createMemo(() => composerRecipientOptions(a.people()));
   const [showCopies, setShowCopies] = createSignal(false);
   const recipientFields = [
     { key: 'recipients', label: 'To' },
@@ -46,8 +45,11 @@ export function EmailDraft(props: {
       <For each={recipientFields}>
         {(field) => {
           const value = createMemo(() => s.fields()[field.key]);
-          const selected = createMemo(() =>
-            composerRecipients(value(), a.people())
+          const selection = createRecipientSelection(
+            value,
+            (text) => composerRecipients(text, a.person),
+            recipientAddresses,
+            (text) => s.edit(field.key, text)
           );
           return (
             <Show
@@ -73,15 +75,13 @@ export function EmailDraft(props: {
                 }
               >
                 <ComposeRecipientInput
-                  options={options}
-                  selectedOptions={selected()}
+                  createSource={a.createRecipientSource}
+                  selectedOptions={selection.selected()}
                   onInputChange={(value) => {
                     if (value && !s.draft().edited.email.includes(field.key))
                       s.edit(field.key, s.fields()[field.key]);
                   }}
-                  setSelectedOptions={(next) =>
-                    s.edit(field.key, recipientAddresses(next))
-                  }
+                  setSelectedOptions={selection.select}
                   inputRef={(element) =>
                     element.setAttribute('aria-label', field.label)
                   }

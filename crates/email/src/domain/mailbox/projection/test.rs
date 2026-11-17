@@ -126,3 +126,35 @@ fn user_category_keeps_its_event_type_and_publication_identity() {
         EmailTopicEvent::ThreadLabelsUpdated(_)
     ));
 }
+
+#[tokio::test]
+async fn persisted_projection_restores_invocation_when_publishing_later() {
+    use macro_event_broker::MacroEvent;
+    let context = context();
+    let id = Uuid::now_v7();
+    let event: ProjectionEvent = serde_json::from_value(serde_json::json!({
+        "kind": "organization", "thread_id": Uuid::now_v7(),
+        "agent_correlation_id": id,
+    }))
+    .unwrap();
+    let persisted = serde_json::to_vec(&event).unwrap();
+    let restored: ProjectionEvent = serde_json::from_slice(&persisted).unwrap();
+    let published = agent_correlation::context::scope(restored.agent_correlation_id(), async {
+        organization_event(
+            &context.link,
+            Uuid::now_v7(),
+            context.link.macro_id.clone(),
+            &crate::domain::models::mailbox_action::MailboxAction::Category {
+                name: "TRASH".into(),
+                present: true,
+            },
+        )
+    })
+    .await;
+    assert_eq!(published.event().agent_correlation_id, Some(id));
+    let legacy: ProjectionEvent = serde_json::from_value(
+        serde_json::json!({"kind": "organization", "thread_id": Uuid::now_v7()}),
+    )
+    .unwrap();
+    assert_eq!(legacy.agent_correlation_id(), None);
+}

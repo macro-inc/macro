@@ -5,6 +5,8 @@ export default {
   closeTab: 'Close Tab',
   nextTab: 'Next Tab',
   previousTab: 'Previous Tab',
+  goToTab: 'Go to Tab {{number}}',
+  goToLastTab: 'Go to Last Tab',
   splitCount: {
     one: '{{count}} split',
     other: '{{count}} splits',
@@ -19,10 +21,11 @@ export default {
   'record-files': 'Files',
   'record-tasks': 'Tasks',
   'record-calls': 'Calls',
-  'record-databases': 'Databases',
 
   // Project sections.
   projectSections: 'Project sections',
   'project-overview': 'Overview',
   'project-tasks': 'Tasks',
+  // A project's name in its breadcrumb and split title before it loads.
+  projectFallbackName: 'Project',
 };

@@ -91,9 +91,9 @@ pub struct DocumentFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_ids: Vec<String>,
 
-    /// Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+    /// Filter by document owner principal — a user ('macro|user@example.com'), a bot
     /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-    /// ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+    /// ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
     /// search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
@@ -160,9 +160,9 @@ pub struct ChatFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_ids: Vec<String>,
 
-    /// Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+    /// Filter by chat owner principal — a user ('macro|user@example.com'), a bot
     /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-    /// ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+    /// ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
     /// search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
@@ -216,6 +216,17 @@ impl SharedEmailFilter {
     }
 }
 
+/// A mailbox view the Email list scopes a search to, as its tabs do.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub enum EmailSearchView {
+    /// Threads with a message the mailbox sent, as the Sent view lists.
+    Sent,
+    /// Threads with a draft, as the Drafts view lists.
+    Drafts,
+}
+
 /// The email filters used to filter down what emails you search over.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -260,6 +271,12 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
     pub notification_filters: NotificationFilters,
 
+    /// Filter by whether the thread is done: true for threads out of the
+    /// inbox (archived), false for threads still in it. This is the mailbox
+    /// state the Email view's Done filter uses, independent of notifications.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub done: Option<bool>,
+
     /// Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. "INBOX", "CATEGORY_PROMOTIONS") and user-created labels (e.g. "github"). Empty to not filter by included labels.
     /// Note: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -298,6 +315,17 @@ pub struct EmailFilters {
     /// type). `Some(false)` and `None` apply no constraint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub calendar_only: Option<bool>,
+
+    /// Only threads with at least one attachment of one of these kinds, by
+    /// MIME type, on any of their messages. Empty applies no constraint.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<crate::ast::email::AttachmentKind>,
+
+    /// Only threads in this mailbox view. Search only: listing email takes
+    /// its view as a parameter of its own, so expanding this into a list
+    /// filter is an error.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<EmailSearchView>,
 }
 
 impl IsEmpty for EmailFilters {
@@ -313,12 +341,15 @@ impl IsEmpty for EmailFilters {
             importance,
             is_read,
             notification_filters,
+            done,
             include_labels,
             exclude_labels,
             shared,
             crm_domains,
             crm_addresses,
             calendar_only,
+            attachments,
+            view,
         } = self;
         senders.is_empty()
             && cc.is_empty()
@@ -330,12 +361,15 @@ impl IsEmpty for EmailFilters {
             && importance.is_none()
             && is_read.is_none()
             && notification_filters.is_empty()
+            && done.is_none()
             && include_labels.is_empty()
             && exclude_labels.is_empty()
             && shared.is_default()
             && crm_domains.is_empty()
             && crm_addresses.is_empty()
             && !calendar_only.unwrap_or(false)
+            && attachments.is_empty()
+            && view.is_none()
     }
 }
 
@@ -494,7 +528,7 @@ pub struct AgentSessionFilters {
     /// Agent session ids to filter by. Empty to include all accessible sessions.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ids: Vec<String>,
-    /// Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+    /// Filter by session owner principal — a user ('macro|user@example.com'), a bot
     /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
     /// owner.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -741,9 +775,9 @@ pub struct ProjectFilters {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub include_root: bool,
 
-    /// Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+    /// Filter by project owner principal — a user ('macro|user@example.com'), a bot
     /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-    /// ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+    /// ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
     /// search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,

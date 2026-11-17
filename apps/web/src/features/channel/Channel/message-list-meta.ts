@@ -8,6 +8,7 @@ import {
 /** One timeline row: a message, or system activity between messages. */
 type ChannelListEntry<T> =
   | { type: 'message'; message: T }
+  | { type: 'call'; message: T }
   | { type: 'activity'; activity: { id: string; occurred_at: string } };
 
 /** List meta keyed by `timelineEntryKey`, oldest entry first. */
@@ -39,6 +40,21 @@ export function buildChannelMessageListMeta<T extends GroupableMessage>(
       };
       previousTopLevelCreatedAt = entry.activity.occurred_at;
       // Activity ends the sender run, so neither grouping nor rails cross it.
+      previousMessage = undefined;
+      continue;
+    }
+
+    // A call's row stands apart from the messages around it, like activity.
+    if (entry.type === 'call') {
+      metaByKey[key] = {
+        index,
+        isNewMessage: false,
+        isFirstNewMessage: false,
+        previousTopLevelCreatedAt,
+        isGroupedWithPrevious: false,
+        reachedStart,
+      };
+      previousTopLevelCreatedAt = entry.message.created_at;
       previousMessage = undefined;
       continue;
     }

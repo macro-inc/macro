@@ -12,7 +12,7 @@ import type {
 } from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import { err, ok } from 'neverthrow';
-import { batch, createSignal, Show, Suspense } from 'solid-js';
+import { batch, createSignal, type JSX, Show, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentSessionHandle } from './create-agent-session';
 
@@ -40,9 +40,12 @@ const harness = vi.hoisted(() => ({
   get: vi.fn(),
   control: vi.fn(),
 }));
+type LogFollow = { rows: (rows: AgentSessionLogEntryDto[]) => void };
 const logSource = vi.hoisted(() => ({
   cached: vi.fn(),
   fetched: vi.fn(),
+  /** The latest load's log subscription, which delivers live rows. */
+  follow: undefined as LogFollow | undefined,
 }));
 
 vi.mock('@core/agent-fold/client', () => fold);
@@ -54,13 +57,15 @@ vi.mock('@queries/agent-session/queue-sync', () => ({
 }));
 vi.mock('@queries/agent-session/log', () => ({
   AgentSessionLogUnavailable: class extends Error {},
-  watchAgentSessionLog: () => ({
-    cached: logSource.cached(),
-    cacheMiss: () => undefined,
-    fetched: logSource.fetched(),
-    stop: () => {},
-  }),
-  canFollowAgentSessionLog: () => false,
+  watchAgentSessionLog: (_id: string, _policy?: string, follow?: LogFollow) => {
+    if (follow) logSource.follow = follow;
+    return {
+      cached: logSource.cached(),
+      cacheMiss: () => undefined,
+      fetched: logSource.fetched(),
+      stop: () => {},
+    };
+  },
   forgetAgentSessionLog: vi.fn(async () => undefined),
 }));
 vi.mock('@queries/agent-session/session-metadata-sync', () => ({
@@ -68,8 +73,14 @@ vi.mock('@queries/agent-session/session-metadata-sync', () => ({
   subscribeAgentSessionUpdated: () => () => {},
 }));
 
+const { QueryClient, QueryClientProvider } = await import(
+  '@tanstack/solid-query'
+);
 const { cleanup, render, screen } = await import('@solidjs/testing-library');
 const { AgentSession } = await import('@core/agent-session/AgentSession');
+const { forgetRecentlyViewed } = await import(
+  '@core/agent-session/recently-viewed'
+);
 const { createAgentSession } = await import('./create-agent-session');
 const { TraceFlow } = await import('@app/observability/flow');
 
@@ -94,14 +105,24 @@ function Pane() {
 }
 
 const mount = () =>
-  render(() => (
-    <Suspense fallback={<p>loading</p>}>
-      <Pane />
-    </Suspense>
-  ));
+  render(
+    () => (
+      <Suspense fallback={<p>loading</p>}>
+        <Pane />
+      </Suspense>
+    ),
+    { wrapper: TestQueryClientProvider }
+  );
+
+const TestQueryClientProvider = (props: { children: JSX.Element }) => (
+  <QueryClientProvider client={new QueryClient()}>
+    {props.children}
+  </QueryClientProvider>
+);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  forgetRecentlyViewed(SESSION);
   for (
     let leaked = AgentSession.get(SESSION);
     leaked;
@@ -173,6 +194,36 @@ describe('createAgentSession', () => {
     expect(await screen.findByText('no access')).toBeTruthy();
     expect(screen.queryByText('loading')).toBeNull();
   });
+
+  describe('a session viewed before', () => {
+    const viewAndLeave = async () => {
+      mount();
+      expect(await screen.findByText('A session')).toBeTruthy();
+      cleanup();
+    };
+
+    it('reopens without fetching the log again, and reads the row behind it', async () => {
+      await viewAndLeave();
+      harness.get.mockResolvedValue(ok({ ...session, name: 'Renamed' }));
+
+      mount();
+      expect(await screen.findByText('Renamed')).toBeTruthy();
+      expect(logSource.fetched).toHaveBeenCalledOnce();
+      expect(harness.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('closes on a refusal of the reread row', async () => {
+      await viewAndLeave();
+      harness.get.mockResolvedValue(err([{ code: 'FORBIDDEN' }]));
+
+      mount();
+      expect(await screen.findByText('no access')).toBeTruthy();
+      expect(screen.getByText('untitled')).toBeTruthy();
+      cleanup();
+      // No longer held: nothing keeps the refused session open.
+      expect(AgentSession.get(SESSION)).toBeUndefined();
+    });
+  });
 });
 
 it('keeps view readiness pending through provisioning and the first transcript load', async () => {
@@ -187,11 +238,14 @@ it('keeps view readiness pending through provisioning and the first transcript l
     });
     return <h1>{live.session()?.name ?? 'Provisioning'}</h1>;
   }
-  render(() => (
-    <TraceFlow name="view.agent">
-      <ProvisionedPane />
-    </TraceFlow>
-  ));
+  render(
+    () => (
+      <TraceFlow name="view.agent">
+        <ProvisionedPane />
+      </TraceFlow>
+    ),
+    { wrapper: TestQueryClientProvider }
+  );
   await Promise.resolve();
   expect(readiness.painted).not.toHaveBeenCalled();
   batch(() => {
@@ -214,11 +268,14 @@ it('settles view readiness when provisioning fails without a session id', async 
     });
     return null;
   }
-  render(() => (
-    <TraceFlow name="view.agent">
-      <FailedPane />
-    </TraceFlow>
-  ));
+  render(
+    () => (
+      <TraceFlow name="view.agent">
+        <FailedPane />
+      </TraceFlow>
+    ),
+    { wrapper: TestQueryClientProvider }
+  );
   await Promise.resolve();
   expect(readiness.painted).not.toHaveBeenCalled();
   setPending(false);
@@ -281,11 +338,14 @@ describe('the transcript store', () => {
       });
       return <h1>{handle.session()?.name}</h1>;
     }
-    render(() => (
-      <Suspense fallback={null}>
-        <TranscriptState />
-      </Suspense>
-    ));
+    render(
+      () => (
+        <Suspense fallback={null}>
+          <TranscriptState />
+        </Suspense>
+      ),
+      { wrapper: TestQueryClientProvider }
+    );
     await screen.findByText('A session');
     const shared = AgentSession.get(SESSION);
     if (!handle || !shared) throw new Error('session was not mounted');
@@ -297,7 +357,8 @@ describe('the transcript store', () => {
     };
     const publish = async (events: FoldedStreamEvent[]) => {
       fold.pushSession.mockResolvedValueOnce(events);
-      AgentSession.ingest({ agentSessionId: SESSION, entries: [row] });
+      if (!logSource.follow) throw new Error('the log is not followed');
+      logSource.follow.rows([row]);
       await shared.snapshot();
     };
     return { messages: handle.messages, publish };

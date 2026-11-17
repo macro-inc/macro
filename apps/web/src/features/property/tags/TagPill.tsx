@@ -20,7 +20,7 @@ export function tagPillClasses(className?: string): string {
     variant: 'outline',
     size: 'xs',
     class: cn(
-      'min-w-0 text-ink-muted transition-colors touch:min-h-0',
+      'min-w-0 border-edge bg-surface-2 text-ink-muted transition-colors touch:min-h-0',
       className
     ),
   });

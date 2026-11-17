@@ -15,8 +15,9 @@
  * A session opened before is folded twice: first from the raw log the
  * GraphQL cache holds from its last open, so the surface has a transcript
  * while the fetch is on the wire, then from the fetched log, which the
- * machine reconciles by row id. The exchange writes the fetched log back;
- * rows the socket delivers after it are appended to the cached copy here.
+ * machine reconciles by row id. Live rows come from the GraphQL log
+ * subscription. The exchange writes the fetched log back; rows the
+ * subscription delivers after it are appended to the cached copy.
  */
 
 import { analytics } from '@app/lib/analytics';
@@ -31,13 +32,11 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   AgentSessionLogUnavailable,
-  canFollowAgentSessionLog,
   forgetAgentSessionLog,
   type SessionLogWatch,
   watchAgentSessionLog,
 } from '@queries/agent-session/log';
 import { subscribeSocketSessionStarted } from '@queries/agent-session/queue-sync';
-import type { AgentSessionLogEvent } from '@queries/agent-session/realtime-protocol';
 import { subscribeAgentSessionUpdated } from '@queries/agent-session/session-metadata-sync';
 import type {
   FoldedStreamEvent,
@@ -52,6 +51,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { CombinedError } from '@urql/core';
+import { err, ok, type Result } from 'neverthrow';
 import { v7 as uuidv7 } from 'uuid';
 import {
   type LoadFailure,
@@ -62,6 +62,7 @@ import {
 import { frameDelivery, PromptTrace } from './prompt-telemetry';
 import { createdRecently, forgetSessionCreated } from './recently-created';
 import { publishSessionTurn } from './session-turn';
+import { typedInClientId } from './ui-client';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
 
@@ -173,39 +174,28 @@ export class AgentSession {
   /**
    * The shared instance for `id`, created on first acquisition. Every
    * acquisition needs a matching {@link release}; the last one closes the
-   * machine and drops the subscriptions.
+   * machine and drops the subscriptions. `hold` keeps a session open for a
+   * later view without being one, so it is not traced as an open.
    */
-  static acquire(id: string): AgentSession {
+  static acquire(id: string, purpose: 'view' | 'hold' = 'view'): AgentSession {
     const open = AgentSession.open.get(id);
     const session = open ?? new AgentSession(id);
     AgentSession.open.set(id, session);
     session.references += 1;
+    if (purpose === 'hold') return session;
     traceAcquire(id, open === undefined, session.references);
+    // A surface opening a session that is already folded waits for nothing;
+    // its render is measured from now, not from the load long ago.
+    if (session.loaded) {
+      session.trace = new SessionLoadTrace(id);
+      session.trace.end('reused');
+    }
     return session;
   }
 
   /** The open instance for `id`, for a caller that only wants to act on it. */
   static get(id: string): AgentSession | undefined {
     return AgentSession.open.get(id);
-  }
-
-  /**
-   * Realtime ingress over the connection gateway: a run of persisted rows
-   * in log order, addressed by session. The socket dispatch and the replay
-   * driver both call this; a session nobody has open ignores it, and so
-   * does one following its log over GraphQL, which hears the same rows
-   * there. The run reaches the machine as one push, so a flush of many
-   * frames costs one worker round trip.
-   */
-  static ingest(event: AgentSessionLogEvent): void {
-    const session = AgentSession.open.get(event.agentSessionId);
-    if (!session || session.followed) return;
-    fireAndForget(
-      session.enqueueAll(
-        event.entries.map((row) => ({ kind: 'confirmed', row }))
-      ),
-      'agent-session'
-    );
   }
 
   readonly id: string;
@@ -221,14 +211,8 @@ export class AgentSession {
    */
   private settled = false;
   /**
-   * Live rows come from the GraphQL log subscription rather than the
-   * gateway. Decided once, when the session opens: the client either
-   * carries subscriptions or it does not.
-   */
-  private readonly followed = canFollowAgentSessionLog();
-  /**
    * The log query in flight for the current load: cached copy, then
-   * fetched; and, when followed, the subscription delivering live rows.
+   * fetched, and the subscription delivering live rows.
    */
   private watch: SessionLogWatch;
   /** The session row, fetched alongside the log and shared by warm and load. */
@@ -265,6 +249,11 @@ export class AgentSession {
   /** Prompts issued here still waiting for their first output. */
   private readonly prompts = new Set<PromptTrace>();
 
+  /** The fetched log is folded and live rows go straight in. */
+  get loaded(): boolean {
+    return this.ready && !this.loadFailed;
+  }
+
   private setTurn(turn: TurnState | undefined): void {
     const next = turn ?? 'idle';
     this.turn = next;
@@ -284,11 +273,9 @@ export class AgentSession {
     });
     // The subscription survives a reconnect, but not the rows published
     // while the socket was down.
-    this.unsubscribeReconnected = this.followed
-      ? subscribeGraphqlSoupReconnected(() =>
-          fireAndForget(this.resync(), 'agent-session')
-        )
-      : () => undefined;
+    this.unsubscribeReconnected = subscribeGraphqlSoupReconnected(() =>
+      fireAndForget(this.resync(), 'agent-session')
+    );
     this.trace = new SessionLoadTrace(id);
     this.watch = this.openWatch();
     this.sessionRow = agentHarnessServiceClient.get(id);
@@ -301,28 +288,21 @@ export class AgentSession {
   }
 
   /**
-   * The log query for a load, following the session when the client can:
-   * each run the subscription delivers folds like a gateway run would, and
-   * a gap in it is a reason to refetch.
+   * The log query for a load, following the session: each run the
+   * subscription delivers reaches the machine as one push, so a flush of
+   * many frames costs one worker round trip, and a gap in it is a reason to
+   * refetch.
    */
   private openWatch(): SessionLogWatch {
-    return watchAgentSessionLog(
-      this.id,
-      'cache-and-network',
-      this.followed
-        ? {
-            rows: (rows) => {
-              fireAndForget(
-                this.enqueueAll(
-                  rows.map((row) => ({ kind: 'confirmed', row }))
-                ),
-                'agent-session'
-              );
-            },
-            gap: () => fireAndForget(this.resync(), 'agent-session'),
-          }
-        : undefined
-    );
+    return watchAgentSessionLog(this.id, 'cache-and-network', {
+      rows: (rows) => {
+        fireAndForget(
+          this.enqueueAll(rows.map((row) => ({ kind: 'confirmed', row }))),
+          'agent-session'
+        );
+      },
+      gap: () => fireAndForget(this.resync(), 'agent-session'),
+    });
   }
 
   /**
@@ -355,6 +335,19 @@ export class AgentSession {
    * afresh. The old watch is stopped first: its rows belong to a load that
    * is no longer the one in flight.
    */
+  /**
+   * Read the session row again, for a surface reopening a session that was
+   * held open since an earlier view: the fold is current, the row may not
+   * be. A refusal forgets the cached log, as a load's does.
+   */
+  async readRow(): Promise<Result<AgentSessionResponse, 'denied' | 'failed'>> {
+    const row = await agentHarnessServiceClient.get(this.id);
+    if (row.isOk()) return ok(row.value);
+    if (!accessDenied(row.error)) return err('failed');
+    this.forgetCached();
+    return err('denied');
+  }
+
   private reissueReads(): void {
     this.watch.stop();
     this.watch = this.openWatch();
@@ -407,7 +400,11 @@ export class AgentSession {
 
     // The harness adopts the id the client speculated under; the response
     // names the id it was accepted under and `issue` reconciles the two.
-    const request: ControlRequest = { ...action, actionId };
+    const request: ControlRequest = {
+      ...action,
+      actionId,
+      ...this.typedIn(action),
+    };
     const result = trace
       ? await this.sendPrompt(trace, actionId, request)
       : await agentHarnessServiceClient.control(this.id, request);
@@ -448,6 +445,17 @@ export class AgentSession {
       );
     }
     return result;
+  }
+
+  /**
+   * The tab a prompt is typed in, so what the turn opens for the person
+   * reaches this tab (`macro.ui.open`).
+   */
+  private typedIn(action: AgentAction): { clientId?: string } {
+    if (action.type !== 'prompt') return {};
+
+    const clientId = typedInClientId();
+    return clientId ? { clientId } : {};
   }
 
   /**

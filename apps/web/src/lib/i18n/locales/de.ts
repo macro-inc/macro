@@ -53,8 +53,6 @@ export default {
     projectBadge: 'Projekt',
     newProject: 'Neues Projekt',
     contentAlreadyOpen: 'Inhalt bereits geöffnet',
-    unableToOpenConversation:
-      'Unterhaltung konnte nicht geöffnet werden. Bitte erneut versuchen.',
     mobileSearchPlaceholder: 'Suchen…',
     closeSearch: 'Suche schließen',
     searchFullTextFor: 'Volltextsuche nach „{{query}}“',
@@ -601,10 +599,6 @@ export default {
       other: '{{accepted}} von {{count}} Elementen als nicht erledigt markiert',
     },
     toastMarkNotDoneFailed: 'Konnte nicht als nicht erledigt markiert werden',
-    toastThreadStaysDone:
-      'Dieser Thread enthält keine empfangenen Nachrichten und bleibt daher erledigt',
-    toastThreadsStayDone:
-      'Diese Threads enthalten keine empfangenen Nachrichten und bleiben daher erledigt',
     toastCountNotRestored: {
       one: '{{count}} konnte nicht wiederhergestellt werden.',
       other: '{{count}} konnten nicht wiederhergestellt werden.',
@@ -773,7 +767,7 @@ export default {
     tabMobileApp: 'Mobile App',
     tabTags: 'Tags',
     tabIntegrations: 'Integrationen',
-    tabRuntimes: 'Laufzeitumgebungen',
+    tabRuntimes: 'Rechner',
     tabMcpServer: 'MCP-Server',
     tabApiKeys: 'API-Schlüssel',
     tabBots: 'Bots',

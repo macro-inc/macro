@@ -3,15 +3,23 @@ import { NATIVE_SESSION_SERVICE_URLS } from '../constant/servers';
 import { isTauri } from './platform';
 
 const nativeServices = NATIVE_SESSION_SERVICE_URLS.map((url) => new URL(url));
+// tauri-plugin-http's message when a URL is outside the capability's scope.
+const SCOPE_DENIAL = 'url not allowed on the configured scope';
 let originalFetch: typeof fetch | undefined;
 
-// Third-party APIs that allow any origin and require requests from the user's
+// Third-party hosts that allow any origin and require requests from the user's
 // browser. The native HTTP client's scope doesn't list them and rejects them.
-const WEBVIEW_FETCH_HOSTS = new Set(['api.klipy.com']);
+// Call background effects fetch MediaPipe's WASM from jsDelivr and its
+// segmentation model from Google Cloud Storage (`@livekit/track-processors`).
+const WEBVIEW_FETCH_HOSTS = new Set([
+  'api.klipy.com',
+  'cdn.jsdelivr.net',
+  'storage.googleapis.com',
+]);
 
 /**
- * Called once by the entry point: routes Tauri's global fetch through the
- * native transport. Localhost requests (dev server) skip it to keep HMR working.
+ * Called once by the entry point: routes Tauri's global fetch through
+ * `createPlatformFetch`, the only place that chooses a transport.
  */
 export function installPlatformFetch() {
   if (!isTauri()) return;
@@ -19,28 +27,10 @@ export function installPlatformFetch() {
   const browserFetch = window.fetch;
   // The global override must call the transport, never `platformFetch`: that
   // reads the global back and would recurse until the stack overflows.
-  const nativeFetch = initializePlatformFetch(browserFetch);
+  const transport = initializePlatformFetch(browserFetch);
   window.fetch = new Proxy(browserFetch, {
-    apply: (target, thisArg, args: Parameters<typeof fetch>) => {
-      const url = args[0];
-      // Resolve bundled asset paths before checking the existing localhost bypass.
-      let resolvedUrl: URL;
-      try {
-        resolvedUrl = new URL(
-          url instanceof Request ? url.url : String(url),
-          document.baseURI
-        );
-      } catch (error) {
-        return Promise.reject(error);
-      }
-      if (
-        resolvedUrl.href.includes('localhost') ||
-        WEBVIEW_FETCH_HOSTS.has(resolvedUrl.hostname)
-      ) {
-        return target.apply(thisArg, args);
-      }
-      return nativeFetch.apply(thisArg, args);
-    },
+    apply: (_target, thisArg, args: Parameters<typeof fetch>) =>
+      transport.apply(thisArg, args),
   });
 }
 
@@ -62,7 +52,11 @@ export function createPlatformFetch(
 ): typeof window.fetch {
   // Tauri sends invoke calls through global fetch. Preserve its webview-owned
   // endpoint or native HTTP recursively invokes itself and expands each payload.
-  const ipc = isTauri() ? new URL(convertFileSrc('', 'ipc')) : undefined;
+  // Local files (`asset`) are also served only to the webview. Each protocol is
+  // `<name>://localhost` or `http(s)://<name>.localhost`, depending on platform.
+  const tauriProtocols = isTauri()
+    ? ['ipc', 'asset'].map((protocol) => new URL(convertFileSrc('', protocol)))
+    : [];
   return async (input, init) => {
     if (!isTauri()) return webviewFetch(input, init);
     const url = new URL(
@@ -80,15 +74,36 @@ export function createPlatformFetch(
     // Assets share the webview origin; authenticated service prefixes take
     // precedence even when the development proxy shares that origin.
     if (
-      (ipc && url.protocol === ipc.protocol && url.host === ipc.host) ||
+      tauriProtocols.some(
+        (endpoint) =>
+          url.protocol === endpoint.protocol && url.host === endpoint.host
+      ) ||
       (!service && url.origin === new URL(document.baseURI).origin) ||
       url.protocol === 'data:' ||
-      url.protocol === 'blob:'
+      url.protocol === 'blob:' ||
+      WEBVIEW_FETCH_HOSTS.has(url.hostname)
     ) {
       return webviewFetch(input, init);
     }
     const { fetch } = await import('@tauri-apps/plugin-http');
-    return fetch(input, init);
+    // The plugin cancels only on `init.signal`, never on a `Request`'s own.
+    const signal =
+      init?.signal ?? (input instanceof Request ? input.signal : undefined);
+    try {
+      return await fetch(input, { ...init, signal });
+    } catch (error) {
+      // The plugin rejects with its Rust error text when no response arrives
+      // (DNS, connect, TLS). Browser fetch rejects those with a TypeError, so
+      // callers can treat both transports alike; the text stays as the message.
+      // Cancellations and scope denials keep their text: they aren't outages.
+      if (
+        typeof error === 'string' &&
+        !signal?.aborted &&
+        !error.startsWith(SCOPE_DENIAL)
+      )
+        throw new TypeError(error);
+      throw error;
+    }
   };
 }
 

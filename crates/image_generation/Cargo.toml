@@ -18,6 +18,7 @@ axum = { workspace = true, optional = true }
 base64.workspace = true
 bot_id = { path = "../bot_id" }
 entity_registry = { path = "../entity_registry/entity_registry", features = ["axum"], optional = true }
+genai_telemetry = { path = "../genai_telemetry" }
 image.workspace = true
 lexical_client = { path = "../lexical_client" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
@@ -40,7 +41,6 @@ uuid.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-http-body-util.workspace = true
 macro_user_id = { path = "../macro_user_id" }
 model_user = { path = "../model_user" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

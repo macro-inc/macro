@@ -6,6 +6,7 @@ import { CalendarSettings } from '../calendar/calendar-settings';
 import { CrmSettings as Crm } from '../crm/crm-settings';
 import { Usage } from '../usage/usage';
 import { Account } from './Account';
+import { AccountManagers } from './AccountManagers';
 import { Admin } from './Admin';
 import { Agent } from './Agent';
 import { AgentSettings } from './AgentSettings';
@@ -53,6 +54,9 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       </Show>
       <Show when={isCurrentTab('API Keys')}>
         <ApiKeys />
+      </Show>
+      <Show when={isCurrentTab('Account Managers')}>
+        <AccountManagers />
       </Show>
       <Show when={isCurrentTab('Notifications')}>
         <Notifications />

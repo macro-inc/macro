@@ -126,6 +126,7 @@ describe('PersistedReview', () => {
         sessionId="session"
         reviewId="review"
         canAct
+        updates={{ kind: 'polled' }}
         onDecision={onDecision}
       />
     ));
@@ -147,6 +148,7 @@ describe('PersistedReview', () => {
         sessionId="session"
         reviewId="review"
         canAct
+        updates={{ kind: 'polled' }}
         onDecision={onDecision}
       />
     ));
@@ -159,7 +161,12 @@ describe('PersistedReview', () => {
     const [record, setRecord] = createSignal<Review>(emailReview);
     reviews.record = record;
     render(() => (
-      <PersistedReview sessionId="session" reviewId="review" canAct />
+      <PersistedReview
+        sessionId="session"
+        reviewId="review"
+        canAct
+        updates={{ kind: 'polled' }}
+      />
     ));
     expect(screen.getByRole('status').textContent).toBe('1:pending');
 

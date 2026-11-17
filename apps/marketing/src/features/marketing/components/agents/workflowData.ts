@@ -43,10 +43,10 @@ export function seedAgentWorkflows(w: DummyWorkspace) {
       ...all,
       {
         id: 'beacon-email',
-        sender: 'Valentina <valentina@coparse.com>',
+        sender: 'Austin Barron <austin@example.com>',
         subject: 'One more thing before Friday',
         snippet: 'Can our 12 clients upload without accounts?',
-        body: 'Hi Julia,\n\nWe talked about our 8 internal reviewers on Tuesday. We also need 12 clients to send us files without creating accounts. Can we include that in the trial?\n\nLet’s discuss on Friday.\nValentina',
+        body: 'Hi Julia,\n\nWe talked about our 8 internal reviewers on Tuesday. We also need 12 clients to send us files without creating accounts. Can we include that in the trial?\n\nLet’s discuss on Friday.\nAustin Barron',
         time: 'Thursday',
         account: 'work',
         folder: 'inbox',
@@ -72,7 +72,7 @@ export function seedAgentWorkflows(w: DummyWorkspace) {
           },
           {
             id: 'westlake-feedback',
-            person: 'valentina',
+            person: 'austin',
             time: 'Yesterday',
             body: 'Westlake asked the same thing about reviewer visibility. They also want clients to send files without creating an account.',
           },
@@ -109,7 +109,7 @@ export function seedAgentWorkflows(w: DummyWorkspace) {
         duration: 0.5,
         calendar: 'work',
         description:
-          'Agree on the first trial for client file uploads with Valentina. Julia hosts.',
+          'Agree on the first trial for client file uploads with Austin Barron. Julia hosts.',
       },
       {
         id: 'westlake-meeting',

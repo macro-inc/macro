@@ -114,7 +114,7 @@ where
             ctx.word_documents.read(
                 receipt,
                 &req.user_id,
-                ctx.actor.into_storage_id().as_ref(),
+                Some(ctx.actor.into_storage_id().as_ref()),
                 self.start,
                 self.count,
             ),
@@ -153,7 +153,7 @@ where
             ctx.word_documents.edit(
                 receipt,
                 &req.user_id,
-                ctx.actor.into_storage_id().as_ref(),
+                Some(ctx.actor.into_storage_id().as_ref()),
                 self.operations.clone(),
                 WordEditOptions {
                     track_changes: self.track_changes,

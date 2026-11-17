@@ -11,7 +11,7 @@ use entity_mutation::{
 use graphql_common::GraphqlEntityType;
 use graphql_permission::GraphqlEntityAccessLevel;
 use graphql_soup::{SoupEntityEdges, SoupItemDataLoader, SoupPatch};
-use model_entity::Entity;
+use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
@@ -352,6 +352,13 @@ pub struct GraphqlEntityMutationError {
     pub message: String,
 }
 
+/// Whether the client keeps this entity type in Soup's normalized cache.
+/// Databases and forms reach Drive through their own lists, so their effects
+/// have no Soup record to patch; every other type must render as a patch.
+fn has_soup_record(entity_type: EntityType) -> bool {
+    !matches!(entity_type, EntityType::Database | EntityType::Form)
+}
+
 /// Successful result for one requested entity mutation.
 pub struct GraphqlMutationSuccess<E> {
     /// Ordered domain effects rendered through the shared Soup patch contract.
@@ -367,21 +374,25 @@ impl<E: SoupEntityEdges> GraphqlMutationSuccess<E> {
     async fn effects(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<SoupPatch<E>>> {
         let user_id = mutation_actor(ctx)?.user_id;
         let loader = ctx.data_opt::<SoupItemDataLoader>();
-        let patches =
-            async_graphql::futures_util::future::try_join_all(self.effects.iter().map(|effect| {
-                let user_id = user_id.clone();
-                async move {
-                    match effect {
-                        EntityMutationEffect::Updated(entity) => {
-                            SoupPatch::hydrate_updated(user_id, entity.clone(), loader).await
-                        }
-                        EntityMutationEffect::Deleted(entity) => {
-                            SoupPatch::deleted(entity.clone()).map(Some)
+        let patches = async_graphql::futures_util::future::try_join_all(
+            self.effects
+                .iter()
+                .filter(|effect| has_soup_record(effect.entity().entity_type))
+                .map(|effect| {
+                    let user_id = user_id.clone();
+                    async move {
+                        match effect {
+                            EntityMutationEffect::Updated(entity) => {
+                                SoupPatch::hydrate_updated(user_id, entity.clone(), loader).await
+                            }
+                            EntityMutationEffect::Deleted(entity) => {
+                                SoupPatch::deleted(entity.clone()).map(Some)
+                            }
                         }
                     }
-                }
-            }))
-            .await?;
+                }),
+        )
+        .await?;
         Ok(patches.into_iter().flatten().collect())
     }
 }

@@ -3,6 +3,7 @@ import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
 import type { PluginManager, SelectionData } from '../plugins';
 import type { Action } from '../plugins/actions/types';
+import type { RestoreFocusDefault } from '../plugins/restore-focus';
 import type { MentionLinkResolver } from '../plugins/text-paste/textPastePlugin';
 import { buildHandleFromConfig } from './buildHandleFromConfig';
 import type {
@@ -110,8 +111,8 @@ export class EditorConfigBuilder implements EditorBuilder {
     return this;
   }
 
-  withRestoreFocus(): this {
-    this.state.restoreFocus = true;
+  withRestoreFocus(defaultSelection: RestoreFocusDefault = 'rootStart'): this {
+    this.state.restoreFocus = defaultSelection;
     return this;
   }
 

@@ -15,6 +15,8 @@ use crate::domain::focus::FocusQuestion;
 /// thread as a change to an event that isn't over, and
 /// `the_experiment_bounds_what_calendar_mail_adds` counts the other extreme.
 const EXPERIMENT: &str = include_str!("experiment.csv");
+/// The questions the experiment recorded answers for.
+const EXPERIMENT_ANSWERS: usize = 8;
 
 fn flag(value: &str) -> bool {
     match value {
@@ -37,12 +39,18 @@ fn parse_row(
     calendar_subject: CalendarNotice,
 ) -> (FocusAnswers, FocusSignals, (bool, bool, bool)) {
     let cells = line.split(',').collect::<Vec<_>>();
-    let answer_count = FocusQuestion::ALL.len();
-    assert_eq!(cells.len(), answer_count + 8, "bad fixture row: {line}");
-    let (probabilities, rest) = cells.split_at(answer_count);
+    assert_eq!(
+        cells.len(),
+        EXPERIMENT_ANSWERS + 8,
+        "bad fixture row: {line}"
+    );
+    let (probabilities, rest) = cells.split_at(EXPERIMENT_ANSWERS);
+    // Questions added since the experiment read 0, as they do on stored rows.
     let probabilities = probabilities
         .iter()
         .map(|cell| cell.parse::<f32>().expect("probability"))
+        .chain(std::iter::repeat(0.0))
+        .take(FocusQuestion::ALL.len())
         .collect::<Vec<_>>();
     let answers =
         FocusAnswers::from_probabilities(&probabilities).expect("one answer per question");
@@ -78,6 +86,8 @@ fn answers(focus: f32) -> FocusAnswers {
         needs_decision: 0.0,
         needs_response: 0.0,
         needs_follow_up: 0.0,
+        grows_with_time: 0.0,
+        fades_with_time: 0.0,
     }
 }
 
@@ -124,6 +134,100 @@ fn reproduces_the_experiment_verdicts() {
     assert_eq!((total, focus, reply, follow_up), (643, 218, 48, 4));
     // Nothing in Focus reads below the 40-59 band on this inbox.
     assert_eq!(bands, [0, 0, 163, 42, 13]);
+}
+
+#[test]
+fn every_experiment_thread_reads_flat_without_the_time_answers() {
+    for line in experiment_rows() {
+        let (answers, signals, _) = parse_row(line, change());
+        assert_eq!(decide(&answers, &signals).importance_rate, 0, "{line}");
+    }
+}
+
+#[test]
+fn the_time_answers_change_nothing_but_the_rate() {
+    for line in experiment_rows() {
+        for notice in [change(), CalendarNotice::NewInvite, CalendarNotice::Rsvp] {
+            let (answers, signals, _) = parse_row(line, notice);
+            let without = decide(&answers, &signals);
+            for (grows_with_time, fades_with_time) in [(1.0, 0.0), (0.0, 1.0), (1.0, 1.0)] {
+                let with = decide(
+                    &FocusAnswers {
+                        grows_with_time,
+                        fades_with_time,
+                        ..answers
+                    },
+                    &signals,
+                );
+                assert_eq!(
+                    FocusVerdict {
+                        importance_rate: 0,
+                        ..with
+                    },
+                    without,
+                    "{line}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_clear_lean_sets_a_signed_rate_scaled_by_how_clear_it_is() {
+    let rate = |grows_with_time, fades_with_time| {
+        decide(
+            &FocusAnswers {
+                grows_with_time,
+                fades_with_time,
+                ..answers(0.8)
+            },
+            &FocusSignals::default(),
+        )
+        .importance_rate
+    };
+    assert_eq!(rate(1.0, 0.0), 10);
+    assert_eq!(rate(0.0, 1.0), -10);
+    assert_eq!(rate(0.9, 0.1), 8);
+    assert_eq!(rate(0.1, 0.9), -8);
+    // Just past the dead band, a thread still moves, slowly.
+    assert_eq!(rate(0.5, 0.05), 5);
+    assert_eq!(rate(0.05, 0.5), -5);
+}
+
+#[test]
+fn no_clear_lean_reads_as_flat() {
+    let rate = |grows_with_time, fades_with_time| {
+        decide(
+            &FocusAnswers {
+                grows_with_time,
+                fades_with_time,
+                ..answers(0.8)
+            },
+            &FocusSignals::default(),
+        )
+        .importance_rate
+    };
+    // Sure of neither, sure of both, and just inside the dead band either way.
+    assert_eq!(rate(0.0, 0.0), 0);
+    assert_eq!(rate(0.95, 0.9), 0);
+    assert_eq!(rate(0.45, 0.1), 0);
+    assert_eq!(rate(0.1, 0.45), 0);
+}
+
+#[test]
+fn answers_stored_before_the_time_questions_decode_as_flat() {
+    let stored = r#"{
+        "focus": 0.8, "outreach": 0.0, "automated": 0.0, "customer": 0.0,
+        "calendar_rsvp": 0.0, "needs_decision": 0.0, "needs_response": 0.0,
+        "needs_follow_up": 0.0
+    }"#;
+    let answers = serde_json::from_str::<FocusAnswers>(stored).unwrap();
+    assert_eq!(answers.grows_with_time, 0.0);
+    assert_eq!(answers.fades_with_time, 0.0);
+    assert_eq!(
+        decide(&answers, &FocusSignals::default()).importance_rate,
+        0
+    );
 }
 
 #[test]

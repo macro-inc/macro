@@ -25,24 +25,19 @@ const mocks = vi.hoisted(() => ({
   soup: vi.fn(),
   toast: vi.fn(),
   renameDatabase: vi.fn(),
-  renameItem: vi.fn(),
-  graphqlEnabled: vi.fn(() => true),
+  renameAgentSession: vi.fn(),
 }));
 vi.mock('@block-database/queries/rename-database', () => ({
   renameDatabase: mocks.renameDatabase,
-}));
-vi.mock('@core/component/FileList/itemOperations', () => ({
-  renameItem: mocks.renameItem,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.toast },
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: {},
-  isFeatureEnabled: mocks.graphqlEnabled,
+  ENABLE_BEARER_TOKEN_AUTH: false,
 }));
 vi.mock('@queries/agent-session/entity-mutations', () => ({
-  renameAgentSession: vi.fn(),
+  renameAgentSession: mocks.renameAgentSession,
 }));
 vi.mock('@queries/client', () => ({
   get queryClient() {
@@ -65,8 +60,15 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlCacheHost: () => mocks.host,
 }));
 
+import { authKeys } from '@queries/auth/keys';
 import { callKeys } from '@queries/call/keys';
 import { channelKeys } from '@queries/channel/keys';
+
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'viewer',
+  useIsAuthenticated: () => () => true,
+}));
+
 import {
   createBulkRenameDssEntityMutation,
   createRenameDssEntityMutation,
@@ -78,7 +80,6 @@ afterEach(() => {
   dispose?.();
   cache.clear();
   vi.clearAllMocks();
-  mocks.graphqlEnabled.mockReturnValue(true);
 });
 
 it.each(['channel', 'call'] as const)(
@@ -86,6 +87,10 @@ it.each(['channel', 'call'] as const)(
   async (type) => {
     cache = new QueryClient({
       defaultOptions: { mutations: { retry: false } },
+    });
+    cache.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'viewer',
+      authenticated: true,
     });
     const listeners = new Set<(settlement: MutationSettlement) => void>();
     mocks.host = {
@@ -117,7 +122,7 @@ it.each(['channel', 'call'] as const)(
     });
     const key =
       type === 'channel'
-        ? channelKeys.listChannels.queryKey
+        ? channelKeys.listChannels('viewer').queryKey
         : callKeys.record('entity').queryKey;
     const original =
       type === 'channel'
@@ -168,6 +173,10 @@ it.each(['After', 'Before', ' Before '])(
     cache = new QueryClient({
       defaultOptions: { mutations: { retry: false } },
     });
+    cache.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'viewer',
+      authenticated: true,
+    });
     mocks.client = createClient({
       url: 'http://test.invalid',
       exchanges: [],
@@ -210,17 +219,21 @@ it.each(['After', 'Before', ' Before '])(
 );
 
 it.each([true, false])(
-  'rolls back only a failed document after a database rename (document success=%s)',
+  'rolls back only a failed agent session after a database rename (agent session success=%s)',
   async (success) => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     cache = new QueryClient({
       defaultOptions: { mutations: { retry: false } },
     });
-    mocks.graphqlEnabled.mockReturnValue(false);
+    cache.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'viewer',
+      authenticated: true,
+    });
     mocks.renameDatabase.mockResolvedValue(
       success ? err({ kind: 'unreachable' }) : ok(undefined)
     );
-    mocks.renameItem.mockResolvedValue(success);
+    if (success) mocks.renameAgentSession.mockResolvedValue(undefined);
+    else mocks.renameAgentSession.mockRejectedValue(new Error('rename failed'));
     const rollback = vi.fn();
     mocks.soup.mockReturnValue({ rollback });
     let mutation!: ReturnType<typeof createBulkRenameDssEntityMutation>;
@@ -247,8 +260,8 @@ it.each([true, false])(
           newName: 'Database after',
         },
         {
-          entity: { id: 'doc-1', type: 'document', name: 'Document before' },
-          newName: 'Document after',
+          entity: { id: 'session-1', type: 'agent_session', name: 'Before' },
+          newName: 'After',
         },
       ])
     ).toEqual([{ success: !success }, { success }]);
@@ -256,9 +269,9 @@ it.each([true, false])(
     else {
       expect(rollback).toHaveBeenCalledOnce();
       expect(mocks.preview).toHaveBeenLastCalledWith({
-        itemId: 'doc-1',
-        itemType: 'document',
-        name: 'Document before',
+        itemId: 'session-1',
+        itemType: 'agent_session',
+        name: 'Before',
       });
     }
     vi.restoreAllMocks();

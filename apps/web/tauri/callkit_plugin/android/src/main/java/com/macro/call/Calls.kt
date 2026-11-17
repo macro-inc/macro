@@ -5,10 +5,13 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.os.Build
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
+import android.provider.Settings
 import android.telecom.*
 import androidx.core.content.ContextCompat
 import app.tauri.plugin.Channel
@@ -56,6 +59,10 @@ internal object Calls {
     var video = false
         private set
     var error: String? = null
+    /** After repeated denials Android stops asking, so only the app's settings page can grant a permission. */
+    fun openAppSettings(ctx: Context) {
+        ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")))
+    }
     /** Where the call UI is, as on iOS: the drawer (expanded), the in-app thumbnail (minimized), or an edge tab (hidden). */
     var overlay = "hidden"
         private set
@@ -77,6 +84,8 @@ internal object Calls {
     private var telecomMuted = false
     private var telecomFocusLost = false
     private var desiredAudioType: String? = null
+    private var selectedCommunicationDevice = false
+    private var communicationDeviceListener: AudioManager.OnCommunicationDeviceChangedListener? = null
     private var remoteAudioSilenced = false
     private var publishedIdentities: String? = null
     private val audioMutex = Mutex()
@@ -101,6 +110,100 @@ internal object Calls {
     }
     fun watch(name: String, channel: Channel) { watchers[name] = channel; publishedIdentities = null }
     fun unwatch() { watchers.clear() }
+
+    // The call ID scopes every read, selection and notification to the current session.
+    fun outputState(ctx: Context): JSObject? {
+        val call = offer?.takeIf { accepted } ?: return null
+        val endpoints = if (Build.VERSION.SDK_INT >= 34)
+            (connection as? TelecomService.MacroConnection)?.availableEndpoints().orEmpty()
+        else emptyList()
+        val outputs = JSONArray()
+        var selectedId: String? = null
+        if (endpoints.isNotEmpty()) {
+            val currentEndpoint = (connection as? TelecomService.MacroConnection)?.currentEndpointId()
+            for (endpoint in endpoints) {
+                val id = endpoint.identifier.toString()
+                outputs.put(JSONObject().put("id", id).put("label", endpoint.endpointName.toString()))
+                val type = when (endpoint.endpointType) {
+                    CallEndpoint.TYPE_SPEAKER -> "Speakerphone"
+                    CallEndpoint.TYPE_BLUETOOTH -> "BluetoothHeadset"
+                    CallEndpoint.TYPE_WIRED_HEADSET -> "WiredHeadset"
+                    else -> "Earpiece"
+                }
+                if (currentEndpoint == id || (currentEndpoint == null && audioRoute == type)) selectedId = id
+            }
+        } else if (Build.VERSION.SDK_INT >= 31) {
+            val audio = ctx.getSystemService(AudioManager::class.java)
+            audio.availableCommunicationDevices.forEach { device ->
+                val id = "device:${device.id}"
+                val label = when (device.type) {
+                    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Speaker"
+                    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "Phone"
+                    else -> device.productName.toString()
+                }
+                outputs.put(JSONObject().put("id", id).put("label", label))
+                if (audio.communicationDevice?.id == device.id) selectedId = id
+            }
+        } else {
+            val handler = room?.audioSwitchHandler
+            handler?.availableAudioDevices?.forEach { device ->
+                val type = audioType(device) ?: return@forEach
+                outputs.put(JSONObject().put("id", type).put("label", when (device) {
+                    is AudioDevice.BluetoothHeadset -> device.name
+                    is AudioDevice.WiredHeadset -> device.name
+                    is AudioDevice.Speakerphone -> "Speaker"
+                    else -> "Phone"
+                }))
+            }
+            selectedId = audioRoute
+        }
+        return JSObject().apply { put("callId", call.callId); put("selectedId", selectedId ?: JSONObject.NULL); put("outputs", outputs) }
+    }
+
+    fun publishAudioOutput(ctx: Context) { outputState(ctx)?.let { emit("audioOutput", it) } }
+
+    fun outputRequiresBluetooth(ctx: Context, id: String): Boolean {
+        if (Build.VERSION.SDK_INT >= 34) {
+            val endpoint = (connection as? TelecomService.MacroConnection)?.availableEndpoints()?.firstOrNull { it.identifier.toString() == id }
+            if (endpoint != null) return endpoint.endpointType == CallEndpoint.TYPE_BLUETOOTH
+        }
+        if (Build.VERSION.SDK_INT >= 31) {
+            val type = ctx.getSystemService(AudioManager::class.java).availableCommunicationDevices.firstOrNull { "device:${it.id}" == id }?.type
+            return type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || type == AudioDeviceInfo.TYPE_BLE_HEADSET
+        }
+        return false
+    }
+
+    fun selectOutput(ctx: Context, callId: String, id: String): Boolean {
+        if (!AudioOutputSelection.allowed(offer?.callId, callId, accepted && room != null)) return false
+        if (Build.VERSION.SDK_INT >= 34) {
+            val connection = connection as? TelecomService.MacroConnection
+            if (connection?.availableEndpoints()?.isNotEmpty() == true) return connection.selectEndpoint(id)
+        }
+        if (Build.VERSION.SDK_INT >= 31) {
+            val audio = ctx.getSystemService(AudioManager::class.java)
+            val device = audio.availableCommunicationDevices.firstOrNull { "device:${it.id}" == id } ?: return false
+            val selected = audio.setCommunicationDevice(device)
+            if (selected) {
+                selectedCommunicationDevice = true
+                desiredAudioType = when (device.type) {
+                    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Speakerphone"
+                    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "Earpiece"
+                    AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> "WiredHeadset"
+                    AudioDeviceInfo.TYPE_BLUETOOTH_SCO, AudioDeviceInfo.TYPE_BLE_HEADSET -> "BluetoothHeadset"
+                    else -> null
+                }
+                publishAudioOutput(ctx)
+            }
+            return selected
+        }
+        val handler = room?.audioSwitchHandler ?: return false
+        val device = handler.availableAudioDevices.firstOrNull { audioType(it) == id } ?: return false
+        desiredAudioType = id
+        handler.selectDevice(device)
+        publishAudioOutput(ctx)
+        return true
+    }
     // Agents such as the transcriber join the room but are not call participants.
     fun remoteHumans(media: Room): List<RemoteParticipant> =
         media.remoteParticipants.values.filter { it.kind != Participant.Kind.AGENT }
@@ -382,12 +485,21 @@ internal object Calls {
             return
         }
         room = media
+        if (Build.VERSION.SDK_INT >= 31) {
+            val audio = ctx.getSystemService(AudioManager::class.java)
+            val listener = AudioManager.OnCommunicationDeviceChangedListener {
+                if (room === media) publishAudioOutput(ctx)
+            }
+            communicationDeviceListener = listener
+            audio.addOnCommunicationDeviceChangedListener(ctx.mainExecutor, listener)
+        }
         media.audioSwitchHandler?.loggingEnabled = false
         media.audioSwitchHandler?.registerAudioDeviceChangeListener { devices, selected ->
             scope.launch {
                 if (room !== media) return@launch
                 audioRoute = audioType(selected)
                 publish()
+                publishAudioOutput(ctx)
                 if (audioRoute != desiredAudioType) {
                     devices.firstOrNull { audioType(it) == desiredAudioType }?.let { media.audioSwitchHandler?.selectDevice(it) }
                 }
@@ -526,6 +638,15 @@ internal object Calls {
         val media = room; room = null
         val telecomConnection = connection; connection = null
         offer = null; pendingAnswered = null; state = "disconnected"; title = null; recipient = null; displayNames.clear(); error = null; muted = false; video = false; held = false; answering = false; accepted = false; focusLost = false; telecomMuted = false; telecomFocusLost = false; desiredAudioType = null; remoteAudioSilenced = false; audioRoute = null; overlay = "hidden"; spotlightId = null
+        if (Build.VERSION.SDK_INT >= 31) {
+            val audio = ctx.getSystemService(AudioManager::class.java)
+            communicationDeviceListener?.let { listener -> runCatching { audio.removeOnCommunicationDeviceChangedListener(listener) } }
+            communicationDeviceListener = null
+            if (selectedCommunicationDevice) {
+                selectedCommunicationDevice = false
+                runCatching { audio.clearCommunicationDevice() }
+            }
+        }
         // Native/SDK callbacks may fail or reenter; no resource owns the cleared session.
         // Release each resource independently so one failure cannot leave a phantom call.
         runCatching { media?.disconnect() }

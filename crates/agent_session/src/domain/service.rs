@@ -67,7 +67,8 @@ use super::model::{
     AuthorKind, ClaimOutcome, CreateAgentSessionParams, FoldedSessionLog, LogAppended,
     MAX_AGENT_SESSION_NAME_CHARS, MAX_PREVIEW_SESSION_IDS, Message, MessageId, ReplicaId,
     SandboxSize, SessionClaim, SessionLog, SessionManagement, SessionPreviewCandidate,
-    StoredAgentSessionLog, StoredQueuedAction, ThreadSession, cursor_run_checkpoint,
+    SessionRelease, StoredAgentSessionLog, StoredQueuedAction, ThreadSession,
+    cursor_run_checkpoint,
 };
 use super::model::{SessionBot, SessionSource, SessionVisibility, TurnPrompter};
 use super::ports::{
@@ -78,7 +79,7 @@ use super::ports::{
 };
 use super::retitle::ConversationDigest;
 use super::session::actors::{ActorInput, SessionActor, SessionCommand, SessionMessage, Stepped};
-use super::session::{CloseReason, Input, StopReason as SessionStopReason};
+use super::session::{CloseReason, Input, PermissionPolicy, StopReason as SessionStopReason};
 use crate::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
@@ -106,6 +107,9 @@ struct ActiveSession {
     /// agent that cannot resume, or refused, still has its previous list.
     mcp_servers: Vec<McpServer>,
     stopped: watch::Receiver<bool>,
+    /// The actor's handshake outcome: `None` until its ACP session opens or
+    /// fails. Absent until an actor starts.
+    opened: Option<watch::Receiver<Option<bool>>>,
     marker: Arc<()>,
     deleting: bool,
     stopping: bool,
@@ -196,6 +200,23 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// Whether the session's persisted turn projection says a turn is open,
+    /// as [`AgentSessionRepo::has_unfinished_turn`] answers.
+    fn has_unfinished_turn(&self, id: AgentSessionId) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Wait for the session's live actor to finish opening its ACP session
+    /// (`session/new`, `session/load` or `session/resume`): `true` once it
+    /// is live, `false` when the handshake failed. Errors with
+    /// [`AgentSessionError::Disconnected`] when no actor is attached here.
+    fn wait_opened(&self, id: AgentSessionId) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Whether the session's in-process turns are billed to its owner, set
+    /// by whoever opened it.
+    fn session_billing(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<crate::domain::model::SessionBilling>> + Send;
+
     /// A persisted agent session by id, or `None` when there is none.
     fn find_session(
         &self,
@@ -207,6 +228,17 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// it to the session's viewers. Any replica may call this; the frame is
     /// ordered by when it is stored.
     fn record_frame(
+        &self,
+        id: AgentSessionId,
+        message: ToServerMessage,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Append a frame nothing projects session state from - no turn,
+    /// status, or model - and push it to the session's viewers, without the
+    /// whole-log fold [`record_frame`](Self::record_frame) runs first. What a
+    /// review writes on every save. Any replica may call this; the frame is
+    /// ordered by when it is stored.
+    fn record_unprojected_frame(
         &self,
         id: AgentSessionId,
         message: ToServerMessage,
@@ -276,6 +308,16 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// is already in the state this asks for, so it succeeds.
     fn close_session(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
+    /// Stop the session's idle actor without a trace: no log frame, no
+    /// turn-observer callback (so no lifecycle event), nothing published. Its
+    /// claim is given back under its own fence. The actor refuses with
+    /// [`SessionRelease::Busy`] while it has work open. A later attach
+    /// rebuilds it from the log as after a restart.
+    fn release_session(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<SessionRelease>> + Send;
+
     /// Persist that a session disconnected before a live actor could report it.
     fn mark_disconnected(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
@@ -334,6 +376,15 @@ pub trait AgentSessionService: Send + Sync + 'static {
         &self,
         id: AgentSessionId,
         servers: Vec<McpServer>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Answer the agent's permission requests under `policy` from now on, on
+    /// the session's live connection on this instance. A session attached
+    /// nowhere here needs nothing: its next attach takes a fresh policy.
+    fn set_permission_policy(
+        &self,
+        id: AgentSessionId,
+        policy: PermissionPolicy,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// The session an incoming channel context routes to, if any.
@@ -548,6 +599,13 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         self.replica
     }
 
+    /// How many sessions have a live actor (or one being attached) on this
+    /// service right now.
+    #[must_use]
+    pub fn active_sessions(&self) -> usize {
+        self.active.len()
+    }
+
     /// Stop active actors and wait for their tasks to release their transports.
     pub async fn shutdown(&self) {
         let lifecycle = self.lifecycle.lock().await;
@@ -576,6 +634,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     commands: None,
                     mcp_servers: Vec::new(),
                     stopped,
+                    opened: None,
                     marker: marker.clone(),
                     deleting: false,
                     stopping: false,
@@ -624,6 +683,8 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         active.commands = Some(commands.clone());
         active.mcp_servers = attachment.mcp_servers.clone();
         active.transport_closed = attachment.closed.clone();
+        let (opened, opened_rx) = watch::channel(None);
+        active.opened = Some(opened_rx);
         drop(active);
         let (marker, stopped_tx) = reservation.commit();
 
@@ -660,7 +721,8 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             }),
             Arc::clone(&self.tool_catalog),
         )
-        .with_initial_model(initial_model);
+        .with_initial_model(initial_model)
+        .with_opened(opened);
         self.tasks.spawn(
             run_session(
                 actor,
@@ -792,6 +854,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     commands: None,
                     mcp_servers: Vec::new(),
                     stopped: stopped.clone(),
+                    opened: None,
                     marker: marker.clone(),
                     deleting,
                     stopping: true,
@@ -907,6 +970,30 @@ where
         self.repo.get(id).await
     }
 
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        self.repo.has_unfinished_turn(id).await
+    }
+
+    async fn wait_opened(&self, id: AgentSessionId) -> Result<bool> {
+        let mut opened = self
+            .active
+            .get(&id)
+            .and_then(|active| active.opened.clone())
+            .ok_or(AgentSessionError::Disconnected(id))?;
+        let outcome = opened
+            .wait_for(Option::is_some)
+            .await
+            .map_err(|_| AgentSessionError::Disconnected(id))?;
+        Ok(outcome.unwrap_or(false))
+    }
+
+    async fn session_billing(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<crate::domain::model::SessionBilling> {
+        self.repo.billing(id).await
+    }
+
     async fn find_session(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
         self.repo.find(id).await
     }
@@ -1018,6 +1105,39 @@ where
         Ok(())
     }
 
+    async fn release_session(&self, id: AgentSessionId) -> Result<SessionRelease> {
+        let (commands, stopped, marker) = {
+            let Some(active) = self.active.get(&id) else {
+                return Ok(SessionRelease::NotAttached);
+            };
+            let Some(commands) = active.commands.clone().filter(|_| !active.stopping) else {
+                return Ok(SessionRelease::NotAttached);
+            };
+            (commands, active.stopped.clone(), active.marker.clone())
+        };
+        let (completed, released) = oneshot::channel();
+        if commands
+            .send(SessionMessage::Release(completed))
+            .await
+            .is_err()
+        {
+            return Ok(SessionRelease::NotAttached);
+        }
+        drop(commands);
+        let Ok(outcome) = released.await else {
+            // The actor stopped for its own reasons before answering.
+            return Ok(SessionRelease::NotAttached);
+        };
+        if outcome? == SessionRelease::Released {
+            Self::wait_stopped(stopped).await;
+            self.active.remove_if(&id, |_, active| {
+                Arc::ptr_eq(&active.marker, &marker) && !active.deleting
+            });
+            return Ok(SessionRelease::Released);
+        }
+        Ok(SessionRelease::Busy)
+    }
+
     async fn management(&self, id: AgentSessionId) -> Result<SessionManagement> {
         let view = self.repo.lease_view(id, self.replica).await?;
         if view.asking_replica_draining {
@@ -1087,6 +1207,51 @@ where
             })
             .await?;
             logs.flush().await
+        })
+        .await
+        .unwrap_or(Err(AgentSessionError::LogTimedOut(id)))
+    }
+
+    #[tracing::instrument(
+        name = "agent.session.record_unprojected_frame",
+        err,
+        skip(self, message),
+        fields(agent.session.id = %id),
+    )]
+    async fn record_unprojected_frame(
+        &self,
+        id: AgentSessionId,
+        message: ToServerMessage,
+    ) -> Result<()> {
+        tokio::time::timeout(SESSION_PERSIST_TIMEOUT, async {
+            let stored = self
+                .repo
+                .create_projected(
+                    AgentSessionLog {
+                        agent_session_id: id,
+                        user_id: None,
+                        content: Message::ToServer(message),
+                        logged_at: None,
+                    },
+                    None,
+                    None,
+                    None,
+                )
+                .await?;
+            // Best effort, as for every other frame: it is already durable,
+            // so a viewer who misses it reads it on the next log fetch.
+            if let Err(error) = self
+                .realtime
+                .publish(LogAppended {
+                    turn_state: None,
+                    agent_session_id: id,
+                    entries: vec![stored],
+                })
+                .await
+            {
+                tracing::error!(error = ?error, %id, "failed to stream an agent session frame");
+            }
+            Ok(())
         })
         .await
         .unwrap_or(Err(AgentSessionError::LogTimedOut(id)))
@@ -1186,6 +1351,24 @@ where
         };
         commands
             .send(SessionMessage::ReplaceMcpServers(servers))
+            .await
+            .map_err(|_| AgentSessionError::Disconnected(id))
+    }
+
+    async fn set_permission_policy(
+        &self,
+        id: AgentSessionId,
+        policy: PermissionPolicy,
+    ) -> Result<()> {
+        let Some(commands) = self
+            .active
+            .get(&id)
+            .and_then(|active| active.commands.clone())
+        else {
+            return Ok(());
+        };
+        commands
+            .send(SessionMessage::SetPermissionPolicy(policy))
             .await
             .map_err(|_| AgentSessionError::Disconnected(id))
     }
@@ -2043,6 +2226,14 @@ where
         self.repo.get(id).await
     }
 
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        self.repo.has_unfinished_turn(id).await
+    }
+
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        self.repo.billing(id).await
+    }
+
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
         self.repo.find(id).await
     }
@@ -2340,6 +2531,9 @@ async fn run_session<Connector, Logs, Ownership>(
     }
     // Last, after the registry entry is gone: whatever the observer does with
     // the fact - clear a busy flag, dispatch nothing - it sees a session that
-    // really has no actor anymore.
-    turn_observer.session_stopped(id, stop_reason);
+    // really has no actor anymore. A silent release is not a stop to anyone
+    // outside this process, so the observer never hears of it.
+    if stop_reason != SessionStopReason::Closed(CloseReason::Released) {
+        turn_observer.session_stopped(id, stop_reason);
+    }
 }

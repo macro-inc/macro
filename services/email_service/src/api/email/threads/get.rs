@@ -1,13 +1,12 @@
 use crate::api::context::{ApiContext, AuthorizationService};
-use anyhow::Context;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, extract};
+use email::domain::message_reads::{ThreadMessagesRequest, ThreadReadError};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 use sqlx::types::Uuid;
-use std::collections::HashSet;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -54,22 +53,10 @@ pub struct GetThreadMessagesParams {
     pub limit: Option<i64>,
 }
 
-/// Represents pagination parameters with defaults applied
-#[derive(Debug, Clone, Copy)]
-struct GetThreadPaginationParams {
-    offset: i64,
-    limit: i64,
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct PathParams {
     pub id: Uuid,
 }
-
-/// The default number of messages to return in each thread
-const DEFAULT_MESSAGE_LIMIT: i64 = 5;
-/// The max number of messages that can be returned in a response
-const MESSAGE_MAX: i64 = 100;
 
 // TODO: deduplicate with internal api
 #[utoipa::path(
@@ -96,65 +83,30 @@ pub async fn get_thread_messages_handler(
     Path(PathParams { id }): Path<PathParams>,
     extract::Query(query_params): extract::Query<GetThreadMessagesParams>,
 ) -> Result<Response, GetThreadError> {
-    let p = process_get_thread_params(&query_params)?;
-
-    let link_ids: HashSet<Uuid> = email_db_client::links::get::fetch_inboxes_for_macro_id(
-        &ctx.db,
-        &authorization.authorization.user.user_context.user_id,
-    )
-    .await
-    .context("Failed to fetch links")?
-    .into_iter()
-    .map(|link| link.id)
-    .collect();
-
-    let messages =
-        email_db_client::messages::get_parsed::get_paginated_parsed_messages_by_thread_id(
-            &ctx.db, id, p.offset, p.limit,
+    let messages = ctx
+        .message_reads
+        .thread_messages(
+            &authorization.authorization.user.user_context.user_id,
+            ThreadMessagesRequest {
+                thread_id: id,
+                offset: query_params.offset,
+                limit: query_params.limit,
+            },
         )
         .await
-        .context("Failed to get paginated parsed messages by thread id")?;
-
-    let accessible_messages = messages
-        .into_iter()
-        .filter(|msg| link_ids.contains(&msg.link_id))
-        .collect::<Vec<_>>();
-
-    if accessible_messages.is_empty() {
-        return Err(GetThreadError::Unauthorized);
-    }
-
-    Ok((StatusCode::OK, Json(accessible_messages)).into_response())
-}
-
-/// Extracts pagination parameters from query params, using defaults when not specified
-fn process_get_thread_params(
-    params: &GetThreadMessagesParams,
-) -> Result<GetThreadPaginationParams, GetThreadError> {
-    if let Some(offset) = params.offset
-        && offset < 0
-    {
-        return Err(GetThreadError::ValidationError(
-            "offset must be non-negative".to_string(),
-        ));
-    }
-
-    if let Some(limit) = params.limit {
-        if limit <= 0 {
-            return Err(GetThreadError::ValidationError(
-                "limit must be positive".to_string(),
-            ));
-        }
-        if limit > MESSAGE_MAX {
-            return Err(GetThreadError::ValidationError(format!(
-                "limit must not exceed {}",
-                MESSAGE_MAX
-            )));
-        }
-    }
-
-    Ok(GetThreadPaginationParams {
-        offset: params.offset.unwrap_or(0),
-        limit: params.limit.unwrap_or(DEFAULT_MESSAGE_LIMIT),
-    })
+        .map_err(|error| match error {
+            ThreadReadError::Validation(error) => {
+                GetThreadError::ValidationError(error.to_string())
+            }
+            ThreadReadError::Unauthorized => GetThreadError::Unauthorized,
+            ThreadReadError::Inboxes(error) => {
+                GetThreadError::DatabaseError(error.into_inner().context("Failed to fetch links"))
+            }
+            ThreadReadError::Messages(error) => GetThreadError::DatabaseError(
+                error
+                    .into_inner()
+                    .context("Failed to get paginated parsed messages by thread id"),
+            ),
+        })?;
+    Ok((StatusCode::OK, Json(messages)).into_response())
 }

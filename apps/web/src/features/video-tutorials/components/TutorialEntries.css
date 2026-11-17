@@ -1,0 +1,10 @@
+/* The tutorial row sits above a list's rows but is not one of them. While the
+   pointer is on it, no row may look hovered, so the list's cursor row (which
+   follows the pointer, and in Mail rests on the first row) drops its
+   highlight. Only the paint changes: the cursor stays where it was, so
+   keyboard navigation carries on from it. Scoped to the list root, never the
+   document. */
+.soup-list:has([data-tutorial-row]:hover) {
+  --color-list-highlighted: transparent;
+  --color-list-selected-highlighted: var(--color-list-selected);
+}

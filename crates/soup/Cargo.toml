@@ -50,6 +50,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
+bot_id = { path = "../bot_id" }
 call = { path = "../call", default-features = false, features = ["ports"] }
 channels = { path = "../channels", default-features = false, features = [
   "list",
@@ -58,7 +59,6 @@ chrono = { workspace = true }
 cowlike = { path = "../cowlike" }
 crm = { path = "../crm", default-features = false }
 document_sub_type = { path = "../document_sub_type" }
-doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 either = { workspace = true }
 email = { path = "../email", features = ["ports"] }
 entity_access = { path = "../entity_access", default-features = false }
@@ -102,7 +102,6 @@ ai_toolset = { path = "../ai_toolset" }
 cool_asserts = "2"
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency", features = ["mock", "outbound"] }
-futures = { workspace = true }
 http-body-util = { workspace = true }
 item_filters = { path = "../item_filters", features = ["mock"] }
 macro_db_migrator = { path = "../macro_db_migrator" }

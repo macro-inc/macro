@@ -1,7 +1,7 @@
 use harness_id::HarnessId;
 
 use super::*;
-use crate::config::{HarnessCredentials, HarnessScope};
+use crate::config::HarnessCredentials;
 
 #[test]
 fn working_state_requires_valid_embedded_credentials() {
@@ -12,7 +12,7 @@ fn working_state_requires_valid_embedded_credentials() {
     config.credentials = Some(HarnessCredentials {
         harness_id: HarnessId::TEST_A,
         token: "invalid".to_owned(),
-        scope: HarnessScope::User,
+        pairing_id: None,
     });
     assert!(!config_is_working(&config));
 

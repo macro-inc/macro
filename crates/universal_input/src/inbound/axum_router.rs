@@ -2,6 +2,9 @@
 use crate::domain::{
     ClassifyInputRequest, ClassifyInputResponse, ExtractInputRequest, ExtractInputResponse,
     FieldExtractor, InputError, UniversalInputService,
+    temporal::thread_due_date::{
+        ThreadDueDateRequest, ThreadDueDateResponse, ThreadDueDateService, ThreadFactExtractor,
+    },
 };
 use axum::{
     Json, Router,
@@ -12,7 +15,8 @@ use axum::{
 };
 use jev::domain::YesNoClassifier;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    UserOrInternal,
 };
 use std::sync::Arc;
 
@@ -129,6 +133,74 @@ where
             .extract(user.authorization.user.macro_user_id, input)
             .await?,
     ))
+}
+
+/// Internal due date state; concrete extraction is composed by the host.
+pub struct ThreadDueDateRouterState<E, A> {
+    service: Arc<ThreadDueDateService<E>>,
+    authorization: MacroAuthorizationState<A>,
+}
+
+impl<E, A> Clone for ThreadDueDateRouterState<E, A> {
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+            authorization: self.authorization.clone(),
+        }
+    }
+}
+
+impl<E, A> ThreadDueDateRouterState<E, A> {
+    /// Attach the domain use case and the host's existing authorization service.
+    pub fn new(
+        service: Arc<ThreadDueDateService<E>>,
+        authorization: MacroAuthorizationState<A>,
+    ) -> Self {
+        Self {
+            service,
+            authorization,
+        }
+    }
+}
+
+impl<E, A> FromRef<ThreadDueDateRouterState<E, A>> for MacroAuthorizationState<A> {
+    fn from_ref(state: &ThreadDueDateRouterState<E, A>) -> Self {
+        state.authorization.clone()
+    }
+}
+
+/// Build the internal due date route to mount under `/universal_input`. It meters
+/// as background Focus usage, which no allowance pays for, so only services reach it.
+pub fn thread_due_date_router<E, A>(state: ThreadDueDateRouterState<E, A>) -> Router
+where
+    E: ThreadFactExtractor + 'static,
+    A: MacroAuthorizationService,
+{
+    Router::new()
+        .route("/thread-due-date", post(thread_due_date::<E, A>))
+        .with_state(state)
+}
+
+/// Read a thread's due date for the acting user who owns it.
+async fn thread_due_date<E, A>(
+    State(state): State<ThreadDueDateRouterState<E, A>>,
+    internal: MacroAuthorizationExtractor<A, InternalOnly>,
+    Json(input): Json<ThreadDueDateRequest>,
+) -> Result<Json<ThreadDueDateResponse>, Response>
+where
+    E: ThreadFactExtractor,
+    A: MacroAuthorizationService,
+{
+    let Some(owner) = internal.authorization.acting_user else {
+        // Usage is the owner's: never guess whom to meter it against.
+        return Err(StatusCode::BAD_REQUEST.into_response());
+    };
+    let response = state
+        .service
+        .due_date(owner.macro_user_id, input)
+        .await
+        .map_err(|error| InputApiError::from(error).into_response())?;
+    Ok(Json(response))
 }
 
 #[cfg(test)]

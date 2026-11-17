@@ -55,6 +55,7 @@ describe('images.generate', () => {
       url: `${STATIC_FILES}/file/generated`,
       width: 1024,
       height: 576,
+      markdown: `<m-image>{"url":"${STATIC_FILES}/file/generated","alt":"","srcType":"sfs","id":"generated","width":1024,"height":576,"scale":1,"constrainedWidth":400,"constrainedHeight":400}</m-image>`,
       mimeType: 'image/png',
       sizeBytes: 2048,
       note: undefined,

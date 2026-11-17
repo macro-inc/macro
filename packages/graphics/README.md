@@ -485,7 +485,8 @@ design size and a presentation sort key. The HTML lays out at the design size an
 scales to fit the box. Core treats the HTML as opaque content: it never parses or
 executes it, and the default Solid renderer shows a placeholder. Hosts own
 sandboxed rendering. `setArtifactCommand` edits content fields in one undo step;
-box size and pose stay with transform commands.
+box size and pose stay with transform commands. `presentationOrder` lists artifacts
+for presenting, and `setPresentationOrderCommand` reorders them in one undo step.
 
 
 ### Host-measured text fitting

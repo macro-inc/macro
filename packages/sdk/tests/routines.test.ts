@@ -68,6 +68,87 @@ test('routine creation maps agent handles, seeds detail and uses shared auth and
   ]);
   expect(JSON.stringify(routine)).not.toContain('mbot_test');
 });
+test('routine creation sends code and Ask AI steps that write as the user', async () => {
+  const bodies: unknown[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json(record, { status: 201 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const steps = [
+    {
+      type: 'code',
+      title: 'Post hello',
+      source: 'export async function main() {}',
+    },
+    {
+      type: 'agent',
+      instructions: 'Summarize what the code posted.',
+      agent: macro.agents.byId('agent-1'),
+    },
+  ] as const;
+  const routine = await macro.routines.create({
+    name: 'Hello as me',
+    trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+    enabled: false,
+    steps,
+    dangerouslyOperateAsUser: true,
+  });
+  await routine.update({
+    name: 'Hello as the agent',
+    trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+    steps,
+  });
+  expect(bodies).toEqual([
+    {
+      name: 'Hello as me',
+      kind: 'Agent',
+      enabled: false,
+      trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+      task: {
+        steps: [
+          {
+            type: 'code',
+            title: 'Post hello',
+            source: 'export async function main() {}',
+          },
+          {
+            type: 'agent',
+            instructions: 'Summarize what the code posted.',
+            agent: { bot_id: 'agent-1' },
+          },
+        ],
+        dangerously_operate_as_user: true,
+      },
+    },
+    {
+      name: 'Hello as the agent',
+      kind: 'Agent',
+      trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+      task: {
+        steps: [
+          {
+            type: 'code',
+            title: 'Post hello',
+            source: 'export async function main() {}',
+          },
+          {
+            type: 'agent',
+            instructions: 'Summarize what the code posted.',
+            agent: { bot_id: 'agent-1' },
+          },
+        ],
+      },
+    },
+  ]);
+});
 test('routine writes invalidate detail only after success', async () => {
   let enabled = true;
   let reads = 0;

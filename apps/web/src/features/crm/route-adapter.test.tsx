@@ -376,13 +376,13 @@ it('opens a pipeline email at its compact URL and restores it after close', asyn
 
 it.each([
   [
-    '/companies/contact/maya/databases/db-1',
+    '/companies/contact/maya/calls/call-2',
     'contact',
     'maya',
-    'databases',
-    'database',
-    'db-1',
-    '/companies/contact/maya/databases',
+    'calls',
+    'call',
+    'call-2',
+    '/companies/contact/maya/calls',
   ],
   [
     '/companies/pipeline/sales/company/acme/calls/call-1',

@@ -53,7 +53,6 @@ export default {
     projectBadge: '프로젝트',
     newProject: '새 프로젝트',
     contentAlreadyOpen: '이미 열려 있는 콘텐츠',
-    unableToOpenConversation: '대화를 열 수 없습니다. 다시 시도해 주세요.',
     mobileSearchPlaceholder: '검색…',
     closeSearch: '검색 닫기',
     searchFullTextFor: '“{{query}}” 전체 텍스트 검색',
@@ -566,10 +565,6 @@ export default {
       other: '항목 {{count}}개 중 {{accepted}}개를 미완료로 표시했습니다',
     },
     toastMarkNotDoneFailed: '미완료로 표시하지 못했습니다',
-    toastThreadStaysDone:
-      '이 스레드에는 받은 메시지가 없어 완료 상태로 유지됩니다',
-    toastThreadsStayDone:
-      '이 스레드들에는 받은 메시지가 없어 완료 상태로 유지됩니다',
     toastCountNotRestored: {
       other: '{{count}}개를 복원하지 못했습니다.',
     },
@@ -731,7 +726,7 @@ export default {
     tabMobileApp: '모바일 앱',
     tabTags: '태그',
     tabIntegrations: '통합',
-    tabRuntimes: '런타임',
+    tabRuntimes: '머신',
     tabMcpServer: 'MCP 서버',
     tabApiKeys: 'API 키',
     tabBots: '봇',

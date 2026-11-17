@@ -15,6 +15,8 @@ export interface TeamMembership {
   user: User;
   /** Their role on the team. */
   role: TeamRole;
+  /** Whether this member may use the team CRM; mailbox consent is separate. */
+  crmAccess: boolean;
 }
 
 /**
@@ -68,13 +70,34 @@ export class Team extends MacroEntity<TeamRecord> {
   /**
    * The team's members, with their roles. The API only exposes members for
    * the caller's current team, so this rejects for any other team.
+   *
+   * @readonly
    */
   async members(): Promise<TeamMembership[]> {
     const res = await this.requireCurrent('members');
     return res.members.map((m) => ({
       user: User.byId(this.client, m.user_id),
       role: m.role,
+      crmAccess:
+        m.role !== 'member' || res.crm_member_access?.[m.user_id] !== false,
     }));
+  }
+
+  /**
+   * Allow or deny a member's CRM access. Only a team admin or owner may change
+   * it; admins and owners always retain access. Mailbox contribution consent
+   * is unchanged. Individually shared pipelines remain accessible.
+   *
+   * @write
+   * @idempotent
+   */
+  async setMemberCrmAccess(member: User, enabled: boolean): Promise<void> {
+    await this.requireCurrent('CRM access controls');
+    unwrap(
+      await this.client.auth.patchTeam({
+        body: { member_crm_access: { user_id: member.id, enabled } },
+      }),
+    );
   }
 
   /**
@@ -101,6 +124,9 @@ export class Team extends MacroEntity<TeamRecord> {
    * @param options - `agent` invites the addresses as agents.
    * @returns `true` when at least one new invite was sent, `false` when every
    *   address was already a member or already invited.
+   *
+   * @destructive
+   * @openworld
    */
   async invite(
     emails: string | readonly string[],
@@ -138,6 +164,8 @@ export class Team extends MacroEntity<TeamRecord> {
    * Pending invites to this team; only a team admin or owner may list them.
    * Only the caller's current team lists invites (see `Team.current`); the
    * API refuses any other team with a 409.
+   *
+   * @readonly
    */
   async invites(): Promise<TeamInvite[]> {
     return unwrap(

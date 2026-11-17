@@ -9,6 +9,7 @@ import type { SetPricingRequestPricePerMilCacheRead } from './setPricingRequestP
 import type { SetPricingRequestPricePerMilCacheWrite } from './setPricingRequestPricePerMilCacheWrite';
 import type { SetPricingRequestPricePerMilIn } from './setPricingRequestPricePerMilIn';
 import type { SetPricingRequestPricePerMilOut } from './setPricingRequestPricePerMilOut';
+import type { SetPricingRequestPricePerProviderCredit } from './setPricingRequestPricePerProviderCredit';
 
 /**
  * Request body for [`set_pricing_handler`].
@@ -28,4 +29,6 @@ has no published rate: calls that report cache writes then stay unpriced. */
   price_per_mil_in?: SetPricingRequestPricePerMilIn;
   /** New price per million output tokens (USD). Required for token pricing. */
   price_per_mil_out?: SetPricingRequestPricePerMilOut;
+  /** Price per vendor credit (USD), or null unless the model bills in credits. */
+  price_per_provider_credit?: SetPricingRequestPricePerProviderCredit;
 }

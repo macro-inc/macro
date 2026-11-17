@@ -40,14 +40,29 @@ pub struct ViewChanges<'a> {
     pub shared_team_id: Option<Uuid>,
 }
 
-/// Visibility and pagination position ordered by creation time then ID.
+/// Pagination position: the viewer's sidebar order, then creation time and ID.
+/// Views the viewer never placed come after placed ones.
 #[derive(Debug, Clone, Copy)]
 pub struct Cursor {
+    /// The viewer's position for the last seen view, if they placed it.
+    pub position: Option<i32>,
     /// Creation time of the last seen view.
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// ID of the last seen view.
     pub id: Uuid,
 }
+
+/// A listed view with the viewer's own sidebar position, if any.
+#[derive(Debug, Clone)]
+pub struct PositionedView {
+    /// The stored definition.
+    pub view: View,
+    /// The viewer's position for this view.
+    pub position: Option<i32>,
+}
+
+/// Most views one reorder can place.
+pub const MAX_REORDER_VIEWS: usize = 200;
 
 /// Storage for view definitions. Conditional writes enforce authorization atomically.
 pub trait ViewRepository: Send + Sync {
@@ -62,7 +77,10 @@ pub trait ViewRepository: Send + Sync {
     ) -> impl Future<Output = Result<Vec<View>, Self::Err>> + Send;
     /// Insert once; return the original live record, or None for a deleted ID.
     fn create(&self, view: &View) -> impl Future<Output = Result<Option<View>, Self::Err>> + Send;
-    /// Read owned and team-shared views for the service to check against current membership.
+    /// Load definitions by ID from primary storage; absent IDs are omitted.
+    fn get_many(&self, ids: &[Uuid]) -> impl Future<Output = Result<Vec<View>, Self::Err>> + Send;
+    /// Read owned and team-shared views, in the viewer's order, for the service
+    /// to check against current membership.
     fn list_views_for_access_check(
         &self,
         viewer: &str,
@@ -70,7 +88,15 @@ pub trait ViewRepository: Send + Sync {
         kind: Option<&str>,
         after: Option<Cursor>,
         limit: i64,
-    ) -> impl Future<Output = Result<Vec<View>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<PositionedView>, Self::Err>> + Send;
+    /// Replace the viewer's order for one kind: the given views take positions
+    /// in sequence and every other view of that kind becomes unplaced.
+    fn set_positions(
+        &self,
+        viewer: &str,
+        kind: &str,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
     /// Replace fields only when the owner and revision match.
     fn update(
         &self,
@@ -111,11 +137,46 @@ pub trait MembershipPort: Send + Sync {
         &self,
         viewer: &str,
     ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+    /// Configuration kinds the viewer may no longer use. The composition owns
+    /// feature policy; generic saved-view storage does not interpret configurations.
+    fn denied_view_kinds(
+        &self,
+        viewer: &str,
+        kinds: &HashSet<String>,
+    ) -> impl Future<Output = Result<HashSet<String>, Self::Err>> + Send;
     /// All current members of a team, including its owner.
     fn team_members(
         &self,
         team: Uuid,
     ) -> impl Future<Output = Result<HashSet<String>, Self::Err>> + Send;
+}
+
+/// A committed change to saved views, for pages that show them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ViewsChanged {
+    /// The changed views' `kind`, such as `email`; `None` when it is unknown
+    /// or changed, so every kind's readers re-read.
+    pub kind: Option<String>,
+    /// Who made the change: the owner, or for a reorder the viewer whose order it is.
+    pub user: String,
+    /// Teams the views were shared with before or after the change; their
+    /// members may see them.
+    pub teams: Vec<Uuid>,
+}
+
+/// Tells open pages that saved views changed. Called after the write commits;
+/// best effort, since pages also re-read when they regain focus.
+pub trait ChangeNotifier: Send + Sync {
+    /// Signal one committed change.
+    fn views_changed(&self, change: ViewsChanged) -> impl Future<Output = ()> + Send;
+}
+
+/// The `kind` a configuration names.
+fn kind_of(config: &Value) -> Option<String> {
+    config
+        .get("kind")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
 }
 
 /// Caller-meaningful saved-view failures.
@@ -151,15 +212,20 @@ pub struct Page {
 }
 
 /// Owns authorization, visibility, write policy and pagination.
-pub struct SavedViewService<R, M> {
+pub struct SavedViewService<R, M, N> {
     repo: R,
     membership: M,
+    notifier: N,
 }
 
-impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
+impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R, M, N> {
     /// Construct the saved-view service from its ports.
-    pub fn new(repo: R, membership: M) -> Self {
-        Self { repo, membership }
+    pub fn new(repo: R, membership: M, notifier: N) -> Self {
+        Self {
+            repo,
+            membership,
+            notifier,
+        }
     }
 
     fn validate(name: &str, config: &Value) -> Result<(), Error> {
@@ -176,12 +242,47 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
         Ok(())
     }
 
+    async fn visible_configurations(
+        &self,
+        viewer: &str,
+        views: Vec<View>,
+    ) -> Result<Vec<View>, Error> {
+        let kinds = views
+            .iter()
+            .filter_map(|view| kind_of(&view.config))
+            .collect();
+        let denied = self
+            .membership
+            .denied_view_kinds(viewer, &kinds)
+            .await
+            .map_err(|error| Error::Internal(rootcause::Report::new(error).into_dynamic()))?;
+        Ok(views
+            .into_iter()
+            .filter(|view| kind_of(&view.config).is_none_or(|kind| !denied.contains(&kind)))
+            .collect())
+    }
+
+    async fn require_configuration(&self, viewer: &str, config: &Value) -> Result<(), Error> {
+        let kinds = kind_of(config).into_iter().collect();
+        let denied = self
+            .membership
+            .denied_view_kinds(viewer, &kinds)
+            .await
+            .map_err(|error| Error::Internal(rootcause::Report::new(error).into_dynamic()))?;
+        if denied.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::NotFound)
+        }
+    }
+
     async fn effective(
         &self,
         viewer: &str,
         views: Vec<View>,
         viewer_teams: &HashSet<Uuid>,
     ) -> Result<Vec<View>, Error> {
+        let views = self.visible_configurations(viewer, views).await?;
         let teams: HashSet<_> = views
             .iter()
             .filter_map(|view| view.shared_team_id)
@@ -265,15 +366,20 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
             let mut effective = self
                 .effective(
                     viewer,
-                    visible.iter().chain(&batch).cloned().collect(),
+                    visible
+                        .iter()
+                        .cloned()
+                        .chain(batch.iter().map(|listed| listed.view.clone()))
+                        .collect(),
                     &team_set,
                 )
                 .await?;
             let visible_ids: HashSet<_> = effective.iter().map(|v| v.id).collect();
             visible.retain(|v: &View| visible_ids.contains(&v.id));
-            for v in batch {
+            for PositionedView { view: v, position } in batch {
                 let previous = cursor;
                 cursor = Some(Cursor {
+                    position,
                     created_at: v.created_at,
                     id: v.id,
                 });
@@ -295,6 +401,61 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
                 });
             }
         }
+    }
+
+    /// Set the viewer's own order for one kind. Any visible view can be placed,
+    /// including a teammate's shared view; definitions and revisions are unchanged.
+    /// Repeating the same order is harmless.
+    #[tracing::instrument(name = "saved_view.reorder", skip_all, fields(kind, count = ids.len()), err)]
+    pub async fn reorder(
+        &self,
+        viewer: &str,
+        kind: &str,
+        ids: Vec<Uuid>,
+    ) -> Result<Vec<View>, Error> {
+        let distinct: HashSet<_> = ids.iter().collect();
+        if kind.is_empty()
+            || kind.len() > 64
+            || ids.is_empty()
+            || ids.len() > MAX_REORDER_VIEWS
+            || distinct.len() != ids.len()
+        {
+            return Err(Error::Invalid);
+        }
+
+        let teams = self
+            .membership
+            .viewer_teams(viewer)
+            .await
+            .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?;
+        let stored = self
+            .repo
+            .get_many(&ids)
+            .await
+            .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?;
+        let mut visible: HashMap<Uuid, View> = self
+            .effective(viewer, stored, &teams.into_iter().collect())
+            .await?
+            .into_iter()
+            .filter(|view| view.config.get("kind").and_then(Value::as_str) == Some(kind))
+            .map(|view| (view.id, view))
+            .collect();
+        if visible.len() != ids.len() {
+            return Err(Error::NotFound);
+        }
+
+        self.repo
+            .set_positions(viewer, kind, &ids)
+            .await
+            .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?;
+        self.notifier
+            .views_changed(ViewsChanged {
+                kind: Some(kind.to_owned()),
+                user: viewer.to_owned(),
+                teams: Vec::new(),
+            })
+            .await;
+        Ok(ids.iter().filter_map(|id| visible.remove(id)).collect())
     }
 
     /// Create once; the ID is client-generated so a retry cannot duplicate a definition.
@@ -319,6 +480,7 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
             return self.get(viewer, id).await;
         }
         Self::validate(&name, &config)?;
+        self.require_configuration(viewer, &config).await?;
         if let Some(team) = team {
             let members = self
                 .membership
@@ -341,6 +503,13 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
         if created.user_id != viewer {
             return Err(Error::NotFound);
         }
+        self.notifier
+            .views_changed(ViewsChanged {
+                kind: kind_of(&created.config),
+                user: viewer.to_owned(),
+                teams: created.shared_team_id.into_iter().collect(),
+            })
+            .await;
         self.get(viewer, id).await
     }
 
@@ -361,6 +530,10 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
             .ok_or(Error::NotFound)?;
         if current.user_id != viewer {
             return Err(Error::NotFound);
+        }
+        self.require_configuration(viewer, &current.config).await?;
+        if let Some(config) = &change.config {
+            self.require_configuration(viewer, config).await?;
         }
         if current.revision != revision {
             return Err(Error::Conflict);
@@ -399,18 +572,48 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
             .await
             .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?
             .ok_or(Error::Conflict)?;
+        let kind =
+            kind_of(&current.config).filter(|kind| kind_of(&saved.config).as_ref() == Some(kind));
+        let mut teams: Vec<Uuid> = current.shared_team_id.into_iter().chain(team).collect();
+        teams.dedup();
+        self.notifier
+            .views_changed(ViewsChanged {
+                kind,
+                user: viewer.to_owned(),
+                teams,
+            })
+            .await;
         self.get(viewer, saved.id).await
     }
 
     /// Delete an owned definition, harmless on a repeated deletion.
     #[tracing::instrument(name = "saved_view.delete", skip_all, fields(view_id = %id, revision), err)]
     pub async fn delete(&self, viewer: &str, id: Uuid, revision: i64) -> Result<Uuid, Error> {
-        if !self
+        // Read first: the change signal names the deleted view's kind and team.
+        let deleting = self
+            .repo
+            .get(id)
+            .await
+            .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?;
+        if let Some(view) = &deleting {
+            self.require_configuration(viewer, &view.config).await?;
+        }
+        if self
             .repo
             .delete(id, viewer, revision)
             .await
             .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?
         {
+            if let Some(view) = deleting {
+                self.notifier
+                    .views_changed(ViewsChanged {
+                        kind: kind_of(&view.config),
+                        user: viewer.to_owned(),
+                        teams: view.shared_team_id.into_iter().collect(),
+                    })
+                    .await;
+            }
+        } else {
             let current = self
                 .repo
                 .get(id)
@@ -433,6 +636,7 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
         name: String,
         config: Value,
     ) -> Result<View, Error> {
+        self.require_configuration(viewer, &config).await?;
         let view = View::new(viewer.to_owned(), name, config);
         self.repo
             .create(&view)
@@ -443,10 +647,12 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
 
     /// Legacy REST listing includes only the caller's private definitions.
     pub async fn legacy_list(&self, viewer: &str) -> Result<Vec<View>, Error> {
-        self.repo
+        let views = self
+            .repo
             .legacy_list(viewer)
             .await
-            .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))
+            .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?;
+        self.visible_configurations(viewer, views).await
     }
 
     async fn require_legacy_owner(&self, viewer: &str, id: Uuid) -> Result<(), Error> {
@@ -459,7 +665,7 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
         if view.user_id != viewer {
             return Err(Error::NotOwner);
         }
-        Ok(())
+        self.require_configuration(viewer, &view.config).await
     }
 
     /// Legacy REST PATCH, preserving its shallow JSON merge.
@@ -472,6 +678,9 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewService<R, M> {
         config: Option<&Value>,
     ) -> Result<(), Error> {
         self.require_legacy_owner(viewer, id).await?;
+        if let Some(config) = config {
+            self.require_configuration(viewer, config).await?;
+        }
         self.repo
             .legacy_patch(id, viewer, name, config)
             .await
@@ -526,10 +735,14 @@ pub trait SavedViewApi: Send + Sync {
     ) -> Result<View, Error>;
     /// Delete with an expected revision.
     async fn delete(&self, viewer: &str, id: Uuid, revision: i64) -> Result<Uuid, Error>;
+    /// Set the viewer's order for one kind.
+    async fn reorder(&self, viewer: &str, kind: &str, ids: Vec<Uuid>) -> Result<Vec<View>, Error>;
 }
 
 #[async_trait::async_trait]
-impl<R: ViewRepository, M: MembershipPort> SavedViewApi for SavedViewService<R, M> {
+impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewApi
+    for SavedViewService<R, M, N>
+{
     async fn get(&self, viewer: &str, id: Uuid) -> Result<View, Error> {
         SavedViewService::get(self, viewer, id).await
     }
@@ -563,5 +776,8 @@ impl<R: ViewRepository, M: MembershipPort> SavedViewApi for SavedViewService<R, 
     }
     async fn delete(&self, viewer: &str, id: Uuid, revision: i64) -> Result<Uuid, Error> {
         SavedViewService::delete(self, viewer, id, revision).await
+    }
+    async fn reorder(&self, viewer: &str, kind: &str, ids: Vec<Uuid>) -> Result<Vec<View>, Error> {
+        SavedViewService::reorder(self, viewer, kind, ids).await
     }
 }

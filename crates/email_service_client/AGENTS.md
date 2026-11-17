@@ -3,8 +3,9 @@
 ## What it is
 
 Part of the Email feature: a Rust HTTP client for `email_service` —
-message/thread lookups by id, thread owner lookup, and an external
-(JWT-authenticated) preview endpoint.
+message/thread lookups by id, thread owner lookup, a user's newest inbox
+messages read live from the providers, and an external (JWT-authenticated)
+preview endpoint.
 
 ## Start here
 
@@ -13,8 +14,8 @@ message/thread lookups by id, thread owner lookup, and an external
 - `src/external.rs`: `EmailServiceClientExternal`, the JWT-authenticated
   counterpart used for external/preview calls.
 - `src/get_message_by_id.rs`, `src/get_messages_by_thread_id.rs`,
-  `src/get_message_senders.rs`, `src/get_thread_owner.rs`: one module per
-  endpoint.
+  `src/get_message_senders.rs`, `src/get_thread_owner.rs`,
+  `src/get_recent_inbox_messages.rs`: one module per endpoint.
 
 ## Scope
 
@@ -23,7 +24,8 @@ message/thread lookups by id, thread owner lookup, and an external
 
 ## Boundaries
 
-- Depends on: `email` (features `axum`, `inbound`), `model`, `models_email`.
+- Depends on: `email` (features `axum`, `inbound`), `macro_tower_layers`,
+  `model`, `models_email`.
 - Used by: `crates/memory`, `crates/ai_tools`, `services/agent_harness_service`,
   `services/agent_harness_service`.
 
@@ -43,6 +45,9 @@ message/thread lookups by id, thread owner lookup, and an external
 - Two client types, not two modes of one struct: `EmailServiceClient` is for
   internal service-to-service calls, `EmailServiceClientExternal` is for
   calls authenticated with a caller's JWT — pick the one matching the caller.
+- New endpoint calls inject the caller's trace context
+  (`macro_tower_layers::inject_trace_headers`, as
+  `get_recent_inbox_messages` does); most older modules predate that.
 
 ## Related
 
