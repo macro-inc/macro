@@ -816,11 +816,11 @@ fn decoded_fingerprint(bytes: &[u8]) -> String {
     let history = doc
         .export_json_updates(&doc.shallow_since_vv().to_vv(), &doc.oplog_vv(), false)
         .map(|json| serde_json::to_string(&json).unwrap_or_default())
-        .unwrap_or_else(|e| format!("json err {e}"));
+        .unwrap_or_else(|e| format!("json err {}", crate::normalize(&e.to_string())));
     let latest = canonical(&doc.get_deep_value_with_id());
     let at_root = match doc.checkout(&root) {
         Ok(()) => canonical(&doc.get_deep_value_with_id()),
-        Err(e) => format!("checkout err {e}"),
+        Err(e) => format!("checkout err {}", crate::normalize(&e.to_string())),
     };
     format!(
         "root={:?} vv={:?} latest={latest} at_root={at_root} history={history}",
