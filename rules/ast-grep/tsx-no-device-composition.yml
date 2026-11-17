@@ -39,6 +39,7 @@ ignores:
   - apps/web/src/features/block-write/DocxBlock.tsx
   - apps/web/src/features/crm/add-to-pipeline.tsx
   - apps/web/src/features/entity-appearance/appearance-menu.tsx
+  - apps/web/src/features/projects/new-project-task.tsx
   - apps/web/src/features/task-composer/compose-task.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx

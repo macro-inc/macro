@@ -12,7 +12,9 @@ and usage metering.
 - `src/agent_loop.rs`: `AgentLoop`/`Session` — runs a turn, dispatches tool
   calls, loops until a final response.
 - `src/model/`: provider adapters (`anthropic.rs`, `openai.rs`, `gemini.rs`)
-  behind `model/router.rs`, plus `predefined_model.rs`/`speed.rs` (the
+  behind `model/router.rs` (the Gemini client's host is
+  `macro_service_urls`' `GoogleGenerativeAiApiUrl`, so a test or a local
+  stack can point it at a stand-in), plus `predefined_model.rs`/`speed.rs` (the
   product-facing model/speed vocabulary) and `metering.rs` (usage recording
   hook into `ai_usage`).
 - `AgentLoop::with_streamed_tool_calls` opts hosts into early tool-call

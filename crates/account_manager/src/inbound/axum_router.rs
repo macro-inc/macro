@@ -2,16 +2,19 @@
 
 use std::sync::Arc;
 
+#[cfg(test)]
+mod test;
+
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
 };
 use macro_authorization::{
     AccountHolderOrInternal, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState,
+    MacroAuthorizationState, MacroUserAuthentication, is_program_run,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
@@ -86,6 +89,30 @@ where
         .with_state(state)
 }
 
+/// Who manages an account is a person's decision, and a claimed token is a
+/// lasting credential for the managed account, so an agent's program
+/// ([`is_program_run`]: a credential signed for an agent or a routine run, or
+/// the code-mode header) can't ask, approve or claim. An agent account asks
+/// and claims with its own key, which signs no agent.
+fn refuse_program(
+    user: &MacroUserAuthentication,
+    headers: &HeaderMap,
+    grant: Option<Uuid>,
+) -> Result<(), AccountManagerError> {
+    let attribution = user.attribution();
+    if is_program_run(attribution, headers) {
+        tracing::warn!(
+            ?attribution,
+            ?grant,
+            "refused an account manager change to a program"
+        );
+        return Err(AccountManagerError::Forbidden(
+            "An agent's program cannot ask for, approve or claim an account manager. A person approves from the card in their DM or in Settings, Account Managers; an agent account asks and claims with its own API key.",
+        ));
+    }
+    Ok(())
+}
+
 /// Request body for asking for a grant.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -150,12 +177,14 @@ pub struct AccountManagerGrantParams {
 pub async fn request_account_manager_handler<S, Auth>(
     State(state): State<AccountManagerRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Json(body): Json<RequestAccountManagerBody>,
 ) -> Result<Json<AccountManagerGrant>, AccountManagerError>
 where
     S: AccountManagerService,
     Auth: MacroAuthorizationService,
 {
+    refuse_program(&user.authorization.user, &headers, None)?;
     let grant = state
         .service
         .request(
@@ -249,6 +278,7 @@ where
 pub async fn respond_to_account_manager_request_handler<S, Auth>(
     State(state): State<AccountManagerRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Path(params): Path<AccountManagerGrantParams>,
     Json(body): Json<RespondToAccountManagerRequestBody>,
 ) -> Result<Json<AccountManagerGrant>, AccountManagerError>
@@ -256,6 +286,10 @@ where
     S: AccountManagerService,
     Auth: MacroAuthorizationService,
 {
+    // Declining only takes access away, so a program may still decline.
+    if body.decision == AccountManagerDecision::Approve {
+        refuse_program(&user.authorization.user, &headers, Some(params.id))?;
+    }
     let grant = state
         .service
         .respond(
@@ -288,12 +322,14 @@ where
 pub async fn claim_account_manager_token_handler<S, Auth>(
     State(state): State<AccountManagerRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Path(params): Path<AccountManagerGrantParams>,
 ) -> Result<Json<ClaimedAccountManagerToken>, AccountManagerError>
 where
     S: AccountManagerService,
     Auth: MacroAuthorizationService,
 {
+    refuse_program(&user.authorization.user, &headers, Some(params.id))?;
     let claimed = state
         .service
         .claim(&user.authorization.user.macro_user_id, params.id)

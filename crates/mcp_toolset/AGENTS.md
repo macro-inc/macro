@@ -40,6 +40,10 @@ names, and routes calls back to the right server.
 
 ## Gotchas
 
+- A mangled name's server segment does not identify its server: names are
+  sanitized and truncated, so `macro_internal_` mangles like
+  `macro_internal`. Decide anything by server with
+  `RemoteMcpToolSet::server_of`, the name it was registered under.
 - `dispatch_tool_call` races the call against `request_context.cancel`: the
   agent loop waits for running tools on cancel, and a server may hold a call
   (owner approval). Dropping the rmcp call sends `notifications/cancelled`.
