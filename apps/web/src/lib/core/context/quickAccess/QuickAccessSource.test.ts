@@ -1733,34 +1733,54 @@ it('conceals CRM rows and excludes CRM search buckets after access is revoked', 
   );
 });
 
-it('withholds cached CRM lookups after revocation without requiring a list read', () => {
-  const [allowed, setAllowed] = createSignal(true);
-  mocks.crmAllowed = allowed;
-  mocks.cacheEnabled = false;
-  mocks.companies = [restCompany];
-  mocks.crmContacts = [
-    {
-      type: 'crm_contact',
-      id: 'contact-1',
-      name: 'Contact',
-      ownerId: 'owner',
-      companyId: restCompany.id,
-      email: 'contact@example.com',
-      hidden: false,
-    },
-  ];
-  mocks.history = retainedHistory;
-  const source = setup((source) => {
-    source.useList('crm_company', 'crm_contact', 'note').items();
-    return source;
-  });
-  expect(source.getById(restCompany.id)?.bucket).toBe('crm_company');
-  expect(source.getById('contact-1')?.bucket).toBe('crm_contact');
-  expect(source.getById('older-note')?.bucket).toBe('note');
-  setAllowed(false);
-  expect(source.getById(restCompany.id)).toBeUndefined();
-  expect(source.getById('contact-1')).toBeUndefined();
-  expect(source.getById('older-note')?.bucket).toBe('note');
-  setAllowed(true);
-  expect(source.getById(restCompany.id)?.bucket).toBe('crm_company');
-});
+it.each([false, true])(
+  'retires cached CRM lookups until fresh rows arrive (read while denied: %s)',
+  (readWhileDenied) => {
+    const [allowed, setAllowed] = createSignal(true);
+    mocks.crmAllowed = allowed;
+    mocks.cacheEnabled = false;
+    mocks.companies = [restCompany];
+    mocks.crmContacts = [
+      {
+        type: 'crm_contact',
+        id: 'contact-1',
+        name: 'Contact',
+        ownerId: 'owner',
+        companyId: restCompany.id,
+        email: 'contact@example.com',
+        hidden: false,
+      },
+    ];
+    mocks.history = retainedHistory;
+    const { source, list } = setup((source) => {
+      const list = source.useList('crm_company', 'crm_contact', 'note');
+      list.items();
+      return { source, list };
+    });
+    expect(source.getById(restCompany.id)?.bucket).toBe('crm_company');
+    expect(source.getById('contact-1')?.bucket).toBe('crm_contact');
+    expect(source.getById('older-note')?.bucket).toBe('note');
+    setAllowed(false);
+    if (readWhileDenied) {
+      expect(source.getById(restCompany.id)).toBeUndefined();
+      expect(source.getById('contact-1')).toBeUndefined();
+      expect(list.items().some((item) => item.bucket.startsWith('crm_'))).toBe(
+        false
+      );
+    }
+    expect(source.getById('older-note')?.bucket).toBe('note');
+    setAllowed(true);
+    expect(source.getById(restCompany.id)).toBeUndefined();
+    expect(source.getById('contact-1')).toBeUndefined();
+    mocks.companies = [{ ...restCompany, name: 'Fresh company' }];
+    mocks.crmContacts = [{ ...mocks.crmContacts[0], name: 'Fresh contact' }];
+    list.items();
+    expect(source.getById(restCompany.id)?.data).toMatchObject({
+      name: 'Fresh company',
+    });
+    expect(source.getById('contact-1')?.data).toMatchObject({
+      name: 'Fresh contact',
+    });
+    expect(source.getById('older-note')?.bucket).toBe('note');
+  }
+);

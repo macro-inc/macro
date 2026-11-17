@@ -59,7 +59,14 @@ import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
-import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createRenderEffect,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import { deduplicateContactItems, toCrmContactItem } from './crm-contacts';
 import {
   filterQuickAccessItems,
@@ -439,6 +446,16 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   // stable cache for transformed items
   const itemCache = new Map<string, CacheEntry>();
+  // Retire copied CRM rows even when no list observes the lazy index memos.
+  createRenderEffect(
+    on(crmAccessAllowed, (allowed) => {
+      if (allowed) return;
+      for (const [id, { item }] of itemCache) {
+        if (item.bucket === 'crm_company' || item.bucket === 'crm_contact')
+          itemCache.delete(id);
+      }
+    })
+  );
 
   const recentlyViewedQuery = useRecentlyViewedSoupQuery();
 
@@ -577,6 +594,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   });
 
   const crmCompanyEntries = createLazyMemo(() => {
+    if (!crmAccessAllowed()) return [];
     const viewedAtMap = soupViewedAtMap();
     const allEntries: IndexEntry[] = [];
 
@@ -640,6 +658,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // CRM contacts (live CRM list, most recently interacted first). They are
   // not Macro users, so they stay out of the 'person' bucket.
   const crmContactEntries = createLazyMemo(() => {
+    if (!crmAccessAllowed()) return [];
     const allEntries: IndexEntry[] = [];
     for (const contact of crmContactsAccessor()) {
       if (contact.hidden) continue;

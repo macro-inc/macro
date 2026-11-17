@@ -657,20 +657,22 @@ it('discards a copied thread when a cached draft read crosses revocation', async
   }
 });
 
-it('recovers a committed draft identity from its journal when permission retirement removed the response', async () => {
+it('does not reuse a pre-save thread binding when committed content is unavailable', async () => {
   const { operations } = await setup(true, true);
-  const local = workingCopy('dirty');
+  const local = { ...workingCopy('dirty'), serverThreadId: 'previous-thread' };
   vi.mocked(readLocalDraft).mockResolvedValue(local);
-  mocks.readRecordsByKeys.mockRejectedValue(new StaleCacheAuthorityError());
   await expect(saveEmailDraftQueued({ args })).resolves.toEqual({
-    kind: 'committed',
-    draftId: local.serverDraftId,
-    threadId: local.serverThreadId,
+    kind: 'queued',
   });
+  // The draft moved since the journal recorded its last thread. This save's
+  // accepted result has no payload confirming where it finally landed.
+  expect(operations[0].variables?.input.threadDbId).toBe('server-thread');
   await expect(
     saveEmailDraftQueued({ args: { ...args, subject: 'Next authored edit' } })
-  ).resolves.toMatchObject({ kind: 'committed' });
+  ).resolves.toEqual({ kind: 'queued' });
   expect(operations).toHaveLength(2);
+  expect(markThreadDraftSaved).not.toHaveBeenCalled();
+  expect(refetchSoupEntity).not.toHaveBeenCalled();
   expect(toast.failure).not.toHaveBeenCalled();
 });
 
@@ -686,17 +688,18 @@ it('keeps legacy saves accepted and completes deletes when committed content is 
 });
 
 it.each([false, true])(
-  'keeps a committed save accepted when identity recovery fails (journal: %s)',
+  'keeps a committed save accepted without rereading its journal (journal: %s)',
   async (hasJournal) => {
     const { operations } = await setup(true, true);
     const failure = new Error('Draft journal unavailable');
     vi.mocked(readLocalDraft)
       .mockResolvedValueOnce(hasJournal ? workingCopy('dirty') : undefined)
       .mockRejectedValueOnce(failure);
+    mocks.readRecordsByKeys.mockRejectedValue(new StaleCacheAuthorityError());
     await expect(saveEmailDraftQueued({ args })).resolves.toEqual({
       kind: 'queued',
     });
-    expect(Telemetry.error).toHaveBeenCalledWith(failure);
+    expect(readLocalDraft).toHaveBeenCalledTimes(1);
     expect(toast.failure).not.toHaveBeenCalled();
     expect(operations).toHaveLength(1);
   }

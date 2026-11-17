@@ -437,27 +437,8 @@ export async function saveEmailDraftQueued(
     return { kind: 'queued' };
   }
   if (outcome.kind === 'committed-without-content') {
-    // Queue settlement already recorded opaque canonical ids in the authored
-    // draft journal. Recover those without reopening a protected response cache.
-    let confirmed: Awaited<ReturnType<typeof readLocalDraft>>;
-    try {
-      confirmed = await readLocalDraft(
-        local?.key ?? String(input.args.draftId)
-      );
-    } catch (error) {
-      reportError(error);
-      return { kind: 'queued' };
-    }
-    if (confirmed?.serverDraftId && confirmed.serverThreadId) {
-      refreshAfterCommittedSave(input, confirmed.serverThreadId);
-      return {
-        kind: 'committed',
-        draftId: confirmed.serverDraftId,
-        threadId: confirmed.serverThreadId,
-      };
-    }
-    // Legacy callers without a journal keep their accepted local handle until
-    // identity recovery. An unavailable response must never latch autosave.
+    // An earlier journal binding cannot confirm this save's destination. Keep
+    // the accepted local handle until a settlement supplies its current identity.
     return { kind: 'queued' };
   }
   refreshAfterCommittedSave(input, outcome.threadId);
