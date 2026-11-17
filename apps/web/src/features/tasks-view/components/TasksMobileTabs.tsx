@@ -80,7 +80,7 @@ function ProjectsPicker() {
 }
 
 export function TasksMobileTabs(props: { leading?: JSX.Element }) {
-  const { state, setTab, projectsEnabled } = useTasksView();
+  const { state, setTab } = useTasksView();
 
   return (
     <div class="h-10 min-w-0 flex-1">
@@ -98,11 +98,7 @@ export function TasksMobileTabs(props: { leading?: JSX.Element }) {
             <TaskSavedViewsPicker />
           </>
         }
-        trailing={
-          <Show when={projectsEnabled()}>
-            <ProjectsPicker />
-          </Show>
-        }
+        trailing={<ProjectsPicker />}
         items={BUILT_IN_TASK_TABS.map((tab) => ({
           value: tab.id,
           label: tab.label,

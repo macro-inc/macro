@@ -97,7 +97,7 @@ function ImportLinearAction() {
 
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, setState, projectsEnabled, savedViews } = useTasksView();
+  const { state, setState, savedViews } = useTasksView();
   const navigate = useNavigate();
   const layout = useSplitLayout();
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
@@ -162,11 +162,7 @@ function TasksViewRoot() {
               <SplitRouter.Outlet
                 fallback={() => (
                   <Show
-                    when={
-                      isProjectTab(state.tab) &&
-                      projectsEnabled() &&
-                      !state.savedViewActive
-                    }
+                    when={isProjectTab(state.tab) && !state.savedViewActive}
                     fallback={taskList()}
                   >
                     <ProjectsTab

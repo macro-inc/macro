@@ -24,12 +24,6 @@ beforeEach(() => {
 });
 
 describe('activity project navigation', () => {
-  it('does not open native projects when the rollout is disabled', () => {
-    openEntityInSplit({ block: 'initiative', id: 'launch', newSplit: false });
-    expect(mocks.openWithSplit).not.toHaveBeenCalled();
-    expect(mocks.openDocument).not.toHaveBeenCalled();
-  });
-
   it('opens native project discussions when the rollout is enabled', () => {
     mocks.projectsEnabled = true;
     openEntityInSplit({

@@ -8,26 +8,13 @@ import {
 } from '@app/features/email-compose/compose-params';
 import { HomeRouteView } from '@app/features/home/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import {
-  DEV_MODE_ENV,
-  enableProjects,
-  LOCAL_ONLY,
-} from '@core/constant/featureFlags';
+import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
 import { lazyNamed } from '@core/util/lazyNamed';
-import {
-  type ComponentProps,
-  type JSXElement,
-  lazy,
-  onMount,
-  type ParentProps,
-  Show,
-} from 'solid-js';
-import { useSplitPanelOrThrow } from './layoutUtils';
+import { type JSXElement, lazy } from 'solid-js';
 import {
   RedirectSplit,
   usePageViewTracking,
@@ -254,46 +241,13 @@ registerComponent('getting-started', () => (
   <RedirectSplit to={{ type: 'component', id: 'home' }} />
 ));
 
-function DisabledProjectsRoute() {
-  const panel = useSplitPanelOrThrow();
-  onMount(() => {
-    if (panel.handle.isPopover()) panel.handle.close();
-    else panel.handle.replace({ next: { type: 'component', id: 'tasks' } });
-  });
-  return null;
-}
-
-function ProjectsRouteGate(props: ParentProps) {
-  const flag = useFeatureFlag(enableProjects);
-  return (
-    <Show
-      when={flag().enabled}
-      fallback={
-        <Show when={!flag().loading} fallback={<LoadingBlock />}>
-          <DisabledProjectsRoute />
-        </Show>
-      }
-    >
-      {props.children}
-    </Show>
-  );
-}
-
-const GatedCreateProjectView = (
-  props: ComponentProps<typeof CreateProjectView>
-) => (
-  <ProjectsRouteGate>
-    <CreateProjectView {...props} />
-  </ProjectsRouteGate>
-);
-
-registerComponent('new-project', withAuth(GatedCreateProjectView), {
+registerComponent('new-project', withAuth(CreateProjectView), {
   splitPanelLayout: 'composable',
 });
 registerComponent('folder-compose', withAuth(FolderComposeView), {
   splitPanelLayout: 'composable',
 });
-registerComponent('project-compose', withAuth(GatedCreateProjectView), {
+registerComponent('project-compose', withAuth(CreateProjectView), {
   splitPanelLayout: 'composable',
 });
 registerComponent(
@@ -304,9 +258,7 @@ registerComponent(
         ? parseProjectRoute(params.projectRoute)
         : undefined;
     return route ? (
-      <ProjectsRouteGate>
-        <ProjectView route={route} />
-      </ProjectsRouteGate>
+      <ProjectView route={route} />
     ) : (
       <RedirectSplit to={{ type: 'component', id: 'tasks' }} />
     );
@@ -315,11 +267,7 @@ registerComponent(
 );
 registerComponent(
   'tasks-projects',
-  withAuth(() => (
-    <ProjectsRouteGate>
-      <ProjectsListView />
-    </ProjectsRouteGate>
-  )),
+  withAuth(() => <ProjectsListView />),
   { splitPanelLayout: 'composable' }
 );
 

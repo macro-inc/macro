@@ -263,15 +263,6 @@ describe('Project rows', () => {
     expect(clearSelection).toHaveBeenCalledOnce();
   });
 
-  it('offers no project actions while projects are off or loading', () => {
-    mocks.projectsEnabled = false;
-    const ids = menuItems([project('a', 'user')]).map(({ id }) => id);
-
-    expect(ids).not.toContain('rename');
-    expect(ids).not.toContain('share');
-    expect(ids).not.toContain('delete');
-  });
-
   it('keeps project actions off a selection mixing projects with other items', () => {
     expect(menuItems([project('a', 'user'), channel])).toEqual([]);
   });

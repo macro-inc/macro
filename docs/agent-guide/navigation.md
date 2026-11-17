@@ -367,12 +367,6 @@ favor of its owner and view-navigation islands, except while creating or editing
 a schedule: a separate **Back to availability** pill sits beside the editor
 title, matching other mobile routes.
 
-Projects are enabled by default in development; production uses the PostHog
-`enable-projects` flag. `VITE_ENABLE_PROJECTS` overrides either environment.
-When disabled, project navigation,
-creation, assignment, chips, and Cmd+K results are hidden; direct project links
-return to Tasks after flags resolve. Existing Files folders stay available.
-
 Projects open as native detail views within Tasks, preserving its sidebar and
 shared breadcrumb navigation. The Projects breadcrumb returns to the same list,
 filters, groups, and scroll position. Opening a task from a project extends the
@@ -1228,8 +1222,7 @@ the catalog's first four available template cards (icon, name, one line and its 
 **New email → Label with AI**) with **All templates** at the right, which opens
 New routine's start screen. A card opens New routine already filled in from that
 template. The strip hides while searching and on **On**; on phones the cards
-scroll sideways. With `enable-routine-suggestions` and
-`enable-routine-code-steps` on (not on touch devices), suggestions take the
+scroll sideways. With `enable-routine-suggestions` on (not on touch devices), suggestions take the
 strip's place: **Suggested for you** above the rows on **All** shows one row
 of Discover's cards, as many as fit, and after them a narrow **N more · In
 Discover** column, which opens a third tab, **Discover**. Discover
@@ -1303,8 +1296,7 @@ enabled, for its trigger condition, then **Chase stuck tasks**, **Tag new
 email**, **Tag new documents**, **Tasks from my calls**, **Weekly pipeline
 review**, **Catch up on mentions**, **Sum up new pull requests** and **Weekly
 agent digest**; each shows its icon, what it does and its trigger → first
-step. Routines with code start with it when `enable-routine-code-steps` is on
-and the scheduler can save code, otherwise with an Ask AI step; schedules are
+step. Routines with code start with it when the scheduler can save code, otherwise with an Ask AI step; schedules are
 in the browser's zone), and
 **Start fresh** beside the
 close button. Each choice closes it and opens the new routine's page at
@@ -1425,7 +1417,7 @@ a controlled repository's delivery and matching routine history. Wildcard
 routines can run more often, and manually redelivering a webhook from GitHub
 can run a routine again.
 
-When `enable-routine-conditions` is on, every activity trigger can take one
+Every activity trigger can take one
 **Only if** check, a yes/no question about each event, such as **Is this email
 an invoice or a receipt?** (**+ Filter** on the page, **Only run if AI says
 yes** in the trigger panel). Before a run starts, the event's content (the email,

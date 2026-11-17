@@ -116,10 +116,8 @@ const createCommands: CommandWithInfo[] = [
   },
 ];
 
-it('lists Projects from Quick Access and gates project creation without hiding Folder', () => {
-  const [flag, setFlag] = createSignal<boolean | undefined>(true);
+it('lists Projects from Quick Access with project creation beside Folder', () => {
   const [category, setCategory] = createSignal<CategoryFilter>('projects');
-  fixtures.projectFlag = flag;
   fixtures.commands = createCommands;
   let source!: ReturnType<typeof useCommandItems>;
   render(() => {
@@ -134,10 +132,6 @@ it('lists Projects from Quick Access and gates project creation without hiding F
   expect(ids()).toEqual(['launch', 'new-project']);
   setCategory('commands');
   expect(ids()).toEqual(['command-Create-project', 'command-Create-folder']);
-  setFlag(false);
-  expect(ids()).toEqual(['command-Create-folder']);
-  setCategory('projects');
-  expect(ids()).not.toContain('new-project');
 });
 
 it('adds projects to All only for typed queries', () => {

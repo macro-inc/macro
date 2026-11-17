@@ -22,7 +22,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enablePasswords,
-  enableProjects,
   enableWhatsappLinked,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
@@ -536,7 +535,6 @@ function getSupportedHandler(
         };
       })
       .with('initiative_discussion', () => {
-        if (!isFeatureEnabled(enableProjects)) return null;
         const meta = notification.notification_metadata;
         if (
           meta.tag !== 'initiative_discussion' ||
