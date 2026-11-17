@@ -28,26 +28,47 @@ pub fn to_string<T: Serialize + ?Sized>(value: &T) -> Result<String> {
 /// the references between its jobs and steps ([`crate::references`]).
 pub fn workflow_to_string<T: Serialize + ?Sized>(workflow: &T) -> Result<String> {
     let mut node = workflow.serialize(NodeSerializer)?;
-    canonicalize_expressions(&mut node, &mut Vec::new())?;
+    canonicalize_expressions(&mut node, &mut Vec::new(), Document::Workflow)?;
     crate::references::check(&node)?;
     Ok(emit(&node))
 }
 
+/// Render a composite action (`action.yml`) with the same checks as a
+/// workflow, against the contexts an action's steps can read, plus the
+/// action's own step rules ([`crate::references::check_action`]).
+pub fn action_to_string<T: Serialize + ?Sized>(action: &T) -> Result<String> {
+    let mut node = action.serialize(NodeSerializer)?;
+    canonicalize_expressions(&mut node, &mut Vec::new(), Document::Action)?;
+    crate::references::check_action(&node)?;
+    Ok(emit(&node))
+}
+
+/// Which file a tree renders as, which decides the contexts each key offers.
+#[derive(Clone, Copy)]
+enum Document {
+    Workflow,
+    Action,
+}
+
 /// Check and re-spell the expressions in every string under `node`, where
 /// `path` leads to `node` (`[]` for a sequence item).
-fn canonicalize_expressions(node: &mut Node, path: &mut Vec<String>) -> Result<()> {
+fn canonicalize_expressions(
+    node: &mut Node,
+    path: &mut Vec<String>,
+    document: Document,
+) -> Result<()> {
     match node {
         Node::Map(entries) => {
             for (key, value) in entries {
                 path.push(key.clone());
-                canonicalize_expressions(value, path)?;
+                canonicalize_expressions(value, path, document)?;
                 path.pop();
             }
         }
         Node::Seq(items) => {
             for item in items {
                 path.push("[]".to_string());
-                canonicalize_expressions(item, path)?;
+                canonicalize_expressions(item, path, document)?;
                 path.pop();
             }
         }
@@ -57,14 +78,18 @@ fn canonicalize_expressions(node: &mut Node, path: &mut Vec<String>) -> Result<(
                 path: keys.join("."),
                 message,
             };
-            if is_script(&keys) && text.contains("${{") {
+            if is_script(&keys, document) && text.contains("${{") {
                 return Err(invalid(
                     "GitHub pastes `${{ }}` into a script as code; set it in the step's \
                      `env` and read the variable instead"
                         .to_string(),
                 ));
             }
-            match expr::scope::at(&keys) {
+            let scope = match document {
+                Document::Workflow => expr::scope::at(&keys),
+                Document::Action => expr::scope::at_action(&keys),
+            };
+            match scope {
                 Some(scope) => {
                     *text = expr::canonicalize(text, scope.contexts, scope.whole_expression)
                         .map_err(invalid)?;
@@ -82,11 +107,17 @@ fn canonicalize_expressions(node: &mut Node, path: &mut Vec<String>) -> Result<(
 
 /// A step's shell `run` or an action's `script` input (`actions/github-script`),
 /// where an expression would become code rather than data.
-fn is_script(path: &[&str]) -> bool {
-    matches!(
-        path,
-        ["jobs", _, "steps", "[]", "run"] | ["jobs", _, "steps", "[]", "with", "script"]
-    )
+fn is_script(path: &[&str], document: Document) -> bool {
+    match document {
+        Document::Workflow => matches!(
+            path,
+            ["jobs", _, "steps", "[]", "run"] | ["jobs", _, "steps", "[]", "with", "script"]
+        ),
+        Document::Action => matches!(
+            path,
+            ["runs", "steps", "[]", "run"] | ["runs", "steps", "[]", "with", "script"]
+        ),
+    }
 }
 
 fn emit(node: &Node) -> String {

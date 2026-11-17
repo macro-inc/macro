@@ -1,3 +1,4 @@
+mod action;
 mod concurrency;
 mod container;
 mod defaults;
@@ -16,6 +17,7 @@ mod strategy;
 pub(crate) mod workflow;
 mod yaml;
 
+pub use action::*;
 pub use concurrency::*;
 pub use container::*;
 pub use defaults::*;

@@ -232,6 +232,62 @@ fn check_cycles(facts: &BTreeMap<&str, JobFacts>) -> Result<()> {
     Ok(())
 }
 
+/// Check a composite action: every `run` step names its `shell` (GitHub
+/// requires it there), step ids are unique, a step reads only earlier step
+/// ids, and an output reads only the action's step ids.
+pub(crate) fn check_action(action: &Node) -> Result<()> {
+    let steps = action
+        .get("runs")
+        .and_then(|runs| runs.get("steps"))
+        .and_then(Node::as_seq)
+        .unwrap_or_default();
+
+    let mut earlier: BTreeSet<&str> = BTreeSet::new();
+    for (index, step) in steps.iter().enumerate() {
+        let at = format!("runs.steps[{index}]");
+        if step.get("run").is_some() && step.get("shell").is_none() {
+            return Err(invalid(
+                &at,
+                "a composite action's `run` step must set `shell`".to_string(),
+            ));
+        }
+        for reference in strings_references(step, false, &at)? {
+            if let [root, step_id, ..] = reference.as_slice() {
+                if root == "steps" && !earlier.contains(step_id.as_str()) {
+                    return Err(invalid(
+                        &at,
+                        format!(
+                            "reads `steps.{step_id}`, which is not an earlier step of this action"
+                        ),
+                    ));
+                }
+            }
+        }
+        if let Some(step_id) = step.get("id").and_then(Node::as_str) {
+            if !earlier.insert(step_id) {
+                return Err(invalid(&at, format!("two steps have the id `{step_id}`")));
+            }
+        }
+    }
+
+    if let Some(outputs) = action.get("outputs").and_then(Node::as_map) {
+        for (name, output) in outputs {
+            let at = format!("outputs.{name}.value");
+            for reference in references_in(output.get("value"), false, &at)? {
+                if let [root, step_id, ..] = reference.as_slice() {
+                    if root == "steps" && !earlier.contains(step_id.as_str()) {
+                        return Err(invalid(
+                            &at,
+                            format!("`{step_id}` is not a step of this action"),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// The context paths (`needs.build.outputs.sha` as `["needs", "build",
 /// "outputs", "sha"]`) read anywhere under `node`.
 fn strings_references(node: &Node, is_if: bool, at: &str) -> Result<Vec<Vec<String>>> {

@@ -16,8 +16,11 @@ We own it now: change it here instead of patching rendered YAML in
 - `src/expr.rs`: expressions: the AST, `parse`, the canonical spelling, and
   `check`. `expr/typed.rs` builds them with types; `expr/scope.rs` is
   GitHub's context availability table.
+- `src/action.rs`: `CompositeAction`, rendered as an `action.yml` with the
+  same checks against the contexts an action's steps can read.
 - `src/references.rs`: the job/step reference checks every rendered
-  workflow passes (needs, outputs, step ids, cycles).
+  workflow (needs, outputs, step ids, cycles) and composite action (shell on
+  `run` steps, step order) passes.
 - `src/yaml.rs`: our YAML emitter; its fixed style is what every generated
   workflow looks like.
 

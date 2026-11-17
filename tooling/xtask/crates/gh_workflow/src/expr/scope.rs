@@ -143,3 +143,41 @@ fn matches(pattern: &[&str], path: &[&str]) -> bool {
         _ => false,
     }
 }
+
+const ACTION_STEP: &[&str] = &[
+    "github", "inputs", "steps", "runner", "env", "job", "strategy", "matrix",
+];
+const ACTION_OUTPUT: &[&str] = &["github", "inputs", "steps"];
+
+/// The composite action (`action.yml`) counterpart of [`TABLE`].
+const ACTION_TABLE: &[(&[&str], &[&str], bool)] = &[
+    (&["inputs", "*", "default"], &["github"], false),
+    (&["outputs", "*", "value"], ACTION_OUTPUT, false),
+    (&["runs", "steps", "[]", "if"], ACTION_STEP, true),
+    (&["runs", "steps", "[]", "name"], ACTION_STEP, false),
+    (&["runs", "steps", "[]", "run"], ACTION_STEP, false),
+    (&["runs", "steps", "[]", "shell"], ACTION_STEP, false),
+    (
+        &["runs", "steps", "[]", "working-directory"],
+        ACTION_STEP,
+        false,
+    ),
+    (
+        &["runs", "steps", "[]", "continue-on-error"],
+        ACTION_STEP,
+        false,
+    ),
+    (&["runs", "steps", "[]", "env", "*"], ACTION_STEP, false),
+    (&["runs", "steps", "[]", "with", "*"], ACTION_STEP, false),
+];
+
+/// [`at`] for a composite action.
+pub fn at_action(path: &[&str]) -> Option<Scope> {
+    ACTION_TABLE
+        .iter()
+        .find(|(pattern, _, _)| matches(pattern, path))
+        .map(|(_, contexts, whole_expression)| Scope {
+            contexts,
+            whole_expression: *whole_expression,
+        })
+}
