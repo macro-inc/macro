@@ -1728,10 +1728,6 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .begin()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        sqlx::query!("SET LOCAL statement_timeout = '60s'")
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         // Match explicit edits' company-before-contact order. Lock before the
         // orphan check so a company cannot be deleted from a stale snapshot
@@ -2122,10 +2118,6 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .begin()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        sqlx::query!("SET LOCAL statement_timeout = '15s'")
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         Self::lock_email_privacy(&mut tx, *team_id, true).await?;
         // Domain locks block in-flight populates past their eligibility
@@ -2285,10 +2277,6 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let mut tx = self
             .pool
             .begin()
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        sqlx::query!("SET LOCAL statement_timeout = '15s'")
-            .execute(&mut *tx)
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         Self::lock_email_privacy(&mut tx, *team_id, true).await?;

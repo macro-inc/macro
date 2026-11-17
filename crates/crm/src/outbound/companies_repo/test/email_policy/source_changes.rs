@@ -215,3 +215,55 @@ async fn deletion_events_retain_targets_after_single_contact_and_bulk_teardown(
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn legacy_hide_and_link_teardown_preserve_the_callers_statement_timeout(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let (team, link, _) = setup(&pool).await?;
+    consent_to_mailbox(&pool, team, link).await?;
+    let company = insert_company(&pool, team, true, &["sample.example.com"]).await?;
+    let contact =
+        insert_contact_with_source(&pool, company, "person@sample.example.com", link).await?;
+    // These trigger objects exist only in this isolated test database. Observe
+    // the setting inside each real mutation without waiting for a long query.
+    sqlx::query(
+        r#"CREATE FUNCTION require_caller_statement_timeout() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+            IF current_setting('statement_timeout')::interval <> interval '90 seconds' THEN
+                RAISE EXCEPTION 'mutation replaced the caller statement timeout';
+            END IF;
+            IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+            RETURN NEW;
+        END $$"#,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query("CREATE TRIGGER require_caller_timeout BEFORE UPDATE OR DELETE ON crm_companies FOR EACH ROW EXECUTE FUNCTION require_caller_statement_timeout()")
+        .execute(&pool).await?;
+    sqlx::query("CREATE TRIGGER require_caller_timeout BEFORE UPDATE OR DELETE ON crm_contacts FOR EACH ROW EXECUTE FUNCTION require_caller_statement_timeout()")
+        .execute(&pool).await?;
+    let caller_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(2)
+        .connect_with(
+            pool.connect_options()
+                .as_ref()
+                .clone()
+                .options([("statement_timeout", "90s")]),
+        )
+        .await?;
+    let repo = CompaniesRepositoryImpl::new(caller_pool.clone());
+    repo.set_contact_hidden(&team, &contact, true).await?;
+    repo.set_contact_hidden(&team, &contact, false).await?;
+    repo.set_company_hidden(&team, &company, true).await?;
+    repo.set_company_hidden(&team, &company, false).await?;
+    repo.depopulate_link_in_team(&team, &link).await?;
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM crm_contacts WHERE team_id=$1", team)
+            .fetch_one(&pool)
+            .await?,
+        Some(0)
+    );
+    caller_pool.close().await;
+    Ok(())
+}

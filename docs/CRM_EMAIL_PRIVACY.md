@@ -230,9 +230,11 @@ Contact address/parent edits, hides, company-hide cascades and sync deletion
 record source events in the same transaction, only for referenced targets.
 Imports of new IDs and metadata-only enrichment keep their existing write paths;
 there are no per-row source triggers. Direct SQL and future matching writers
-must use the same event hook. The worker pages at most 100 raw saved-rule
-references before checking
-whether a revision is active, so inactive history cannot turn a miss into an
+must use the same event hook. Existing mailbox teardown and company/contact
+visibility edits preserve the caller's statement timeout. Worker-owned metadata
+transactions retain their 15-second statement and 5-second lock limits.
+The worker pages at most 100 raw saved-rule references before checking whether a
+revision is active, so inactive history cannot turn a miss into an
 unbounded scan. Reverse indexes live only on `crm_email_rule_contacts` and
 `crm_email_rule_companies`; ordinary mail ingestion maintains neither. Source
 IDs have no record FK so deletion can still be reconciled. Team deletion removes
