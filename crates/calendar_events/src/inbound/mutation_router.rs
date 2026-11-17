@@ -504,6 +504,13 @@ fn refuse_program_join_answer(
     attribution: CredentialAttribution,
     headers: &HeaderMap,
 ) -> Result<(), CalendarMutationApiError> {
+    if is_program_run(attribution, headers) {
+        return Err(CalendarMutationApiError {
+            code: CalendarMutationErrorCode::PersonMustDecide,
+            message: PROGRAM_JOIN_ANSWER_REFUSAL.to_owned(),
+            status: StatusCode::FORBIDDEN,
+        });
+    }
     Ok(())
 }
 
@@ -1153,7 +1160,7 @@ pub struct RespondToJoinRequestRequest {
     responses(
         (status = 200, description = "The answered join request", body = CalendarJoinRequest),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Calendar is read-only, the organizer doesn't let guests invite others, or the calendar needs reauthorization", body = CalendarMutationApiError),
+        (status = 403, description = "Calendar is read-only, the organizer doesn't let guests invite others, the calendar needs reauthorization, or a program answered (code person_must_decide)", body = CalendarMutationApiError),
         (status = 404, description = "Request not found or its event cannot be changed by the requester", body = CalendarMutationApiError),
         (status = 409, description = "The provider rejected the new guest", body = CalendarMutationApiError),
         (status = 503, description = "Transient provider failure", body = CalendarMutationApiError),
@@ -1162,6 +1169,7 @@ pub struct RespondToJoinRequestRequest {
 pub async fn respond_to_join_request<S, L, Auth>(
     State(state): State<CalendarMutationRouterState<S, L, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
     Path(request_id): Path<Uuid>,
     Json(request): Json<RespondToJoinRequestRequest>,
 ) -> Result<Json<CalendarJoinRequest>, CalendarMutationApiError>
@@ -1170,6 +1178,7 @@ where
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
 {
+    refuse_program_join_answer(user.authorization.user.attribution(), &headers)?;
     let answered = state
         .service
         .respond_to_join_request(

@@ -267,18 +267,13 @@ fn no_program_answers_a_join_request() {
     );
     let browser = axum::http::HeaderMap::new();
 
-    let refusal =
-        refuse_program_join_answer(CredentialAttribution::Agent, &browser).unwrap_err();
+    let refusal = refuse_program_join_answer(CredentialAttribution::Agent, &browser).unwrap_err();
     assert_eq!(refusal.status, StatusCode::FORBIDDEN);
     assert_eq!(refusal.code, CalendarMutationErrorCode::PersonMustDecide);
     assert_eq!(refusal.message, PROGRAM_JOIN_ANSWER_REFUSAL);
     assert!(refuse_program_join_answer(CredentialAttribution::Routine, &browser).is_err());
-    assert!(
-        refuse_program_join_answer(CredentialAttribution::Person, &code_execution).is_err()
-    );
-    assert!(
-        refuse_program_join_answer(CredentialAttribution::Routine, &code_execution).is_err()
-    );
+    assert!(refuse_program_join_answer(CredentialAttribution::Person, &code_execution).is_err());
+    assert!(refuse_program_join_answer(CredentialAttribution::Routine, &code_execution).is_err());
 }
 
 #[test]
