@@ -212,6 +212,7 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 ## Gotchas
 
+- The email sign-in (`POST /login/passwordless`, `GET /oauth/passwordless/{code}`) refuses an agent's program (`middleware::refuse_program_sign_in`, 403): one that reads the code from the user's inbox would hold the session. These routes take no credential: inside the sandbox every request carries `x-macro-code-execution`, which is the guard; a sent credential signed for an agent or routine refuses too, though a program outside the sandbox can send none. A credential that does not verify counts as none, so a person with a stale session still signs in.
 - Match Google link email display names without ASCII case sensitivity: FusionAuth preserves Google's capitalization, while Macro normalizes email addresses. Keep refresh, token lookup, removal, and grant relocation consistent.
 - `/mobile-welcome-email` copies allowlisted ad parameters from the capture
   request onto the desktop signup link and always sets
@@ -329,3 +330,10 @@ subscription reconciliation still use them. Prices have no fallback. See [requir
   through team deletion; drop it before DSS RPC if data appeared.
 - Keep account deletion and membership compensation independent of vault items;
   team items retain their immutable creator after a person leaves.
+
+- Compose `FlaggedCrmAccessRollout` from the shared flag provider for team CRM
+  preference writes. `enable-crm-member-access-changes` is evaluated freshly for
+  service context `team-crm-member-access`; missing configuration, a missing/off
+  flag, or evaluation failure answers 503 before updates. Keep it off until all
+  membership-removal writers preserve CRM preferences and all access consumers
+  are upgraded. No environment bypass applies.

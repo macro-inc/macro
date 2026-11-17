@@ -63,6 +63,33 @@ export type AccessRequest = {
 };
 
 /**
+ * How an agent's access request was resolved.
+ */
+export type AccessRequestResolution = 'approved' | 'denied' | 'revoked';
+
+/**
+ * Metadata for [`PasswordTopicEvent::AccessRequestResolved`].
+ */
+export type AccessRequestResolvedMetadata = {
+    /**
+     * Requested item.
+     */
+    itemId: string;
+    /**
+     * Resolved request.
+     */
+    requestId: string;
+    /**
+     * Resolution.
+     */
+    status: AccessRequestResolution;
+    /**
+     * Team owning the item.
+     */
+    teamId: string;
+};
+
+/**
  * Share state visible to one authenticated viewer.
  */
 export type AccessRequestState = {
@@ -1439,6 +1466,11 @@ export type AttachmentChange = {
         remove: Array<string>;
     };
 };
+
+/**
+ * A kind of attachment a thread's messages carry, by MIME type.
+ */
+export type AttachmentKind = 'pdf' | 'image' | 'document';
 
 /**
  * RSVP state for an attendee.
@@ -4290,6 +4322,10 @@ export type ColumnCast = {
      */
     is_multi_select: boolean;
     /**
+     * Whether the target shows a number as a percent.
+     */
+    percentage?: boolean;
+    /**
      * Why nothing converts, for a `never` cast.
      */
     reason: string | null;
@@ -4398,6 +4434,12 @@ export type ColumnConfig = {
      */
     formula: Formula;
     kind: 'derived';
+    /**
+     * Whether a number formula is shown as a percent.
+     */
+    percentage?: boolean;
+} | {
+    kind: 'percentage';
 };
 
 /**
@@ -4476,6 +4518,8 @@ export type ColumnKind = {
     type: 'text';
 } | {
     type: 'number';
+} | {
+    type: 'percentage';
 } | {
     type: 'boolean';
 } | {
@@ -6302,6 +6346,20 @@ export type CrmDomainResponse = {
 };
 
 /**
+ * Current authority for the authenticated viewer; contribution consent is separate.
+ */
+export type CrmMemberAccessResponse = {
+    /**
+     * Whether the viewer may access that team's CRM.
+     */
+    allowed: boolean;
+    /**
+     * The viewer's current team, if any.
+     */
+    team_id?: string | null;
+};
+
+/**
  * Minimum team role required for a CRM governance capability. Members
  * can edit visible CRM records (e.g. company properties), but the
  * governance capabilities these settings gate stay restricted to
@@ -7531,6 +7589,15 @@ export type DocumentTopicEvent = {
      * A peer joined, left, or a periodic save occurred.
      */
     metadata: DocumentInteractionMetadata;
+} | {
+    event_type: 'document.email_attachments_released';
+    /**
+     * Documents whose mail is gone stopped being email attachments, in one
+     * batch: the system moved some to the Trash and left the rest. Like the
+     * documents in a trashed folder, the trashed ones are removed from open
+     * lists and trigger nothing per document.
+     */
+    metadata: EmailAttachmentsReleasedMetadata;
 };
 
 /**
@@ -9197,6 +9264,22 @@ export type EffectSpecSoftEdgeOptions = string | {
 };
 
 /**
+ * Metadata for [`DocumentTopicEvent::EmailAttachmentsReleased`]: the
+ * documents of one queue batch that lost their last email link.
+ */
+export type EmailAttachmentsReleasedMetadata = {
+    /**
+     * Documents left as they were: kept by their owner, or already in the
+     * Trash. They are no longer email attachments either.
+     */
+    kept_document_ids: Array<string>;
+    /**
+     * Documents the batch moved to the Trash.
+     */
+    trashed_document_ids: Array<string>;
+};
+
+/**
  * The audience affected by a domain exclusion.
  */
 export type EmailBlockScope = 'team' | 'personal';
@@ -9205,6 +9288,11 @@ export type EmailBlockScope = 'team' | 'personal';
  * The email filters used to filter down what emails you search over.
  */
 export type EmailFilters = {
+    /**
+     * Only threads with at least one attachment of one of these kinds, by
+     * MIME type, on any of their messages. Empty applies no constraint.
+     */
+    attachments?: Array<AttachmentKind>;
     /**
      * Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC.
      */
@@ -9225,7 +9313,8 @@ export type EmailFilters = {
      * fully-qualified addresses. Each address is authorized against
      * `crm_contacts` + `crm_companies` (contact must not be hidden, company
      * must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_domains`.
+     * Mutually exclusive with `crm_domains`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_addresses?: Array<string>;
     /**
@@ -9234,9 +9323,16 @@ export type EmailFilters = {
      * domains (in any of sender/cc/bcc/recipient). Each domain is authorized
      * against `crm_domains` + `crm_companies` (must exist for the caller's
      * team, company must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_addresses`.
+     * Mutually exclusive with `crm_addresses`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_domains?: Array<string>;
+    /**
+     * Filter by whether the thread is done: true for threads out of the
+     * inbox (archived), false for threads still in it. This is the mailbox
+     * state the Email view's Done filter uses, independent of notifications.
+     */
+    done?: boolean | null;
     /**
      * Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads.
      */
@@ -9271,7 +9367,14 @@ export type EmailFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * A list of project ids to search within. Empty to ignore project filtering.
+     * Drive folder (project) ids to search within: threads filed in any of
+     * these folders. Besides the caller's own threads, it reaches every
+     * thread in a folder shared with the caller, whoever's inbox holds it,
+     * as the folder's list does. Search takes at most 50 folders and
+     * rejects more with a 400, and matches the query against at most 10,000
+     * of their threads in all; threads past that are not searched, unless
+     * `email_thread_ids` names them, and at most 10,000 named threads are
+     * searched in all. Empty to ignore project filtering.
      */
     project_ids?: Array<string>;
     /**
@@ -9287,6 +9390,7 @@ export type EmailFilters = {
      * Defaults to "exclude" (only the user's own threads).
      */
     shared?: SharedEmailFilter;
+    view?: null | EmailSearchView;
 };
 
 /**
@@ -9371,6 +9475,16 @@ export type EmailFollowupResponse = {
  * One explicit privacy change, avoiding lost updates to whole blocklists.
  */
 export type EmailPrivacyChange = {
+    action: 'set_thread_exclusion';
+    /**
+     * False removes this exception; consent and other exclusions still apply.
+     */
+    excluded: boolean;
+    /**
+     * Must belong to a mailbox owned by the authenticated member.
+     */
+    thread_id: string;
+} | {
     action: 'set_consent';
     /**
      * False withdraws this mailbox's CRM contribution without deleting records.
@@ -9464,6 +9578,11 @@ export type EmailReminderSummary = {
      */
     threadId: string;
 };
+
+/**
+ * A mailbox view the Email list scopes a search to, as its tabs do.
+ */
+export type EmailSearchView = 'sent' | 'drafts';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -9870,6 +9989,38 @@ export type ExcludedDefaultView = {
     defaultViewId: string;
     id: string;
     userId: string;
+};
+
+/**
+ * One private thread from the caller's own mailbox, never a teammate's copy.
+ */
+export type ExcludedEmailThread = {
+    /**
+     * Exact mailbox containing this copy.
+     */
+    link_id: string;
+    /**
+     * Current subject, for the owner's privacy settings.
+     */
+    subject?: string | null;
+    /**
+     * Mailbox-local thread identity.
+     */
+    thread_id: string;
+};
+
+/**
+ * A bounded page of the caller's private threads, ordered by thread ID.
+ */
+export type ExcludedEmailThreads = {
+    /**
+     * Pass as `after` to read the next page.
+     */
+    next_cursor?: string | null;
+    /**
+     * At most fifty exclusions.
+     */
+    threads: Array<ExcludedEmailThread>;
 };
 
 export type ExportDocumentResponse = {
@@ -15460,6 +15611,426 @@ export type PasswordActivity = {
 };
 
 /**
+ * Access request body.
+ */
+export type PasswordAgentAccessRequestBody = {
+    /**
+     * Requested permission.
+     */
+    permission: PasswordPermission;
+};
+
+/**
+ * A page of requests for human review.
+ */
+export type PasswordAgentAccessRequestPage = {
+    /**
+     * Opaque cursor of the next page.
+     */
+    nextCursor?: string | null;
+    /**
+     * Pending requests on items the caller may manage.
+     */
+    requests: Array<PasswordAgentAccessRequestState>;
+};
+
+/**
+ * An agent's request state.
+ */
+export type PasswordAgentAccessRequestState = {
+    /**
+     * Current access.
+     */
+    access: PasswordAgentItemAccess;
+    /**
+     * Agent account.
+     */
+    agentAccountId: string;
+    /**
+     * Item id.
+     */
+    itemId: PasswordItemId;
+    permission?: null | PasswordPermission;
+    /**
+     * Request id; null when none exists.
+     */
+    requestId?: string | null;
+    /**
+     * Request revision; 0 when none exists.
+     */
+    revision: number;
+    /**
+     * Request status.
+     */
+    status: PasswordAgentRequestStatus;
+    /**
+     * Last transition.
+     */
+    updatedAt?: string | null;
+};
+
+/**
+ * Whether the agent can use an item now.
+ */
+export type PasswordAgentAccessStatus = 'usable' | 'request_access' | 'pending';
+
+/**
+ * API credential fields an agent may select.
+ */
+export type PasswordAgentApiField = 'key' | 'secret';
+
+/**
+ * Agent item creation; the kind is the secret's tag.
+ */
+export type PasswordAgentCreateItem = {
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * UUIDv7, stable across retries; becomes the item id.
+     */
+    operationId: string;
+    /**
+     * Typed values.
+     */
+    secret: PasswordAgentCreateSecret;
+    url?: null | PasswordLoginUrl;
+};
+
+/**
+ * New item values; the item kind is this tag.
+ */
+export type PasswordAgentCreateSecret = {
+    kind: 'login';
+    /**
+     * Required non-empty password.
+     */
+    password: PasswordSecretString;
+    username?: null | PasswordSecretString;
+} | {
+    key?: null | PasswordSecretString;
+    kind: 'api';
+    /**
+     * Required non-empty API secret.
+     */
+    secret: PasswordSecretString;
+};
+
+/**
+ * One-field disclosure request.
+ */
+export type PasswordAgentDiscloseRequest = {
+    /**
+     * When given, the committed version must match.
+     */
+    expectedVersion?: number | null;
+    /**
+     * Audited intent.
+     */
+    purpose: PasswordAgentPurpose;
+    /**
+     * The single slot to disclose.
+     */
+    selector: PasswordAgentSecretSelector;
+};
+
+/**
+ * One disclosed field.
+ */
+export type PasswordAgentDisclosed = {
+    /**
+     * The selector that was disclosed.
+     */
+    selector: PasswordAgentSecretSelector;
+    /**
+     * The selected value.
+     */
+    value: PasswordSecretString;
+    /**
+     * Committed version it was read from.
+     */
+    version: number;
+};
+
+/**
+ * Agent-editable display fields.
+ */
+export type PasswordAgentEditableMetadata = {
+    /**
+     * New display name.
+     */
+    name?: string | null;
+    /**
+     * New URL; null clears it, absent keeps it.
+     */
+    url?: string | null;
+};
+
+/**
+ * Closed, payload-free failure codes of the agent vault API.
+ */
+export type PasswordAgentErrorCode = 'unauthorized' | 'invalid_agent' | 'invalid_session_attribution' | 'not_found' | 'not_granted' | 'pending' | 'forbidden' | 'invalid_request' | 'unsupported_kind' | 'field_not_set' | 'version_conflict' | 'vault_busy' | 'rate_limited' | 'vault_unavailable';
+
+/**
+ * Sanitized agent vault failure.
+ */
+export type PasswordAgentFailure = {
+    /**
+     * Machine-readable category; never contains request or secret values.
+     */
+    code: PasswordAgentErrorCode;
+    /**
+     * Present only on `rate_limited`.
+     */
+    retryAfterMs?: number | null;
+};
+
+/**
+ * Current agent access to one item, recomputed on every use.
+ */
+export type PasswordAgentItemAccess = {
+    /**
+     * Whether the agent may enroll a verification-code seed.
+     */
+    canSetTotp: boolean;
+    /**
+     * Whether the agent may update values and metadata.
+     */
+    canUpdate: boolean;
+    grantPermission?: null | PasswordPermission;
+    /**
+     * Live request awaiting review.
+     */
+    pendingRequestId?: string | null;
+    /**
+     * Revision of this agent's grant/approval on the item.
+     */
+    permissionRevision: number;
+    /**
+     * Current status.
+     */
+    status: PasswordAgentAccessStatus;
+    useBasis?: null | PasswordAgentUseBasis;
+};
+
+/**
+ * Login item fields an agent may select.
+ */
+export type PasswordAgentLoginField = 'username' | 'password';
+
+/**
+ * Agent item update.
+ */
+export type PasswordAgentPatchItem = {
+    /**
+     * Committed version the update applies to.
+     */
+    expectedVersion: number;
+    metadataPatch?: null | PasswordAgentEditableMetadata;
+    /**
+     * UUIDv7, stable across retries of this one update.
+     */
+    operationId: string;
+    secretPatch?: null | PasswordAgentSecretPatch;
+};
+
+/**
+ * Accepted disclosure intent. Typing is a later additive value.
+ */
+export type PasswordAgentPurpose = 'copy';
+
+/**
+ * Wire request status.
+ */
+export type PasswordAgentRequestStatus = 'none' | 'pending' | 'approved' | 'denied' | 'revoked';
+
+/**
+ * Human decision on a pending request.
+ */
+export type PasswordAgentResolveRequest = {
+    decision: 'approve';
+    /**
+     * Granted permission.
+     */
+    permission: PasswordPermission;
+    /**
+     * Request revision observed by the reviewer.
+     */
+    revision: number;
+} | {
+    decision: 'deny';
+    /**
+     * Request revision observed by the reviewer.
+     */
+    revision: number;
+};
+
+/**
+ * Human revocation of agent access.
+ */
+export type PasswordAgentRevokeBody = {
+    /**
+     * Permission revision observed by the reviewer.
+     */
+    expectedPermissionRevision: number;
+    /**
+     * What to remove.
+     */
+    scope: PasswordAgentRevokeScope;
+};
+
+/**
+ * What a revocation removes.
+ */
+export type PasswordAgentRevokeScope = 'approval' | 'grant_and_approval';
+
+/**
+ * Metadata-only search hit; never values, usernames, notes or custom fields.
+ */
+export type PasswordAgentSearchHit = {
+    /**
+     * Current access.
+     */
+    access: PasswordAgentItemAccess;
+    /**
+     * Item id.
+     */
+    id: PasswordItemId;
+    /**
+     * Stored kind.
+     */
+    kind: PasswordItemKind;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Website URL.
+     */
+    url?: string | null;
+    /**
+     * Committed positive version.
+     */
+    version: number;
+};
+
+/**
+ * One search page.
+ */
+export type PasswordAgentSearchPage = {
+    /**
+     * Hits, newest first.
+     */
+    items: Array<PasswordAgentSearchHit>;
+    /**
+     * Opaque cursor of the next page.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * Replacement of supplied slots; absent slots keep their stored value.
+ */
+export type PasswordAgentSecretPatch = {
+    kind: 'login';
+    password?: null | PasswordSecretString;
+    username?: null | PasswordSecretString;
+} | {
+    key?: null | PasswordSecretString;
+    kind: 'api';
+    secret?: null | PasswordSecretString;
+};
+
+/**
+ * Closed kind-aware selector of exactly one stored slot. Notes, custom fields
+ * and TOTP seeds are never selectable.
+ */
+export type PasswordAgentSecretSelector = {
+    /**
+     * Selected login field.
+     */
+    field: PasswordAgentLoginField;
+    kind: 'login';
+} | {
+    /**
+     * Selected API credential field.
+     */
+    field: PasswordAgentApiField;
+    kind: 'api';
+};
+
+/**
+ * Verification-code seed setup for an item the agent created.
+ */
+export type PasswordAgentSetTotp = {
+    /**
+     * Committed version the setup applies to.
+     */
+    expectedVersion: number;
+    /**
+     * UUIDv7, stable across retries; identifies the enrollment generation.
+     */
+    operationId: string;
+    /**
+     * Base32 seed.
+     */
+    seed: PasswordSecretString;
+};
+
+/**
+ * A verification code with a conservative server-computed lifetime.
+ */
+export type PasswordAgentTotpCode = {
+    /**
+     * Current code; never the seed.
+     */
+    code: PasswordSecretString;
+    /**
+     * Conservative usable-until time under the documented provider clock bound;
+     * not an observed generation instant.
+     */
+    expiresAt: string;
+    /**
+     * Code period in seconds.
+     */
+    periodSeconds: number;
+    /**
+     * Whole milliseconds from the server's final check until `expiresAt`.
+     */
+    validForMs: number;
+};
+
+/**
+ * Verification-code request.
+ */
+export type PasswordAgentTotpCodeRequest = {
+    /**
+     * Audited intent.
+     */
+    purpose: PasswordAgentPurpose;
+};
+
+/**
+ * Why a usable item is usable.
+ */
+export type PasswordAgentUseBasis = 'creator_grant' | 'approved_grant';
+
+/**
+ * Created or updated item.
+ */
+export type PasswordAgentWriteResult = {
+    /**
+     * Item after the write.
+     */
+    item: PasswordAgentSearchHit;
+    /**
+     * Committed version.
+     */
+    version: number;
+};
+
+/**
  * New folder, at the top level or inside another folder of the team.
  */
 export type PasswordCreateFolderBody = {
@@ -15539,9 +16110,167 @@ export type PasswordGrant = {
 };
 
 /**
- * Future principals can extend this without exposing agent controls in v1.
+ * Grant recipient category. Agent grants are managed only through the agent
+ * access routes and never appear in, or count toward, human sharing.
  */
-export type PasswordGranteeKind = 'user' | 'team';
+export type PasswordGranteeKind = 'user' | 'team' | 'agent';
+
+/**
+ * At most 25 credentials and 200 source folders in a request bounded to 4 MiB.
+ */
+export type PasswordImportBatch = {
+    /**
+     * Source folder tree, parents first; resend with each batch.
+     */
+    folders: Array<PasswordImportFolder>;
+    /**
+     * Source category recorded in the batch audit.
+     */
+    format: PasswordImportFormat;
+    /**
+     * Independently validated credentials.
+     */
+    items: Array<PasswordImportItem>;
+    /**
+     * Omit the default team Edit grant on newly created items.
+     */
+    private: boolean;
+    /**
+     * Root for source folders and otherwise unfiled items.
+     */
+    target: PasswordImportTarget;
+};
+
+/**
+ * Partial batch success without credential values or display metadata.
+ */
+export type PasswordImportBatchResult = {
+    /**
+     * Ensured source folders, in request order.
+     */
+    folders: Array<PasswordImportFolderResult>;
+    /**
+     * One result per input item, in request order.
+     */
+    items: Array<PasswordImportItemResult>;
+    /**
+     * Destination folder; null for the vault root.
+     */
+    targetFolderId?: string | null;
+};
+
+/**
+ * Closed, sanitized per-item failure categories.
+ */
+export type PasswordImportErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'folder_missing' | 'busy' | 'vault_unavailable';
+
+/**
+ * Source folder; parents must precede children in every batch.
+ */
+export type PasswordImportFolder = {
+    /**
+     * Opaque identity from the client parser.
+     */
+    key: PasswordImportKey;
+    /**
+     * Validated using ordinary vault folder rules.
+     */
+    name: string;
+    parentKey?: null | PasswordImportKey;
+};
+
+/**
+ * Source-to-vault folder identity without display names.
+ */
+export type PasswordImportFolderResult = {
+    /**
+     * Existing or ensured folder identity.
+     */
+    folderId: string;
+    /**
+     * Opaque source identity.
+     */
+    key: PasswordImportKey;
+};
+
+/**
+ * Recognized client-side source parser; contains no export contents.
+ */
+export type PasswordImportFormat = 'one_password_pux' | 'one_password_csv' | 'bitwarden_json' | 'bitwarden_csv' | 'bitwarden_zip';
+
+/**
+ * One normalized credential; intentionally has no Debug implementation.
+ */
+export type PasswordImportItem = {
+    /**
+     * Favorite state from the export.
+     */
+    favorite: boolean;
+    folderKey?: null | PasswordImportKey;
+    /**
+     * Ordinary vault template.
+     */
+    kind: PasswordItemKind;
+    /**
+     * Display name, validated by the ordinary create path.
+     */
+    name: string;
+    /**
+     * Stable source identity for idempotent retries.
+     */
+    sourceKey: PasswordImportKey;
+    totp?: null | PasswordSecretString;
+    url?: null | PasswordLoginUrl;
+    /**
+     * Zeroizing confidential values sent only to the provider.
+     */
+    values: PasswordSecretValues;
+};
+
+/**
+ * Result for a single item; failed TOTP enrollment can still return the created item id.
+ */
+export type PasswordImportItemResult = {
+    errorCode?: null | PasswordImportErrorCode;
+    itemId?: null | PasswordItemId;
+    /**
+     * Whether the item was newly created, retained, or failed.
+     */
+    outcome: PasswordImportOutcome;
+    /**
+     * Opaque identity matching the request.
+     */
+    sourceKey: PasswordImportKey;
+};
+
+/**
+ * Opaque source identity, bounded before hashing or returning it to a caller.
+ */
+export type PasswordImportKey = string;
+
+/**
+ * Fixed per-item outcome.
+ */
+export type PasswordImportOutcome = 'created' | 'already_present' | 'failed';
+
+/**
+ * Destination under which source folders are nested.
+ */
+export type PasswordImportTarget = {
+    /**
+     * Destination folder identity.
+     */
+    folderId: string;
+    kind: 'existing';
+} | {
+    kind: 'new';
+    /**
+     * Validated using ordinary vault folder rules.
+     */
+    name: string;
+} | {
+    kind: 'root';
+};
 
 /**
  * Searchable display fields, without any credential values.
@@ -15634,6 +16363,18 @@ export type PasswordItemMetadata = PasswordItemFields & {
  * A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.
  */
 export type PasswordLoginUrl = string;
+
+/**
+ * Item names to look for before an import, in the body so they stay out of
+ * URLs and access logs.
+ */
+export type PasswordMatchNames = {
+    /**
+     * Names trimmed and lower-cased by the caller, compared with each item's
+     * lower-cased name; at most 500 (`password_import::vault::MAX_IMPORT_MATCH_NAMES`).
+     */
+    names: Array<string>;
+};
 
 /**
  * New containing folder for an existing folder.
@@ -15756,6 +16497,17 @@ export type PasswordShareBody = {
  * Team isolation boundary.
  */
 export type PasswordTeamId = string;
+
+/**
+ * An authorized human resolved, or revoked, an agent's access request.
+ */
+export type PasswordTopicEvent = {
+    event_type: 'passwords.access_request.resolved';
+    /**
+     * An authorized human resolved, or revoked, an agent's access request.
+     */
+    metadata: AccessRequestResolvedMetadata;
+};
 
 /**
  * Private seed submitted only to the verification-code provider.
@@ -17091,9 +17843,13 @@ export type ReadSpreadsheetRequest = {
 
 export type RecentlyDeletedResponseData = {
     /**
-     * The items returned from the call
+     * The items returned from the call, most recently trashed first
      */
     items: Array<Item>;
+    /**
+     * Pass as `cursor` to get the next page; absent on the last page
+     */
+    next_cursor?: string | null;
 };
 
 /**
@@ -19736,6 +20492,12 @@ export type SoupItem = {
      */
     data: SoupHarness;
     tag: 'harness';
+} | {
+    /**
+     * Team, listed only by attention feeds.
+     */
+    data: SoupTeam;
+    tag: 'team';
 };
 
 /**
@@ -19925,6 +20687,26 @@ export type SoupProperty = {
      */
     id: string;
     value?: null | PropertyValue;
+};
+
+/**
+ * A team, listed only by attention feeds: team-scoped notifications (a
+ * vault access request) are filed under it, and it has no page of its own.
+ * Teams carry no timestamps; attention feeds order by attention time.
+ */
+export type SoupTeam = {
+    /**
+     * The team uuid.
+     */
+    id: string;
+    /**
+     * The team's display name.
+     */
+    name: string;
+    /**
+     * The user who owns the team.
+     */
+    ownerId: string;
 };
 
 /**
@@ -22149,9 +22931,13 @@ export type TypedSuccessResponse = {
      */
     data: {
         /**
-         * The items returned from the call
+         * The items returned from the call, most recently trashed first
          */
         items: Array<Item>;
+        /**
+         * Pass as `cursor` to get the next page; absent on the last page
+         */
+        next_cursor?: string | null;
     };
     /**
      * Indicates if an error occurred
@@ -23176,7 +23962,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent | PasswordTopicEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.
@@ -27762,6 +28548,37 @@ export type UpdateCrmEmailPrivacyResponses = {
 };
 
 export type UpdateCrmEmailPrivacyResponse = UpdateCrmEmailPrivacyResponses[keyof UpdateCrmEmailPrivacyResponses];
+
+export type ListCrmExcludedEmailThreadsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Read entries after this thread ID.
+         */
+        after?: string | null;
+    };
+    url: '/crm/email-privacy/threads';
+};
+
+export type ListCrmExcludedEmailThreadsResponses = {
+    200: ExcludedEmailThreads;
+};
+
+export type ListCrmExcludedEmailThreadsResponse = ListCrmExcludedEmailThreadsResponses[keyof ListCrmExcludedEmailThreadsResponses];
+
+export type GetCrmMemberAccessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/member-access';
+};
+
+export type GetCrmMemberAccessResponses = {
+    200: CrmMemberAccessResponse;
+};
+
+export type GetCrmMemberAccessResponse = GetCrmMemberAccessResponses[keyof GetCrmMemberAccessResponses];
 
 export type ListCrmPipelinesData = {
     body?: never;
@@ -33739,6 +34556,311 @@ export type EntityMessageTypingResponses = {
 
 export type EntityMessageTypingResponse = EntityMessageTypingResponses[keyof EntityMessageTypingResponses];
 
+export type PasswordsAgentSearchData = {
+    body?: never;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+    };
+    path: {
+        team: string;
+    };
+    query?: {
+        /**
+         * Metadata search text; never a value search.
+         */
+        q?: string | null;
+        /**
+         * Page size, 1 to 100; default 50.
+         */
+        limit?: string | null;
+        /**
+         * Cursor from the previous page.
+         */
+        cursor?: string | null;
+    };
+    url: '/passwords/agent/teams/{team}/items';
+};
+
+export type PasswordsAgentSearchErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentSearchError = PasswordsAgentSearchErrors[keyof PasswordsAgentSearchErrors];
+
+export type PasswordsAgentSearchResponses = {
+    200: PasswordAgentSearchPage;
+};
+
+export type PasswordsAgentSearchResponse = PasswordsAgentSearchResponses[keyof PasswordsAgentSearchResponses];
+
+export type PasswordsAgentCreateData = {
+    body: PasswordAgentCreateItem;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items';
+};
+
+export type PasswordsAgentCreateErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentCreateError = PasswordsAgentCreateErrors[keyof PasswordsAgentCreateErrors];
+
+export type PasswordsAgentCreateResponses = {
+    /**
+     * Replay of an accepted operation
+     */
+    200: PasswordAgentWriteResult;
+    201: PasswordAgentWriteResult;
+};
+
+export type PasswordsAgentCreateResponse = PasswordsAgentCreateResponses[keyof PasswordsAgentCreateResponses];
+
+export type PasswordsAgentUpdateData = {
+    body: PasswordAgentPatchItem;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}';
+};
+
+export type PasswordsAgentUpdateErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentUpdateError = PasswordsAgentUpdateErrors[keyof PasswordsAgentUpdateErrors];
+
+export type PasswordsAgentUpdateResponses = {
+    200: PasswordAgentWriteResult;
+};
+
+export type PasswordsAgentUpdateResponse = PasswordsAgentUpdateResponses[keyof PasswordsAgentUpdateResponses];
+
+export type PasswordsAgentRequestAccessData = {
+    body: PasswordAgentAccessRequestBody;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/access-requests';
+};
+
+export type PasswordsAgentRequestAccessErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    429: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentRequestAccessError = PasswordsAgentRequestAccessErrors[keyof PasswordsAgentRequestAccessErrors];
+
+export type PasswordsAgentRequestAccessResponses = {
+    /**
+     * Already usable
+     */
+    200: PasswordAgentAccessRequestState;
+    202: PasswordAgentAccessRequestState;
+};
+
+export type PasswordsAgentRequestAccessResponse = PasswordsAgentRequestAccessResponses[keyof PasswordsAgentRequestAccessResponses];
+
+export type PasswordsAgentMyRequestData = {
+    body?: never;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/access-requests/mine';
+};
+
+export type PasswordsAgentMyRequestErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentMyRequestError = PasswordsAgentMyRequestErrors[keyof PasswordsAgentMyRequestErrors];
+
+export type PasswordsAgentMyRequestResponses = {
+    200: PasswordAgentAccessRequestState;
+};
+
+export type PasswordsAgentMyRequestResponse = PasswordsAgentMyRequestResponses[keyof PasswordsAgentMyRequestResponses];
+
+export type PasswordsAgentDiscloseData = {
+    body: PasswordAgentDiscloseRequest;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/disclose';
+};
+
+export type PasswordsAgentDiscloseErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentDiscloseError = PasswordsAgentDiscloseErrors[keyof PasswordsAgentDiscloseErrors];
+
+export type PasswordsAgentDiscloseResponses = {
+    200: PasswordAgentDisclosed;
+};
+
+export type PasswordsAgentDiscloseResponse = PasswordsAgentDiscloseResponses[keyof PasswordsAgentDiscloseResponses];
+
+export type PasswordsAgentSetTotpData = {
+    body: PasswordAgentSetTotp;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/totp';
+};
+
+export type PasswordsAgentSetTotpErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentSetTotpError = PasswordsAgentSetTotpErrors[keyof PasswordsAgentSetTotpErrors];
+
+export type PasswordsAgentSetTotpResponses = {
+    204: void;
+};
+
+export type PasswordsAgentSetTotpResponse = PasswordsAgentSetTotpResponses[keyof PasswordsAgentSetTotpResponses];
+
+export type PasswordsAgentTotpCodeData = {
+    body: PasswordAgentTotpCodeRequest;
+    headers: {
+        /**
+         * Wake UUIDv7
+         */
+        'X-Macro-Agent-Session-Id': string;
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/agent/teams/{team}/items/{item}/totp/code';
+};
+
+export type PasswordsAgentTotpCodeErrors = {
+    400: PasswordAgentFailure;
+    401: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentTotpCodeError = PasswordsAgentTotpCodeErrors[keyof PasswordsAgentTotpCodeErrors];
+
+export type PasswordsAgentTotpCodeResponses = {
+    200: PasswordAgentTotpCode;
+};
+
+export type PasswordsAgentTotpCodeResponse = PasswordsAgentTotpCodeResponses[keyof PasswordsAgentTotpCodeResponses];
+
 export type PasswordsTeamsData = {
     body?: never;
     path?: never;
@@ -33758,6 +34880,43 @@ export type PasswordsTeamsResponses = {
 };
 
 export type PasswordsTeamsResponse = PasswordsTeamsResponses[keyof PasswordsTeamsResponses];
+
+export type PasswordsAgentAccessRequestsData = {
+    body?: never;
+    path: {
+        team: string;
+    };
+    query?: {
+        /**
+         * Managed item: list every agent's access to it instead of the pending queue.
+         */
+        itemId?: string | null;
+        /**
+         * Page size, 1 to 100; default 50.
+         */
+        limit?: string | null;
+        /**
+         * Cursor from the previous page.
+         */
+        cursor?: string | null;
+    };
+    url: '/passwords/teams/{team}/agent-access-requests';
+};
+
+export type PasswordsAgentAccessRequestsErrors = {
+    400: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentAccessRequestsError = PasswordsAgentAccessRequestsErrors[keyof PasswordsAgentAccessRequestsErrors];
+
+export type PasswordsAgentAccessRequestsResponses = {
+    200: PasswordAgentAccessRequestPage;
+};
+
+export type PasswordsAgentAccessRequestsResponse = PasswordsAgentAccessRequestsResponses[keyof PasswordsAgentAccessRequestsResponses];
 
 export type PasswordsFoldersData = {
     body?: never;
@@ -33898,6 +35057,39 @@ export type PasswordsMoveFolderResponses = {
 
 export type PasswordsMoveFolderResponse = PasswordsMoveFolderResponses[keyof PasswordsMoveFolderResponses];
 
+export type PasswordsImportBatchData = {
+    body: PasswordImportBatch;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        import_id: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/imports/{import_id}/items';
+};
+
+export type PasswordsImportBatchErrors = {
+    400: PasswordFailure;
+    403: PasswordFailure;
+    404: PasswordFailure;
+    409: PasswordFailure;
+    413: unknown;
+    503: PasswordFailure;
+};
+
+export type PasswordsImportBatchError = PasswordsImportBatchErrors[keyof PasswordsImportBatchErrors];
+
+export type PasswordsImportBatchResponses = {
+    200: PasswordImportBatchResult;
+};
+
+export type PasswordsImportBatchResponse = PasswordsImportBatchResponses[keyof PasswordsImportBatchResponses];
+
 export type PasswordsListData = {
     body?: never;
     path: {
@@ -33952,6 +35144,36 @@ export type PasswordsCreateResponses = {
 };
 
 export type PasswordsCreateResponse = PasswordsCreateResponses[keyof PasswordsCreateResponses];
+
+export type PasswordsMatchData = {
+    body: PasswordMatchNames;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/match';
+};
+
+export type PasswordsMatchErrors = {
+    400: PasswordFailure;
+    403: PasswordFailure;
+    404: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsMatchError = PasswordsMatchErrors[keyof PasswordsMatchErrors];
+
+export type PasswordsMatchResponses = {
+    200: Array<PasswordItemMetadata>;
+};
+
+export type PasswordsMatchResponse = PasswordsMatchResponses[keyof PasswordsMatchResponses];
 
 export type PasswordsRemoveData = {
     body?: never;
@@ -34085,6 +35307,72 @@ export type PasswordsActivityResponses = {
 };
 
 export type PasswordsActivityResponse = PasswordsActivityResponses[keyof PasswordsActivityResponses];
+
+export type PasswordsAgentResolveRequestData = {
+    body: PasswordAgentResolveRequest;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+        request: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/agent-access-requests/{request}/resolve';
+};
+
+export type PasswordsAgentResolveRequestErrors = {
+    400: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentResolveRequestError = PasswordsAgentResolveRequestErrors[keyof PasswordsAgentResolveRequestErrors];
+
+export type PasswordsAgentResolveRequestResponses = {
+    200: PasswordAgentAccessRequestState;
+};
+
+export type PasswordsAgentResolveRequestResponse = PasswordsAgentResolveRequestResponses[keyof PasswordsAgentResolveRequestResponses];
+
+export type PasswordsAgentRevokeData = {
+    body: PasswordAgentRevokeBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+        agent: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/agents/{agent}/revoke';
+};
+
+export type PasswordsAgentRevokeErrors = {
+    400: PasswordAgentFailure;
+    403: PasswordAgentFailure;
+    404: PasswordAgentFailure;
+    409: PasswordAgentFailure;
+    503: PasswordAgentFailure;
+};
+
+export type PasswordsAgentRevokeError = PasswordsAgentRevokeErrors[keyof PasswordsAgentRevokeErrors];
+
+export type PasswordsAgentRevokeResponses = {
+    200: PasswordAgentItemAccess;
+};
+
+export type PasswordsAgentRevokeResponse = PasswordsAgentRevokeResponses[keyof PasswordsAgentRevokeResponses];
 
 export type PasswordsCopyData = {
     body: PasswordRevealBody;
@@ -34859,7 +36147,16 @@ export type RevertDeleteProjectResponse = RevertDeleteProjectResponses[keyof Rev
 export type RecentlyDeletedData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Page size (1-500, default 100)
+         */
+        limit?: number;
+        /**
+         * The previous page's next_cursor
+         */
+        cursor?: string;
+    };
     url: '/recents/deleted';
 };
 

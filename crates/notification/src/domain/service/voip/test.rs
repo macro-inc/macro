@@ -121,6 +121,7 @@ impl NotificationRepository for MockRepo {
     async fn get_unsubscribed_users<'a>(
         &self,
         _: &str,
+        _: bool,
         _: &[MacroUserIdStr<'a>],
     ) -> Result<std::collections::HashSet<MacroUserIdStr<'static>>, Report> {
         unimplemented!()

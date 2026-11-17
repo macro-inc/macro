@@ -87,6 +87,19 @@ impl AppEnvironment {
     }
 }
 
+/// The commit the embedded bundle was built from, when its manifest names one.
+///
+/// Desktop only: a desktop release numbers its embedded bundle by commit time,
+/// below the OTA bundle deployed from the same commit. Mobile embedded bundles
+/// are numbered by build time and keep comparing by build number alone.
+fn embedded_bundle_git_sha() -> Option<&'static str> {
+    if cfg!(desktop) {
+        Some(env!("MACRO_EMBEDDED_BUNDLE_GIT_SHA")).filter(|sha| !sha.is_empty())
+    } else {
+        None
+    }
+}
+
 fn embedded_bundle_build() -> u64 {
     env!("MACRO_EMBEDDED_BUNDLE_BUILD")
         .parse()
@@ -342,6 +355,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
                 embedded_bundle_build,
                 bundle_routes.clone(),
             )
+            .with_embedded_git_sha(embedded_bundle_git_sha())
             // Builds without this feature (just ios-dev, ios-build-no-update)
             // must never check for or apply OTA bundles on their own; manual
             // checks from settings still work.
@@ -549,6 +563,15 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             tracing::debug!(window_label = %label, "mobile window resumed");
             if let Some(state) = app_handle.try_state::<diagnostics::Diagnostics>() {
                 state.record_native_event(diagnostics::events::NativeEvent::Foreground);
+            }
+            // Connections kept from before the app was suspended may have been
+            // dropped without notice; a request sent on one would hang.
+            if let Some(http) = app_handle.try_state::<tauri_plugin_http::Http>() {
+                http.reset_connections()
+                    .inspect_err(|error| {
+                        tracing::warn!(error=?error, "failed to reset http connections on resume")
+                    })
+                    .ok();
             }
             let app = app_handle.clone();
             tauri::async_runtime::spawn(async move {

@@ -1,3 +1,4 @@
+mod mentions_only;
 mod publication;
 mod state;
 
@@ -127,7 +128,7 @@ async fn test_get_unsubscribed_users(pool: Pool<Postgres>) {
     let other = test_user("other@test.com");
 
     let result = pool
-        .get_unsubscribed_users("item-123", &[unsub.clone(), other])
+        .get_unsubscribed_users("item-123", false, &[unsub.clone(), other])
         .await
         .unwrap();
 
@@ -143,7 +144,7 @@ async fn test_get_unsubscribed_users_different_item(pool: Pool<Postgres>) {
     let unsub = test_user("unsub@test.com");
 
     let result = pool
-        .get_unsubscribed_users("other-item", &[unsub])
+        .get_unsubscribed_users("other-item", false, &[unsub])
         .await
         .unwrap();
 

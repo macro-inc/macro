@@ -1,6 +1,6 @@
 //! Composition of code execution credentials with the harness's owner approval gate.
 use agent_code_mode::domain::{
-    CodeModeError, ExecutionCredentials, ExecutionIdentity, UserExecutionCredentials,
+    CodeModeError, ExecutionCredentials, ExecutionIdentity, IssuedRun, UserExecutionCredentials,
 };
 use agent_correlation::domain::{CorrelationRepository, SessionScope};
 use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, SignedCorrelation};
@@ -66,7 +66,7 @@ async fn scope_of(
 /// through its scoped credential, and finding and reading tools.
 fn native_tool_allowed(scope: SessionScope, tool: &str) -> bool {
     match scope {
-        SessionScope::Generation | SessionScope::NoSend => matches!(
+        SessionScope::Generation | SessionScope::NoSend | SessionScope::DryRun => matches!(
             tool,
             "ExecuteCode"
                 | "DescribeCodeTools"
@@ -100,15 +100,39 @@ impl NativeToolGate for ScopedToolGate {
                 Ok(_) => self.inner.check(session, tool, arguments).await,
                 Err(error) => {
                     tracing::error!(?error, "could not read a session's scope");
-                    NativeToolVerdict::Refuse(
-                        "Whether this tool may run could not be checked; nothing was done."
-                            .to_owned(),
-                    )
+                    NativeToolVerdict::Refuse(SCOPE_UNREAD.to_owned())
+                }
+            }
+        })
+    }
+
+    /// A scoped session calls no remote MCP server's tool directly
+    /// (connected apps, custom servers, previews): the egress proxy that
+    /// carries the call knows nothing of the scope, and a tool's read-only
+    /// hint is its server's own claim. Its code's route to connected apps is
+    /// refused by the scope too.
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        session: agent_session::domain::model::AgentSessionId,
+        tool: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async move {
+            match self.scopes.scope(session.as_uuid()).await {
+                Ok(Some(_)) => Some(format!(
+                    "This session can't use {tool}; it reaches no app outside Macro."
+                )),
+                Ok(None) => self.inner.refuse_remote_mcp(session, tool).await,
+                Err(error) => {
+                    tracing::error!(?error, "could not read a session's scope");
+                    Some(SCOPE_UNREAD.to_owned())
                 }
             }
         })
     }
 }
+
+/// What the model hears when a session's scope can't be read.
+const SCOPE_UNREAD: &str = "Whether this tool may run could not be checked; nothing was done.";
 
 #[async_trait]
 impl ExecutionCredentials for RunCredentials {
@@ -117,7 +141,7 @@ impl ExecutionCredentials for RunCredentials {
         identity: &ExecutionIdentity,
         source: &str,
         cancel: CancellationToken,
-    ) -> Result<RunEnvironment, CodeModeError> {
+    ) -> Result<IssuedRun, CodeModeError> {
         let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
         let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
         let correlation = self
@@ -152,13 +176,16 @@ impl ExecutionCredentials for RunCredentials {
                 tracing::error!(?error, "could not mint execution credential");
                 CodeModeError::Unavailable
             })?;
-        Ok(RunEnvironment {
-            token,
-            trace_headers: trace_headers(),
-            endpoints: self.endpoints.clone(),
-            session_id: Some(identity.session.as_uuid()),
-            execution_id: Some(identity.execution.as_uuid()),
-            unattended: None,
+        Ok(IssuedRun {
+            environment: RunEnvironment {
+                token,
+                trace_headers: trace_headers(),
+                endpoints: self.endpoints.clone(),
+                session_id: Some(identity.session.as_uuid()),
+                execution_id: Some(identity.execution.as_uuid()),
+                unattended: None,
+            },
+            acting_user: actor,
         })
     }
 }
@@ -317,6 +344,7 @@ pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
 }
 
 pub mod connected_apps;
+pub mod images;
 pub mod reviews;
 pub mod ui_commands;
 

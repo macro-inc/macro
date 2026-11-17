@@ -11,7 +11,7 @@
 use super::*;
 use crate::outbound::email_pg_repo::db_types::ThreadPreviewCursorDbRow;
 use crate::outbound::email_pg_repo::dynamic::{
-    OwnedReadTuning, OwnedStreams, begin_snapshot, inbox_window,
+    OwnedReadStats, OwnedReadTuning, OwnedStreams, begin_snapshot, inbox_window,
 };
 use item_filters::NotificationState;
 use item_filters::SharedEmailFilter;
@@ -27,20 +27,25 @@ fn link(i: u8) -> Uuid {
 }
 
 /// Every way the owned read takes a page, by name.
-const READS: [(&str, OwnedReadTuning); 5] = [
+const READS: [(&str, OwnedReadTuning); 7] = [
     ("default", OwnedReadTuning::DEFAULT),
     (
         "superset",
         OwnedReadTuning {
             superset_limit: i64::MAX,
             window_per_row: 20,
+            ..OwnedReadTuning::DEFAULT
         },
     ),
+    // Rounds that never probe.
     (
         "inboxes",
         OwnedReadTuning {
             superset_limit: -1,
             window_per_row: 1_000,
+            superset_per_need: 0,
+            superset_per_walked: 0,
+            ..OwnedReadTuning::DEFAULT
         },
     ),
     (
@@ -48,16 +53,48 @@ const READS: [(&str, OwnedReadTuning); 5] = [
         OwnedReadTuning {
             superset_limit: -1,
             window_per_row: 3,
+            superset_per_need: 0,
+            superset_per_walked: 0,
+            ..OwnedReadTuning::DEFAULT
         },
     ),
+    // The superset finishes a page whenever the walk finds rows too slowly.
     (
         "inboxes_then_superset",
         OwnedReadTuning {
             superset_limit: -1,
             window_per_row: 1,
+            superset_per_need: i64::MAX,
+            superset_per_walked: i64::MAX,
+            ..OwnedReadTuning::DEFAULT
         },
     ),
+    // Probes that come up over their cap until it outgrows the superset: the
+    // fixture's sparse company has 26 superset rows.
+    (
+        "rounds",
+        OwnedReadTuning {
+            superset_limit: -1,
+            window_per_row: 1,
+            superset_per_need: i64::MAX,
+            superset_per_walked: 2,
+            ..OwnedReadTuning::DEFAULT
+        },
+    ),
+    // Windows that stop growing at 16 threads and probe caps at 27 rows: the
+    // sparse company's 26 superset rows fit only the one probe at the most.
+    ("capped", CAPPED),
 ];
+
+/// The `capped` read: probes at one superset row per thread walked.
+const CAPPED: OwnedReadTuning = OwnedReadTuning {
+    superset_limit: -1,
+    window_per_row: 1,
+    superset_per_need: i64::MAX,
+    superset_per_walked: 1,
+    max_round_window: 16,
+    max_superset_cap: 27,
+};
 
 fn any_direction(email: Email) -> Expr<EmailLiteral> {
     Expr::or(
@@ -162,11 +199,11 @@ impl<'a> Request<'a> {
     }
 }
 
-/// A request's pages until one comes back empty, and the owned read's
-/// streams for each page (`None` when the general builder read it).
+/// A request's pages until one comes back empty, and how the owned read
+/// took each page (`None` when the general builder read it).
 struct Pages {
     rows: Vec<Vec<ThreadPreviewCursorDbRow>>,
-    streams: Vec<Option<OwnedStreams>>,
+    stats: Vec<Option<OwnedReadStats>>,
 }
 
 impl Pages {
@@ -187,12 +224,12 @@ async fn pages(
     let filter = Arc::new(request.filter.clone());
     let mut pages = Pages {
         rows: Vec::new(),
-        streams: Vec::new(),
+        stats: Vec::new(),
     };
     let mut cursor = None;
     loop {
         let query = Query::new(cursor.take(), request.sort, filter.clone());
-        let (page, streams) = dynamic::dynamic_email_thread_cursor_owned_with(
+        let (page, stats) = dynamic::dynamic_email_thread_cursor_owned_with(
             pool,
             request.links,
             request.limit,
@@ -213,7 +250,7 @@ async fn pages(
             filter: filter.clone(),
         });
         pages.rows.push(page);
-        pages.streams.push(streams);
+        pages.stats.push(stats);
         if cursor.is_none() {
             return Ok(pages);
         }
@@ -228,14 +265,14 @@ async fn parity(
     request: &Request<'_>,
 ) -> anyhow::Result<Vec<ThreadPreviewCursorDbRow>> {
     let expected = pages(pool, request, None).await?;
-    assert!(expected.streams.iter().all(Option::is_none));
+    assert!(expected.stats.iter().all(Option::is_none));
     for (name, tuning) in READS {
         let actual = pages(pool, request, Some(tuning)).await?;
         assert!(
-            actual.streams.iter().all(Option::is_some),
+            actual.stats.iter().all(Option::is_some),
             "{name} read left pages to the general builder for {:?}: {:?}",
             request.filter,
-            actual.streams
+            actual.stats
         );
         assert_eq!(
             actual.printed(),
@@ -270,7 +307,7 @@ async fn general(
     let expected = pages(pool, request, None).await?;
     let actual = pages(pool, request, Some(OwnedReadTuning::DEFAULT)).await?;
     assert!(
-        actual.streams.iter().all(Option::is_none),
+        actual.stats.iter().all(Option::is_none),
         "{:?}",
         request.filter
     );
@@ -907,6 +944,27 @@ async fn team_requests_read_general(pool: Pool<Postgres>) -> anyhow::Result<()> 
     Ok(())
 }
 
+/// How the owned read took each page.
+async fn taken(
+    pool: &Pool<Postgres>,
+    caller_links: &[Uuid],
+    filter: &Expr<EmailLiteral>,
+    limit: u32,
+    tuning: OwnedReadTuning,
+) -> anyhow::Result<Vec<OwnedReadStats>> {
+    let pages = pages(
+        pool,
+        &Request::all(caller_links, filter, limit),
+        Some(tuning),
+    )
+    .await?;
+    pages
+        .stats
+        .into_iter()
+        .map(|stats| stats.ok_or_else(|| anyhow::anyhow!("the general builder read a page")))
+        .collect()
+}
+
 /// The owned read's streams by name, one per page.
 async fn streams(
     pool: &Pool<Postgres>,
@@ -922,9 +980,9 @@ async fn streams(
     )
     .await?;
     Ok(pages
-        .streams
+        .stats
         .into_iter()
-        .map(|streams| streams.map_or("general", <&str>::from))
+        .map(|stats| stats.map_or("general", |stats| <&str>::from(stats.streams)))
         .collect())
 }
 
@@ -934,8 +992,9 @@ async fn streams(
 )]
 async fn each_read_takes_its_streams(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let dense = company(&["dense.test"]);
+    let sparse = company(&["sparse.test"]);
     let both = [link(0), link(1)];
-    let [default, superset, inboxes, _, fallback] = READS.map(|(_, tuning)| tuning);
+    let [default, superset, inboxes, tight, fallback, rounds, _] = READS.map(|(_, tuning)| tuning);
     // The fixture's superset is small, so the default reads it first.
     let read = streams(&pool, &both, &dense, 7, default).await?;
     assert!(read.iter().all(|name| *name == "superset"), "{read:?}");
@@ -951,9 +1010,31 @@ async fn each_read_takes_its_streams(pool: Pool<Postgres>) -> anyhow::Result<()>
         "{read:?}"
     );
     assert_eq!(*last, "inboxes_to_end");
-    // A window of one thread per row seldom fills a page.
+    // Rounds that only walk fill the pages a small first window leaves short.
+    let read = streams(&pool, &both, &dense, 7, tight).await?;
+    assert!(read.contains(&"inboxes_then_inboxes"), "{read:?}");
+    assert!(!read.contains(&"inboxes_then_superset"), "{read:?}");
+    // A first window that finds rows at the page's rate walks on; one that
+    // finds too few leaves the page to the superset.
     let read = streams(&pool, &both, &dense, 7, fallback).await?;
-    assert_eq!(read.first(), Some(&"inboxes_then_superset"), "{read:?}");
+    assert!(read.contains(&"inboxes_then_inboxes"), "{read:?}");
+    assert!(read.contains(&"inboxes_then_superset"), "{read:?}");
+    // The first round's probe fits the sparse company's superset.
+    let read = taken(&pool, &both, &sparse, 7, fallback).await?;
+    assert_eq!(
+        read[0].streams,
+        OwnedStreams::InboxesThenSuperset,
+        "{read:?}"
+    );
+    assert_eq!(read[0].probes, 2, "{read:?}");
+    // Probes the superset outgrows walk on, until a cap fits it.
+    let read = taken(&pool, &both, &sparse, 7, rounds).await?;
+    assert_eq!(
+        read[0].streams,
+        OwnedStreams::InboxesThenSuperset,
+        "{read:?}"
+    );
+    assert!(read[0].probes > 2, "{read:?}");
     // An Owner term outside the caller's inboxes leaves nothing to read.
     let elsewhere = and(dense.clone(), EmailLiteral::Owner(link(2)));
     assert_eq!(
@@ -963,6 +1044,76 @@ async fn each_read_takes_its_streams(pool: Pool<Postgres>) -> anyhow::Result<()>
     // No inboxes at all.
     let rows = assert_parity(&pool, &[], &dense, 10).await?;
     assert_eq!(rows, 0);
+    Ok(())
+}
+
+/// A page whose first window found most of its rows, with nothing below
+/// them: a busy company's last page, and the empty page after it.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_owned_address_read", "email_owned_address_busy")
+    )
+)]
+async fn a_window_without_rows_probes_the_superset(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let busy = company(&["busy.test"]);
+    let inbox = [link(0)];
+    assert_eq!(assert_parity(&pool, &inbox, &busy, 10).await?, 9);
+    // The 5,400-row superset is past the first probe. The first window, 100
+    // threads, holds all nine rows of the first page, and the round below
+    // it 400 threads without one. So the next round probes at 50 superset
+    // rows per thread walked, which fits, rather than walking on at the
+    // page's rate to the end of the inbox. The page after it walks the
+    // same windows, finding nothing.
+    let probed = OwnedReadStats {
+        streams: OwnedStreams::InboxesThenSuperset,
+        rounds: 2,
+        probes: 2,
+        probe_cap: Some(25_000),
+        walked: 500,
+    };
+    assert_eq!(
+        taken(&pool, &inbox, &busy, 10, OwnedReadTuning::DEFAULT).await?,
+        [probed, probed]
+    );
+    Ok(())
+}
+
+/// The `capped` read, whose rounds reach their most window and cap.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_owned_address_read", "email_owned_address_busy")
+    )
+)]
+async fn rounds_stop_at_their_most(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let inbox = [link(0)];
+    let busy = company(&["busy.test"]);
+    let read = taken(&pool, &inbox, &busy, 10, CAPPED).await?;
+    let first = read[0];
+    assert_eq!(first.streams, OwnedStreams::InboxesThenInboxes, "{read:?}");
+    // Every round's window is the most, 16 threads, past the first
+    // window's 10.
+    assert!(first.rounds > 3, "{read:?}");
+    assert_eq!(first.walked, 10 + 16 * i64::from(first.rounds), "{read:?}");
+    // The probes at 10 (one row per thread walked) and at 27, the most,
+    // came up short of the 5,400-row superset. Caps of 26 and less than 40
+    // would recount the first, and the most never runs twice.
+    assert_eq!(first.probes, 3, "{read:?}");
+    assert_eq!(first.probe_cap, Some(27), "{read:?}");
+    // The sparse company's 26 superset rows outgrow the probe at 7 rows, and
+    // the next caps under 28 only fit at the most, 27, which probes once.
+    let sparse = company(&["sparse.test"]);
+    let read = taken(&pool, &inbox, &sparse, 7, CAPPED).await?;
+    assert_eq!(
+        read[0].streams,
+        OwnedStreams::InboxesThenSuperset,
+        "{read:?}"
+    );
+    assert_eq!(read[0].probe_cap, Some(27), "{read:?}");
+    assert_eq!(read[0].probes, 3, "{read:?}");
     Ok(())
 }
 
@@ -984,8 +1135,47 @@ async fn reads_share_one_snapshot(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
 #[test]
 fn window_grows_with_the_page_up_to_its_cap() {
-    assert_eq!(inbox_window(20, 100), 2_000);
-    assert_eq!(inbox_window(100, 100), 10_000);
-    assert_eq!(inbox_window(500, 100), 10_000);
-    assert_eq!(inbox_window(i64::MAX, 2), 10_000);
+    assert_eq!(inbox_window(20, 10), 200);
+    assert_eq!(inbox_window(100, 10), 1_000);
+    assert_eq!(inbox_window(500, 10), 1_000);
+    assert_eq!(inbox_window(i64::MAX, 2), 1_000);
+    assert_eq!(inbox_window(7, 0), 1);
 }
+
+#[test]
+fn round_cap_follows_the_walk_left() {
+    let tuning = OwnedReadTuning::DEFAULT;
+    // 2 rows in the last 1,000 threads: 49,000 more threads at that rate,
+    // so the cap is the walk so far's 50 rows per thread.
+    assert_eq!(tuning.round_cap(1_000, 1_000, 2, 98), 50_000);
+    // 16 rows: 5,250 more threads, 3 rows each.
+    assert_eq!(tuning.round_cap(1_000, 1_000, 16, 84), 15_750);
+    // The last window's rate, not the walk's: 2 rows in its 4,000 threads
+    // leave 20,000 more for the last 10 rows.
+    assert_eq!(tuning.round_cap(5_000, 4_000, 2, 10), 60_000);
+    // A window without rows gives no rate: only the walk bounds the cap.
+    assert_eq!(tuning.round_cap(5_000, 4_000, 0, 1), 250_000);
+    assert_eq!(tuning.round_cap(100, 100, 0, 100), 5_000);
+    assert_eq!(tuning.round_cap(1_000_000, 16_000, 0, 100), 800_000);
+    assert_eq!(tuning.round_cap(i64::MAX, i64::MAX, 0, i64::MAX), 800_000);
+    assert_eq!(CAPPED.round_cap(100, 16, 0, 5), 27);
+}
+
+#[test]
+fn probes_grow_and_end_at_the_most() {
+    let tuning = OwnedReadTuning::DEFAULT;
+    // The first round probe needs four times the 5,000-row probe.
+    assert!(!tuning.probes_again(19_999, 5_000));
+    assert!(tuning.probes_again(20_000, 5_000));
+    // Without rows the caps go 50,000 and 250,000; past a short probe at
+    // 250,000 only the most is left.
+    assert!(tuning.probes_again(250_000, 50_000));
+    assert!(!tuning.probes_again(799_999, 250_000));
+    assert!(tuning.probes_again(800_000, 250_000));
+    // Once the most came up short, nothing probes again.
+    assert!(!tuning.probes_again(800_000, 800_000));
+    assert!(CAPPED.probes_again(27, 10));
+    assert!(!CAPPED.probes_again(27, 27));
+}
+
+mod sender_probe_cap;

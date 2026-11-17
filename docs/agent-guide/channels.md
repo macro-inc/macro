@@ -164,6 +164,17 @@ Named-channel invites still show `#<channel name>` and **Join channel**.
 Verify both emails in local Mailpit using distinct, unregistered test addresses;
 repeat with a plus-addressed DM recipient to check the email-name fallback.
 
+## Agent names and pictures stay current
+
+An agent's name and picture show as they are now everywhere: the `@` menu,
+mention chips, and the sender of every message it has sent, including older
+ones. Creating, renaming, re-picturing or deleting a bot (from settings, the
+SDK, or an agent's own tools) pushes a `bot_profile_changed` message to its
+owner, team and channel members, and open views update without a reload. To
+check it, open the same channel in two windows, ask an agent in one to create
+an agent or change its own name or picture, and confirm the other window's `@`
+menu, chips and earlier messages follow, on desktop and at phone width.
+
 ## Private conversations with an agent
 
 Agent DM discovery is on in development builds (dev.macro.com and `bun run dev`)
@@ -835,7 +846,7 @@ twice unfurls once, mentions of other document types, channels, and chats never
 unfurl, and inaccessible images show nothing. This applies to every channel
 message, not only bot replies, so a person sharing an image document by `@`
 mention sees the same card. The preview shows `Preparing preview` until storage
-has the bytes. With GraphQL enabled, document mentions and preview cards load
+has the bytes. Document mentions and preview cards load
 in bounded batches, including task status/priority/assignees and the viewer's edit
 permission. Task badges can appear with the initial preview rather than waiting for
 separate properties/document-metadata requests; cached titles may appear first while
@@ -1318,8 +1329,20 @@ offer **Unmute all channels**. These actions affect only the viewer's current
 complete membership, including unloaded and filtered rows, never later additions.
 Built-in lists include joined channels only; Favorites targets channel favorites.
 Bulk writes retain successful chunks on partial failures. Channel row menus use
-the same durations under **Mute notifications**, without leading mute or unmute icons. Preset
-end dates and times align with the menu's right content edge.
+the same durations under **Mute notifications**, with a muted bell for Mute and
+an ordinary bell for Unmute. Preset end dates and times align with the menu's right
+content edge.
+
+For a channel or group chat (not a one-to-one direct message) the same submenu
+starts with **Only @mentions**, on desktop and in the phone drill-in page. It
+silences every notification from that channel, web and push, except a message
+that @mentions the viewer directly; replies in a thread they took part in,
+reactions and document mentions stay silent, and the channel shows no unread
+dot for them. The option shows a check while on, and choosing it again returns
+the channel to notifying for every message. The rail row and Home row show an
+`@` in place of the muted bell, and Settings → Notifications lists the channel
+under **Mentions only** with **Notify for all**. Mute, snooze and mentions-only
+replace each other; a snooze that expires returns the channel to all messages.
 
 **Add to section** lists eligible sections with checked membership, then New
 section. Rule-only matches stay checked and read-only; edit the rule to remove
@@ -1331,9 +1354,10 @@ Display remain personal.
 ### Phone sections (flag on)
 
 The phone list reuses Home rows and the existing large favorite circles with
-unread dots. Up to six loaded favorites retain their saved order in one sideways
-scrolling row. All is selected initially, followed by Direct messages and custom
-sections in personal display order. All excludes pins except incoming-call rows;
+unread dots. All loaded channel favorites retain their saved order in one sideways
+scrolling row; swipe horizontally to reach favorites beyond the viewport. All is
+selected initially, followed by Direct messages and custom sections in personal
+display order. All excludes pins except incoming-call rows;
 the shared list renderer owns that exclusion so ringing pins retain their Join
 and Decline actions. Other tabs retain their pinned members. The shared `PillTabs`
 control sits below Favorites and above the conversation list, scrolls horizontally,
@@ -1447,7 +1471,7 @@ and people directly; the conversation list does not constrain results. Full-text
 and People uses the existing channel-content scope. Closing search resets its
 session; the conversation list retains its browse pagination. See
 [Search](search.md) for mode, keyboard, and session-reset checks.
-With `enable-graphql-soup` enabled, open an unread conversation from the mobile
+Open an unread conversation from the mobile
 list and return to the list: all notifications on top-level messages should be seen,
 including mentions and reactions older than the global feed's loaded page.
 Replies and mentions inside threads remain unread. Channel-view unread badges
@@ -1471,11 +1495,11 @@ and full notification edge load before the split opens with the same top-level
 read policy. Selecting another channel while that request is pending must cancel
 the pending open; failed lookups must not open a split or mark anything seen.
 
-With GraphQL enabled, the app-shell Chat badge uses `ChannelUnreadPresence`: only
+The app-shell Chat badge uses `ChannelUnreadPresence`: only
 channel IDs and at most one unread top-level message/mention ID/state per channel, with a
 500-channel candidate bound and no history, message previews, or metadata. It
-excludes replies, thread mentions, and reactions, matching the channel-row badges
-in both GraphQL and REST modes. It shares the channel lists' refreshes after notification patches, mark-read, and
+excludes replies, thread mentions, and reactions, matching the channel-row badges.
+It shares the channel lists' refreshes after notification patches, mark-read, and
 reconnect. Merely rendering that badge, subscribing to realtime notifications,
 or applying local read/done overrides must not start the full `SoupNotifications`
 feed. Check this with document-mention notifications disabled too (the production
@@ -1487,7 +1511,7 @@ block the separate email read marker. Cold bulk actions wait for loading
 and report failures rather than treating pending data as an empty list. The
 Inbox badge still uses its own full Soup query for channel/thread membership.
 
-With GraphQL enabled, channel lists request at most one unread message notification
+Channel lists request at most one unread message notification
 per channel through an aliased, filtered `notifications` edge. An empty edge means
 no unread messages; invites and call notifications do not light the dot. Recent
 cards still use the latest-message preview. Full notification edges load only for

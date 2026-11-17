@@ -7,6 +7,7 @@ mod association;
 mod company_contacts;
 mod contact_listing;
 mod contact_update;
+mod email_policy;
 mod email_privacy;
 mod previews;
 
@@ -87,11 +88,12 @@ impl CompaniesRepositoryImpl {
     }
 
     /// Read the activity edges (`activity_property_edges`, the Sales views'
-    /// per-record probes) from `replica`, off the primary. They then follow
-    /// the replica's lag: a record hidden or a member removed a moment ago can
-    /// still match, and a record just added may not yet. Every item still
-    /// passes its own source's access check. Every other read and write stays
-    /// on the primary.
+    /// per-record probes) from `replica`, after checking the viewer's current
+    /// permitted teams on the primary. Record data follows the replica's lag:
+    /// a record hidden a moment ago can still match, and a record just added
+    /// may not yet. Removed memberships and CRM access revocation take effect
+    /// on the next request. Every item still passes its own source's access
+    /// check. Every other read and write stays on the primary.
     pub fn with_activity_edges_replica(mut self, replica: readonly_pool::ReadOnlyPool) -> Self {
         self.activity_edges_pool = replica.0;
         self
@@ -814,7 +816,7 @@ impl CompaniesRepositoryImpl {
         if !blocked {
             sqlx::query!(
                 r#"INSERT INTO crm_email_backfill_outbox (team_id, user_id, traceparent)
-                   SELECT team_id, user_id, $2 FROM crm_email_consent WHERE team_id = $1 AND enabled
+                   SELECT team_id, user_id, $2 FROM crm_email_consent WHERE team_id = $1 AND (enabled OR selected_enabled)
                    ON CONFLICT (team_id, user_id) DO UPDATE SET requested_at = now(), traceparent = EXCLUDED.traceparent"#,
                 team_id,
                 Self::current_traceparent()
@@ -2073,7 +2075,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             ).execute(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
             sqlx::query!(
                 r#"INSERT INTO crm_email_backfill_outbox (team_id, user_id, traceparent)
-                   SELECT team_id, user_id, $2 FROM crm_email_consent WHERE team_id = $1 AND enabled
+                   SELECT team_id, user_id, $2 FROM crm_email_consent WHERE team_id = $1 AND (enabled OR selected_enabled)
                    ON CONFLICT (team_id, user_id) DO UPDATE SET requested_at = now(), traceparent = EXCLUDED.traceparent"#,
                 team_id,
                 Self::current_traceparent()
@@ -2301,6 +2303,19 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     ) -> Result<CrmContact, CrmError> {
         self.update_contact_details(team_id, contact_id, update, include_hidden)
             .await
+    }
+
+    #[tracing::instrument(name = "crm.current_member_access", skip_all, err)]
+    async fn current_member_access(&self, user_id: &str) -> Result<Option<(Uuid, bool)>, CrmError> {
+        sqlx::query!(
+            r#"SELECT team_id, (crm_access OR team_role <> 'member') AS "allowed!"
+               FROM team_user WHERE user_id = $1"#,
+            user_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(|row| row.map(|row| (row.team_id, row.allowed)))
+        .map_err(|error| CrmError::StorageLayerError(error.into()))
     }
 
     #[tracing::instrument(skip_all, err)]
@@ -3055,5 +3070,15 @@ impl TeamSettingsStore for CompaniesRepositoryImpl {
         patch: &CrmTeamSettingsPatch,
     ) -> Result<CrmTeamSettings, CrmError> {
         self.update_team_settings(team_id, patch).await
+    }
+}
+
+impl crate::domain::auth::CrmMemberAccess for CompaniesRepositoryImpl {
+    async fn member_has_crm_access(
+        &self,
+        team_id: Uuid,
+        user_id: &str,
+    ) -> Result<bool, crate::domain::model::CrmError> {
+        super::member_access::member_has_crm_access(&self.pool, team_id, user_id).await
     }
 }

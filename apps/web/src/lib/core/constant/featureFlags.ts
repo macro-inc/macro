@@ -575,6 +575,12 @@ export const enableCrmActivity = defineFlag({
   env: 'ENABLE_CRM_ACTIVITY',
 });
 
+// Stay off until all ingestion and Team email reader binaries support exceptions.
+// No dev default or local override: the server independently requires this flag.
+export const enableCrmThreadExclusions = defineFlag({
+  key: 'enable-crm-thread-exclusions',
+});
+
 // Company collections are paused until ready; preserve stored lists while off.
 export const enableCrmLists = defineFlag({
   key: 'enable-crm-lists',
@@ -621,6 +627,15 @@ export const enableReminders = defineFlag({
 export const enableEmailSavedViews = defineFlag({
   key: 'enable-email-saved-views',
   env: 'ENABLE_EMAIL_SAVED_VIEWS',
+  default: onInDev,
+});
+
+// Mail's search field takes over the list header while searching, lists
+// recent searches, and keeps the rows on screen while results load; on phones
+// it adds a search page to the Email list.
+export const enableEmailWideSearch = defineFlag({
+  key: 'enable-email-wide-search',
+  env: 'ENABLE_EMAIL_WIDE_SEARCH',
   default: onInDev,
 });
 
@@ -704,12 +719,7 @@ export const enableInboxNotifiedSort = defineFlag({
   default: onInDev,
 });
 
-export const enableGraphqlSoup = defineFlag({
-  key: 'enable-graphql-soup',
-  env: 'ENABLE_GRAPHQL_SOUP',
-});
-
-/** Serves calendar reads from the normalized cache; requires GraphQL Soup. */
+/** Serves calendar reads from the normalized cache. */
 export const enableGraphqlCalendar = defineFlag({
   key: 'enable-graphql-calendar',
   env: 'ENABLE_GRAPHQL_CALENDAR',

@@ -41,7 +41,11 @@ const toRowType = (
     .with('PULL_REQUEST', () => 'pull_request' as const)
     .with('CALENDAR_EVENT', () => 'calendar_event' as const)
     .with('CALENDAR_JOIN_REQUEST', () => 'calendar_join_request' as const)
-    .with('ACCESS_REQUESTED', () => 'access_requested' as const)
+    .with(
+      'ACCESS_REQUESTED',
+      'PASSWORD_ACCESS_REQUESTED',
+      () => 'access_requested' as const
+    )
     .with('ACCESS_GRANTED', () => 'access_granted' as const)
     .with('ACCESS_REMOVED', () => 'access_removed' as const)
     .exhaustive(() => 'other' as const);
@@ -79,26 +83,31 @@ const toActions = (actions: WireRow['actions']): InboxRowAction[] =>
       .exhaustive(() => [])
   );
 
-const toGraphqlRowType = (type: InboxRowType): NotificationInboxRowType =>
-  match(type)
-    .with('agent', () => 'AGENT' as const)
-    .with('email', () => 'EMAIL' as const)
-    .with('channel_mention', () => 'CHANNEL_MENTION' as const)
-    .with('channel_messages', () => 'CHANNEL_MESSAGES' as const)
-    .with('channel_thread', () => 'CHANNEL_THREAD' as const)
-    .with('discussion_mention', () => 'DISCUSSION_MENTION' as const)
-    .with('discussion_messages', () => 'DISCUSSION_MESSAGES' as const)
-    .with('discussion_thread', () => 'DISCUSSION_THREAD' as const)
-    .with('task', () => 'TASK' as const)
-    .with('pull_request', () => 'PULL_REQUEST' as const)
-    .with('calendar_event', () => 'CALENDAR_EVENT' as const)
-    .with('calendar_join_request', () => 'CALENDAR_JOIN_REQUEST' as const)
-    .with('access_requested', () => 'ACCESS_REQUESTED' as const)
-    .with('access_granted', () => 'ACCESS_GRANTED' as const)
-    .with('access_removed', () => 'ACCESS_REMOVED' as const)
-    .exhaustive(() => {
-      throw new Error(`Unknown inbox row type: ${type}`);
-    });
+const toGraphqlRowTypes = (type: InboxRowType): NotificationInboxRowType[] => {
+  // The UI groups ordinary and Passwords access requests under one filter.
+  if (type === 'access_requested')
+    return ['ACCESS_REQUESTED', 'PASSWORD_ACCESS_REQUESTED'];
+  return [
+    match(type)
+      .with('agent', () => 'AGENT' as const)
+      .with('email', () => 'EMAIL' as const)
+      .with('channel_mention', () => 'CHANNEL_MENTION' as const)
+      .with('channel_messages', () => 'CHANNEL_MESSAGES' as const)
+      .with('channel_thread', () => 'CHANNEL_THREAD' as const)
+      .with('discussion_mention', () => 'DISCUSSION_MENTION' as const)
+      .with('discussion_messages', () => 'DISCUSSION_MESSAGES' as const)
+      .with('discussion_thread', () => 'DISCUSSION_THREAD' as const)
+      .with('task', () => 'TASK' as const)
+      .with('pull_request', () => 'PULL_REQUEST' as const)
+      .with('calendar_event', () => 'CALENDAR_EVENT' as const)
+      .with('calendar_join_request', () => 'CALENDAR_JOIN_REQUEST' as const)
+      .with('access_granted', () => 'ACCESS_GRANTED' as const)
+      .with('access_removed', () => 'ACCESS_REMOVED' as const)
+      .exhaustive(() => {
+        throw new Error(`Unknown inbox row type: ${type}`);
+      }),
+  ];
+};
 
 /**
  * Encode an inbox scope for the server. Every known type reads every row,
@@ -110,7 +119,9 @@ export function encodeInboxScope(
   const everyType = ALL_INBOX_ROW_TYPES.every((type) =>
     scope.rowTypes.includes(type)
   );
-  const rowTypes = everyType ? [] : scope.rowTypes.map(toGraphqlRowType);
+  const rowTypes = everyType
+    ? []
+    : [...new Set(scope.rowTypes.flatMap(toGraphqlRowTypes))];
   return scope.unreadOnly ? { rowTypes, unreadOnly: true } : { rowTypes };
 }
 
@@ -121,7 +132,7 @@ export function encodeInboxScope(
 export function encodeClearScope(
   scope: InboxScope
 ): NotificationInboxScopeInput {
-  const rowTypes = scope.rowTypes.map(toGraphqlRowType);
+  const rowTypes = [...new Set(scope.rowTypes.flatMap(toGraphqlRowTypes))];
   return scope.unreadOnly ? { rowTypes, unreadOnly: true } : { rowTypes };
 }
 

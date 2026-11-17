@@ -32,7 +32,7 @@ pub async fn upsert_unsubscribed_item_user(
         r#"
         INSERT INTO user_notification_item_unsubscribe (user_id, item_id, item_type)
         VALUES ($1, $2, $3)
-        ON CONFLICT (user_id, item_id) DO UPDATE SET snoozed_until = NULL
+        ON CONFLICT (user_id, item_id) DO UPDATE SET snoozed_until = NULL, mentions_only = FALSE
         "#,
         user_id,
         item_id,

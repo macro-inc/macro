@@ -744,6 +744,7 @@ impl JwtValidator for FakeJwtValidator {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: jwt.to_string(),
                 fusion_user_id: "fusion-user".to_string(),
                 organization_id: None,
@@ -835,6 +836,7 @@ fn bot_authentication_with_acting_user(bot_id: BotId) -> BotAuthentication {
             origin: macro_authorization::CredentialOrigin::Bot,
             agent_id: None,
             agent_via: None,
+            routine_id: None,
             macro_user_id: MacroUserIdStr::parse_from_str("macro|acting-bot@example.com").unwrap(),
             user_context: Default::default(),
         }),
@@ -927,6 +929,32 @@ async fn channel_webhook_router_admin_can_create_scoped_bot() {
         .expect("create call recorded");
     assert_eq!(call.caller.as_ref(), "macro|bot-admin@example.com");
     assert_eq!(call.channel_id, channel_id);
+}
+
+#[tokio::test]
+async fn an_agents_program_cannot_create_a_scoped_bot_with_its_token() {
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let service = TestBotService::for_create(scoped_bot_response(bot_id));
+    let channel_id = Uuid::new_v4();
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/channels/{channel_id}/bots/scoped"))
+        .header("content-type", "application/json")
+        .header(macro_authorization::CODE_EXECUTION_HEADER, "1")
+        .body(scoped_bot_request_body())
+        .unwrap();
+
+    let response = router(
+        service.clone(),
+        TestChannelPoster::new(),
+        EntityParticipantRole::Admin,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(service.create_calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

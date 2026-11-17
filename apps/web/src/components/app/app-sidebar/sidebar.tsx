@@ -43,7 +43,11 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
 import BellIcon from '@icon/system/regular/bell.svg';
+import SplitIcon from '@icon/system/regular/columns.svg';
 import HomeIcon from '@icon/system/regular/house.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
@@ -568,20 +572,27 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
         <ContextMenuContent class="text-xs text-ink-muted">
           <MenuItem
             text={t('nav.openInNewSplit')}
+            icon={SplitIcon}
             onClick={openInNewSplit}
             disabled={!canOpenInNewSplit()}
           />
           <Show when={canOpenInNewTab()}>
             <MenuItem
               text={t('nav.openInNewTab')}
+              icon={ArrowSquareOutIcon}
               onClick={() => openInNewTab(openInCurrentSplit)}
             />
           </Show>
           <Show when={canOpenFullscreen()}>
-            <MenuItem text={t('nav.openFullscreen')} onClick={openFullscreen} />
+            <MenuItem
+              text={t('nav.openFullscreen')}
+              icon={ArrowsOutIcon}
+              onClick={openFullscreen}
+            />
           </Show>
           <MenuItem
             text={t('nav.openInCurrentSplit')}
+            icon={ArrowRightIcon}
             onClick={openInCurrentSplit}
           />
           {props.additionalActions}

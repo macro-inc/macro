@@ -139,8 +139,8 @@ class FakePageAdapter {
     this.options.onTerminalError?.(error);
   }
 
-  unavailable(reason: string): void {
-    this.options.onCacheUnavailable?.(reason);
+  unavailable(reason: string, superseded = false): void {
+    this.options.onCacheUnavailable?.(reason, superseded);
   }
 
   superseded(reason: string): void {
@@ -1706,8 +1706,9 @@ describe('createWorkerCacheHost', () => {
     adapter.superseded('duplicate notice');
 
     expect(onSuperseded).toHaveBeenCalledOnce();
+    // This build never gets the database back, so recovery must not retry.
     expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ errorCode: 'owner-lock-unavailable' })
+      expect.objectContaining({ errorCode: 'cache-superseded' })
     );
     // Leaving like a navigating page stops the engine without counting as a
     // lost owner, so the newer build opens the same database.
@@ -1719,7 +1720,64 @@ describe('createWorkerCacheHost', () => {
     expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
     await expect(
       host.readQuery({ query: 'query Q { q }' })
-    ).rejects.toMatchObject({ errorCode: 'owner-lock-unavailable' });
+    ).rejects.toMatchObject({ errorCode: 'cache-superseded' });
+  });
+
+  it('marks a host that registers after a newer build took over as superseded', async () => {
+    configureAdapter = (fake) => {
+      fake.ignoredKinds.add('init');
+    };
+    localStorage.setItem('graphql-cache:scope', 'scope-1');
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    const read = host.readQuery({ query: 'query Q { q }' });
+    const refused = expect(read).rejects.toMatchObject({
+      errorCode: 'cache-superseded',
+    });
+    await vi.waitFor(() =>
+      expect(requireAdapter().requests.map(({ kind }) => kind)).toContain(
+        'init'
+      )
+    );
+
+    requireAdapter().unavailable(
+      'a newer version of the app took over the local cache',
+      true
+    );
+
+    await refused;
+    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ errorCode: 'cache-superseded' })
+    );
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
+  });
+
+  it('retires as superseded when a request is refused for a newer build', async () => {
+    localStorage.setItem('graphql-cache:scope', 'scope-1');
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    await host.clear();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('read');
+    const read = host.readQuery({ query: 'query Q { q }' });
+    await vi.waitFor(() => expect(adapter.requests.at(-1)?.kind).toBe('read'));
+
+    adapter.reject(
+      adapter.requests.at(-1)?.id ?? -1,
+      'a newer version of the app took over the local cache',
+      'cache-superseded'
+    );
+
+    await expect(read).rejects.toMatchObject({ errorCode: 'cache-superseded' });
+    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ errorCode: 'cache-superseded' })
+    );
   });
 
   it('reports an enqueue in flight at the handover as uncertain, never unsent', async () => {
@@ -1744,7 +1802,7 @@ describe('createWorkerCacheHost', () => {
       errorCode: 'admitted-enqueue-uncertain',
     });
     const readRejected = expect(read).rejects.toMatchObject({
-      errorCode: 'owner-lock-unavailable',
+      errorCode: 'cache-superseded',
     });
     await vi.waitFor(() =>
       expect(adapter.requests.map(({ kind }) => kind)).toEqual(

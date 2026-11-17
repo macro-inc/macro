@@ -23,7 +23,9 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
-use agent::{AgentError, AgentLoop, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit};
+use agent::{
+    AgentError, AgentLoop, PromptSection, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit,
+};
 use ai_tools::user_tool_review::{ReviewError, UserToolAuthorizer, authorized_user_tool_finisher};
 use ai_tools::{DeferredToolSet, ToolServiceContext};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
@@ -136,13 +138,31 @@ impl RigTurnEngine {
 const UNGATED_NATIVE_TOOLS: [&str; 4] = ["AskUser", "SearchTools", "LoadTools", "ReadToolResult"];
 
 /// A turn's tools, each call to one of Macro's own asked of the gate first.
-/// Remote MCP tools are left to the egress proxy, which gates them already.
+/// A remote MCP tool's account and approvals are the egress proxy's; the gate
+/// only says whether the session may call it at all.
 struct GatedToolSet<Context> {
     tools: Arc<dyn AiToolSet<Context> + Send + Sync>,
     gate: Arc<dyn NativeToolGate>,
     session: agent_session::domain::model::AgentSessionId,
     awaiting: Arc<crate::domain::engine::AwaitingUser>,
     reviewed_tools: Vec<String>,
+    /// The turn's remote MCP tools, to tell which server a call reaches.
+    remote: Option<mcp_toolset::RemoteMcpToolSet>,
+}
+
+impl<Context> GatedToolSet<Context> {
+    /// Whether `tool_name` is a remote MCP tool of a server other than the
+    /// harness's internal one, which gates its own tools. Decided by the
+    /// server the tool was registered under, never by its name's server
+    /// segment, which another server's name can mangle to.
+    fn reaches_remote_server(&self, tool_name: &str) -> bool {
+        tool_name.starts_with(mcp_select::MANGLED_PREFIX)
+            && self
+                .remote
+                .as_ref()
+                .and_then(|remote| remote.server_of(tool_name))
+                != Some(crate::domain::mcp::MACRO_INTERNAL_MCP_NAME)
+    }
 }
 
 impl<Context> AiToolSet<Context> for GatedToolSet<Context>
@@ -158,6 +178,14 @@ where
     ) -> ai_toolset::ToolCallFuture<'a> {
         Box::pin(async move {
             let mut request_context = request_context;
+            if self.reaches_remote_server(tool_name)
+                && let Some(reason) = self.gate.refuse_remote_mcp(self.session, tool_name).await
+            {
+                return Ok(Err(ai_toolset::ToolCallError {
+                    internal_error: anyhow::anyhow!("{tool_name} was refused before dispatch"),
+                    description: reason,
+                }));
+            }
             let native = !UNGATED_NATIVE_TOOLS.contains(&tool_name)
                 && !tool_name.starts_with(mcp_select::MANGLED_PREFIX)
                 && agent_egress::domain::approval::spends_owner_access("macro", tool_name);
@@ -843,10 +871,13 @@ async fn drive_turn(
         ));
     }
     // Native tools use the actor gate unless the installed finisher authorizes
-    // their final reviewed arguments. Remote MCP tools use the egress gate.
+    // their final reviewed arguments. Remote MCP tools are first put to the
+    // gate's `refuse_remote_mcp`, then to the egress proxy's.
     // Keep remote MCP tools alongside the native and AskUser tools. The
     // finisher above reviews only Macro's native user tools.
-    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools.filter(|_| !summarizing) {
+    let mcp_tools = mcp_tools.filter(|_| !summarizing);
+    let remote = mcp_tools.clone();
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
         Some(mcp) if unseen => Arc::new(
             mcp_select::CombinedToolSet::new(toolset, unseen::CodeModeOnly::new(mcp))
                 .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS),
@@ -866,6 +897,7 @@ async fn drive_turn(
         session: session_id,
         awaiting,
         reviewed_tools,
+        remote,
     });
     let session = agent_loop
         .session(toolset, Arc::new(tool_context), system_prompt, loop_usage)
@@ -1051,52 +1083,68 @@ fn system_prompt(
     instructions: Option<&str>,
     user_memory: Option<&str>,
 ) -> SystemPrompt {
-    // Blank instructions are "none" stated clumsily. A delimited section with
-    // nothing in it is worse than no section: the model has to decide what an
-    // empty instruction means.
-    let instructions = instructions
-        .filter(|text| !text.trim().is_empty())
-        .map(|text| format!("\n<session_instructions>\n{text}\n</session_instructions>"))
-        .unwrap_or_default();
-    let identity = identity.map_or_else(String::new, |identity| {
+    let mut prompt = SystemPrompt::default();
+    let identity = identity.map(|identity| {
         format!(
             "\n{}",
             prompt::agent_identity::render(&identity.name, &identity.handle)
         )
     });
+    // Blank instructions are "none" stated clumsily. A delimited section with
+    // nothing in it is worse than no section: the model has to decide what an
+    // empty instruction means.
+    let instructions = instructions
+        .filter(|text| !text.trim().is_empty())
+        .map(|text| format!("\n<session_instructions>\n{text}\n</session_instructions>"));
     // A turn nobody watches has neither a conversation to write for nor the
     // tools `tools_prompt` describes. Its opener sends every session of its
     // kind (every routine draft) the same instructions, so they join the
     // cached shared block and are read back across sessions.
-    let (shared, mut rest) = match delivery {
-        ReplyDelivery::Unseen => (
-            format!("{}{identity}{instructions}", unseen::PROMPT),
-            String::new(),
-        ),
-        ReplyDelivery::Streamed | ReplyDelivery::Whole => (
-            format!("{}{tools_prompt}", prompt::agent_session::PROMPT),
-            format!("{identity}{instructions}"),
-        ),
-    };
-    // An unseen turn has no ContentSearch to look back with.
-    if delivery != ReplyDelivery::Unseen {
-        rest.push_str(&format!(
-            "\n<agent_session>\nThis conversation is agent session {session_id}. Once it grows \
-             long, its earlier part is summarized to keep it within your context. To find the exact \
-             words of anything said earlier, summarized or not, run ContentSearch with \
-             agentSessionIds [\"{session_id}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
-        ));
+    if delivery == ReplyDelivery::Unseen {
+        prompt.push_shared(PromptSection::Preamble, unseen::PROMPT);
+        if let Some(identity) = &identity {
+            prompt.push_shared(PromptSection::Identity, identity);
+        }
+        if let Some(instructions) = &instructions {
+            prompt.push_shared(PromptSection::SessionInstructions, instructions);
+        }
+    } else {
+        prompt.push_shared(
+            PromptSection::Preamble,
+            &prompt::agent_session::PROMPT.to_string(),
+        );
+        prompt.push_shared(PromptSection::MacroPrompt, &tools_prompt.to_string());
+        if let Some(identity) = &identity {
+            prompt.push(PromptSection::Identity, identity);
+        }
+        if let Some(instructions) = &instructions {
+            prompt.push(PromptSection::SessionInstructions, instructions);
+        }
+        // An unseen turn has no ContentSearch to look back with.
+        prompt.push(
+            PromptSection::SessionNote,
+            &format!(
+                "\n<agent_session>\nThis conversation is agent session {session_id}. Once it grows \
+                 long, its earlier part is summarized to keep it within your context. To find the exact \
+                 words of anything said earlier, summarized or not, run ContentSearch with \
+                 agentSessionIds [\"{session_id}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
+            ),
+        );
     }
     if delivery == ReplyDelivery::Whole {
-        rest.push('\n');
-        rest.push_str(opener::NOT_OPENED);
+        prompt.push(
+            PromptSection::OpenerNote,
+            &format!("\n{}", opener::NOT_OPENED),
+        );
     }
     if let Some(memory) = user_memory {
-        rest.push_str("\n<user_memory>\n");
-        rest.push_str(memory);
-        rest.push_str("\n</user_memory>");
+        prompt.push(
+            PromptSection::Memory,
+            &format!("\n<user_memory>\n{memory}\n</user_memory>"),
+        );
     }
-    SystemPrompt::split(shared, rest).with_turn(sdk_docs)
+    prompt.push_turn(PromptSection::SdkDocs, sdk_docs);
+    prompt
 }
 
 /// The effort a turn runs at. Someone waits on an unseen turn (a routine

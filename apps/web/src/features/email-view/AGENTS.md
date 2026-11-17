@@ -12,6 +12,16 @@ the Soup-backed thread list, and saved email views (flag
   `mail.savedView` URL id, and saved-view selection.
 - `queries/email-query.ts`: each tab's or saved view's Soup `ef` filter.
 - `queries/use-email-query.ts`: list, search, read admission, local drafts.
+- `views/mobile/email-search.tsx`: the phone search page's header (field and
+  Cancel, composed with `MobileHeader`) and recent searches; the mobile layout
+  in `email-view.tsx` opens it from the search pill and keeps the list mounted
+  below it. `primitives/create-email-mobile-search.ts` owns whether the page is
+  open, and ends its search whenever it closes.
+- `primitives/create-search-scroll-reset.ts`: a new search starts at the top
+  once its own results replace the rows kept on screen.
+- `search/`: recent searches (`recent-searches.ts`, per person in browser
+  storage) and the suggestions the header's search field lists
+  (`create-email-search-suggestions.ts`), behind `enable-email-wide-search`.
 - `filters/email-saved-view.ts`: the `kind: "email"` definition codec: strict
   capture, permissive read with skipped-setting issues, materialization,
   canonical comparison, scope resolution, and each tab's own filters.
@@ -49,14 +59,17 @@ the Soup-backed thread list, and saved email views (flag
   predicate, as aliases do; local working copies are left out.
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the
   ingress depth limit.
+- The data source keeps the previous rows while a search loads only when
+  asked (`keepRowsWhileSearching`) and reports it as `showsPreviousRows`; they
+  never cross a tab change, and `isLoading` stays false while they show, so
+  gate "loading" UI on both.
 - Unread dots are presence in a small first unread page per view, never a count.
-- `/` and Cmd+F are registered for the whole desktop view in
-  `use-email-search-hotkeys.ts`, not in the list header: a thread or a new
-  email unmounts that header, and a `/` with no Email command falls through
-  to the app sidebar's Search view. With the header unmounted, `/` returns to
-  the list (`closeThread`, as Back does) and focuses the header's field once
-  it mounts; Cmd+F stays unhandled so the browser can find text in the thread
-  or draft.
+- Cmd+F is registered for the whole desktop view in
+  `use-email-search-hotkeys.ts` and focuses the list header's field through
+  `registerListSearch`; while a thread or a new email has replaced that
+  header it stays unhandled, so the browser can find text in the thread or
+  draft. Email binds no `/`; as in every other view, it opens the app
+  sidebar's Search view.
 - `ViewShell.Main` holds the list at the width `use-reading-pane-list-width.ts`
   reads beside the reading pane, so every drag must be saved through
   `onWidthChangeEnd`; an unsaved one snaps back on the next resize.
