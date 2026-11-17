@@ -24,7 +24,6 @@ import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import CloseIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button, Checkbox, cn, Calendar as MiniCalendar } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -310,20 +309,6 @@ function CalendarTeamOooSection() {
   );
 }
 
-function CalendarSidebarOverlayClose() {
-  const shell = useViewShell();
-  return (
-    <Show when={shell.aside.isOverlay() && isTouchDevice()}>
-      <ViewSidebar.Control
-        aria-label="Close calendar navigation"
-        onClick={shell.aside.collapse}
-      >
-        <CloseIcon class="size-4" />
-      </ViewSidebar.Control>
-    </Show>
-  );
-}
-
 export function CalendarSidebar() {
   const shell = useViewShell();
   const closeOverlay = () => {
@@ -337,7 +322,6 @@ export function CalendarSidebar() {
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Calendar</ViewSidebar.Title>
         </div>
-        <CalendarSidebarOverlayClose />
       </ViewSidebar.Header>
       <ViewSidebar.Primary>
         <CalendarCreateMenu

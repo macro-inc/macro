@@ -224,15 +224,13 @@ function WorkspaceContent(props: { headerLeading?: JSX.Element }) {
             <ViewShell.Root
               asidePreferenceKey="calendar"
               resizable
-              aside={isMobile() ? false : { preserveDuringResize: false }}
+              aside={{ preserveDuringResize: false }}
               main={{ preferredWidth: 640 }}
             >
-              <Show when={!isMobile()}>
-                <ViewShell.Aside>
-                  <CalendarSidebar />
-                </ViewShell.Aside>
-              </Show>
-              <ViewShell.Main>
+              <ViewShell.Aside>
+                <CalendarSidebar />
+              </ViewShell.Aside>
+              <ViewShell.Main class="relative">
                 <Header presentation="workspace" />
                 <ViewTour tour={calendarTour} />
                 <ViewShell.Content class="flex min-h-0 flex-1">

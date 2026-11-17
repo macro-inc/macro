@@ -8,6 +8,7 @@ use tracing::Instrument;
 pub struct MemoryServiceImpl<R> {
     repo: R,
     generator: Arc<dyn MemoryGenerator>,
+    judge: Arc<dyn MemoryJudge>,
     teams: Arc<dyn MemoryTeams>,
     activity: Arc<dyn MemoryActivity>,
 }
@@ -16,12 +17,14 @@ impl<R> MemoryServiceImpl<R> {
     pub fn new(
         repo: R,
         generator: Arc<dyn MemoryGenerator>,
+        judge: Arc<dyn MemoryJudge>,
         teams: Arc<dyn MemoryTeams>,
         activity: Arc<dyn MemoryActivity>,
     ) -> Self {
         Self {
             repo,
             generator,
+            judge,
             teams,
             activity,
         }
@@ -80,7 +83,9 @@ impl<R: ComposedMemoryRepo> MemoryService for MemoryServiceImpl<R> {
         let content = edit.apply(&current.content)?;
         // Deletion must remain possible even if older content fails today's judge.
         if !matches!(edit, MemoryEdit::Delete { .. }) {
-            self.generator.judge(user.clone(), &content).await?;
+            self.judge
+                .review(user.clone(), MemoryKind::Explicit, &content)
+                .await?;
         }
         self.repo.save_explicit(&user, revision, &content).await
     }
@@ -172,7 +177,9 @@ impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
             None => {
                 let research = format!(include_str!("service/prompts/daily.md"), date = date);
                 let content = self.generator.research(user.clone(), &research).await?;
-                self.generator.judge(user.clone(), &content).await?;
+                self.judge
+                    .review(user.clone(), MemoryKind::Activity, &content)
+                    .await?;
                 let daily = Activity {
                     granularity: Granularity::Day,
                     period_start: date,
@@ -233,7 +240,9 @@ impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
                     .generator
                     .research(user.clone(), profile_prompt)
                     .await?;
-                self.generator.judge(user.clone(), &profile).await?;
+                self.judge
+                    .review(user.clone(), MemoryKind::Profile, &profile)
+                    .await?;
                 self.repo
                     .stage(&user, date, &Piece::Profile(profile.clone()))
                     .await?;
@@ -450,7 +459,9 @@ impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
             .generator
             .summarize(user.clone(), &instructions, &render_activity(sources))
             .await?;
-        self.generator.judge(user.clone(), &content).await?;
+        self.judge
+            .review(user.clone(), MemoryKind::Activity, &content)
+            .await?;
         let report = Activity {
             granularity,
             period_start: start,

@@ -171,6 +171,7 @@ function Fixture() {
             <SettingsSidebar
               groups={groups}
               results={[]}
+              searchable
               searchQuery=""
               onSearchQueryChange={() => {}}
               isItemActive={(tab) => tab === 'Appearance'}

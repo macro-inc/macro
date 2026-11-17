@@ -400,10 +400,11 @@ impl UiCommandService {
 }
 
 /// The person and tab a turn may show things to: a person's own turn, typed
-/// in a tab. A system turn never has one, whatever its row holds.
+/// in a tab. A system or program turn never has one, whatever its row holds:
+/// a program may have rewritten a prompt the person typed in that tab.
 fn prompting_tab(admitted: &Admitted) -> Option<(&MacroUserIdStr<'static>, UiClientId)> {
     let prompter = admitted.turn_facts.prompter.as_ref()?;
-    if prompter.action_id != admitted.turn {
+    if prompter.action_id != admitted.turn || !prompter.kind.is_user() {
         return None;
     }
 

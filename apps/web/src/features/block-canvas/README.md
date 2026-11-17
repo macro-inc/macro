@@ -100,7 +100,9 @@ buttons.
 ## Desktop and touch views
 
 `canvas-next.tsx` is the entry: it owns the editor, state, clipboard and hotkeys,
-and holds the one device switch. `views/canvas-view.tsx` and
+and holds the view's device switch. The pane's header is switched beside it, in
+`component/Block.tsx`, between `views/canvas-header.tsx` and
+`views/mobile/canvas-header.tsx`. `views/canvas-view.tsx` and
 `views/canvas-read-only-view.tsx` are the desktop compositions,
 `views/mobile/` the phone and tablet ones, and `views/shared/` the parts both
 render: `CanvasViewParts` (the root that wires the viewport, the scene, the

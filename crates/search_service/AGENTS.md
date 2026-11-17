@@ -115,6 +115,38 @@ per-entity-type search plus a unified search across them — mounted into
   change to any of these with the default model on rows that are really in the
   index, and a user whose memory does not describe the behavior under test.
 
+- Email filters mean what the Email list query means by them, applied before
+  pagination (`domain/email_search.rs`). Shared threads are resolved from
+  `entity_access` grants to the caller's sources, leaving out their own
+  inboxes, and searched by id (at most `MAX_SHARED_THREADS`); `email_thread_ids`
+  narrow by id. Calendar only and `view` (Sent, Drafts) are `ThreadSet`
+  allowlists read from the partial index each view reads
+  (`idx_email_threads_calendar_view`, `idx_email_threads_sent_view_link_ts_id`,
+  `idx_email_messages_drafts_view`), at most `MAX_THREAD_SET_ALLOWLIST` per set,
+  past which the set is checked per hit; two sets intersect. Read, done
+  (`inbox_visible`), notification state and attachment kinds can each cover
+  most of a mailbox or have no index, so `read_until_page_kept` checks each
+  page's email threads in Postgres and reads further pages until the page is
+  full, the results end, or `MAX_EMAIL_STATE_ROUNDS`; the span records the
+  rounds and whether the bound was reached. Attachment kinds are read from
+  `email_attachments`, as the list's built-in tabs filter them, not from the
+  thread flags, which saved views read and which are not backfilled
+  everywhere. `email_filters.view` is search only: expanding it into a list
+  filter is an `ExpandErr`. `project_ids` (Drive folders) is an allowlist with
+  the list's Project candidate rule (`entity_access::project_email_threads`):
+  the caller's own threads in the folders, every thread in a folder granted to
+  their sources whoever's inbox holds it, and thread shares in the folders,
+  at most `MAX_PROJECT_THREADS`, from at most `MAX_EMAIL_PROJECTS` folders
+  (more is a 400); the other thread-level filters are then checked per hit.
+  Each folder's read stops once it has the cap's worth of threads the caller
+  reads, so a granted folder is not read whole; a folder without a grant is
+  read until then or to its end under the query's 5 s statement timeout.
+  Thread shares are probed only for
+  threads in folders the caller holds no grant on. `crm_domains` and `crm_addresses` are rejected with a 400
+  (`UnsupportedEmailFilter`): they need the list's CRM team scope and consent.
+  Enrichment reads a shared hit through its owner's inbox after `shared_among`
+  confirms a grant on the thread or on its folder; a revoked grant drops it.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
