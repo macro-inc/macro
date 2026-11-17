@@ -7,10 +7,11 @@ use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
-        BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
-        BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+        BotChannel, BotChannelListCaller, BotId, BotIdentity, BotKind, BotOwner, BotOwnerProfile,
+        BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
         CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessFacts, HarnessId,
-        MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
+        MAX_BOT_IDENTITY_IDS, MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest,
+        UpdateAgentRequest,
     },
     ports::{BotError, BotRepo, BotService, HarnessRemoved, McpAppCatalog},
     tokens,
@@ -743,6 +744,71 @@ where
             .iter()
             .filter(|id| seen.insert(**id))
             .filter_map(|id| found.get(id).cloned())
+            .collect())
+    }
+
+    async fn get_identities(&self, ids: &[BotId]) -> Result<Vec<BotIdentity>, BotError> {
+        if ids.len() > MAX_BOT_IDENTITY_IDS {
+            return Err(BotError::BadRequest(format!(
+                "at most {MAX_BOT_IDENTITY_IDS} bot ids may be requested"
+            )));
+        }
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let found = self
+            .repo
+            .get_bot_identities(ids)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?;
+        let mut seen = std::collections::HashSet::new();
+        Ok(ids
+            .iter()
+            .filter(|id| seen.insert(**id))
+            .filter_map(|id| found.get(id).cloned())
+            .collect())
+    }
+
+    async fn list_mentionable_bots(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        channel: Option<EntityAccessReceipt<MemberParticipantRole>>,
+    ) -> Result<Vec<Bot>, BotError> {
+        let channel_bots = match &channel {
+            Some(access) => {
+                if access.entity().entity_type != EntityType::Channel {
+                    return Err(BotError::BadRequest(
+                        "channel access receipt required".to_string(),
+                    ));
+                }
+                let channel_id = Uuid::parse_str(&access.entity().entity_id)
+                    .map_err(|error| BotError::BadRequest(error.to_string()))?;
+                self.repo
+                    .list_channel_bots(channel_id)
+                    .await
+                    .map_err(|err| BotError::Repo(err.into()))?
+            }
+            None => Vec::new(),
+        };
+        let agents = self
+            .repo
+            .list_manageable_agents(caller)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?;
+
+        // Outside a channel every agent the caller can start is mentionable;
+        // in one, only those available in every channel join its bots.
+        let agent_bots = agents
+            .into_iter()
+            .filter(|agent| agent.bot.has_agent)
+            .filter(|agent| channel.is_none() || agent.channel_scope == AgentChannelScope::All)
+            .map(|agent| agent.bot);
+        let mut seen = std::collections::HashSet::new();
+        Ok(channel_bots
+            .into_iter()
+            .chain(agent_bots)
+            .filter(|bot| seen.insert(bot.id))
             .collect())
     }
 
