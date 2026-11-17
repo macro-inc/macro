@@ -255,11 +255,12 @@ export class Session {
   /**
    * Slows the WebView renderer by `rate` (1 leaves it alone) and checks that
    * the rate took effect. Times the CPU probe first, unthrottled, as the
-   * reference for later checks.
+   * reference for later checks; interference only adds time, so the fastest
+   * run is the reference.
    */
   async throttleCpu(rate: number): Promise<void> {
     this.#cpuBaselineMs = Math.min(
-      ...(await this.cdp.evaluate<number[]>(cpuProbe(5)))
+      ...(await this.cdp.evaluate<number[]>(cpuProbe(3)))
     );
     await this.cdp.send('Emulation.setCPUThrottlingRate', { rate });
     this.cpuThrottle = rate;
@@ -273,10 +274,8 @@ export class Session {
   async checkCpuThrottle(): Promise<number> {
     if (this.#cpuBaselineMs === undefined)
       throw new Error('Call throttleCpu before measuring a step');
-    const fastest = Math.min(
-      ...(await this.cdp.evaluate<number[]>(cpuProbe(3)))
-    );
-    const measured = fastest / this.#cpuBaselineMs;
+    const [probeMs] = await this.cdp.evaluate<number[]>(cpuProbe(1));
+    const measured = probeMs / this.#cpuBaselineMs;
     if (!throttleInForce(this.cpuThrottle, measured))
       throw new Error(
         `CPU throttle ${this.cpuThrottle}× is not in force: the page runs ${measured.toFixed(1)}× slower than unthrottled`

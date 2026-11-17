@@ -34,14 +34,16 @@ export function parseCpuThrottle(value: string): number[] {
 
 /**
  * Runs a fixed arithmetic loop `runs` times in the page and returns each
- * run's milliseconds. Interference only adds time, so callers take the fastest.
+ * run's milliseconds. DevTools throttles by pausing the thread for slices of
+ * time, so a short run can fall between pauses: each run takes about 50 ms
+ * unthrottled, long enough to span several.
  */
 export const cpuProbe = (runs: number) => `(() => {
   const times = [];
   for (let run = 0; run < ${runs}; run++) {
     const start = performance.now();
     let value = 0;
-    for (let i = 0; i < 1000000; i++) value = (value + Math.sqrt(i * 1.0001)) % 1e9;
+    for (let i = 0; i < 4000000; i++) value = (value + Math.sqrt(i * 1.0001)) % 1e9;
     times.push(performance.now() - start);
   }
   return times;
