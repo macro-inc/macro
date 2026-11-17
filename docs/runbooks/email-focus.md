@@ -19,9 +19,12 @@ because the worker is stopping are not counted as failures. Each publish also lo
 names, units and meanings are in `services/email_focus_worker/src/metrics.rs`;
 the thresholds are in `infra/stacks/observability/nixos/email-focus.nix`.
 
-Cost uses the prices in `ai_effective_pricing`, read once per model; a changed
-price is picked up when the worker restarts. A model with no stored price is
-logged ("no stored price") and its cost is not counted.
+Cost uses the prices in `ai_effective_pricing`, read once per model in the
+background; a changed price is picked up when the worker restarts. Calls made
+before a model's price is read, or while a failed read is retried, cost
+nothing, so a due date model's first call each start is not counted. A model
+with no stored price is logged ("no stored price") and its cost is not
+counted.
 
 ## Go/stop numbers
 
@@ -35,7 +38,7 @@ logged ("no stored price") and its cost is not counted.
 | Sweep failures | none | The "focus sweep failed" error log. |
 | New inbox backfill time (p95) | under 15 minutes | `email_focus.backfill` spans: `candidates` per pass, and the classifier. Only inboxes whose owner joined while the worker ran are timed; the inboxes its first look finds after a start are not. |
 | Stale-thread read (p95) | under 500 ms | MacroDB CPU and load on the Prod alerts dashboard; the read's plan for a large inbox. |
-| Worker restarts | at most 2 in 30 minutes | ECS stopped-task reasons for `email-focus-worker`, and the worker's last logs. |
+| Worker restarts | at most 3 in 30 minutes | ECS stopped-task reasons for `email-focus-worker`, and the worker's last logs. A start counts only once the worker is up; a worker that fails earlier (configuration, database) shows only in ECS. No data for 30 minutes means the worker isn't publishing, and the rule fires. |
 | Focus tab opened empty | under 5% of opens | PostHog, from the web app's Focus tab events. |
 
 Traces: see "Email Focus live updates" in `docs/agent-guide/observability.md`.

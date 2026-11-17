@@ -280,7 +280,10 @@ let
         }
       ];
       value = "$starts";
-      description = "The worker started {{ humanize $values.B.Value }} times in 30 minutes: a crash loop. A deploy starts it once or twice.";
+      # Starts are published every minute, so none for 30 minutes is a worker
+      # that stopped publishing.
+      noData = "Alerting";
+      description = "The worker started {{ humanize $values.B.Value }} times in 30 minutes: a crash loop. A deploy starts it once or twice. With no value, the worker has published nothing for 30 minutes: it is down or stuck.";
     }
   ];
 in

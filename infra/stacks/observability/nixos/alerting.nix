@@ -163,7 +163,9 @@ let
       for = "0s";
       # Every counter is published each minute, so no data means the worker
       # isn't publishing, or no samples for a percentile: nothing to judge.
-      noDataState = "OK";
+      # The restarts check alone fires on it, as critical, for a worker that
+      # stopped.
+      noDataState = if severity == "critical" then check.noData or "OK" else "OK";
       execErrState = "Error";
       isPaused = false;
       labels = {
