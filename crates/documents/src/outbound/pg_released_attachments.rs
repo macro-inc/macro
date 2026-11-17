@@ -6,6 +6,7 @@ use crate::domain::released_attachments::{
 };
 use sqlx::PgPool;
 
+mod orphans;
 #[cfg(test)]
 mod test;
 

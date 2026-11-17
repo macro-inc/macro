@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                d.id AS \"document_id!\",\n                EXISTS (\n                    SELECT 1 FROM email_links l WHERE l.macro_id = d.owner OFFSET 0\n                ) AS \"mailbox_kept!\",\n                EXISTS (\n                    SELECT 1\n                    FROM email_links l\n                    WHERE l.macro_id = d.owner AND l.created_at < d.\"createdAt\"\n                    OFFSET 0\n                ) AS \"mailbox_predates_document!\",\n                EXISTS (\n                    SELECT 1 FROM email_threads t WHERE t.id = source.thread_id OFFSET 0\n                ) AS \"thread_kept!\",\n                EXISTS (\n                    SELECT 1 FROM email_messages m WHERE m.id = source.message_id OFFSET 0\n                ) AS \"message_kept!\"\n            FROM (\n                SELECT\n                    ep.entity_id,\n                    CASE\n                        WHEN ep.values->'value'->0->>'entity_id'\n                            ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'\n                        THEN (ep.values->'value'->0->>'entity_id')::uuid\n                    END AS thread_id,\n                    CASE\n                        WHEN ep.values->'value'->0->>'specific_message_id'\n                            ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'\n                        THEN (ep.values->'value'->0->>'specific_message_id')::uuid\n                    END AS message_id\n                FROM unnest($1::text[]) AS scanned(entity_id)\n                CROSS JOIN LATERAL (\n                    SELECT ep.entity_id, ep.property_definition_id, ep.values\n                    FROM entity_properties ep\n                    WHERE ep.entity_id = scanned.entity_id AND ep.entity_type = 'DOCUMENT'\n                    OFFSET 0\n                ) ep\n                WHERE ep.property_definition_id = '00000001-0000-0000-0000-00000000000b'\n                    AND ep.values->'value'->0->>'entity_type' = 'THREAD'\n            ) source\n            CROSS JOIN LATERAL (\n                SELECT d.id, d.owner, d.\"createdAt\"\n                FROM \"Document\" d\n                WHERE d.id = source.entity_id AND d.\"deletedAt\" IS NULL\n                OFFSET 0\n            ) d\n            WHERE NOT EXISTS (\n                SELECT 1 FROM document_email de WHERE de.document_id = d.id OFFSET 0\n            )\n            ORDER BY d.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "mailbox_kept!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "mailbox_predates_document!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "thread_kept!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "message_kept!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "81b0cbb1dcadf762696926ccead0f5888ef6768ff6a01b6fc833d137271637b7"
+}
