@@ -243,7 +243,7 @@ function MobileCanvasLayout() {
     if (!draft) return;
     state.text.finish();
     state.toolDone();
-    if (!state.toolLocked() && editor.document.items[draft.id])
+    if (!state.keepsTool() && editor.document.items[draft.id])
       editor.select(draft.id);
   };
   // A phone's Done button takes the focus from the text, to nowhere. Focus

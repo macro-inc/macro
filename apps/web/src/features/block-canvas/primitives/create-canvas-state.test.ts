@@ -164,6 +164,16 @@ it('hands a drawing tool back to Select once it has drawn, unless the tool is lo
       state.setToolLocked(false);
       state.toolDone();
       expect(state.tool()).toBe('select');
+
+      // The lock keeps a drawing tool. Under Select there is none to keep, so
+      // what finishes there (a connector's end dragged, a text edited) stays
+      // selected.
+      state.setToolLocked(true);
+      editor.select('first');
+      expect(state.keepsTool()).toBe(false);
+      state.toolDone();
+      expect(state.tool()).toBe('select');
+      expect(editor.getSession().selectedIds).toEqual(['first']);
     } finally {
       dispose();
       editor.dispose();

@@ -139,7 +139,9 @@ The zoom button opens a sheet with what the desktop zoom menu holds: fit, zoom
 to selection, zoom levels, the dot grid and snapping. It also holds **Keep tool
 after drawing** (`toolLocked` in the canvas state): a drawing tool normally hands
 back to Select after one shape, line or text, which costs a finger a trip to the
-toolbar for every further one; kept, it stays and nothing is selected. More, and a long press on
+toolbar for every further one; kept, it stays and nothing is selected. The lock
+acts only while a drawing tool is chosen (`keepsTool`): under Select, a text
+edited or a connector's end dragged stays selected. More, and a long press on
 the canvas with Select or Hand, open a sheet with every context-menu action:
 clipboard, duplicate, select all, group, layer order and delete. Copy leaves the
 sheet open and confirms with a check, as copy actions do in other menus. A long press

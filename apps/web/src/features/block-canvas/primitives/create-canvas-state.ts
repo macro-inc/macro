@@ -39,6 +39,13 @@ export function createCanvasState(
   // A drawing tool hands back to Select once it has drawn. Locked, it stays,
   // for drawing several of a kind without choosing the tool each time.
   const [toolLocked, setToolLocked] = createSignal(false);
+  /**
+   * The lock is keeping a drawing tool chosen. It has nothing to keep under
+   * Select or Hand, where what finishes (a connector's end dragged, a text
+   * edited) stays selected as it does without the lock.
+   */
+  const keepsTool = () =>
+    toolLocked() && tool() !== 'select' && tool() !== 'pan';
   const eraser = createEraserState(editor, () => tool() === 'eraser');
   const [defaults, setDefaults] = createSignal(initialAppearance);
   const text = createTextState(editor, measureText, defaults);
@@ -191,12 +198,13 @@ export function createCanvasState(
     ungroup: () => editor.ungroupSelection(),
     toolLocked,
     setToolLocked,
+    keepsTool,
     /**
      * A tool has finished what it draws: back to Select. Locked, it stays, and
      * what it drew is not left selected under a tool about to draw again.
      */
     toolDone() {
-      if (toolLocked()) editor.select();
+      if (keepsTool()) editor.select();
       else chooseTool('select');
     },
     shapeCreated(id: string) {
