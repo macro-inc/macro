@@ -36,7 +36,7 @@ const cleanups: (() => void)[] = [];
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()));
 
 /** A read-only surface in a document, with one shape at the origin. */
-function setup() {
+function setup(tool: 'select' | 'pan' = 'select') {
   const editor = createGraphicsEditor([
     {
       id: 'shape',
@@ -55,7 +55,7 @@ function setup() {
   let yielding = true;
   const detach = attachCameraControls(surface, editor, {
     editing: false,
-    tool: () => 'pan',
+    tool: () => tool,
     yieldToPage: () => yielding,
   });
   cleanups.push(() => {
@@ -63,13 +63,19 @@ function setup() {
     editor.dispose();
     surface.remove();
   });
-  const finger = (id: number, type: string, x: number, y: number) => {
+  const finger = (
+    id: number,
+    type: string,
+    x: number,
+    y: number,
+    pointerType = 'touch'
+  ) => {
     surface.dispatchEvent(
       new PointerEvent(type, {
         bubbles: true,
         cancelable: true,
         pointerId: id,
-        pointerType: 'touch',
+        pointerType,
         isPrimary: id === 1,
         button: 0,
         buttons: type === 'pointerup' ? 0 : 1,
@@ -106,17 +112,33 @@ function setup() {
   };
 }
 
-it('leaves one finger to the page: nothing pans, nothing is selected', () => {
-  const { editor, finger, pageMayScroll } = setup();
-  const camera = editor.getCamera();
+it('leaves one finger to the page: nothing is selected, nothing pans', () => {
+  for (const tool of ['select', 'pan'] as const) {
+    const { editor, finger, pageMayScroll } = setup(tool);
+    const camera = editor.getCamera();
 
-  finger(1, 'pointerdown', 50, 40);
-  finger(1, 'pointermove', 50, 140);
-  expect(pageMayScroll()).toBe(true);
-  finger(1, 'pointerup', 50, 140);
+    // Lands on the shape and drags.
+    finger(1, 'pointerdown', 50, 40);
+    finger(1, 'pointermove', 50, 140);
+    expect(pageMayScroll()).toBe(true);
+    finger(1, 'pointerup', 50, 140);
 
-  expect(editor.getCamera()).toEqual(camera);
+    expect(editor.getCamera()).toEqual(camera);
+    expect(editor.getSession().selectedIds).toEqual([]);
+    expect(editor.getSession().box).toBeUndefined();
+  }
+});
+
+it('leaves a pen to the page as well, and a mouse to the canvas', () => {
+  const { editor, finger } = setup();
+
+  finger(1, 'pointerdown', 50, 40, 'pen');
+  finger(1, 'pointerup', 50, 40, 'pen');
   expect(editor.getSession().selectedIds).toEqual([]);
+
+  finger(1, 'pointerdown', 50, 40, 'mouse');
+  finger(1, 'pointerup', 50, 40, 'mouse');
+  expect(editor.getSession().selectedIds).toEqual(['shape']);
 });
 
 it('still gives two fingers to the canvas, and keeps the page from scrolling under them', () => {
@@ -144,7 +166,7 @@ it('leaves the wheel to the page, except for a pinch or a held zoom key', () => 
 });
 
 it('takes one finger and the wheel once the person interacts', () => {
-  const { editor, finger, wheel, interact } = setup();
+  const { editor, finger, wheel, interact } = setup('pan');
   interact();
 
   finger(1, 'pointerdown', 50, 40);

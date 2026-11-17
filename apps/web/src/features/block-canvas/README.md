@@ -109,11 +109,13 @@ insert menu, the presentation and the empty state), `CanvasInspectorSections`,
 while every view lists the tools it offers. A canvas embedded in a document
 keeps its controls inside the embed: the desktop read-only view on desktop, and
 on touch `views/mobile/canvas-embedded-view.tsx`, which lets the document
-scroll. There one finger over the canvas scrolls the document and the plain
-wheel does too (`yieldToPage` on the surface: `touch-action: pan-x pan-y`, and
-single touches ignored), while two fingers, a trackpad pinch and Ctrl/Cmd-wheel
-still move the canvas. **Interact** gives the canvas every gesture, with the
-Hand tool, until **Done** or a press elsewhere in the document.
+scroll. There one finger or a pen over the canvas scrolls the document and the
+plain wheel does too (`yieldToPage` on the surface: `touch-action: pan-x pan-y`,
+and presses other than a mouse's ignored), while two fingers, a trackpad pinch
+and Ctrl/Cmd-wheel still move the canvas. **Interact** gives the canvas every
+gesture, with the Hand tool, until **Done** or a press elsewhere in the
+document. Zoom to fit and Done then sit at the bottom of the screen, above the
+dock, because the embed's own corner may be out of reach.
 
 On touch the canvas's controls are islands in the app's bottom chrome, in the
 `accessory` float region above the dock, so the dock, the home indicator and

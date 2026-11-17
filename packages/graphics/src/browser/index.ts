@@ -77,10 +77,10 @@ export type GraphicsInputOptions = {
    */
   touchHandles?: boolean;
   /**
-   * Leave one finger and the plain wheel to the page. A surface inside a
-   * scrolling document sets this until the person asks to interact with it:
+   * Leave one finger, a pen and the plain wheel to the page. A surface inside
+   * a scrolling document sets this until the person asks to interact with it:
    * swipes and the wheel scroll the document, while two fingers (and a pinch
-   * or Ctrl/Cmd wheel) still move the canvas.
+   * or Ctrl/Cmd wheel) still move the canvas. A mouse works as ever.
    */
   yieldToPage?: () => boolean;
 };
@@ -280,7 +280,8 @@ export function attachCameraControls(
     });
   };
   const pointerDown = (event: PointerEvent) => {
-    if (options.yieldToPage?.() && event.pointerType === 'touch') return;
+    // A pen pans the page like a finger does; only a mouse cannot.
+    if (options.yieldToPage?.() && event.pointerType !== 'mouse') return;
     if (
       options.suspended?.() ||
       options.ignoreTarget?.(event.target) ||

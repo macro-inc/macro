@@ -312,6 +312,13 @@ export function attachTouchNavigation(
   const touchMove = (event: TouchEvent) => {
     if (navigating && event.cancelable) event.preventDefault();
   };
+  // Fingers on the surface, by their touch events. The browser takes a
+  // finger's pointer events away once it scrolls the page with it, and the
+  // finger is still there.
+  let fingers = 0;
+  const countFingers = (event: TouchEvent) => {
+    fingers = event.targetTouches.length;
+  };
   const wheel = () => glide.cancel();
   // A press released in another window never reports its release here. Forget
   // it, or a mouse that went away pressed would keep fingers from navigating.
@@ -323,11 +330,14 @@ export function attachTouchNavigation(
   window.addEventListener('pointercancel', pointerEnd, true);
   element.addEventListener('wheel', wheel, { passive: true });
   element.addEventListener('touchmove', touchMove, { passive: false });
+  element.addEventListener('touchstart', countFingers, { passive: true });
+  element.addEventListener('touchend', countFingers, { passive: true });
+  element.addEventListener('touchcancel', countFingers, { passive: true });
   window.addEventListener('blur', blur);
 
   return {
     /** Touches are down on the surface, so a WebKit gesture event duplicates them. */
-    tracking: () => touches.size > 0,
+    tracking: () => touches.size > 0 || fingers > 0,
     detach() {
       glide.cancel();
       dropFrame();
@@ -338,6 +348,9 @@ export function attachTouchNavigation(
       window.removeEventListener('pointercancel', pointerEnd, true);
       element.removeEventListener('wheel', wheel);
       element.removeEventListener('touchmove', touchMove);
+      element.removeEventListener('touchstart', countFingers);
+      element.removeEventListener('touchend', countFingers);
+      element.removeEventListener('touchcancel', countFingers);
       window.removeEventListener('blur', blur);
     },
   };

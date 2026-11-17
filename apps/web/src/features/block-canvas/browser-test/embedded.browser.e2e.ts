@@ -78,6 +78,27 @@ test('two fingers zoom the embedded canvas and leave the document where it is', 
   expect(await scrolled(page)).toBe(0);
 });
 
+test('two fingers dragging down pan the canvas, and the document stays put', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  const middle = await embed(page);
+  const pair = (dy: number) => [
+    { x: middle.x - 40, y: middle.y - 60 + dy },
+    { x: middle.x + 40, y: middle.y - 60 + dy },
+  ];
+
+  // The direction the document scrolls in: the browser must not take it.
+  await touch(cdp, 'touchStart', pair(0));
+  for (let step = 1; step <= 6; step++)
+    await touch(cdp, 'touchMove', pair(step * 20));
+  await touch(cdp, 'touchEnd', []);
+
+  await expect.poll(async () => (await camera(page)).y).toBeCloseTo(120, 0);
+  expect((await camera(page)).scale).toBe(1);
+  expect(await scrolled(page)).toBe(0);
+});
+
 test('Interact gives one finger to the canvas until Done', async ({ page }) => {
   const cdp = await page.context().newCDPSession(page);
   const middle = await embed(page);

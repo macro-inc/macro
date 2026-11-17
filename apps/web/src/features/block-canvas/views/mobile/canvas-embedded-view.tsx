@@ -1,20 +1,61 @@
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
+import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { Button } from '@ui/components/Button';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import {
   CanvasReadOnlyParts,
   type CanvasReadOnlyViewProps,
   useCanvasReadOnlyView,
 } from '../shared/canvas-read-only-parts';
 
+/**
+ * The controls of a canvas that has the gestures, at the bottom of the screen
+ * rather than of the canvas: an embed can be taller than the screen, and one
+ * finger no longer scrolls to where its own corner is. They take the slot
+ * above the dock, or the bottom of the page where the app has no chrome.
+ */
+function InteractingBar(props: {
+  ref: (element: HTMLElement) => void;
+  children: JSX.Element;
+}) {
+  return (
+    <Show
+      when={FloatRegions.mount('accessory')}
+      fallback={
+        <Portal>
+          <div
+            ref={props.ref}
+            class="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-end gap-2 px-(--mobile-chrome-gutter) pb-[calc(var(--safe-bottom,0px)+var(--mobile-chrome-gutter))]"
+          >
+            {props.children}
+          </div>
+        </Portal>
+      }
+    >
+      <FloatRegion region="accessory">
+        <div
+          ref={props.ref}
+          class="flex justify-end gap-2 px-(--mobile-chrome-gutter)"
+        >
+          {props.children}
+        </div>
+      </FloatRegion>
+    </Show>
+  );
+}
+
 function MobileCanvasEmbeddedLayout() {
   const view = useCanvasReadOnlyView();
   const [interacting, setInteracting] = createSignal(false);
+  let bar: HTMLElement | undefined;
 
   // A press anywhere else in the document hands the gestures back to it.
   const pressedElsewhere = (event: PointerEvent) => {
-    const host = view.host();
-    if (host && event.target instanceof Node && !host.contains(event.target))
-      end();
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    if (view.host()?.contains(target) || bar?.contains(target)) return;
+    end();
   };
   const start = () => {
     // One finger moves the canvas while it has the gestures.
@@ -23,19 +64,22 @@ function MobileCanvasEmbeddedLayout() {
     window.addEventListener('pointerdown', pressedElsewhere, true);
   };
   const end = () => {
+    if (interacting()) view.chooseTool('select');
     setInteracting(false);
     window.removeEventListener('pointerdown', pressedElsewhere, true);
   };
-  onCleanup(end);
+  onCleanup(() =>
+    window.removeEventListener('pointerdown', pressedElsewhere, true)
+  );
 
   return (
     <>
       <CanvasReadOnlyParts.Surface yieldToPage={() => !interacting()} />
       <CanvasReadOnlyParts.Presentation />
-      <div class="pointer-events-none absolute inset-x-0 bottom-0 flex justify-end gap-2 p-2">
-        <Show
-          when={interacting()}
-          fallback={
+      <Show
+        when={interacting()}
+        fallback={
+          <div class="pointer-events-none absolute inset-x-0 bottom-0 flex justify-end p-2">
             <Button
               variant="secondary"
               finish="raised"
@@ -45,7 +89,13 @@ function MobileCanvasEmbeddedLayout() {
             >
               Interact
             </Button>
-          }
+          </div>
+        }
+      >
+        <InteractingBar
+          ref={(element) => {
+            bar = element;
+          }}
         >
           <Button
             variant="secondary"
@@ -64,8 +114,8 @@ function MobileCanvasEmbeddedLayout() {
           >
             Done
           </Button>
-        </Show>
-      </div>
+        </InteractingBar>
+      </Show>
     </>
   );
 }
