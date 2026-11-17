@@ -7,10 +7,7 @@ use crate::domain::models::CredentialAttribution;
 #[cfg(test)]
 mod test;
 
-/// Set by the code-mode runtime (`code_execution`'s `bootstrap.mjs`) on every
-/// SDK request a program makes, in agent sessions and for public MCP clients
-/// alike.
-pub const CODE_EXECUTION_HEADER: &str = "x-macro-code-execution";
+pub use macro_auth::credential::CODE_EXECUTION_HEADER;
 
 /// Whether a request comes from an agent's program rather than a person in
 /// the app: a credential signed for an agent, or a code-mode request whose

@@ -395,6 +395,7 @@ dependencies = [
  "macro_auth",
  "macro_db_migrator",
  "rootcause",
+ "route_policy",
  "serde",
  "serde_json",
  "sqlx",
@@ -17705,6 +17706,23 @@ dependencies = [
  "rootcause",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "route_policy"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "http-body-util",
+ "macro_tower_layers",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
