@@ -1,0 +1,13 @@
+apiVersion: v1
+data:
+  runtime-config.yaml: |
+    {}
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/instance: loki
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/version: 3.7.10
+    helm.sh/chart: loki-21.2.3
+  name: loki-runtime
+  namespace: observability
