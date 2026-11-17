@@ -95,8 +95,12 @@ in-call chat.
   `POST /call/record/{call_id}/join`; the latter never creates a call.
 - A view grant alone does not admit a user to a live call. Channel membership,
   standalone ownership, attendance, or an explicit invite is required.
-- Every token-producing HTTP route refuses `x-macro-code-execution` because
-  tokens can outlive a code execution and cannot be revoked.
+- Every authenticated token-producing HTTP route refuses a program
+  (`macro_authorization::is_program_run`: a credential signed for an agent or a
+  routine run, or `x-macro-code-execution`), because tokens reach the model,
+  outlive the run and cannot be revoked. A program can drop the header with a
+  raw `fetch`, so the signed claims carry the refusal. The guest join has no
+  credential and checks the header only.
 - `edit_call_record_handler` refuses share permission and team sharing
   changes from a scoped agent session
   (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
