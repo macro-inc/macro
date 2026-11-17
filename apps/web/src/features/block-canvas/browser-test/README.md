@@ -14,6 +14,11 @@ bunx playwright test --config src/features/block-canvas/browser-test/playwright.
 The desktop case covers drag previews, cursors, remote selection and style,
 local undo, session reopening, and peer departure. The touch case covers mobile
 selection awareness. Each case runs only in its applicable device project.
+`touch-navigation.browser.e2e.ts` sends real multi-touch through Chromium
+(`Input.dispatchTouchEvent`) in the touch project: pinch in the select, hand,
+rectangle and pencil tools after the first finger has started its gesture,
+two-finger pan, and the glide after a flick. `window.canvasFixture.setTool`
+switches the fixture's tool.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an installed Chromium.
 
 ![Two editors and a viewer sharing a scene and Alice's cursor](multiplayer.png)
