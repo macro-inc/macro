@@ -43,6 +43,7 @@ import { createMemo, lazy } from 'solid-js';
 import { createTagFacetContext } from '../soup';
 import { createCrmActivityFilters } from './activity-filters-adapter';
 import { createCrmActivityState } from './activity-state-adapter';
+import { createAddToPipelineSource } from './add-to-pipeline-adapter';
 import type { CrmContext } from './context/crm-context';
 import type { CrmQuery, ItemListSource } from './context/crm-sources';
 import {
@@ -51,6 +52,7 @@ import {
 } from './creation-adapter';
 import { createAppCrmDisplayOptions } from './display-adapter';
 import { downloadCrmCsv } from './download-adapter';
+import { EmailThreadMention } from './email-thread-mention';
 import {
   copyCrmPipelineLink,
   copyCrmRecordLink,
@@ -234,6 +236,11 @@ export function createAppCrmContext(): CrmContext {
       graphql: getGraphqlSoupClient,
       storage: deps.storage,
     }),
+    createAddToPipeline: (record) =>
+      createAddToPipelineSource(
+        { ...deps, graphql: getGraphqlSoupClient },
+        record
+      ),
     PipelineSharing: PipelineShare,
     createPipelineTransfer: (pipeline) =>
       createPipelineTransfer(deps, pipeline),
@@ -244,6 +251,7 @@ export function createAppCrmContext(): CrmContext {
     contactInitials: getInitialsFromName,
     userEmail: idToEmail,
     createNavigation: createAppCrmNavigation,
+    EmailThreadMention,
     copyRecordLink: copyCrmRecordLink,
     copyViewLink: copyCrmViewLink,
     copyPipelineLink: copyCrmPipelineLink,

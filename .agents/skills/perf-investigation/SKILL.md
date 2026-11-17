@@ -161,6 +161,10 @@ instrumentation skill explains each primitive.
 
 ## Verify locally first
 
+For Android, measure on an emulator with the benchmark harness
+([README](../../../apps/web/scripts/android-benchmark/README.md)): it reads these same
+spans from a release build, so its numbers compare with the field.
+
 Before relying on a new or renamed span in Datadog, run the flow on a local
 stack and find it in Tempo (`live-debug` skill): `{ span.flow.kind != nil }`
 lists roots, `{ span.flow.root = "navigation" }` its phases. Local traces are

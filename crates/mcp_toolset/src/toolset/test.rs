@@ -120,3 +120,67 @@ async fn cancelling_the_request_abandons_a_held_call_and_tells_the_server() {
     .unwrap();
     assert!(echo.is_ok(), "the session still serves calls: {echo:?}");
 }
+
+/// Opens a session on a [`HoldingServer`], whose tools are `hold` and `echo`.
+async fn holding_session() -> Arc<McpServer> {
+    let (server_side, client_side) = tokio::io::duplex(8192);
+    tokio::spawn(async move {
+        let running = HoldingServer::default().serve(server_side).await.unwrap();
+        let _ = running.waiting().await;
+    });
+    Arc::new(crate::client_info().serve(client_side).await.unwrap())
+}
+
+/// A tool's server is the one it was registered under, whatever its mangled
+/// name's server segment says: a server named to mangle like another
+/// (`macro_internal_` like `macro_internal`) is still told apart, in either
+/// order.
+#[tokio::test]
+async fn a_tools_server_is_the_one_it_was_registered_under() {
+    let listed = |name: &str, client: Arc<McpServer>, tool: &str| ListedServer {
+        name: name.to_owned(),
+        client,
+        tools: vec![Tool::new(
+            tool.to_owned(),
+            "",
+            Arc::new(serde_json::Map::new()),
+        )],
+    };
+    let impostor_first = RemoteMcpToolSet::from_listed(
+        vec![
+            listed("macro__internal", holding_session().await, "post"),
+            listed("macro_internal_", holding_session().await, "echo"),
+            listed("macro_internal", holding_session().await, "echo"),
+            listed("macro_internal", holding_session().await, "send"),
+        ],
+        None,
+    );
+    assert_eq!(
+        impostor_first.server_of("mcp__macro_internal__post"),
+        Some("macro__internal")
+    );
+    assert_eq!(
+        impostor_first.server_of("mcp__macro_internal__echo"),
+        Some("macro_internal_")
+    );
+    assert_eq!(
+        impostor_first.server_of("mcp__macro_internal__send"),
+        Some("macro_internal")
+    );
+    assert_eq!(
+        impostor_first.server_of("mcp__macro_internal__missing"),
+        None
+    );
+
+    let internal_first = RemoteMcpToolSet::from_listed(
+        vec![
+            listed("macro_internal", holding_session().await, "echo"),
+            listed("macro_internal_", holding_session().await, "echo"),
+        ],
+        None,
+    );
+    assert_eq!(
+        internal_first.server_of("mcp__macro_internal__echo"),
+        Some("macro_internal")
+    );
+}

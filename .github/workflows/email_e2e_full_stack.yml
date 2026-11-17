@@ -1,0 +1,241 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/email_e2e_full_stack.rs
+name: Email end-to-end (full stack)
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: limited
+  CARGO_PROFILE_TEST_DEBUG: limited
+  RUST_BACKTRACE: '1'
+  RUSTFLAGS: '-C link-arg=-fuse-ld=lld'
+'on':
+  schedule:
+  # cron is UTC: 21:00 UTC is 4pm EST and 5pm EDT.
+  - cron: '0 21 * * *'
+  workflow_dispatch: {}
+jobs:
+  email-e2e-full-stack:
+    name: Email end-to-end (full stack)
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
+      SQLX_OFFLINE: 'true'
+      SCCACHE_IDLE_TIMEOUT: '0'
+      EMAIL_E2E_INSTANCE: email-e2e
+      EMAIL_E2E_BROWSER_WORKERS: '4'
+    timeout-minutes: 45
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
+    - name: Setup
+      uses: './.github/actions/setup-reqs-web'
+      with:
+        playwright: 'true'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Start sccache server
+      run: sccache --start-server
+    - name: Build code-mode assets
+      run: |
+        set -euo pipefail
+
+        # Build the code-mode assets once per SDK state, not once per job. Cache volumes
+        # are forks of past jobs, so most jobs miss the store path another job just built.
+        # The key is the store path, which covers every input of the build.
+        assets="$(nix eval --raw .#code-mode-assets.outPath)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+
+        if nix-store --check-validity "$assets" 2>/dev/null; then
+          echo "Code-mode assets already in the store"
+          exit 0
+        fi
+
+        # Forks have no remote cache credentials.
+        if [ -z "${SCCACHE_WEBDAV_ENDPOINT:-}" ]; then
+          nix build --no-link --print-build-logs .#code-mode-assets
+          exit 0
+        fi
+
+        cache_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$assets").closure.gz"
+
+        # The token goes through a config descriptor so it stays out of curl's arguments.
+        cache_request() {
+          curl --fail --silent --show-error --max-time 30 --retry 2 \
+            -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$@"
+        }
+
+        if cache_request "$cache_url" | gunzip | nix-store --import; then
+          echo "Code-mode assets restored from the remote cache"
+          exit 0
+        fi
+
+        # Installing node_modules is most of a build and changes far less often than the SDK,
+        # so it has its own entry.
+        modules="$(nix eval --raw .#macro-js-node-modules.outPath)"
+        modules_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$modules").zst"
+        save_modules=false
+
+        if ! nix-store --check-validity "$modules" 2>/dev/null; then
+          # No retries: a retry would restart the stream into the same pipe, and past the limit
+          # a rebuild is faster.
+          if cache_request --retry 0 --max-time 60 "$modules_url" | zstd -d | nix-store --import; then
+            echo "node_modules restored from the remote cache"
+          else
+            save_modules=true
+          fi
+        fi
+
+        nix build --no-link --print-build-logs .#code-mode-assets
+
+        if [ "$save_modules" = true ] \
+          && ! nix-store --export "$modules" | zstd -T0 -3 | cache_request --max-time 120 --upload-file - "$modules_url"; then
+          echo "::warning::Could not save node_modules to the remote cache"
+        fi
+
+        # Losing the upload costs the next job a rebuild, not a failure.
+        if nix-store --export "$assets" | gzip | cache_request --upload-file - "$cache_url"; then
+          echo "Code-mode assets saved to the remote cache"
+        else
+          echo "::warning::Could not save code-mode assets to the remote cache"
+        fi
+    - name: run the full-stack tier
+      run: |
+        set -euo pipefail
+
+        bundle_log="$RUNNER_TEMP/email-e2e-bundle.log"
+
+        # The bundle builds beside the stack's services, without the job's RUSTFLAGS:
+        # they link the services with mold, and a wasm package the wasm cache misses
+        # links with rust-lld, which refuses that flag.
+        (cd apps/web && unset RUSTFLAGS && just build-email-e2e > "$bundle_log" 2>&1) &
+        web=$!
+        trap 'kill "$web" 2>/dev/null || true; tail -n 40 "$bundle_log" || true' ERR
+
+        # Builds every service, starts the stack and returns once it answers.
+        started=$(date +%s)
+        just run_local --no-doppler --instance "$EMAIL_E2E_INSTANCE" --no-frontend --traces off --no-computers
+        echo "Local stack up: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+        trap - ERR
+
+        if ! wait "$web"; then
+          cat "$bundle_log"
+          echo "the web bundle did not build" >&2
+          exit 1
+        fi
+        tail -n 5 "$bundle_log"
+        echo "Bundle built: $(( $(date +%s) - started )) s after the start" | tee -a "$GITHUB_STEP_SUMMARY"
+
+        failed=0
+        started=$(date +%s)
+        (cd apps/web && just test-email-e2e-full-stack "$EMAIL_E2E_INSTANCE") || failed=1
+        echo "Full-stack tier: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+        exit "$failed"
+      env:
+        CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_PSD_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
+    - name: report the tier's tests for known bugs
+      if: '!cancelled()'
+      run: just test-email-e2e-full-stack "$EMAIL_E2E_INSTANCE" --pass-with-no-tests --retries 0 --output tests/email-e2e/test-results/known-bugs
+      env:
+        EMAIL_E2E_KNOWN_BUGS: '1'
+      continue-on-error: true
+      working-directory: apps/web
+    - name: check the tier's coverage of the email UI
+      if: '!cancelled()'
+      run: just email-e2e-ledger --enforce
+      working-directory: apps/web
+    - name: Upload email-e2e-full-stack-coverage artifact
+      if: '!cancelled()'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: email-e2e-full-stack-coverage
+        path: apps/web/tests/email-e2e/ledger-results/report
+        if-no-files-found: ignore
+        retention-days: '30'
+    - name: collect the stack's logs
+      if: failure()
+      run: |-
+        mkdir -p target/email-e2e-full-stack
+        docker compose -p macro-email-e2e logs --no-color > target/email-e2e-full-stack/containers.log 2>&1 || true
+        cp infra/local/generated/email-e2e/run/*.log target/email-e2e-full-stack/ 2>/dev/null || true
+    - name: Upload email-e2e-full-stack-logs artifact
+      if: failure()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: email-e2e-full-stack-logs
+        path: target/email-e2e-full-stack
+        if-no-files-found: ignore
+        retention-days: '7'
+    - name: Upload email-e2e-full-stack-traces artifact
+      if: failure()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: email-e2e-full-stack-traces
+        path: apps/web/tests/email-e2e/test-results
+        if-no-files-found: ignore
+        retention-days: '7'
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+concurrency:
+  group: email-e2e-full-stack-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.sha }}
+  cancel-in-progress: true

@@ -752,14 +752,20 @@ export function CanvasView(props: {
                   ),
                 }}
                 input={{
-                  ignoreTarget: (target) =>
-                    target instanceof Element &&
-                    !!target.closest(
-                      '[data-canvas-document],[data-canvas-artifact]'
-                    ) &&
-                    !!target.closest(
-                      'button,a,input,select,textarea,[role="button"]'
-                    ),
+                  ignoreTarget: (target) => {
+                    if (!(target instanceof Element)) return false;
+                    // An embed being interacted with owns every touch on it.
+                    if (target.closest('[data-canvas-embed-active]'))
+                      return true;
+                    return (
+                      !!target.closest(
+                        '[data-canvas-document],[data-canvas-artifact]'
+                      ) &&
+                      !!target.closest(
+                        'button,a,input,select,textarea,[role="button"]'
+                      )
+                    );
+                  },
                   tool: () =>
                     state.tool() === 'text' ||
                     state.tool() === 'eraser' ||
