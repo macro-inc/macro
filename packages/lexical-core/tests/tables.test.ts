@@ -966,6 +966,69 @@ describe('pipe characters inside pipe-table cells', () => {
     });
   });
 
+  it('round-trips a literal backslash before a pipe in cell text', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      row.append($createCell('C:\\|x'), $createCell('y'));
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    await importWith(editor, markdown);
+    editor.getEditorState().read(() => {
+      expect($cellTexts()).toEqual([['C:\\|x', 'y']]);
+    });
+  });
+
+  it('keeps an empty row after the first row as a row, not a delimiter', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      ['| Name | Score |', '| | |', '| a | 1 |'].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      expect($cellTexts()).toEqual([
+        ['Name', 'Score'],
+        ['', ''],
+        ['a', '1'],
+      ]);
+      expect(
+        grid
+          .flat()
+          .some((cell) => cell.hasHeaderState(TableCellHeaderStates.ROW))
+      ).toBe(false);
+    });
+  });
+
+  it('keeps start and end alignment through the internal table XML', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const start = $createCell('a');
+      start.setFormat('start');
+      const end = $createCell('b');
+      end.setFormat('end');
+      row.append(start, end);
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const first = exportMarkdown(editor, INTERNAL_TRANSFORMERS);
+    await importWith(editor, first, INTERNAL_TRANSFORMERS);
+    editor.getEditorState().read(() => {
+      expect($cellGrid()[0].map((cell) => cell.getFormatType())).toEqual([
+        'start',
+        'end',
+      ]);
+    });
+  });
+
   it('round-trips markdown -> lexical -> markdown stably', async () => {
     const source = [
       '| Person | Code | Note |',

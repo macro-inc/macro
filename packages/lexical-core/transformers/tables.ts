@@ -113,7 +113,13 @@ const HEADER_STATE_BY_ATTR: Record<string, TableCellHeaderState> = {
   both: TableCellHeaderStates.BOTH,
 };
 
-const CELL_ALIGNMENTS = ['left', 'center', 'right'] as const;
+const CELL_ALIGNMENTS = ['left', 'center', 'right', 'start', 'end'] as const;
+
+type CellAlignment = (typeof CELL_ALIGNMENTS)[number];
+
+function isCellAlignment(value: string | undefined): value is CellAlignment {
+  return CELL_ALIGNMENTS.some((alignment) => alignment === value);
+}
 
 const REG_EXP_XML_TABLE = xmlMatcherWithAttrs(TAG_TABLE, '');
 const REG_EXP_XML_TABLE_ROW = xmlMatcherWithAttrs(TAG_TABLE_ROW, 'gs');
@@ -180,9 +186,9 @@ export const I_TABLE_NODE: ElementTransformer = {
               colspan: cell.getColSpan() > 1 ? cell.getColSpan() : undefined,
               rowspan: cell.getRowSpan() > 1 ? cell.getRowSpan() : undefined,
               header: HEADER_ATTR_BY_STATE[cell.__headerState],
-              align: CELL_ALIGNMENTS.find(
-                (format) => format === cell.getFormatType()
-              ),
+              align: isCellAlignment(cell.getFormatType())
+                ? cell.getFormatType()
+                : undefined,
             })}>`;
             output += $convertToMarkdownString(
               internalTransformersWithinTables,
@@ -236,11 +242,8 @@ export const I_TABLE_NODE: ElementTransformer = {
           if (headerState !== undefined) {
             cellNode.setHeaderStyles(headerState);
           }
-          const alignment = CELL_ALIGNMENTS.find(
-            (format) => format === cellAttrs.align
-          );
-          if (alignment) {
-            cellNode.setFormat(alignment);
+          if (isCellAlignment(cellAttrs.align)) {
+            cellNode.setFormat(cellAttrs.align);
           }
 
           $convertFromMarkdownString(
@@ -272,7 +275,8 @@ export const I_TABLE_NODE: ElementTransformer = {
 // External Table Node
 
 const REG_EXP_TABLE_ROW = /^(?:\|)(.+)(?:\|)\s?$/;
-const REG_EXP_TABLE_ROW_DIVIDER = /^(\| ?:?-*:? ?)+\|\s?$/;
+// Each delimiter cell needs at least one dash, so an empty `| | |` row stays a row.
+const REG_EXP_TABLE_ROW_DIVIDER = /^\|(?:\s*:?-+:?\s*\|)+\s*$/;
 
 const externalTransformersWithinTables: Transformer[] = [
   BR_TAG_TO_LINE_BREAK,
@@ -322,8 +326,16 @@ function createTableCell(cellContent: string): TableCellNode {
   return cellNode;
 }
 
-// An inline `<m-…>` tag at the start of `text`, up to its closing tag.
-const REG_EXP_LEADING_XML_TAG = /^<(m-[\w-]+)(?:\s[^>]*)?>.*?<\/\1>/s;
+// An inline `<m-…>` tag starting at `lastIndex`, up to its closing tag.
+const REG_EXP_XML_TAG_AT = /<(m-[\w-]+)(?:\s[^>]*)?>.*?<\/\1>/sy;
+// An inline code span starting at `lastIndex`.
+const REG_EXP_CODE_SPAN_AT = /(`+)(.*?[^`])\1(?!`)/sy;
+const REG_EXP_BACKTICKS_AT = /`+/y;
+
+function matchAt(regExp: RegExp, text: string, index: number): string | null {
+  regExp.lastIndex = index;
+  return regExp.exec(text)?.[0] ?? null;
+}
 
 /**
  * Splits the inside of a pipe-table row into raw cell strings. A pipe does
@@ -336,60 +348,57 @@ export function splitTableRow(row: string): string[] {
   let cell = '';
   let index = 0;
   while (index < row.length) {
-    const rest = row.slice(index);
-    if (rest.startsWith('\\|')) {
-      cell += '|';
+    const char = row[index];
+    if (char === '\\') {
+      const next = row[index + 1] ?? '';
+      cell += next === '|' ? '|' : char + next;
       index += 2;
       continue;
     }
-    if (rest.startsWith('\\')) {
-      cell += rest.slice(0, 2);
-      index += 2;
-      continue;
-    }
-    const tag = REG_EXP_LEADING_XML_TAG.exec(rest);
-    if (tag) {
-      cell += tag[0];
-      index += tag[0].length;
-      continue;
-    }
-    const code = rest.match(/^(`+)(.*?[^`])\1(?!`)/s);
-    if (code) {
-      cell += code[0].replaceAll('\\|', '|');
-      index += code[0].length;
-      continue;
-    }
-    if (rest.startsWith('`')) {
-      const fence = rest.match(/^`+/)![0];
-      cell += fence;
-      index += fence.length;
-      continue;
-    }
-    if (rest.startsWith('|')) {
+    if (char === '|') {
       cells.push(cell);
       cell = '';
-    } else {
-      cell += rest[0];
+      index += 1;
+      continue;
     }
+    const tag = char === '<' ? matchAt(REG_EXP_XML_TAG_AT, row, index) : null;
+    const code =
+      char === '`'
+        ? (matchAt(REG_EXP_CODE_SPAN_AT, row, index) ??
+          matchAt(REG_EXP_BACKTICKS_AT, row, index))
+        : null;
+    const span = tag ?? code;
+    if (span) {
+      // GFM unescapes `\|` inside a code span in a table cell.
+      cell += code ? span.replaceAll('\\|', '|') : span;
+      index += span.length;
+      continue;
+    }
+    cell += char;
     index += 1;
   }
   cells.push(cell);
   return cells;
 }
 
-/** Escapes cell pipes outside `<m-…>` tags so the cell stays one cell. */
+/** Escapes unescaped pipes outside `<m-…>` tags so the cell stays one cell. */
 function escapeCellPipes(markdown: string): string {
   let escaped = '';
   let index = 0;
+  // A pipe after an odd run of backslashes is already escaped.
+  let backslashRun = 0;
   while (index < markdown.length) {
-    const rest = markdown.slice(index);
-    const tag = REG_EXP_LEADING_XML_TAG.exec(rest);
+    const char = markdown[index];
+    const tag =
+      char === '<' ? matchAt(REG_EXP_XML_TAG_AT, markdown, index) : null;
     if (tag) {
-      escaped += tag[0];
-      index += tag[0].length;
+      escaped += tag;
+      index += tag.length;
+      backslashRun = 0;
       continue;
     }
-    escaped += rest[0] === '|' ? '\\|' : rest[0];
+    escaped += char === '|' && backslashRun % 2 === 0 ? '\\|' : char;
+    backslashRun = char === '\\' ? backslashRun + 1 : 0;
     index += 1;
   }
   return escaped;
@@ -404,19 +413,21 @@ function mapToTableCells(textContent: string): Array<TableCellNode> | null {
   return splitTableRow(match[1]).map((text) => createTableCell(text));
 }
 
-type ColumnAlignment = (typeof CELL_ALIGNMENTS)[number];
-
 /** The alignment each `:---`, `:---:` or `---:` marker of a delimiter row sets. */
-function columnAlignments(divider: string): Array<ColumnAlignment | ''> {
-  return splitTableRow(divider.trim().replace(/^\||\|$/g, '')).map((marker) => {
-    const trimmed = marker.trim();
-    const left = trimmed.startsWith(':');
-    const right = trimmed.endsWith(':');
-    if (left && right) return 'center';
-    if (right) return 'right';
-    if (left) return 'left';
-    return '';
-  });
+function columnAlignments(divider: string): Array<CellAlignment | ''> {
+  return divider
+    .trim()
+    .replace(/^\||\|$/g, '')
+    .split('|')
+    .map((marker) => {
+      const trimmed = marker.trim();
+      const left = trimmed.startsWith(':');
+      const right = trimmed.endsWith(':');
+      if (left && right) return 'center';
+      if (right) return 'right';
+      if (left) return 'left';
+      return '';
+    });
 }
 
 function delimiterFor(format: ElementFormatType): string {
