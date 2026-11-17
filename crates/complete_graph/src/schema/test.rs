@@ -46,6 +46,7 @@ use uuid::Uuid;
 
 use super::*;
 
+mod bot_identities;
 mod calendar;
 mod channel;
 mod contacts;

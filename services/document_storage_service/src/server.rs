@@ -2293,6 +2293,12 @@ async fn run_server() -> anyhow::Result<()> {
     let calendar_read_service = Arc::new(calendar_events::domain::service::CalendarService::new(
         calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
     ));
+    // Bot identities read the primary: a just-renamed or just-created bot must
+    // read back as it now is. Every read is a primary-key lookup.
+    let graphql_bots_context = graphql_bots::BotsGraphqlContext::new(
+        Arc::new(bots_service.clone()),
+        entity_access_service.clone(),
+    );
     let graphql_calendar_context = graphql_calendar::CalendarGraphqlContext::new(
         calendar_read_service.clone(),
         Arc::new(
@@ -2667,6 +2673,7 @@ async fn run_server() -> anyhow::Result<()> {
             scheduled_action_read_service,
         ),
         graphql_contacts_context,
+        graphql_bots_context,
         graphql_calendar_context,
         graphql_calendar_mutation_context,
         initiative_state: InitiativeRouterState::new(

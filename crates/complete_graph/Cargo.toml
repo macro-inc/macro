@@ -27,6 +27,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
 entity_mutation = { path = "../entity_mutation" }
 favorites = { path = "../favorites", default-features = false, features = ["ports"] }
 graphql_activity = { path = "../graphql_activity" }
+graphql_bots = { path = "../graphql_bots" }
 graphql_calendar = { path = "../graphql_calendar" }
 graphql_contacts = { path = "../graphql_contacts" }
 graphql_channel = { path = "../graphql_channel" }
