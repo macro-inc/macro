@@ -69,7 +69,7 @@ pub(super) async fn read_team_page(
     let deadline = Instant::now() + TEAM_READ_BUDGET;
     let mut transaction = begin_snapshot(pool).await?;
     params.resolved = resolve_filters_on(
-        &mut *transaction,
+        &mut transaction,
         &params.link_ids,
         params.team_id,
         email_filter,
