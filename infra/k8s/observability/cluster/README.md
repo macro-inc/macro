@@ -22,7 +22,7 @@ modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──
 | `external-secrets` | `external-secrets` | External Secrets Operator and the `secrets-manager` ClusterSecretStore over the Secrets Manager secret `observability/prod`. Only cluster admins can create stores (namespace `edit` and `admin` can't), since a store without credentials reads with the operator's. |
 | `storage` | `kube-system` | The default `gp3` StorageClass (EBS CSI, encrypted, expandable). |
 | `observability-namespace` | `observability` | The namespace the backends and Grafana run in, default-deny NetworkPolicies and the policies they share. |
-| `alloy-node` | `alloy` | One Alloy per node for the cluster's own node, kubelet, cAdvisor and pod-log telemetry. Collects and drops until the backends land. |
+| `alloy-node` | `alloy` | One Alloy per node for the cluster's own node, kubelet, cAdvisor and pod-log telemetry. Sends to Mimir and Loki. |
 
 Charts are pinned in `charts/<repo>/<chart>/default.nix` (version and hash).
 

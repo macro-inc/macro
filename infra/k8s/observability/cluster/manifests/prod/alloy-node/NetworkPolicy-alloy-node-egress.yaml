@@ -24,6 +24,25 @@ spec:
           protocol: TCP
         - port: 10250
           protocol: TCP
+    - ports:
+        - port: 3100
+          protocol: TCP
+        - port: 3200
+          protocol: TCP
+        - port: 8080
+          protocol: TCP
+      to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - loki
+                  - tempo
+                  - mimir
   podSelector: {}
   policyTypes:
     - Egress

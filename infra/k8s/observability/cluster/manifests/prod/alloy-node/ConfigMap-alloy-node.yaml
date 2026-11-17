@@ -21,7 +21,7 @@ data:
     prometheus.scrape "node" {
       targets    = prometheus.exporter.unix.node.targets
       job_name   = "node"
-      forward_to = []
+      forward_to = [prometheus.remote_write.mimir.receiver]
     }
 
     // This node's kubelet, through the node object (InternalIP:10250).
@@ -54,7 +54,7 @@ data:
       tls_config {
         insecure_skip_verify = true
       }
-      forward_to = []
+      forward_to = [prometheus.remote_write.mimir.receiver]
     }
 
     prometheus.scrape "cadvisor" {
@@ -67,7 +67,7 @@ data:
       tls_config {
         insecure_skip_verify = true
       }
-      forward_to = []
+      forward_to = [prometheus.remote_write.mimir.receiver]
     }
 
     // Logs of the pods on this node, from the container runtime's files.
@@ -128,7 +128,78 @@ data:
     loki.process "pod_logs" {
       stage.cri { }
 
-      forward_to = []
+      forward_to = [loki.write.loki.receiver]
+    }
+
+    prometheus.remote_write "mimir" {
+      endpoint {
+        url = "http://mimir.observability.svc.cluster.local:8080/api/v1/push"
+      }
+    }
+
+    loki.write "loki" {
+      endpoint {
+        url = "http://loki.observability.svc.cluster.local:3100/loki/api/v1/push"
+      }
+    }
+
+    // The backends' own metrics, from their pods on this node.
+    discovery.kubernetes "backends" {
+      role = "pod"
+
+      namespaces {
+        names = ["observability"]
+      }
+
+      selectors {
+        role  = "pod"
+        field = "spec.nodeName=" + sys.env("K8S_NODE_NAME")
+      }
+    }
+
+    discovery.relabel "backends" {
+      targets = discovery.kubernetes.backends.targets
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+        regex         = "loki|tempo|mimir"
+        action        = "keep"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_port_name"]
+        regex         = "http-metrics"
+        action        = "keep"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+        target_label  = "job"
+        replacement   = "observability/$1"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_component"]
+        target_label  = "component"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "pod"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_node_name"]
+        target_label  = "node"
+      }
+    }
+
+    // The host's Prometheus scraped every 30s.
+    prometheus.scrape "backends" {
+      targets         = discovery.relabel.backends.output
+      job_name        = "observability"
+      scrape_interval = "30s"
+      forward_to      = [prometheus.remote_write.mimir.receiver]
     }
 kind: ConfigMap
 metadata:

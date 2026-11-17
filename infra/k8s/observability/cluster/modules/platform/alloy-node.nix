@@ -3,17 +3,10 @@
 # mounts host paths, which the `observability` namespace's Pod Security level
 # forbids.
 #
-# Destinations come with the backends: the PR that adds Mimir and Loki sets
-#
-#   macro.alloyNode = {
-#     metricsForwardTo = [ "prometheus.remote_write.mimir.receiver" ];
-#     logsForwardTo = [ "loki.write.loki.receiver" ];
-#     extraConfig = ''prometheus.remote_write "mimir" { ... } loki.write "loki" { ... }'';
-#     egress = [ <rule that reaches the Mimir and Loki pods> ];
-#   };
-#
-# and lets the `alloy` namespace in through its own ingress policies. Until
-# then Alloy collects and drops.
+# Destinations come from `macro.alloyNode`, which ../backends/default.nix sets:
+# the Mimir and Loki writers, their forward_to receivers, and the egress rule
+# that reaches the backends' pods. Their own ingress policies let the `alloy`
+# namespace in.
 {
   charts,
   config,
