@@ -172,7 +172,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   the session repo, the `enable-agent-navigation` flag, Redis budgets and
   the gateway `ui_command` send.
   `src/code_mode/connected_apps.rs` serves a running execution's
-  `macro.connectedApps` through the in-process egress service.
+  `macro.connectedApps` through the in-process egress service; a scoped
+  session's code is refused it, and its turn calls no remote MCP tool
+  directly either (`ScopedToolGate::refuse_remote_mcp`).
   Code execution's destination list in `src/code_mode.rs` (`SdkHost`) also
   includes the configured editing worker, whose comment-mark endpoint requires
   a scoped document token; this does not grant permission to edit document

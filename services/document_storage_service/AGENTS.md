@@ -22,8 +22,10 @@ threads, pins, recents, notifications, folders, activity.
 - Personal contact pages use `graphql_contacts` and the contacts directory service.
   Compose primary-backed graph and name readers in `server.rs`, and insert the
   context through the shared GraphQL HTTP/websocket request-data function.
-- `src/api/graphql_soup.rs`: the `/soup/graphql` (+ `/soup/graphql/ws`
-  subscriptions) GraphQL API — the frontend's main read path for Home/Recent/
+- `src/api/graphql_soup.rs`: the `/items/soup/graphql` (+
+  `/items/soup/graphql/ws` subscriptions; mounted under `ITEMS_PATH`, and
+  `no_scope_reaches_graphql_where_it_is_mounted` holds `agent_correlation`'s
+  `ANY_WRITE` to that mount) GraphQL API — the frontend's main read path for Home/Recent/
   search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the

@@ -61,6 +61,9 @@ code, not in its prompt. The harness also signs the scope into the credential
   recorded a sharing refusal with 403 `SharingRefused`, whatever error the
   handler mapped it to). `enforce_signed_scope` is the
   check alone, for a service with no database to look a correlation up in.
+  `refuse_signed_scopes` refuses every credential that signs a scope, for a
+  service no scope may reach at all (the image proxy, which fetches what
+  its caller names).
 - `src/outbound.rs`: invocation mappings and session-agent lookup on the primary.
 
 ## Boundaries
@@ -85,6 +88,12 @@ code, not in its prompt. The harness also signs the scope into the credential
   authority.
 - Do not check session state: accepted work can complete after a session ends.
 - A scope is matched against the request path: the SDK's path, alone or
-  under one gateway service prefix (`SERVICE_PREFIXES`). Never match by
+  under one gateway service prefix (`SERVICE_PREFIXES`), then alone or
+  under one API version (`/v1`; document storage, cognition and
+  notification serve every route under `/{version}`). Never match by
   suffix: `/web/search` is a write that ends like `/search`.
+- `ANY_WRITE` names GraphQL where document storage mounts it
+  (`/items/soup/graphql`); its test
+  `no_scope_reaches_graphql_where_it_is_mounted` builds the path from the
+  router's own constants, so a moved mount fails until the scope follows.
 - Session deletion cascades mappings; activity retains its existing entity lifecycle.
