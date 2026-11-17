@@ -1,8 +1,6 @@
 import { t } from '@app/lib/i18n';
-import PinIcon from '@icon/system/regular/push-pin.svg';
-import UnpinIcon from '@icon/system/regular/push-pin-slash.svg';
+import SidePanelIcon from '@icon/system/regular/sidebar-simple.svg';
 import { Button } from '@ui';
-import { Show } from 'solid-js';
 
 export function ComposerPin(props: {
   pinned: boolean;
@@ -21,9 +19,7 @@ export function ComposerPin(props: {
       disabled={props.disabled}
       onClick={props.onToggle}
     >
-      <Show when={props.pinned} fallback={<PinIcon class="size-4" />}>
-        <UnpinIcon class="size-4" />
-      </Show>
+      <SidePanelIcon class="size-4 rotate-180" />
     </Button>
   );
 }

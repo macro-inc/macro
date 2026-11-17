@@ -1,10 +1,13 @@
-import { createRoot } from 'solid-js';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createComponent, createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import { ComposerPin } from '../components/composer/actions/ComposerPin';
 import { createComposerHeaderDrag } from './create-composer-header-drag';
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
   for (const dispose of disposers.splice(0)) dispose();
+  cleanup();
   document.body.replaceChildren();
 });
 
@@ -41,9 +44,15 @@ function setup() {
   header.releasePointerCapture = vi.fn(() => {
     captured = false;
   });
-  const onPin = vi.fn();
+  const onPin = vi.fn(() => {
+    pinned = true;
+  });
+  const onUnpin = vi.fn(() => {
+    pinned = false;
+  });
   const onFinish = vi.fn();
   let disabled = false;
+  let pinned = false;
   let width = 1000;
   const source = createRoot((dispose) => {
     disposers.push(dispose);
@@ -51,7 +60,9 @@ function setup() {
       boundary: () => ({ left: 300, top: 100, width, height: 800 }),
       surface: () => ({ left: 500, top: 200, width: 384, height: 500 }),
       disabled: () => disabled,
+      pinned: () => pinned,
       onPin,
+      onUnpin,
       onFinish,
     });
   });
@@ -61,7 +72,11 @@ function setup() {
     button,
     source,
     onPin,
+    onUnpin,
     onFinish,
+    setPinned: (value: boolean) => {
+      pinned = value;
+    },
     resize: (nextWidth: number) => {
       width = nextWidth;
     },
@@ -170,4 +185,81 @@ it('keeps a moved surface inside resized content without mutating its saved posi
   expect(source.position()).toEqual({ x: 408, y: 240 });
   resize(1000);
   expect(source.position()).toEqual({ x: 750, y: 240 });
+});
+
+it('drags a pinned composer over the grid and restores its event anchor on drop', () => {
+  const { header, source, onPin, onUnpin, onFinish, setPinned } = setup();
+  setPinned(true);
+  pointer(header, 'pointerdown', 850, 210);
+  pointer(window, 'pointermove', 650, 250);
+  expect(source.state.active).toBe(true);
+  expect(source.state.overTarget).toBe(false);
+  expect(source.state.position).toEqual({ x: 308, y: 240 });
+  expect(onUnpin).not.toHaveBeenCalled();
+  pointer(window, 'pointerup', 650, 250);
+  expect(onUnpin).toHaveBeenCalledOnce();
+  expect(onPin).not.toHaveBeenCalled();
+  expect(source.state.position).toBeUndefined();
+  expect(onFinish).toHaveBeenLastCalledWith('floating');
+});
+
+it('retains pinning when a pinned drag returns to the dock', () => {
+  const { header, source, onPin, onUnpin, onFinish, setPinned } = setup();
+  setPinned(true);
+  pointer(header, 'pointerdown', 850, 210);
+  pointer(window, 'pointermove', 650, 250);
+  pointer(window, 'pointermove', 1000, 250);
+  expect(source.state.overTarget).toBe(true);
+  pointer(window, 'pointerup', 1000, 250);
+  expect(onPin).not.toHaveBeenCalled();
+  expect(onUnpin).not.toHaveBeenCalled();
+  expect(source.state.position).toBeUndefined();
+  expect(onFinish).toHaveBeenLastCalledWith('pinned');
+});
+
+it('resets a floating position after pinning and unpins the same session on a later drag', () => {
+  const { header, source, onPin, onUnpin, setPinned } = setup();
+  pointer(header, 'pointerdown', 600, 210);
+  pointer(window, 'pointerup', 700, 250);
+  expect(source.state.position).toEqual({ x: 600, y: 240 });
+  pointer(header, 'pointerdown', 600, 210);
+  pointer(window, 'pointerup', 1100, 250);
+  expect(onPin).toHaveBeenCalledOnce();
+  expect(source.state.position).toBeUndefined();
+  setPinned(true);
+  pointer(header, 'pointerdown', 850, 210);
+  pointer(window, 'pointerup', 650, 250);
+  expect(onUnpin).toHaveBeenCalledOnce();
+  expect(source.state.position).toBeUndefined();
+});
+
+it('cancels a pinned drag without changing pinning or its anchor', () => {
+  const { header, source, onPin, onUnpin, onFinish, setPinned } = setup();
+  setPinned(true);
+  pointer(header, 'pointerdown', 850, 210);
+  pointer(window, 'pointermove', 650, 250);
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  expect(source.state.active).toBe(false);
+  expect(source.state.position).toBeUndefined();
+  expect(onPin).not.toHaveBeenCalled();
+  expect(onUnpin).not.toHaveBeenCalled();
+  expect(onFinish).toHaveBeenLastCalledWith('cancelled');
+  pointer(window, 'pointerup', 650, 250);
+  expect(onUnpin).not.toHaveBeenCalled();
+});
+
+it('keeps the pin button actionable in both states', () => {
+  const onToggle = vi.fn();
+  const floating = render(() =>
+    createComponent(ComposerPin, { pinned: false, onToggle })
+  );
+  const pin = screen.getByRole('button', { name: /pin/i });
+  expect(pin.getAttribute('aria-pressed')).toBe('false');
+  fireEvent.click(pin);
+  floating.unmount();
+  render(() => createComponent(ComposerPin, { pinned: true, onToggle }));
+  const unpin = screen.getByRole('button', { name: /unpin/i });
+  expect(unpin.getAttribute('aria-pressed')).toBe('true');
+  fireEvent.click(unpin);
+  expect(onToggle).toHaveBeenCalledTimes(2);
 });

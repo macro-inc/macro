@@ -13,6 +13,7 @@ interface HeaderGesture {
   surface: ComposerDragBounds;
   previous: ComposerDragPoint | undefined;
   target: HTMLElement;
+  pinned: boolean;
 }
 
 interface HeaderDragState {
@@ -30,7 +31,9 @@ export function createComposerHeaderDrag(options: {
   boundary: Accessor<ComposerDragBounds | undefined>;
   surface: Accessor<ComposerDragBounds | undefined>;
   disabled: Accessor<boolean>;
+  pinned?: Accessor<boolean>;
   onPin: () => void;
+  onUnpin?: () => void;
   onStart?: () => void;
   onFinish?: (outcome: ComposerDragOutcome) => void;
 }) {
@@ -101,10 +104,16 @@ export function createComposerHeaderDrag(options: {
     if (!gesture) return;
     const active = state.active;
     const pin = active && state.overTarget;
+    const wasPinned = gesture.pinned;
     detach();
-    setState({ active: false, overTarget: false });
+    setState({
+      active: false,
+      overTarget: false,
+      position: active && (pin || wasPinned) ? undefined : state.position,
+    });
     if (!active) return;
-    if (pin) options.onPin();
+    if (pin && !wasPinned) options.onPin();
+    if (!pin && wasPinned) options.onUnpin?.();
     options.onFinish?.(pin ? 'pinned' : 'floating');
   };
   const onPointerCancel = (event: PointerEvent) => {
@@ -138,6 +147,7 @@ export function createComposerHeaderDrag(options: {
       surface,
       previous: state.position ? { ...state.position } : undefined,
       target: event.currentTarget,
+      pinned: options.pinned?.() ?? false,
     };
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -156,5 +166,12 @@ export function createComposerHeaderDrag(options: {
     return clampComposerPosition(current, surface, boundary);
   };
   onCleanup(cancel);
-  return { state, target, position, start, cancel };
+  return {
+    state,
+    target,
+    position,
+    start,
+    cancel,
+    reset: () => setState('position', undefined),
+  };
 }

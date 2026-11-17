@@ -24,10 +24,13 @@ calendar account metadata and other conferencing providers keep their original U
 Desktop event creation and editing use a 384px composer rather than a second
 split inside Calendar. A selected grid range or event anchors it beside that
 selection. **Pin event composer** reserves a right-side panel; unpinning keeps the
-same draft and field state. Drag the empty header area to move a floating composer;
-the right-side target lights up, and dropping there pins it. Escape, pointer
-cancellation, or losing window focus cancels the drag without discarding edits.
-Header menus and buttons retain their normal behavior. While pinned, selecting
+same draft and field state. The header uses the rotated side-panel icon for both
+new and existing-event composers. Drag its empty header area to move a floating
+composer; dropping on the right-side target pins it. Dragging a pinned header
+left floats the card with a shadow; dropping over the calendar returns it to its
+event anchor, while dropping back on the panel leaves it pinned. Escape, pointer
+cancellation, or losing window focus cancels without discarding edits. Header
+menus and buttons retain their normal behavior. While pinned, selecting
 another editable occurrence replaces the editor without collapsing its panel;
 a dirty draft asks for discard first. Rejecting discard keeps that draft. Selecting
 the same occurrence never resets edits. Read-only occurrences keep their existing
@@ -40,16 +43,22 @@ selections and supplied draft values keep their chosen range.
 
 The desktop composer orders kind, title, time, description, guests, call, location,
 and calendar in aligned icon/value rows. Its title grows to three lines, then scrolls.
+The desktop header and phone title row share one 28px event-kind chip on the
+secondary surface. Its menu shows calendar-icon Event and prohibit-icon Out of
+office with a check beside the current kind. Edits and locked drafts cannot
+change kind. Agent drafts display an agent mark inside the chip on both layouts.
 Location is an inline text field. **More options** reveals Notifications, authorized
 Guest permissions, and Visibility; it also reveals an empty description on an
 existing event. Pinning keeps those options expanded. Visibility for **This event**
 is unavailable because occurrence reads do not expose that override.
 The plain duration value opens duration choices and **All day**. Choosing a duration
 keeps that length when the start moves; explicitly picking an end keeps that end fixed.
-Dropdown triggers and date/time inputs use the theme control surface. Their menus
-stay inside the composer's portal scope. Verify that calendar, recurrence, Guests,
+Dropdown triggers and date/time inputs use the theme control surface. Menus use
+shared Dropdown spacing; searchable clock and time-zone lists keep their listbox
+semantics with the same menu frames. Verify calendar, recurrence, Guests,
 conferencing, and Notifications open on the first click from the title field and
-accept changes without closing the composer.
+accept changes without closing the composer. Reminder pills contain their
+value, chevron, and remove button within one frame; Add follows the last pill.
 Desktop date pills open one month for a start-then-end range selection. Both dates
 commit together; Escape or an outside press drops an incomplete selection. Same-day
 ranges show one date, except when only the end is editable; multi-day ranges show
@@ -61,27 +70,28 @@ Start-time edits keep the event's length until its end is explicitly changed.
 Legacy per-end date pickers also preserve the duration or all-day day count.
 A start past a fixed end shows the end-before-start error.
 
-The phone composer orders title/type, When, people, call/calendar, optional-field
-add rows, time zone, reminders, guest permissions, and visibility. Adding a
-Description or Location replaces its add row and focuses the field in its final
-position. The title becomes compact above the scroller after its group scrolls
-away. The footer stays outside the single scroll viewport; its fade disappears
-at the bottom. First tap on a time pill opens the keyboard-free list, a second
-tap enters typing, and choosing an overnight end advances the end date. People
-selection opens a staged picker: Done applies; Cancel or lost permission drops
-the draft. Verify both ordinary and recurring edits, keyboard dismissal, and
-save-failure retry on a physical phone. Phone Day slot taps open the same
-composer low enough to retain calendar context; timed slots show a separate
-unsaved one-hour dashed draft with native start and end resize handles.
+The phone composer orders title and one event-kind dropdown chip, When, people,
+call/calendar, optional-field add rows, time zone, reminders, guest permissions,
+and visibility. Adding a Description or Location replaces its add row and focuses
+the field in its final position. The title becomes compact above the scroller
+after its group scrolls away. The footer stays outside the single scroll viewport;
+its fade disappears at the bottom. First tap on a time pill opens the
+keyboard-free list, a second tap enters typing, and choosing an overnight end
+advances the end date. People selection opens a staged picker: Done applies;
+Cancel or lost permission drops the draft. Verify both ordinary and recurring
+edits, keyboard dismissal, and save-failure retry on a physical phone. Phone Day
+slot taps open the same composer low enough to retain calendar context; timed
+slots show a separate unsaved one-hour dashed draft with native start and end
+resize handles.
 Resize either end while the composer remains open:
 its date/time fields update without clearing other edits. Editing those fields
 or choosing a time zone updates the draft's grid instants; switching calendars
 updates its color. The Day-slot sheet has no scrim, leaves the grid interactive,
 and dismisses on outside taps except during the draft gesture. Other sheets
 remain modal. Closing removes the draft; saving creates one persisted event.
-New opens at full sheet height. The phone date/time pills share 110px columns
-and keep the meridiem at the right edge. Type choices use accent chips, every
-option stays in the one scroller, and the sheet surface is opaque.
+New opens at full sheet height. Desktop and phone date/time pills share fixed
+110px widths and keep the meridiem at the right edge. Every option stays in the
+one scroller, and the sheet surface is opaque.
 
 Phone agent review cards use the same grouped fields and clock picker as the
 standalone sheet. Adding Location inserts and focuses it after the call row.
@@ -265,9 +275,9 @@ new session from the same meeting link must start a separate chat thread.
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. `Create event` or `Save` sits at
 the top right of the sheet's pinned chrome, below the handle, so it stays in
-reach while the form scrolls. The title and description come first, then
-`Event` and `Out of office` as selectable labels. A section of rows holds
-All-day (switch on the right), Starts and Ends (date and time), and Repeat; a
+reach while the form scrolls. The title and description come first, then one
+event-kind dropdown chip offering `Event` and `Out of office`. A section of rows
+holds All-day (switch on the right), Starts and Ends (date and time), and Repeat; a
 second has one row each for Calendar, Guests, Call, Location, and Reminders
 (Declines and Message for out-of-office events). Location is a text field in
 its row, so the sheet scrolls it above the keyboard. Guest permissions follow, one

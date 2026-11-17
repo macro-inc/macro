@@ -34,8 +34,10 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
     // The dock's parent is the content area below the toolbar and beside the sidebar.
     boundary: () => host.dock()?.parentElement?.getBoundingClientRect(),
     surface: () => content?.getBoundingClientRect(),
-    disabled: () => pinned() || host.sessions.state.transitioning,
+    disabled: () => host.sessions.state.transitioning,
+    pinned,
     onPin: () => host.sessions.setPinned(session.key, true),
+    onUnpin: () => host.sessions.setPinned(session.key, false),
     onStart: () => {
       operation = startUiOperation('calendar.composer.drag');
     },
@@ -76,6 +78,7 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
     if (dock) observer.observe(dock);
     onCleanup(() => observer.disconnect());
   });
+  const docked = () => pinned() && !drag.state.active;
   const dockRect = () => {
     measureVersion();
     return host.dock()?.getBoundingClientRect();
@@ -83,7 +86,7 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
   const anchorRect = () => {
     measureVersion();
     const dock = dockRect();
-    if (pinned() && dock)
+    if (docked() && dock)
       return new DOMRect(dock.left, dock.top, 0, dock.height);
     const position = drag.position();
     if (position) return new DOMRect(position.x - 8, position.y, 0, 0);
@@ -102,9 +105,9 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
     <Popover
       open
       placement="right-start"
-      gutter={pinned() ? 0 : 8}
-      flip={!pinned() && !drag.state.position}
-      slide={!pinned() && !drag.state.position}
+      gutter={docked() ? 0 : 8}
+      flip={!docked() && !drag.state.position}
+      slide={!docked() && !drag.state.position}
       getAnchorRect={anchorRect}
     >
       <ScopedPortal scope="global">
@@ -116,16 +119,17 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
             />
           )}
         </Show>
+        {/* Local menus must escape the card; the editor body owns scrolling. */}
         <Popover.Content
           ref={content}
-          class="portal-scope menu-surface z-modal flex min-h-0 flex-col overflow-hidden outline-none"
+          class="portal-scope menu-surface z-modal flex min-h-0 flex-col overflow-visible outline-none"
           classList={{
-            'rounded-[14px]': !pinned(),
-            'rounded-none border-l border-edge shadow-none': pinned(),
+            'rounded-[14px] shadow-lg': !docked(),
+            'rounded-none border-l border-edge shadow-none': docked(),
           }}
           style={{
-            width: pinned() ? `${dockRect()?.width ?? 384}px` : '384px',
-            height: pinned() ? `${dockRect()?.height ?? 0}px` : undefined,
+            width: docked() ? `${dockRect()?.width ?? 384}px` : '384px',
+            height: docked() ? `${dockRect()?.height ?? 0}px` : undefined,
             'max-width': 'calc(100vw - 32px)',
             'max-height': 'calc(100dvh - 32px)',
           }}
@@ -164,8 +168,11 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
           <StandaloneComposer
             {...session.request}
             pinned={pinned()}
-            onTogglePin={() => host.sessions.setPinned(session.key, !pinned())}
-            onHeaderPointerDown={pinned() ? undefined : drag.start}
+            onTogglePin={() => {
+              drag.reset();
+              host.sessions.setPinned(session.key, !pinned());
+            }}
+            onHeaderPointerDown={drag.start}
             onDirtyChange={(dirty) =>
               host.sessions.setDirty(session.key, dirty)
             }

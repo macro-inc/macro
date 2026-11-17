@@ -67,6 +67,9 @@ host lives in `../block-calendar/`.
   and picked clock state through its `primitives/create-time-input.ts` in both layouts.
   Its `mobile-time-input/MobileTimeInput.tsx` is the new list-first T1 presentation;
   `MobileStartTime` and `MobileEndTime` share the same range and rollover behavior.
+  Date/time pills share fixed widths, and clock/time-zone menus use the shared
+  Dropdown frames without replacing their listbox semantics. Reminder pills
+  share `components/composer/reminders/ComposerReminderPill.tsx` across layouts.
   `views/composer/mobile/MobileComposer.tsx` composes the 2J sheet around those fields;
   `MobileComposerHost.tsx` uses the popover's footer, header, and sole scroll viewport.
   New-menu sheets use 92% height; timed phone Day slot taps request a low 42%
@@ -78,9 +81,10 @@ host lives in `../block-calendar/`.
   composer primitives.
   Guest selection stages changes in `PickerSheet` and applies only on Done.
 - `primitives/create-agent-composer.ts` keeps one validated review decision; the
-  agent host selects `MobileAgentComposer` for the same 2J fields on touch.
-  Pass explicit time-zone metadata through the tool adapter and keep unsupported
-  visibility read-only; the current tool accepts one time, not alternatives.
+  agent host selects `DesktopComposer` or `MobileAgentComposer` over that model.
+  Both layouts use the shared event-kind chip with an agent mark. Pass explicit
+  time-zone metadata through the tool adapter and keep unsupported visibility
+  read-only; the current tool accepts one time, not alternatives.
   Feed the same validated time and recurrence snapshot to the preview and submission.
 - Pass the calendar clock preference into shared date/time controls from their
   host; generic fields must not import calendar preferences.
