@@ -1,0 +1,23 @@
+packages/sdk/generated/agent-harness/index.ts
+  s_e4b3032e8c4db7::t_b6e37253d2ad53 4
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_e4b3032e8c4db7::t_13b83135c24a56 1966-1971,1977-1982,2451-2456
+packages/sdk/specs/agent-harness.json
+  s_e4b3032e8c4db7::t_5e80502d9eadbb 6837-6840,6844-6847,6850,7545-7549
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "50f98b17829781f906aacef21ecb6b555e59cc67",
+  "prompts": {},
+  "sessions": {
+    "s_e4b3032e8c4db7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24925383-e21a-4525-9705-fbe4754c37cc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
