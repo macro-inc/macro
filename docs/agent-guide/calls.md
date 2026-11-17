@@ -4,7 +4,7 @@
 
 The Calls list starts with the Calls `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows.
 
-On desktop a collapsible sidebar starts with the shared outlined `New` button;
+Above 720px on desktop, a collapsible sidebar starts with the shared outlined `New` button;
 `Search calls` is in the list header. The sidebar also holds
 the views `All` / `Missed` / `Unattended`, a `Type` section (`Internal` /
 `External`; External means at least one guest without a Macro account joined),
@@ -13,7 +13,9 @@ a type, channel, or tag shows only that one; choosing it again clears it. These
 refinements carry across the three views. The desktop header uses one row:
 title, an outlined filter group, a view-options group, `New`, and an expandable
 Search icon. Command-F expands and focuses search; Close or Escape clears it
-and restores the icon. Phones keep pill tabs and the header search.
+and restores the icon. Touch keeps pill tabs and the header search. Above 720px on touch, the Calls
+list stays left of an empty or selected call preview, and Show sidebar opens
+view/filter navigation in a sheet. Ordinary selections remain in the preview.
 `New call` opens a menu with `Start an instant
 call`, `Call a channel or contact`, and `Manage call links`. `Start an instant call` opens `/app/meet/new`
 without creating a meeting, the same setup reached from `New Call` beside
@@ -276,7 +278,7 @@ LiveKit speaking state. Background noise can also activate this audio indicator.
 
 ### Calls whose discussion is a channel thread
 
-A new call in a channel stores
+With the `enable-call-channel-thread` server flag on for the caller, a new call in a channel stores
 `channel_thread` as its discussion, and `CallRecord.discussion` says so. Past channel calls, calls
 already running, and calls with no channel keep `call_chat`, and behave as described elsewhere here.
 
@@ -366,7 +368,9 @@ same download flow and confirmations as Drive files.
 
 ### Call links and guests — `/app/meet/join/:shareToken`
 
+These routes require `enable-quick-calls` for both signed-in users and guests.
 In Calendar, create an event with `Macro call` selected (the default).
+The composer waits for the quick-call flag to load before choosing its default.
 Saving creates the call and includes its link in the invitation;
 the room starts on the first join. Use Calendar to edit the event or invite guests.
 Teammate rings require a live call; selecting teammates during new-call setup

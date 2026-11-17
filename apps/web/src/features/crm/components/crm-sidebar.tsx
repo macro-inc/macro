@@ -2,7 +2,6 @@ import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
 import { getIconConfig } from '@core/component/EntityIcon';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import ExportIcon from '@icon/system/regular/download-simple.svg';
 import GearIcon from '@icon/system/regular/gear-six.svg';
@@ -52,14 +51,12 @@ export function CrmSidebar(props: {
   return (
     <ViewSidebar.Root aria-label={t('crm.navigation')}>
       <header class="flex shrink-0 flex-col">
-        <Show when={!isTouchDevice()}>
-          <ViewSidebar.Header>
-            <div class="flex min-w-0 items-center gap-1">
-              <ViewSidebar.CloseButton class="shrink-0" />
-              <ViewSidebar.Title>{t('nav.customers')}</ViewSidebar.Title>
-            </div>
-          </ViewSidebar.Header>
-        </Show>
+        <ViewSidebar.Header>
+          <div class="flex min-w-0 items-center gap-1">
+            <ViewSidebar.CloseButton class="shrink-0" />
+            <ViewSidebar.Title>{t('nav.customers')}</ViewSidebar.Title>
+          </div>
+        </ViewSidebar.Header>
         <ViewSidebar.Primary ref={tourTarget(COMPANIES_TOUR.create)}>
           <CrmCreateMenu
             onCreateCompany={props.onCreateCompany}

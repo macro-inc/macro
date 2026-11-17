@@ -51,6 +51,7 @@ import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { useNativeNavigationEdge } from '@core/mobile/nativeNavigationEdge';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { hasLoginCookie, updateCookie } from '@core/util/cookies';
 import { lazyNamed } from '@core/util/lazyNamed';
@@ -181,7 +182,7 @@ export function RootFrame(props: ParentProps) {
     <MobileSettingsProvider>
       <div
         class={cn(
-          'relative flex flex-col justify-between not-touch:bg-page w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)',
+          'relative flex flex-col justify-between not-touch:bg-page touch:bg-panel w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)',
           hasOverlayTitleBar && 'pt-[40px]'
         )}
       >
@@ -261,6 +262,13 @@ const MobileCallIsland = lazyNamed(
 
 export function AppChrome(props: ParentProps) {
   const isAuthenticated = useIsAuthenticated();
+  const navigationEdge = useNativeNavigationEdge();
+  const dockEdge = (): 'left' | 'right' | 'bottom' =>
+    SearchState.isOpen() ? 'bottom' : navigationEdge();
+  const navigationInset = (side: 'left' | 'right') =>
+    isTouchDevice() && isAuthenticated() && dockEdge() === side
+      ? 'var(--native-navigation-content-inset, calc(var(--mobile-chrome-button-size) + 2 * var(--mobile-chrome-gutter)))'
+      : '0px';
   // A login cookie shows the rail while sign-in is confirmed; a stale one
   // goes through SessionExpiredRedirect instead of leaving the app blank.
   const sidebarVisible = () =>
@@ -342,6 +350,10 @@ export function AppChrome(props: ParentProps) {
       {/* The banner already sits below the status bar on touch devices. */}
       <div
         class="min-h-0 flex-1 flex"
+        style={{
+          'padding-left': navigationInset('left'),
+          'padding-right': navigationInset('right'),
+        }}
         classList={{ 'touch:[--safe-top:0px]': systemStatus() !== undefined }}
       >
         <ItemDndProvider>
@@ -361,7 +373,7 @@ export function AppChrome(props: ParentProps) {
         </ItemDndProvider>
       </div>
       <Show when={isTouchDevice() && isAuthenticated()}>
-        <FloatRegionHost />
+        <FloatRegionHost navigationEdge={dockEdge()} />
         <Suspense>
           <MobileCallIsland />
         </Suspense>
@@ -383,7 +395,7 @@ export function AppChrome(props: ParentProps) {
           region="dock"
           active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
         >
-          <MobileDockRow />
+          <MobileDockRow vertical={dockEdge() !== 'bottom'} />
         </FloatRegion>
       </Show>
       <InitialInteractiveOnboardingModal />

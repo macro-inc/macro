@@ -11,11 +11,18 @@ the Soup-backed thread list, and saved email views.
   `mail.savedView` URL id, and saved-view selection.
 - `queries/email-query.ts`: each tab's or saved view's Soup `ef` filter.
 - `queries/use-email-query.ts`: list, search, read admission, local drafts.
-- `views/mobile/email-search.tsx`: the phone search page's header (field and
-  Cancel, composed with `MobileHeader`) and recent searches; the mobile layout
-  in `email-view.tsx` opens it from the search pill and keeps the list mounted
-  below it. `primitives/create-email-mobile-search.ts` owns whether the page is
+- `views/mobile/email-search.tsx`: the touch search page's field and Cancel
+  (`EmailMobileSearchField`) and recent searches
+  (`EmailMobileRecentSearches`); the mobile layout in `email-view.tsx` opens
+  it from the search pill, puts the field in place of the list pane's pill
+  row, and keeps the list mounted below it. `primitives/create-email-mobile-search.ts` owns whether the page is
   open, and ends its search whenever it closes.
+- `components/EmailDetailView.tsx` and `components/EmailComposeRouteView.tsx`:
+  entries for a thread and a new email inside Mail. They hold the state and
+  switch between the desktop views (`views/email-detail.tsx`,
+  `views/email-compose-route.tsx`) and the touch ones in `views/mobile/`,
+  which host the thread's or composer's own mobile header in the pane's top
+  bar through `SplitHeaderScope`.
 - `primitives/create-search-scroll-reset.ts`: a new search starts at the top
   once its own results replace the rows kept on screen.
 - `search/`: recent searches (`recent-searches.ts`, per person in browser
@@ -31,7 +38,7 @@ the Soup-backed thread list, and saved email views.
   editors; the mobile drawer shares People.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
-- `views/email-saved-views.tsx`: sidebar section, mobile picker, menus, the
+- `views/email-saved-views.tsx`: sidebar section (also the touch sidebar sheet), menus, the
   builder dialog, header actions, unavailable and skipped-setting states.
 
 ## Gotchas

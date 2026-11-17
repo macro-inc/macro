@@ -5,6 +5,7 @@ import {
 import { shareEntity } from '@app/features/access-requests/core/types';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFlow, usePending } from '@app/observability/flow';
+import { useSplitHeaderScope } from '@components/app/SplitHeaderScope';
 import {
   DocumentFileSidePanelSections,
   SidePanel,
@@ -41,6 +42,8 @@ export type FileDetailLayoutProps = ParentProps<{
 }>;
 
 export function FileDetailLayout(props: FileDetailLayoutProps) {
+  // A hosted split header carries the details toggle, as the block's does.
+  const hostedHeader = useSplitHeaderScope();
   const permissions = () => getPermissions(props.userAccessLevel);
   const canEdit = () => hasPermissions(permissions(), Permissions.CAN_EDIT);
 
@@ -49,7 +52,7 @@ export function FileDetailLayout(props: FileDetailLayoutProps) {
       floating
       defaultOpen={props.defaultSidePanelOpen ?? false}
       persistKey={`file:${props.documentId}`}
-      headerToggle={false}
+      headerToggle={!!hostedHeader}
     >
       <DocumentFileSidePanelSections
         documentId={props.documentId}

@@ -195,14 +195,12 @@ export function EmailSidebar() {
 
   return (
     <ViewSidebar.Root aria-label="Email navigation">
-      <Show when={!isTouchDevice()}>
-        <ViewSidebar.Header>
-          <div class="flex min-w-0 items-center gap-1">
-            <ViewSidebar.CloseButton class="shrink-0" />
-            <ViewSidebar.Title>Email</ViewSidebar.Title>
-          </div>
-        </ViewSidebar.Header>
-      </Show>
+      <ViewSidebar.Header>
+        <div class="flex min-w-0 items-center gap-1">
+          <ViewSidebar.CloseButton class="shrink-0" />
+          <ViewSidebar.Title>Email</ViewSidebar.Title>
+        </div>
+      </ViewSidebar.Header>
 
       <Show when={!isTouchDevice()}>
         <ViewSidebar.Primary>

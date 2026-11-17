@@ -261,6 +261,20 @@ async fn a_prompt_typed_in_a_tab_opens_in_that_tab_only() {
     assert_eq!(frame.kind, UiCommandKind::Open);
 }
 
+/// A program that rewrote a prompt the owner typed in a tab opens a Program
+/// turn that still names the tab; it never shows anything there.
+#[tokio::test]
+async fn a_program_turn_never_sends_a_command() {
+    let prompter = TurnPrompter {
+        kind: PrompterKind::Program,
+        ..typed_in_tab()
+    };
+    let harness = harness(Some(prompter), true, 1);
+
+    assert_eq!(harness.open(DOC).await, UiCommandOutcome::NoClient);
+    assert!(harness.gateway.frames().is_empty());
+}
+
 #[tokio::test]
 async fn a_system_turn_never_sends_a_command() {
     // Routines' notification batches, triggers and email-triggered turns are
