@@ -2,6 +2,8 @@
 # the rule groups, as the three provisioning documents Grafana reads.
 #
 # `goalertUrl` is where Grafana reaches GoAlert's API, without a trailing slash.
+# The contact points read `$GRAFANA_ALERT_TOPIC_ARN`, `$GOALERT_GRAFANA_KEY`
+# and `$GOALERT_GRAFANA_NOTIFY_KEY` from Grafana's environment.
 { lib, goalertUrl }:
 let
   lokiQuery = expr: {
