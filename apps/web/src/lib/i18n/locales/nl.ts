@@ -104,7 +104,6 @@ export default {
     close: 'Sluiten',
     delete: 'Verwijderen',
     rename: 'Naam wijzigen',
-    more: 'Meer',
     search: 'Zoeken',
     settings: 'Instellingen',
   },

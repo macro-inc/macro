@@ -103,7 +103,6 @@ export default {
     close: 'Đóng',
     delete: 'Xóa',
     rename: 'Đổi tên',
-    more: 'Thêm',
     search: 'Tìm kiếm',
     settings: 'Cài đặt',
   },

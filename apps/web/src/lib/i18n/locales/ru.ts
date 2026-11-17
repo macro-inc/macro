@@ -103,7 +103,6 @@ export default {
     close: 'Закрыть',
     delete: 'Удалить',
     rename: 'Переименовать',
-    more: 'Ещё',
     search: 'Поиск',
     settings: 'Настройки',
   },

@@ -103,7 +103,6 @@ export default {
     close: 'Lukk',
     delete: 'Slett',
     rename: 'Gi nytt navn',
-    more: 'Mer',
     search: 'Søk',
     settings: 'Innstillinger',
   },

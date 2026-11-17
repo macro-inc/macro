@@ -103,7 +103,6 @@ export default {
     close: 'बंद करें',
     delete: 'मिटाएं',
     rename: 'नाम बदलें',
-    more: 'और',
     search: 'खोजें',
     settings: 'सेटिंग',
   },

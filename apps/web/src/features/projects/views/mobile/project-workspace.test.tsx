@@ -32,14 +32,14 @@ vi.mock('../shared/project-workspace-layout', () => ({
 vi.mock('../../project-tasks-provider', () => ({
   ProjectTasksProvider: (props: ParentProps) => props.children,
 }));
-vi.mock('../shared/project-summary', () => ({
-  ProjectSummary: (props: ParentProps) => props.children,
+vi.mock('@core/component/InlineTitleEditor', () => ({
+  InlineTitleEditor: () => <h1>Project</h1>,
 }));
 vi.mock('./project-description', () => ({
   MobileProjectDescription: (props: ParentProps) => props.children,
 }));
-vi.mock('./project-details-action', () => ({
-  ProjectDetailsAction: () => null,
+vi.mock('@property/component/PropertyValuePill', () => ({
+  PropertyValuePill: () => null,
 }));
 vi.mock('../../components/project-progress', () => ({
   ProjectProgress: () => null,
@@ -95,6 +95,7 @@ it('keeps Add task available when the task area cannot fill the viewport', () =>
   ));
 
   expect(screen.getByText('Existing task')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /^More$/ })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Add task' }));
   expect(createTask).toHaveBeenCalledOnce();
 });

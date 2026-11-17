@@ -103,7 +103,6 @@ export default {
     close: 'Sulje',
     delete: 'Poista',
     rename: 'Nimeä uudelleen',
-    more: 'Lisää',
     search: 'Hae',
     settings: 'Asetukset',
   },

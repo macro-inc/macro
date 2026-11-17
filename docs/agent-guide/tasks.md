@@ -1208,7 +1208,8 @@ title and property pills, a description of up to eight lines with Show more /
 Show less, a Discussion entry, then Tasks. The description uses the largest
 five-to-eight-line preview that leaves the Tasks heading and the first row's top
 above the floating controls. Empty descriptions show the full placeholder without
-clamping or Show more. More opens the existing Details panel.
+clamping or Show more. The property row contains only property pills; open the
+existing Details panel from its header island.
 The header has caret-only Back, the truncating project title, Share, and Details;
 there is no Tasks header island or Overview/Tasks switch. The Tasks heading pins
 beneath the header and shows the progress ring, completed/total count, and Filters.
@@ -1237,7 +1238,7 @@ borderless tasks empty state immediately, even while a filtered layout query is
 pending. It says “No tasks yet” and “Add tasks to plan and track this project's
 work.” Editors get a filled Add task menu; everyone gets Documentation with a
 book icon, opening https://docs.macro.com/product/projects in a new tab. On phones,
-use its inline Add task action while the summary is visible. If linked tasks exist
+use the floating Task menu; do not add a second inline action. If linked tasks exist
 but search, filters, or hidden completed tasks remove them from the view, keep the filtered-empty
 message instead; no project-empty illustration is shown.
 

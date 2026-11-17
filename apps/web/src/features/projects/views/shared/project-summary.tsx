@@ -2,13 +2,11 @@ import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { Key } from '@solid-primitives/keyed';
-import { createSignal, type JSX, type ParentProps, Show } from 'solid-js';
+import { createSignal, type ParentProps, Show } from 'solid-js';
 import type { ProjectWorkspaceProps } from '../../context/project-workspace';
 import { canEditProject } from '../../core/project';
 
-export function ProjectSummary(
-  props: ParentProps<ProjectWorkspaceProps & { propertyAction?: JSX.Element }>
-) {
+export function ProjectSummary(props: ParentProps<ProjectWorkspaceProps>) {
   const [error, setError] = createSignal<string>();
   const rename = async (name: string) => {
     setError(undefined);
@@ -62,7 +60,6 @@ export function ProjectSummary(
             />
           )}
         </Key>
-        {props.propertyAction}
       </div>
       {props.children}
     </>

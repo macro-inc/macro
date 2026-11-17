@@ -14,7 +14,6 @@ import { ProjectSummary } from '../shared/project-summary';
 import { ProjectTasksEmptyState } from '../shared/project-tasks-empty-state';
 import { ProjectWorkspaceLayout } from '../shared/project-workspace-layout';
 import { MobileProjectDescription } from './project-description';
-import { ProjectDetailsAction } from './project-details-action';
 
 export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
@@ -60,10 +59,7 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
           class="h-full min-h-0 w-full overflow-y-auto overscroll-none pb-[calc(var(--mobile-content-inset-bottom,0px)+16px)]"
         >
           <div ref={setSummary} class="px-5 pt-4 pb-8">
-            <ProjectSummary
-              {...props}
-              propertyAction={<ProjectDetailsAction />}
-            >
+            <ProjectSummary {...props}>
               <MobileProjectDescription
                 ref={setDescription}
                 availableHeight={descriptionHeight()}

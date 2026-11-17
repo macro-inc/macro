@@ -44,7 +44,6 @@ export default {
   loadingConversation: 'Loading conversation',
   delete: 'Delete',
   rename: 'Rename',
-  more: 'More',
   search: 'Search',
   selectItem: 'Select item',
   contactsAndCompanies: 'Contacts & Companies',
