@@ -110,7 +110,7 @@ it('keeps a count when multiple projects are linked', () => {
   expect(view.getByRole('button', { name: 'Project: 2 items' })).toBeDefined();
 });
 
-it('filters by the assignee picked in the hover card, and only for people', () => {
+it('filters by the assignee picked in the hover card, and only for person properties', () => {
   const onFilterByUser = vi.fn();
   const assignees: EntityProperty = {
     ...project,
