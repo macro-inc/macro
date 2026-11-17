@@ -1,0 +1,37 @@
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecord.ts
+  s_e4b3032e8c4db7::t_fc793535972c91 34-36
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_e4b3032e8c4db7::t_81359d7b07ad23 6800
+crates/agent_code_mode/src/domain/models.rs
+  s_e4b3032e8c4db7::t_743845c8a71553 72-78,163-165
+crates/agent_code_mode/src/domain/ports.rs
+  s_e4b3032e8c4db7::t_fa52c106b6a9ef 1,22,27
+crates/agent_code_mode/src/domain/service.rs
+  s_e4b3032e8c4db7::t_6540a2c9d17101 156
+crates/agent_code_mode/src/domain/service/test.rs
+  s_e4b3032e8c4db7::t_3976d223b336a7 76,791-792,795-797
+crates/agent_code_mode/src/inbound/toolset/test/ocaml.rs
+  s_e4b3032e8c4db7::t_3e412a1a97adcf 10,69
+services/agent_harness_service/src/code_mode.rs
+  s_e4b3032e8c4db7::t_4652f6d0cad7cb 3-4,120,123,355,358-363
+services/agent_harness_service/src/code_mode/test.rs
+  s_e4b3032e8c4db7::t_4915372d3336c1 43-50,56-63,72-126,148-156,702-707
+services/agent_harness_service/src/internal_mcp/test/code_mode.rs
+  s_e4b3032e8c4db7::t_442ebab8c9966a 34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "26f9f2a96e648c7cedb664431c0c1f1e086dd522",
+  "prompts": {},
+  "sessions": {
+    "s_e4b3032e8c4db7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24925383-e21a-4525-9705-fbe4754c37cc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
