@@ -34,6 +34,7 @@ const buttonFrames = {
     'bg-transparent text-ink-muted border-border-secondary bg-none shadow-none',
   ghost:
     'bg-button-tertiary-bg text-ink-muted border-transparent bg-none shadow-none',
+  row: 'bg-button-tertiary-bg text-ink border-transparent bg-none shadow-none',
   danger: 'bg-button-danger-bg text-failure border-transparent shadow-button',
   'danger-ghost':
     'bg-button-tertiary-bg text-failure border-transparent bg-none shadow-none',
@@ -49,7 +50,7 @@ const buttonPressedStyles =
 
 /** Shared recipe for Button and headless controls that own their rendering. */
 const buttonStyles = createVariants(
-  'relative inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border font-medium select-none transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 data-disabled:cursor-not-allowed data-disabled:opacity-45 focus-visible:outline-hidden focus-visible:-outline-offset-2 motion-reduce:transition-none forced-colors:focus-visible:outline-current touch:min-h-9 touch:min-w-9',
+  'relative inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border font-medium select-none transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 data-disabled:cursor-not-allowed data-disabled:opacity-45 focus-visible:outline-hidden focus-visible:-outline-offset-2 motion-reduce:transition-none forced-colors:focus-visible:outline-current touch:min-w-9',
   {
     variant: {
       primary: cn(
@@ -84,6 +85,11 @@ const buttonStyles = createVariants(
         'not-touch:not-data-disabled:hover:bg-button-tertiary-hover not-touch:not-data-disabled:hover:text-ink not-data-disabled:active:bg-button-tertiary-pressed not-data-disabled:active:text-ink aria-pressed:bg-button-tertiary-pressed aria-pressed:text-ink not-touch:aria-pressed:not-data-disabled:hover:bg-button-tertiary-pressed popup-open:bg-button-tertiary-pressed popup-open:text-ink not-touch:popup-open:not-data-disabled:hover:bg-button-tertiary-pressed',
         buttonPressedStyles
       ),
+      row: cn(
+        buttonFrames.row,
+        'not-touch:not-data-disabled:hover:bg-button-tertiary-hover not-data-disabled:active:bg-button-tertiary-pressed popup-open:bg-button-tertiary-pressed',
+        buttonPressedStyles
+      ),
       danger: cn(
         buttonFrames.danger,
         'not-data-disabled:hover:bg-button-danger-hover not-data-disabled:active:bg-button-danger-pressed aria-pressed:bg-button-danger-pressed aria-pressed:not-data-disabled:hover:bg-button-danger-pressed popup-open:bg-button-danger-pressed popup-open:not-data-disabled:hover:bg-button-danger-pressed',
@@ -110,6 +116,8 @@ const buttonStyles = createVariants(
       'icon-sm': iconControlSizes.sm,
       'icon-md': iconControlSizes.md,
       sheet: 'min-h-11 px-4 py-2 text-[15px] leading-5',
+      'sheet-row': 'min-h-11 px-0 py-2 text-base leading-[22px] font-normal',
+      field: 'h-9 px-3 text-[15px] leading-5 font-normal',
       'icon-lg': iconControlSizes.lg,
       'icon-xl': iconControlSizes.xl,
     },
@@ -138,7 +146,10 @@ function buttonFinishClasses(variant: ButtonVariant, finish?: ButtonFinish) {
   }
   if (
     finish !== 'raised' &&
-    (variant === 'ghost' || variant === 'danger-ghost' || variant === 'link')
+    (variant === 'ghost' ||
+      variant === 'danger-ghost' ||
+      variant === 'link' ||
+      variant === 'row')
   ) {
     return undefined;
   }
@@ -162,6 +173,11 @@ export function buttonClasses(options: ButtonClassOptions = {}) {
     buttonStyles({ variant: isBare ? null : variant, size: options.size }),
     isBare && 'border-transparent bg-transparent shadow-none',
     !isBare && buttonFinishClasses(variant, finish),
+    (!options.size ||
+      ['xs', 'sm', 'md', 'icon-xs', 'icon-sm', 'icon-md'].includes(
+        options.size
+      )) &&
+      'touch:min-h-9',
     options.fullWidth && 'w-full',
     options.class
   );

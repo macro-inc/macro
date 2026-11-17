@@ -30,6 +30,7 @@ export interface CalendarComposerOptions {
   guestListHidden?: boolean;
   guestPolicyEditable?: boolean;
   detailsReadOnlyReason?: string;
+  visibilityReadOnlyReason?: string;
   showRecurringEditNotice?: boolean;
   onCalendarChange?: (calendarId: string, color: string) => void;
   onDirtyChange?: (dirty: boolean) => void;

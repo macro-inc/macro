@@ -9,6 +9,9 @@ const VALUES = ['default', 'public', 'private', 'confidential'] as const;
 export function ComposerVisibility(props: { fullWidth?: boolean } = {}) {
   const model = useCalendarComposer();
   const unavailable = () => model.editScope() === 'this_event';
+  const reason = () =>
+    model.options.visibilityReadOnlyReason ??
+    (unavailable() ? t('calendar.visibilityUnavailable') : undefined);
   const labels = {
     get default() {
       return t('calendar.visibilityDefault');
@@ -24,6 +27,7 @@ export function ComposerVisibility(props: { fullWidth?: boolean } = {}) {
     },
   };
   const label = () => {
+    if (model.options.visibilityReadOnlyReason) return t('calendar.visibility');
     if (unavailable()) return t('calendar.visibilityUnavailable');
     const value = model.visibility();
     return value ? labels[value] : t('calendar.visibility');
@@ -31,14 +35,14 @@ export function ComposerVisibility(props: { fullWidth?: boolean } = {}) {
   return (
     <Dropdown placement="bottom-start">
       <Tooltip
-        label={t('calendar.visibilityUnavailable')}
-        disabled={!unavailable()}
+        label={reason() ?? ''}
+        disabled={!reason()}
         class={props.fullWidth ? 'w-full' : undefined}
       >
         <Dropdown.Trigger
-          variant={props.fullWidth ? 'ghost' : 'value'}
+          variant={props.fullWidth ? 'row' : 'value'}
           finish="flat"
-          size={props.fullWidth ? 'sheet' : 'sm'}
+          size={props.fullWidth ? 'sheet-row' : 'sm'}
           fullWidth={props.fullWidth}
           class={props.fullWidth ? 'justify-between' : undefined}
           disabled={model.visibilityIsDisabled()}

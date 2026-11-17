@@ -109,8 +109,8 @@ export function TimezoneSelect(props: {
           class={
             props.appearance === 'value'
               ? buttonClasses({
-                  variant: props.fullWidth ? 'ghost' : 'value',
-                  size: props.fullWidth ? 'sheet' : 'sm',
+                  variant: props.fullWidth ? 'row' : 'value',
+                  size: props.fullWidth ? 'sheet-row' : 'sm',
                   fullWidth: props.fullWidth,
                   class: `min-w-0 ${props.fullWidth ? 'justify-between' : ''} ${props.class ?? ''}`,
                 })

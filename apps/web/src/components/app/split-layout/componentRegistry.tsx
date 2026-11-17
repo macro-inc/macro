@@ -459,6 +459,11 @@ registerComponent('calendar-event-compose', (params) => {
           | Promise<Partial<EventEditorInitialValues>>
           | undefined
       }
+      initialDrawerHeight={
+        typeof params?.initialDrawerHeight === 'number'
+          ? params.initialDrawerHeight
+          : undefined
+      }
       onCalendarChange={
         params?.onCalendarChange as
           | ((calendarId: string, color: string) => void)

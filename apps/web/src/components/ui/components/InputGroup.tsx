@@ -27,6 +27,7 @@ const INPUT_GROUP_SIZE_VARIANTS: Record<InputSize, string> = {
   md: 'h-8 text-base',
   lg: 'h-9 text-base',
   xl: 'h-12 text-base',
+  field: 'h-9 text-[15px] leading-5',
 };
 
 const INPUT_GROUP_ADDON_PADDING: Record<
@@ -58,6 +59,11 @@ const INPUT_GROUP_ADDON_PADDING: Record<
     end: 'pe-4',
     buttonEnd: '[&:has([data-button])]:pe-1.5',
   },
+  field: {
+    start: 'ps-3',
+    end: 'pe-3',
+    buttonEnd: '[&:has([data-button])]:pe-0.5',
+  },
 };
 
 // Touch keeps its original addon inset; desktop matches the pill Input.
@@ -70,6 +76,7 @@ const TOUCH_INPUT_GROUP_ADDON_PADDING: Record<
   md: { start: 'ps-2', end: 'pe-2' },
   lg: { start: 'ps-3', end: 'pe-3' },
   xl: { start: 'ps-4', end: 'pe-4' },
+  field: { start: 'ps-3', end: 'pe-3' },
 };
 
 const INPUT_GROUP_BUTTON_SIZE: Record<InputSize, ButtonSize> = {
@@ -78,6 +85,7 @@ const INPUT_GROUP_BUTTON_SIZE: Record<InputSize, ButtonSize> = {
   md: 'sm',
   lg: 'md',
   xl: 'lg',
+  field: 'sm',
 };
 
 /** Canonical variants for a framed input composition. */
@@ -94,6 +102,8 @@ export const inputGroupVariants = createVariants(
         'has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-edge-muted'
       ),
       bare: 'border-transparent bg-transparent',
+      value:
+        'border-transparent bg-ink/6 has-[[data-slot=input-group-control]:focus-visible]:ring-[1.5px] has-[[data-slot=input-group-control]:focus-visible]:ring-accent',
     },
     size: INPUT_GROUP_SIZE_VARIANTS,
   },

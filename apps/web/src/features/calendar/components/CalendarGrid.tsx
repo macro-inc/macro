@@ -9,6 +9,7 @@ import type {
   EventInput,
 } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
+import type { DateClickArg } from '@fullcalendar/interaction';
 import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import {
@@ -97,6 +98,7 @@ export interface CalendarGridSelection {
   color: string;
   eventId?: string;
   onDateSelect?: (selection: DateSelectArg) => void;
+  onDateClick?: (selection: DateClickArg) => void;
   onEventSelect?: (event: CalendarEvent, element: HTMLElement) => void;
   /** The selected event's chip mounted, replacing the element it had. */
   onSelectedEventMount?: (event: CalendarEvent, element: HTMLElement) => void;
@@ -288,6 +290,7 @@ export function CalendarGrid(props: CalendarGridProps) {
       selectMinDistance={0}
       snapDuration="00:30:00"
       select={(selection) => props.selection.onDateSelect?.(selection)}
+      dateClick={(selection) => props.selection.onDateClick?.(selection)}
       eventClick={
         props.selection.onEventSelect
           ? ({ el, event, jsEvent }) => {

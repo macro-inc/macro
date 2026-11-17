@@ -114,9 +114,13 @@ export type SplitPanelContextType = {
   /**
    * Opens the touch sheet at a fixed height (70% by default) while the calling
    * owner lives. The latest live owner wins; removing it restores the previous
-   * request, or natural height when none remain. Absent outside a touch popover.
+   * request, or natural height when none remain. An opaque surface follows the
+   * same owner lifetime. Absent outside a touch popover.
    */
-  fillDrawer?: (requestedHeight?: number) => void;
+  fillDrawer?: (
+    requestedHeight?: number,
+    options?: { opaque?: boolean }
+  ) => void;
   layoutRefs: {
     headerLeft?: HTMLDivElement;
     headerRight?: HTMLDivElement;

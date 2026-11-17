@@ -5,7 +5,9 @@ import type { EventComposerSplit } from './EventComposerSplit';
 
 /** Adapt the popover split lifecycle; the composer owns its platform layout. */
 export function CalendarComposerSplitAdapter(
-  props: ComponentProps<typeof EventComposerSplit>
+  props: ComponentProps<typeof EventComposerSplit> & {
+    initialDrawerHeight?: number;
+  }
 ) {
   const panel = useSplitPanelOrThrow();
   onMount(() =>
@@ -16,6 +18,7 @@ export function CalendarComposerSplitAdapter(
       event={props.event}
       initialValues={props.initialValues}
       suggestedValues={props.suggestedValues}
+      initialDrawerHeight={props.initialDrawerHeight}
       onCalendarChange={props.onCalendarChange}
       onDirtyChange={props.onDirtyChange}
       onCreated={props.onCreated}

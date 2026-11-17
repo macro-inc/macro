@@ -84,7 +84,7 @@ export type TabsProps<T extends string> = {
   ref?: (element: HTMLElement) => void;
 } & (
   | {
-      variant?: 'grouped' | 'pills';
+      variant?: 'grouped' | 'pills' | 'choices';
       size?: TabsSize;
       /** Let many options flow onto more lines; renders pills on touch too. */
       wrap?: boolean;
@@ -126,7 +126,9 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
   };
   // Wrapping presets retain separate pills; desktop view tabs share a frame.
   const touchStyle = (): TabsTouchStyle =>
-    isTouchDevice() && !props.wrap ? (props.touch ?? 'pill') : 'pills';
+    isTouchDevice() && !props.wrap && props.variant !== 'choices'
+      ? (props.touch ?? 'pill')
+      : 'pills';
 
   return (
     <KSegmentedControl
@@ -158,6 +160,7 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
                   size={props.size ?? 'md'}
                   iconOnly={props.iconOnly ?? false}
                   fullWidth={props.fullWidth ?? false}
+                  choices={props.variant === 'choices'}
                 />
               )}
             </For>
@@ -168,7 +171,11 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
           <Track {...props} />
         </Match>
         <Match
-          when={!isTouchDevice() && !props.wrap && props.variant !== 'pills'}
+          when={
+            !isTouchDevice() &&
+            !props.wrap &&
+            (props.variant === undefined || props.variant === 'grouped')
+          }
         >
           <div
             class={cn(
@@ -248,6 +255,7 @@ function PillOption<T extends string>(props: {
   iconOnly: boolean;
   fullWidth: boolean;
   joined?: boolean;
+  choices?: boolean;
 }) {
   const [tooltipOpen, setTooltipOpen] = createSignal(false);
   const square = () => props.iconOnly && props.option.icon !== undefined;
@@ -257,14 +265,19 @@ function PillOption<T extends string>(props: {
       disabled={props.option.disabled}
       class={cn(
         'relative inline-flex min-w-0 shrink-0 rounded-full border text-ink-muted transition-colors duration-120 motion-reduce:transition-none',
-        props.joined
-          ? 'self-stretch border-transparent data-checked:border-edge-button'
-          : 'bg-control border-edge-button',
-        'shadow-none not-touch:not-data-checked:hover:overlay-hover not-touch:not-data-checked:hover:text-ink',
-        'data-checked:overlay-active data-checked:text-ink',
-        'has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus',
+        props.choices
+          ? 'min-h-9 bg-control border-edge-button text-ink-muted data-checked:bg-accent/24 data-checked:border-accent/50 data-checked:text-accent'
+          : cn(
+              props.joined
+                ? 'self-stretch border-transparent data-checked:border-edge-button'
+                : 'bg-control border-edge-button',
+              'not-touch:not-data-checked:hover:overlay-hover not-touch:not-data-checked:hover:text-ink',
+              'data-checked:overlay-active data-checked:text-ink'
+            ),
+        'shadow-none has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus',
         'data-disabled:pointer-events-none data-disabled:opacity-50',
         !props.joined &&
+          !props.choices &&
           (square()
             ? iconControlSizes[props.size]
             : labeledControlFrames[props.size]),
@@ -281,7 +294,9 @@ function PillOption<T extends string>(props: {
       <KSegmentedControl.ItemLabel
         class={cn(
           'flex min-w-0 flex-1 self-stretch items-center justify-center gap-2 font-medium whitespace-nowrap select-none',
-          !square() && tabContentClasses(props.size),
+          props.choices
+            ? 'px-3.5 py-1.5 text-[15px] leading-5'
+            : !square() && tabContentClasses(props.size),
           props.joined && 'py-0'
         )}
       >

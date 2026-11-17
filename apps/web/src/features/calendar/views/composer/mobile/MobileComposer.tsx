@@ -109,7 +109,10 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
                 icon={<TextIcon class="size-4" />}
                 class="items-start py-3"
               >
-                <div onFocusIn={() => fields.reveal('description')}>
+                <div
+                  class="w-full"
+                  onFocusIn={() => fields.reveal('description')}
+                >
                   <ComposerDescription
                     inputRef={(element) => (description = element)}
                     resolveAppLink={props.resolveAppLink}
@@ -139,7 +142,7 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
             </SheetRow>
             <Show when={fields.visible('location')}>
               <SheetRow icon={<LocationIcon class="size-4" />}>
-                <div onFocusIn={() => fields.reveal('location')}>
+                <div class="w-full" onFocusIn={() => fields.reveal('location')}>
                   <ComposerLocation
                     inputRef={(element) => (location = element)}
                   />

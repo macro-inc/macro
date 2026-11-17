@@ -61,6 +61,7 @@ export function CalendarComposerEditor(
           }
         >
           <MobileComposerHost
+            initialHeight={props.initialDrawerHeight}
             macroCallsEnabled={props.macroCallsEnabled()}
             saveError={setup.saveError()}
             resolveAppLink={resolveAppLink}

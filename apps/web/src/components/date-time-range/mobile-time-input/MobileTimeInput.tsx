@@ -138,7 +138,7 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
             ref={button}
             id={props.id}
             variant="value"
-            size="sm"
+            size="field"
             fullWidth
             role="combobox"
             aria-label={props.label}
@@ -175,7 +175,8 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
             autocomplete="off"
             spellcheck={false}
             placeholder={t('common.time')}
-            size="sm"
+            size="field"
+            variant="value"
             value={
               model.state.shown ??
               formatTimeValue(props.value, props.timeFormat) ??
@@ -198,7 +199,10 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
       <Show when={model.isOpen()}>
         <ScopedPortal scope="local">
           <Popover.Content
-            class="menu-surface z-action-menu max-h-72 min-w-40 max-w-[90vw] overflow-y-auto rounded-[22px] p-1.5 outline-none"
+            class={cn(
+              'menu-surface z-action-menu max-h-[300px] max-w-[90vw] overflow-y-auto rounded-[22px] p-1.5 outline-none',
+              props.date ? 'w-[196px]' : 'w-44'
+            )}
             onOpenAutoFocus={(event) => event.preventDefault()}
             onCloseAutoFocus={(event) => event.preventDefault()}
             onEscapeKeyDown={(event) => {

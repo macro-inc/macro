@@ -25,8 +25,8 @@ export function MobileComposerReminders(props: ComposerReminderOptions) {
             <div class="flex min-w-0 items-center">
               <Dropdown placement="bottom-start">
                 <Dropdown.Trigger
-                  variant="ghost"
-                  size="sheet"
+                  variant="row"
+                  size="sheet-row"
                   class="flex-1 justify-start"
                   disabled={props.disabled}
                 >
@@ -78,7 +78,7 @@ export function MobileComposerReminders(props: ComposerReminderOptions) {
         <Dropdown placement="bottom-start">
           <Dropdown.Trigger
             variant="ghost"
-            size="sheet"
+            size="sheet-row"
             fullWidth
             class="justify-start"
             disabled={props.disabled || !props.canAdd}

@@ -7,10 +7,10 @@ export function MobileComposerHost(
   props: Omit<
     ComponentProps<typeof MobileComposer>,
     'headerMount' | 'footerMount' | 'scrollElement'
-  >
+  > & { initialHeight?: number }
 ) {
   const panel = useContext(SplitPanelContext);
-  panel?.fillDrawer?.(92);
+  panel?.fillDrawer?.(props.initialHeight ?? 92, { opaque: true });
   return (
     <MobileComposer
       {...props}

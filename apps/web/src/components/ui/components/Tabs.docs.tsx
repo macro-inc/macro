@@ -152,6 +152,25 @@ function TrackDemo() {
 }
 // #endregion
 
+// #region demo:choices
+function ChoicesDemo() {
+  const [value, setValue] = createSignal<'event' | 'away'>('event');
+  return (
+    <Tabs
+      aria-label="Event type"
+      variant="choices"
+      wrap
+      options={[
+        { value: 'event', label: 'Event' },
+        { value: 'away', label: 'Out of office' },
+      ]}
+      value={value()}
+      onChange={setValue}
+    />
+  );
+}
+// #endregion
+
 export default defineDoc({
   name: 'Tabs',
   category: 'Navigation',
@@ -168,6 +187,13 @@ export default defineDoc({
       description:
         'Header view tabs sit after the title, left of the controls. Optional desktop pill tooltips explain a label on hover or input focus without renaming it; the explanation remains an accessible description on touch. The choices share a flat rounded track with an inset selected pill, sized to match neighbouring controls.',
       render: ViewDemo,
+    },
+    {
+      id: 'choices',
+      title: 'Form choices',
+      description:
+        'Separate 36px value choices use an accent selection and 15px text, retaining the same radio and keyboard behavior.',
+      render: ChoicesDemo,
     },
     {
       id: 'counts',

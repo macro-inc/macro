@@ -38,7 +38,7 @@ it.each([undefined, 82])(
     const content: SplitContent = { type: 'component', id: 'test-composer' };
     const Fill = (props: { height?: number }) => {
       const panel = useContext(SplitPanelContext);
-      panel?.fillDrawer?.(props.height);
+      panel?.fillDrawer?.(props.height, { opaque: props.height !== 90 });
       return <div>Filling content</div>;
     };
     const TestContent = () => {
@@ -124,15 +124,18 @@ it.each([undefined, 82])(
     expect(drawer.style.getPropertyValue('--drawer-h')).toBe(
       `${requestedHeight ?? 70}dvh`
     );
+    expect(drawer.classList.contains('bg-menu')).toBe(true);
     expect(drawer.style.getPropertyValue('--drawer-max-h')).toBe('92dvh');
     fireEvent.click(screen.getByRole('button', { name: 'Toggle other fill' }));
     expect(drawer.style.getPropertyValue('--drawer-h')).toBe('90dvh');
+    expect(drawer.classList.contains('bg-menu')).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Toggle fill' }));
     expect(drawer.style.getPropertyValue('--drawer-h')).toBe('90dvh');
     fireEvent.click(screen.getByRole('button', { name: 'Toggle fill' }));
     expect(drawer.style.getPropertyValue('--drawer-h')).toBe(
       `${requestedHeight ?? 70}dvh`
     );
+    expect(drawer.classList.contains('bg-menu')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Toggle other fill' }));
     expect(drawer.style.getPropertyValue('--drawer-h')).toBe(
       `${requestedHeight ?? 70}dvh`

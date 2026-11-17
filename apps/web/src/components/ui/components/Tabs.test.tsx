@@ -13,45 +13,49 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('switches a controlled view by its visible label', () => {
-  const [value, setValue] = createSignal<'all' | 'recent' | 'threads'>('all');
-  render(() => (
-    <>
-      <Tabs
-        aria-label="Conversation view"
-        options={[
-          { value: 'all', label: 'All' },
-          {
-            value: 'recent',
-            label: 'Recent',
-            tooltip: 'Recently updated conversations',
-          },
-          { value: 'threads', label: 'Threads' },
-        ]}
-        value={value()}
-        onChange={setValue}
-      />
-      <p>Current view: {value()}</p>
-    </>
-  ));
+it.each([undefined, 'choices'] as const)(
+  'switches a controlled %s value by its visible label',
+  (variant) => {
+    const [value, setValue] = createSignal<'all' | 'recent' | 'threads'>('all');
+    render(() => (
+      <>
+        <Tabs
+          aria-label="Conversation view"
+          variant={variant}
+          options={[
+            { value: 'all', label: 'All' },
+            {
+              value: 'recent',
+              label: 'Recent',
+              tooltip: 'Recently updated conversations',
+            },
+            { value: 'threads', label: 'Threads' },
+          ]}
+          value={value()}
+          onChange={setValue}
+        />
+        <p>Current view: {value()}</p>
+      </>
+    ));
 
-  expect(
-    screen
-      .getByRole('radio', { name: 'Recent' })
-      .getAttribute('aria-description')
-  ).toBe('Recently updated conversations');
-  fireEvent.click(screen.getByText('Recent', { exact: true }));
-  expect(screen.getByText('Current view: recent')).toBeTruthy();
-  expect(
-    screen.getByRole('radio', { name: 'Recent', checked: true })
-  ).toBeTruthy();
-  expect(
-    screen.getByRole('radio', { name: 'All', checked: false })
-  ).toBeTruthy();
+    expect(
+      screen
+        .getByRole('radio', { name: 'Recent' })
+        .getAttribute('aria-description')
+    ).toBe('Recently updated conversations');
+    fireEvent.click(screen.getByText('Recent', { exact: true }));
+    expect(screen.getByText('Current view: recent')).toBeTruthy();
+    expect(
+      screen.getByRole('radio', { name: 'Recent', checked: true })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('radio', { name: 'All', checked: false })
+    ).toBeTruthy();
 
-  fireEvent.click(screen.getByText('Threads', { exact: true }));
-  expect(screen.getByText('Current view: threads')).toBeTruthy();
-});
+    fireEvent.click(screen.getByText('Threads', { exact: true }));
+    expect(screen.getByText('Current view: threads')).toBeTruthy();
+  }
+);
 
 it('keeps icon-only options named by their labels', () => {
   const [value, setValue] = createSignal<'messages' | 'files'>('messages');

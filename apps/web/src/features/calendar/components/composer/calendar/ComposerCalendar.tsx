@@ -12,9 +12,9 @@ export function ComposerCalendar(props: { fullWidth?: boolean } = {}) {
   return (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
-        variant={props.fullWidth ? 'ghost' : 'value'}
+        variant={props.fullWidth ? 'row' : 'value'}
         finish="flat"
-        size={props.fullWidth ? 'sheet' : 'sm'}
+        size={props.fullWidth ? 'sheet-row' : 'sm'}
         fullWidth={props.fullWidth}
         class={props.fullWidth ? 'justify-between' : undefined}
         aria-label={t('calendar.composerCalendar')}

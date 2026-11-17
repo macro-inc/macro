@@ -9,7 +9,7 @@ import { MobileComposerKind } from './MobileComposerKind';
 export function MobileComposerTitle() {
   const model = useCalendarComposer();
   return (
-    <SheetGroup class="py-3">
+    <SheetGroup>
       <SheetRow
         icon={
           <CalendarSwatch
@@ -22,7 +22,7 @@ export function MobileComposerTitle() {
       >
         <ComposerTitle autofocus={false} submitOnEnter={false} />
       </SheetRow>
-      <SheetRow class="pt-2">
+      <SheetRow>
         <MobileComposerKind />
       </SheetRow>
     </SheetGroup>

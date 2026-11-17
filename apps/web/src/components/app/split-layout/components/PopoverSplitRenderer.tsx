@@ -69,12 +69,12 @@ function PopoverSplitModal(props: {
   const [drawerFooter, setDrawerFooter] = createSignal<HTMLElement>();
   const [drawerScrollBody, setDrawerScrollBody] = createSignal<HTMLElement>();
   const [drawerHeightRequests, setDrawerHeightRequests] = createSignal<
-    { height: number }[]
+    { height: number; opaque?: boolean }[]
   >([]);
   const drawerTargetHeight = () => drawerHeightRequests().at(-1)?.height;
-  const fillDrawer = (requestedHeight = 70) => {
+  const fillDrawer = (requestedHeight = 70, options?: { opaque?: boolean }) => {
     // The latest live owner wins; disposing either owner only removes its request.
-    const request = { height: requestedHeight };
+    const request = { height: requestedHeight, opaque: options?.opaque };
     setDrawerHeightRequests((requests) => [...requests, request]);
     onCleanup(() =>
       setDrawerHeightRequests((requests) =>
@@ -224,6 +224,7 @@ function PopoverSplitModal(props: {
             ref={attachPanel}
             aria-label={displayName()}
             maxHeight={92}
+            opaque={drawerHeightRequests().at(-1)?.opaque}
             class="[&:has(>[data-drawer-footer]:not(:empty))>[data-drawer-scroll-body]]:pb-0"
             // Room to write a few paragraphs without covering the page.
             targetHeight={drawerTargetHeight()}

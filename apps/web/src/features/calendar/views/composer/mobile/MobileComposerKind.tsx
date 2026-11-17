@@ -16,6 +16,7 @@ export function MobileComposerKind() {
       disabled={
         model.formIsDisabled() || model.isEdit() || model.detailsLocked()
       }
+      variant="choices"
       wrap
       touch="pills"
       size="md"

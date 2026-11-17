@@ -8,7 +8,10 @@ import type { ButtonSize } from './Button';
 type NativeInputSize = number;
 
 /** Text-bearing Button sizes that also make sense for an input. */
-export type InputSize = Exclude<ButtonSize, `icon-${string}` | 'sheet'>;
+export type InputSize = Exclude<
+  ButtonSize,
+  `icon-${string}` | 'sheet' | 'sheet-row'
+>;
 
 // Single-line inputs are pills like Buttons on desktop, so their text sits further in.
 const INPUT_SIZE_VARIANTS: Record<InputSize, string> = {
@@ -17,6 +20,7 @@ const INPUT_SIZE_VARIANTS: Record<InputSize, string> = {
   md: 'h-8 px-3 text-base',
   lg: 'h-9 px-3.5 text-base',
   xl: 'h-12 px-4 text-base',
+  field: 'h-9 px-3 text-[15px] leading-5',
 };
 
 // Touch keeps its rounded fields and their original inset.
@@ -26,6 +30,7 @@ const TOUCH_INPUT_SHAPE: Record<InputSize, string> = {
   md: 'rounded-lg px-2',
   lg: 'rounded-lg px-3',
   xl: 'rounded-lg px-4',
+  field: 'rounded-full px-3',
 };
 
 /** Shared focus treatment for outlined text-entry controls. */
@@ -48,6 +53,8 @@ export const inputVariants = createVariants(
         inputOutlineFocusClasses
       ),
       bare: 'border-transparent bg-transparent',
+      value:
+        'border-transparent bg-ink/6 focus-visible:ring-[1.5px] focus-visible:ring-accent',
     },
     size: INPUT_SIZE_VARIANTS,
   },

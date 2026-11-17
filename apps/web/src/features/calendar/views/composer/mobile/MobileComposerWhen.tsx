@@ -22,7 +22,10 @@ export function MobileComposerWhen() {
   return (
     <DateTimeRange.Root {...model.range}>
       <SheetGroup>
-        <SheetRow icon={<ClockIcon class="size-4" />} class="items-start py-3">
+        <SheetRow
+          icon={<ClockIcon class="mt-2.5 size-4" />}
+          class="items-start py-1"
+        >
           <div class="flex flex-col gap-2">
             <DateTimeRange.Dates layout="columns" />
             <Show when={!model.state().allDay}>
@@ -44,7 +47,7 @@ export function MobileComposerWhen() {
         <SheetRow>
           <ToggleSwitch
             class="min-h-11 w-full flex-row-reverse justify-between"
-            size="md"
+            size="lg"
             label={t('calendar.allDay')}
             labelClass="text-base text-ink"
             checked={model.state().allDay}

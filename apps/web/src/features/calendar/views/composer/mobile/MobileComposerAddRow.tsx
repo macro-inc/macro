@@ -1,4 +1,3 @@
-import { SheetRow } from '@components/app/mobile/sheet-row/SheetRow';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
 import type { JSX } from 'solid-js';
@@ -10,18 +9,19 @@ export function MobileComposerAddRow(props: {
   onClick: (element: HTMLButtonElement) => void;
 }) {
   return (
-    <SheetRow icon={props.icon}>
-      <Button
-        variant="ghost"
-        size="sheet"
-        fullWidth
-        class="justify-between"
-        disabled={props.disabled}
-        onClick={(event) => props.onClick(event.currentTarget)}
-      >
-        {props.label}
-        <PlusIcon class="size-4 shrink-0" />
-      </Button>
-    </SheetRow>
+    <Button
+      variant="ghost"
+      size="sheet-row"
+      fullWidth
+      class="grid grid-cols-[18px_minmax(0,1fr)_16px] gap-3 px-3 text-left"
+      disabled={props.disabled}
+      onClick={(event) => props.onClick(event.currentTarget)}
+    >
+      <span aria-hidden="true" class="flex justify-center">
+        {props.icon}
+      </span>
+      <span>{props.label}</span>
+      <PlusIcon class="size-4 shrink-0" />
+    </Button>
   );
 }

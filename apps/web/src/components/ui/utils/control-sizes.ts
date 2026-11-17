@@ -29,6 +29,8 @@ export const labeledControlSizes = {
 export const buttonControlFrames = {
   ...labeledControlFrames,
   sheet: 'min-h-11',
+  'sheet-row': 'min-h-11',
+  field: 'min-h-9',
   'icon-xs': 'h-6',
   'icon-sm': 'h-7',
   'icon-md': 'h-8',

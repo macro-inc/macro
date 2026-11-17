@@ -8,6 +8,7 @@ import {
 } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { calendarSelectionToEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
+import { phoneSlotRange } from '@app/features/calendar/core/phone-slot';
 import {
   type CalendarOccurrenceData,
   useCalendarOccurrenceData,
@@ -33,11 +34,13 @@ import {
 import { mergeCalendarOverlays } from '@app/features/calendar-team/core/merge';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
+import { beginInteraction } from '@app/observability/flow';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
+import type { DateClickArg } from '@fullcalendar/interaction';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
   isGuestEditRefused,
@@ -254,6 +257,42 @@ export function Page(props: {
     () => new Map(visibleEvents().map((event) => [event.id, event]))
   );
   const updateEventTime = useUpdateCalendarEventMutation();
+  const handleDateClick = (selection: DateClickArg) => {
+    if (!isActive() || pager.periodView() !== 'timeGridDay') return;
+    if (consumeSuppressedCalendarDateSelection()) return;
+    const interaction = beginInteraction('calendar.slot.create');
+    const calendar = firstWritableCalendar();
+    const range = phoneSlotRange(selection.date, selection.allDay);
+    try {
+      selection.view.calendar.select(range);
+      // Keep the full selected hour above the low sheet after its layout settles.
+      const scrollFrame = requestAnimationFrame(() => {
+        if (isActive())
+          selection.view.calendar.scrollToTime({
+            hours: Math.max(0, range.start.getHours() - 3),
+          });
+      });
+      setSelectionColor(calendar?.color ?? DEFAULT_CALENDAR_SOURCE.color);
+      openEventComposer({
+        initialDrawerHeight: 42,
+        initialValues: {
+          ...calendarSelectionToEditorInitialValues(
+            range,
+            quickCalls().enabled && !quickCalls().loading
+          ),
+          ...(calendar ? { calendarId: calendar.id } : {}),
+        },
+        onCalendarChange: (_calendarId, color) => setSelectionColor(color),
+        onClose: () => {
+          cancelAnimationFrame(scrollFrame);
+          selection.view.calendar.unselect();
+          setSelectionColor(undefined);
+        },
+      });
+    } finally {
+      interaction.end();
+    }
+  };
   const handleSelect = (selection: DateSelectArg) => {
     if (!isActive()) return;
     // The press that closes open event details also hits the grid. FullCalendar
@@ -366,6 +405,7 @@ export function Page(props: {
           color: effectiveSelectionColor(),
           eventId: isActive() ? calendarView.selectedEvent()?.id : undefined,
           onDateSelect: isMobile() ? undefined : handleSelect,
+          onDateClick: isMobile() ? handleDateClick : undefined,
           onEventSelect: (event, element) => {
             if (isActive()) calendarView.selectEvent(event, element);
           },

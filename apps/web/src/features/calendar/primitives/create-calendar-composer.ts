@@ -90,7 +90,9 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
   };
   // Occurrence readbacks omit visibility overrides, so do not expose a write-only choice.
   const visibilityIsDisabled = () =>
-    metadataIsDisabled() || editScope() === 'this_event';
+    metadataIsDisabled() ||
+    editScope() === 'this_event' ||
+    options.visibilityReadOnlyReason !== undefined;
   const setVisibility = (visibility: EventVisibility) => {
     if (!visibilityIsDisabled()) metadata.setVisibility(visibility);
   };
@@ -193,9 +195,9 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     })
   );
 
-  const submit = () => {
+  const submission = () => {
     const submission = preparedSubmission();
-    if (!submission || formIsDisabled()) return;
+    if (!submission) return;
     const customRuleInNewZone =
       submission.changes.timeZoneChanged &&
       controller.recurrenceChoice() === 'custom';
@@ -215,10 +217,15 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
       };
     }
     const scope = options.showRecurringEditNotice ? editScope() : undefined;
-    if (Object.keys(submission.changes).length > 0) {
-      options.onSubmit(values, scope, submission.changes);
+    return { values, scope, changes: submission.changes };
+  };
+  const submit = () => {
+    const prepared = submission();
+    if (!prepared || formIsDisabled()) return;
+    if (Object.keys(prepared.changes).length > 0) {
+      options.onSubmit(prepared.values, prepared.scope, prepared.changes);
     } else {
-      options.onSubmit(values, scope);
+      options.onSubmit(prepared.values, prepared.scope);
     }
   };
 
@@ -258,6 +265,7 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     range,
     guests,
     guestPolicy,
+    submission,
     submit,
   };
 }

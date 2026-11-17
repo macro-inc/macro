@@ -938,4 +938,28 @@
 		padding-top: calc(var(--mobile-content-inset-top, 0px) + 0.5rem);
 		padding-bottom: calc(var(--mobile-content-inset-bottom, 0px) + 0.5rem);
 	}
+
+	/* The modal owns editing; the range ends remain visible behind its low sheet. */
+	html[data-touch-device="true"] .fc-timeGridDay-view .fc-event-mirror:has(.calendar-event-selection-preview)::before,
+	html[data-touch-device="true"] .fc-timeGridDay-view .fc-event-mirror:has(.calendar-event-selection-preview)::after {
+		position: absolute;
+		z-index: 2;
+		width: 10px;
+		height: 10px;
+		border: 2px solid var(--calendar-selection-color, var(--color-accent));
+		border-radius: 50%;
+		background: var(--color-menu);
+		content: "";
+		pointer-events: none;
+	}
+
+	html[data-touch-device="true"] .fc-timeGridDay-view .fc-event-mirror:has(.calendar-event-selection-preview)::before {
+		top: -5px;
+		right: 18px;
+	}
+
+	html[data-touch-device="true"] .fc-timeGridDay-view .fc-event-mirror:has(.calendar-event-selection-preview)::after {
+		bottom: -5px;
+		left: 18px;
+	}
 }

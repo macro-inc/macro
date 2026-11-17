@@ -24,12 +24,13 @@ afterEach(() => vi.clearAllMocks());
 it('uses the drawer on touch even inside a workspace with a desktop composer host', () => {
   source.touch = true;
   createRoot((dispose) => {
-    useOpenEventComposer()();
+    useOpenEventComposer()({ initialDrawerHeight: 42 });
     expect(source.openHost).not.toHaveBeenCalled();
     expect(source.openDrawer).toHaveBeenCalledOnce();
     expect(source.openDrawer.mock.calls[0][0]).toMatchObject({
       type: 'component',
       id: 'calendar-event-compose',
+      params: { initialDrawerHeight: 42 },
     });
     dispose();
   });

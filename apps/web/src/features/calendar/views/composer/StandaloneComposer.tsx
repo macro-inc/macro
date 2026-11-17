@@ -11,6 +11,7 @@ export interface StandaloneComposerProps {
   event?: CalendarEvent;
   initialValues?: EventEditorInitialValues;
   suggestedValues?: Promise<Partial<EventEditorInitialValues>>;
+  initialDrawerHeight?: number;
   pinned?: boolean;
   onTogglePin?: () => void;
   onHeaderPointerDown?: JSX.EventHandler<HTMLDivElement, PointerEvent>;

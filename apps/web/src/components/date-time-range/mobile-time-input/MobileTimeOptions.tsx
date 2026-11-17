@@ -48,7 +48,7 @@ export function MobileTimeOptions(props: {
           <div role="group" aria-label={dateLabel(group.offset)}>
             <Show when={group.offset > 0 && dateLabel(group.offset)}>
               {(label) => (
-                <div class="flex min-h-7 items-center px-3 text-[13px] text-ink-extra-muted">
+                <div class="sticky top-0 z-10 flex min-h-7 items-center bg-menu px-3 text-[13px] text-ink-extra-muted">
                   {label()}
                 </div>
               )}
