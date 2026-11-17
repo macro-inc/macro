@@ -34,13 +34,15 @@ Every request to an SDK origin carries `x-macro-code-execution: 1`, whatever
 credential it carries. A program can drop it with a raw `fetch`, so a refusal
 that must hold reads the credential's signed claims too: every code-mode
 credential, public MCP's included, signs an agent or a routine
-(`macro_authorization::is_program_run`). APIs that ask a program to
-confirm what a person picks by opening something read it; the calendar
-mutation routes demand the copy's `inbox` from such requests, the calendar
-create route refuses them, and the email send and schedule routes refuse
-them unless the schedule quotes the user's approval
-(`macro_authorization::is_agent_run`). The email sign-in and the MCP OAuth
-broker take no credential, so the header is what refuses a program there.
+(`macro_authorization::is_program_run`), and the header never overrides a
+signed claim. The calendar mutation routes demand the copy's `inbox` from
+every program run; the calendar create route and the email send and schedule
+routes refuse agent runs (`macro_authorization::is_agent_run`) unless the send
+quotes the user's approval, so an owner routine step (signed `routine_id`, no
+agent) sends and creates. The email sign-in and the MCP OAuth broker take no
+credential, so the header is what refuses a program there.
+
+A program reads Macro's own sign-in emails redacted (email and storage-service responses, `models_email::sign_in_email`), and GraphQL refuses it.
 
 A run whose `RunEnvironment::egress` is `Egress::Proxied` reaches the hosts
 only through a loopback forwarder the runner starts for it
@@ -52,8 +54,9 @@ The forwarder sets the mark and trace context itself, outside the realm, drops
 the ones the program set, follows no redirects and records a
 `code_execution.egress` span per request. Each span also records what the
 forwarder would refuse once it enforces (`would_refuse`: `outside_service`,
-`unknown_operation`, `dry_run_write`, `no_credential`; `egress/decision.rs`,
-matched on the SDK catalog), but for now every request is forwarded. It stops when the run ends, is
+`unknown_operation`, `dry_run_write`, `no_credential`, `unparseable_url`;
+`egress/decision.rs`, matched on the SDK catalog), but for now every request
+is forwarded. It stops when the run ends, is
 cancelled or times out. The agent harness picks it per user with the
 fail-closed `enable-code-execution-egress-proxy` flag; `Egress::Direct` (the
 default) is the old path.

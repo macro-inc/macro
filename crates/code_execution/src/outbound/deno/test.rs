@@ -1406,8 +1406,8 @@ export async function main({token, hosts}) {
             .unwrap(),
     )
     .await;
-    server.await.unwrap();
     assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    server.await.unwrap();
 }
 
 /// A proxied run, with its one SDK host at `host`.
@@ -1629,49 +1629,6 @@ async fn a_proxied_runs_requests_end_with_the_run() {
     service.shutdown().await;
 }
 
-/// The forwarder only records what it would refuse: a request that is no
-/// SDK operation still reaches the host.
-#[tokio::test]
-#[ignore = "requires pinned Deno runtime"]
-async fn a_proxied_request_it_would_refuse_is_still_forwarded() {
-    let (_root, service) = setup(Limits::default()).await;
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let host = format!("http://{}", listener.local_addr().unwrap());
-    let server = tokio::spawn(async move {
-        let (mut stream, _) = listener.accept().await.unwrap();
-        let request = read_request(&mut stream).await;
-        respond(&mut stream, "{}").await;
-        request
-    });
-    let source = r#"
-export async function main({hosts}) {
-  return (await fetch(`${hosts.cognition}/not-an-operation`, {method: "DELETE"})).status;
-}
-"#;
-    let (_, outcome) = collect(
-        service
-            .execute(
-                ExecuteRequest {
-                    source: source.into(),
-                    timeout_ms: 10_000,
-                },
-                proxied(&host),
-            )
-            .unwrap(),
-    )
-    .await;
-    let Outcome::Succeeded { value } = outcome else {
-        panic!("{outcome:?}");
-    };
-    assert_eq!(value, 200);
-    let request = server.await.unwrap();
-    assert!(
-        request.starts_with("DELETE /not-an-operation "),
-        "{request}"
-    );
-    service.shutdown().await;
-}
-
 /// `--allow-net` lets `host.` through as `host`, so a trailing dot must not
 /// lose the mark either.
 #[tokio::test]
@@ -1768,6 +1725,49 @@ export async function main({hosts}) {
     assert!(request.starts_with("POST /decisions "), "{request}");
     assert!(
         request.ends_with(r#"{"input":"x","questions":{"yes":"Yes?"}}"#),
+        "{request}"
+    );
+    service.shutdown().await;
+}
+
+/// The forwarder only records what it would refuse: a request that is no
+/// SDK operation still reaches the host.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_request_it_would_refuse_is_still_forwarded() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        respond(&mut stream, "{}").await;
+        request
+    });
+    let source = r#"
+export async function main({hosts}) {
+  return (await fetch(`${hosts.cognition}/not-an-operation`, {method: "DELETE"})).status;
+}
+"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 10_000,
+                },
+                proxied(&host),
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value, 200);
+    let request = server.await.unwrap();
+    assert!(
+        request.starts_with("DELETE /not-an-operation "),
         "{request}"
     );
     service.shutdown().await;

@@ -8,7 +8,9 @@ use agent_egress::domain::model::{
 };
 use agent_fold::domain::model::{StopReason, TurnSignal};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
-use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
+use agent_session::domain::model::{
+    AgentMcpServers, AgentSessionId, MessageId, PrompterKind, SandboxSize,
+};
 use agent_session::domain::ports::ControlEvent;
 use agent_session::domain::session::PermissionPolicy;
 
@@ -562,6 +564,9 @@ pub struct DeliverAction {
     /// The app tab a person typed the prompt in, when they typed it in one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client: Option<agent_session::domain::model::UiClientId>,
+    /// Whether a person or a program for them sent it.
+    #[serde(default, skip_serializing_if = "PrompterKind::is_user")]
+    pub prompter: PrompterKind,
 }
 
 /// How long a session on an external runtime goes without activity before it
@@ -648,6 +653,9 @@ pub enum HarnessCommand {
         /// may not prompt a session may not rewrite what it is about to be
         /// prompted with.
         actor: Option<MacroUserIdStr<'static>>,
+        /// Whether a person or a program for them rewrote it.
+        #[serde(default, skip_serializing_if = "PrompterKind::is_user")]
+        prompter: PrompterKind,
     },
     /// Remove a queued action before it dispatches.
     RemoveQueued {
@@ -719,6 +727,7 @@ impl DeliverAction {
             announce,
             context: None,
             client: None,
+            prompter: PrompterKind::User,
         }
     }
 
@@ -736,6 +745,7 @@ impl DeliverAction {
             announce: None,
             context: event.context,
             client: event.client,
+            prompter: event.prompter,
         }
     }
 }

@@ -117,6 +117,9 @@ export async function readContactDirectory(
       throw new ContactDirectoryScopeError();
     span.setAttr('contacts.query_length', request.query.length);
     span.setAttr('contacts.limit', limit);
+    span.setAttr('contacts.mode', policy.mode);
+    // Pickers read further pages by themselves as their lists scroll.
+    span.setAttr('contacts.continuation', !!request.cursor);
     const input = {
       viewer,
       request,
