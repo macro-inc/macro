@@ -280,6 +280,79 @@ async fn fetch_user_source_ids(
     Ok(source_ids.into_iter().flatten().collect())
 }
 
+/// How the document, chat, and project arms check the caller's grants.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AccessGate {
+    /// `source_id = ANY(...)`: Postgres estimates the grants from
+    /// `entity_access.source_id` statistics, and hashes them when there are
+    /// many (a large team's grants are in its most-common values).
+    Planned,
+    /// One index probe per source, then one item lookup per grant. For callers
+    /// with many sources but few grants: the statistics cost every source that
+    /// is not a most-common value at the column average, so 16k private
+    /// channels holding 30k grants were planned as millions of rows, with
+    /// sequential scans of `entity_access` and the item table.
+    PerSource,
+}
+
+/// Callers with more sources than this get their grants counted, so the gate
+/// is chosen from the count instead of the statistics. Prod has no caller
+/// between 1k and 5k sources; 15 hold more.
+const MANY_SOURCES: usize = 1_000;
+
+/// Above this many grants, hashing them against one scan of the item table is
+/// cheaper than one item lookup per grant. Measured on 5M documents: probing
+/// 24k grants took 0.28 s against 1.34 s hashed, and 469k grants 2.9 s
+/// against 0.8 s.
+const MAX_PROBED_GRANTS: i64 = 50_000;
+
+/// Chooses the caller's [`AccessGate`]. Only callers with more than
+/// [`MANY_SOURCES`] sources pay for the count; it reads one index range per
+/// source and stops past [`MAX_PROBED_GRANTS`].
+async fn access_gate(
+    connection: &mut PgConnection,
+    source_ids: &[String],
+) -> Result<AccessGate, sqlx::Error> {
+    if source_ids.len() <= MANY_SOURCES {
+        return Ok(AccessGate::Planned);
+    }
+
+    let grants = sqlx::query_scalar!(
+        r#"
+        SELECT count(*) AS "grants!"
+        FROM (
+            SELECT 1
+            FROM unnest($1::text[]) AS caller(source_id)
+            CROSS JOIN LATERAL (
+                SELECT 1
+                FROM entity_access ea
+                WHERE ea.source_id = caller.source_id
+                    AND ea.entity_type IN ('document', 'chat', 'project')
+                OFFSET 0
+            ) grants
+            LIMIT $2
+        ) capped
+        "#,
+        source_ids,
+        MAX_PROBED_GRANTS + 1
+    )
+    .fetch_one(connection)
+    .await?;
+
+    if grants > MAX_PROBED_GRANTS {
+        Ok(AccessGate::Planned)
+    } else {
+        Ok(AccessGate::PerSource)
+    }
+}
+
+/// Where the caller's source ids are bound, and how the arms gate on them.
+#[derive(Clone, Copy)]
+struct SourceGrants {
+    slot: usize,
+    gate: AccessGate,
+}
+
 // -- Lightweight top clauses: only id + sort_ts (plus filter-required joins) --
 
 static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
@@ -1824,19 +1897,38 @@ pub(in crate::outbound::pg_soup_repo) fn access_semi_join(
 }
 
 /// [`access_semi_join`] over the caller's source ids, bound as a constant
-/// array at parameter `source_ids`. Postgres costs the `user_source_ids` join at the average
-/// source's grant count, so it planned callers holding hundreds of thousands
-/// of grants with one item probe per grant; it estimates the array from
-/// `entity_access.source_id` statistics and hashes the grants instead.
-fn bound_access_semi_join(id_sql: &str, entity_type: &str, source_ids: usize) -> String {
-    format!(
-        r#"{id_sql} IN (
+/// array at parameter `sources.slot`. Postgres costs the `user_source_ids` join
+/// at the average source's grant count, so it planned callers holding hundreds
+/// of thousands of grants with one item probe per grant; it estimates the
+/// array from `entity_access.source_id` statistics and hashes the grants
+/// instead. [`AccessGate::PerSource`] probes each source's grants through
+/// `idx_entity_access_source_type_entity_plain` instead; the `OFFSET 0` keeps
+/// the probe from being flattened back into a join planned from statistics.
+fn bound_access_semi_join(id_sql: &str, entity_type: &str, sources: SourceGrants) -> String {
+    let slot = sources.slot;
+    match sources.gate {
+        AccessGate::Planned => format!(
+            r#"{id_sql} IN (
                     SELECT ea.entity_id::text
                     FROM entity_access ea
-                    WHERE ea.source_id = ANY(${source_ids}::text[])
+                    WHERE ea.source_id = ANY(${slot}::text[])
                         AND ea.entity_type = '{entity_type}'
                 )"#
-    )
+        ),
+        AccessGate::PerSource => format!(
+            r#"{id_sql} IN (
+                    SELECT grants.entity_id::text
+                    FROM unnest(${slot}::text[]) AS caller(source_id)
+                    CROSS JOIN LATERAL (
+                        SELECT ea.entity_id
+                        FROM entity_access ea
+                        WHERE ea.source_id = caller.source_id
+                            AND ea.entity_type = '{entity_type}'
+                        OFFSET 0
+                    ) grants
+                )"#
+        ),
+    }
 }
 
 /// The most named ids an arm checks access for after its filters. Each
@@ -1968,7 +2060,7 @@ fn bounded_access_probe(id_sql: &str, entity_type: &str, source_ids: usize) -> S
 fn document_top_where_clause(
     sort_method: SimpleSortMethod,
     access: DocumentArmAccess,
-    source_ids: usize,
+    sources: SourceGrants,
 ) -> String {
     let user_history_join = if top_needs_user_history(sort_method) {
         r#"                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
@@ -1979,7 +2071,7 @@ fn document_top_where_clause(
     let access_clause = match access {
         DocumentArmAccess::Joined => format!(
             "\n                AND {}",
-            bound_access_semi_join("d.id", "document", source_ids)
+            bound_access_semi_join("d.id", "document", sources)
         ),
         DocumentArmAccess::AfterFilters => String::new(),
     };
@@ -1989,21 +2081,21 @@ fn document_top_where_clause(
     )
 }
 
-fn chat_top_where_clause(source_ids: usize) -> String {
+fn chat_top_where_clause(sources: SourceGrants) -> String {
     format!(
         r#"                WHERE c."deletedAt" IS NULL
                 AND {}
 "#,
-        bound_access_semi_join("c.id", "chat", source_ids)
+        bound_access_semi_join("c.id", "chat", sources)
     )
 }
 
-fn project_top_where_clause(source_ids: usize) -> String {
+fn project_top_where_clause(sources: SourceGrants) -> String {
     format!(
         r#"                WHERE p."deletedAt" IS NULL
                 AND {}
 "#,
-        bound_access_semi_join("p.id", "project", source_ids)
+        bound_access_semi_join("p.id", "project", sources)
     )
 }
 
@@ -2011,10 +2103,15 @@ fn build_query<'a>(
     filter_ast: &'a EntityFilterAst,
     exclude_frecency: bool,
     sort: DynamicSort,
+    gate: AccessGate,
     document_ids: &mut DocumentIdArrays,
 ) -> QueryBuilder<'a, Postgres> {
     let sort_method = sort.timestamp_method();
     let source_ids = source_ids_slot(sort, false);
+    let sources = SourceGrants {
+        slot: source_ids,
+        gate,
+    };
     let property_sort = matches!(sort, DynamicSort::Property { .. });
     let name_sort = matches!(sort, DynamicSort::Name { .. });
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
@@ -2129,7 +2226,7 @@ fn build_query<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method, access, source_ids));
+        builder.push(document_top_where_clause(sort_method, access, sources));
         builder.push(build_document_filter(document_filter, Some(document_ids)));
         builder.push(build_probed_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2147,7 +2244,7 @@ fn build_query<'a>(
         if optimized_notification_predicate.is_some() && chat_notification.is_some() {
             builder.push(build_notification_join("c", "chat"));
         }
-        builder.push(chat_top_where_clause(source_ids));
+        builder.push(chat_top_where_clause(sources));
         builder.push(build_chat_filter(chat_filter));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2162,7 +2259,7 @@ fn build_query<'a>(
         if optimized_notification_predicate.is_some() && project_notification.is_some() {
             builder.push(build_notification_join("p", "project"));
         }
-        builder.push(project_top_where_clause(source_ids));
+        builder.push(project_top_where_clause(sources));
         builder.push(build_project_filter(project_filter));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2693,12 +2790,14 @@ async fn expanded_dynamic_cursor_soup_hydrated(
 
     let mut transaction = begin_dynamic_query(db).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
+    let gate = access_gate(&mut transaction, &source_ids).await?;
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), false));
     let mut builder = build_query(
         cursor.filter(),
         exclude_frecency,
         *cursor.sort_method(),
+        gate,
         &mut document_ids,
     );
     let mut query = builder
@@ -2921,10 +3020,15 @@ fn build_grouped_query<'a>(
     exclude_frecency: bool,
     grouping: &'a GroupingConfig,
     sort: DynamicSort,
+    gate: AccessGate,
     document_ids: &mut DocumentIdArrays,
 ) -> (QueryBuilder<'a, Postgres>, Option<String>) {
     let sort_method = sort.timestamp_method();
     let source_ids = source_ids_slot(sort, true);
+    let sources = SourceGrants {
+        slot: source_ids,
+        gate,
+    };
     let property_sort = matches!(sort, DynamicSort::Property { .. });
     let name_sort = matches!(sort, DynamicSort::Name { .. });
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
@@ -2978,7 +3082,7 @@ fn build_grouped_query<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method, access, source_ids));
+        builder.push(document_top_where_clause(sort_method, access, sources));
         builder.push(build_document_filter(document_filter, Some(document_ids)));
         builder.push(build_probed_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2992,7 +3096,7 @@ fn build_grouped_query<'a>(
     if include_chats {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(grouped_chat_top_clause(sort_method, name_sort));
-        builder.push(chat_top_where_clause(source_ids));
+        builder.push(chat_top_where_clause(sources));
         builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -3003,7 +3107,7 @@ fn build_grouped_query<'a>(
     if include_projects {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(grouped_project_top_clause(sort_method, name_sort));
-        builder.push(project_top_where_clause(source_ids));
+        builder.push(project_top_where_clause(sources));
         builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -3217,6 +3321,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
 
     let mut transaction = begin_dynamic_query(db).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
+    let gate = access_gate(&mut transaction, &source_ids).await?;
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), true));
     let (mut query_builder, entity_type_bind) = build_grouped_query(
@@ -3224,6 +3329,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         exclude_frecency,
         &grouping,
         *cursor.sort_method(),
+        gate,
         &mut document_ids,
     );
 
