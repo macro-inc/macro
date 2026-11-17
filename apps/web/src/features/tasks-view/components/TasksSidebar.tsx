@@ -9,7 +9,7 @@ import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
 import { useProjectSavedViews } from '@app/features/projects/context/project-saved-views-context';
-import { ProjectSavedViewRows } from '@app/features/projects/views/project-saved-views';
+import { ProjectSavedViewsList } from '@app/features/projects/views/project-saved-views';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
 import { useParams } from '@app/lib/split-router';
@@ -233,9 +233,14 @@ export function TasksSidebar() {
               label={t('viewMenus.projectViews')}
               onSelect={selectTab}
             />
-            <ProjectSavedViewRows />
           </CollapsibleSection.Content>
         </CollapsibleSection.Root>
+        <ProjectSavedViewsList
+          open={isSidebarSectionOpen('saved-project-views')}
+          onOpenChange={(open) =>
+            setSidebarSectionOpen('saved-project-views', open)
+          }
+        />
         <TaskSavedViewsList />
 
         <TaskFavorites

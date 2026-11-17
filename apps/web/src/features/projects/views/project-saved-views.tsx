@@ -1,10 +1,8 @@
 import { t } from '@app/lib/i18n';
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import { Button, openDialog } from '@ui';
 import { ok } from 'neverthrow';
 import { For, getOwner, type Owner, Show } from 'solid-js';
@@ -14,7 +12,6 @@ import {
   SavedViewListRow,
 } from '../../saved-views/components/saved-view-list';
 import { SavedViewMenuItems } from '../../saved-views/components/saved-view-menu';
-import { SavedViewPicker } from '../../saved-views/components/saved-view-picker';
 import type { SavedView } from '../../saved-views/core/saved-view';
 import {
   savedViewErrorMessage,
@@ -214,7 +211,9 @@ export function ProjectSavedViewRows(props: {
         <Show when={views.creating()}>
           <SavedViewList.Draft
             mobile={props.mobile}
-            onSelect={() => run(() => views.select())}
+            onSelect={() => {
+              // The draft is already active; let the sidebar close without cancelling it.
+            }}
           />
         </Show>
         <For each={items()}>
@@ -313,47 +312,30 @@ export function ProjectSavedViewRows(props: {
   );
 }
 
-/** The same saved-view cards serve both project header entry points. */
-export function ProjectSavedViewsPicker() {
+/** Project views use the same sidebar creation flow as task views. */
+export function ProjectSavedViewsList(props: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const views = useProjectSavedViews();
-  const owner = getOwner();
-  const [attachCreateHotkeys] = useHotkeyDOMScope(
-    'create-project-view-picker',
-    true
-  );
-  if (!views) return null;
-  const label = () => {
-    const view = views.draft.view();
-    if (view.kind === 'saved') return view.record.name;
-    if (view.kind === 'new') return t('viewMenus.newView');
-    return t('viewMenus.savedViews');
+  const [attachCreateHotkeys] = useHotkeyDOMScope('create-project-view', true);
+  const create = () => {
+    props.onOpenChange(true);
+    views?.start();
   };
   return (
-    <SavedViewPicker
-      title={t('viewMenus.savedViews')}
-      label={label()}
-      icon={<BookmarkIcon class="size-4 shrink-0" />}
-      active={Boolean(views.selectedId() || views.creating())}
-      scopeKey={views.viewerId()}
-    >
-      {(onAction) => (
-        <>
-          <ProjectSavedViewRows
-            mobile
-            onAction={onAction}
-            dialogOwner={owner}
-          />
-          <MobileDrawer.Item
-            ref={attachCreateHotkeys}
-            class="mt-4 h-12 justify-center rounded-3xl bg-ink/6 text-base"
-            onClick={() => onAction(views.start)}
-          >
-            <PlusIcon class="size-5" />
-            {t('viewMenus.newView')}
-          </MobileDrawer.Item>
-        </>
-      )}
-    </SavedViewPicker>
+    <Show when={views}>
+      <SavedViewList.Root open={props.open} onOpenChange={props.onOpenChange}>
+        <SavedViewList.Header
+          label={t('viewMenus.savedProjectViews')}
+          onCreate={create}
+          createButtonRef={attachCreateHotkeys}
+        />
+        <SavedViewList.Content>
+          <ProjectSavedViewRows />
+        </SavedViewList.Content>
+      </SavedViewList.Root>
+    </Show>
   );
 }
 

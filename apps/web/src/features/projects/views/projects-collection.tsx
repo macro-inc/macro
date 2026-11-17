@@ -17,6 +17,7 @@ import {
   ListHeader,
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import {
   getSoupMenuEntities,
@@ -51,6 +52,7 @@ import {
 } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { DeleteProjectsDialog } from '../components/delete-projects-dialog';
+import { ProjectCollectionControls } from '../components/project-collection-controls';
 import { ProjectRowMenu } from '../components/project-row-menu';
 import { ProjectsEmptyState } from '../components/projects-empty-state';
 import { RenameProjectDialog } from '../components/rename-project-dialog';
@@ -81,7 +83,6 @@ import {
   ProjectSavedViewActions,
   ProjectSavedViewStatus,
 } from './project-saved-views';
-import { ProjectsDesktopTabs } from './project-view-tabs';
 import {
   PROJECT_GROUP_OPTIONS,
   PROJECT_SORT_OPTIONS,
@@ -89,7 +90,6 @@ import {
   ProjectsFilterDrawer,
 } from './projects-filter-drawer';
 import { ProjectsGantt } from './projects-gantt';
-import { ProjectsMobileTabs } from './projects-mobile-tabs';
 
 type FilterGroup = ProjectFilterGroup;
 
@@ -593,37 +593,11 @@ export function ProjectsCollection(props: {
     </Dropdown>
   );
   return (
-    <>
-      <Show
-        when={isTouchDevice()}
-        fallback={
-          <ListHeader
-            title={
-              <ProjectsDesktopTabs
-                filters={
-                  <HeaderActionGroup label="Project filters" size="md">
-                    {filterControl()}
-                    {dueDateControl()}
-                  </HeaderActionGroup>
-                }
-                fallback={
-                  <ViewSidebar.Title caret={false}>{title()}</ViewSidebar.Title>
-                }
-              />
-            }
-          >
-            <ProjectSavedViewActions />
-            <HeaderActionGroup label="Project view options" size="md">
-              {layoutControl()}
-              {sortControl()}
-              {groupControl()}
-            </HeaderActionGroup>
-            {props.createAction ?? (
-              <ViewCreateButton
-                aria-label="New project"
-                onClick={() => props.onCreate()}
-              />
-            )}
+    <MobileListLayout
+      header={
+        <ProjectCollectionControls
+          navigation={props.mobileNavigation}
+          search={
             <ListHeaderSearch
               label="Search projects"
               value={collection.search()}
@@ -633,40 +607,51 @@ export function ProjectsCollection(props: {
                 focusSearch = focus;
               }}
             />
-          </ListHeader>
-        }
-      >
-        <ViewShell.Header>
-          <div class="flex min-w-0 flex-col gap-2">
-            <ProjectsMobileTabs
-              navigation={props.mobileNavigation}
-              search={
-                <ListHeaderSearch
-                  label="Search projects"
-                  value={collection.search()}
-                  onValueChange={collection.setSearch}
-                  focusResults={focusList}
-                  registerFocus={(focus) => {
-                    focusSearch = focus;
-                  }}
-                />
-              }
-              filters={
-                <ProjectsFilterDrawer
-                  collection={collection}
-                  groups={filters()}
-                  activeCount={activeCount()}
-                  isSelected={isFilterSelected}
-                  onSelectionChange={selectFilter}
-                  onClear={clearFilters}
-                />
-              }
+          }
+          filters={
+            <ProjectsFilterDrawer
+              collection={collection}
+              groups={filters()}
+              activeCount={activeCount()}
+              isSelected={isFilterSelected}
+              onSelectionChange={selectFilter}
+              onClear={clearFilters}
             />
-            <div class="flex flex-wrap gap-2 empty:hidden">
-              <ProjectSavedViewActions />
-            </div>
-          </div>
-        </ViewShell.Header>
+          }
+          actions={<ProjectSavedViewActions />}
+        />
+      }
+    >
+      <Show when={!isTouchDevice()}>
+        <ListHeader
+          title={<ViewSidebar.Title caret={false}>{title()}</ViewSidebar.Title>}
+        >
+          <ProjectSavedViewActions />
+          <HeaderActionGroup label="Project view options" size="md">
+            {layoutControl()}
+            {sortControl()}
+            {groupControl()}
+          </HeaderActionGroup>
+          {props.createAction ?? (
+            <ViewCreateButton
+              aria-label="New project"
+              onClick={() => props.onCreate()}
+            />
+          )}
+          <ListHeaderSearch
+            label="Search projects"
+            value={collection.search()}
+            onValueChange={collection.setSearch}
+            focusResults={focusList}
+            registerFocus={(focus) => {
+              focusSearch = focus;
+            }}
+          />
+          <HeaderActionGroup label="Project filters" size="md">
+            {filterControl()}
+            {dueDateControl()}
+          </HeaderActionGroup>
+        </ListHeader>
       </Show>
       <ViewShell.Content>
         <ProjectSavedViewStatus />
@@ -754,6 +739,7 @@ export function ProjectsCollection(props: {
                   </Match>
                   <Match when={true}>
                     <ListViewport
+                      touchInset
                       ref={(handle) => {
                         setVirtualizer(handle);
                         handle?.scrollTo(collection.scrollOffset());
@@ -983,6 +969,6 @@ export function ProjectsCollection(props: {
           )}
         </Show>
       </ViewShell.Content>
-    </>
+    </MobileListLayout>
   );
 }

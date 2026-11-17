@@ -23,7 +23,6 @@ import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
 import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
 import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
-import CubeIcon from '@icon/system/regular/cube.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import LockIcon from '@icon/system/regular/lock.svg';
@@ -109,13 +108,6 @@ export const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
     },
     icon: getIconConfig('task').icon,
     iconActive: ListChecksFillIcon,
-  },
-  {
-    id: 'projects',
-    get label() {
-      return t('viewMenus.projects');
-    },
-    icon: CubeIcon,
   },
   {
     id: 'calls',

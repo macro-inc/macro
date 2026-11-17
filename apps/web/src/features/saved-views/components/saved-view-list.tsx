@@ -31,13 +31,16 @@ function Root(props: {
 }
 
 function Header(props: {
+  label?: string;
   onCreate?: () => void;
   createButtonRef?: (element: HTMLButtonElement) => void;
 }) {
   return (
     <CollapsibleSection.Header>
       <CollapsibleSection.Trigger>
-        <span class="min-w-0 truncate">{t('viewMenus.savedViews')}</span>
+        <span class="min-w-0 truncate">
+          {props.label ?? t('viewMenus.savedViews')}
+        </span>
         <CollapsibleSection.Indicator />
       </CollapsibleSection.Trigger>
       <Show when={props.onCreate}>

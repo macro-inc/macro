@@ -38,13 +38,15 @@ test('phone collection changes filters, grouping and project scope', async ({
     .getByRole('button', { name: 'Close filters', exact: true })
     .click();
   await expect(page.getByRole('row', { name: /Beta review/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show sidebar' }).click();
   await page.getByRole('button', { name: 'All projects', exact: true }).click();
+  await page.getByRole('button', { name: 'Show sidebar' }).click();
   await page
     .getByRole('button', { name: 'Created by me', exact: true })
     .click();
   await expect(
-    page.getByRole('button', { name: 'Created by me', exact: true })
-  ).toBeVisible();
+    page.getByRole('button', { name: 'Saved views', exact: true })
+  ).toHaveCount(0);
 });
 
 test('saved project views support create, rename, duplicate, delete and unsupported definitions', async ({
@@ -127,29 +129,29 @@ test('saved project views support create, rename, duplicate, delete and unsuppor
   await expect(page.getByRole('row', { name: /Alpha launch/ })).toHaveCount(0);
 });
 
-test('phone project picker creates and reopens a saved view', async ({
+test('phone project sidebar creates and reopens a saved view', async ({
   page,
 }, info) => {
   test.skip(info.project.name !== 'phone');
   await open(page);
-  await page.getByRole('button', { name: 'Saved views', exact: true }).click();
-  const views = page.getByRole('dialog', { name: 'Saved views' });
-  await expect(views.getByText('All projects', { exact: true })).toHaveCount(0);
-  await expect(views.getByText('My projects', { exact: true })).toHaveCount(0);
-  await views.getByRole('button', { name: 'New view' }).click();
+  await page.getByRole('button', { name: 'Show sidebar' }).click();
+  const views = page.getByTestId('saved-view-sidebar');
+  await views
+    .getByRole('button', { name: 'New saved view', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Hide sidebar' }).click();
   await page.getByRole('button', { name: 'Save view', exact: true }).click();
   const save = page.getByRole('dialog', { name: 'Save view' });
   await save.getByRole('textbox', { name: 'Name' }).fill('Phone projects');
   await save.getByRole('button', { name: 'Save view', exact: true }).click();
   await expect(save).toBeHidden();
+  await page.getByRole('button', { name: 'Show sidebar' }).click();
   await page.getByRole('button', { name: 'My projects', exact: true }).click();
-  await page.getByRole('button', { name: 'Saved views', exact: true }).click();
+  await page.getByRole('button', { name: 'Show sidebar' }).click();
   await views
     .getByRole('button', { name: 'Phone projects', exact: true })
     .click();
-  await expect(
-    page.getByRole('button', { name: 'Phone projects', exact: true })
-  ).toBeVisible();
+  await expect(page.getByTestId('selected')).not.toBeEmpty();
   await page.screenshot({ path: '/tmp/project-saved-phone.png' });
 });
 

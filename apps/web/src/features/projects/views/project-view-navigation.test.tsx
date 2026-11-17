@@ -10,8 +10,7 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { SavedView } from '../../saved-views/core/saved-view';
 import type { ProjectScope } from '../core/project';
-import { ProjectsDesktopTabs } from './project-view-tabs';
-import { ProjectsMobileTabs } from './projects-mobile-tabs';
+import { ProjectSavedViewsList } from './project-saved-views';
 
 vi.mock('@core/hotkey/hotkeys', () => ({
   useHotkeyDOMScope: () => [() => {}],
@@ -106,73 +105,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it.each(['phone', 'desktop'])(
-  'keeps %s navigation ordered and separates saved views from built-ins',
-  async (platform) => {
-    render(() =>
-      platform === 'phone' ? (
-        <ProjectsMobileTabs filters={<button>Filters</button>} />
-      ) : (
-        <ProjectsDesktopTabs
-          filters={<button>Filters</button>}
-          fallback={null}
-        />
-      )
-    );
-    const filters = screen.getByRole('button', { name: 'Filters' });
-    const picker = screen.getByRole('button', { name: 'Saved views' });
-    const tabRole = platform === 'phone' ? 'button' : 'radio';
-    const builtIn = screen.getByRole(tabRole, { name: 'My projects' });
-    expect(
-      filters.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
-    expect(
-      picker.compareDocumentPosition(builtIn) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+it('selects project views and starts creation from the shared sidebar section', async () => {
+  const [open, setOpen] = createSignal(false);
+  render(() => <ProjectSavedViewsList open={open()} onOpenChange={setOpen} />);
+  fireEvent.click(screen.getByRole('button', { name: 'New saved view' }));
+  expect(open()).toBe(true);
+  expect(views.start).toHaveBeenCalledOnce();
+  expect(views.creating()).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'New view, draft' }));
+  expect(views.creating()).toBe(true);
+  expect(views.select).not.toHaveBeenCalled();
 
-    fireEvent.click(picker);
-    const drawer = await screen.findByRole('dialog', { name: 'Saved views' });
-    expect(within(drawer).queryByText('My projects')).toBeNull();
-    expect(within(drawer).queryByText('All projects')).toBeNull();
-    expect(within(drawer).queryByText('Created by me')).toBeNull();
-    fireEvent.click(
-      within(drawer).getByRole('button', {
-        name: 'Launch projects, shared with team',
-      })
-    );
-    await waitFor(() => expect(views.select).toHaveBeenCalledWith(record.id));
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(
-      screen
-        .getByRole('button', { name: record.name })
-        .getAttribute('aria-pressed')
-    ).toBe('true');
-    expect(
-      screen
-        .getByRole(tabRole, { name: 'All projects' })
-        .hasAttribute('data-checked')
-    ).toBe(false);
-
-    fireEvent.click(screen.getByRole(tabRole, { name: 'My projects' }));
-    expect(views.selectScope).toHaveBeenCalledWith('assigned-to-me');
-    expect(views.selectedId()).toBeUndefined();
-    expect(
-      screen
-        .getByRole('button', { name: 'Saved views' })
-        .getAttribute('aria-pressed')
-    ).toBe('false');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Saved views' }));
-    fireEvent.click(
-      within(
-        await screen.findByRole('dialog', { name: 'Saved views' })
-      ).getByRole('button', { name: 'New view' })
-    );
-    await waitFor(() => expect(views.start).toHaveBeenCalledOnce());
-    expect(
-      screen
-        .getByRole('button', { name: 'New view' })
-        .getAttribute('aria-pressed')
-    ).toBe('true');
-  }
-);
+  const list = screen.getByRole('navigation', { name: 'Saved project views' });
+  fireEvent.click(
+    within(list).getByRole('button', {
+      name: 'Launch projects, shared with team',
+    })
+  );
+  await waitFor(() => expect(views.select).toHaveBeenCalledWith(record.id));
+  expect(views.creating()).toBe(false);
+  expect(views.selectedId()).toBe(record.id);
+});

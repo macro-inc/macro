@@ -267,7 +267,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/tasks` | Tasks table |
 | `/app/tasks/<uuid>` | Tasks with a task document opened inline |
 | `/app/agents` | AI chats / agents list |
-| `/app/tasks/projects` | Projects collection inside Tasks (requires the Projects flag) |
+| `/app/tasks/projects` | Projects collection inside Tasks |
 | `/app/tasks/projects/<uuid>/overview` | Project detail in Tasks, with breadcrumbs, properties, description, and discussions; replace `overview` with `tasks` for the task list |
 | `/app/component/project-compose` | Native project composer, sharing the task composer layout and property controls |
 | `/app/component/new-project` | Alias for the project composer; existing links remain valid |
@@ -402,11 +402,12 @@ a schedule: a separate **Back to availability** pill sits beside the editor
 title, matching other mobile routes.
 
 Projects are available without a feature flag.
-Phones expose Projects as its own dock/More destination, separate from Tasks.
-It opens the shared project collection with Filters, a Saved views item, and
-built-in project PillTabs in that order. The desktop header uses the same order
-with standard tabs. The shared saved-view drawer keeps its 48px cards and New
-view action, and no longer lists built-in project scopes.
+Projects live within Tasks. Open **Show sidebar** on touch to choose a built-in
+project view or a saved project view. The Tasks dock button remains selected;
+Projects has no separate dock/More entry, header tabs, or saved-view picker.
+Create saved project views with the shared sidebar section's **+** or empty-state
+action. Collection headers keep navigation on the left and search/filter actions
+on the right.
 Project definitions use the `sN.projects.savedView` search parameter; opening a
 project pushes detail and Back returns to that collection.
 Existing Files folders stay separate from task projects.
@@ -744,10 +745,10 @@ the other entity actions used on Home.
 
 Desktop inner sidebars place the same full-width, outlined **New** pill directly
 below the title. List toolbars use its compact version, including when the
-sidebar is hidden. Email, Drive, and Tasks use one desktop row: title, filter
-controls, view options, New, and Search. Projects places filter controls, saved
-views, and built-in tabs first, followed by view options, New, and Search. Filter and view
-controls use the rounded, bordered button groups from the email thread toolbar;
+sidebar is hidden. Collection toolbars keep their title and navigation left and
+search/filter controls right. Projects uses the same sidebar navigation and
+saved-view creation flow as Tasks, without additional tabs or a saved-view
+selector in its header. Filter and view controls use the rounded, bordered button groups from the email thread toolbar;
 New and Search have their own rounded, bordered backgrounds. Search starts as an
 icon and expands into a compact field when clicked or opened with Cmd/Ctrl+F.
 Closing it clears the query and returns to the icon. The action stays specific to

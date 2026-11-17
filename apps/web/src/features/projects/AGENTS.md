@@ -10,7 +10,7 @@ Task projects are initiatives, not legacy Drive folders. `projects.tsx` composes
 - `core/project-saved-view.ts`: versioned `projects` definitions; search and scroll remain local.
 - `project-saved-views.tsx`: saved-view production composition, route/account scope, and settings ownership.
 - `views/project-saved-views.tsx`: shared saved-view lists, menus, dialogs, and explicit saves.
-- `views/projects-collection.tsx`: desktop collection; `project-view-tabs.tsx` and `projects-mobile-tabs.tsx` share built-in options and the saved-view drawer, with `projects-filter-drawer.tsx` composing phone filters.
+- `views/projects-collection.tsx`: collection state and desktop header; `components/project-collection-controls.tsx` lays out touch controls in `MobileListLayout`.
 - `add-project-tasks.tsx`: shared creation/assignment state; `views/add-project-tasks.tsx` and `views/mobile/add-project-tasks.tsx` compose the menus.
 - `project-detail.tsx` and `project-title-menu.tsx`: shared sources and actions above desktop/mobile header compositions.
 - `project-row.tsx`: row entry; `views/project-row.tsx`, `views/mobile/project-row.tsx`, and `views/shared/` own responsive presentation.
@@ -22,10 +22,10 @@ Task projects are initiatives, not legacy Drive folders. `projects.tsx` composes
 - Preserve the raw saved layout when phones display List instead of Gantt; exclude temporary saved-view edits from entry snapshots.
 - Keep built-in scopes viewer-relative and independent of editable filters; sharing a definition never grants project access.
 - Reject unknown nested saved-view settings and reset pending creation on account changes so unsupported restrictions and draft state cannot leak across views.
-- Keep Projects separate from Tasks in phone navigation and view restoration while reusing the Tasks workspace for project details and push/back history.
+- Keep Projects inside the Tasks workspace and its hamburger navigation on touch; omit a separate Projects dock destination while retaining project route restoration.
 - Use the shared SplitTitleFileMenu and SplitFileMenu for project titles and replace the active desktop breadcrumb. Phones show one page with title/property pills, an expandable description of up to eight lines, shared Discussion entry, and a pinned Tasks heading; keep Share and Details islands, render only property pills in the property row, omit section tabs, and skip obsolete same-project sections on Back. Preserve desktop and tablet tabs.
 - Resolve title-menu property options and edit permission reactively so late definitions and access changes update open menus.
-- Order project collection headers as filters, saved-view picker, then built-in tabs, followed by the shared project search; use the shared scrollable PillTabs on phones and Tabs on desktop. Keep built-ins out of the saved-view drawer; reuse its 48px cards with accent selection, shared marks, actions, and New view at the bottom, and defer navigation and dialogs until sheet closure.
+- Keep built-in project scopes and saved project views in the Tasks sidebar on every platform; use the shared saved-view section header plus and empty-state creation action. Omit project PillTabs and saved-view pickers from headers. Keep navigation left and search/filter controls right.
 - Share `ListColumnHeader`, `NarrowRowGrid`, and task-grid tracks with task rows. Project lists order Status, Priority, Assignees, Due date, Updated; collapse values to icons at 840px and hide Updated at 600px with the shared 160ms reduced-motion-aware transition. Keep the saved `EntityIcon` before the name and an accessible 14px progress ring after it, with a 22px tooltip target; use a 20px ring in the phone Tasks heading. On phones, trail Status, Priority, and one lead avatar using existing property editors, with the task rows' dashed-user placeholder for no assignee.
 - Use one Add task dropdown on desktop and a filled PillButton in centered empty states. On phones, keep one page-owned floating Task menu visible at rest and while scrolling; omit inline and empty-state task buttons, keep the empty description and Documentation link, and pad the list above the floating chrome. Projects-list creation remains separate.
 - Resolve the phone Projects creation action with `TOKENS.create.initiative`; `TOKENS.create.project` creates a Drive folder.

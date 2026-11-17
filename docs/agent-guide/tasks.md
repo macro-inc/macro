@@ -1,6 +1,6 @@
 # Tasks
 
-On touch, **Show sidebar** and **Filters** float over the full-height list with a list-local top fade. The initial chrome inset, tutorial, warning rows, and touch column headings scroll with the tasks. Above 720px on touch, the task or project list remains left of an empty or selected detail preview. At every touch width, Show sidebar opens navigation (task views, projects, saved views) in a sheet; there are no view pills.
+On touch, **Show sidebar** stays on the left while **Search** and **Filters** float on the right over the full-height list with a list-local top fade. The initial chrome inset, tutorial, warning rows, and touch column headings scroll with the tasks. Above 720px on touch, the task or project list remains left of an empty or selected detail preview. At every touch width, Show sidebar opens navigation (task views, projects, saved views) in a sheet; there are no view pills.
 
 ## Surface
 
@@ -53,22 +53,17 @@ desktop sidebar has no search field.
 The desktop sidebar and toolbar `New` menus offer `Task`, `Subtask`, `Project` (when
 Projects is enabled), and `Tag`. Task and Project open their existing composers;
 Tag opens the tag editor, with personal scope selected and team sharing available
-when the user has a team. The Projects list uses the same menu. With Projects
-enabled, the collapsible `Projects` section appears above task `Saved views`.
-It contains `My projects` (assigned to the viewer), `All projects`, `Created by me`,
-and saved project views. The plus beside the section opens the project composer.
-Phones have a separate `Projects` destination in the bottom navigation's More
-menu (or dock after customization), not a Projects pill inside Tasks. Each destination
-restores its own last view; switching to Tasks must not reopen Projects. Its floating
-`Project` action opens the initiative composer, not the Drive folder dialog. The phone
-header orders Filters, Saved views, then the My projects, All projects, and
-Created by me pill tabs in the shared scrolling strip. The Saved views item shows
-the active saved view's name, or Saved views otherwise. Its drawer contains only
-saved project views in 48px cards, marks selection with accent and a check, and
-puts New view at the bottom. Cards retain sharing marks and action menus.
-Desktop uses the same filter, saved-view picker, and built-in tab order.
-The search control follows the tabs on touch and filters the project names; the
-Search projects hotkey focuses that same control.
+when the user has a team. The Projects list uses the same menu. The collapsible
+**Projects** section contains **My projects** (assigned to the viewer), **All
+projects**, and **Created by me**. Its plus opens the project composer. The
+**Saved project views** section below uses the same header plus, draft row, and
+empty-state creation action as task saved views. Both sections appear in the
+shared sidebar on desktop and in the **Show sidebar** hamburger drawer on touch.
+Projects has no separate dock/More destination, PillTabs, or saved-view selector.
+The Tasks dock button stays selected while browsing projects. The project list's
+floating **Project** action opens the initiative composer, not the Drive folder
+dialog. Search and filters sit on the right of the header, with navigation on the
+left; the Search projects hotkey focuses the same expandable field.
 The filter button
 opens Sort, Group, Status, Priority, Assignee, and Due date controls. Project rows
 keep Status, Priority, Assignees, Due date, and Updated columns on desktop/tablet.
@@ -1258,11 +1253,11 @@ message instead; no project-empty illustration is shown.
 
 ### Saved project views
 
-Change project filters, sort, grouping, or layout and choose Save view. Name the
-view and optionally share it with the current team. The view appears below the
-built-in views in the desktop Projects section and in the shared saved-view
-drawer opened from the desktop or phone header. Built-in views remain in the
-tabs, not in that drawer.
+Use the **+** in **Saved project views** or its empty-state **Create view** action
+to start a draft, configure project filters, sort, grouping, or layout, then choose
+**Save view**. Name the view and optionally share it with the current team. Views
+appear in that sidebar section on desktop and in the shared hamburger drawer on
+touch; there is no project header picker or built-in tab strip.
 Opening it reapplies its settings; search text and scroll are not saved. Assigned
 to me and Created by me remain relative to whoever opens the definition.
 Use a row's menu to Edit its name/sharing, Duplicate a private copy, or Delete.

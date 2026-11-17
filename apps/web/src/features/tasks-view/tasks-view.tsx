@@ -2,6 +2,7 @@ import {
   CollectionPanes,
   ViewBreadcrumbs,
   ViewShell,
+  ViewSidebar,
 } from '@app/components/view-shell';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { openProject } from '@app/features/projects/open-project';
@@ -160,7 +161,13 @@ function TasksViewRoot() {
   onMount(() => panel.handle.setDisplayName('Tasks'));
 
   const taskList = () => (
-    <MobileListLayout header={<TasksMobileControls />}>
+    <MobileListLayout
+      header={
+        <TasksMobileControls
+          focusSearchResults={() => listElement()?.focus()}
+        />
+      }
+    >
       <TasksHeader focusSearchResults={() => listElement()?.focus()} />
       <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
       <ViewShell.Content class="flex flex-col">
@@ -217,7 +224,9 @@ function TasksViewRoot() {
                 <ProjectsTab
                   scope={() => projectScopeForTab(state.tab)}
                   title={TASK_TABS.find((tab) => tab.id === state.tab)?.label}
-                  mobileNavigation={<TasksMobileControls />}
+                  mobileNavigation={
+                    <ViewSidebar.Toggle action="expand" presentation="pill" />
+                  }
                   search={{
                     value: () => state.search,
                     onChange: (search) => setState('search', search),

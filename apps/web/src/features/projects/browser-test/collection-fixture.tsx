@@ -1,11 +1,13 @@
-import { ViewShell } from '@app/components/view-shell';
+import { ViewShell, ViewSidebar } from '@app/components/view-shell';
+import { PROJECT_TABS } from '@app/features/tasks-view/constants';
+import { projectScopeForTab } from '@app/features/tasks-view/core/task-navigation';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { withApiValues } from '@property/utils/transforms';
 import { ImperativeDialogHost } from '@ui';
-import { batch, createMemo, createSignal } from 'solid-js';
+import { batch, createMemo, createSignal, For } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { createSavedViewDraft } from '../../saved-views/primitives/create-saved-view-draft';
 import { ProjectSavedViewsContext } from '../context/project-saved-views-context';
@@ -25,7 +27,7 @@ import {
   readProjectSavedView,
 } from '../core/project-saved-view';
 import { createProjectCollection } from '../primitives/project-collection';
-import { ProjectSavedViewRows } from '../views/project-saved-views';
+import { ProjectSavedViewsList } from '../views/project-saved-views';
 import { ProjectsCollection } from '../views/projects-collection';
 import {
   filterProjectFixtureRows,
@@ -245,13 +247,34 @@ export function CollectionFixture() {
           ref={attachHotkeys}
           class="relative flex h-screen min-h-0 flex-col bg-app text-ink"
         >
-          <div class="hidden not-touch:block" data-testid="saved-view-sidebar">
-            <ProjectSavedViewRows />
-          </div>
-          <ViewShell.Root aside={false} class="flex min-h-0 flex-1 flex-col">
+          <ViewShell.Root class="flex min-h-0 flex-1">
+            <ViewShell.Aside>
+              <ViewSidebar.Root data-testid="saved-view-sidebar">
+                <ViewSidebar.Header>Projects</ViewSidebar.Header>
+                <ViewSidebar.Content>
+                  <ViewSidebar.Nav aria-label="Project views">
+                    <For each={PROJECT_TABS}>
+                      {(tab) => (
+                        <ViewSidebar.Item
+                          onClick={() =>
+                            views.selectScope(projectScopeForTab(tab.id))
+                          }
+                        >
+                          {tab.label}
+                        </ViewSidebar.Item>
+                      )}
+                    </For>
+                  </ViewSidebar.Nav>
+                  <ProjectSavedViewsList open onOpenChange={() => {}} />
+                </ViewSidebar.Content>
+              </ViewSidebar.Root>
+            </ViewShell.Aside>
             <ViewShell.Main class="flex min-h-0 flex-1 flex-col">
               <ProjectsCollection
                 collection={collection}
+                mobileNavigation={
+                  <ViewSidebar.Toggle action="expand" presentation="pill" />
+                }
                 onOpen={setOpened}
                 onCreate={() => setCreatedProjects((count) => count + 1)}
                 createAssigneeName={(id) => id}
