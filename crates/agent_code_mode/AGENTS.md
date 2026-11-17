@@ -77,8 +77,7 @@ stacks. Process isolation belongs to
   dropped, so a command never starts what a link from outside the app does.
   Budgets (5 commands and 3 panes a turn, 30 a person a minute) live in Redis; the
   harness adapters (`agent_harness_service/src/code_mode/ui_commands.rs`) send a
-  `ui_command` frame to `user/{prompter}` through the connection gateway behind
-  the `enable-agent-navigation` flag. No acknowledgement yet: `sent` is the
+  `ui_command` frame to `user/{prompter}` through the connection gateway. No acknowledgement yet: `sent` is the
   gateway receipt.
 - `src/domain/documentation.rs`: the build-time SDK catalog (per entity a
   `@routing` description, an `@agent` guide and an index; a reference per

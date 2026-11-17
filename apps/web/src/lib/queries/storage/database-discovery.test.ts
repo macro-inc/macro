@@ -45,12 +45,4 @@ describe('database command discovery refresh', () => {
     setActive(true);
     expect(mocks.invalidate).toHaveBeenCalledTimes(2);
   });
-  it('does not refresh when databases are disabled and responds when the flag becomes available', () => {
-    const { setActive, setEnabled } = setup();
-    setEnabled(false);
-    setActive(true);
-    expect(mocks.invalidate).not.toHaveBeenCalled();
-    setEnabled(true);
-    expect(mocks.invalidate).toHaveBeenCalledOnce();
-  });
 });

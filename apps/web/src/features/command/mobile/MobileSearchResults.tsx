@@ -46,7 +46,6 @@ import { createSearchPagination } from './create-search-pagination';
 import { createSearchResultWindow } from './create-search-result-window';
 import { createSearchScrollRestoration } from './create-search-scroll-restoration';
 import type { MobileSearchSession } from './mobileSearchState';
-import { useMobileSearchCategory } from './use-mobile-search-category';
 
 function MobileNameResults(props: {
   session: MobileSearchSession;
@@ -55,7 +54,7 @@ function MobileNameResults(props: {
   const state = props.session;
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const [container, setContainer] = createSignal<HTMLDivElement>();
-  const category = useMobileSearchCategory(state.category);
+  const category = state.category;
   const source = useEntitySearch(state.query, category, {
     enabled: () => true,
     contactDiscovery: useCrmContactDiscovery,
@@ -244,7 +243,7 @@ function MobileFullTextResults(props: {
   accountId: string;
 }) {
   const state = props.session;
-  const category = useMobileSearchCategory(state.category);
+  const category = state.category;
   const search = createMobileFullTextSearch(state.query, category);
   usePending('search.full-text', search.isSettling);
   const hasAuthoritativeError = () =>

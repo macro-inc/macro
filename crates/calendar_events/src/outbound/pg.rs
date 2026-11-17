@@ -3035,6 +3035,10 @@ async fn upsert_calendar_tx(
     // Snapshot the reminder-relevant state before the upsert: a change to the
     // default reminders or the zone that anchors all-day starts invalidates
     // the firing schedule of every event that follows this calendar.
+    // A source under another role counts only if written since the last
+    // committed sync. A full snapshot keeps a stored copy newer than Google's
+    // and its old role, and reading the calendar again keeps it again, so
+    // counting older sources would rebuild such a calendar on every poll.
     let previous = sqlx::query!(
         r#"
         SELECT
@@ -3043,6 +3047,7 @@ async fn upsert_calendar_tx(
                 SELECT 1 FROM calendar_event_sources source
                 WHERE source.calendar_id = calendars.id
                   AND source.provider_access_role IS DISTINCT FROM calendars.access_role
+                  AND source.last_seen_at >= calendars.synced_at
             )) AS "needs_verification!"
         FROM calendars
         WHERE account_id = $1 AND provider_calendar_id = $2

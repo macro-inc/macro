@@ -392,9 +392,8 @@ picker, displays, and editing.
 
 ## Spreadsheets
 
-Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog
-flag in every environment. Team targeting is configured in PostHog; ordinary
-document permissions continue to control access to each workbook.
+Spreadsheets are available to everyone. Ordinary document permissions control
+access to each workbook.
 
 Choose **Create → Spreadsheet**, or **New → Spreadsheet** in Files or a folder.
 From Files the new workbook opens inline in the open folder or tab
