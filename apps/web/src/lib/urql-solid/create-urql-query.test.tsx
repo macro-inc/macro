@@ -1,3 +1,4 @@
+import { PaneSuspensionContext } from '@core/context/pane-suspension';
 import {
   type AnyVariables,
   type Client,
@@ -257,6 +258,36 @@ describe('createUrqlQuery reactive state', () => {
 
     execution?.next({ data: { value: 'pushed' } });
     expect(query.data).toEqual({ value: 'pushed' });
+    expect(fake.executions).toHaveLength(1);
+  });
+
+  it('holds pushed results while its pane is suspended and applies the latest on showing', () => {
+    const fake = makeFakeClient();
+    const [suspended, setSuspended] = createSignal(false);
+    let query!: UrqlQueryResult<Data, Variables>;
+    disposals.push(
+      createRoot((dispose) => {
+        createComponent(PaneSuspensionContext.Provider, {
+          value: suspended,
+          get children() {
+            query = createUrqlQuery(() => activeOptions(fake.client));
+            return undefined;
+          },
+        });
+        return dispose;
+      })
+    );
+    const execution = fake.executions[0];
+    execution?.next({ data: { value: 'shown' } });
+    expect(query.data).toEqual({ value: 'shown' });
+
+    setSuspended(true);
+    execution?.next({ data: { value: 'first while hidden' } });
+    execution?.next({ data: { value: 'second while hidden' } });
+    expect(query.data).toEqual({ value: 'shown' });
+
+    setSuspended(false);
+    expect(query.data).toEqual({ value: 'second while hidden' });
     expect(fake.executions).toHaveLength(1);
   });
 

@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   createHiddenDeferral,
@@ -144,4 +144,29 @@ it('stays quiet when shown with nothing deferred or after disposal', () => {
   setVisibility('visible');
   dispatch();
   expect(run).not.toHaveBeenCalled();
+});
+
+it('holds requests while its pane is suspended and runs once when it shows', () => {
+  setVisibility('visible');
+  const run = vi.fn();
+  const [suspended, setSuspended] = createSignal(true);
+  const dispose = createRoot((dispose) => {
+    const deferral = createHiddenDeferral(run, suspended);
+    deferral.request();
+    deferral.request();
+    return () => {
+      deferral.dispose();
+      dispose();
+    };
+  });
+  expect(run).not.toHaveBeenCalled();
+
+  setSuspended(false);
+  expect(run).toHaveBeenCalledTimes(1);
+
+  // Shown again with nothing new held, it does not run.
+  setSuspended(true);
+  setSuspended(false);
+  expect(run).toHaveBeenCalledTimes(1);
+  dispose();
 });

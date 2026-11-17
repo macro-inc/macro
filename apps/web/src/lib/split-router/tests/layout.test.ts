@@ -6,7 +6,7 @@ import { createMemoryPaneStore } from '../panes/memory-store';
 import { createSplitRouter } from '../router/create-router';
 import { PANE_LEVEL } from '../router/leave-guards';
 import type { Entry, PaneId } from '../routes/types';
-import { appRoutes, createTestPolicy } from './fixtures';
+import { appLocation, appRoutes, createTestPolicy } from './fixtures';
 
 function setup(url: string, split?: SplitSide) {
   const history = createMemoryHistory(url);
@@ -294,6 +294,49 @@ describe('parked layouts', () => {
     await router.navigate('/drive/~/calls');
     expect(router.panes()).not.toContain('pane-1');
     expect(router.entry('pane-1' as PaneId)).toBe(home);
+  });
+
+  it('a navigation parks the panes it is asked to park and never reuses them', async () => {
+    const { router, history } = track(setup('/home/~/drive'));
+    const home = router.entry('pane-1' as PaneId);
+    const stop = router.registerGuard(
+      'pane-1' as PaneId,
+      PANE_LEVEL,
+      () => false
+    );
+
+    const result = await router.navigate(
+      { location: appLocation('mail') },
+      { park: ['pane-1' as PaneId] }
+    );
+    expect(result.status).toBe('committed');
+    // The parked pane keeps its entry and skips its guard; the other open
+    // pane shows the destination.
+    expect(router.panes()).toEqual(['pane-2']);
+    expect(router.retainedPanes()).toEqual(['pane-1', 'pane-2']);
+    expect(router.entry('pane-1' as PaneId)).toBe(home);
+    expect(routeIds(router.entry('pane-2' as PaneId))).toEqual(['mail']);
+    expect(history.entries().at(-1)?.path).toBe('/mail');
+    stop();
+  });
+
+  it('shows a parked pane, parking one open pane and closing the rest', async () => {
+    const { router } = track(setup('/home'));
+    await router.navigate(
+      { location: appLocation('mail') },
+      { park: ['pane-1' as PaneId] }
+    );
+    await router.navigatePane('pane-2' as PaneId, '/mail/~/drive');
+    const mail = router.entry('pane-2' as PaneId);
+
+    const result = await router.showLayout(['pane-1'] as PaneId[], {
+      closeOpen: true,
+      park: ['pane-2' as PaneId],
+    });
+    expect(result.status).toBe('committed');
+    expect(router.panes()).toEqual(['pane-1']);
+    expect(router.retainedPanes()).toEqual(['pane-1', 'pane-2']);
+    expect(router.entry('pane-2' as PaneId)).toBe(mail);
   });
 
   it('parks stacked panes in their tiles and shows them again in them', async () => {
