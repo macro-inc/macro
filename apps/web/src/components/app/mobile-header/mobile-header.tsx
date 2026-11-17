@@ -70,6 +70,8 @@ function Title(props: {
   icon?: JSX.Element;
   /** Shown between the icon and the label, such as the file type. */
   badges?: JSX.Element;
+  /** Shown after the label, such as a Beta badge. */
+  trailingBadges?: JSX.Element;
   colorIcon?: boolean;
   class?: string;
 }) {
@@ -118,6 +120,7 @@ function Title(props: {
             <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
           </Show>
         </span>
+        {props.trailingBadges}
       </div>
     </MobileHeaderIsland>
   );

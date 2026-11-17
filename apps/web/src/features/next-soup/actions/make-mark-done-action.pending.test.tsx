@@ -15,7 +15,6 @@ import {
 } from './tests/done-write-fixture';
 
 const mocks = vi.hoisted(() => ({
-  graphql: true,
   home: false,
   notificationIdsForEntity: undefined as
     | ((entity: EntityData) => string[])
@@ -46,10 +45,6 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
     },
   }),
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => mocks.graphql,
-}));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: mocks.toast }));
 vi.mock('./graphql-done-optimism', () => ({
   applyGraphqlDoneOptimistic: mocks.apply,
@@ -65,7 +60,6 @@ vi.mock('@queries/notification/entity-mutations', () => ({
   }),
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
-  applyEntitiesDoneOptimistic: mocks.apply,
   executeMarkEntitiesDone: async (args: DoneWriteArgs) => {
     const [result] = await Promise.allSettled([mocks.done(args)]);
     (mocks.report ?? reportDoneWriteOutcomes)(args, result);
@@ -133,7 +127,6 @@ function mount() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.graphql = true;
   mocks.home = false;
   mocks.notificationIdsForEntity = undefined;
   mocks.report = undefined;
@@ -729,24 +722,5 @@ describe('pending GraphQL Done undo', () => {
         notificationEntities: [{ type: 'email', id: 'email-1' }],
       })
     );
-  });
-
-  it('retains success-only registration for REST', async () => {
-    mocks.graphql = false;
-    const write = Promise.withResolvers<string[]>();
-    mocks.done.mockReturnValueOnce(write.promise);
-    const { action, undo } = mount();
-    const done = action.execute([email()]);
-    await vi.waitFor(() => expect(mocks.done).toHaveBeenCalledOnce());
-    expect(undo.canUndo()).toBe(false);
-    expect(mocks.toast.success).not.toHaveBeenCalled();
-    write.resolve([]);
-    await done;
-    expect(undo.canUndo()).toBe(true);
-    await undo.undo();
-    expect(mocks.undone).toHaveBeenCalledWith({
-      emailIds: ['email-1'],
-      notificationIds: ['locally-known-id'],
-    });
   });
 });
