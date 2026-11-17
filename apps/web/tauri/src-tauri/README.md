@@ -87,6 +87,19 @@ ignores legacy cache contents: the first launch uses embedded assets and checks
 for a fresh download. Other platforms retain their existing cache location.
 This storage change requires a native app release.
 
+## Bundle identity
+
+The updater orders bundles by `BundleBuild` from `crates/bundle_identity`: the
+committer time of the commit a bundle was built from, in milliseconds. The
+embedded bundle and the OTA bundle of one commit are therefore equal, and an
+OTA bundle of an older commit is older than the embedded one however late it was
+built. `build.rs` reads the embedded identity and commit from the stamped
+`../../dist/bundle-manifest.json`; a `production` build fails on an unstamped or
+invalid manifest, and a `development` build warns and uses 0. The updater reads
+OTA manifests just as strictly: a bundle persisted before stamping (no
+`commitTime`) is rejected as `manifest_invalid` at startup, and the app serves
+its embedded bundle until the next update.
+
 ## File saving and sharing
 
 The optional `file_export_plugin` registers iOS save/share commands. The web
