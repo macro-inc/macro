@@ -83,7 +83,9 @@ let
       # Tempo's span metrics carry trace IDs as exemplars.
       max_global_exemplars_per_user = 100000;
       # Prometheus has no series limit; Mimir defaults to 150k. The host holds
-      # about 53k, and Tempo's span metrics may add up to 50k.
+      # about 53k; each of the two metrics generators may add up to 50k (its
+      # own cap), and the node Alloy adds the cluster's own node, kubelet and
+      # cAdvisor series.
       max_global_series_per_user = 300000;
       # Mimir's 10k samples/s would cut off senders catching up after an
       # outage; the host takes about 900/s.
@@ -170,7 +172,7 @@ in
                 resources = {
                   requests = {
                     cpu = "100m";
-                    memory = "768Mi";
+                    memory = "1Gi";
                   };
                   limits.memory = "${toString memoryLimitMiB}Mi";
                 };

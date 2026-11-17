@@ -55,7 +55,7 @@ spec:
               memory: 2048Mi
             requests:
               cpu: 100m
-              memory: 768Mi
+              memory: 1Gi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -87,6 +87,7 @@ spec:
               app.kubernetes.io/instance: mimir
               app.kubernetes.io/name: mimir
           maxSkew: 1
+          minDomains: 3
           topologyKey: topology.kubernetes.io/zone
           whenUnsatisfiable: DoNotSchedule
       volumes:

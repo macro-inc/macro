@@ -67,11 +67,18 @@ in
           resources = {
             requests = {
               cpu = "100m";
-              memory = "512Mi";
+              memory = "1Gi";
             };
             limits.memory = "2Gi";
           };
+          # The chart publishes starting and stopping pods by default, which
+          # would send pushes and queries to a replica replaying its WAL or
+          # already shut down. Memberlist has its own Service.
+          service.publishNotReadyAddresses = false;
+          # Nothing in the single binary talks to the Kubernetes API.
+          automountServiceAccountToken = false;
         };
+        serviceAccount.automountServiceAccountToken = false;
 
         # Only the single binary: no simple-scalable targets, no nginx gateway
         # (Grafana's query gateway and Alloy ingest are their own apps), no

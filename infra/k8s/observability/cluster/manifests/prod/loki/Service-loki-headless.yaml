@@ -26,7 +26,6 @@ spec:
       port: 9096
       protocol: TCP
       targetPort: grpc
-  publishNotReadyAddresses: true
   selector:
     app.kubernetes.io/component: single-binary
     app.kubernetes.io/instance: loki

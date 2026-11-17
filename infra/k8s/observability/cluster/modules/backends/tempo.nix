@@ -91,7 +91,17 @@ in
           replicas = 3;
           persistence = volume;
           topologySpreadConstraints = spread "ingester";
-          resources = resources "512Mi" "2Gi";
+          # Never two on one node (the chart only prefers it): their volumes
+          # would pin them together, and losing that node would lose quorum.
+          affinity = builtins.toJSON {
+            podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution = [
+              {
+                labelSelector.matchLabels = component "ingester";
+                topologyKey = "kubernetes.io/hostname";
+              }
+            ];
+          };
+          resources = resources "1Gi" "2Gi";
         };
         distributor = stateless "distributor" 2 "128Mi" "512Mi";
         querier = stateless "querier" 2 "256Mi" "1Gi";

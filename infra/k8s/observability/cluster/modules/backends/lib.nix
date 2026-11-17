@@ -25,10 +25,13 @@ rec {
   # One node per zone: replicas spread one per zone, and a replica waits for
   # its zone rather than doubling up in another, so a lost zone takes one
   # copy of the data, never two. A volume (gp3, WaitForFirstConsumer) stays in
-  # the zone its pod first ran in.
+  # the zone its pod first ran in. `minDomains` keeps that true while a zone
+  # has no node (bootstrap, a node being replaced): without it the scheduler
+  # counts only the zones it sees and would put two replicas in one.
   zoneSpread = matchLabels: [
     {
       maxSkew = 1;
+      minDomains = 3;
       topologyKey = "topology.kubernetes.io/zone";
       whenUnsatisfiable = "DoNotSchedule";
       labelSelector.matchLabels = matchLabels;

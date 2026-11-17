@@ -41,7 +41,7 @@ spec:
                   app.kubernetes.io/instance: loki
                   app.kubernetes.io/name: loki
               topologyKey: kubernetes.io/hostname
-      automountServiceAccountToken: true
+      automountServiceAccountToken: false
       containers:
         - args:
             - -config.file=/etc/loki/config/config.yaml
@@ -92,7 +92,7 @@ spec:
               memory: 2Gi
             requests:
               cpu: 100m
-              memory: 512Mi
+              memory: 1Gi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -128,6 +128,7 @@ spec:
               app.kubernetes.io/instance: loki
               app.kubernetes.io/name: loki
           maxSkew: 1
+          minDomains: 3
           topologyKey: topology.kubernetes.io/zone
           whenUnsatisfiable: DoNotSchedule
       volumes:

@@ -129,6 +129,7 @@ spec:
               app.kubernetes.io/instance: tempo
               app.kubernetes.io/name: tempo
           maxSkew: 1
+          minDomains: 3
           topologyKey: topology.kubernetes.io/zone
           whenUnsatisfiable: DoNotSchedule
       volumes:

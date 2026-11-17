@@ -96,7 +96,10 @@ The repository is public, so Argo CD clones it over HTTPS without a deploy key
 Loki, Tempo and Mimir (`modules/backends/`) each keep three copies of recent
 data (replication 3, quorum 2), one replica per zone, and older data in their
 own S3 bucket, so a rollout, a drained node or a lost zone loses neither
-writes nor queries. Each pod keeps its WAL on a gp3 volume.
+writes nor queries. Two parts keep one copy: Tempo's metrics generators and
+Loki's pattern ingester each own a share of the series or streams, so while a
+replica is down its share of span metrics, service graphs and log patterns
+is missing. Each pod keeps its WAL on a gp3 volume.
 
 | Backend | Write | Query | Bucket |
 | --- | --- | --- | --- |
