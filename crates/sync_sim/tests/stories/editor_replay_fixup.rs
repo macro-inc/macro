@@ -133,7 +133,31 @@ fn startup_adoption_precedes_editor_attachment_and_dependent_edits() {
     );
     // Startup now replays before model attachment, avoiding the former own
     // repair operation. Both user characters still require durable delivery.
-    assert_eq!(client.oplog_vv.get(&peer), Some(&2));
+    // That first local commit also carries the stored-drift normalization the
+    // writers left behind, as Source's Mirror does: each list item was stored with
+    // checked null, which Source's import clears outside a check list, so the
+    // reopened client deletes it once per item. 2 characters + 2 deletions.
+    assert_eq!(client.oplog_vv.get(&peer), Some(&4));
+    fn list_items(node: &serde_json::Value, out: &mut Vec<serde_json::Value>) {
+        if node.get("type").and_then(serde_json::Value::as_str) == Some("listitem") {
+            out.push(node.clone());
+        }
+        for child in node
+            .get("children")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            list_items(child, out);
+        }
+    }
+    let mut items = vec![];
+    list_items(
+        &outcome.finals.servers[&DocIx(0)].deep_value["root"],
+        &mut items,
+    );
+    assert_eq!(items.len(), 2);
+    assert!(items.iter().all(|item| item.get("checked").is_none()));
     for author in ["client1", "client2"] {
         assert!(outcome.events.iter().any(|event| matches!(&event.fact,
             Fact::LocalOp { client, op: AbstractOp::Editor(EditorOp::ToggleList { .. }), spans }
