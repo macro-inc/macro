@@ -38,6 +38,12 @@ pub struct RunEnvironment {
     /// instead of an agent's or a person's call.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unattended: Option<Unattended>,
+    /// The credential carries a session scope (a suggestion generation, or
+    /// a run that sends nothing). The program is then refused the one SDK
+    /// service that holds no credential to a scope: unfurl, which fetches
+    /// any URL it is given.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub scoped: bool,
 }
 
 /// The deployment's Macro SDK targets, so a program's requests and links stay

@@ -138,6 +138,7 @@ async fn real_sdk_nested_calls_are_authenticated_and_concurrent() {
             web_app_url: "https://app.example.test".into(),
         },
         unattended: None,
+        scoped: false,
     };
     let source = r#"
 import { Macro } from '@macro-inc/sdk';
@@ -224,6 +225,7 @@ async fn a_program_presents_a_view_through_its_session() {
             web_app_url: "https://app.example.test".into(),
         },
         unattended: None,
+        scoped: false,
     };
     let source = r#"
 export async function main({execution}) {
@@ -1406,4 +1408,173 @@ export async function main({token, hosts}) {
     .await;
     server.await.unwrap();
     assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+}
+
+/// Tries unfurl under every spelling of its URL and other places a scoped
+/// run may not reach, then the requests it may make.
+const SCOPED_FETCHES: &str = r#"
+export async function main() {
+  const attempts = {
+    "proxy": "UNFURL/proxy?url=https%3A%2F%2Fexample.test%2F%3Fd%3Dsecret",
+    "unfurl": "UNFURL/unfurl?url=https%3A%2F%2Fexample.test",
+    "bulk": "UNFURL/unfurl/bulk",
+    "upper case": "UPPER/PROXY?url=x",
+    "encoded": "LOCAL/%75nfurl/%70roxy?url=x",
+    "double encoded": "LOCAL/%2575nfurl/proxy?url=x",
+    "encoded dot segments": "LOCAL/other/%2e%2e/unfurl/proxy?url=x",
+    "doubled slashes": "LOCAL//unfurl//proxy?url=x",
+    "trailing dot": "DOTTED/proxy?url=x",
+    "request object": new Request("UNFURL/proxy?url=x"),
+    "another prefix": "SERVER/image-proxy/proxy?url=x",
+    "encoded base": "SERVER/%63ognition/marked",
+    "lookalike base": "SERVER/cognitionx/marked",
+    "encoded slash": "COGNITION/a%2F..%2F..%2Fimage-proxy",
+    "public booking": "CALENDAR/scheduling/public/someone/intro/book",
+    "encoded public booking": "CALENDAR/Scheduling/%70ublic/bookings/1/cancel",
+  };
+  const results = {};
+  for (const [name, input] of Object.entries(attempts)) {
+    try {
+      await fetch(input, name === "bulk" ? {method: "POST", body: "{}"} : undefined);
+      results[name] = "reached";
+    } catch (error) {
+      results[name] = String(error.message).includes("macro.unfurls") ? "refused" : String(error.message);
+    }
+  }
+  const redirect = await fetch("COGNITION/redirect");
+  const marked = await fetch("COGNITION/marked");
+  return {results, redirect: redirect.status, status: marked.status};
+}
+"#;
+
+/// A scoped run reaches only the SDK's own bases, never unfurl however its
+/// URL is spelled, and follows no redirect; its other fetches go through.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_scoped_program_reaches_only_the_sdk_and_never_unfurl() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let unfurl = format!("http://localhost:{port}/unfurl");
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("GET /cognition/redirect "), "{request}");
+        let response = format!(
+            "HTTP/1.1 302 Found\r\nLocation: http://localhost:{port}/unfurl/proxy?url=x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        stream.write_all(response.as_bytes()).await.unwrap();
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("GET /cognition/marked "), "{request}");
+        respond(&mut stream, "{}").await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), listener.accept())
+                .await
+                .is_err()
+        );
+    });
+    let server_origin = format!("http://127.0.0.1:{port}");
+    let cognition = format!("{server_origin}/cognition");
+    let source = SCOPED_FETCHES
+        .replace("UNFURL", &unfurl)
+        .replace("UPPER", &format!("http://LOCALHOST:{port}/UNFURL"))
+        .replace("LOCAL", &format!("http://localhost:{port}"))
+        .replace("DOTTED", &format!("http://localhost.:{port}/unfurl"))
+        .replace("COGNITION", &cognition)
+        .replace("CALENDAR", &format!("{server_origin}/calendar"))
+        .replace("SERVER", &server_origin);
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([
+                ("cognition".into(), cognition.clone()),
+                ("calendar".into(), format!("{server_origin}/calendar")),
+                ("unfurl".into(), unfurl.clone()),
+            ]),
+            ..SdkEndpoints::default()
+        },
+        scoped: true,
+        ..RunEnvironment::default()
+    };
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source,
+                    timeout_ms: 10_000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    let refused = serde_json::json!("refused");
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "results": {
+                "proxy": refused, "unfurl": refused, "bulk": refused,
+                "upper case": refused, "encoded": refused,
+                "double encoded": refused, "encoded dot segments": refused,
+                "doubled slashes": refused, "trailing dot": refused,
+                "request object": refused, "another prefix": refused,
+                "encoded base": refused, "lookalike base": refused,
+                "encoded slash": refused, "public booking": refused,
+                "encoded public booking": refused,
+            },
+            "redirect": 302,
+            "status": 200,
+        })
+    );
+    server.await.unwrap();
+    service.shutdown().await;
+}
+
+/// A run with no scope keeps its link previews.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn an_unscoped_program_reaches_unfurl() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        respond(&mut stream, "{}").await;
+        request
+    });
+    let unfurl = format!("http://{address}/unfurl");
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("unfurl".into(), unfurl.clone())]),
+            ..SdkEndpoints::default()
+        },
+        ..RunEnvironment::default()
+    };
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: format!(
+                        "export async function main() {{ return (await fetch('{unfurl}/proxy?url=x')).status; }}"
+                    ),
+                    timeout_ms: 10_000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value, serde_json::json!(200));
+    let request = server.await.unwrap();
+    assert!(request.starts_with("GET /unfurl/proxy?url=x "), "{request}");
+    service.shutdown().await;
 }

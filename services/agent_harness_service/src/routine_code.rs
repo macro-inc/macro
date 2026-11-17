@@ -304,6 +304,9 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                 arguments,
                 dry_run: run.dry_run,
             }),
+            // A routine runs on its owner's unscoped credential; a scoped
+            // session can't create one (routines are sends).
+            scoped: false,
         };
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let started = Instant::now();

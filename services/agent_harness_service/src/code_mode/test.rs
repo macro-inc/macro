@@ -495,7 +495,8 @@ fn enforcement(host: SdkHost) -> ScopeEnforcement {
         // signs; the editing worker accepts only document tokens the storage
         // service mints with a POST a generation session can't make, and its
         // routes edit documents, which a run that sends nothing may do;
-        // unfurl previews public links for any caller.
+        // unfurl previews public links for any caller, and a scoped run's
+        // sandbox refuses it (`RunEnvironment::scoped`).
         SdkHost::DocumentContent | SdkHost::EditingWorker | SdkHost::Unfurl => {
             ScopeEnforcement::NoMacroCredential
         }

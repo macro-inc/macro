@@ -39,6 +39,16 @@ create route refuses them, and the email send and schedule routes refuse
 them unless the schedule quotes the user's approval
 (`macro_authorization::is_agent_run`).
 
+A scoped run (`RunEnvironment::scoped`: a suggestion generation or a run
+that sends nothing) may fetch only under the SDK hosts' own bases, exactly as
+spelled there, follows no redirect, and never reaches `unfurl` (which takes
+no credential and fetches any URL it is given), however its URL is spelled.
+A path with an encoded dot segment or slash is refused, since it reads two
+ways. The checks use built-ins captured before the program runs. This raises
+the bar but is not a boundary: a program that patches other built-ins can
+get past the wrapper. The boundary is each service's own scope check on the
+credential's signed claims.
+
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
 host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
 `new Macro(...)` makes the SDK default to prod, so `webUrl()` links on dev and

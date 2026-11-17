@@ -93,6 +93,8 @@ fn a_run_that_sends_nothing_reaches_nobody() {
     for (method, path) in [
         ("POST", "/email/messages"),
         ("POST", "/cognition/email/send-confirmed"),
+        // Starting an MCP server's sign-in fetches the URL it is given.
+        ("POST", "/cognition/mcp/servers/auth/start"),
         // Work that runs with the person's full access.
         ("POST", "/agent-harness/agent-sessions"),
         ("POST", "/agent-sessions/01a1/control"),

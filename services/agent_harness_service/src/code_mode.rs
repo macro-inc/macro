@@ -160,6 +160,7 @@ impl ExecutionCredentials for RunCredentials {
                 session_id: Some(identity.session.as_uuid()),
                 execution_id: Some(identity.execution.as_uuid()),
                 unattended: None,
+                scoped: scope.is_some(),
             },
             acting_user: actor,
         })
@@ -208,6 +209,9 @@ impl UserExecutionCredentials for UserRunCredentials {
             }
             None => None,
         };
+        let scoped = correlation
+            .as_ref()
+            .is_some_and(|correlation| correlation.scope.is_some());
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
         let token = self
             .signer
@@ -231,6 +235,7 @@ impl UserExecutionCredentials for UserRunCredentials {
             session_id: None,
             execution_id: None,
             unattended: None,
+            scoped,
         })
     }
 }

@@ -10,6 +10,23 @@ const parse = JSON.parse.bind(JSON);
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const isArray = Array.isArray;
+// Captured before the program runs, so it can't redefine what the fetch
+// wrapper's checks rely on.
+const uncurry = (method) => Function.prototype.call.bind(method);
+const getter = (prototype, name) => uncurry(Object.getOwnPropertyDescriptor(prototype, name).get);
+const URLConstructor = URL;
+const RequestConstructor = Request;
+const urlHostname = getter(URL.prototype, "hostname");
+const urlPort = getter(URL.prototype, "port");
+const urlProtocol = getter(URL.prototype, "protocol");
+const urlPathname = getter(URL.prototype, "pathname");
+const requestUrl = getter(Request.prototype, "url");
+const lowerCase = uncurry(String.prototype.toLowerCase);
+const endsWith = uncurry(String.prototype.endsWith);
+const includes = uncurry(String.prototype.includes);
+const slice = uncurry(String.prototype.slice);
+const decodeComponent = decodeURIComponent;
+const rejection = Promise.reject.bind(Promise);
 const entries = Object.entries;
 const hasOwn = Object.hasOwn;
 // Calls of one operation that, unfinished at the deadline, read as a loop.
@@ -131,8 +148,105 @@ try {
   const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
+  // A scoped run (a suggestion generation, or a run that sends nothing) may
+  // reach only the SDK's own services, under their own bases, and never the
+  // anonymous routes that act outward on a URL or a person no credential
+  // binds: unfurl, which fetches any URL it is given, and the public booking
+  // routes, which book, cancel and reschedule with a guest or host.
+  // Anything else on an allowed host (another gateway prefix, such as the
+  // image proxy) is refused, as is a path that reads two ways (an encoded
+  // dot segment or slash), so what is checked is what is routed. This raises
+  // the bar; it is not a boundary: the services' own scope checks are.
+  const DEFAULT_PORTS = {__proto__: null, "https:": "443", "http:": "80"};
+  const MAX_DECODES = 4;
+  const decodeSegment = (segment) => {
+    let decoded = segment;
+    for (let round = 0; round < MAX_DECODES; round++) {
+      let next;
+      try {
+        next = decodeComponent(decoded);
+      } catch {
+        return decoded;
+      }
+      if (next === decoded) return decoded;
+      decoded = next;
+    }
+    return decoded;
+  };
+  // A URL's host, port and path segments, raw and decoded; `undefined` for a
+  // path that reads two ways. No prototypes, so the program can't intercept
+  // their indexes.
+  const placeOf = (url) => {
+    const parsed = new URLConstructor(url);
+    const path = urlPathname(parsed);
+    const raw = {__proto__: null, length: 0};
+    const decoded = {__proto__: null, length: 0};
+    let start = 0;
+    for (let index = 0; index <= path.length; index++) {
+      if (index < path.length && path[index] !== "/") continue;
+      const segment = slice(path, start, index);
+      start = index + 1;
+      if (segment === "") continue;
+      const plain = lowerCase(decodeSegment(segment));
+      if (plain === "." || plain === ".." || includes(plain, "/") || includes(plain, "\\")) return undefined;
+      raw[raw.length] = segment;
+      raw.length += 1;
+      decoded[decoded.length] = plain;
+      decoded.length += 1;
+    }
+    let host = lowerCase(urlHostname(parsed));
+    while (endsWith(host, ".")) host = slice(host, 0, -1);
+    const port = urlPort(parsed) || DEFAULT_PORTS[urlProtocol(parsed)] || "";
+    return {host, port, raw, decoded};
+  };
+  const under = (target, base, segments) => {
+    if (target.host !== base.host || target.port !== base.port) return false;
+    if (target[segments].length < base[segments].length) return false;
+    for (let index = 0; index < base[segments].length; index++) {
+      if (target[segments][index] !== base[segments][index]) return false;
+    }
+    return true;
+  };
+  // Each SDK host's anonymous outward routes, under its base; the whole of
+  // unfurl.
+  const WITHHELD = {__proto__: null, unfurl: [""], calendar: ["/scheduling/public"]};
+  let scopedBases;
+  let withheldBases;
+  if (context.scoped) {
+    scopedBases = {__proto__: null, length: 0};
+    withheldBases = {__proto__: null, length: 0};
+    for (const [name, url] of entries(context.hosts)) {
+      for (const route of WITHHELD[name] ?? []) {
+        withheldBases[withheldBases.length] = placeOf(`${url}${route}`);
+        withheldBases.length += 1;
+      }
+      if (name === "unfurl") continue;
+      scopedBases[scopedBases.length] = placeOf(url);
+      scopedBases.length += 1;
+    }
+  }
+  // Whether a scoped run may send `url`: under an SDK base, exactly as
+  // spelled there, and under no withheld route however it is spelled.
+  const scopedMaySend = (url) => {
+    const target = placeOf(url);
+    if (target === undefined) return false;
+    for (let index = 0; index < withheldBases.length; index++) {
+      if (under(target, withheldBases[index], "decoded")) return false;
+    }
+    for (let index = 0; index < scopedBases.length; index++) {
+      if (under(target, scopedBases[index], "raw")) return true;
+    }
+    return false;
+  };
   globalThis.fetch = (input, init) => {
-    const request = new Request(input, init);
+    let request = new RequestConstructor(input, init);
+    if (scopedBases) {
+      if (!scopedMaySend(requestUrl(request))) {
+        return rejection(new Error("A scoped run reaches only Macro's own services, and not link previews (macro.unfurls) or public booking pages, which act on anyone's behalf."));
+      }
+      // A redirect isn't checked again, so a scoped run follows none.
+      request = new RequestConstructor(request, {redirect: "manual"});
+    }
     // Every request to an SDK origin, whatever credential it carries.
     if (origins.has(new URL(request.url).origin)) {
       for (const [name, value] of Object.entries(context.traceHeaders ?? {})) {
@@ -171,9 +285,9 @@ try {
   const program = new URL(unattended ? "./main.ts" : "./main.mjs", import.meta.url).href;
   // Every request must go through the fetch above, which marks it as the
   // program's and holds back a dry run's writes. Nothing else may reach the
-  // network (raw sockets, listeners, websockets), start a realm with its own
+  // network (raw sockets, listeners, websockets, custom HTTP clients), start a realm with its own
   // fetch (workers), or reach Node's or Deno's internals past the import map.
-  for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket"]) {
+  for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket", "createHttpClient"]) {
     Object.defineProperty(Deno, name, {value: undefined});
   }
   delete Deno[Deno.internal];

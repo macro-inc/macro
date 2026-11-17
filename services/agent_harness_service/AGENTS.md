@@ -180,7 +180,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   fails for a host the SDK can reach (`code_mode_assets::HOSTS`) that isn't
   an `SdkHost`, and records how each host's service holds a scoped session's
   credential to its scope: `propagate`, `enforce_signed_scope`, or no Macro
-  credential accepted. A new host picks one before it ships.
+  credential accepted. A new host picks one before it ships. A scoped run's
+  sandbox is also kept to the SDK hosts' bases and off unfurl
+  (`RunEnvironment::scoped`), which raises the bar; the services' checks are
+  the boundary.
   `src/public_mcp/analytics.rs` sends PostHog `$mcp_initialize` /
   `$mcp_tool_call` events (PostHog MCP analytics schema) in the background,
   with the user's team as the `team` group. At most 64 sends run at once
