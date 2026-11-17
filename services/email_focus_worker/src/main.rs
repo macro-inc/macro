@@ -56,6 +56,8 @@ use crate::{
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 /// Longest a flag read holds up a classification or the sweep.
 const FLAG_TIMEOUT: Duration = Duration::from_secs(3);
+/// The longest window of mail the worker classifies, as the Focus list reads.
+const MAX_WINDOW_DAYS: u16 = 90;
 
 #[tokio::main]
 async fn main() -> Result<(), Report> {
@@ -113,10 +115,10 @@ async fn main() -> Result<(), Report> {
         )?,
         FlagEnrollment::new(flags),
     ));
-    tracing::info!(
-        window_days = config.focus_window_days,
-        "email focus worker started"
-    );
+    // The Focus list reads at most 90 days; a longer window would only make
+    // every stale-thread page scan the whole thread table.
+    let window_days = config.focus_window_days.clamp(1, MAX_WINDOW_DAYS);
+    tracing::info!(window_days, "email focus worker started");
 
     tokio::spawn({
         let shutdown = shutdown.clone();
@@ -127,16 +129,12 @@ async fn main() -> Result<(), Report> {
     });
     let brokers = config.kafka_brokers.to_string();
     let consumer = run_focus_consumer(&brokers, Arc::clone(&service), shutdown.clone());
-    let backfills = run_backfills(
-        Arc::clone(&service),
-        config.focus_window_days,
-        shutdown.clone(),
-    );
+    let backfills = run_backfills(Arc::clone(&service), window_days, shutdown.clone());
     let sweeps = run_sweeps(
         service,
         // A zero interval would panic the timer.
         Duration::from_secs(config.focus_sweep_interval_secs.max(60)),
-        config.focus_window_days,
+        window_days,
         shutdown.clone(),
     );
     // Any loop ending with an error stops the worker so it restarts fresh.

@@ -43,7 +43,7 @@ pub struct Config {
     /// Seconds between sweeps for threads the event stream missed.
     #[macro_config_default(3600)]
     pub focus_sweep_interval_secs: u64,
-    /// Days of mail the sweep and the Focus list cover.
+    /// Days of mail the backfill and the sweep cover, at most 90.
     #[macro_config_default(30)]
     pub focus_window_days: u16,
 }
