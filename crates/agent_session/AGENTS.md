@@ -93,7 +93,8 @@ created with a first prompt) or a routine's agent step, and a queued prompt a
 program rewrote, record `PrompterKind::Program`: the user's access, never the
 user's decision. The kind rides `ControlEvent`, the harness queue
 (`StoredQueuedAction.prompter`, absent = `user`) and `turn_prompter_kind`
-(`program`; unknown values read as `user`).
+(`program`). An unknown kind, stored or serialized, reads as `program`; only
+a missing one reads as `user`.
 Never expose notification metadata through public session controls. Notification
 sessions read original log frames across load boundaries to retain trusted event
 provenance when runtimes echo their prompt history. A log trigger records this

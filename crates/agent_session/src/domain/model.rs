@@ -647,6 +647,10 @@ pub enum PrompterKind {
     /// A program prompting for the user (an agent's code-mode run, or a
     /// routine): it acts with the user's access, but no person stands behind
     /// its words, so nothing in the turn counts as the user deciding.
+    ///
+    /// Any serialized kind this build doesn't know reads as this one, the
+    /// least trusted; a missing field still defaults to [`Self::User`].
+    #[serde(other)]
     Program,
 }
 
@@ -657,11 +661,12 @@ impl PrompterKind {
         *self == Self::User
     }
 
-    /// The stored `turn_prompter_kind`; anything unknown reads as `User`, as
-    /// every row did before the column held more than `user` and `system`.
+    /// The stored `turn_prompter_kind`. An unknown value reads as
+    /// [`Self::Program`], the least trusted kind, so a bad row can never
+    /// grant a person's authority; the column's default covers legacy rows.
     #[must_use]
     pub fn from_stored(value: &str) -> Self {
-        value.parse().unwrap_or_default()
+        value.parse().unwrap_or(Self::Program)
     }
 
     /// The kind a prompt keeps when `edit` rewrites it: once a program has
