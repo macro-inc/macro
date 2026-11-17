@@ -222,6 +222,23 @@ describe('row context menu', () => {
     expect(screen.getByRole('menu')).toBeTruthy();
   });
 
+  it('closes after an item that throws', async () => {
+    actions.items = [
+      {
+        id: 'tab',
+        label: 'Open in new tab',
+        onClick: () => {
+          throw new Error('no tab');
+        },
+      },
+    ];
+    renderRow();
+    await openMenu();
+    choose('Open in new tab');
+
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+  });
+
   it('closes when an embedded picker is done with it', async () => {
     actions.items = [
       {

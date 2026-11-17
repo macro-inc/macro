@@ -71,6 +71,12 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
     });
   });
 
+  // Async so an item that throws is reported like one that rejects, and
+  // the menu still closes.
+  const runAction = async (onClick: () => void | Promise<unknown>) => {
+    await onClick();
+  };
+
   return (
     <>
       <Key each={groups()} by="id">
@@ -99,7 +105,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
                                 disabled={action().disabled}
                                 onClick={() =>
                                   fireAndForget(
-                                    action().onClick(),
+                                    runAction(action().onClick),
                                     'entity-actions'
                                   )
                                 }
