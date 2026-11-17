@@ -1,5 +1,6 @@
 use std::{path::Path, sync::Arc};
 
+use bundle_identity::BundleBuild;
 use macro_bundle_updater_plugin::domain::bundle_routes::{BundleRoutes, BundleSource};
 use tokio::sync::Notify;
 
@@ -101,9 +102,12 @@ fn rewrites_embedded_asset_uris() {
 
 #[tokio::test]
 async fn timed_out_asset_read_keeps_route_lease_until_read_finishes() {
-    let routes = BundleRoutes::new(1);
+    let routes = BundleRoutes::new(BundleBuild::reported(1));
     routes
-        .transition_to(BundleSource::ota(2, "/cache/2".into()))
+        .transition_to(BundleSource::ota(
+            BundleBuild::reported(2),
+            "/cache/2".into(),
+        ))
         .await;
     let read_started = Arc::new(Notify::new());
     let finish_read = Arc::new(Notify::new());
@@ -136,6 +140,6 @@ async fn timed_out_asset_read_keeps_route_lease_until_read_finishes() {
     finish_read.notify_one();
     assert_eq!(
         finish_transition.await.unwrap(),
-        Some(BundleSource::embedded(1))
+        Some(BundleSource::embedded(BundleBuild::reported(1)))
     );
 }

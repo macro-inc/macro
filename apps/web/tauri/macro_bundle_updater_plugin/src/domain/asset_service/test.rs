@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use bundle_identity::BundleBuild;
 use tokio::sync::Mutex;
 
 use super::*;
@@ -51,7 +52,10 @@ fn rejects_paths_that_escape_the_bundle_root() {
 
 #[tokio::test]
 async fn delegates_to_embedded_assets_when_no_ota_is_active() {
-    let resolver = BundleAssetResolver::new(BundleRoutes::new(1), FakeAssets::default());
+    let resolver = BundleAssetResolver::new(
+        BundleRoutes::new(BundleBuild::reported(1)),
+        FakeAssets::default(),
+    );
 
     let resolution = resolver.resolve(&path("app.js")).await.unwrap();
 
@@ -60,9 +64,12 @@ async fn delegates_to_embedded_assets_when_no_ota_is_active() {
 
 #[tokio::test]
 async fn reads_assets_from_the_active_ota_bundle() {
-    let routes = BundleRoutes::new(1);
+    let routes = BundleRoutes::new(BundleBuild::reported(1));
     routes
-        .restore(BundleSource::ota(2, PathBuf::from("/ota/2")))
+        .restore(BundleSource::ota(
+            BundleBuild::reported(2),
+            PathBuf::from("/ota/2"),
+        ))
         .await;
     let assets = FakeAssets::default();
     assets.insert("/ota/2", "app.js", "current").await;
@@ -81,9 +88,12 @@ async fn reads_assets_from_the_active_ota_bundle() {
 
 #[tokio::test]
 async fn extensionless_routes_use_the_active_ota_entrypoint() {
-    let routes = BundleRoutes::new(1);
+    let routes = BundleRoutes::new(BundleBuild::reported(1));
     routes
-        .restore(BundleSource::ota(2, PathBuf::from("/ota/2")))
+        .restore(BundleSource::ota(
+            BundleBuild::reported(2),
+            PathBuf::from("/ota/2"),
+        ))
         .await;
     let assets = FakeAssets::default();
     assets.insert("/ota/2", "index.html", "entrypoint").await;
@@ -102,12 +112,18 @@ async fn extensionless_routes_use_the_active_ota_entrypoint() {
 
 #[tokio::test]
 async fn missing_extensionful_assets_can_use_the_previous_ota_generation() {
-    let routes = BundleRoutes::new(1);
+    let routes = BundleRoutes::new(BundleBuild::reported(1));
     routes
-        .restore(BundleSource::ota(2, PathBuf::from("/ota/2")))
+        .restore(BundleSource::ota(
+            BundleBuild::reported(2),
+            PathBuf::from("/ota/2"),
+        ))
         .await;
     routes
-        .transition_to(BundleSource::ota(3, PathBuf::from("/ota/3")))
+        .transition_to(BundleSource::ota(
+            BundleBuild::reported(3),
+            PathBuf::from("/ota/3"),
+        ))
         .await;
     let assets = FakeAssets::default();
     assets.insert("/ota/2", "old-hash.js", "previous").await;
@@ -126,9 +142,12 @@ async fn missing_extensionful_assets_can_use_the_previous_ota_generation() {
 
 #[tokio::test]
 async fn embedded_to_ota_transition_can_fall_back_to_embedded_assets() {
-    let routes = BundleRoutes::new(1);
+    let routes = BundleRoutes::new(BundleBuild::reported(1));
     routes
-        .transition_to(BundleSource::ota(2, PathBuf::from("/ota/2")))
+        .transition_to(BundleSource::ota(
+            BundleBuild::reported(2),
+            PathBuf::from("/ota/2"),
+        ))
         .await;
     let resolver = BundleAssetResolver::new(routes, FakeAssets::default());
 
@@ -139,11 +158,16 @@ async fn embedded_to_ota_transition_can_fall_back_to_embedded_assets() {
 
 #[tokio::test]
 async fn ota_to_embedded_transition_checks_the_previous_ota_first() {
-    let routes = BundleRoutes::new(1);
+    let routes = BundleRoutes::new(BundleBuild::reported(1));
     routes
-        .restore(BundleSource::ota(2, PathBuf::from("/ota/2")))
+        .restore(BundleSource::ota(
+            BundleBuild::reported(2),
+            PathBuf::from("/ota/2"),
+        ))
         .await;
-    routes.transition_to(BundleSource::embedded(1)).await;
+    routes
+        .transition_to(BundleSource::embedded(BundleBuild::reported(1)))
+        .await;
     let assets = FakeAssets::default();
     assets.insert("/ota/2", "ota-hash.js", "previous").await;
     let resolver = BundleAssetResolver::new(routes, assets);
@@ -161,11 +185,16 @@ async fn ota_to_embedded_transition_checks_the_previous_ota_first() {
 
 #[tokio::test]
 async fn rollback_entrypoints_always_use_the_embedded_document() {
-    let routes = BundleRoutes::new(100);
+    let routes = BundleRoutes::new(BundleBuild::reported(100));
     routes
-        .restore(BundleSource::ota(101, PathBuf::from("/ota/101")))
+        .restore(BundleSource::ota(
+            BundleBuild::reported(101),
+            PathBuf::from("/ota/101"),
+        ))
         .await;
-    routes.transition_to(BundleSource::embedded(100)).await;
+    routes
+        .transition_to(BundleSource::embedded(BundleBuild::reported(100)))
+        .await;
     let assets = FakeAssets::default();
     assets
         .insert("/ota/101", "index.html", "revoked document")
@@ -182,12 +211,18 @@ async fn rollback_entrypoints_always_use_the_embedded_document() {
 
 #[tokio::test]
 async fn a_missing_ota_entrypoint_never_uses_the_previous_document() {
-    let routes = BundleRoutes::new(100);
+    let routes = BundleRoutes::new(BundleBuild::reported(100));
     routes
-        .restore(BundleSource::ota(101, PathBuf::from("/ota/101")))
+        .restore(BundleSource::ota(
+            BundleBuild::reported(101),
+            PathBuf::from("/ota/101"),
+        ))
         .await;
     routes
-        .transition_to(BundleSource::ota(102, PathBuf::from("/ota/102")))
+        .transition_to(BundleSource::ota(
+            BundleBuild::reported(102),
+            PathBuf::from("/ota/102"),
+        ))
         .await;
     let assets = FakeAssets::default();
     assets

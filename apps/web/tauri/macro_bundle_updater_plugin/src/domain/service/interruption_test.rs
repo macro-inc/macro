@@ -1,7 +1,8 @@
 use super::{
     BundleRejection, BundleStartup, FsRepo, StartupSelection, UpdateStatus, find_cached_bundle,
     tests::{
-        FakeFs, cache_dir, seed_bundle, seed_persisted_bundle_root, service_with_status_and_fs,
+        FakeFs, cache_dir, commit_build, seed_bundle, seed_persisted_bundle_root,
+        service_with_status_and_fs,
     },
 };
 use crate::domain::startup::SavedSelection;
@@ -15,7 +16,11 @@ async fn process_death_during_extraction_never_restores_or_reuses_partial_assets
     fs.remove_file(&dir.with_extension("complete"))
         .await
         .unwrap();
-    assert!(find_cached_bundle(&fs, &cache, 20, 0).await.is_none());
+    assert!(
+        find_cached_bundle(&fs, &cache, commit_build(20), 0)
+            .await
+            .is_none()
+    );
     let (mut service, _rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
     assert_eq!(
         service.load_bundle_root(&cache, 0).await.selection,

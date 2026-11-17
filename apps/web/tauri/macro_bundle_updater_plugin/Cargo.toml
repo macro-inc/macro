@@ -6,6 +6,7 @@ version = "0.1.0"
 [dependencies]
 rootcause = { workspace = true }
 futures = { version = "0.3" }
+bundle_identity = { path = "../../../../crates/bundle_identity" }
 digest = "0.10"
 reqwest = { workspace = true, features = ["json", "stream"] }
 sha2 = "0.10"

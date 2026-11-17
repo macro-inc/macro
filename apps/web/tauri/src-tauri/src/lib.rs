@@ -1,3 +1,4 @@
+use bundle_identity::BundleBuild;
 use device::{IsIpad, detect_is_ipad, is_ipad};
 use logger::Logger;
 use macro_bundle_updater_plugin::domain::{
@@ -89,9 +90,10 @@ impl AppEnvironment {
 
 /// The commit the embedded bundle was built from, when its manifest names one.
 ///
-/// Desktop only: a desktop release numbers its embedded bundle by commit time,
-/// below the OTA bundle deployed from the same commit. Mobile embedded bundles
-/// are numbered by build time and keep comparing by build number alone.
+/// The embedded bundle and the OTA bundle of one commit are now numbered
+/// equal (`bundle_identity`), so the number alone keeps the server from
+/// offering that OTA as an update. Desktop still sends the commit for update
+/// servers that skip the running commit by sha during the transition.
 fn embedded_bundle_git_sha() -> Option<&'static str> {
     if cfg!(desktop) {
         Some(env!("MACRO_EMBEDDED_BUNDLE_GIT_SHA")).filter(|sha| !sha.is_empty())
@@ -100,10 +102,13 @@ fn embedded_bundle_git_sha() -> Option<&'static str> {
     }
 }
 
-fn embedded_bundle_build() -> u64 {
-    env!("MACRO_EMBEDDED_BUNDLE_BUILD")
-        .parse()
-        .expect("MACRO_EMBEDDED_BUNDLE_BUILD must be an unsigned integer")
+/// The embedded bundle's identity, which `build.rs` read from its stamped manifest.
+fn embedded_bundle_build() -> BundleBuild {
+    BundleBuild::reported(
+        env!("MACRO_EMBEDDED_BUNDLE_BUILD")
+            .parse()
+            .expect("MACRO_EMBEDDED_BUNDLE_BUILD must be an unsigned integer"),
+    )
 }
 
 /// When this native binary was compiled, in Unix milliseconds. Unlike the

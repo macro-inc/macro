@@ -1,3 +1,4 @@
+use bundle_identity::BundleBuild;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::{OwnedRwLockReadGuard, RwLock};
 
@@ -13,8 +14,8 @@ pub enum BundleSourceKind {
 /// Identifies one frontend bundle generation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BundleIdentity {
-    /// Monotonically increasing bundle build number.
-    pub bundle_build: u64,
+    /// The bundle's identity, ordered by source commit.
+    pub bundle_build: BundleBuild,
     /// Storage source for this bundle generation.
     pub source: BundleSourceKind,
 }
@@ -25,12 +26,12 @@ pub enum BundleSource {
     /// Assets compiled into the native application.
     Embedded {
         /// Build number compiled into the native application.
-        bundle_build: u64,
+        bundle_build: BundleBuild,
     },
     /// Assets stored in an applied OTA bundle directory.
     Ota {
         /// Build number read from the OTA bundle manifest.
-        bundle_build: u64,
+        bundle_build: BundleBuild,
         /// Root directory containing the OTA bundle assets.
         root: PathBuf,
     },
@@ -38,12 +39,12 @@ pub enum BundleSource {
 
 impl BundleSource {
     /// Construct an embedded bundle source.
-    pub fn embedded(bundle_build: u64) -> Self {
+    pub fn embedded(bundle_build: BundleBuild) -> Self {
         Self::Embedded { bundle_build }
     }
 
     /// Construct an OTA bundle source.
-    pub fn ota(bundle_build: u64, root: PathBuf) -> Self {
+    pub fn ota(bundle_build: BundleBuild, root: PathBuf) -> Self {
         Self::Ota { bundle_build, root }
     }
 
@@ -91,7 +92,7 @@ pub struct BundleRoutes {
 
 impl BundleRoutes {
     /// Create routing state that initially serves the embedded bundle.
-    pub fn new(embedded_bundle_build: u64) -> Self {
+    pub fn new(embedded_bundle_build: BundleBuild) -> Self {
         Self {
             state: Arc::new(RwLock::new(BundleRouteSnapshot {
                 active: BundleSource::embedded(embedded_bundle_build),

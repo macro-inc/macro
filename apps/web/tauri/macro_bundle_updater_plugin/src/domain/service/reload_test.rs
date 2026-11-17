@@ -1,11 +1,16 @@
 use std::path::{Path, PathBuf};
 
-use super::{ApplyUpdateResult, CompletedStatus, UpdateStatus, tests::service_with_status};
+use bundle_identity::BundleBuild;
+
+use super::{
+    ApplyUpdateResult, CompletedStatus, UpdateStatus,
+    tests::{commit_build, service_with_status},
+};
 
 #[tokio::test]
 async fn held_reload_keeps_a_completed_update_until_released() {
     let (mut service, _start_rx) = service_with_status(UpdateStatus::Completed(CompletedStatus {
-        bundle_build: 2,
+        bundle_build: commit_build(2),
         entrypoint: PathBuf::from("/cache/2/index.html"),
     }));
 
@@ -21,13 +26,13 @@ async fn held_reload_keeps_a_completed_update_until_released() {
         service.apply_update(Path::new("/cache")).await.unwrap(),
         ApplyUpdateResult::ReloadNeeded
     );
-    assert_eq!(service.pending_reload_bundle_build, Some(2));
+    assert_eq!(service.pending_reload_bundle_build, Some(commit_build(2)));
 }
 
 #[tokio::test]
 async fn held_reload_also_keeps_an_applied_update_from_redispatching() {
     let (mut service, _start_rx) = service_with_status(UpdateStatus::Completed(CompletedStatus {
-        bundle_build: 2,
+        bundle_build: commit_build(2),
         entrypoint: PathBuf::from("/cache/2/index.html"),
     }));
     assert_eq!(
@@ -52,7 +57,7 @@ async fn held_reload_also_keeps_an_applied_update_from_redispatching() {
 async fn stale_document_cannot_acknowledge_a_new_bundle_generation() {
     let (mut service, mut start_rx) =
         service_with_status(UpdateStatus::Completed(CompletedStatus {
-            bundle_build: 2,
+            bundle_build: commit_build(2),
             entrypoint: PathBuf::from("/cache/2/index.html"),
         }));
     assert_eq!(
@@ -61,20 +66,20 @@ async fn stale_document_cannot_acknowledge_a_new_bundle_generation() {
     );
 
     let acknowledged = service
-        .acknowledge_update_reload(Path::new("/cache"), 1)
+        .acknowledge_update_reload(Path::new("/cache"), commit_build(1))
         .await
         .unwrap();
 
     assert!(!acknowledged);
-    assert_eq!(service.pending_reload_bundle_build, Some(2));
+    assert_eq!(service.pending_reload_bundle_build, Some(commit_build(2)));
     assert!(start_rx.try_recv().is_err());
     let routes = service.bundle_routes.read().await;
-    assert_eq!(routes.active.identity().bundle_build, 2);
+    assert_eq!(routes.active.identity().bundle_build, commit_build(2));
     assert_eq!(
         routes
             .fallback
             .as_ref()
             .map(|source| source.identity().bundle_build),
-        Some(0)
+        Some(BundleBuild::reported(0))
     );
 }

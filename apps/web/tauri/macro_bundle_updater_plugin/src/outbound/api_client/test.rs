@@ -1,9 +1,10 @@
 use super::*;
 use crate::domain::models::{AppInfo, Arch, Target};
+use bundle_identity::BundleBuild;
 
 fn app_info() -> AppInfo {
     AppInfo {
-        current_bundle_build: 42,
+        current_bundle_build: BundleBuild::reported(42),
         current_git_sha: None,
         native_build: 7,
         arch: Arch::Aarch64,
@@ -21,7 +22,7 @@ fn update_check_url_joins_gateway_prefix_with_or_without_trailing_slash() {
     ] {
         let client = BundleClient::new(base.parse().unwrap());
         let request = AppInfo {
-            current_bundle_build: 1790022571617,
+            current_bundle_build: BundleBuild::reported(1790022571617),
             native_build: 183,
             ..app_info()
         };

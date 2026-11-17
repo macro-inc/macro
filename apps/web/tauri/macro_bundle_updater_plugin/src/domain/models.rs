@@ -1,4 +1,5 @@
-use serde::Deserialize;
+use bundle_identity::{BundleBuild, BundleManifest, NativePlatform};
+use serde::{Deserialize, Deserializer};
 use std::path::{Path, PathBuf};
 use strum::IntoStaticStr;
 use thiserror::Error;
@@ -132,9 +133,9 @@ impl BundleRoot {
     }
 
     /// Read the bundle manifest inside the bundle root.
-    pub(crate) async fn manifest(&self, fs: &impl FsRepo) -> Option<BundleManifest> {
+    pub(crate) async fn manifest(&self, fs: &impl FsRepo) -> Option<OtaManifest> {
         let manifest_path = self.path()?.join("bundle-manifest.json");
-        BundleManifest::read(&manifest_path, fs).await
+        OtaManifest::read(&manifest_path, fs).await
     }
 }
 
@@ -142,65 +143,29 @@ impl BundleRoot {
 /// so the server never offers desktop a schema it would reject.
 pub const SUPPORTED_MANIFEST_SCHEMA: u64 = 3;
 
-/// Metadata generated with each JavaScript bundle build.
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct BundleManifest {
-    /// Manifest schema version.
-    pub schema_version: u64,
-    /// Monotonic JavaScript bundle build number.
-    pub bundle_build: u64,
-    /// Minimum native app build that can safely run this bundle.
+/// What the updater needs from a downloaded bundle's stamped manifest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OtaManifest {
+    /// The bundle's identity, derived from the commit it was built from.
+    pub bundle_build: BundleBuild,
+    /// Minimum native build of this platform that can run the bundle.
     pub min_native_build: u64,
-    /// Independent mobile build minima for schema 3 bundles.
-    #[serde(default)]
-    pub min_native_builds: Option<MobileBuildMinima>,
-    /// Short git SHA used to build the bundle.
-    pub git_sha: Option<String>,
-    /// Application package version used for the bundle.
-    pub app_version: String,
 }
 
-/// Independent native build requirements for a shared bundle.
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct MobileBuildMinima {
-    /// Android versionCode.
-    pub android: u64,
-    /// iOS CFBundleVersion.
-    pub ios: u64,
-}
-
-impl BundleManifest {
-    /// Select a native minimum without comparing independent platform numbers.
-    pub fn minimum_for(&self, target: Target) -> Option<u64> {
-        match (self.schema_version, &self.min_native_builds, target) {
-            (2, None, Target::Android) => None,
-            (2, None, _) => Some(self.min_native_build),
-            (3, Some(builds), Target::Android) => Some(builds.android),
-            (3, Some(builds), Target::Ios) => Some(builds.ios),
-            (3, Some(_), Target::Darwin | Target::Linux | Target::Windows) => {
-                Some(self.min_native_build)
-            }
-            _ => None,
-        }
-    }
-
-    /// Read and validate a bundle manifest from disk.
+impl OtaManifest {
+    /// Read a bundle manifest from disk. `None` when it is unreadable, not
+    /// stamped from a commit, or states no minimum this platform can use.
     pub async fn read(path: &Path, fs: &impl FsRepo) -> Option<Self> {
-        let mut manifest = fs
-            .read_to_string(path)
-            .await
-            .ok()
-            .and_then(|s| serde_json::from_str::<Self>(&s).ok())?;
-        let target = if cfg!(target_os = "android") {
-            Target::Android
-        } else if cfg!(target_os = "ios") {
-            Target::Ios
-        } else {
-            Target::Linux
-        };
-        manifest.min_native_build = manifest.minimum_for(target)?;
-        Some(manifest)
+        let contents = fs.read_to_string(path).await.ok()?;
+        let manifest = serde_json::from_str::<BundleManifest>(&contents)
+            .inspect_err(|error| tracing::debug!(?error, ?path, "Invalid bundle manifest"))
+            .ok()?;
+        let min_native_build = manifest.minimum_for(Target::running().native_platform())?;
+
+        Some(Self {
+            bundle_build: manifest.bundle_build(),
+            min_native_build,
+        })
     }
 }
 
@@ -224,7 +189,7 @@ pub struct NativeAppInfo {
 #[derive(Debug, Clone)]
 pub struct AppInfo {
     /// The current effective JS bundle build.
-    pub current_bundle_build: u64,
+    pub current_bundle_build: BundleBuild,
     /// The commit the current bundle was built from, sent only while the
     /// embedded bundle is active.
     pub current_git_sha: Option<String>,
@@ -251,6 +216,29 @@ pub enum Target {
     Ios,
     /// the requesting client is on android
     Android,
+}
+
+impl Target {
+    /// The platform this binary was compiled for. Desktop platforms share one
+    /// native minimum, so they all read as Linux.
+    fn running() -> Self {
+        if cfg!(target_os = "android") {
+            Self::Android
+        } else if cfg!(target_os = "ios") {
+            Self::Ios
+        } else {
+            Self::Linux
+        }
+    }
+
+    /// The platform whose native minimum gates bundles on this target.
+    pub fn native_platform(self) -> NativePlatform {
+        match self {
+            Self::Android => NativePlatform::Android,
+            Self::Ios => NativePlatform::Ios,
+            Self::Darwin | Self::Linux | Self::Windows => NativePlatform::Desktop,
+        }
+    }
 }
 
 /// The possible input architechtures
@@ -296,11 +284,18 @@ mod tests {
         assert!(matches!(
             action,
             BundleAction::NativeUpdateRequired(BundleNativeUpdateRequired {
-                bundle_build: 102,
+                bundle_build,
                 min_native_build: 999999,
-            })
+            }) if bundle_build == BundleBuild::reported(102)
         ));
     }
+}
+
+/// Read a bundle build number from an update server response.
+fn reported_bundle_build<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<BundleBuild, D::Error> {
+    u64::deserialize(deserializer).map(BundleBuild::reported)
 }
 
 /// A response instructing the client to clear the active OTA bundle.
@@ -315,7 +310,8 @@ pub struct BundleClear {
 #[serde(rename_all = "camelCase")]
 pub struct BundleNativeUpdateRequired {
     /// The newer bundle build that could not be applied.
-    pub bundle_build: u64,
+    #[serde(deserialize_with = "reported_bundle_build")]
+    pub bundle_build: BundleBuild,
     /// The minimum native build required by that bundle.
     pub min_native_build: u64,
 }
@@ -326,7 +322,8 @@ pub struct BundleNativeUpdateRequired {
 #[serde(rename_all = "camelCase")]
 pub struct BundleUpdate {
     /// the bundle build that we are going to update to
-    pub bundle_build: u64,
+    #[serde(deserialize_with = "reported_bundle_build")]
+    pub bundle_build: BundleBuild,
     /// minimum native build required by this bundle
     pub min_native_build: u64,
     /// some optional notes about the update
@@ -534,7 +531,7 @@ pub struct ClearRequiredStatus {
 #[derive(Debug, Clone)]
 pub struct NativeUpdateRequiredStatus {
     /// The newer bundle build that could not be applied.
-    pub bundle_build: u64,
+    pub bundle_build: BundleBuild,
     /// The minimum native build required by that bundle.
     pub min_native_build: u64,
 }
@@ -556,7 +553,7 @@ pub struct UnzipStatus {
     /// Path to the zip archive being extracted.
     pub zip_filename: PathBuf,
     /// Expected bundle build in the extracted manifest.
-    pub expected_bundle_build: u64,
+    pub expected_bundle_build: BundleBuild,
     /// Expected minimum native build in the extracted manifest.
     pub expected_min_native_build: u64,
     /// Expected SHA-256 hex digest.
@@ -569,7 +566,7 @@ pub struct UnzipStatus {
 #[derive(Debug, Clone)]
 pub struct CompletedStatus {
     /// Build number from the validated bundle manifest.
-    pub bundle_build: u64,
+    pub bundle_build: BundleBuild,
     /// Path to the extracted `index.html` entrypoint.
     pub entrypoint: PathBuf,
 }
