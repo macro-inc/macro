@@ -80,6 +80,8 @@ impl TeamReadTuning {
 enum Stream {
     /// The threads the address indexes list for the record, sorted.
     Superset,
+    /// A superset the initial capped probe found small enough for indexed lookups.
+    SparseSuperset,
     /// Each inbox's newest threads, merged, up to a window.
     Inboxes,
 }
@@ -243,7 +245,9 @@ impl<'a> TeamRead<'a> {
         superset_rows: i64,
     ) -> Result<(&'static str, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
         if superset_rows <= self.tuning.superset_limit {
-            let rows = self.page(connection, deadline, Stream::Superset).await?;
+            let rows = self
+                .page(connection, deadline, Stream::SparseSuperset)
+                .await?;
             return Ok(("superset", rows));
         }
         let rows = self.page(connection, deadline, Stream::Inboxes).await?;
@@ -276,7 +280,8 @@ impl<'a> TeamRead<'a> {
         let mut builder = QueryBuilder::new("");
         let AddressSuperset {
             contact_ctes,
-            branches,
+            indexed_branches: branches,
+            ..
         } = self.superset.clone();
         let mut separator = "WITH ";
         for (name, body) in contact_ctes {
@@ -456,11 +461,17 @@ impl<'a> TeamRead<'a> {
             r#" AND b.user_id IN (SELECT macro_id FROM contributing)
         )"#,
         );
-        if stream == Stream::Superset {
+        if matches!(stream, Stream::Superset | Stream::SparseSuperset) {
             let AddressSuperset {
                 contact_ctes,
                 branches,
+                indexed_branches,
             } = self.superset.clone();
+            let branches = if stream == Stream::SparseSuperset {
+                indexed_branches
+            } else {
+                branches
+            };
             for (name, body) in contact_ctes {
                 builder.push(format!(",\n        {name} AS MATERIALIZED (\n            "));
                 body.push_into(builder, &self.params.user_id);
@@ -479,7 +490,7 @@ impl<'a> TeamRead<'a> {
         sort_ts_field: &str,
     ) {
         match stream {
-            Stream::Superset => {
+            Stream::Superset | Stream::SparseSuperset => {
                 // Each superset thread by its id: as a semi-join the planner
                 // hashes the superset against every thread of the inboxes,
                 // which reads all of them before the sort.

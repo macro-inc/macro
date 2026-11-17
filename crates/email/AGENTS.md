@@ -178,6 +178,12 @@ tools — hexagonal, heavily feature-gated.
   `test/owned_address_read.rs` compares every tuning's pages with the general
   builder; extend it when the read covers a new filter. A repeated inbox id
   reads as one in every builder (`distinct_links`).
+- Address supersets keep joined and indexed recipient branches. Use the
+  indexed branches only for the initial capped probe and the sparse page it
+  selects, in both Team and Owned reads. Dense underfill fallbacks and larger
+  Owned round probes keep the joined SQL; per-message probes can make those
+  large sets slower. Checked General branches also keep their original joins
+  so mailbox-fact checks are planned with the messages.
 - A requested sender may be a verified Gmail send-as alias, not just an inbox
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.
