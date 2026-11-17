@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import {
   assertCompatibilityWebGraph,
+  assertEditorLoroFeature,
   assertNativeEditorGraph,
   assertSessionArtifact,
 } from './native-editor-features';
@@ -150,4 +151,15 @@ test('compatibility output rejects a native artifact and corrupt artifacts fail'
     'missing createCompat'
   );
   expect(() => assertSessionArtifact(new Uint8Array([0]), 'native')).toThrow();
+});
+
+test('native session graphs need the editor Loro runtime and others must not enable it', () => {
+  const editor = 'loro-internal v1.17.1 (/vendor/loro-editor/loro-internal)';
+  const native = `document_session v0.1.0|application\n${editor}|native-editor,wasm`;
+  const upstream = `macro_document_model v0.1.0|html\n${editor}|wasm`;
+  expect(() => assertEditorLoroFeature(native, true)).not.toThrow();
+  expect(() => assertEditorLoroFeature(upstream, false)).not.toThrow();
+  expect(() => assertEditorLoroFeature(upstream, true)).toThrow('lacks');
+  expect(() => assertEditorLoroFeature('', true)).toThrow('lacks');
+  expect(() => assertEditorLoroFeature(native, false)).toThrow('enables');
 });

@@ -9,48 +9,56 @@ export const nativeEditorProfiles = [
     name: 'native-web-default',
     package: 'document_session_wasm',
     target: 'wasm32-unknown-unknown',
+    editorLoroNative: true,
     args: [],
   },
   {
     name: 'native-web-explicit',
     package: 'document_session_wasm',
     target: 'wasm32-unknown-unknown',
+    editorLoroNative: true,
     args: ['--no-default-features', '--features', 'bebop-owned-all'],
   },
   {
     name: 'ffi-host',
     package: 'document_session_ffi',
     target: undefined,
+    editorLoroNative: true,
     args: [],
   },
   {
     name: 'ffi-android',
     package: 'document_session_ffi',
     target: 'aarch64-linux-android',
+    editorLoroNative: true,
     args: [],
   },
   {
     name: 'ffi-ios',
     package: 'document_session_ffi',
     target: 'aarch64-apple-ios',
+    editorLoroNative: true,
     args: [],
   },
   {
     name: 'session-headless',
     package: 'document_session',
     target: undefined,
+    editorLoroNative: true,
     args: [],
   },
   {
     name: 'macro-headless',
     package: 'macro_document_model',
     target: undefined,
+    editorLoroNative: false,
     args: ['--features', 'html'],
   },
   {
     name: 'server-model',
     package: 'sync_server_core',
     target: undefined,
+    editorLoroNative: false,
     args: ['--features', 'in-process-gate'],
   },
 ] as const;
@@ -84,6 +92,25 @@ export function assertNativeEditorGraph(
   }
   if (!packages.has(selectedPackage) || !packages.has('lexical_model')) {
     throw new Error(`Incomplete native editor graph for ${selectedPackage}`);
+  }
+}
+
+const EDITOR_LORO = 'loro-internal v1.17.1';
+
+// The editor's Loro runtime changes (vendor/loro-editor) belong to native
+// session builds only; server-facing graphs must resolve upstream behaviour.
+export function assertEditorLoroFeature(output: string, native: boolean) {
+  const rows = output
+    .split('\n')
+    .filter((line) => line.startsWith(`${EDITOR_LORO} `));
+  const enabled = rows.some((line) =>
+    line.split('|')[1]?.split(',').includes('native-editor')
+  );
+  if (native && !enabled) {
+    throw new Error(`Native editor graph lacks ${EDITOR_LORO}/native-editor`);
+  }
+  if (!native && enabled) {
+    throw new Error(`Non-session graph enables ${EDITOR_LORO}/native-editor`);
   }
 }
 
@@ -159,6 +186,7 @@ function checkNativeProfiles() {
     if (result.status !== 0)
       throw new Error(`Cargo graph failed: ${profile.name}`);
     assertNativeEditorGraph(result.stdout, profile.package);
+    assertEditorLoroFeature(result.stdout, profile.editorLoroNative);
     console.log(`Native editor feature graph: ${profile.name} passed`);
   }
   const positive = spawnSync(
