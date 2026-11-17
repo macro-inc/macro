@@ -316,6 +316,53 @@ test('a finger takes a corner from outside it and moves the shape from its middl
   expect(moved.x).toBeCloseTo(middle.x + 30, 0);
 });
 
+test('a tap beside the end of a selected connector leaves it, and a drag from there moves it', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  // Arrow, Line and Connector share a button: the second tap opens the group.
+  const lines = page.getByRole('button', { name: 'Arrow tool' });
+  await lines.tap();
+  await lines.tap();
+  await page.getByRole('menuitem', { name: 'Connector' }).tap();
+  // Drawn across empty canvas, to the right of the fixture's shapes.
+  await touch(cdp, 'touchStart', [{ x: 250, y: 120 }]);
+  await touch(cdp, 'touchMove', [{ x: 300, y: 150 }]);
+  await touch(cdp, 'touchMove', [{ x: 350, y: 180 }]);
+  await touch(cdp, 'touchEnd', []);
+
+  const connector = () =>
+    page.evaluate(() => {
+      const { editor } = window.canvasTouchFixture;
+      const item = Object.values(editor.document.items).find(
+        (candidate) => candidate.type === 'connector'
+      );
+      if (!item) return undefined;
+      editor.select(item.id);
+      return JSON.stringify(item.geometry);
+    });
+  const drawn = await connector();
+  expect(drawn).toBeDefined();
+
+  const handle = await page
+    .getByRole('img', { name: 'Connector end' })
+    .boundingBox();
+  if (!handle) throw new Error("The connector's end is not rendered");
+  // 11px from the middle of the end's handle: beside it, within a finger's reach.
+  const beside = {
+    x: handle.x + handle.width / 2 + 9,
+    y: handle.y + handle.height / 2 + 6,
+  };
+  await page.touchscreen.tap(beside.x, beside.y);
+  expect(await connector()).toBe(drawn);
+
+  await touch(cdp, 'touchStart', [beside]);
+  await touch(cdp, 'touchMove', [{ x: beside.x + 20, y: beside.y + 15 }]);
+  await touch(cdp, 'touchMove', [{ x: beside.x + 40, y: beside.y + 30 }]);
+  await touch(cdp, 'touchEnd', []);
+  expect(await connector()).not.toBe(drawn);
+});
+
 test('a tap near the stroke of an outlined shape selects it', async ({
   page,
 }) => {

@@ -31,13 +31,16 @@ leaves the selection as it was.
 
 Handles are drawn small but a finger takes them from further away: a drag that
 starts within 16px of a corner or of the rotation knob, or within 12px outside
-an edge, resizes or rotates; a drag from the middle of the shape moves it. A tap
+an edge, resizes or rotates; a drag from the middle of the shape moves it, a
+thin shape (a line of text, a divider) included. A tap
 in those places changes nothing: beside the shape it selects what is there or
-clears the selection. A tap on empty canvas within 10px of an unfilled shape's
+clears the selection. A selected connector's ends are taken from 16px away too,
+by any pointer in the touch view: a drag moves the end by as much as the pointer
+moves, and a tap leaves it and its attachment as they were. A tap on empty canvas within 10px of an unfilled shape's
 stroke selects it, but a shape under the finger always wins. A press on another
 shape is for that shape even right beside the selection. On touch there are no
-corner-radius handles; use Corner radius in the inspector. The wider reach is
-for fingers only: a mouse on the same canvas hits what is drawn.
+corner-radius handles; use Corner radius in the inspector. The handles' wider
+reach is for fingers only: a mouse on the same canvas hits what is drawn.
 
 ## Canvas colors
 
