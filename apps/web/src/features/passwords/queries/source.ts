@@ -32,7 +32,11 @@ import type {
   PasswordResult,
   PasswordSource,
 } from '../context/passwords-context';
-import type { PasswordFolder, PasswordItem } from '../core/types';
+import type {
+  PasswordFolder,
+  PasswordGrant,
+  PasswordItem,
+} from '../core/types';
 
 function metadata(item: PasswordItemMetadata): PasswordItem {
   return {
@@ -58,8 +62,12 @@ function folder(dto: FolderDto): PasswordFolder {
  * Busy retries outlast one vault write holding the team lock (about a second
  * under load): the jittered waits add up to between 1.5 and 4.5 seconds.
  */
-const BUSY_RETRIES = 4;
+export const BUSY_RETRIES = 4;
 const BUSY_BACKOFF_MS = 200;
+/** Jittered exponential wait before busy retry number `retries`. */
+export function busyDelay(retries: number): number {
+  return BUSY_BACKOFF_MS * 2 ** retries * (0.5 + Math.random());
+}
 
 function failure(codes: readonly string[]): PasswordFailure {
   if (codes.includes(PasswordErrorCode.folder_missing)) return 'folderMissing';
@@ -169,7 +177,7 @@ export function createPasswordSource(
             (error) => error.code === PasswordErrorCode.vault_busy
           )
         ) {
-          await sleep(BUSY_BACKOFF_MS * 2 ** retries * (0.5 + Math.random()));
+          await sleep(busyDelay(retries));
           continue;
         }
         return response.mapErr((errors) => errors.map((error) => error.code));
@@ -276,8 +284,17 @@ export function createPasswordSource(
         } satisfies PasswordPatchItem)
       ).map(metadata);
     },
-    grants(id) {
-      return request<GrantDto[]>(`/items/${id}/share`, 'GET');
+    async grants(id) {
+      return (await request<GrantDto[]>(`/items/${id}/share`, 'GET')).map(
+        (grants) =>
+          grants.flatMap((grant): PasswordGrant[] => {
+            // Human sharing excludes agent access, which has its own controls.
+            if (grant.kind !== 'user' && grant.kind !== 'team') return [];
+            return [
+              { kind: grant.kind, id: grant.id, permission: grant.permission },
+            ];
+          })
+      );
     },
     async remove(id) {
       return (await action('passwords.delete', `/items/${id}`, 'DELETE')).map(
@@ -285,11 +302,17 @@ export function createPasswordSource(
       );
     },
     username(id) {
-      return action<PasswordUsername>(
-        'passwords.username',
-        `/items/${id}/username`,
-        'GET'
-      );
+      return Telemetry.span('passwords.username', async (span) => {
+        const result = await requestCodes<PasswordUsername>(
+          `/items/${id}/username`,
+          'GET'
+        );
+        if (result.isErr()) {
+          span.setAttr('passwords.error_code', result.error.join(','));
+          span.error('passwords.username failed');
+        }
+        return result.mapErr(failure);
+      });
     },
     copyUsername(id) {
       return action<PasswordUsername>(

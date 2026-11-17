@@ -2,6 +2,7 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import type { SplitFileMenuActionGroups } from '@components/app/split-layout/context';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import Share from '@icon/share.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Rename from '@icon/system/regular/pencil-line.svg';
@@ -59,7 +60,10 @@ export function SpreadsheetDraftMenu(props: {
                 {(action) => (
                   <Dropdown.Item
                     onSelect={() => {
-                      action.action?.();
+                      fireAndForget(
+                        action.action?.(),
+                        'spreadsheet-draft-menu'
+                      );
                       props.onOpenChange(false);
                     }}
                   >
@@ -93,7 +97,10 @@ export function SpreadsheetDraftMenu(props: {
                     <MobileDrawer.Item
                       type="button"
                       onClick={() => {
-                        action.action?.();
+                        fireAndForget(
+                          action.action?.(),
+                          'spreadsheet-draft-menu'
+                        );
                         props.onOpenChange(false);
                       }}
                     >

@@ -1,6 +1,9 @@
 import { ModelCatalogMenu } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import {
+  catalogModelLabel,
+  modelLabel,
+} from '@core/component/AI/constant/model-label';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
@@ -64,11 +67,7 @@ function DesktopAgentPicker(props: AgentPickerProps) {
     props.modelOverride ??
     props.selected?.defaultModel ??
     catalog.currentModel();
-  const baseLabel = () =>
-    modelLabel(
-      model(),
-      catalog.models().find((option) => option.id === model())?.name
-    );
+  const baseLabel = () => catalogModelLabel(model(), catalog.models());
   const label = () =>
     [baseLabel(), props.effortLabel].filter(Boolean).join(' · ');
   const choose = (agent: RosterAgent, model?: string) => {
@@ -145,7 +144,11 @@ function DesktopAgentPicker(props: AgentPickerProps) {
                   disabled={Boolean(agent().unavailableReason)}
                   options={macroCatalog.models().map((option) => ({
                     id: option.id,
-                    label: modelLabel(option.id, option.name),
+                    label: modelLabel(
+                      option.id,
+                      option.name,
+                      option.description
+                    ),
                     description: option.description ?? undefined,
                     group: option.group ?? undefined,
                   }))}
@@ -332,7 +335,7 @@ function AgentModels(props: {
       value={props.modelOverride ?? defaultModel() ?? null}
       options={catalog.models().map((option) => ({
         id: option.id,
-        label: modelLabel(option.id, option.name),
+        label: modelLabel(option.id, option.name, option.description),
         description: option.description ?? undefined,
         group: option.group ?? undefined,
       }))}

@@ -144,6 +144,7 @@ try {
       VITE_ENABLE_BEARER_TOKEN_AUTH: 'true',
       LOCAL_JWT: 'fixture-only',
       VITE_ENABLE_GRAPHQL_SOUP: 'true',
+      VITE_ENABLE_CHANNEL_LOCAL_SYNC: 'true',
       VITE_ENABLE_GRAPHQL_BACKFILL: 'true',
       VITE_ENABLE_SNIPPETS: 'true',
       VITE_ENABLE_AUTO_UPDATE_UI: 'false',

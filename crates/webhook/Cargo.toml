@@ -33,6 +33,7 @@ inbound = [
   "ports",
   "rate_limit/axum",
   "user_events/schema",
+  "password_events/schema",
 ]
 ingestion = [
   "dep:agent_session",
@@ -43,6 +44,7 @@ ingestion = [
   "dep:entity_access",
   "dep:futures",
   "dep:user_events",
+  "dep:password_events",
   "dep:uuid",
   "ports",
 ]
@@ -109,6 +111,7 @@ tokio = { workspace = true, features = ["macros", "sync", "time"], optional = tr
 tokio-retry = { workspace = true, optional = true }
 tracing = { workspace = true }
 user_events = { path = "../user_events", optional = true }
+password_events = { path = "../password_events", optional = true }
 url = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }

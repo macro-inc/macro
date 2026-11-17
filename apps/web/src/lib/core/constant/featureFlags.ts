@@ -575,6 +575,12 @@ export const enableCrmActivity = defineFlag({
   env: 'ENABLE_CRM_ACTIVITY',
 });
 
+// Stay off until all ingestion and Team email reader binaries support exceptions.
+// No dev default or local override: the server independently requires this flag.
+export const enableCrmThreadExclusions = defineFlag({
+  key: 'enable-crm-thread-exclusions',
+});
+
 // Company collections are paused until ready; preserve stored lists while off.
 export const enableCrmLists = defineFlag({
   key: 'enable-crm-lists',
@@ -621,6 +627,15 @@ export const enableReminders = defineFlag({
 export const enableEmailSavedViews = defineFlag({
   key: 'enable-email-saved-views',
   env: 'ENABLE_EMAIL_SAVED_VIEWS',
+  default: onInDev,
+});
+
+// Mail's search field takes over the list header while searching, lists
+// recent searches, and keeps the rows on screen while results load; on phones
+// it adds a search page to the Email list.
+export const enableEmailWideSearch = defineFlag({
+  key: 'enable-email-wide-search',
+  env: 'ENABLE_EMAIL_WIDE_SEARCH',
   default: onInDev,
 });
 
@@ -707,6 +722,18 @@ export const enableInboxNotifiedSort = defineFlag({
 export const enableGraphqlSoup = defineFlag({
   key: 'enable-graphql-soup',
   env: 'ENABLE_GRAPHQL_SOUP',
+});
+
+/**
+ * Channel messages read from the device cache and are written through its
+ * queue (`queries/messages/local`); off, channels use REST. Needs the GraphQL
+ * cache. No default, dev included: off until PostHog answers on, because the
+ * rollout moves where messages are stored and sent. A local or CI bundle has
+ * no PostHog and sets `VITE_ENABLE_CHANNEL_LOCAL_SYNC` at build time.
+ */
+export const enableChannelLocalSync = defineFlag({
+  key: 'enable-channel-local-sync',
+  env: 'ENABLE_CHANNEL_LOCAL_SYNC',
 });
 
 /** Serves calendar reads from the normalized cache; requires GraphQL Soup. */

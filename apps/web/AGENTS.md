@@ -229,6 +229,10 @@ Give browser fixtures the app's viewport metadata and assert the CSS viewport wi
 Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
+The same suite's `list-search.browser.e2e.ts` drives the list header's search
+field over the real hotkey engine and list controller: ArrowDown and Enter move
+to the first result, and Escape keeps the search in the field and clears it
+from the list after a selection.
 
 A project's Tasks header keeps search, filters, Add existing tasks and New task on
 screen at 320–430px phone widths, with search closed and open, by collapsing both
@@ -734,6 +738,8 @@ reads retain client-scoped denial state across remounts and immediately reauthor
 previous-viewer cache hits; older requests never clear newer denial decisions.
 A project view mounts one full project read (`createProjectSource`): breadcrumbs
 and labels use the identity read, and embedded lists take the view's source.
+Keep editable breadcrumb icons on that identity read, including owner metadata;
+never load project counts or task membership just to open the appearance editor.
 Project reads refresh only through the activity registry (pushes, websocket
 connects, the app's own project writes; `registerProjectRevalidation`); never
 add a timer or focus refetch to them.
@@ -819,6 +825,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
   `browser-test/archive/selector-pagination.browser.e2e.ts` covers shared
   task/contact/mixed/thread/generic source pagination on desktop and touch.
+- Keep the owner-only **Keep this thread out of CRM** action in both thread
+  menus, and removal/pagination in the existing CRM Email settings surface.
+  Use the shared privacy mutation so contact/company contribution email readers
+  and owner exception pages refresh even when another reader fails; report
+  refresh failures separately from a successfully saved change;
+  gate thread actions and exception settings with `enableCrmThreadExclusions`,
+  which has no dev/local override while backend ingestion rolls out;
+  another contributor's copy remains eligible. Desktop/phone coverage lives in
+  `src/features/crm/browser-test/privacy`.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
@@ -1025,6 +1040,17 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   search field only when the sidebar is the list it searches (Home, Chat, Agents),
   in `ViewSidebar.Header` so its icon precedes collapse and its field opens above
   New; a view with a list header searches from `ListHeaderSearch` alone.
+  `ListHeaderSearch` owns the search keys: pass `focusResults` so ArrowDown,
+  Enter and Escape can move the keyboard into the list, and never clear the
+  query on Escape yourself. ArrowDown and Enter then run the list's own "go to
+  first item" command, so a list on `useListInteractions` lands on its first
+  row with no code in the view. `wide` lets the open field take the rest of
+  the header (the view hides its other actions from `onOpenChange`), and
+  `suggestions` lists rows under the field that the arrows walk before the
+  results; Email's wide search uses both. It registers the
+  split's Escape that clears a search from the list; keep a view's own Escape
+  steps (leaving a tab) conditional on no search, and selection clearing at
+  `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
@@ -1132,7 +1158,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   conversation, including an empty unread result after a read on another
   device. Include off-page favorites in unread presence without adding them to
   section counts; mention counts include thread replies, the unread dot does not.
-- With `enable-graphql-soup` and a cache host that serves channel timelines, channel pages, threads and message lookups read through `queries/messages/local` (device index first, GraphQL on a miss, REST on any failure or an older native build). Opening never waits on the device: while the cache is starting, and for the latest page of a channel not yet known to be held, the server is asked at the same time and the first page shows, and threads and message lookups stay on REST until the host has answered; timeline and thread queries run `offlineFirst` (`channelReadNetworkMode`) so a held channel opens offline, and their retry policy is wrapped in `retryOnceOnline` so a read the device cannot serve offline waits for the connection without using up its retry; the TanStack timeline stays the view model and its REST page shape and cursors are unchanged. Pushes still patch the open views directly; the device takes the same changes from `channelChanges` by sequence (`catch-up.ts`), which is also what a revisit, reconnect and the idle prewarm (`use-channel-cache.ts`: up to forty unread plus twenty recent channels from server-ordered lists (`prewarm-list.ts`), one request at a time and only while the person leaves the app alone, thirty-day eviction) run. When the cache storage is reset under an open page, the open channels' pages and threads are read again (`rereadChannelsAfterStorageReset`), so the device holds what is on screen again. Never refetch a timeline because a push arrived, and never write a push payload into the cache without its `sortKey`. The device takes a push a moment after the views do: a quiet channel's push is stored at once, one that arrives while another is being stored shares the next request, so a device page older than a push on screen, or a thread read while one is outstanding, waits for `pushesStored` (`catch-up.ts`) and is read again, at most three times; a push the device has not taken within two seconds is not waited on further and the read is shown as it is; the answer to a queued write also reaches the views late, so it keeps the reactions on screen (`applyQueuedWrite`) and a reaction confirms only its own change (`confirmQueuedReaction`). On that same path, a person's send, edit, delete and reaction go through the cache's durable mutation queue (`queries/messages/local/writes.ts`), not REST: the message hooks keep their optimistic rows, toasts and rollback and only swap `mutationFn`, which stays pending while the queue holds the write (offline, or behind an older write) and rejects with the server's code when it is refused. The send's queue identity and nonce are the client-minted message id, so a replay returns the stored message; a queued send is predicted with `unplacedSortKey`, past every message the server has placed, never with this device's clock, so quick sends stay in the order written; a send is noted in `localStorage` (`unqueued-sends.ts`) until the queue stores it, and the next page to start resends what a page that is gone left noted, in the order written; the queue releases a lease on its head that nothing sends under (its page is gone, or the enqueue that claimed it for this page lost its answer) instead of waiting five minutes for it to lapse; `SERVICE_UNAVAILABLE` from a busy channel is retried with the queue's backoff until the channel lets the write in (`graphql-mutation-retry.ts`), and the queue never counts an answer made only of that code toward its ten-server-failure limit. A root message of the newest page is moved to where the server's time puts it when its delivery arrives (`placeTopLevelMessageInMessageTimeline`), since a waiting row sits below what was pushed after it was written; a write still queued after a second is announced to the device's other windows (`waiting-writes.ts`), which read the device again to show it; a channel is noted in `localStorage` (`unstored-pushes.ts`) from a push reaching the views until the device has stored it, and each page catches up the noted channels at start and after a reconnect; a thread REST answered while the host was starting is also loaded through the device in the background (`holdChannelThread`), so it is held offline. Anchored posts, other parents, and anyone without the cache stay on REST. Run `bunx vitest run src/lib/queries/messages` after changing either path.
+- With `enable-channel-local-sync` (`enableChannelLocalSync`; no default, so off until PostHog answers on; a local or CI bundle sets `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true` or `=false` at build time) and a cache host that serves channel timelines, everything below applies; with it off `channelCacheHost()` is `undefined` and channels read and write over REST as before: no prewarm, eviction, storage-reset reread, push catch-up, other-window announcements acted on, or "Not sent yet" mark. Writes already in the device queue are still delivered, since the GraphQL cache runs its queue whatever this flag says, and sends an earlier page noted in `localStorage` for the queue are posted over REST under their own id (`left-behind-sends.ts`), kept noted until the server answers. Channel pages, threads and message lookups read through `queries/messages/local` (device index first, GraphQL on a miss, REST on any failure or an older native build). Opening never waits on the device: while the cache is starting, and for the latest page of a channel not yet known to be held, the server is asked at the same time and the first page shows, and threads and message lookups stay on REST until the host has answered; timeline and thread queries run `offlineFirst` (`channelReadNetworkMode`) so a held channel opens offline, and their retry policy is wrapped in `retryOnceOnline` so a read the device cannot serve offline waits for the connection without using up its retry; the TanStack timeline stays the view model and its REST page shape and cursors are unchanged. Pushes still patch the open views directly; the device takes the same changes from `channelChanges` by sequence (`catch-up.ts`), which is also what a revisit, reconnect and the idle prewarm (`use-channel-cache.ts`: up to forty unread plus twenty recent channels from server-ordered lists (`prewarm-list.ts`), one request at a time and only while the person leaves the app alone, thirty-day eviction) run. When the cache storage is reset under an open page, the open channels' pages and threads are read again (`rereadChannelsAfterStorageReset`), so the device holds what is on screen again. Never refetch a timeline because a push arrived, and never write a push payload into the cache without its `sortKey`. The device takes a push a moment after the views do: a quiet channel's push is stored at once, one that arrives while another is being stored shares the next request, so a device page older than a push on screen, or a thread read while one is outstanding, waits for `pushesStored` (`catch-up.ts`) and is read again, at most three times; a push the device has not taken within two seconds is not waited on further and the read is shown as it is; the answer to a queued write also reaches the views late, so it keeps the reactions on screen (`applyQueuedWrite`) and a reaction confirms only its own change (`confirmQueuedReaction`). On that same path, a person's send, edit, delete and reaction go through the cache's durable mutation queue (`queries/messages/local/writes.ts`), not REST: the message hooks keep their optimistic rows, toasts and rollback and only swap `mutationFn`, which stays pending while the queue holds the write (offline, or behind an older write) and rejects with the server's code when it is refused. The send's queue identity and nonce are the client-minted message id, so a replay returns the stored message; a queued send is predicted with `unplacedSortKey`, past every message the server has placed, never with this device's clock, so quick sends stay in the order written; a send is noted in `localStorage` (`unqueued-sends.ts`) until the queue stores it, and the next page to start resends what a page that is gone left noted, in the order written; the queue releases a lease on its head that nothing sends under (its page is gone, or the enqueue that claimed it for this page lost its answer) instead of waiting five minutes for it to lapse; `SERVICE_UNAVAILABLE` from a busy channel is retried with the queue's backoff until the channel lets the write in (`graphql-mutation-retry.ts`), and the queue never counts an answer made only of that code toward its ten-server-failure limit. A root message of the newest page is moved to where the server's time puts it when its delivery arrives (`placeTopLevelMessageInMessageTimeline`), since a waiting row sits below what was pushed after it was written; a write still queued after a second is announced to the device's other windows (`waiting-writes.ts`), which read the device again to show it; a channel is noted in `localStorage` (`unstored-pushes.ts`) from a push reaching the views until the device has stored it, and each page catches up the noted channels at start and after a reconnect; a thread REST answered while the host was starting is also loaded through the device in the background (`holdChannelThread`), so it is held offline. Anchored posts, other parents, and anyone without the cache stay on REST. Run `bunx vitest run src/lib/queries/messages` after changing either path.
 - Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
 - Read folders for picking or moving through `createFolderList`
   (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
@@ -1404,6 +1430,18 @@ and checks that both appear in the output. Without them, Vite leaves the
 loader's relative imports unchanged and Tauri serves HTML for the missing
 module, so that file type fails to open on desktop.
 
+## Videos stay out of native bundles
+
+Vite writes imported videos (`.mp4`, `.webm`, `.mov`) to `dist/web-hosted/`,
+which the web deploy publishes and every native bundle deletes: `build-tauri`,
+`build-tauri-dev`, the OTA archive (`infra/stacks/web-app`) and the desktop
+derivation (`nix/tauri-desktop.nix`). Pass a video import's URL through
+`webHostedUrl` (`@core/util/webHostedUrl`) so the apps load the web deploy's
+copy; a bare import 404s in a native build. Retained-build pruning keeps
+`web-hosted/` for apps stuck on old bundles. `scripts/web-hosted.test.ts`
+checks the routing and every deletion. Bundled, the tutorial videos alone added 105 MB
+to each app binary and OTA download.
+
 ## macOS desktop runtime: Chromium (CEF)
 `tauri/desktop-cef` builds the shipped macOS app with Chromium in its own Cargo
 workspace. The macOS release DMG builds this workspace; iOS, Android, Linux,
@@ -1669,6 +1707,18 @@ Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx
 import it directly from Tasks and legacy `next-soup` consumers.
 Keep entity-picker navigation on its search input, before the enclosing menu handles the key.
 
+### Tag picker selection and creation
+
+Keep tag checkbox toggles open for pointer and keyboard input; desktop row picks
+save the staged selection and close only the picker, while touch sheets retain
+explicit Done. Keep the parent More menu open after a tag pick or Escape, and
+prevent reopening the picker until its pending selection save settles. Dismiss
+the parent only when opening the tag editor or navigating to tagged items.
+Return from sharing to color to name with Back or Escape, preserving the draft
+and chosen color; native Back-button activation must not advance the flow.
+Keep tag-creation headers compact beside Back and show the current draft color
+beside the title throughout the color and sharing steps.
+
 ### Sidebar tag dragging
 
 The shared sidebar-tag fixture covers dragging tags onto taggable desktop rows.
@@ -1769,6 +1819,12 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   [entity collection fixture](src/features/entity/browser-test/README.md).
 
 ### Passwords
+
+Keep agent-request loading and read failures inside the item pane using shared
+skeletons and local Retry; after a stale decision, hide cached actions until a
+successful refresh. Team inbox groups are notification-only: show only valid
+password requests for the current team while Passwords is enabled, and open
+the request's vault target without a generic Team preview or fallback page.
 
 The flag-gated `/passwords` route mounts `features/passwords` with its team-scoped
 source; the rail and phone dock show it only for team members (flag and team).

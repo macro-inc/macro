@@ -1,5 +1,5 @@
 import {
-  enableGraphqlSoup,
+  enableChannelLocalSync,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import type { CacheHost } from '@graphql-cache/index';
@@ -35,14 +35,14 @@ export function channelCacheAnswered(host: CacheHost): boolean {
 
 /**
  * The cache host serving channel reads, or `undefined` when channels read
- * from REST: the cache rollout flag is off, the cache is unavailable, or the
- * native engine cannot serve channel timelines.
+ * from REST: `enable-channel-local-sync` is off or not answered yet, the
+ * cache is unavailable, or the native engine cannot serve channel timelines.
  */
 export function channelCacheHost(): CacheHost | undefined {
   // No host is the common REST case and needs no flag read.
   const host = getGraphqlSoupCacheHost();
   if (!host || host.disabled || unsupportedHosts.has(host)) return undefined;
-  if (!isFeatureEnabled(enableGraphqlSoup) || !graphqlCacheEnabled()) {
+  if (!isFeatureEnabled(enableChannelLocalSync) || !graphqlCacheEnabled()) {
     return undefined;
   }
   return host;

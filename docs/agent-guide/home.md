@@ -47,8 +47,18 @@ opens **Filter Home**.
 
 With the GraphQL Soup flag on, desktop Signal reads
 the server work feed (`user.workFeed` plus the `workFeedUpdates` subscription)
-instead of merging sources in the browser; Noise, search, and touch devices keep
-the merged feed. Verify these against a backend that serves the work feed: a
+instead of merging sources in the browser; Noise and touch devices keep
+the merged feed.
+
+Typing in **Search Home** there filters the feed first: every loaded Home row
+whose name matches the query is listed, in Home's order, whatever its type or
+age, followed by the search service's hits (content matches in mail, documents,
+tasks and chats that pass Home's notification filters). The Watch tutorial row
+is hidden while the field has text. Rows on feed pages that have not loaded
+yet, and a row whose only match is its sender or body, are found only if the
+search service returns them. To check, type a word from the title of a row of
+each type further down the list (an agent session, a task older than two
+weeks, a channel, a project): each must appear. Verify these against a backend that serves the work feed: a
 document you edited with no notifications appears read and offers no **Mark Done**.
 What an agent session does for you is the session's work, not yours: a task or
 document it creates stays out of Home unless a notification brings it in, and
@@ -165,28 +175,16 @@ preview; alternate activation and Shift-click open a split.
 On desktop, before selecting a row, the main pane shows a centered single-line chat
 composer under “What should we get done in Macro?”. Attachment, text, model, and
 send controls share one row; longer prompts expand the input as needed.
-Home uses the shared app font and composer theme tokens; suggestion text and
-hover states use the same semantic colors as other app surfaces.
+Home uses the shared app font and composer theme tokens; hover states use the same semantic colors as other app surfaces.
 Type in “Type @ to reference / for skills”, use the attachment button for
 attachments and the model menu to choose a model, then press Enter or Send to
 create and open an AI chat. If chat creation fails, the submitted text and attachments
 are restored, including before a chat-limit paywall opens. With agents disabled,
-the input stays 32px above the vertical center as suggestions load. With agents
-enabled, the composer uses the same topbar offset and 24/64 padding as the
-Agents new-conversation page so the two inputs share a baseline; suggestions
-still load below it without moving the input. Up to three cached AI
-suggestions appear below the
-composer, using the existing fast/smart recommendation projections. Compact rows
-use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
-suggestion fills the input and replaces its context attachments without sending;
-the Open action opens its source item in a new split, preserving the editor type
-for tasks, skills, snippets, and other documents. Suggestion loading/errors
-are isolated from the input. If generation stalls for 45 seconds, the shimmer
-is replaced with a retry action; a late result still appears automatically.
-Generation status updates do not extend that deadline. Retry starts a fresh
-45-second wait. Free users get suggestions from the free-tier model; if the
-plan refuses the request (403), the row says suggestions are unavailable and
-offers no retry. Shift+Enter adds a line. Selecting a Home row replaces
+the input stays 32px above the vertical center. With agents enabled, the
+composer uses the same topbar offset and 24/64 padding as the Agents
+new-conversation page so the two inputs share a baseline. With
+`enable-suggestions` on, today and the top priorities appear below the
+composer; otherwise the space below it is empty. Shift+Enter adds a line. Selecting a Home row replaces
 the composer with its preview. Home uses the shared 256px sidebar and collapses
 navigation below 720px. The hamburger or `Cmd+.` opens the full feed as a
 slide-over. Activating a row or **New chat** closes that overlay to show content;
@@ -302,8 +300,7 @@ and prevent dismissal; canceling leaves the underlying data unchanged.
 
 ## Suggestions on Home
 
-With `enable-suggestions` on (desktop only), the idle pane shows, below the composer
-and in place of the recommended actions:
+With `enable-suggestions` on (desktop only), the idle pane shows, below the composer:
 
 - **Today**: the day's timed events across working hours (8am to 8pm) as
   neutral chips with a thin line at now; a chip opens the event in Calendar.

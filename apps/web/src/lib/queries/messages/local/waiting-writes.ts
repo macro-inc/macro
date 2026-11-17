@@ -1,6 +1,7 @@
 import { createCrossTabBus } from '@core/cross-tab/cross-tab-bus';
 import { match, P } from 'ts-pattern';
 import { refreshChannelViews } from './catch-up';
+import { channelCacheHost } from './flag';
 
 type WaitingWrite = {
   type: 'channel-write-waiting';
@@ -52,7 +53,9 @@ export function announceWaitingWrite(channelId: string): void {
 /** Has this window read a channel again from the device when another window's write to it waits. */
 export function watchWaitingWrites(): void {
   stopWatching ??= waitingWrites.subscribe((message) => {
-    if (message.windowId !== WINDOW_ID) refreshChannelViews(message.channelId);
+    // With channels back on REST there is no device copy to read again.
+    if (message.windowId === WINDOW_ID || !channelCacheHost()) return;
+    refreshChannelViews(message.channelId);
   });
 }
 

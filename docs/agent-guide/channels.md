@@ -609,12 +609,15 @@ disables the entrance animation.
 The message renders immediately with avatar, email, timestamp. Composer extras: `Attach
 files` and the `Send message` button. Replies also include a close-reply control.
 
-With `enable-graphql-soup` enabled and the device cache serving channels, a
+With `enable-channel-local-sync` enabled (a local bundle is built with
+`VITE_ENABLE_CHANNEL_LOCAL_SYNC=true`) and the device cache serving channels, a
 send, edit, delete or reaction made while offline stays on screen and is
 delivered when the connection returns, including after a reload: check with the
 network off, then back on, that the message appears once and other members
 receive it. A write the server refuses is removed again with the usual failure
 toast; after a reload the row is removed without a toast.
+With the flag off channels read and write over REST: an offline send waits in
+the page and is lost on reload, as before the device cache.
 
 Hover a message for its action menu. `Reply` on a top-level message opens that thread. On
 an existing thread reply, it inserts a one-line reply-target reference into the composer;
@@ -1325,8 +1328,9 @@ offer **Unmute all channels**. These actions affect only the viewer's current
 complete membership, including unloaded and filtered rows, never later additions.
 Built-in lists include joined channels only; Favorites targets channel favorites.
 Bulk writes retain successful chunks on partial failures. Channel row menus use
-the same durations under **Mute notifications**, without leading mute or unmute icons. Preset
-end dates and times align with the menu's right content edge.
+the same durations under **Mute notifications**, with a muted bell for Mute and
+an ordinary bell for Unmute. Preset end dates and times align with the menu's right
+content edge.
 
 **Add to section** lists eligible sections with checked membership, then New
 section. Rule-only matches stay checked and read-only; edit the rule to remove

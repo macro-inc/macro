@@ -5,6 +5,7 @@ use tracing::instrument::WithSubscriber;
 
 mod recovery;
 mod token_reuse;
+mod username;
 
 // This external protocol can finish after one adapter polling budget. Busy-only
 // reinvocation models its durable retry; each call already waits on namespace GET.

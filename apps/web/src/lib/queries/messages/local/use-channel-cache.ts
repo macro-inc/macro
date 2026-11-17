@@ -1,17 +1,27 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
+import { enableChannelLocalSync } from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
-import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  getGraphqlSoupCacheHost,
+  subscribeGraphqlSoupReconnected,
+} from '@service-storage/graphql-soup';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 import {
   rereadChannelsAfterStorageReset,
   resetChannelSync,
   storeUnstoredPushes,
 } from './catch-up';
 import { channelCacheHost } from './flag';
+import { queueIfAnswering, sendLeftBehindOverRest } from './left-behind-sends';
 import { resetPendingChannelPages } from './pages';
 import { evictIdleChannels, runChannelPrewarm } from './prewarm';
 import { loadPrewarmChannelIds } from './prewarm-list';
@@ -73,7 +83,8 @@ async function runPass(host: CacheHost, signal: AbortSignal): Promise<void> {
 }
 
 /**
- * While `userId` is signed in and channels read from the device cache, the cross-tab
+ * While `userId` is signed in and channels read from the device cache
+ * (`enable-channel-local-sync`), the cross-tab
  * leader keeps up to forty unread and the twenty most recently used channels
  * ready, one request at a time and only while the person leaves the app alone,
  * again after a reconnect or a replaced cache, and drops channels not opened
@@ -81,14 +92,15 @@ async function runPass(host: CacheHost, signal: AbortSignal): Promise<void> {
  * channels' pages and threads are read again so the device holds them again.
  * Each tab also sends the messages a page that is gone was still handing to
  * the device queue, and stores the pushed changes such a page had shown but
- * the device had not taken.
+ * the device had not taken. With the flag off none of this runs; the sends an
+ * earlier page left noted are posted over REST.
  */
 export function useChannelCache(userId: Accessor<string | undefined>): void {
   const active = () => userId() !== undefined;
-  const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
+  const localSync = useFeatureFlag(enableChannelLocalSync);
   const isLeader = createTabLeaderSignal('graphql-channel-prewarm:v1');
   const [pass, setPass] = createSignal(0);
-  const host = () => (graphqlSoup().enabled ? channelCacheHost() : undefined);
+  const host = () => (localSync().enabled ? channelCacheHost() : undefined);
 
   createEffect(() => {
     const cacheHost = host();
@@ -136,6 +148,24 @@ export function useChannelCache(userId: Accessor<string | undefined>): void {
           }),
           'channel-local-sync'
         )
+      ),
+      'channel-local-sync'
+    );
+  });
+
+  createEffect(() => {
+    const sender = userId();
+    const flag = localSync();
+    // Channels are on REST here. What an earlier page noted for the queue is
+    // posted over REST, unless the queue turns out to hold it: the cache
+    // delivers its queue whatever this flag says.
+    if (!sender || flag.loading || flag.enabled) return;
+    // Other pages starting now leave to this one what it takes over.
+    holdUnqueuedSendsPage();
+    const queue = queueIfAnswering(untrack(getGraphqlSoupCacheHost));
+    fireAndForget(
+      resendUnqueuedSends(queue, sender, (send) =>
+        fireAndForget(sendLeftBehindOverRest(send), 'channel-local-sync')
       ),
       'channel-local-sync'
     );

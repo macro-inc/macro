@@ -6,14 +6,17 @@ import {
 } from '../waiting-writes';
 import { CHANNEL_ID } from './fixtures';
 
-const { refreshChannelViews } = vi.hoisted(() => ({
+const { refreshChannelViews, channelCacheHost } = vi.hoisted(() => ({
   refreshChannelViews: vi.fn(),
+  channelCacheHost: vi.fn((): object | undefined => ({})),
 }));
 vi.mock('../catch-up', () => ({ refreshChannelViews }));
+vi.mock('../flag', () => ({ channelCacheHost }));
 
 afterEach(() => {
   resetWaitingWrites();
   refreshChannelViews.mockClear();
+  channelCacheHost.mockReturnValue({});
 });
 
 /** What another window's announcement looks like to this one. */
@@ -43,6 +46,15 @@ it('does not read again for a write this window made', () => {
   watchWaitingWrites();
 
   announceWaitingWrite(CHANNEL_ID);
+
+  expect(refreshChannelViews).not.toHaveBeenCalled();
+});
+
+it('does nothing while channels read from REST', () => {
+  watchWaitingWrites();
+  channelCacheHost.mockReturnValue(undefined);
+
+  announceFromAnotherWindow(CHANNEL_ID);
 
   expect(refreshChannelViews).not.toHaveBeenCalled();
 });

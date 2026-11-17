@@ -45,3 +45,9 @@ doc = false
 name = "bitwarden_csv"
 path = "fuzz_targets/bitwarden_csv.rs"
 test = false
+
+[[bin]]
+doc = false
+name = "bitwarden_zip"
+path = "fuzz_targets/bitwarden_zip.rs"
+test = false

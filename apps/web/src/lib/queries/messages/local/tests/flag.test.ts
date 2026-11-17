@@ -1,7 +1,16 @@
 import type { CacheHost } from '@graphql-cache/index';
+import {
+  getGraphqlSoupCacheHost,
+  graphqlCacheEnabled,
+} from '@service-storage/graphql-soup';
 import { onlineManager, QueryClient } from '@tanstack/solid-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { channelReadNetworkMode, retryOnceOnline } from '../flag';
+import {
+  channelCacheHost,
+  channelReadNetworkMode,
+  markChannelCacheUnsupported,
+  retryOnceOnline,
+} from '../flag';
 import { fakeHost } from './fixtures';
 
 vi.mock('@service-storage/graphql-soup', () => ({
@@ -9,8 +18,50 @@ vi.mock('@service-storage/graphql-soup', () => ({
   graphqlCacheEnabled: vi.fn(),
 }));
 
+const { isFeatureEnabled } = vi.hoisted(() => ({ isFeatureEnabled: vi.fn() }));
+vi.mock('@core/constant/featureFlags', () => ({
+  enableChannelLocalSync: { key: 'enable-channel-local-sync' },
+  isFeatureEnabled,
+}));
+
 const host = fakeHost([]) as unknown as CacheHost;
 const channel = { type: 'channel' };
+
+describe('channelCacheHost', () => {
+  const serve = (cacheHost: CacheHost | undefined) => {
+    vi.mocked(getGraphqlSoupCacheHost).mockReturnValue(cacheHost);
+    vi.mocked(graphqlCacheEnabled).mockReturnValue(true);
+  };
+
+  it('serves channels from the cache host while the flag is on', () => {
+    serve(host);
+    isFeatureEnabled.mockReturnValue(true);
+
+    expect(channelCacheHost()).toBe(host);
+    expect(isFeatureEnabled).toHaveBeenLastCalledWith({
+      key: 'enable-channel-local-sync',
+    });
+  });
+
+  it('leaves channels on REST while the flag is off or not answered', () => {
+    serve(host);
+    isFeatureEnabled.mockReturnValue(false);
+
+    expect(channelCacheHost()).toBeUndefined();
+    expect(channelReadNetworkMode(channel)).toBe('online');
+  });
+
+  it('leaves channels on REST without a usable cache host, flag on', () => {
+    isFeatureEnabled.mockReturnValue(true);
+    serve(undefined);
+    expect(channelCacheHost()).toBeUndefined();
+
+    const old = fakeHost([]) as unknown as CacheHost;
+    serve(old);
+    markChannelCacheUnsupported(old);
+    expect(channelCacheHost()).toBeUndefined();
+  });
+});
 
 describe('channelReadNetworkMode', () => {
   afterEach(() => onlineManager.setOnline(true));
