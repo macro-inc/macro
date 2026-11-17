@@ -112,13 +112,7 @@ describe('suggestions feed', () => {
           'suggestion-running',
           'suggestion-done',
         ]);
-        expect(feed.counts()).toEqual({ all: 5, running: 2, open: 2, done: 1 });
-
-        feed.setFilter('running');
-        expect(shownIds(feed)).toEqual([
-          'suggestion-failed',
-          'suggestion-running',
-        ]);
+        expect(feed.counts()).toEqual({ running: 2, open: 2, done: 1 });
       }
     );
   });
@@ -256,7 +250,7 @@ describe('suggestions feed', () => {
       [replySuggestion, opened],
       async (feed, { source, actions }) => {
         expect(shownIds(feed)).toEqual(['suggestion-reply', opened.id]);
-        expect(feed.counts()).toEqual({ all: 2, running: 0, open: 1, done: 1 });
+        expect(feed.counts()).toEqual({ running: 0, open: 1, done: 1 });
 
         feed.open(opened);
         expect(actions.openDraft).toHaveBeenCalledWith(DRAFT);
@@ -355,7 +349,7 @@ describe('suggestions feed', () => {
           ['suggestion-reply', false],
           ['suggestion-composer', true],
         ]);
-        expect(feed.counts().all).toBe(1);
+        expect(feed.counts().open).toBe(1);
       }
     );
   });

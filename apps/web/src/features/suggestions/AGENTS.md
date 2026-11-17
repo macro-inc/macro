@@ -21,7 +21,7 @@ only, behind `enable-suggestions`.
   header's Refresh control (`POST /suggestions/regenerate`): running while a
   generation runs, "Available at h:mm" during the hourly cooldown (one timer
   ends it), hidden where the server has no status to give.
-- `primitives/feed.ts` decides what a card's action does for its kind: a
+- `primitives/feed.ts` decides what a row's action does for its kind: a
   composer prompt accepts, then opens the composer; a background prompt only
   accepts, which starts its run; an entity suggestion accepts, then opens its item
   or draft; a routine suggestion saves its drafted routine.
@@ -43,7 +43,7 @@ only, behind `enable-suggestions`.
 
 ## Start here
 
-- `core/suggestion.ts`: the suggestion and feed model, the tab filter.
+- `core/suggestion.ts`: the suggestion and feed model, the section counts.
 - `primitives/feed.ts`: card actions, dismiss and undo.
 - `route-views.tsx`, `home-priorities.tsx`: the two production compositions.
 
@@ -62,10 +62,10 @@ only, behind `enable-suggestions`.
 
 ## Gotchas
 
-- Clicking Run on a background suggestion is the approval: the card must show
+- Clicking Run on a background suggestion is the approval: the row must show
   `sends` (or that it sends nothing) before Run, and there is no approval UI.
 - The server decides and the page shows: each suggestion's `status`, the
-  feed's order (what waits or runs, then what is done), the tab `counts`,
+  feed's order (what waits or runs, then what is done), the section `counts`,
   `isNew`, what a finished one left (`result`, absent until its run
   settled), a reply's `waitingSince`, `from` and draft `preview`, and a
   routine suggestion's `routine` sentence and when-line. Don't
@@ -84,31 +84,34 @@ only, behind `enable-suggestions`.
   is now: the source puts that in the feed and answers `changed`, and the
   card shows the new text with a note, so nothing is taken up or run on text
   the person didn't see.
-- The page follows the chosen design frames: one column of cards, then
-  "Done today" and "Dismissed". Every card is the app's `Card` from `@ui`
-  (`variant="filled" depth={3}`, as the routine cards) built from its own
-  parts: `Card.Header` with an `Item` (`Item.Media` tile, `Card.Title`,
-  `Card.Description`), an optional `Card.Body` holding a nested
-  `Card variant="filled" offset={1}`, and `Card.Footer` with `Card.Metadata`
-  and `Card.Actions`. Don't restyle these with local surface, border or type
-  classes.
-- A card shows only what the person needs to act: the title, one block of
-  text, and one quiet line of facts beside one main action. There is never a
-  second block repeating the first: a background run shows its summary and
-  what it sends, not its prompt (Open in chat shows that); a drafted reply
-  shows the draft in place of the summary; every finished suggestion is one
-  row. The one part that reads the app's items (`SuggestionItemParts`: the
-  source link's icon and name) is supplied by `suggestion-items.tsx`.
-- Nothing on a card is loud: the main action is the app's `secondary`
-  button and the other a `ghost` one (no `primary`: several white buttons on
-  one page read as shouting), line icons take the muted ink, and dismiss
-  shows on hover or keyboard focus. Colour is left to the tile (each kind has
-  its own, from the routine cards' tints), the state badges and the values
-  AI picked.
+- The page is one list in sections by status, each in the server's order:
+  To do (`open`), Running (`running` and `failed`), Done today (`done`),
+  then Dismissed for the visit. The header and the section headings show the
+  server's counts (`sectionCounts`); with nothing waiting or running, a card
+  says so above what was done. Rows are the app's `Item` from `@ui`
+  (`Item.Icon`, `Item.Title`, `Item.Description`, `Item.Metadata`); an opened
+  row is `variant="filled" depth={3}` and its draft a nested
+  `Card variant="filled" offset={1}`. Don't restyle these with local surface,
+  border or type classes.
+- A row shows only what the person needs to act: its kind's glyph (or its
+  run's state), the title, one line of text, and a quiet fact over its one
+  action. A background run also shows what it sends, not its prompt (Open in
+  chat shows that). Pressing a row's text opens it in place, one at a time
+  (the one opened from Home to begin with): its source link, a drafted
+  reply's draft, and its other actions (Review, Open in chat). Every finished
+  suggestion is one line. The one part that reads the app's items
+  (`SuggestionItemParts`: the source link's icon and name) is supplied by
+  `suggestion-items.tsx`.
+- Nothing on a row is loud: its action is the app's `link` button, an opened
+  row's other actions are `secondary` (no `primary`), line icons take the
+  muted ink, and dismiss shows on hover or keyboard focus. Colour is left to
+  the glyph (each kind has its own, from the routine cards' tints), a failed
+  run and the values AI picked.
 - The API has no due times; a reply's "waiting 2 days" is the feed's
   `waitingSince`. Without it a card shows when the suggestion arrived.
-- Rows are kept by suggestion id (`Key`), so a feed read updates a card in
-  place: don't key a branch on an object that is rebuilt on every read.
+- Rows are kept by suggestion id (`Key`), so a feed read updates a row in
+  place: don't key a branch on an object that is rebuilt on every read. A
+  row whose status changes moves to another section's list and is rebuilt.
 - What a card holds belongs to the account that read it. Accept and
   regenerate compare the signed-in account before acting on an answer.
 - Every change to the feed also invalidates Home's rows

@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { doneSuggestion, replySuggestion } from '../tests/fixtures';
-import { draftOrigin, tabCounts, waitingFor } from './suggestion';
+import { draftOrigin, sectionCounts, waitingFor } from './suggestion';
 
-describe('tabCounts', () => {
-  it('counts a failed run with the running ones and sums All', () => {
-    expect(tabCounts({ open: 4, running: 1, failed: 2, done: 3 })).toEqual({
-      all: 10,
-      running: 3,
+describe('sectionCounts', () => {
+  it('counts a failed run with the running ones', () => {
+    expect(sectionCounts({ open: 4, running: 1, failed: 2, done: 3 })).toEqual({
       open: 4,
+      running: 3,
       done: 3,
     });
   });

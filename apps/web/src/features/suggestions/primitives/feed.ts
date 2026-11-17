@@ -6,11 +6,9 @@ import type {
   SuggestionsSource,
 } from '../context/suggestions-source';
 import {
-  type FeedFilter,
-  matchesFilter,
   type Suggestion,
   type SuggestionStatus,
-  tabCounts,
+  sectionCounts,
 } from '../core/suggestion';
 
 /** One card in the feed. */
@@ -36,8 +34,8 @@ export type FeedView =
   | { kind: 'suggestions'; entries: FeedEntry[] };
 
 /**
- * The feed's state: its filter and each card's action. The server decides
- * every card's status, order and counts; a dismissal is sent at once, and a
+ * The feed's state and each row's action. The server decides every
+ * suggestion's status, order and counts; a dismissal is sent at once, and a
  * suggestion dismissed during this visit stays as a row whose Undo asks the
  * server to restore it.
  */
@@ -52,7 +50,6 @@ export function createSuggestionsFeed(
     viewer?: Accessor<string | undefined>;
   } = {}
 ) {
-  const [filter, setFilter] = createSignal<FeedFilter>('all');
   // Dismissed during this visit, as they were: the feed no longer lists them.
   const [dismissed, setDismissed] = createSignal<Suggestion[]>([]);
   const [busyIds, setBusyIds] = createSignal<string[]>([]);
@@ -60,7 +57,7 @@ export function createSuggestionsFeed(
   const [changedIds, setChangedIds] = createSignal<string[]>([]);
 
   const counts = createMemo(() =>
-    tabCounts(
+    sectionCounts(
       source.feed()?.counts ?? { open: 0, running: 0, failed: 0, done: 0 }
     )
   );
@@ -87,7 +84,7 @@ export function createSuggestionsFeed(
         )
         .map((suggestion) => entry(suggestion, false)),
       ...gone.map((suggestion) => entry(suggestion, true)),
-    ].filter((shown) => matchesFilter(shown.status, filter()));
+    ];
     if (entries.length === 0) return { kind: 'empty' };
 
     return { kind: 'suggestions', entries };
@@ -153,8 +150,6 @@ export function createSuggestionsFeed(
     });
 
   return {
-    filter,
-    setFilter,
     counts,
     view,
     accept,

@@ -94,7 +94,9 @@ function Fixture() {
       ? undefined
       : scenario === 'empty'
         ? []
-        : ALL
+        : scenario === 'done'
+          ? [doneSuggestion]
+          : ALL
   );
   const [failed, setFailed] = createSignal(scenario === 'error');
   const [log, setLog] = createSignal<string[]>([]);

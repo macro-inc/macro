@@ -133,21 +133,14 @@ export function draftOrigin(
   return undefined;
 }
 
-export type FeedFilter = 'all' | 'running' | 'open' | 'done';
+/** How many suggestions each of the page's sections holds. */
+export type SectionCounts = { open: number; running: number; done: number };
 
-export function matchesFilter(status: SuggestionStatus, filter: FeedFilter) {
-  if (filter === 'all') return true;
-  if (filter === 'running') return status === 'running' || status === 'failed';
-
-  return status === filter;
-}
-
-/** The tabs' counts: a failed run sits with the running ones. */
-export function tabCounts(counts: FeedCounts): Record<FeedFilter, number> {
+/** The sections' counts: a failed run sits with the running ones. */
+export function sectionCounts(counts: FeedCounts): SectionCounts {
   return {
-    all: counts.open + counts.running + counts.failed + counts.done,
-    running: counts.running + counts.failed,
     open: counts.open,
+    running: counts.running + counts.failed,
     done: counts.done,
   };
 }

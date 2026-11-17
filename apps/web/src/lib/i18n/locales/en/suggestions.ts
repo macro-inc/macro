@@ -1,14 +1,16 @@
 export default {
-  subtitle: 'Suggestions to explore. Things to move forward.',
-  filters: 'Filter your suggestions',
-  all: 'All',
+  toDo: 'To do',
   running: 'Running',
+  thingsWaiting: {
+    one: '{{count}} thing',
+    other: '{{count}} things',
+  },
+  doneOfAll: {
+    other: '{{done}} of {{count}} done',
+  },
   open: 'Suggestions',
-  done: 'Done',
   badgeRunning: 'Running',
-  badgeDone: 'Done',
   badgeFailed: 'Failed',
-  badgeRoutine: 'Routine',
   run: 'Run',
   runInBackground: 'Run in background',
   runAgain: 'Run again',
@@ -67,7 +69,6 @@ export default {
   emptyTitle: 'You’re all caught up',
   emptyBody:
     'Nothing is waiting and nothing is running. New suggestions arrive overnight from your inbox, chats and docs.',
-  emptyFilter: 'Nothing here right now.',
   topPriorities: 'Your top priorities',
   allInForYou: 'All in For you',
   today: 'Today',

@@ -5,7 +5,7 @@ const card = (page: Page, id: string) =>
 const requests = (page: Page) => page.getByRole('list', { name: 'Requests' });
 
 for (const theme of ['dark', 'light']) {
-  test(`every kind and state of suggestion shows as a card in ${theme}`, async ({
+  test(`every kind and state of suggestion shows as a row in ${theme}`, async ({
     page,
   }, testInfo) => {
     const errors: string[] = [];
@@ -17,7 +17,10 @@ for (const theme of ['dark', 'light']) {
       'data-suggestion-status',
       'failed'
     );
-    await expect(card(page, 'suggestion-running')).toContainText('Running');
+    await expect(card(page, 'suggestion-running')).toHaveAttribute(
+      'data-suggestion-status',
+      'running'
+    );
     // A finished suggestion is one quiet row under Done today.
     await expect(card(page, 'suggestion-done')).toContainText('Open result');
     // What a run will post is on the card before Run.
@@ -108,6 +111,8 @@ test('a routine suggestion shows its sentence and can be reviewed or turned on',
   await expect(suggestion).toContainText(
     'Every Friday at 9:00 AM, list the deliveries vendors confirmed this week and post it to #ops.'
   );
+  // Review is one of the row's other actions, shown once it is opened.
+  await suggestion.getByRole('button', { expanded: false }).click();
   await suggestion.getByRole('button', { name: 'Review' }).click();
   await expect(requests(page)).toContainText('review routine-draft-1');
 
@@ -179,18 +184,52 @@ test('leaving the page records that the feed was viewed', async ({ page }) => {
   await expect(requests(page).getByText('viewed')).toHaveCount(1);
 });
 
-test('tabs filter by where a suggestion stands', async ({ page }) => {
+test('sections list suggestions by where they stand, with the server’s counts', async ({
+  page,
+}) => {
   await page.goto('/');
-  const tabs = page.getByRole('radiogroup', {
-    name: 'Filter your suggestions',
-  });
+  const section = (name: string) => page.getByRole('region', { name });
 
-  await tabs.getByText('Running', { exact: true }).click();
-  await expect(page.locator('[data-suggestion]')).toHaveCount(2);
-  await tabs.getByText('Done', { exact: true }).click();
+  await expect(section('To do 6').locator('[data-suggestion]')).toHaveCount(6);
+  // A failed run sits with the running ones.
+  await expect(section('Running 2').locator('[data-suggestion]')).toHaveCount(
+    2
+  );
+  await expect(
+    section('Done today 1').locator('[data-suggestion]')
+  ).toHaveCount(1);
+  await expect(page.locator('[data-suggestions-progress]')).toHaveText(
+    '1 of 9 done'
+  );
+});
+
+test('opening a drafted reply’s row shows the thread and the draft in place', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const reply = card(page, 'suggestion-drafted-reply');
+  await expect(reply.locator('[data-suggestion-draft]')).toHaveCount(0);
+
+  await reply.getByRole('button', { expanded: false }).click();
+  await expect(reply.locator('[data-suggestion-draft]')).toHaveText(
+    'The terms are unchanged; only the price moved.'
+  );
+  await reply.locator('[data-suggestion-source]').click();
+  await expect(requests(page)).toContainText('open email_thread thread-1');
+
+  await reply.getByRole('button', { expanded: true }).click();
+  await expect(reply.locator('[data-suggestion-draft]')).toHaveCount(0);
+});
+
+test('with nothing waiting or running, the page says so above what was done', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=done');
+
+  await expect(page.locator('[data-suggestions-clear]')).toContainText(
+    'You’re all caught up'
+  );
   await expect(page.locator('[data-suggestion]')).toHaveCount(1);
-  await tabs.getByText('Suggestions', { exact: true }).click();
-  await expect(page.locator('[data-suggestion]')).toHaveCount(6);
 });
 
 test('the suggestion opened from Home is scrolled to, in its place', async ({
