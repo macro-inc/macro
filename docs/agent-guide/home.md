@@ -303,25 +303,28 @@ With `enable-suggestions` on (desktop only), the idle pane shows, below the comp
   server ranks them. A row opens For you with that suggestion first; **All in
   For you** opens the page.
 
-For you lists the suggestions under **To do**, **Running** (failed runs
-included) and **Done today**, with how many are done in its header. A reply,
-a review or a composer prompt leads with a circle that marks it done without
-opening anything; pointing at its row shows **Open**, **Open draft** or
-**Open in chat** and the `x`. A background run shows what it sends and
-**Run**, which starts it at once; it moves to Running and, when done, to Done
-today with **Open result**. A routine suggestion shows **Turn on**. Pressing a
-row's text opens it in place: its source, a drafted reply's text, and its
-actions, **Review** (a routine) and **Open in chat** (a background run) among
-them. **Open draft** opens the thread with the draft in its reply composer and
-a footer under it that reads **Drafted by Macro**, links what else the
-suggestion cites, and offers **Rewrite**, which opens the agent composer with
-the thread mentioned and the request typed, unsent. Done today shows the
-latest finished suggestion; the earlier ones are behind **Logbook**. The `x`
-(shown on hover or focus) dismisses at once and leaves an Undo row for the
-visit; Undo restores the suggestion, which the server allows for a few
-minutes. Dismissing a running suggestion stops its run, and restoring it
-brings it back open, not running.
-**Refresh suggestions** in the top bar asks for a fresh run, at most once an
-hour; while one runs it reads "Looking for suggestions", and during the
-cooldown "Available at" a time.
+For you is two cards under **Today** and the date. **Suggestions** is work
+Macro can do: each row says what Macro will do and has one button. **Run**
+starts a background run at once (the row says what it posts or sends first,
+or that nothing is sent); the row then reads "Running." with **View**, which
+opens its session, and a failed run turns red with **Retry**. **Open chat**
+opens the composer with a prompt typed, unsent, and **Turn on** saves a
+routine. Pressing a Suggestions row's text looks without taking it up: a
+routine opens for review and a run's prompt opens in the composer. **To do**
+is the person's own mail and documents: each row names the item it is about,
+who wrote, whether a reply is drafted, and how long it has waited. Its circle
+marks it done without opening anything; pressing its text, or **Open** /
+**Open draft** shown on hover or focus, opens the item. **Open draft** opens
+the thread with the draft in its reply composer and a footer under it that
+reads **Drafted by Macro**, links what else the suggestion cites, and offers
+**Rewrite**, which opens the agent composer with the thread mentioned and the
+request typed, unsent. A suggestion that is taken up or finished leaves the
+page; with nothing left, one card reads **You’re clear for today**. The `x`
+(shown on hover or focus) dismisses at once and leaves the row in its card
+with **Undo** for the visit; Undo restores the suggestion, which the server
+allows for a few minutes. Dismissing a running suggestion stops its run, and
+restoring it brings it back open, not running.
+**Refresh** in the top bar asks for a fresh run, at most once an hour; while
+one runs it reads "Looking for suggestions", and during the cooldown
+"Available at" a time.
 

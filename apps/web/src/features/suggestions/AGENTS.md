@@ -24,7 +24,8 @@ only, behind `enable-suggestions`.
 - `primitives/feed.ts` decides what a row's action does for its kind: a
   composer prompt accepts, then opens the composer; a background prompt only
   accepts, which starts its run; an entity suggestion accepts, then opens its item
-  or draft; a routine suggestion saves its drafted routine.
+  or draft; a routine suggestion saves its drafted routine. `look` opens what
+  a prompt or routine would do without accepting it.
 - `suggestion-actions.ts` is the only place that knows the app's splits, composer
   and routine suggestions.
 - `draft-origin.tsx` is the footer the email thread draws under a reply
@@ -43,7 +44,7 @@ only, behind `enable-suggestions`.
 
 ## Start here
 
-- `core/suggestion.ts`: the suggestion and feed model, the section counts.
+- `core/suggestion.ts`: the suggestion and feed model.
 - `primitives/feed.ts`: card actions, dismiss and undo.
 - `route-views.tsx`, `home-priorities.tsx`: the two production compositions.
 
@@ -65,8 +66,8 @@ only, behind `enable-suggestions`.
 - Clicking Run on a background suggestion is the approval: the row must show
   `sends` (or that it sends nothing) before Run, and there is no approval UI.
 - The server decides and the page shows: each suggestion's `status`, the
-  feed's order (what waits or runs, then what is done), the section `counts`,
-  `isNew`, what a finished one left (`result`, absent until its run
+  feed's order (what waits or runs, then what is done), `isNew`, what a
+  finished one left (`result`, absent until its run
   settled), a reply's `waitingSince`, `from` and draft `preview`, and a
   routine suggestion's `routine` sentence and when-line. Don't
   derive any of these here. Home asks for its rows with `?limit=5`
@@ -84,44 +85,41 @@ only, behind `enable-suggestions`.
   is now: the source puts that in the feed and answers `changed`, and the
   card shows the new text with a note, so nothing is taken up or run on text
   the person didn't see.
-- The page is one list in sections by status, each in the server's order:
-  To do (`open`), Running (`running` and `failed`), Done today (`done`),
-  then Dismissed for the visit. The header and the section headings show the
-  server's counts (`sectionCounts`). While something waits or runs, Done
-  today shows the latest finished one and folds the earlier ones into the
-  Logbook row; with nothing waiting or running, a card says so and every
-  finished one is listed. Refresh sits in the bar above the page
-  (`ForYouRefresh`).
-- Rows are the app's `Item` from `@ui` with `text-base` titles; an opened row
-  is `variant="filled" depth={3}` and its draft a nested
-  `Card variant="filled" offset={1}`. Don't give them local surfaces or
-  borders.
-- A row leads with what pressing it does: a circle where taking the
-  suggestion up is all there is to do (a reply, a review, a composer
-  prompt), a play mark for a background run, the repeat mark for a routine,
-  or its run's state. The circle marks it done without opening anything
-  (`feed.markDone`); the server counts that as taken up, exactly like Open,
-  and it is never offered where taking up starts a run or saves a routine.
-- After the title and one line of text, the right side holds a quiet fact:
-  the kind's glyph and how long it has waited, with Draft ready under it. A
-  suggestion that opens something swaps these for Open and dismiss when
-  pointed at or focused. One that runs something keeps its action in view
-  under the fact, since pressing it is the approval; what it sends is a line
-  of its own, or "Sends nothing" beside Run.
-- Pressing a row's text opens it in place, one at a time (the one opened
-  from Home to begin with): its source link, a drafted reply's draft, and
-  its actions (Review and Open in chat among them). A background run's
-  prompt is not shown; Open in chat shows that. The one part that reads the
-  app's items (`SuggestionItemParts`: the source link's icon and name) is
-  supplied by `suggestion-items.tsx`.
-- Nothing on a row is loud: actions are `secondary`, `ghost` or `link`
-  buttons (no `primary`), line icons take the muted ink, and colour is left
-  to the kind's glyph, a failed run, Draft ready and the values AI picked.
-- The API has no due times; a reply's "waiting 2 days" is the feed's
-  `waitingSince`. Without it a card shows when the suggestion arrived.
+- The page is two cards under Today and the date, each in the server's
+  order: Suggestions (prompts and routines: work Macro can do, in any status
+  but done) then To do (entity suggestions that are open: the person's own
+  mail and documents). A done suggestion is not listed, so taking one up or
+  a run finishing removes its row. With no row left, one card says so.
+  Refresh sits in the bar above the page (`ForYouRefresh`).
+- The cards are `Card variant="filled" depth={3}` and the rows `Item
+  size="sm"` with `border-0`, a medium `text-sm` title and one 13px line.
+  Don't give them local surfaces, borders, counts or descriptions beside
+  the card's title. `for-you.browser.e2e.ts` holds the row's height and type
+  sizes.
+- A Suggestions row (`MacroRow`) leads with its kind's mark (a violet
+  sparkle, an orange repeat for a routine, a spinner while running, a red
+  mark once failed), says what Macro will do, and has one secondary button:
+  Run, Open chat, Turn on, Retry, or View while it runs. A background run's
+  line ends with what it sends, or that nothing is sent, since pressing Run
+  is the approval. Pressing the row's text looks without taking it up
+  (`feed.look`): a routine opens for review, a run under way opens its
+  session, and a prompt opens in the composer.
+- A To do row (`ToDoRow`) leads with a circle that marks it done without
+  opening anything (`feed.markDone`; the server counts that as taken up,
+  like Open). Its line names the item it is about (`SuggestionItemParts`'
+  `Source`, supplied by `suggestion-items.tsx`, the one part that reads the
+  app's items; the summary where the viewer can't read the item), who wrote,
+  and that a reply is drafted. The right side shows how long it has waited;
+  pointing at the row or focusing in it swaps that for Open or Open draft
+  and dismiss, in a slot wide enough that the row doesn't change size.
+  Pressing the text opens it too. Rows don't open in place.
+- Nothing on a row is loud: actions are `secondary` or `ghost` buttons (no
+  `primary`), and colour is left to the kind's mark and a failed run.
+- The API has no due times; a to-do's "2 days" is the feed's `waitingSince`,
+  or when the suggestion arrived without it (`ageLabel`).
 - Rows are kept by suggestion id (`Key`), so a feed read updates a row in
-  place: don't key a branch on an object that is rebuilt on every read. A
-  row whose status changes moves to another section's list and is rebuilt.
+  place, a run starting or failing included: don't key a branch on an object
+  that is rebuilt on every read.
 - What a card holds belongs to the account that read it. Accept and
   regenerate compare the signed-in account before acting on an answer.
 - Every change to the feed also invalidates Home's rows

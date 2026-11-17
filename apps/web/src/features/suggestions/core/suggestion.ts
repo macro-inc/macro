@@ -133,18 +133,6 @@ export function draftOrigin(
   return undefined;
 }
 
-/** How many suggestions each of the page's sections holds. */
-export type SectionCounts = { open: number; running: number; done: number };
-
-/** The sections' counts: a failed run sits with the running ones. */
-export function sectionCounts(counts: FeedCounts): SectionCounts {
-  return {
-    open: counts.open,
-    running: counts.running + counts.failed,
-    done: counts.done,
-  };
-}
-
 /** How long someone has waited, in whole hours or days; nothing under an hour. */
 export function waitingFor(
   since: string,

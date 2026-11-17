@@ -44,7 +44,6 @@ function ForYouPage() {
         </ViewShell.TopBar>
         <ForYouView
           feed={feed}
-          actions={actions}
           parts={SUGGESTION_ITEM_PARTS}
           focusedId={search.suggestion}
           onRetry={source.retry}

@@ -63,10 +63,10 @@ const ALL: Suggestion[] = [
 /** Items by their ids, where the app would read their names and text. */
 const PARTS: SuggestionItemParts = {
   Source: (props) => (
-    <button type="button" data-suggestion-source onClick={() => props.onOpen()}>
-      {props.from ? `${props.from} · ` : ''}
+    <span class="truncate" data-suggestion-source>
       {props.target.entityType} {props.target.entityId}
-    </button>
+      {props.from ? ` · ${props.from}` : ''}
+    </span>
   ),
 };
 
@@ -245,7 +245,6 @@ function Fixture() {
         </header>
         <ForYouView
           feed={feed}
-          actions={actions}
           parts={PARTS}
           focusedId={PARAMS.get('suggestion') ?? undefined}
           onRetry={source.retry}

@@ -1,16 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { doneSuggestion, replySuggestion } from '../tests/fixtures';
-import { draftOrigin, sectionCounts, waitingFor } from './suggestion';
-
-describe('sectionCounts', () => {
-  it('counts a failed run with the running ones', () => {
-    expect(sectionCounts({ open: 4, running: 1, failed: 2, done: 3 })).toEqual({
-      open: 4,
-      running: 3,
-      done: 3,
-    });
-  });
-});
+import { draftOrigin, waitingFor } from './suggestion';
 
 describe('waitingFor', () => {
   const now = new Date('2026-11-09T09:30:00Z');

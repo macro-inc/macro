@@ -15,7 +15,6 @@ import {
   doneSuggestion,
   draftedReplySuggestion,
   failedSuggestion,
-  quietBackgroundSuggestion as quietSuggestion,
   replySuggestion,
   routineSuggestion,
   runningSuggestion,
@@ -95,7 +94,7 @@ function shownIds(feed: SuggestionsFeed) {
 }
 
 describe('suggestions feed', () => {
-  it('shows the server’s order and counts as they are, with a failed run counted under Running', async () => {
+  it('shows the server’s order as it is', async () => {
     await withFeed(
       [
         composerSuggestion,
@@ -112,7 +111,6 @@ describe('suggestions feed', () => {
           'suggestion-running',
           'suggestion-done',
         ]);
-        expect(feed.counts()).toEqual({ running: 2, open: 2, done: 1 });
       }
     );
   });
@@ -244,21 +242,6 @@ describe('suggestions feed', () => {
     );
   });
 
-  it('lists an opened suggestion as done once the server says so, and opens it again without accepting', async () => {
-    const opened = { ...draftedReplySuggestion, status: 'done' as const };
-    await withFeed(
-      [replySuggestion, opened],
-      async (feed, { source, actions }) => {
-        expect(shownIds(feed)).toEqual(['suggestion-reply', opened.id]);
-        expect(feed.counts()).toEqual({ running: 0, open: 1, done: 1 });
-
-        feed.open(opened);
-        expect(actions.openDraft).toHaveBeenCalledWith(DRAFT);
-        expect(source.accept).not.toHaveBeenCalled();
-      }
-    );
-  });
-
   it('opens nothing when the account changed while the accept was out', async () => {
     const deps = host([composerSuggestion]);
     const [viewer, setViewer] = createSignal('user-1');
@@ -284,7 +267,7 @@ describe('suggestions feed', () => {
 
     await createRoot(async (dispose) => {
       const feed = createSuggestionsFeed(deps.source, deps.actions);
-      await feed.reviewRoutine(routineSuggestion);
+      await feed.look(routineSuggestion);
 
       const view = feed.view();
       if (view.kind !== 'suggestions') throw new Error('expected a feed');
@@ -303,35 +286,23 @@ describe('suggestions feed', () => {
     });
   });
 
-  it('opens what the server says a finished run left, and a running one’s session', async () => {
+  it('looks at a running suggestion’s session, and at a waiting one’s prompt without taking it up', async () => {
     await withFeed(
-      [runningSuggestion, doneSuggestion],
-      async (feed, { actions }) => {
-        feed.open(doneSuggestion);
-        expect(actions.openItem).toHaveBeenLastCalledWith({
-          entityType: 'document',
-          entityId: 'document-1',
-        });
-
-        feed.open(runningSuggestion);
+      [runningSuggestion, backgroundSuggestion],
+      async (feed, { source, actions }) => {
+        await feed.look(runningSuggestion);
         expect(actions.openItem).toHaveBeenLastCalledWith({
           entityType: 'agent_session',
           entityId: 'session-1',
         });
+
+        await feed.look(backgroundSuggestion);
+        expect(actions.openComposer).toHaveBeenCalledWith(
+          'Summarize this week and post it.'
+        );
+        expect(source.accept).not.toHaveBeenCalled();
       }
     );
-  });
-
-  it('opens nothing for a finished suggestion that left nothing', async () => {
-    const unsettled: Suggestion = {
-      ...quietSuggestion,
-      status: 'done',
-    };
-    await withFeed([unsettled], async (feed, { actions }) => {
-      feed.open(unsettled);
-
-      expect(actions.openItem).not.toHaveBeenCalled();
-    });
   });
 
   it('marks a reply done by taking it up, without opening anything', async () => {
@@ -366,7 +337,6 @@ describe('suggestions feed', () => {
           ['suggestion-reply', false],
           ['suggestion-composer', true],
         ]);
-        expect(feed.counts().open).toBe(1);
       }
     );
   });

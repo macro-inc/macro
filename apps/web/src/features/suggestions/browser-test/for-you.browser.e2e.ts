@@ -1,7 +1,9 @@
 import { expect, type Page, test } from '@playwright/test';
 
-const card = (page: Page, id: string) =>
+const row = (page: Page, id: string) =>
   page.locator(`[data-suggestion="${id}"]`);
+const list = (page: Page, name: string) =>
+  page.getByRole('region', { name, exact: true });
 const requests = (page: Page) => page.getByRole('list', { name: 'Requests' });
 
 for (const theme of ['dark', 'light']) {
@@ -12,28 +14,34 @@ for (const theme of ['dark', 'light']) {
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(`/?theme=${theme}`);
 
-    await expect(page.locator('[data-suggestion]')).toHaveCount(9);
-    await expect(card(page, 'suggestion-failed')).toHaveAttribute(
+    // A finished suggestion is not listed.
+    await expect(page.locator('[data-suggestion]')).toHaveCount(8);
+    await expect(row(page, 'suggestion-done')).toHaveCount(0);
+    await expect(row(page, 'suggestion-failed')).toHaveAttribute(
       'data-suggestion-status',
       'failed'
     );
-    await expect(card(page, 'suggestion-running')).toHaveAttribute(
+    await expect(row(page, 'suggestion-running')).toHaveAttribute(
       'data-suggestion-status',
       'running'
     );
-    // A finished suggestion is one quiet row under Done today.
-    await expect(card(page, 'suggestion-done')).toContainText('Open result');
-    // What a run will post is on the card before Run.
+    // What a run will post is on its row before Run.
     await expect(
-      card(page, 'suggestion-background').locator('[data-suggestion-sends]')
+      row(page, 'suggestion-background').locator('[data-suggestion-sends]')
     ).toHaveText('Posts the weekly status summary in #ops');
     await expect(
-      card(page, 'suggestion-quiet').locator('[data-suggestion-sends]')
-    ).toHaveText('Sends nothing');
-    // A reply suggestion says how long the other side has waited, not when it arrived.
+      row(page, 'suggestion-quiet').locator('[data-suggestion-sends]')
+    ).toHaveText('Nothing is sent to anyone.');
+    // A to-do names the item it is about, and how long its sender has waited.
+    const reply = row(page, 'suggestion-reply');
+    await expect(reply.locator('[data-suggestion-source]')).toHaveText(
+      'email_thread thread-1 · Priya Shah'
+    );
+    await expect(reply.locator('[data-suggestion-time]')).toHaveText('2 days');
+    await expect(reply.locator('[data-suggestion-drafted]')).toHaveCount(0);
     await expect(
-      card(page, 'suggestion-reply').locator('[data-suggestion-time]')
-    ).toHaveText('waiting 2 days');
+      row(page, 'suggestion-drafted-reply').locator('[data-suggestion-drafted]')
+    ).toHaveText(' · A reply is drafted');
     await page.screenshot({
       path: testInfo.outputPath(`for-you-${theme}.png`),
       fullPage: true,
@@ -42,12 +50,46 @@ for (const theme of ['dark', 'light']) {
   });
 }
 
-test('Run on a composer suggestion opens the composer with its prompt', async ({
+test('the page is two cards: Suggestions, then To do', async ({ page }) => {
+  await page.goto('/');
+
+  const suggestions = list(page, 'Suggestions');
+  const toDo = list(page, 'To do');
+  // Work Macro can do: runs, prompts and routines, running and failed too.
+  await expect(suggestions.locator('[data-suggestion]')).toHaveCount(6);
+  // The person's own mail and documents.
+  await expect(toDo.locator('[data-suggestion]')).toHaveCount(2);
+
+  const first = await suggestions.boundingBox();
+  const second = await toDo.boundingBox();
+  if (!first || !second) throw new Error('expected both cards');
+  expect(first.y + first.height).toBeLessThan(second.y);
+  expect(first.width).toBe(720);
+});
+
+test('a row is two lines: a medium title over a smaller line', async ({
   page,
 }) => {
   await page.goto('/');
-  await card(page, 'suggestion-composer')
-    .getByRole('button', { name: 'Open in chat', exact: true })
+  const reply = row(page, 'suggestion-reply');
+
+  const box = await reply.boundingBox();
+  expect(box?.height).toBe(56);
+  const title = reply.locator('[data-slot="item-title"]');
+  await expect(title).toHaveCSS('font-size', '14px');
+  await expect(title).toHaveCSS('font-weight', '500');
+  await expect(reply.locator('[data-slot="item-description"]')).toHaveCSS(
+    'font-size',
+    '13px'
+  );
+});
+
+test('Open chat on a composer suggestion opens the composer with its prompt', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await row(page, 'suggestion-composer')
+    .getByRole('button', { name: 'Open chat', exact: true })
     .click();
 
   await expect(requests(page)).toContainText(
@@ -56,14 +98,15 @@ test('Run on a composer suggestion opens the composer with its prompt', async ({
   await expect(requests(page)).toContainText('accept suggestion-composer');
 });
 
-test('Run starts the run, shows it running, then its result', async ({
+test('Run starts the run in its row, and a finished run leaves the page', async ({
   page,
 }) => {
   await page.goto('/');
-  const suggestion = card(page, 'suggestion-background');
+  const suggestion = row(page, 'suggestion-background');
   await suggestion.getByRole('button', { name: 'Run', exact: true }).click();
 
   await expect(suggestion).toHaveAttribute('data-suggestion-status', 'running');
+  await expect(suggestion).toContainText('Running.');
   await expect(
     suggestion.getByRole('button', { name: 'Run', exact: true })
   ).toHaveCount(0);
@@ -71,57 +114,91 @@ test('Run starts the run, shows it running, then its result', async ({
     requests(page).getByText('accept suggestion-background')
   ).toHaveCount(1);
 
-  await page.getByRole('button', { name: 'Finish runs' }).click();
-  await expect(suggestion).toHaveAttribute('data-suggestion-status', 'done');
-  await suggestion.getByRole('button', { name: 'Open result' }).click();
+  await suggestion.getByRole('button', { name: 'View', exact: true }).click();
   await expect(requests(page)).toContainText(
     'open agent_session session-suggestion-background'
   );
+
+  await page.getByRole('button', { name: 'Finish runs' }).click();
+  await expect(suggestion).toHaveCount(0);
 });
 
-test('a failed run says so and runs again', async ({ page }) => {
+test('pressing a run’s text puts its prompt in the composer without starting it', async ({
+  page,
+}) => {
   await page.goto('/');
-  const suggestion = card(page, 'suggestion-failed');
+  const suggestion = row(page, 'suggestion-background');
+  await suggestion.getByText('Post the weekly status summary').first().click();
+
+  await expect(requests(page).getByRole('listitem')).toHaveText([
+    'composer Summarize this week and post it.',
+  ]);
+  await expect(suggestion).toHaveAttribute('data-suggestion-status', 'open');
+});
+
+test('a failed run says so and Retry runs it again', async ({ page }) => {
+  await page.goto('/');
+  const suggestion = row(page, 'suggestion-failed');
   await expect(suggestion).toContainText('The run didn’t finish');
-  await suggestion.getByRole('button', { name: 'Run again' }).click();
+  await suggestion.getByRole('button', { name: 'Retry', exact: true }).click();
 
   await expect(suggestion).toHaveAttribute('data-suggestion-status', 'running');
 });
 
-test('a reply suggestion opens its draft, and one without a draft opens the thread', async ({
+test('a to-do opens its draft, and one without a draft opens its thread', async ({
   page,
 }) => {
   await page.goto('/');
-  await card(page, 'suggestion-drafted-reply')
-    .getByRole('button', { name: 'Open draft' })
-    .click();
+  const drafted = row(page, 'suggestion-drafted-reply');
+  await drafted.hover();
+  await drafted.getByRole('button', { name: 'Open draft' }).click();
   await expect(requests(page)).toContainText('draft draft-1');
+  // Opening it takes it up, so it leaves the page.
+  await expect(drafted).toHaveCount(0);
 
-  await card(page, 'suggestion-reply')
-    .getByRole('button', { name: 'Open', exact: true })
+  // Pressing a row's text opens it too.
+  await row(page, 'suggestion-reply')
+    .getByText('Reply about the invoice')
     .click();
   await expect(requests(page)).toContainText('open email_thread thread-1');
+});
+
+test('pointing at a to-do swaps its age for Open and dismiss', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const reply = row(page, 'suggestion-reply');
+  const age = reply.locator('[data-suggestion-time]');
+  const open = reply.getByRole('button', { name: 'Open', exact: true });
+  await expect(age).toHaveCSS('opacity', '1');
+  await expect(open).toHaveCSS('opacity', '1');
+  await expect(open.locator('..')).toHaveCSS('opacity', '0');
+
+  await reply.hover();
+  await expect(age).toHaveCSS('opacity', '0');
+  await expect(open.locator('..')).toHaveCSS('opacity', '1');
+  // The row keeps its height when the buttons take the age's place.
+  expect((await reply.boundingBox())?.height).toBe(56);
 });
 
 test('a routine suggestion shows its sentence and can be reviewed or turned on', async ({
   page,
 }) => {
   await page.goto('/');
-  const suggestion = card(page, 'suggestion-routine');
+  const suggestion = row(page, 'suggestion-routine');
   await expect(suggestion).toContainText(
     'Every Friday at 9:00 AM, list the deliveries vendors confirmed this week and post it to #ops.'
   );
-  // Review is one of the row's other actions, shown once it is opened.
-  await suggestion.getByRole('button', { expanded: false }).click();
-  await suggestion.getByRole('button', { name: 'Review' }).click();
+  // Pressing its text opens the drafted routine for review.
+  await suggestion.getByText('Weekly vendor digest').click();
   await expect(requests(page)).toContainText('review routine-draft-1');
 
   await suggestion.getByRole('button', { name: 'Turn on' }).click();
   await expect(requests(page)).toContainText('turn-on routine-draft-1');
-  await expect(suggestion).toHaveAttribute('data-suggestion-status', 'done');
+  await expect(suggestion).toHaveCount(0);
 });
 
-test('a dismissal is sent at once, and Undo asks the server to bring it back', async ({
+test('a dismissal is sent at once, and the row stays in its card with Undo', async ({
   page,
 }) => {
   await page.goto('/');
@@ -131,13 +208,15 @@ test('a dismissal is sent at once, and Undo asks the server to bring it back', a
   await expect(requests(page).getByRole('listitem')).toHaveText([
     'dismiss suggestion-composer',
   ]);
-  await expect(page.locator('[data-suggestion]')).toHaveCount(8);
+  await expect(page.locator('[data-suggestion]')).toHaveCount(7);
 
-  await page
-    .locator('[data-suggestion-dismissed="suggestion-composer"]')
-    .getByRole('button', { name: 'Undo' })
-    .click();
-  await expect(card(page, 'suggestion-composer')).toBeVisible();
+  const dismissed = list(page, 'Suggestions').locator(
+    '[data-suggestion-dismissed="suggestion-composer"]'
+  );
+  await expect(dismissed).toContainText('Prepare the budget review');
+  await expect(dismissed).toContainText('Dismissed');
+  await dismissed.getByRole('button', { name: 'Undo' }).click();
+  await expect(row(page, 'suggestion-composer')).toBeVisible();
   await expect(requests(page).getByRole('listitem')).toHaveText([
     'dismiss suggestion-composer',
     'restore suggestion-composer',
@@ -145,11 +224,11 @@ test('a dismissal is sent at once, and Undo asks the server to bring it back', a
   await expect(page.locator('[data-suggestion-dismissed]')).toHaveCount(0);
 });
 
-test('a refused dismissal leaves the card and says it didn’t work', async ({
+test('a refused dismissal leaves the row and says it didn’t work', async ({
   page,
 }) => {
   await page.goto('/?scenario=dismiss-refused');
-  const composer = card(page, 'suggestion-composer');
+  const composer = row(page, 'suggestion-composer');
   await composer
     .getByRole('button', { name: 'Dismiss “Prepare the budget review”' })
     .click();
@@ -167,61 +246,43 @@ test('an Undo the server refuses keeps the row and says it may be too late', asy
   await page
     .getByRole('button', { name: 'Dismiss “Prepare the budget review”' })
     .click();
-  const row = page.locator('[data-suggestion-dismissed="suggestion-composer"]');
-  await row.getByRole('button', { name: 'Undo' }).click();
+  const dismissed = page.locator(
+    '[data-suggestion-dismissed="suggestion-composer"]'
+  );
+  await dismissed.getByRole('button', { name: 'Undo' }).click();
 
-  await expect(row.getByRole('alert')).toHaveText(
+  await expect(dismissed.getByRole('alert')).toHaveText(
     'Couldn’t undo. It may be too late to bring this back.'
   );
 });
 
+test('dismissing a running suggestion says its run is stopped', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const running = row(page, 'suggestion-running');
+  await running.hover();
+  await running
+    .getByRole('button', {
+      name: 'Stop the run and dismiss “Post the weekly status summary”',
+    })
+    .click();
+
+  await expect(
+    page.locator('[data-suggestion-dismissed="suggestion-running"]')
+  ).toContainText('Dismissed, and its run was stopped');
+});
+
 test('leaving the page records that the feed was viewed', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('[data-suggestion]')).toHaveCount(9);
+  await expect(page.locator('[data-suggestion]')).toHaveCount(8);
   await expect(requests(page).getByText('viewed')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Leave page' }).click();
   await expect(requests(page).getByText('viewed')).toHaveCount(1);
 });
 
-test('sections list suggestions by where they stand, with the server’s counts', async ({
-  page,
-}) => {
-  await page.goto('/');
-  const section = (name: string) => page.getByRole('region', { name });
-
-  await expect(section('To do 6').locator('[data-suggestion]')).toHaveCount(6);
-  // A failed run sits with the running ones.
-  await expect(section('Running 2').locator('[data-suggestion]')).toHaveCount(
-    2
-  );
-  await expect(
-    section('Done today 1').locator('[data-suggestion]')
-  ).toHaveCount(1);
-  await expect(page.locator('[data-suggestions-progress]')).toHaveText(
-    '1 of 9 done'
-  );
-});
-
-test('opening a drafted reply’s row shows the thread and the draft in place', async ({
-  page,
-}) => {
-  await page.goto('/');
-  const reply = card(page, 'suggestion-drafted-reply');
-  await expect(reply.locator('[data-suggestion-draft]')).toHaveCount(0);
-
-  await reply.getByRole('button', { expanded: false }).click();
-  await expect(reply.locator('[data-suggestion-draft]')).toHaveText(
-    'The terms are unchanged; only the price moved.'
-  );
-  await reply.locator('[data-suggestion-source]').click();
-  await expect(requests(page)).toContainText('open email_thread thread-1');
-
-  await reply.getByRole('button', { expanded: true }).click();
-  await expect(reply.locator('[data-suggestion-draft]')).toHaveCount(0);
-});
-
-test('the circle marks a suggestion done without opening anything', async ({
+test('the circle marks a to-do done without opening anything', async ({
   page,
 }) => {
   await page.goto('/');
@@ -229,70 +290,61 @@ test('the circle marks a suggestion done without opening anything', async ({
     .getByRole('button', { name: 'Mark “Reply about the invoice” done' })
     .click();
 
-  await expect(card(page, 'suggestion-reply')).toHaveAttribute(
-    'data-suggestion-status',
-    'done'
-  );
+  await expect(row(page, 'suggestion-reply')).toHaveCount(0);
   await expect(requests(page).getByRole('listitem')).toHaveText([
     'accept suggestion-reply',
   ]);
 });
 
-test('earlier finished suggestions fold into the Logbook', async ({ page }) => {
-  await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Mark “Reply about the invoice” done' })
-    .click();
-  const logbook = page.locator('[data-suggestions-logbook]');
-  await expect(logbook).toContainText('1 earlier today');
-  await expect(card(page, 'suggestion-done')).toHaveCount(0);
-
-  await logbook.click();
-  await expect(card(page, 'suggestion-done')).toBeVisible();
-});
-
-test('with nothing waiting or running, the page says so above what was done', async ({
+test('with nothing waiting, the page is one card that says so', async ({
   page,
 }) => {
+  // Only finished suggestions, which are not listed.
   await page.goto('/?scenario=done');
+  const clear = page.locator('[data-suggestions-clear]');
+  await expect(clear).toContainText('You’re clear for today');
+  await expect(page.locator('[data-suggestion]')).toHaveCount(0);
+  await expect(page.getByRole('region')).toHaveCount(1);
 
-  await expect(page.locator('[data-suggestions-clear]')).toContainText(
-    'You’re all caught up'
-  );
-  await expect(page.locator('[data-suggestion]')).toHaveCount(1);
+  await page.goto('/?scenario=empty');
+  await expect(clear).toContainText('You’re clear for today');
 });
 
 test('the suggestion opened from Home is scrolled to, in its place', async ({
   page,
 }) => {
-  await page.goto('/?suggestion=suggestion-done');
+  await page.setViewportSize({ width: 1280, height: 420 });
+  await page.goto('/?suggestion=suggestion-reply');
 
-  await expect(card(page, 'suggestion-done')).toBeInViewport();
+  await expect(row(page, 'suggestion-reply')).toBeInViewport();
   await expect(page.locator('[data-suggestion]').first()).toHaveAttribute(
     'data-suggestion',
-    'suggestion-drafted-reply'
+    'suggestion-background'
   );
 });
 
-test('a running suggestion reads as under way, not as one waiting', async ({
+test('a running suggestion reads as under way, with View in place of Run', async ({
   page,
 }) => {
   await page.goto('/');
-  const running = card(page, 'suggestion-running');
+  const running = row(page, 'suggestion-running');
 
-  await expect(running.locator('[data-suggestion-time]')).toContainText(
-    'started'
+  await expect(running).toContainText(
+    'Running. Posts the weekly status summary in #ops'
   );
   await expect(
-    running.getByRole('button', { name: 'View progress' })
+    running.getByRole('button', { name: 'View', exact: true })
   ).toBeVisible();
+  await expect(
+    running.getByRole('button', { name: 'Run', exact: true })
+  ).toHaveCount(0);
 });
 
-test('Run on an suggestion that changed shows the new text and starts nothing until pressed again', async ({
+test('Run on a suggestion that changed shows the new text and starts nothing until pressed again', async ({
   page,
 }) => {
   await page.goto('/?scenario=changed');
-  const suggestion = card(page, 'suggestion-background');
+  const suggestion = row(page, 'suggestion-background');
   await suggestion.getByRole('button', { name: 'Run', exact: true }).click();
 
   await expect(suggestion.locator('[data-suggestion-changed]')).toBeVisible();
@@ -306,24 +358,7 @@ test('Run on an suggestion that changed shows the new text and starts nothing un
   await expect(suggestion.locator('[data-suggestion-changed]')).toHaveCount(0);
 });
 
-test('an opened suggestion becomes done and can be opened again', async ({
-  page,
-}) => {
-  await page.goto('/');
-  const reply = card(page, 'suggestion-reply');
-  await reply.getByRole('button', { name: 'Open', exact: true }).click();
-
-  await expect(reply).toHaveAttribute('data-suggestion-status', 'done');
-  await reply.getByRole('button', { name: 'Open thread' }).click();
-  await expect(requests(page).getByText('accept suggestion-reply')).toHaveCount(
-    1
-  );
-  await expect(
-    requests(page).getByText('open email_thread thread-1')
-  ).toHaveCount(2);
-});
-
-test('loading, failure with retry, and empty', async ({ page }) => {
+test('loading, and failure with retry', async ({ page }) => {
   await page.goto('/?scenario=loading');
   await expect(page.getByRole('status')).toBeVisible();
   await expect(page.locator('[data-suggestion]')).toHaveCount(0);
@@ -333,51 +368,28 @@ test('loading, failure with retry, and empty', async ({ page }) => {
     'Your suggestions couldn’t be loaded.'
   );
   await page.getByRole('button', { name: 'Try again' }).click();
-  await expect(page.locator('[data-suggestion]')).toHaveCount(9);
-
-  await page.goto('/?scenario=empty');
-  await expect(page.getByText('You’re all caught up')).toBeVisible();
+  await expect(page.locator('[data-suggestion]')).toHaveCount(8);
 });
 
-test('dismissing a running suggestion says its run is stopped', async ({
+test('a row keeps its place and focus when the feed updates under it', async ({
   page,
 }) => {
   await page.goto('/');
-  const running = card(page, 'suggestion-running');
-  await running.hover();
-  await running
-    .getByRole('button', {
-      name: 'Stop the run and dismiss “Post the weekly status summary”',
-    })
-    .click();
-
-  await expect(
-    page.locator('[data-suggestion-dismissed="suggestion-running"]')
-  ).toContainText('and stopped its run');
-});
-
-test('a card keeps its place and focus when the feed updates under it', async ({
-  page,
-}) => {
-  await page.goto('/');
-  const action = card(page, 'suggestion-composer').getByRole('button', {
-    name: 'Open in chat',
+  const action = row(page, 'suggestion-composer').getByRole('button', {
+    name: 'Open chat',
     exact: true,
   });
   await action.focus();
 
   // The server's next answer finishes the running suggestion; nothing here
-  // touches the focused card.
+  // touches the focused row.
   await page.evaluate(() => {
     const finish = [...document.querySelectorAll('button')].find(
       (button) => button.textContent?.trim() === 'Finish runs'
     );
     finish?.click();
   });
-  await expect(card(page, 'suggestion-running')).toHaveAttribute(
-    'data-suggestion-status',
-    'done'
-  );
+  await expect(row(page, 'suggestion-running')).toHaveCount(0);
 
   await expect(action).toBeFocused();
 });

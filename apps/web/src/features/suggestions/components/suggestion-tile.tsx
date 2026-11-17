@@ -66,18 +66,3 @@ export function SuggestionTile(props: {
     </Item.Media>
   );
 }
-
-/** A suggestion's kind as its glyph alone, in the kind's colour, for a row. */
-export function SuggestionGlyph(props: {
-  suggestion: Suggestion;
-  small?: boolean;
-}) {
-  const look = () => suggestionLook(props.suggestion);
-
-  return (
-    <Dynamic
-      component={look().icon}
-      class={`${props.small ? 'size-3.5' : 'size-4'} shrink-0 ${look().tint}`}
-    />
-  );
-}

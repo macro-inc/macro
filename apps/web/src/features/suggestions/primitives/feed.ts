@@ -1,21 +1,16 @@
-import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type {
   SuggestionActions,
   SuggestionsSource,
 } from '../context/suggestions-source';
-import {
-  type Suggestion,
-  type SuggestionStatus,
-  sectionCounts,
-} from '../core/suggestion';
+import type { Suggestion, SuggestionStatus } from '../core/suggestion';
 
-/** One card in the feed. */
+/** One row in the feed. */
 export type FeedEntry = {
   suggestion: Suggestion;
   status: SuggestionStatus;
-  /** Turned down during this visit: its card is a one-line Undo row. */
+  /** Turned down during this visit: its row stays, with Undo. */
   dismissed: boolean;
   /** Proposed since the person last opened their feed. */
   isNew: boolean;
@@ -35,7 +30,7 @@ export type FeedView =
 
 /**
  * The feed's state and each row's action. The server decides every
- * suggestion's status, order and counts; a dismissal is sent at once, and a
+ * suggestion's status and order; a dismissal is sent at once, and a
  * suggestion dismissed during this visit stays as a row whose Undo asks the
  * server to restore it.
  */
@@ -55,12 +50,6 @@ export function createSuggestionsFeed(
   const [busyIds, setBusyIds] = createSignal<string[]>([]);
   const [failedIds, setFailedIds] = createSignal<string[]>([]);
   const [changedIds, setChangedIds] = createSignal<string[]>([]);
-
-  const counts = createMemo(() =>
-    sectionCounts(
-      source.feed()?.counts ?? { open: 0, running: 0, failed: 0, done: 0 }
-    )
-  );
 
   const view = createMemo((): FeedView => {
     const feed = source.feed();
@@ -150,7 +139,6 @@ export function createSuggestionsFeed(
     });
 
   return {
-    counts,
     view,
     accept,
     /**
@@ -171,49 +159,29 @@ export function createSuggestionsFeed(
         }
       }),
     /**
-     * Open what a finished suggestion left, a running one's session, else
-     * what taking it up opened.
+     * Look at work Macro would do without taking it up: a routine's draft, a
+     * run's session while it is under way, else its prompt in the composer,
+     * to read or edit. A routine that can't be opened marks the row failed.
      */
-    open(suggestion: Suggestion) {
-      if (suggestion.result) return actions.openItem(suggestion.result);
-
-      if (suggestion.kind === 'prompt' && suggestion.runMode === 'background') {
-        // Its run's session shows the work under way.
-        if (suggestion.run) {
-          actions.openItem({
-            entityType: 'agent_session',
-            entityId: suggestion.run.sessionId,
-          });
-        }
-        return;
-      }
-
-      if (suggestion.kind === 'prompt') {
-        return fireAndForget(
-          actions.openComposer(suggestion.prompt),
-          'suggestions'
-        );
-      }
-
-      if (suggestion.kind === 'entity' && suggestion.draft) {
-        return actions.openDraft(suggestion.draft);
-      }
-
-      const [about] = suggestion.about;
-      if (about) actions.openItem(about);
-    },
-    /** Put a prompt suggestion's prompt in the composer to edit, without taking it up. */
-    openInChat(suggestion: Suggestion) {
-      if (suggestion.kind !== 'prompt') return;
-
-      fireAndForget(actions.openComposer(suggestion.prompt), 'suggestions');
-    },
-    /** A routine that can't be opened for review marks the card failed. */
-    reviewRoutine: (suggestion: Suggestion) =>
-      act(suggestion, 'review', async () => {
+    look: (suggestion: Suggestion) =>
+      act(suggestion, 'look', async () => {
         if (suggestion.kind === 'routine') {
           actions.reviewRoutine(suggestion.routineSuggestionId);
+          return;
         }
+        if (suggestion.kind !== 'prompt') return;
+
+        if (suggestion.status === 'running') {
+          if (suggestion.runMode === 'background' && suggestion.run) {
+            actions.openItem({
+              entityType: 'agent_session',
+              entityId: suggestion.run.sessionId,
+            });
+          }
+          return;
+        }
+
+        await actions.openComposer(suggestion.prompt);
       }),
     /** Sent at once; a refusal leaves the card, marked failed. */
     dismiss: (suggestion: Suggestion) =>
