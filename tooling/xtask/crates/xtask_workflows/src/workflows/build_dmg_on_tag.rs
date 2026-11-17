@@ -1,7 +1,7 @@
 //! `Build macOS DMG` — reusable workflow that builds the Tauri desktop DMG via
 //! Nix. The release orchestrator also uses its build job directly.
 
-use gh_workflow::expr::typed::{Expr, Str, cancelled, input, steps as step};
+use gh_workflow::expr::typed::{Expr, JobHandle, StepHandle, Str, cancelled, input};
 use gh_workflow::{
     Event, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
 };
@@ -12,6 +12,11 @@ use crate::workflows::{build_appimage_on_tag, runners, steps, vars};
 mod test;
 
 const NIX_CACHE_SIZE_GB: u16 = 100;
+
+/// The DMG build job, here and in the desktop release orchestrator.
+pub(crate) const BUILD_DMG: JobHandle<()> = JobHandle::new("build-dmg", ());
+/// The [`configure_nix_cache`] step.
+const NIX_CACHE: StepHandle<()> = StepHandle::new("nix-cache", ());
 
 /// Build the reusable workflow.
 pub fn build_dmg() -> Workflow {
@@ -52,7 +57,7 @@ pub fn build_dmg() -> Workflow {
                         .required(true),
                 ),
         ))
-        .add_job("build-dmg", build_dmg_job(input("ref")))
+        .add_job(BUILD_DMG, build_dmg_job(input("ref")))
 }
 
 /// Build the macOS DMG job, checking out and naming artifacts from `ref_expr`.
@@ -80,7 +85,10 @@ pub fn build_dmg_job(ref_expr: Expr<Str>) -> Job {
         .add_step(prepare_cloudkit_tcp())
         .add_step(notarize_dmg())
         .add_step(steps::upload_artifact(
-            &format!("macro-dmg-{}", step("metadata").output("safe_tag")),
+            &format!(
+                "macro-dmg-{}",
+                steps::ARTIFACT_METADATA.outputs.safe_tag.read()
+            ),
             xtask_paths::runtime_path!("artifacts/*"),
         ))
 }
@@ -125,7 +133,7 @@ fn nix_build_dmg() -> Step<Run> {
 pub(super) fn configure_nix_cache() -> Step<Run> {
     Step::new("Configure macOS Nix binary cache")
         .run(include_str!("scripts/configure_macos_nix_cache.sh"))
-        .id("nix-cache")
+        .id(NIX_CACHE.id())
         .shell("bash")
         .continue_on_error(true)
 }
@@ -134,7 +142,7 @@ pub(super) fn save_nix_cache() -> Step<Run> {
     Step::new("Prune and save macOS Nix build dependencies")
         .run(include_str!("scripts/save_macos_nix_cache.sh"))
         .shell("bash")
-        .if_condition((!cancelled()).and(step("nix-cache").outcome().eq("success")))
+        .if_condition((!cancelled()).and(NIX_CACHE.outcome().eq("success")))
         .continue_on_error(true)
 }
 

@@ -22,7 +22,9 @@
 //! in App Store Connect before the next submission; already releasing, it
 //! needs a follow-up release. The comment says which.
 
-use gh_workflow::expr::typed::{Bool, Expr, Json, Str, always, github, steps as step};
+use gh_workflow::expr::typed::{
+    Bool, Expr, Flag, Json, StepHandle, StepOutput, Str, always, github,
+};
 use gh_workflow::{
     Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use, Workflow,
 };
@@ -71,8 +73,37 @@ fn drift_job() -> Job {
         .add_step(comment())
 }
 
+struct DetectOutputs {
+    /// Whether this push changed the iOS native code.
+    changed: StepOutput<Flag>,
+}
+
+/// The [`detect`] step.
+const DETECT: StepHandle<DetectOutputs> = StepHandle::new(
+    "detect",
+    DetectOutputs {
+        changed: StepOutput::new("detect", "changed"),
+    },
+);
+
+struct WithdrawOutputs {
+    /// The approved version held for release, if any.
+    held: StepOutput<Str>,
+    /// The approved version already live, if any.
+    live: StepOutput<Str>,
+}
+
+/// The [`withdraw`] step.
+const WITHDRAW: StepHandle<WithdrawOutputs> = StepHandle::new(
+    "withdraw",
+    WithdrawOutputs {
+        held: StepOutput::new("withdraw", "held"),
+        live: StepOutput::new("withdraw", "live"),
+    },
+);
+
 fn changed() -> Expr<Bool> {
-    step("detect").output("changed").is_true()
+    DETECT.outputs.changed.read().is_set()
 }
 
 fn detect() -> Step<Run> {
@@ -81,7 +112,7 @@ fn detect() -> Step<Run> {
             include_str!("scripts/ios_native_tree.sh"),
             include_str!("scripts/ios_release_drift.sh")
         ))
-        .id("detect")
+        .id(DETECT.id())
         .shell("bash")
         .add_env(("BEFORE_SHA", github().event::<Str>("before")))
         .add_env(("AFTER_SHA", github().event::<Str>("after")))
@@ -138,7 +169,7 @@ fn fetch_credentials() -> Step<Run> {
 fn withdraw() -> Step<Run> {
     Step::new("Withdraw the PR's App Store submission")
         .run("bun scripts/ios-app-store.mjs withdraw --pr \"$PR_NUMBER\"")
-        .id("withdraw")
+        .id(WITHDRAW.id())
         .if_condition(changed())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
@@ -175,9 +206,9 @@ fn comment() -> Step<Run> {
         "#})
         .if_condition(after_withdraw())
         .shell("bash")
-        .add_env(("HELD", step("withdraw").output("held")))
-        .add_env(("LIVE", step("withdraw").output("live")))
-        .add_env(("WITHDRAW_OUTCOME", step("withdraw").outcome()))
+        .add_env(("HELD", WITHDRAW.outputs.held.read()))
+        .add_env(("LIVE", WITHDRAW.outputs.live.read()))
+        .add_env(("WITHDRAW_OUTCOME", WITHDRAW.outcome()))
         .add_env((
             "RUN_URL",
             format!(

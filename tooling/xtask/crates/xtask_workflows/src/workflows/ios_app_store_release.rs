@@ -29,7 +29,7 @@
 //! role) and optionally an Apple Distribution certificate; without the
 //! certificate xcodebuild uses cloud signing through the API key.
 
-use gh_workflow::expr::typed::{Expr, Str, failure, github, steps as step, success};
+use gh_workflow::expr::typed::{Expr, Flag, StepHandle, StepOutput, Str, failure, github, success};
 use gh_workflow::{
     Concurrency, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use,
     Workflow,
@@ -197,6 +197,19 @@ fn fetch_credentials() -> Step<Run> {
         .add_env(("IOS_DISTRIBUTION_CERTIFICATE", "1"))
 }
 
+struct BuildCheckOutputs {
+    /// Whether App Store Connect already holds our own upload of this build.
+    uploaded: StepOutput<Flag>,
+}
+
+/// The [`require_unused_build`] step.
+const BUILD_CHECK: StepHandle<BuildCheckOutputs> = StepHandle::new(
+    "build-check",
+    BuildCheckOutputs {
+        uploaded: StepOutput::new("build-check", "uploaded"),
+    },
+);
+
 /// Fail before the (long) build if App Store Connect already holds a build at
 /// or above this PR's number that is not our own upload — another native PR
 /// bumped from the same base, or a hand-made release whose bump was never
@@ -209,7 +222,7 @@ fn require_unused_build() -> Step<Run> {
         "Check the build number is unused in App Store Connect",
         "  cd apps/web\n  bun scripts/ios-app-store.mjs status --require-unused-build\n",
     )
-    .id("build-check")
+    .id(BUILD_CHECK.id())
 }
 
 fn configure_signing() -> Step<Run> {
@@ -229,7 +242,7 @@ fn build_and_upload() -> Step<Run> {
             "  bun install --frozen-lockfile\n  cd apps/web\n  just ios-release --no-bump\n",
         ))
         .shell("bash")
-        .if_condition(step("build-check").output("uploaded").ne("true"))
+        .if_condition(BUILD_CHECK.outputs.uploaded.read().is_unset())
         .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
         .add_env(("IOS_RELEASE_PR", pr_number()))
 }

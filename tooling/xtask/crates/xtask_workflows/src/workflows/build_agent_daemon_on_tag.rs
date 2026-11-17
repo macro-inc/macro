@@ -13,7 +13,9 @@
 //! waiting on DMG notarization, and a flaky desktop build has no business
 //! holding it back.
 
-use gh_workflow::expr::typed::{Bool, Expr, Str, cancelled, github, input, needs, steps as step};
+use gh_workflow::expr::typed::{
+    Bool, Expr, JobHandle, JobOutput, StepHandle, StepOutput, Str, cancelled, github, input, needs,
+};
 use gh_workflow::{
     Concurrency, Event, Job, Push, Run, Step, Workflow, WorkflowDispatch, WorkflowInput,
 };
@@ -23,9 +25,34 @@ use crate::workflows::{build_appimage_on_tag, runners, steps, vars};
 #[cfg(test)]
 mod test;
 
-/// The ref `resolve-ref` resolved, so every build job checks out the same commit.
+struct ResolveRefOutputs {
+    /// The resolved ref, so every build job checks out the same commit.
+    git_ref: JobOutput<Str>,
+}
+
+/// The `resolve-ref` job.
+const RESOLVE_REF: JobHandle<ResolveRefOutputs> = JobHandle::new(
+    "resolve-ref",
+    ResolveRefOutputs {
+        git_ref: JobOutput::new("resolve-ref", "ref"),
+    },
+);
+
+struct ResolveOutputs {
+    /// The resolved ref, behind `RESOLVE_REF.outputs.git_ref`.
+    git_ref: StepOutput<Str>,
+}
+
+/// The [`resolve_ref_step`] step.
+const RESOLVE: StepHandle<ResolveOutputs> = StepHandle::new(
+    "resolve",
+    ResolveOutputs {
+        git_ref: StepOutput::new("resolve", "ref"),
+    },
+);
+
 fn resolved_ref() -> Expr<Str> {
-    needs("resolve-ref").output("ref")
+    RESOLVE_REF.outputs.git_ref.read()
 }
 
 /// One published binary.
@@ -96,23 +123,23 @@ pub fn build_agent_daemon_on_tag() -> Workflow {
             ))
             .cancel_in_progress(true),
         )
-        .add_job("resolve-ref", resolve_ref());
+        .add_job(RESOLVE_REF, resolve_ref());
 
     for target in LINUX_TARGETS {
-        workflow = workflow.add_job(job_id(target), linux_job(target).add_needs("resolve-ref"));
+        workflow = workflow.add_job(job_id(target), linux_job(target).add_needs(RESOLVE_REF));
     }
     for target in MACOS_TARGETS {
-        workflow = workflow.add_job(job_id(target), macos_job(target).add_needs("resolve-ref"));
+        workflow = workflow.add_job(job_id(target), macos_job(target).add_needs(RESOLVE_REF));
     }
     for target in WINDOWS_TARGETS {
-        workflow = workflow.add_job(job_id(target), windows_job(target).add_needs("resolve-ref"));
+        workflow = workflow.add_job(job_id(target), windows_job(target).add_needs(RESOLVE_REF));
     }
 
     let mut publish = build_appimage_on_tag::publish_job(
         resolved_ref(),
         xtask_paths::runtime_path!("release-artifacts/*"),
     )
-    .add_needs("resolve-ref");
+    .add_needs(RESOLVE_REF);
     for target in all_targets() {
         publish = publish.add_needs(job_id(target));
     }
@@ -129,7 +156,7 @@ fn publish_when_any_build_succeeded() -> Expr<Bool> {
         .reduce(Expr::or)
         .expect("at least one daemon target");
     (!cancelled())
-        .and(needs("resolve-ref").result().eq("success"))
+        .and(RESOLVE_REF.result().eq("success"))
         .and(any_build)
 }
 
@@ -158,14 +185,17 @@ fn resolve_ref() -> Job {
     Job::default()
         .name("Resolve build ref")
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_output("ref", step("resolve").output("ref"))
+        .add_output(
+            RESOLVE_REF.outputs.git_ref.name(),
+            RESOLVE.outputs.git_ref.read(),
+        )
         .add_step(resolve_ref_step())
 }
 
 fn resolve_ref_step() -> Step<Run> {
     Step::new("Resolve ref")
         .run(include_str!("scripts/resolve_desktop_ref.sh"))
-        .id("resolve")
+        .id(RESOLVE.id())
         .shell("bash")
         .add_env(("EVENT_NAME", github().event_name()))
         .add_env(("INPUT_REF", input::<Str>("ref")))
@@ -240,7 +270,10 @@ fn build_step(target: &DaemonTarget, script: &str) -> Step<Run> {
         .run(script)
         .shell("bash")
         .add_env(("TARGET", target.triple))
-        .add_env(("MACROD_RELEASE_TAG", step("metadata").output("tag")))
+        .add_env((
+            "MACROD_RELEASE_TAG",
+            steps::ARTIFACT_METADATA.outputs.tag.read(),
+        ))
 }
 
 fn package_step(target: &DaemonTarget) -> Step<Run> {
@@ -249,8 +282,8 @@ fn package_step(target: &DaemonTarget) -> Step<Run> {
         .shell("bash")
         .add_env(("TARGET", target.triple))
         .add_env(("SLUG", target.slug))
-        .add_env(("SAFE_TAG", step("metadata").output("safe_tag")))
-        .add_env(("RELEASE_TAG", step("metadata").output("tag")))
+        .add_env(("SAFE_TAG", steps::ARTIFACT_METADATA.outputs.safe_tag.read()))
+        .add_env(("RELEASE_TAG", steps::ARTIFACT_METADATA.outputs.tag.read()))
         .add_env(("SMOKE_RUN", if target.smoke_run { "1" } else { "0" }))
 }
 
@@ -259,7 +292,7 @@ fn upload_step(target: &DaemonTarget) -> Step<gh_workflow::Use> {
         &format!(
             "macrod-{}-{}",
             target.slug,
-            step("metadata").output("safe_tag")
+            steps::ARTIFACT_METADATA.outputs.safe_tag.read()
         ),
         xtask_paths::runtime_path!("artifacts/*"),
     )

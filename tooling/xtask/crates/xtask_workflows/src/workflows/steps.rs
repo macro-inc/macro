@@ -5,7 +5,9 @@
 //! trailing comment, or in the doc of a `*_SHA` const when several workflows
 //! use the action.
 
-use gh_workflow::expr::typed::{Bool, Expr, Str, always, github, input, needs, steps};
+use gh_workflow::expr::typed::{
+    Bool, Expr, StepHandle, StepOutput, Str, always, github, input, needs,
+};
 use gh_workflow::{Env, Job, Run, Step, Use};
 use xtask_paths::{RepoDir, RuntimePath};
 
@@ -102,6 +104,23 @@ pub fn setup_bun_pinned() -> Step<Use> {
         .add_with(("bun-version", "1.3.13"))
 }
 
+/// The outputs of [`google_play_auth`].
+pub(crate) struct GooglePlayAuthOutputs {
+    /// An `androidpublisher` access token.
+    pub access_token: StepOutput<Str>,
+    /// The credentials file, when asked for one.
+    pub credentials_file_path: StepOutput<Str>,
+}
+
+/// The step [`google_play_auth`] adds.
+pub(crate) const GOOGLE_PLAY_AUTH: StepHandle<GooglePlayAuthOutputs> = StepHandle::new(
+    "auth",
+    GooglePlayAuthOutputs {
+        access_token: StepOutput::new("auth", "access_token"),
+        credentials_file_path: StepOutput::new("auth", "credentials_file_path"),
+    },
+);
+
 /// Keyless Google Play access (Workload Identity Federation through the
 /// repository variables `GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER` /
 /// `GOOGLE_PLAY_SERVICE_ACCOUNT`), as step `auth`: an `androidpublisher`
@@ -118,7 +137,7 @@ pub fn google_play_auth(credentials_file: bool) -> Step<Use> {
             "auth",
             "7c6bc770dae815cd3e89ee6cdf493a5fab2cc093",
         ) // v3
-        .id("auth")
+        .id(GOOGLE_PLAY_AUTH.id())
         .add_with((
             "workload_identity_provider",
             vars::GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER,
@@ -589,6 +608,23 @@ pub fn mount_macos_nix_cache_volume() -> Step<Use> {
         .add_with(("path", "~/.cache/macro-desktop-nix"))
 }
 
+/// The outputs of [`derive_artifact_metadata`].
+pub(crate) struct ArtifactMetadataOutputs {
+    /// The release tag taken from the ref.
+    pub tag: StepOutput<Str>,
+    /// `tag` with the characters artifact names can't hold replaced.
+    pub safe_tag: StepOutput<Str>,
+}
+
+/// The step [`derive_artifact_metadata`] adds.
+pub(crate) const ARTIFACT_METADATA: StepHandle<ArtifactMetadataOutputs> = StepHandle::new(
+    "metadata",
+    ArtifactMetadataOutputs {
+        tag: StepOutput::new("metadata", "tag"),
+        safe_tag: StepOutput::new("metadata", "safe_tag"),
+    },
+);
+
 /// Derive a safe tag name from the git ref for use in artifact names.
 pub fn derive_artifact_metadata(raw_ref: Expr<Str>) -> Step<Run> {
     Step::new("Derive artifact metadata")
@@ -602,7 +638,7 @@ pub fn derive_artifact_metadata(raw_ref: Expr<Str>) -> Step<Run> {
             echo "tag=$tag" >> "$GITHUB_OUTPUT"
             echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
         "#})
-        .id("metadata")
+        .id(ARTIFACT_METADATA.id())
         .shell("bash")
         .add_env(("RAW_REF", raw_ref))
 }
@@ -637,8 +673,8 @@ pub fn upload_release_artifacts(path: RuntimePath<'_>) -> Step<Use> {
             "action-gh-release",
             "3bb12739c298aeb8a4eeaf626c5b8d85266b0e65",
         ) // v2
-        .if_condition(steps("metadata").output("tag").starts_with("v"))
-        .add_with(("tag_name", steps("metadata").output("tag")))
+        .if_condition(ARTIFACT_METADATA.outputs.tag.read().starts_with("v"))
+        .add_with(("tag_name", ARTIFACT_METADATA.outputs.tag.read()))
         .add_with(("files", path.as_str()))
         .add_with(("fail_on_unmatched_files", true))
 }

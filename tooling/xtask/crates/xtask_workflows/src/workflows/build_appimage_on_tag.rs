@@ -1,7 +1,7 @@
 //! `Build AppImage` — reusable workflow that builds the Tauri desktop AppImage
 //! via Nix. Called from [`super::build_desktop_on_tag`].
 
-use gh_workflow::expr::typed::{Expr, Str, input, steps as step};
+use gh_workflow::expr::typed::{Expr, JobHandle, Str, input};
 use gh_workflow::{
     Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall, WorkflowCallSecret,
     WorkflowInput,
@@ -13,6 +13,9 @@ use crate::workflows::{runners, steps, vars};
 /// Tag pattern for desktop release builds (CalVer: `v2026.6.23.1`).
 /// Shared with the DMG workflow and the parent orchestrator.
 pub const DESKTOP_TAG_PATTERN: &str = "v[0-9]*";
+
+/// The AppImage build job, here and in the desktop release orchestrator.
+pub(crate) const BUILD_APPIMAGE: JobHandle<()> = JobHandle::new("build-appimage", ());
 
 /// Secrets a caller must forward to the reusable desktop build workflows. A
 /// called workflow cannot read repository secrets on its own, and the desktop
@@ -41,7 +44,7 @@ pub fn build_appimage() -> Workflow {
                 )
                 .secrets(desktop_build_secrets()),
         ))
-        .add_job("build-appimage", build_appimage_job(input("ref")))
+        .add_job(BUILD_APPIMAGE, build_appimage_job(input("ref")))
 }
 
 /// Build the AppImage job, checking out and naming artifacts from `ref_expr`.
@@ -57,7 +60,10 @@ pub fn build_appimage_job(ref_expr: Expr<Str>) -> Job {
         .add_step(nix_build_appimage())
         .add_step(collect_appimage())
         .add_step(steps::upload_artifact(
-            &format!("macro-appimage-{}", step("metadata").output("safe_tag")),
+            &format!(
+                "macro-appimage-{}",
+                steps::ARTIFACT_METADATA.outputs.safe_tag.read()
+            ),
             xtask_paths::runtime_path!("artifacts/*"),
         ))
         .add_step(steps::teardown_nix())

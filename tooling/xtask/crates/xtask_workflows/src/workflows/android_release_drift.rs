@@ -21,7 +21,9 @@
 //! lookup fails.
 //! The iOS counterpart is [`super::ios_release_drift`].
 
-use gh_workflow::expr::typed::{Bool, Expr, Json, Str, always, github, steps as step};
+use gh_workflow::expr::typed::{
+    Bool, Expr, Flag, Json, StepHandle, StepOutput, Str, always, github,
+};
 use gh_workflow::{
     Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use, Workflow,
 };
@@ -75,12 +77,41 @@ fn drift_job() -> Job {
         .add_step(comment())
 }
 
+struct DetectOutputs {
+    /// Whether this push changed the Android native code.
+    changed: StepOutput<Flag>,
+    /// The version code of the bundle released before this push, if any.
+    version_code: StepOutput<Str>,
+}
+
+/// The [`detect`] step.
+const DETECT: StepHandle<DetectOutputs> = StepHandle::new(
+    "detect",
+    DetectOutputs {
+        changed: StepOutput::new("detect", "changed"),
+        version_code: StepOutput::new("detect", "version_code"),
+    },
+);
+
+struct PlayStatusOutputs {
+    /// Whether that bundle reached production; unset when that's unknown.
+    promoted: StepOutput<Flag>,
+}
+
+/// The [`play_status`] step.
+const PLAY_STATUS: StepHandle<PlayStatusOutputs> = StepHandle::new(
+    "status",
+    PlayStatusOutputs {
+        promoted: StepOutput::new("status", "promoted"),
+    },
+);
+
 fn changed() -> Expr<Bool> {
-    step("detect").output("changed").is_true()
+    DETECT.outputs.changed.read().is_set()
 }
 
 fn version_code() -> Expr<Str> {
-    step("detect").output("version_code")
+    DETECT.outputs.version_code.read()
 }
 
 fn setup_bun() -> Step<Use> {
@@ -93,7 +124,7 @@ fn detect() -> Step<Run> {
             include_str!("scripts/android_git_fetch.sh"),
             include_str!("scripts/android_release_drift.sh")
         ))
-        .id("detect")
+        .id(DETECT.id())
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .add_env(("BEFORE_SHA", github().event::<Str>("before")))
@@ -139,7 +170,7 @@ fn play_status() -> Step<Run> {
             include_str!("scripts/android_play_statuses.sh"),
             include_str!("scripts/android_release_drift_promoted.sh")
         ))
-        .id("status")
+        .id(PLAY_STATUS.id())
         .if_condition(changed().and(version_code().ne("")))
         .shell("bash")
         .add_env(("BEFORE_SHA", github().event::<Str>("before")))
@@ -175,6 +206,6 @@ fn comment() -> Step<Run> {
         "#})
         .if_condition(after_detect())
         .shell("bash")
-        .add_env(("PROMOTED", step("status").output("promoted")))
+        .add_env(("PROMOTED", PLAY_STATUS.outputs.promoted.read()))
         .add_env(("VERSION_CODE", version_code()))
 }

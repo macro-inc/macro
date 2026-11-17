@@ -24,7 +24,7 @@
 //! Credentials: the signing keystore and Firebase config come from Doppler
 //! (`android-release/prd` via `ANDROID_RELEASE_DOPPLER_TOKEN`).
 
-use gh_workflow::expr::typed::{Expr, Str, failure, github, steps as step};
+use gh_workflow::expr::typed::{Expr, StepHandle, StepOutput, Str, failure, github};
 use gh_workflow::{
     Concurrency, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use,
     Workflow,
@@ -105,8 +105,34 @@ fn head_sha() -> Expr<Str> {
     github().event("pull_request.head.sha")
 }
 
+struct PreconditionsOutputs {
+    /// The PR's bumped version code.
+    version_code: StepOutput<Str>,
+}
+
+/// The [`preconditions`] step.
+const PRECONDITIONS: StepHandle<PreconditionsOutputs> = StepHandle::new(
+    "preconditions",
+    PreconditionsOutputs {
+        version_code: StepOutput::new("preconditions", "version_code"),
+    },
+);
+
+struct PrepareOutputs {
+    /// The release file name, from the release metadata.
+    filename: StepOutput<Str>,
+}
+
+/// The [`prepare_version_and_signing`] step.
+const PREPARE: StepHandle<PrepareOutputs> = StepHandle::new(
+    "metadata",
+    PrepareOutputs {
+        filename: StepOutput::new("metadata", "filename"),
+    },
+);
+
 fn version_code() -> Expr<Str> {
-    step("preconditions").output("version_code")
+    PRECONDITIONS.outputs.version_code.read()
 }
 
 fn checkout_pr_head() -> Step<Use> {
@@ -136,7 +162,7 @@ fn preconditions() -> Step<Run> {
             include_str!("scripts/release_wait_for_checks.sh")
         ),
     )
-    .id("preconditions")
+    .id(PRECONDITIONS.id())
     .working_directory(xtask_paths::repo_dir!("apps/web"))
     .add_env(("HEAD_SHA", head_sha()))
     .add_env(("WAIT_MINUTES", "30"))
@@ -164,7 +190,7 @@ fn prepare_version_and_signing() -> Step<Run> {
               tauri/src-tauri/gen/android/keystore.properties
             bun scripts/android-firebase.ts build --doppler "$RUNNER_TEMP/android-google-services.json"
         "#})
-        .id("metadata")
+        .id(PREPARE.id())
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .add_env(("VERSION_CODE", version_code()))
@@ -209,7 +235,7 @@ fn verify_and_collect() -> Step<Run> {
     .id("artifact")
     .working_directory(xtask_paths::repo_dir!("apps/web"))
     .add_env(("VERSION_CODE", version_code()))
-    .add_env(("RELEASE_FILENAME", step("metadata").output("filename")))
+    .add_env(("RELEASE_FILENAME", PREPARE.outputs.filename.read()))
 }
 
 /// Native code pushed while the build ran, on the PR or on `main`, would make

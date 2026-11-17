@@ -30,7 +30,8 @@
 //! otherwise cancel a pending publish).
 
 use gh_workflow::expr::typed::{
-    Str, always, failure, github, job_status, needs, runner, steps as step, success,
+    Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, always, failure, github, job_status,
+    runner, success,
 };
 use gh_workflow::{
     Concurrency, Event, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowRun,
@@ -45,6 +46,83 @@ mod test;
 /// The `publish` job's name, which its failure comment looks up.
 const PUBLISH_JOB_NAME: &str = "Android Play Publish";
 
+struct CheckOutputs {
+    /// Whether a build is to be published.
+    publish: JobOutput<Flag>,
+    /// The PR the build was made for.
+    pr_number: JobOutput<Str>,
+    /// The build's version code.
+    version_code: JobOutput<Str>,
+    /// The Play release name for the build.
+    release_name: JobOutput<Str>,
+}
+
+/// The `check` job, which `publish` waits on.
+const CHECK: JobHandle<CheckOutputs> = JobHandle::new(
+    "check",
+    CheckOutputs {
+        publish: JobOutput::new("check", "publish"),
+        pr_number: JobOutput::new("check", "pr_number"),
+        version_code: JobOutput::new("check", "version_code"),
+        release_name: JobOutput::new("check", "release_name"),
+    },
+);
+
+struct VerifyOutputs {
+    /// Whether to publish, behind `CHECK.outputs.publish`.
+    publish: StepOutput<Flag>,
+    pr_number: StepOutput<Str>,
+    version_code: StepOutput<Str>,
+    release_name: StepOutput<Str>,
+}
+
+/// The [`verify`] step, whose outputs become [`CHECK`]'s.
+const VERIFY: StepHandle<VerifyOutputs> = StepHandle::new(
+    "verify",
+    VerifyOutputs {
+        publish: StepOutput::new("verify", "publish"),
+        pr_number: StepOutput::new("verify", "pr_number"),
+        version_code: StepOutput::new("verify", "version_code"),
+        release_name: StepOutput::new("verify", "release_name"),
+    },
+);
+
+struct StampOutputs {
+    /// The native tree hash, from main's hashing script.
+    native_hash: StepOutput<Str>,
+}
+
+/// The [`provenance_stamp`] step.
+const STAMP: StepHandle<StampOutputs> = StepHandle::new(
+    "stamp",
+    StampOutputs {
+        native_hash: StepOutput::new("stamp", "native_hash"),
+    },
+);
+
+struct PickFilesOutputs {
+    /// The App Bundle's path.
+    bundle: StepOutput<Str>,
+    /// The R8 mapping's path.
+    mapping: StepOutput<Str>,
+}
+
+/// The [`pick_files`] step.
+const PICK_FILES: StepHandle<PickFilesOutputs> = StepHandle::new(
+    "artifact",
+    PickFilesOutputs {
+        bundle: StepOutput::new("artifact", "bundle"),
+        mapping: StepOutput::new("artifact", "mapping"),
+    },
+);
+
+/// The [`upload_internal`] step.
+const UPLOAD: StepHandle<()> = StepHandle::new("upload", ());
+/// The [`mark_promotion_pending`] step.
+const PENDING: StepHandle<()> = StepHandle::new("pending", ());
+/// The [`promote_production`] step.
+const PROMOTE: StepHandle<()> = StepHandle::new("promote", ());
+
 /// Build the workflow.
 pub fn android_play_publish() -> Workflow {
     Workflow::new("Android Play Publish")
@@ -53,7 +131,7 @@ pub fn android_play_publish() -> Workflow {
                 .add_type(WorkflowRunType::Completed)
                 .add_workflow("Android Play Release"),
         ))
-        .add_job("check", check_job())
+        .add_job(CHECK, check_job())
         .add_job("publish", publish_job())
 }
 
@@ -88,10 +166,19 @@ fn check_job() -> Job {
         )
         .add_env(("GH_TOKEN", github().token()))
         .add_env(("GH_REPO", github().repository()))
-        .add_output("publish", step("verify").output("publish"))
-        .add_output("pr_number", step("verify").output("pr_number"))
-        .add_output("version_code", step("verify").output("version_code"))
-        .add_output("release_name", step("verify").output("release_name"))
+        .add_output(CHECK.outputs.publish.name(), VERIFY.outputs.publish.read())
+        .add_output(
+            CHECK.outputs.pr_number.name(),
+            VERIFY.outputs.pr_number.read(),
+        )
+        .add_output(
+            CHECK.outputs.version_code.name(),
+            VERIFY.outputs.version_code.read(),
+        )
+        .add_output(
+            CHECK.outputs.release_name.name(),
+            VERIFY.outputs.release_name.read(),
+        )
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_bun_pinned())
         .add_step(verify())
@@ -106,7 +193,7 @@ fn verify() -> Step<Run> {
             include_str!("scripts/android_play_publish_verify.sh")
         ),
     )
-    .id("verify")
+    .id(VERIFY.id())
     .working_directory(xtask_paths::repo_dir!("apps/web"))
     .add_env(("RUN_ID", github().event::<Str>("workflow_run.id")))
     .add_env((
@@ -139,9 +226,9 @@ fn refusal_comment() -> Step<Run> {
 
             A person with write access can remove and re-add the \`android-update\` label to release the PR's current head."
         "#})
-        .if_condition(failure().and(step("verify").output("pr_number").ne("")))
+        .if_condition(failure().and(VERIFY.outputs.pr_number.read().ne("")))
         .shell("bash")
-        .add_env(("PR_NUMBER", step("verify").output("pr_number")))
+        .add_env(("PR_NUMBER", VERIFY.outputs.pr_number.read()))
         .add_env(("BUILD_URL", github().event::<Str>("workflow_run.html_url")))
         .add_env((
             "RUN_URL",
@@ -157,8 +244,8 @@ fn refusal_comment() -> Step<Run> {
 fn publish_job() -> Job {
     Job::default()
         .name(PUBLISH_JOB_NAME)
-        .add_needs("check")
-        .cond(needs("check").output("publish").is_true())
+        .add_needs(CHECK)
+        .cond(CHECK.outputs.publish.read().is_set())
         // A hosted image: the upload action and the promotion script need Node.
         .runs_on("ubuntu-24.04")
         .timeout_minutes(30u32)
@@ -179,8 +266,8 @@ fn publish_job() -> Job {
         )
         .add_env(("GH_TOKEN", github().token()))
         .add_env(("GH_REPO", github().repository()))
-        .add_env(("PR_NUMBER", needs("check").output("pr_number")))
-        .add_env(("VERSION_CODE", needs("check").output("version_code")))
+        .add_env(("PR_NUMBER", CHECK.outputs.pr_number.read()))
+        .add_env(("VERSION_CODE", CHECK.outputs.version_code.read()))
         .add_env(("BUILT_SHA", github().event::<Str>("workflow_run.head_sha")))
         .add_env(("BASE_BRANCH", "main"))
         .add_step(steps::checkout(false, false))
@@ -234,7 +321,7 @@ fn provenance_stamp() -> Step<Run> {
             echo "Stamp: native tree ${hash} for PR #${PR_NUMBER}"
         "#},
     )
-    .id("stamp")
+    .id(STAMP.id())
     .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -272,7 +359,7 @@ fn pick_files() -> Step<Run> {
             echo "Bundle ${bundles[0]}, mapping ${mappings[0]}."
         "#},
     )
-    .id("artifact")
+    .id(PICK_FILES.id())
 }
 
 fn upload_internal() -> Step<Use> {
@@ -282,15 +369,15 @@ fn upload_internal() -> Step<Use> {
             "upload-google-play",
             "e738b9dd8f2476ea806d921b64aacd24f34515a5",
         ) // v1
-        .id("upload")
+        .id(UPLOAD.id())
         .add_with((
             "serviceAccountJson",
-            step("auth").output("credentials_file_path"),
+            steps::GOOGLE_PLAY_AUTH.outputs.credentials_file_path.read(),
         ))
         .add_with(("packageName", "com.macro.workspace.mobile"))
-        .add_with(("releaseFiles", step("artifact").output("bundle")))
-        .add_with(("mappingFile", step("artifact").output("mapping")))
-        .add_with(("releaseName", needs("check").output("release_name")))
+        .add_with(("releaseFiles", PICK_FILES.outputs.bundle.read()))
+        .add_with(("mappingFile", PICK_FILES.outputs.mapping.read()))
+        .add_with(("releaseName", CHECK.outputs.release_name.read()))
         .add_with(("track", "internal"))
         .add_with(("status", "completed"))
         .add_with(("whatsNewDirectory", format!("{}/whatsnew", runner().temp())))
@@ -308,9 +395,9 @@ fn mark_promotion_pending() -> Step<Run> {
                   "$(android_release_description "$VERSION_CODE" "$NATIVE_HASH")"
             "#}
         ))
-        .id("pending")
+        .id(PENDING.id())
         .shell("bash")
-        .add_env(("NATIVE_HASH", step("stamp").output("native_hash")))
+        .add_env(("NATIVE_HASH", STAMP.outputs.native_hash.read()))
 }
 
 /// Internal → production, full rollout. Play can take a moment to show the
@@ -331,9 +418,9 @@ fn promote_production() -> Step<Run> {
             exit 1
         "#},
     )
-    .id("promote")
+    .id(PROMOTE.id())
     .working_directory(xtask_paths::repo_dir!("apps/web"))
-    .add_env(("GOOGLE_PLAY_ACCESS_TOKEN", step("auth").output("access_token")))
+    .add_env(("GOOGLE_PLAY_ACCESS_TOKEN", steps::GOOGLE_PLAY_AUTH.outputs.access_token.read()))
     .add_env(("CHANGES_NOT_SENT_FOR_REVIEW", "false"))
 }
 
@@ -353,10 +440,10 @@ fn mark_promotion_result() -> Step<Run> {
                   "$(android_release_description "$VERSION_CODE" "$NATIVE_HASH")"
             "#}
         ))
-        .if_condition(always().and(step("pending").outcome().eq("success")))
+        .if_condition(always().and(PENDING.outcome().eq("success")))
         .shell("bash")
-        .add_env(("NATIVE_HASH", step("stamp").output("native_hash")))
-        .add_env(("PROMOTE_OUTCOME", step("promote").outcome()))
+        .add_env(("NATIVE_HASH", STAMP.outputs.native_hash.read()))
+        .add_env(("PROMOTE_OUTCOME", PROMOTE.outcome()))
 }
 
 fn pr_comment() -> Step<Use> {
@@ -370,9 +457,9 @@ fn pr_comment() -> Step<Use> {
         .add_with(("github-token", vars::GITHUB_TOKEN))
         .add_env(("JOB_NAME", PUBLISH_JOB_NAME))
         .add_env(("BUILD_URL", github().event::<Str>("workflow_run.html_url")))
-        .add_env(("RELEASE_NAME", needs("check").output("release_name")))
+        .add_env(("RELEASE_NAME", CHECK.outputs.release_name.read()))
         .add_env(("JOB_STATUS", job_status()))
-        .add_env(("UPLOAD_OUTCOME", step("upload").outcome()))
+        .add_env(("UPLOAD_OUTCOME", UPLOAD.outcome()))
         .add_with((
             "script",
             include_str!("scripts/android_play_publish_comment.js"),

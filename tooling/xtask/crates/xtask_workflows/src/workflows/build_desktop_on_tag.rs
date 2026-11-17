@@ -5,7 +5,9 @@
 //! The reusable job definitions live in [`super::build_appimage_on_tag`] and
 //! [`super::build_dmg_on_tag`].
 
-use gh_workflow::expr::typed::{Expr, Str, github, input, needs, steps as step};
+use gh_workflow::expr::typed::{
+    Expr, JobHandle, JobOutput, StepHandle, StepOutput, Str, github, input,
+};
 use gh_workflow::{
     Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Workflow, WorkflowDispatch,
     WorkflowInput,
@@ -17,8 +19,37 @@ use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag, steps, vars};
 mod test;
 
 /// The ref `resolve-ref` resolved, so every build job checks out the same commit.
+struct ResolveRefOutputs {
+    /// The git ref every build and publish job checks out.
+    git_ref: JobOutput<Str>,
+}
+
+/// The `resolve-ref` job.
+const RESOLVE_REF: JobHandle<ResolveRefOutputs> = JobHandle::new(
+    "resolve-ref",
+    ResolveRefOutputs {
+        git_ref: JobOutput::new("resolve-ref", "ref"),
+    },
+);
+
+struct ResolveOutputs {
+    /// The resolved ref, behind `RESOLVE_REF.outputs.git_ref`.
+    git_ref: StepOutput<Str>,
+}
+
+/// The [`resolve_ref_step`] step.
+const RESOLVE: StepHandle<ResolveOutputs> = StepHandle::new(
+    "resolve",
+    ResolveOutputs {
+        git_ref: StepOutput::new("resolve", "ref"),
+    },
+);
+
+/// The job that attaches the installers to the release.
+const PUBLISH_INSTALLERS: JobHandle<()> = JobHandle::new("publish-installers", ());
+
 fn resolved_ref() -> Expr<Str> {
-    needs("resolve-ref").output("ref")
+    RESOLVE_REF.outputs.git_ref.read()
 }
 
 /// The dispatch override, else the pushed tag, else the selected ref.
@@ -37,34 +68,34 @@ pub fn build_desktop_on_tag() -> Workflow {
         .concurrency(
             Concurrency::new(format!("desktop-{}", desktop_ref())).cancel_in_progress(true),
         )
-        .add_job("resolve-ref", resolve_ref())
+        .add_job(RESOLVE_REF, resolve_ref())
         .add_job(
-            "build-appimage",
-            build_appimage_on_tag::build_appimage_job(resolved_ref()).add_needs("resolve-ref"),
+            build_appimage_on_tag::BUILD_APPIMAGE,
+            build_appimage_on_tag::build_appimage_job(resolved_ref()).add_needs(RESOLVE_REF),
         )
         .add_job(
-            "build-dmg",
-            build_dmg_on_tag::build_dmg_job(resolved_ref()).add_needs("resolve-ref"),
+            build_dmg_on_tag::BUILD_DMG,
+            build_dmg_on_tag::build_dmg_job(resolved_ref()).add_needs(RESOLVE_REF),
         )
         // The installers users download must reach the release on their own.
         // Updater signing needs Doppler, Apple, and the stable channel; none of
         // that may stand between a green build and macro.com/download.
         .add_job(
-            "publish-installers",
+            PUBLISH_INSTALLERS,
             build_appimage_on_tag::publish_job(
                 resolved_ref(),
                 xtask_paths::runtime_path!("release-artifacts/*"),
             )
             .name("Publish desktop installers")
-            .add_needs("resolve-ref")
-            .add_needs("build-appimage")
-            .add_needs("build-dmg"),
+            .add_needs(RESOLVE_REF)
+            .add_needs(build_appimage_on_tag::BUILD_APPIMAGE)
+            .add_needs(build_dmg_on_tag::BUILD_DMG),
         )
         .add_job(
             "publish-release",
             publish_desktop_job()
-                .add_needs("resolve-ref")
-                .add_needs("publish-installers"),
+                .add_needs(RESOLVE_REF)
+                .add_needs(PUBLISH_INSTALLERS),
         )
 }
 
@@ -94,7 +125,7 @@ fn publish_desktop_job() -> Job {
                 .shell("bash")
                 .add_env(("DOPPLER_TOKEN", vars::MACOS_RELEASE_DOPPLER_TOKEN))
                 .add_env(("GH_TOKEN", github().token()))
-                .add_env(("RELEASE_TAG", step("metadata").output("tag")))
+                .add_env(("RELEASE_TAG", steps::ARTIFACT_METADATA.outputs.tag.read()))
                 .add_env(("RELEASE_REPOSITORY", github().repository())),
         )
         .add_step(
@@ -102,7 +133,7 @@ fn publish_desktop_job() -> Job {
                 .run(include_str!("scripts/publish_desktop_updates.sh"))
                 .shell("bash")
                 .add_env(("GH_TOKEN", github().token()))
-                .add_env(("RELEASE_TAG", step("metadata").output("tag")))
+                .add_env(("RELEASE_TAG", steps::ARTIFACT_METADATA.outputs.tag.read()))
                 .add_env(("RELEASE_REPOSITORY", github().repository())),
         )
     // No Teardown Nix here. This job runs on a hosted runner with no /nix cache
@@ -140,14 +171,17 @@ fn resolve_ref() -> Job {
         )
         .name("Resolve build ref")
         .runs_on("ubuntu-latest")
-        .add_output("ref", step("resolve").output("ref"))
+        .add_output(
+            RESOLVE_REF.outputs.git_ref.name(),
+            RESOLVE.outputs.git_ref.read(),
+        )
         .add_step(resolve_ref_step())
 }
 
 fn resolve_ref_step() -> Step<Run> {
     Step::new("Resolve ref")
         .run(include_str!("scripts/resolve_desktop_ref.sh"))
-        .id("resolve")
+        .id(RESOLVE.id())
         .shell("bash")
         .add_env(("EVENT_NAME", github().event_name()))
         .add_env(("INPUT_REF", input::<Str>("ref")))

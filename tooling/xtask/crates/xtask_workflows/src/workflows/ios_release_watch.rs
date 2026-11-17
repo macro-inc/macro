@@ -20,7 +20,7 @@
 //! Credentials come from Doppler like the other two iOS workflows; the
 //! common case (no labeled PRs) exits before fetching anything.
 
-use gh_workflow::expr::typed::{Bool, Expr, github, steps as step};
+use gh_workflow::expr::typed::{Bool, Expr, StepHandle, StepOutput, Str, github};
 use gh_workflow::{
     Event, Job, Level, Permissions, Run, Schedule, Step, Use, Workflow, WorkflowDispatch,
 };
@@ -61,8 +61,24 @@ fn watch_job() -> Job {
 
 /// `true` when the first step found at least one PR to look at.
 fn gated() -> Expr<Bool> {
-    step("prs").output("count").ne("0")
+    FIND_PRS.outputs.count.read().ne("0")
 }
+
+struct FindPrsOutputs {
+    /// The open PRs found, as a JSON array of `{number, sha, merge}`.
+    prs: StepOutput<Str>,
+    /// How many PRs `prs` holds.
+    count: StepOutput<Str>,
+}
+
+/// The [`find_prs`] step.
+const FIND_PRS: StepHandle<FindPrsOutputs> = StepHandle::new(
+    "prs",
+    FindPrsOutputs {
+        prs: StepOutput::new("prs", "prs"),
+        count: StepOutput::new("prs", "count"),
+    },
+);
 
 fn find_prs() -> Step<Run> {
     Step::new("Find PRs waiting on an App Store release")
@@ -76,7 +92,7 @@ fn find_prs() -> Step<Run> {
             echo "prs=${prs}" >> "$GITHUB_OUTPUT"
             echo "count=${count}" >> "$GITHUB_OUTPUT"
         "#})
-        .id("prs")
+        .id(FIND_PRS.id())
         .shell("bash")
 }
 
@@ -104,5 +120,5 @@ fn rerun_approved_checks() -> Step<Run> {
         ))
         .shell("bash")
         .if_condition(gated())
-        .add_env(("PRS", step("prs").output("prs")))
+        .add_env(("PRS", FIND_PRS.outputs.prs.read()))
 }

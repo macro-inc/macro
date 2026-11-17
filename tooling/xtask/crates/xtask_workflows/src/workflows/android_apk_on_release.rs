@@ -20,7 +20,7 @@
 //! Credentials: the signing keystore and Firebase config come from Doppler
 //! (`android-release/prd` via `ANDROID_RELEASE_DOPPLER_TOKEN`).
 
-use gh_workflow::expr::typed::{github, steps as step};
+use gh_workflow::expr::typed::{JobHandle, StepHandle, StepOutput, Str, github};
 use gh_workflow::{
     Concurrency, Event, Job, Level, Permissions, Release, ReleaseType, Run, Step, Use, Workflow,
     WorkflowDispatch,
@@ -33,6 +33,9 @@ use crate::workflows::{runners, steps, vars};
 /// publish job.
 const APK_ARTIFACT: &str = "android-apk";
 
+/// The job that builds the APK, which `publish` waits for.
+const BUILD: JobHandle<()> = JobHandle::new("build", ());
+
 /// Build the workflow.
 pub fn android_apk_on_release() -> Workflow {
     Workflow::new("Android APK on Release")
@@ -43,7 +46,7 @@ pub fn android_apk_on_release() -> Workflow {
             "android-apk-on-release-{}",
             github().ref_name()
         )))
-        .add_job("build", build_job())
+        .add_job(BUILD, build_job())
         .add_job("publish", publish_job())
 }
 
@@ -73,7 +76,7 @@ fn build_job() -> Job {
 fn publish_job() -> Job {
     Job::default()
         .name("Attach the APK to the release")
-        .add_needs("build")
+        .add_needs(BUILD)
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(10u32)
         .permissions(Permissions::default().contents(Level::Write))
@@ -104,6 +107,19 @@ fn require_release() -> Step<Run> {
         .add_env(("GH_TOKEN", github().token()))
 }
 
+struct PrepareOutputs {
+    /// The APK's file name, from the release metadata.
+    filename: StepOutput<Str>,
+}
+
+/// The [`prepare_version_and_signing`] step.
+const PREPARE: StepHandle<PrepareOutputs> = StepHandle::new(
+    "metadata",
+    PrepareOutputs {
+        filename: StepOutput::new("metadata", "filename"),
+    },
+);
+
 fn prepare_version_and_signing() -> Step<Run> {
     Step::new("Prepare version and signing")
         .run(indoc::indoc! {r#"
@@ -114,7 +130,7 @@ fn prepare_version_and_signing() -> Step<Run> {
               tauri/src-tauri/gen/android/keystore.properties
             bun scripts/android-firebase.ts build --doppler "$RUNNER_TEMP/android-google-services.json"
         "#})
-        .id("metadata")
+        .id(PREPARE.id())
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .add_env(("DOPPLER_TOKEN", vars::ANDROID_RELEASE_DOPPLER_TOKEN))
@@ -140,7 +156,7 @@ fn verify_and_collect() -> Step<Run> {
         "#})
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(("APK_FILENAME", step("metadata").output("filename")))
+        .add_env(("APK_FILENAME", PREPARE.outputs.filename.read()))
 }
 
 fn upload_workflow_artifact() -> Step<Use> {
