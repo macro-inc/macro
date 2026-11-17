@@ -470,6 +470,7 @@ impl StreamTelemetry {
     fn start(plan: &SyncPlan) -> Self {
         let span = tracing::info_span!(
             "soup.sync_stream",
+            "sync.protocol" = i64::from(plan.protocol),
             "sync.lane_count" = span_number(plan.lanes.len()),
             "sync.max_pages" = plan.max_pages.map(i64::from),
             "sync.pages" = Empty,

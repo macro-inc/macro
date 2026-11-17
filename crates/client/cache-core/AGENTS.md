@@ -43,7 +43,10 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `src/queue.rs`: the optimistic mutation queue.
 - `src/sync.rs` + `src/engine/sync.rs`: streamed sync plans, the NDJSON frame
   decoder, and `Engine::sync_apply_next` (host-neutral; hosts open the stream
-  and supply `SyncHooks`).
+  and supply `SyncHooks`). `SYNC_PROTOCOL` is the version every request
+  carries; line types the engine does not know are skipped
+  (`SyncFrame::Unrecognized`), anything else new needs a new version (see
+  `docs/architecture/streamed-cache-sync.md`).
 - `tests/`: the primary spec for engine behavior — one file per concern
   (optimistic updates, calendar range, search, subscriptions, fuzz).
 

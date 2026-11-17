@@ -12,8 +12,10 @@ file.
 
 ## How it works
 
-`SyncPlan::from_json` validates the body (lane ids, at most 32 lanes, query
-operations only, a pageable `input`). `frames` / `ndjson_stream` run lanes in
+`SyncPlan::from_json` validates the body: its `protocol` first, against
+`PROTOCOL_VERSIONS` (`RequestError::UnsupportedProtocol`, which DSS answers
+with 426), then lane ids, at most 32 lanes, query operations only, a pageable
+`input`. `frames` / `ndjson_stream` run lanes in
 order over a `PageExecutor`, one page per poll: the next page executes only when
 the reader asks for the next line, and dropping the stream stops the loop.
 Before each page the loop waits for the executor's `turn`; DSS backs it with
@@ -40,6 +42,11 @@ whose pages took the least time first.
 
 ## Gotchas
 
+- The cache engine (`cache_core::sync::SYNC_PROTOCOL`) sends one protocol
+  number and gets exactly that version. A line type an older engine may skip
+  needs no new version; any other wire change does, and `PROTOCOL_VERSIONS`
+  must cover it in a deployed server before an engine sends it. Native apps
+  keep old engines for months, so lower its start only once none are left.
 - `page.nextVariables` is `null` exactly when no further page of that lane follows
   in this stream (complete, `maxItems`, or failure); after `end maxPages` the last
   page's `nextVariables` is the resume point.

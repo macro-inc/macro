@@ -481,6 +481,18 @@ describe('runCacheSync', () => {
     await Effect.runPromise(Fiber.interrupt(fiber));
   });
 
+  it('falls back to the paged backfill at once when the server refuses the sync protocol', async () => {
+    runSyncPass.mockResolvedValue({
+      ok: false,
+      failure: { kind: 'http', status: 426 },
+    });
+    const host = fakeHost();
+    const fiber = await start(runCacheSync('user-1', asHost(host), true));
+    expect(runSyncPass).toHaveBeenCalledOnce();
+    expect(host.currentStorageGeneration).toHaveBeenCalled();
+    await Effect.runPromise(Fiber.interrupt(fiber));
+  });
+
   const failing = { ok: false, failure: { kind: 'http', status: 500 } };
   /** Past a stream's five retries (2 + 4 + 8 + 16 + 32 s). */
   const PAST_RETRIES_MS = 63_000;

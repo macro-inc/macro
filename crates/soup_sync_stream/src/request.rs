@@ -9,8 +9,14 @@ use async_graphql::parser::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::RangeInclusive};
 
+/// Sync protocol versions this server speaks. A version names what the
+/// client's cache engine sends and decodes: the request, the lines, their
+/// fields and what they mean. Raise the upper end, and ship that server,
+/// before any engine sends the new version; raise the lower end only once no
+/// supported client sends the old one.
+pub const PROTOCOL_VERSIONS: RangeInclusive<u8> = 1..=1;
 /// Most lanes one stream may carry.
 pub const MAX_LANES: usize = 32;
 const MAX_LANE_ID_LEN: usize = 64;
@@ -77,6 +83,13 @@ enum Paging {
     Calendar,
 }
 
+/// The body's protocol, read before anything else in it, so a body of another
+/// protocol's shape is refused for its protocol rather than as malformed.
+#[derive(Debug, Deserialize)]
+struct ProtocolField {
+    protocol: Option<u8>,
+}
+
 /// The JSON request body.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -97,9 +110,19 @@ struct LaneRequest {
     max_items: Option<u32>,
 }
 
-/// Why a request body was rejected (HTTP 400).
+/// Why a request body was rejected: HTTP 426 for
+/// [`RequestError::UnsupportedProtocol`], 400 for the rest.
 #[derive(Debug, thiserror::Error)]
 pub enum RequestError {
+    /// The body names no protocol, or one outside [`PROTOCOL_VERSIONS`]: the
+    /// client's cache engine is too old or too new for this server.
+    #[error(
+        "sync protocol {} is not supported; this server speaks {} to {}",
+        protocol_name(*.0),
+        PROTOCOL_VERSIONS.start(),
+        PROTOCOL_VERSIONS.end()
+    )]
+    UnsupportedProtocol(Option<u8>),
     /// The body is not JSON of the request shape.
     #[error("invalid request body: {0}")]
     Body(#[from] serde_json::Error),
@@ -138,9 +161,11 @@ pub enum RequestError {
     InvalidSoupInput(LaneId),
 }
 
-/// A validated stream request: the lanes to run, in order, and the page budget.
+/// A validated stream request: the protocol, the lanes to run, in order, and
+/// the page budget.
 #[derive(Debug)]
 pub struct SyncPlan {
+    pub(crate) protocol: u8,
     pub(crate) lanes: Vec<LanePlan>,
     pub(crate) max_pages: Option<u32>,
 }
@@ -175,8 +200,12 @@ pub(crate) enum LanePaging {
 }
 
 impl SyncPlan {
-    /// Parses and validates a request body.
+    /// Parses and validates a request body, its protocol first.
     pub fn from_json(body: &[u8]) -> Result<Self, RequestError> {
+        let ProtocolField { protocol } = serde_json::from_slice(body)?;
+        let protocol = protocol
+            .filter(|version| PROTOCOL_VERSIONS.contains(version))
+            .ok_or(RequestError::UnsupportedProtocol(protocol))?;
         let request: SyncStreamRequest = serde_json::from_slice(body)?;
         if request.lanes.len() > MAX_LANES {
             return Err(RequestError::TooManyLanes(request.lanes.len()));
@@ -193,6 +222,7 @@ impl SyncPlan {
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
+            protocol,
             lanes,
             max_pages: request.max_pages,
         })
@@ -246,6 +276,11 @@ impl LaneRequest {
             max_items: self.max_items,
         })
     }
+}
+
+/// A requested protocol for [`RequestError::UnsupportedProtocol`]'s message.
+fn protocol_name(protocol: Option<u8>) -> String {
+    protocol.map_or_else(|| "(none)".to_owned(), |version| version.to_string())
 }
 
 /// Mirrors async-graphql's operation selection in `Schema::execute`.

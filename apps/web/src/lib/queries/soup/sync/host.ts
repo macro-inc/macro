@@ -19,6 +19,22 @@ export const isServerBusy = (failure: SyncFailure): boolean =>
   failure.kind === 'http' && SYNC_BUSY_STATUSES.includes(failure.status);
 
 /**
+ * The server does not speak this client's sync protocol: the cache engine is
+ * older than the oldest the server supports, or newer than the newest.
+ */
+const SYNC_PROTOCOL_REFUSED = 426;
+
+/**
+ * A server that refuses the cache engine's sync protocol leaves this client
+ * unable to stream, as a host that cannot stream does: `unsupported`, so the
+ * paged backfill takes over instead of retrying.
+ */
+export const unsupportedWhenRefused = (failure: SyncFailure): SyncFailure =>
+  failure.kind === 'http' && failure.status === SYNC_PROTOCOL_REFUSED
+    ? { kind: 'unsupported' }
+    : failure;
+
+/**
  * Second-pass streams are sized by time and bytes, not a fixed page count:
  * pages range from 5 email threads to 500 documents, so 20 pages took 0.3 s
  * or 7 s. Each stream asks for as many pages as the previous one's rate says

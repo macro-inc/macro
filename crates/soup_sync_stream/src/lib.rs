@@ -5,8 +5,8 @@
 //! every page as one NDJSON line. The wire format is the shared contract in
 //! `docs/architecture/streamed-cache-sync.md`.
 //!
-//! This crate holds the transport-free part: request validation
-//! ([`SyncPlan::from_json`]), the lane loop over a [`PageExecutor`]
+//! This crate holds the transport-free part: request validation, the
+//! protocol version first ([`SyncPlan::from_json`], [`PROTOCOL_VERSIONS`]), the lane loop over a [`PageExecutor`]
 //! ([`frames`], [`ndjson_stream`]), the frames and their encoding
 //! ([`Frame`]), the per-user single-stream guard ([`ActiveStreams`]), and the
 //! page slots streams take turns on ([`PageTurns`]).
@@ -21,6 +21,6 @@ mod turns;
 
 pub use active::{ActiveStreamGuard, ActiveStreams};
 pub use frame::{EndReason, Frame, LaneDoneReason};
-pub use request::{InvalidLaneId, LaneId, MAX_LANES, RequestError, SyncPlan};
+pub use request::{InvalidLaneId, LaneId, MAX_LANES, PROTOCOL_VERSIONS, RequestError, SyncPlan};
 pub use runner::{PageExecutor, frames, ndjson_stream};
 pub use turns::{PageTurn, PageTurns, StreamTurns};

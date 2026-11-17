@@ -62,12 +62,14 @@ fn run_decodes_every_frame_type_and_counts_bytes() {
         "\n",
         r#"{"type":"laneError","lane":"tasks","message":"boom"}"#,
         "\n",
+        r#"{"type":"progress","lane":"tasks","items":3}"#,
+        "\n",
         r#"{"type":"end","reason":"maxPages"}"#,
         "\n",
     );
     let (head, tail) = stream.split_at(40);
     assert_eq!(run.push_bytes(head.as_bytes()).unwrap(), 0);
-    assert_eq!(run.push_bytes(tail.as_bytes()).unwrap(), 5);
+    assert_eq!(run.push_bytes(tail.as_bytes()).unwrap(), 6);
     let frames = run.pending.iter().cloned().collect::<Vec<_>>();
     assert!(
         matches!(&frames[0], SyncFrame::Page { lane, next_variables: None, .. } if lane == "tasks")
@@ -82,8 +84,10 @@ fn run_decodes_every_frame_type_and_counts_bytes() {
     ));
     assert_eq!(frames[2], SyncFrame::Waiting);
     assert!(matches!(&frames[3], SyncFrame::LaneError { message, .. } if message == "boom"));
+    // A line type this engine does not know is kept as nothing to apply.
+    assert_eq!(frames[4], SyncFrame::Unrecognized);
     assert_eq!(
-        frames[4],
+        frames[5],
         SyncFrame::End {
             reason: SyncEndReason::MaxPages
         }
@@ -94,11 +98,19 @@ fn run_decodes_every_frame_type_and_counts_bytes() {
 
 #[test]
 fn malformed_frames_and_unterminated_streams_are_stream_errors() {
-    let mut run = SyncRun::new(&args(vec![lane("tasks", json!({"kind":"hydrate"}))]), 0.0).unwrap();
-    assert!(matches!(
-        run.push_bytes(b"{\"type\":\"unknown\"}\n"),
-        Err(SyncStreamError::Stream(_))
-    ));
+    // A known line type must still have its fields; only unknown types skip.
+    for line in [
+        &b"{\"type\":\"laneDone\",\"lane\":\"tasks\"}\n"[..],
+        b"{\"type\":\"end\",\"reason\":\"later\"}\n",
+        b"{\"lane\":\"tasks\"}\n",
+    ] {
+        let mut run =
+            SyncRun::new(&args(vec![lane("tasks", json!({"kind":"hydrate"}))]), 0.0).unwrap();
+        assert!(matches!(
+            run.push_bytes(line),
+            Err(SyncStreamError::Stream(_))
+        ));
+    }
 
     let mut run = SyncRun::new(&args(vec![lane("tasks", json!({"kind":"hydrate"}))]), 0.0).unwrap();
     run.push_bytes(b"{\"type\":\"end\"").unwrap();
@@ -151,7 +163,10 @@ fn plans_are_validated_before_any_request() {
     let mut empty = args(Vec::new());
     empty.max_pages = Some(0);
     let mut run = SyncRun::new(&empty, 0.0).unwrap();
-    assert_eq!(run.request_body(), json!({"lanes": [], "maxPages": 0}));
+    assert_eq!(
+        run.request_body(),
+        json!({"protocol": SYNC_PROTOCOL, "lanes": [], "maxPages": 0})
+    );
     run.push_bytes(b"{\"type\":\"end\",\"reason\":\"maxPages\"}\n")
         .unwrap();
     SyncRun::new(
@@ -175,6 +190,7 @@ fn request_body_carries_only_the_server_fields() {
     assert_eq!(
         run.request_body(),
         json!({
+            "protocol": 1,
             "lanes": [{
                 "id": "tasks",
                 "query": "query Q { user { id } }",

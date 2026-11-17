@@ -26,6 +26,14 @@ mod test;
 /// Maximum lanes in one request (the server rejects more).
 pub const MAX_SYNC_LANES: usize = 32;
 const MAX_LANE_ID_BYTES: usize = 64;
+/// The sync protocol this engine speaks: what it sends and how it reads the
+/// lines it gets. Every request carries it, and a server that does not speak
+/// it answers 426 instead of streaming. A line type this engine does not know
+/// is skipped ([`SyncFrame::Unrecognized`]), so a server can add one an older
+/// engine may ignore without a new version; any other change to the request,
+/// the lines or their meaning is a new version, which the server must speak
+/// before an engine sends it (`soup_sync_stream::PROTOCOL_VERSIONS`).
+pub const SYNC_PROTOCOL: u8 = 1;
 
 /// How the server follows one lane's pages.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -258,6 +266,11 @@ pub enum SyncFrame {
         /// Why it ended.
         reason: SyncEndReason,
     },
+    /// A line type this engine does not know: one a newer server added that
+    /// an older engine may skip ([`SYNC_PROTOCOL`]). Nothing to apply. Serde
+    /// needs it last.
+    #[serde(other)]
+    Unrecognized,
 }
 
 /// Per-lane summary of one run.
@@ -437,6 +450,7 @@ impl SyncRun {
             })
             .collect();
         let mut body = Map::new();
+        body.insert("protocol".into(), Json::from(SYNC_PROTOCOL));
         body.insert("lanes".into(), Json::Array(lanes));
         if let Some(max_pages) = self.max_pages {
             body.insert("maxPages".into(), Json::from(max_pages));
@@ -462,12 +476,13 @@ impl SyncRun {
     }
 
     /// The lane of the next pending frame and whether it is that lane's
-    /// `laneDone`; `None` for `waiting`, `end` or when nothing is pending.
+    /// `laneDone`; `None` for `waiting`, `end`, a line type this engine does
+    /// not know, or when nothing is pending.
     pub fn peek_frame(&self) -> Option<(&str, bool)> {
         match self.pending.front()? {
             SyncFrame::Page { lane, .. } | SyncFrame::LaneError { lane, .. } => Some((lane, false)),
             SyncFrame::LaneDone { lane, .. } => Some((lane, true)),
-            SyncFrame::Waiting | SyncFrame::End { .. } => None,
+            SyncFrame::Waiting | SyncFrame::Unrecognized | SyncFrame::End { .. } => None,
         }
     }
 

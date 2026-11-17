@@ -218,6 +218,36 @@ fn hydrate_lane_writes_pages_saves_resume_state_and_completes() {
 }
 
 #[test]
+fn a_line_type_the_engine_does_not_know_is_skipped() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let plan = args(vec![lane(
+            "tasks",
+            TASKS,
+            "soup",
+            json!({"kind": "hydrate"}),
+        )]);
+        let mut run = SyncRun::new(&plan, 0.0).unwrap();
+        let stream = ndjson(&[
+            soup_page("tasks", 0, &[1], None),
+            json!({"type": "progress", "lane": "tasks", "items": 1}),
+            lane_done("tasks", 1, 1),
+            end("complete"),
+        ]);
+        let applied = run_stream(&mut engine, &mut run, &stream).await.unwrap();
+        assert_eq!(applied.len(), 4);
+        assert!(matches!(applied[1], SyncApplied::Recorded));
+        assert_eq!(run.finish(1.0).unwrap().reason, SyncRunReason::Complete);
+        assert_eq!(present(&engine, &[task_key(1)]).await, [true]);
+        assert!(
+            engine.sync_lane_states().await.unwrap()[0]
+                .completed_at
+                .is_some()
+        );
+    });
+}
+
+#[test]
 fn a_resumed_pass_keeps_counting_and_a_new_pass_restarts_counts() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

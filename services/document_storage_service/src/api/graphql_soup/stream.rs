@@ -1,5 +1,6 @@
 //! `POST /soup/graphql/stream`: the streamed cache sync. The lane loop and
 //! wire format live in `crates/soup_sync_stream`; this adapter authenticates,
+//! answers a body of a protocol it does not speak with 426,
 //! limits each user to one open stream and each task to
 //! [`MAX_STREAMS_PER_TASK`] open streams that take turns on [`PAGE_SLOTS`]
 //! pages at once, and runs every page through the Soup schema with the same
@@ -21,7 +22,8 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use soup_sync_stream::{
-    ActiveStreamGuard, ActiveStreams, PageExecutor, PageTurn, PageTurns, StreamTurns, SyncPlan,
+    ActiveStreamGuard, ActiveStreams, PageExecutor, PageTurn, PageTurns, RequestError, StreamTurns,
+    SyncPlan,
 };
 use std::{
     convert::Infallible,
@@ -75,6 +77,11 @@ pub(super) async fn sync_stream_handler(
     // The message echoes only the caller's own request; it is not logged.
     let plan = match SyncPlan::from_json(&body) {
         Ok(plan) => plan,
+        // The client's cache engine speaks another protocol: it cannot sync
+        // through this server and pages instead.
+        Err(error @ RequestError::UnsupportedProtocol(_)) => {
+            return (StatusCode::UPGRADE_REQUIRED, error.to_string()).into_response();
+        }
         Err(error) => return (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
     };
     let Some(active) = ACTIVE_STREAMS.try_acquire(acting_user.macro_user_id.clone()) else {

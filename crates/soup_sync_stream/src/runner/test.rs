@@ -77,7 +77,7 @@ async fn soup_lane_follows_cursors_until_none() {
     ]);
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [{
+            "protocol": 1, "lanes": [{
                 "id": "tasks",
                 "query": SOUP_QUERY,
                 "operationName": "SoupBackfillSyncTasks",
@@ -161,7 +161,7 @@ async fn soup_lane_resumed_from_a_continuation_keeps_its_fields() {
     ]);
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [{
+            "protocol": 1, "lanes": [{
                 "id": "email-recent",
                 "query": SOUP_QUERY,
                 "variables": { "input": { "continuation": { "cursor": "c8", "emailView": "ALL", "sortDirection": "ASC" } } },
@@ -202,7 +202,7 @@ async fn calendar_lane_pages_with_after_and_rejects_a_repeated_cursor() {
     ]);
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [
+            "protocol": 1, "lanes": [
                 {
                     "id": "calendar-0",
                     "query": CALENDAR_QUERY,
@@ -276,7 +276,7 @@ async fn calendar_lane_rejects_a_resumed_cursor_coming_back() {
     )]);
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [{
+            "protocol": 1, "lanes": [{
                 "id": "calendar-0",
                 "query": CALENDAR_QUERY,
                 "variables": { "input": { "start": "2026-09-01T00:00:00Z", "end": "2026-11-01T00:00:00Z", "after": "k4" } },
@@ -305,7 +305,7 @@ async fn calendar_lane_completes_without_a_next_page_and_fails_without_an_end_cu
         json!({ "data": { "user": { "calendarOccurrences": { "nodes": [], "hasNextPage": true, "endCursor": null } } } }),
     )]);
     let body = json!({
-        "lanes": [{
+        "protocol": 1, "lanes": [{
             "id": "calendar-0",
             "query": CALENDAR_QUERY,
             "variables": { "input": { "start": "2026-09-01T00:00:00Z", "end": "2026-11-01T00:00:00Z" } },
@@ -376,7 +376,7 @@ async fn max_items_stops_the_lane_and_the_next_lane_runs() {
     ]);
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [
+            "protocol": 1, "lanes": [
                 { "id": "email-older", "query": SOUP_QUERY, "variables": { "input": { "initial": { "limit": 2 } } }, "paging": "soup", "maxItems": 3 },
                 { "id": "task-projects", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }
             ]
@@ -451,7 +451,7 @@ async fn max_pages_ends_the_stream_with_the_next_page_saved() {
     ]);
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [
+            "protocol": 1, "lanes": [
                 { "id": "crm-contacts", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" },
                 { "id": "core-rest", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }
             ],
@@ -488,7 +488,7 @@ async fn max_pages_reached_on_the_last_lane_page_ends_complete() {
     )]);
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [{ "id": "crm-contacts", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }],
+            "protocol": 1, "lanes": [{ "id": "crm-contacts", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }],
             "maxPages": 1
         })
         .to_string()
@@ -519,7 +519,7 @@ async fn a_page_with_graphql_errors_fails_its_lane_and_the_next_lane_runs() {
     ]);
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [
+            "protocol": 1, "lanes": [
                 { "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" },
                 { "id": "task-projects", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }
             ]
@@ -582,7 +582,7 @@ async fn a_page_without_paging_fields_fails_its_lane() {
     let executor = ScriptedExecutor::new(vec![Ok(json!({ "data": null }))]);
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [{ "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
+            "protocol": 1, "lanes": [{ "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
         })
         .to_string()
         .as_bytes(),
@@ -618,7 +618,7 @@ async fn an_execution_failure_sends_no_page() {
     let executor = ScriptedExecutor::new(vec![Err(FakeError)]);
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [{ "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
+            "protocol": 1, "lanes": [{ "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
         })
         .to_string()
         .as_bytes(),
@@ -676,7 +676,7 @@ async fn a_page_past_its_timeout_fails_its_lane_and_the_next_lane_runs() {
     };
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [
+            "protocol": 1, "lanes": [
                 { "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" },
                 { "id": "channels", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }
             ]
@@ -715,7 +715,7 @@ async fn a_stream_past_its_deadline_ends_with_the_resume_point_saved() {
     };
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [{ "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
+            "protocol": 1, "lanes": [{ "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
         })
         .to_string()
         .as_bytes(),
@@ -759,7 +759,7 @@ impl PageExecutor for QueuedExecutor {
 fn one_lane_plan() -> SyncPlan {
     SyncPlan::from_json(
         json!({
-            "lanes": [{ "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
+            "protocol": 1, "lanes": [{ "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
         })
         .to_string()
         .as_bytes(),
@@ -811,7 +811,8 @@ async fn a_stream_still_waiting_at_its_deadline_ends_with_deadline() {
 
 #[tokio::test]
 async fn a_request_without_lanes_ends_complete() {
-    let plan = SyncPlan::from_json(json!({ "lanes": [] }).to_string().as_bytes()).unwrap();
+    let plan =
+        SyncPlan::from_json(json!({ "protocol": 1, "lanes": [] }).to_string().as_bytes()).unwrap();
 
     let frames: Vec<Frame> = frames(plan, ScriptedExecutor::default()).collect().await;
 
@@ -832,7 +833,7 @@ async fn pages_run_only_as_the_stream_is_read_and_stop_when_it_is_dropped() {
     ]);
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [{ "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
+            "protocol": 1, "lanes": [{ "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
         })
         .to_string()
         .as_bytes(),
@@ -866,7 +867,7 @@ async fn ndjson_stream_writes_one_line_per_frame() {
     )]);
     let plan = SyncPlan::from_json(
         json!({
-            "lanes": [{ "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
+            "protocol": 1, "lanes": [{ "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
         })
         .to_string()
         .as_bytes(),
@@ -893,7 +894,9 @@ async fn ndjson_stream_writes_one_line_per_frame() {
 async fn streams_keep_returning_none_when_polled_after_the_end() {
     // HTTP bodies can be polled again after they end (the gzip response
     // layer's reader does); a bare unfold panics there.
-    let plan = || SyncPlan::from_json(json!({ "lanes": [] }).to_string().as_bytes()).unwrap();
+    let plan = || {
+        SyncPlan::from_json(json!({ "protocol": 1, "lanes": [] }).to_string().as_bytes()).unwrap()
+    };
 
     let mut lines = Box::pin(ndjson_stream(plan(), ScriptedExecutor::default()));
     assert!(lines.next().await.is_some(), "the end line");

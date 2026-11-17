@@ -26,6 +26,7 @@ Request body:
 
 ```json
 {
+  "protocol": 1,
   "lanes": [
     {
       "id": "tasks",
@@ -40,6 +41,8 @@ Request body:
 }
 ```
 
+- `protocol`: the sync protocol the client's cache engine speaks
+  (`cache_core::sync::SYNC_PROTOCOL`); see [Protocol versions](#protocol-versions).
 - `id`: `[a-z0-9-]{1,64}`, unique within the request.
 - `query`: server-safe GraphQL text (client-only directives removed); `query`
   operations only.
@@ -60,8 +63,9 @@ Request body:
 
 ### Server rules
 
-- 401 without an authenticated user; 400 for an invalid body or a non-query
-  operation; at most 32 lanes.
+- 401 without an authenticated user; 426 when the body names no protocol or
+  one the server does not speak, checked before the rest of the body; 400 for
+  an invalid body or a non-query operation; at most 32 lanes.
 - 409 when the user already has a stream open on this server task; 503 with
   `Retry-After` when the task already holds its most open streams
   (`MAX_STREAMS_PER_TASK`).
@@ -98,7 +102,8 @@ Request body:
 - Traced as one `soup.sync_stream` span (lanes, pages, items, bytes, time
   waited for turns, end reason) with a `soup.sync_stream.page` child per page
   (lane, page, time waited for its turn, items, outcome), under the request's
-  span, which adopts the app's `traceparent`. Counts are recorded as integers.
+  span, which adopts the app's `traceparent`. The stream span also records the
+  protocol it speaks. Counts are recorded as integers.
   No query text, variables or content in telemetry.
 
 ### Response
@@ -128,6 +133,29 @@ Request body:
   `maxPages`, `deadline` (the stream ran for its longest time; lanes resume
   from their last page's `nextVariables`), or `error` (a frame could not be
   encoded). A stream that closes without `end` was interrupted.
+
+## Protocol versions
+
+The protocol number names what the cache engine sends and how it reads the
+lines it gets: the request, the line types, their fields and what their values
+mean. The cache engine owns it, because it is the part that decodes the stream:
+the web app ships it in its Wasm, the native apps in their binary, which
+reaches users only through a store release. The server lists the versions it
+speaks in `soup_sync_stream::PROTOCOL_VERSIONS` and serves each client exactly
+the version it sent. Version 1 is the only one so far.
+
+- A new line type that an older engine may skip needs no new version: engines
+  skip line types they do not know (`SyncFrame::Unrecognized`), as they skip
+  `waiting`. A new field on an existing line needs none either.
+- Anything else is a new version: a request change, a new value for an
+  existing field (an end or `laneDone` reason), a line an older engine must
+  not skip, or a change in what a line means. Unknown values of known fields
+  fail the stream.
+- Raise the server's upper end, and deploy it, before any engine sends the new
+  version. Raise its lower end only once no supported client sends the old
+  one; until then the server keeps serving it.
+- A client the server refuses (426) cannot stream through it and runs the paged
+  backfill for the rest of the session, as on a host that cannot stream.
 
 ## Cache behaviour
 
@@ -228,9 +256,10 @@ threads, and calls, are not synced.
 `useSoupBackfills` (`apps/web/src/lib/queries/soup/backfill.ts`) runs the
 streamed sync in the leader tab when the remote flag
 `enable-streamed-cache-sync` is on and the cache host can stream
-(`isSyncHost`). Otherwise, and when a host answers `unsupported` (a native
-build older than the sync commands answers `Command … not found`), the paged
-backfill runs as before. A lane that fails is re-run in the same pass after
+(`isSyncHost`). Otherwise, when a host answers `unsupported` (a native build
+older than the sync commands answers `Command … not found`), and when the
+server refuses the cache engine's protocol (426), the paged backfill runs as
+before. A lane that fails is re-run in the same pass after
 2 s, then 4 s; after three failures it is left out of the pass and resumes on
 the next one. A first-pass stream the server ended early (`deadline`) is
 resumed until the pass completes, and only then does the second pass start.

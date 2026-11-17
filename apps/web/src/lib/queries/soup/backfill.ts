@@ -60,6 +60,7 @@ import {
   isSyncHost,
   nextSecondPassPages,
   SECOND_PASS_STREAM,
+  unsupportedWhenRefused,
 } from './sync/host';
 import type { SyncPass } from './sync/lanes';
 import {
@@ -794,7 +795,8 @@ function skipFailedLanes(failures: LaneFailures): {
 type StreamedSyncHost = CacheHost & SyncHost;
 
 /**
- * One stream of `pass`, retried with backoff (except `unsupported`). A busy
+ * One stream of `pass`, retried with backoff (except `unsupported`, which a
+ * server's refusal of the sync protocol counts as). A busy
  * server is asked again every `SYNC_BUSY_PAUSE_MS` for as long as it stays
  * busy, without spending retries. Every attempt re-plans from the cache's
  * saved lane state, so it resumes rather than restarts, and is one span of
@@ -825,7 +827,7 @@ const runSyncStream = (
       (outcome): Effect.Effect<Option.Option<SyncRunResult>, SyncFailure> =>
         outcome.ok
           ? Effect.succeed(Option.some(outcome.result))
-          : Effect.fail(outcome.failure)
+          : Effect.fail(unsupportedWhenRefused(outcome.failure))
     ),
     Effect.onInterrupt(() =>
       Effect.tryPromise(() => host.syncStop()).pipe(Effect.ignore)
@@ -1000,8 +1002,9 @@ const runStreamedSyncUntilDone = (host: StreamedSyncHost) =>
 /**
  * Keeps the cache synced: through the streamed sync when `streamed` is on and
  * the host can stream, otherwise through the paged backfill. A host that
- * reports it cannot stream (an older native build) falls back to the paged
- * backfill too. A streamed sync that stops after its retries runs again once
+ * reports it cannot stream (an older native build), or a server that refuses
+ * its cache engine's sync protocol (426), falls back to the paged backfill
+ * too. A streamed sync that stops after its retries runs again once
  * the device is back online, the app is back in the foreground, or a pause
  * ran out.
  */

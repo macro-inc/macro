@@ -288,7 +288,7 @@ fn a_run_writes_every_page_natively_and_publishes_it_like_hydration() {
     let body: Json = serde_json::from_slice(&requests[0].body).unwrap();
     assert_eq!(
         body,
-        json!({"lanes": [{
+        json!({"protocol": cache_core::sync::SYNC_PROTOCOL, "lanes": [{
             "id": "tasks",
             "query": TASKS,
             "operationName": "SyncTasks",

@@ -31,7 +31,8 @@ threads, pins, recents, notifications, folders, activity.
   search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
 - `src/api/graphql_soup/stream.rs`: `POST /soup/graphql/stream` (streamed
   cache sync): runs paged Soup and calendar queries with the `/soup/graphql`
-  request context and writes NDJSON; one open stream per user per task (409)
+  request context and writes NDJSON; 426 for a body whose sync protocol it
+  does not speak; one open stream per user per task (409)
   and at most `MAX_STREAMS_PER_TASK` open per task (503 with `Retry-After`).
   Open streams take turns on `PAGE_SLOTS` pages at once, so the number of
   streams does not change what they ask of the database. Lane loop, turns
