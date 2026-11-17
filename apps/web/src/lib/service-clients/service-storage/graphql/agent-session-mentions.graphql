@@ -10,7 +10,7 @@ query AgentSessionMentions($input: SoupInput!) {
           ownerId
           botId
           harness
-          bot { id name avatarUrl }
+          botProfile { ...BotFields }
           status
           createdAt
           updatedAt

@@ -17,11 +17,10 @@ vi.mock('@core/user', async (importOriginal) => ({
   getDisplayName: (id: string | undefined) =>
     id === 'macro|peter@example.com' ? 'Peter Park' : '',
 }));
-vi.mock('@queries/bots/profiles', () => ({
-  useBotProfile: () => ({
-    isPending: false,
-    isError: false,
-    data: { name: 'Deploy Bot', avatarUrl: undefined, deleted: true },
+vi.mock('@queries/bots/graphql-bots', () => ({
+  createBotIdentity: () => ({
+    isError: () => false,
+    data: () => ({ name: 'Deploy Bot', avatarUrl: undefined, deleted: true }),
   }),
 }));
 vi.mock('@queries/team/teams', () => ({

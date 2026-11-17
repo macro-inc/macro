@@ -1,6 +1,6 @@
 import type { MessageData } from '@core/messages/types';
 import { getDisplayName, tryMacroId } from '@core/user';
-import { useLiveBotSender } from '@queries/bots/profiles';
+import { useLiveBotSender } from '@queries/bots/live-bot-sender';
 import {
   getBotDisplayName,
   senderFromStorageId,

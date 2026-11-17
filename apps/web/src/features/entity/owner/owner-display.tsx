@@ -4,7 +4,7 @@ import { getDisplayName } from '@core/user';
 import type { MacroId } from '@core/user/macroId';
 import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { firstPartyBotName } from '@queries/bots/first-party-bot-name';
-import { useBotProfile } from '@queries/bots/profiles';
+import { createBotIdentity } from '@queries/bots/graphql-bots';
 import { queryReadyGate } from '@queries/gate';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import { Avatar, cn } from '@ui';
@@ -123,12 +123,12 @@ function ProfileBot(props: {
   iconOnly?: boolean;
   iconClass?: string;
 }): JSX.Element {
-  const profile = useBotProfile(() => props.botId);
-  const settled = () => (queryReadyGate(profile) ? profile.data : undefined);
+  const profile = createBotIdentity(() => props.botId);
+  const settled = () => profile.data();
   const name = () => {
     const found = settled();
     if (found) return botOwnerName(found);
-    return found === null || profile.isError ? 'Bot' : '';
+    return found === null || profile.isError() ? 'Bot' : '';
   };
   return (
     <BotFace

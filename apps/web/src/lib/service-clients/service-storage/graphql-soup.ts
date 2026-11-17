@@ -2026,7 +2026,11 @@ export function mapGraphqlAgentSessionRow(
       .exhaustive(() => null),
     pullRequestId: entity.pullRequestId,
     turnState: entity.turnState,
-    bot: entity.bot,
+    bot: entity.botProfile && {
+      id: entity.botProfile.id,
+      name: entity.botProfile.name,
+      avatarUrl: entity.botProfile.avatarUrl,
+    },
     threadId: entity.threadId,
     source: match(entity.source)
       .with('USER', () => 'user' as const)

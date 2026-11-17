@@ -43,11 +43,10 @@ vi.mock('@queries/agent-session/session', () => ({
     data: { canEdit: mocks.canEdit },
   }),
 }));
-vi.mock('@queries/bots/profiles', () => ({
-  useBotProfile: () => ({
-    isPending: false,
-    isError: false,
-    data: { name: 'Researcher', avatarUrl: undefined, deleted: false },
+vi.mock('@queries/bots/graphql-bots', () => ({
+  createBotIdentity: () => ({
+    isError: () => false,
+    data: () => ({ name: 'Researcher', avatarUrl: undefined, deleted: false }),
   }),
 }));
 vi.mock('@app/features/block-agent/ui/TextShimmer', () => ({

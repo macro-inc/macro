@@ -18,6 +18,14 @@ vi.mock('@core/mobile/native-network-status', () => ({
   },
 }));
 
+const botRecoveries = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/bots/bot-updates', () => ({
+  createBotUpdatesHandler: () => ({
+    onResult: () => {},
+    reconnect: botRecoveries,
+  }),
+}));
+
 function setNativeStatus(status: string) {
   for (const listener of [...nativeStatus.listeners]) listener(status);
 }
@@ -38,6 +46,7 @@ afterEach(() => {
 import { registerActiveGraphqlSoupQuery } from '../../queries/soup/graphql/active-queries';
 import {
   ActivityUpdatesDocument,
+  BotUpdatesDocument,
   NotificationUpdatesDocument,
   SoupUpdatesDocument,
 } from './graphql/generated/graphql';
@@ -212,6 +221,111 @@ describe('GraphQL Soup subscription lifecycle', () => {
     }
   });
 
+  function scriptedClient() {
+    const receive = new Map<
+      unknown,
+      (result: { data?: unknown; error?: unknown; hasNext?: boolean }) => void
+    >();
+    const unsubscribes = new Map<unknown, ReturnType<typeof vi.fn>[]>();
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn((document) => ({
+        subscribe: (
+          next: (result: {
+            data?: unknown;
+            error?: unknown;
+            hasNext?: boolean;
+          }) => void
+        ) => {
+          receive.set(document, next);
+          const unsubscribe = vi.fn();
+          unsubscribes.set(document, [
+            ...(unsubscribes.get(document) ?? []),
+            unsubscribe,
+          ]);
+          return { unsubscribe };
+        },
+      })),
+    };
+    const subscribed = (document: unknown) =>
+      client.subscription.mock.calls.filter(([called]) => called === document)
+        .length;
+    return { client, receive, unsubscribes, subscribed };
+  }
+
+  it('recovers bots on a reconnect, not on the first connection', () => {
+    const { client } = scriptedClient();
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never);
+    botRecoveries.mockClear();
+
+    lifecycle.connected();
+    expect(botRecoveries).not.toHaveBeenCalled();
+    lifecycle.connected();
+    expect(botRecoveries).toHaveBeenCalledOnce();
+    lifecycle.dispose();
+  });
+
+  it('resubscribes botUpdates alone, soon, after it falls behind, and recovers', () => {
+    vi.useFakeTimers();
+    const { client, receive, unsubscribes, subscribed } = scriptedClient();
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never);
+    botRecoveries.mockClear();
+    const fellBehind = {
+      error: {
+        graphQLErrors: [
+          { message: 'bot updates fell behind; resubscribe and refetch' },
+        ],
+      },
+      hasNext: false,
+    };
+
+    receive.get(BotUpdatesDocument)?.(fellBehind);
+    expect(subscribed(BotUpdatesDocument)).toBe(1);
+    vi.advanceTimersByTime(1_000);
+    expect(subscribed(BotUpdatesDocument)).toBe(2);
+    expect(botRecoveries).toHaveBeenCalledOnce();
+    // The other streams were never torn down.
+    expect(subscribed(NotificationUpdatesDocument)).toBe(1);
+    expect(
+      unsubscribes.get(NotificationUpdatesDocument)?.[0]
+    ).not.toHaveBeenCalled();
+
+    // Falling behind again backs off further.
+    receive.get(BotUpdatesDocument)?.(fellBehind);
+    vi.advanceTimersByTime(1_000);
+    expect(subscribed(BotUpdatesDocument)).toBe(2);
+    vi.advanceTimersByTime(1_000);
+    expect(subscribed(BotUpdatesDocument)).toBe(3);
+    lifecycle.dispose();
+  });
+
+  it('leaves the other streams alone when a server without botUpdates refuses it', () => {
+    vi.useFakeTimers();
+    const { client, receive, subscribed } = scriptedClient();
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never);
+
+    receive.get(BotUpdatesDocument)?.({
+      error: {
+        graphQLErrors: [
+          {
+            message:
+              'Unknown field "botUpdates" on type "CompleteSubscriptionRoot".',
+          },
+        ],
+      },
+      hasNext: false,
+    });
+    setVisibility('visible');
+    vi.advanceTimersByTime(120_000);
+
+    expect(subscribed(BotUpdatesDocument)).toBe(1);
+    expect(subscribed(NotificationUpdatesDocument)).toBe(1);
+    lifecycle.dispose();
+  });
+
   it('keeps notification and activity updates active with or without a cache host', () => {
     const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
     const receive = new Map<unknown, (result: { data?: unknown }) => void>();
@@ -241,6 +355,7 @@ describe('GraphQL Soup subscription lifecycle', () => {
       );
       expect(documents).toContain(NotificationUpdatesDocument);
       expect(documents).toContain(ActivityUpdatesDocument);
+      expect(documents).toContain(BotUpdatesDocument);
       expect(documents.includes(SoupUpdatesDocument)).toBe(
         host?.disabled === false
       );
@@ -320,21 +435,21 @@ describe('GraphQL Soup subscription lifecycle', () => {
         onCacheGenerationChanged: () => () => {},
       } as never
     );
-    expect(client.subscription).toHaveBeenCalledTimes(3);
+    expect(client.subscription).toHaveBeenCalledTimes(4);
     for (let cycle = 0; cycle < 2; cycle += 1) {
       dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
       for (const unsubscribe of unsubscribes)
         expect(unsubscribe).toHaveBeenCalledOnce();
       dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false }));
-      expect(client.subscription).toHaveBeenCalledTimes((cycle + 1) * 3);
+      expect(client.subscription).toHaveBeenCalledTimes((cycle + 1) * 4);
       dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
       dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
-      expect(client.subscription).toHaveBeenCalledTimes((cycle + 2) * 3);
+      expect(client.subscription).toHaveBeenCalledTimes((cycle + 2) * 4);
     }
     dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
     lifecycle.dispose();
     dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
-    expect(client.subscription).toHaveBeenCalledTimes(9);
+    expect(client.subscription).toHaveBeenCalledTimes(12);
     for (const unsubscribe of unsubscribes)
       expect(unsubscribe).toHaveBeenCalledOnce();
   });
@@ -350,7 +465,7 @@ describe('GraphQL Soup subscription lifecycle', () => {
     lifecycle.replace(client as never);
     dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
     dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
-    expect(client.subscription).toHaveBeenCalledTimes(2);
+    expect(client.subscription).toHaveBeenCalledTimes(3);
     expect(unsubscribe).not.toHaveBeenCalled();
     lifecycle.dispose();
   });
@@ -404,22 +519,26 @@ describe('GraphQL Soup subscription lifecycle', () => {
     };
     const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
     lifecycle.replace(client as never);
-    expect(client.subscription).toHaveBeenCalledTimes(2);
+    expect(client.subscription).toHaveBeenCalledTimes(3);
 
     // Results that keep the stream open never reattach it.
     receive[0]?.({ hasNext: true });
     setVisibility('visible');
-    expect(client.subscription).toHaveBeenCalledTimes(2);
+    expect(client.subscription).toHaveBeenCalledTimes(3);
 
     // A terminal result waits for an opportunity rather than a timer.
     const failed = receive[0];
     failed?.({ error: new Error('session rejected'), hasNext: false });
     receive[1]?.({ error: new Error('session rejected'), hasNext: false });
-    expect(client.subscription).toHaveBeenCalledTimes(2);
+    receive[2]?.({ error: new Error('session rejected'), hasNext: false });
+    expect(client.subscription).toHaveBeenCalledTimes(3);
 
+    botRecoveries.mockClear();
     setVisibility('visible');
-    expect(client.subscription).toHaveBeenCalledTimes(4);
-    for (const unsubscribe of unsubscribes.slice(0, 2))
+    expect(client.subscription).toHaveBeenCalledTimes(6);
+    // Bots pushed while the stream was down are read again.
+    expect(botRecoveries).toHaveBeenCalledOnce();
+    for (const unsubscribe of unsubscribes.slice(0, 3))
       expect(unsubscribe).toHaveBeenCalledOnce();
 
     // Late results from the replaced set and repeated signals do not
@@ -427,13 +546,13 @@ describe('GraphQL Soup subscription lifecycle', () => {
     failed?.({ error: new Error('stale'), hasNext: false });
     setVisibility('visible');
     dispatchEvent(new Event('online'));
-    expect(client.subscription).toHaveBeenCalledTimes(4);
+    expect(client.subscription).toHaveBeenCalledTimes(6);
     expect(telemetryError).toHaveBeenCalledOnce();
 
-    receive[2]?.({ error: new Error('again'), hasNext: false });
+    receive[3]?.({ error: new Error('again'), hasNext: false });
     lifecycle.dispose();
     dispatchEvent(new Event('online'));
-    expect(client.subscription).toHaveBeenCalledTimes(4);
+    expect(client.subscription).toHaveBeenCalledTimes(6);
   });
 
   it('signals a new outage after a successful reconnection', () => {

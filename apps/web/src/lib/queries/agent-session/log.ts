@@ -109,8 +109,8 @@ function isDirection(value: string): value is LogDirectionDto {
   return DIRECTIONS.has(value);
 }
 
-type LogData = NonNullable<AgentSessionLogQuery['user']['agentSession']>['log'];
-type LogEntry = LogData['entries'][number];
+type SessionData = NonNullable<AgentSessionLogQuery['user']['agentSession']>;
+type LogEntry = SessionData['log']['entries'][number];
 
 /** One GraphQL entry in the wire shape the fold reads. */
 function toRow(sessionId: string, entry: LogEntry): AgentSessionLogEntryDto {
@@ -129,15 +129,26 @@ function toRow(sessionId: string, entry: LogEntry): AgentSessionLogEntryDto {
 }
 
 /** The wire shape the fold reads, from the GraphQL selection. */
-function toSnapshot(sessionId: string, log: LogData): SessionLogSnapshot {
+function toSnapshot(
+  sessionId: string,
+  session: SessionData
+): SessionLogSnapshot {
+  // Null only when no bot has the session's id; its messages still need a
+  // sender.
+  const bot = session.botProfile ?? {
+    id: session.botId,
+    name: '',
+    handle: '',
+    avatarUrl: null,
+  };
   return {
     bot: {
-      id: log.bot.id,
-      name: log.bot.name,
-      handle: log.bot.handle,
-      ...(log.bot.avatarUrl === null ? {} : { avatarUrl: log.bot.avatarUrl }),
+      id: bot.id,
+      name: bot.name,
+      handle: bot.handle,
+      ...(bot.avatarUrl === null ? {} : { avatarUrl: bot.avatarUrl }),
     },
-    rows: log.entries.map((entry) => toRow(sessionId, entry)),
+    rows: session.log.entries.map((entry) => toRow(sessionId, entry)),
   };
 }
 
@@ -206,13 +217,13 @@ export function watchAgentSessionLog(
       );
       return;
     }
-    const log = result.data?.user.agentSession?.log;
-    if (!log) {
+    const session = result.data?.user.agentSession;
+    if (!session) {
       rejectFetched(new AgentSessionLogUnavailable(sessionId, 'inaccessible'));
       return;
     }
     try {
-      const snapshot = toSnapshot(sessionId, log);
+      const snapshot = toSnapshot(sessionId, session);
       appender?.fetched(snapshot.rows);
       resolveFetched(snapshot);
     } catch (error) {
@@ -238,12 +249,12 @@ export function watchAgentSessionLog(
         source === 'affected-cache-reread' ||
         result.stale;
       if (fromCache) {
-        const log = result.data?.user.agentSession?.log;
+        const session = result.data?.user.agentSession;
         // A cached miss or a cached refusal is not worth folding; the
         // network answer settles both.
-        if (log && !result.error) {
+        if (session && !result.error) {
           try {
-            hitCache(toSnapshot(sessionId, log));
+            hitCache(toSnapshot(sessionId, session));
           } catch {
             missCache('unreadable');
           }
@@ -462,8 +473,9 @@ async function appendAgentSessionLogRows(
   if (read.kind !== 'hit') return;
   // The generated document defines the normalized cache result's shape.
   const data = read.data as AgentSessionLogQuery;
-  const log = data.user.agentSession?.log;
-  if (!log) return;
+  const session = data.user.agentSession;
+  if (!session) return;
+  const log = session.log;
   const known = new Set(log.entries.map((entry) => entry.id));
   const appended = rows
     .filter((row) => !known.has(row.id))
@@ -481,8 +493,8 @@ async function appendAgentSessionLogRows(
       user: {
         id: data.user.id,
         agentSession: {
-          id: sessionId,
-          log: { bot: log.bot, entries: [...log.entries, ...appended] },
+          ...session,
+          log: { entries: [...log.entries, ...appended] },
         },
       },
     } satisfies AgentSessionLogQuery,

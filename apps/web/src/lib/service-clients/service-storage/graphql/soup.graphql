@@ -376,10 +376,8 @@ fragment SoupAgentSessionFields on GraphqlSoupAgentSession {
 	pullRequestState
 	pullRequestId
 	turnState
-	bot {
-		id
-		name
-		avatarUrl
+	botProfile {
+		...BotFields
 	}
 	threadId
 	source

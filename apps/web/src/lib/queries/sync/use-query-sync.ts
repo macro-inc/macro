@@ -24,11 +24,6 @@ import {
   handleAgentSessionUpdated,
   invalidateAgentSessionMetadata,
 } from '@queries/agent-session/session-metadata-sync';
-import {
-  BOT_PROFILE_CHANGED_EVENT,
-  handleBotProfileChanged,
-  invalidateBotProfiles,
-} from '@queries/bots/profile-sync';
 import { handleChannelAccessRequestChanged } from '@queries/channel/access-requests';
 import {
   handleChannelPictureChanged,
@@ -86,10 +81,6 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
   onCleanup(() =>
     ws.removeEventListener(WebsocketEvent.Open, invalidateChannelPictures)
   );
-  ws.addEventListener(WebsocketEvent.Open, invalidateBotProfiles);
-  onCleanup(() =>
-    ws.removeEventListener(WebsocketEvent.Open, invalidateBotProfiles)
-  );
   // Also cover the first connection: a lookup can finish before the socket opens.
   ws.addEventListener(WebsocketEvent.Open, invalidateAgentSessionMetadata);
   onCleanup(() =>
@@ -143,13 +134,6 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           data.type,
           data.data,
           handleChannelPictureChanged
-        );
-      })
-      .with({ type: BOT_PROFILE_CHANGED_EVENT }, () => {
-        withParsedWebsocketPayload(
-          data.type,
-          data.data,
-          handleBotProfileChanged
         );
       })
       .with({ type: 'user_picture_changed' }, () => {

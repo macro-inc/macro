@@ -4,6 +4,10 @@ type Entry<Item, Batch> = {
   ready: Promise<Batch | undefined>;
   resolve: (batch: Batch | undefined) => void;
   group?: { entries: Entry<Item, Batch>[]; value: Batch; dispose: () => void };
+  /** Pending release of a dispatched entry nobody holds, during `linger`. */
+  release?: ReturnType<typeof setTimeout>;
+  /** Out of the batcher; its group goes once every member is. */
+  released?: boolean;
 };
 
 /**
@@ -11,11 +15,14 @@ type Entry<Item, Batch> = {
  * A batch's variables never grow/change after dispatch: sibling mounts cannot
  * cancel a request or clear another preview. The last consumer owns teardown.
  * Create one batcher per client/session and query selection, not per component.
+ * With `linger`, a dispatched entry nobody holds stays live that long, so a
+ * remount (a recycled row, a reopened view) shows its data at once.
  */
 export function createLivePreviewBatcher<Item, Batch>(options: {
   start: (items: Item[]) => { value: Batch; dispose: () => void };
   wait?: number;
   maxSize?: number;
+  linger?: number;
 }) {
   const entries = new Map<string, Entry<Item, Batch>>();
   const pending = new Map<string, Entry<Item, Batch>>();
@@ -54,10 +61,26 @@ export function createLivePreviewBatcher<Item, Batch>(options: {
         pending.set(key, entry);
       }
       const current = entry;
+      clearTimeout(current.release);
+      current.release = undefined;
       current.listeners.add(listener);
       if (current.group) listener(current.group.value);
       else if (pending.size >= maxSize) flush();
       else timer ??= setTimeout(flush, options.wait ?? 30);
+
+      const release = () => {
+        current.release = undefined;
+        current.released = true;
+        entries.delete(key);
+        pending.delete(key);
+        current.resolve(undefined);
+        if (!pending.size) {
+          clearTimeout(timer);
+          timer = undefined;
+        }
+        const group = current.group;
+        if (group?.entries.every((entry) => entry.released)) group.dispose();
+      };
 
       let disposed = false;
       return {
@@ -67,20 +90,11 @@ export function createLivePreviewBatcher<Item, Batch>(options: {
           disposed = true;
           current.listeners.delete(listener);
           if (current.listeners.size) return;
-          entries.delete(key);
-          pending.delete(key);
-          current.resolve(undefined);
-          if (!pending.size) {
-            clearTimeout(timer);
-            timer = undefined;
+          if (options.linger && current.group) {
+            current.release = setTimeout(release, options.linger);
+            return;
           }
-          const group = current.group;
-          if (
-            group &&
-            group.entries.every((entry) => entry.listeners.size === 0)
-          ) {
-            group.dispose();
-          }
+          release();
         },
       };
     },
