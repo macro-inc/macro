@@ -31,6 +31,13 @@ read it before changing behaviour.
   harness listings mark an agent teammate's computer.
 - `src/outbound/`: Postgres repo, `IncusFleet`, dev-only `DockerFleet`, and
   `ConfiguredFleet` (explicit `COMPUTERS_FLEET`, never a fallback).
+- `src/outbound/incus_fleet/boot.rs`: direct kernel boot. A new computer
+  boots its image's kernel through `raw.qemu`, created from the image's
+  fingerprint, only when the host marked the image with
+  `user.macro.boot.append` after copying its boot files; any other case,
+  including a failed image listing, boots through firmware and records why
+  on `incus_fleet.create` (`boot.path`, `boot.fallback_reason`). Never let
+  this choice fail a create.
 
 ## Scope
 

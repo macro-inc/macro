@@ -215,6 +215,21 @@ impl IncusFleet {
         }
     }
 
+    /// How a computer created from `image` boots. Never fails: anything
+    /// short of boot files the host vouches for boots through firmware.
+    async fn boot_path(&self, image: &IncusImage) -> boot::BootPath {
+        if image.source.remote.is_some() {
+            return boot::BootPath::Firmware(boot::FirmwareReason::RemoteImage);
+        }
+        match self.client.images().await {
+            Ok(images) => boot::choose(&image.source, &images),
+            Err(error) => {
+                tracing::warn!(error = %error, "could not list images; booting through firmware");
+                boot::BootPath::Firmware(boot::FirmwareReason::ImageLookupFailed)
+            }
+        }
+    }
+
     async fn force_stop(&self, name: &InstanceName) -> Result<(), IncusFleetError> {
         match self.client.stop(name, true).await {
             Ok(()) | Err(IncusError::NotFound { .. }) => Ok(()),
@@ -276,7 +291,17 @@ impl Fleet for IncusFleet {
         &self.config.control_plane_id
     }
 
-    #[tracing::instrument(name = "incus_fleet.create", skip_all, fields(computer_id = %computer.id, start), err)]
+    #[tracing::instrument(
+        name = "incus_fleet.create",
+        skip_all,
+        fields(
+            computer_id = %computer.id,
+            start,
+            boot.path = tracing::field::Empty,
+            boot.fallback_reason = tracing::field::Empty
+        ),
+        err
+    )]
     async fn create(
         &self,
         computer: &Computer,
@@ -356,7 +381,12 @@ impl Fleet for IncusFleet {
                 let enrollment = enrollment.issue().await?;
                 let enrollment_json = zeroize::Zeroizing::new(serde_json::to_string(&enrollment)?);
                 let image = self.images.for_enrollment(&enrollment);
-                let boot = boot::BootPath::Firmware(boot::FirmwareReason::NoBootFiles);
+                let boot = self.boot_path(image).await;
+                let span = tracing::Span::current();
+                span.record("boot.path", boot.label());
+                if let Some(reason) = boot.fallback_reason() {
+                    span.record("boot.fallback_reason", reason.as_ref());
+                }
                 let mut body = instance_body(
                     &self.config,
                     image,
@@ -654,14 +684,32 @@ fn instance_body(
     computer: &Computer,
     enrollment_json: &str,
     created_at: DateTime<Utc>,
-    _boot: &boot::BootPath,
+    boot: &boot::BootPath,
 ) -> Result<types::InstancesPost, InvalidName> {
     let computer_id = computer.id;
     let resources = computer.resources;
-    let (alias, fingerprint) = match &image.source.reference {
-        ImageReference::Alias(alias) => (Some(alias.as_str().to_owned()), None),
-        ImageReference::Fingerprint(fingerprint) => (None, Some(fingerprint.clone())),
+    // A direct boot's files belong to one fingerprint, so the instance is
+    // created from it rather than from wherever the alias points by now.
+    let (alias, fingerprint) = match (boot, &image.source.reference) {
+        (boot::BootPath::Direct(direct), _) => (None, Some(direct.fingerprint().to_owned())),
+        (boot::BootPath::Firmware(_), ImageReference::Alias(alias)) => {
+            (Some(alias.as_str().to_owned()), None)
+        }
+        (boot::BootPath::Firmware(_), ImageReference::Fingerprint(fingerprint)) => {
+            (None, Some(fingerprint.clone()))
+        }
     };
+    let mut instance_config = instance_config(
+        &config.control_plane_id,
+        created_at,
+        computer_id,
+        &image.name,
+        resources,
+        enrollment_json,
+    );
+    if let boot::BootPath::Direct(direct) = boot {
+        instance_config.insert("raw.qemu".to_owned(), direct.raw_qemu());
+    }
     let (server, protocol) = match &image.source.remote {
         Some(remote) => (
             Some(remote.server.clone()),
@@ -677,14 +725,7 @@ fn instance_body(
             InstanceKind::VirtualMachine.as_ref().to_owned(),
         )),
         profiles: Some(vec![config.profile.as_str().to_owned()]),
-        config: Some(types::ConfigMap(instance_config(
-            &config.control_plane_id,
-            created_at,
-            computer_id,
-            &image.name,
-            resources,
-            enrollment_json,
-        ))),
+        config: Some(types::ConfigMap(instance_config)),
         devices: Some(types::DevicesMap(BTreeMap::from([
             ("root".to_owned(), root_device(config.storage_pool.as_str())),
             (

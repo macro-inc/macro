@@ -21,7 +21,7 @@ inbound = [
   "pairing_id/schema",
   "ports",
 ]
-outbound = ["dep:harnesses", "dep:incus_client", "dep:macro_env", "dep:sqlx", "ports", "tokio/fs", "tokio/process", "tokio/time"]
+outbound = ["dep:harnesses", "dep:incus_client", "dep:lazy-regex", "dep:macro_env", "dep:sqlx", "ports", "tokio/fs", "tokio/process", "tokio/time"]
 ports = []
 
 [dependencies]
@@ -35,6 +35,7 @@ feature_flags = { path = "../feature_flags" }
 harness_id = { path = "../harness_id" }
 harnesses = { path = "../harnesses", optional = true, default-features = false, features = ["outbound"] }
 incus_client = { path = "../incus_client", optional = true }
+lazy-regex = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false }
 macro_env = { path = "../macro_env", optional = true }
 macro_user_id = { path = "../macro_user_id" }

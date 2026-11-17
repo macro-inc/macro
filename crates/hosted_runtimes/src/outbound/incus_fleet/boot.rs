@@ -80,14 +80,44 @@ impl DirectBoot {
         &self.fingerprint
     }
 
-    /// The `raw.qemu` instance config that boots the image's kernel.
+    /// The `raw.qemu` instance config that boots the image's kernel. Incus
+    /// splits it like a shell, so the command line is single-quoted; [`choose`]
+    /// only accepts one without quotes, backslashes or line breaks.
     pub fn raw_qemu(&self) -> String {
-        String::new()
+        let directory = format!("{BOOT_FILES_DIR}/{}", self.fingerprint);
+        format!(
+            "-kernel {directory}/kernel -initrd {directory}/initrd -append '{}'",
+            self.append
+        )
     }
 }
 
 /// How an instance created from `source` boots, given the host's images.
-pub fn choose(_source: &ImageSource, _images: &[ImageInfo]) -> BootPath {
-    let _ = (ImageReference::Fingerprint(String::new()), BOOT_FILES_DIR);
-    BootPath::Firmware(FirmwareReason::NoBootFiles)
+pub fn choose(source: &ImageSource, images: &[ImageInfo]) -> BootPath {
+    if source.remote.is_some() {
+        return BootPath::Firmware(FirmwareReason::RemoteImage);
+    }
+    let Some(image) = images.iter().find(|image| match &source.reference {
+        ImageReference::Alias(alias) => image.aliases.contains(alias),
+        ImageReference::Fingerprint(fingerprint) => &image.fingerprint == fingerprint,
+    }) else {
+        return BootPath::Firmware(FirmwareReason::ImageMissing);
+    };
+    let Some(append) = image.properties.get(BOOT_APPEND_PROPERTY) else {
+        return BootPath::Firmware(FirmwareReason::NoBootFiles);
+    };
+    // A fingerprint names a directory; the command line is a NixOS system's
+    // init plus plain kernel parameters, which is all the host writes.
+    if !lazy_regex::regex_is_match!(r"^[0-9a-f]{64}$", &image.fingerprint)
+        || !lazy_regex::regex_is_match!(
+            r#"^init=/nix/store/[^\s'"\\/]+/init( [^\s'"\\]+)*$"#,
+            append
+        )
+    {
+        return BootPath::Firmware(FirmwareReason::InvalidBootFiles);
+    }
+    BootPath::Direct(DirectBoot {
+        fingerprint: image.fingerprint.clone(),
+        append: append.clone(),
+    })
 }

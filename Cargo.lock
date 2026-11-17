@@ -10366,6 +10366,7 @@ dependencies = [
  "harness_id",
  "harnesses",
  "incus_client",
+ "lazy-regex",
  "macro_authorization",
  "macro_db_migrator",
  "macro_env",
