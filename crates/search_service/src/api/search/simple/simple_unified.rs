@@ -639,8 +639,7 @@ async fn search_unified_sources(
         mut filter_project_response,
         mut filter_call_record_response,
         mut filter_calendar_event_response,
-    ) = filter_responses
-        .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
+    ) = filter_responses?;
 
     // Set terms on each index's search args.
     //
