@@ -1,5 +1,6 @@
 import type { ChannelEntity } from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
+import { CombinedError } from '@urql/core';
 import { type Accessor, createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createChannelDetailSource } from './channel-detail-source';
@@ -105,6 +106,15 @@ describe('channel detail source', () => {
     setFetching(true);
     expect(source.load()).toEqual({ status: 'pending' });
     expect(readData).not.toHaveBeenCalled();
+  });
+
+  it('keeps a held channel when the request got no response', () => {
+    const { source, setError, setEntities } = setup();
+    const error = new CombinedError({ networkError: new Error('Offline') });
+    setError(error);
+    expect(source.load()).toEqual({ status: 'ready', channel: full });
+    setEntities([]);
+    expect(source.load()).toEqual({ status: 'error', error });
   });
 
   it('exposes failures and missing results without accepting another channel’s data', () => {

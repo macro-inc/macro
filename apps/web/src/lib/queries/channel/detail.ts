@@ -1,3 +1,4 @@
+import { isResponseFreeNetworkError } from '@core/util/request-error';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import {
   ChannelDetailSoupDocument,
@@ -56,6 +57,14 @@ export function createChannelDetailQuery(
       ? value.result
       : undefined;
   };
+  // A request that got no response, as without a connection, decided
+  // nothing: what the device holds of the channel stays readable.
+  const decided = () => {
+    const value = currentServer();
+    return value?.error && isResponseFreeNetworkError(value.error)
+      ? undefined
+      : value;
+  };
   const includesChannel = (data: ChannelDetailSoupQuery | undefined) =>
     data?.user?.soup?.items.some((item) => item.id === channelId()) ?? false;
   const variables = createMemo(() => {
@@ -75,8 +84,21 @@ export function createChannelDetailQuery(
       onResult: (result) => {
         const source = normalizedCacheResultMetadata(result)?.source;
         if (!source || source === 'live-network') {
-          if (!result.stale && !result.hasNext)
-            setServer({ id, client, result });
+          if (result.stale || result.hasNext) return;
+          // A request that got no response decided nothing: it never
+          // replaces what the server said of this channel before.
+          const earlier = server();
+          const undecided =
+            !!result.error && isResponseFreeNetworkError(result.error);
+          if (
+            undecided &&
+            earlier?.id === id &&
+            earlier?.client === client &&
+            !isResponseFreeNetworkError(earlier?.result.error)
+          ) {
+            return;
+          }
+          setServer({ id, client, result });
           return;
         }
         if (result.stale || result.hasNext) return;
@@ -108,7 +130,7 @@ export function createChannelDetailQuery(
   });
   const data = createMemo(() => {
     if (query.isPending) return undefined;
-    const confirmed = currentServer();
+    const confirmed = decided();
     if (confirmed?.error) return undefined;
     // A confirmed absence must also win over later stale positive cache rows.
     let value = confirmed?.data;
