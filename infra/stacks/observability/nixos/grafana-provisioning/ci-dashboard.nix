@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }:
+{ lib }:
 let
   tempo = {
     type = "tempo";
@@ -196,21 +196,4 @@ let
     ];
   };
 in
-{
-  services.grafana.provision.dashboards.settings.providers = [
-    {
-      name = "macro-ci";
-      orgId = 1;
-      folder = "Macro";
-      type = "file";
-      disableDeletion = true;
-      allowUiUpdates = false;
-      options.path = pkgs.linkFarm "macro-ci-dashboard" [
-        {
-          name = "ci.json";
-          path = pkgs.writeText "ci.json" (builtins.toJSON dashboard);
-        }
-      ];
-    }
-  ];
-}
+dashboard

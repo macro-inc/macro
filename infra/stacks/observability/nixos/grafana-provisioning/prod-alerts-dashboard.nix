@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }:
+{ lib }:
 let
   prodAlerts = import ./prod-alerts.nix;
   datasource = {
@@ -123,21 +123,4 @@ let
     inherit panels;
   };
 in
-{
-  services.grafana.provision.dashboards.settings.providers = [
-    {
-      name = "macro-prod-alerts";
-      orgId = 1;
-      folder = "Macro";
-      type = "file";
-      disableDeletion = true;
-      allowUiUpdates = false;
-      options.path = pkgs.linkFarm "macro-prod-alerts-dashboard" [
-        {
-          name = "prod-alerts.json";
-          path = pkgs.writeText "prod-alerts.json" (builtins.toJSON dashboard);
-        }
-      ];
-    }
-  ];
-}
+dashboard
