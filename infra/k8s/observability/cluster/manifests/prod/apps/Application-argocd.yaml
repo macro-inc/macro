@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  destination:
+    namespace: argocd
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: ./infra/k8s/observability/cluster/manifests/prod/argocd
+    repoURL: https://github.com/macro-inc/macro.git
+    targetRevision: main
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
+      limit: 10
+    syncOptions:
+      - ServerSideApply=true

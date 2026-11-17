@@ -1,0 +1,22 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: cert-manager
+    app.kubernetes.io/component: cert-manager
+    app.kubernetes.io/instance: cert-manager
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: cert-manager
+    app.kubernetes.io/version: v1.21.3
+    helm.sh/chart: cert-manager-v1.21.3
+  name: cert-manager-controller-approve:cert-manager-io
+rules:
+  - apiGroups:
+      - cert-manager.io
+    resourceNames:
+      - issuers.cert-manager.io/*
+      - clusterissuers.cert-manager.io/*
+    resources:
+      - signers
+    verbs:
+      - approve
