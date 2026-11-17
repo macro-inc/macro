@@ -38,7 +38,7 @@ scheduler's spec.
   never an address): its email thread's newest message, or its channel
   message, unless the person sent it, read when a session writes it
   (`ReplyWaits`, `outbound/reply_waits.rs`, wired in the harness; kept as it
-  was when the item can't be read) and cleared when it is resolved. Its draft
+  was when the item can't be read) and cleared when it is answered or resolved. Its draft
   carries `preview`, the first 300 characters of its plain text, read when it
   is attached.
 - The person takes back a dismissal within five minutes
@@ -57,8 +57,9 @@ scheduler's spec.
   abandoned), of either kind, gets 403 (`Generating`), since hidden sessions
   only manage the feed through their own tools. The harness refuses to start
   without validating requests' attribution. An agent accepting a background
-  prompt suggestion only takes it on (the person runs it from the app); any
-  other suggestion but a routine one becomes done either way.
+  prompt suggestion only takes it on (the person runs it from the app);
+  accepting a reply suggestion only takes it on, whoever does it; any other
+  suggestion but a routine one becomes done either way.
 - New since the last visit: the app sends `POST /suggestions/viewed` once the
   feed is on screen, which stores the time in `suggestion_feed_view` (one row
   per person; a time never goes back). The feed marks an open suggestion
@@ -78,10 +79,12 @@ scheduler's spec.
   reconciliation, auto-retire or scoring code here.
 - The one exception is resolution by events (`domain/resolution.rs`, consumed
   by `inbound/kafka_consumer.rs`, group `suggestions-resolution`, run by the
-  harness): open suggestions are resolved with `state_reason` `replied` (the
-  owner's own `email.message_sent` on the thread, or `message.posted` in the
-  item or in the suggestion's thread part, after the suggestion was created; reply suggestions
-  only), `deleted` (`document.deleted`/`purged`, `channel.deleted`,
+  harness): the owner's own reply (`email.message_sent` on the thread, sent
+  from the app or the suggestion's draft included, or `message.posted` in the
+  item or in the suggestion's thread part, after the suggestion was created)
+  makes the open reply suggestions it answers done (lifecycle event `answer`,
+  `state_reason` empty; rows from before keep `replied`); other open
+  suggestions are resolved with `state_reason` `deleted` (`document.deleted`/`purged`, `channel.deleted`,
   `message.deleted` for that part, `project.deleted`/`permanently_deleted`) or
   `access_lost` (`channel.participant_removed`, or a document's share
   permissions changing, then only for people `SuggestionAccess` now refuses). Keep
@@ -99,9 +102,9 @@ scheduler's spec.
   in an email thread the suggestion is about. It is stored as the `suggestion_target` of
   role `draft` (the thread, with the draft as the part); a new one replaces
   it, logged as `rewritten` with `{"draft": ...}` before and after. While a
-  suggestion has a draft, its `about` keeps the draft's thread. A sent draft
-  resolves the suggestion through `email.message_sent` on that thread, like any
-  reply. Deleting a draft publishes no event (`email.message_deleted` comes
+  suggestion has a draft, its `about` keeps the draft's thread. Opening the
+  draft only takes the suggestion on; the sent draft makes it done through
+  `email.message_sent` on that thread, like any reply. Deleting a draft publishes no event (`email.message_deleted` comes
   only from provider sync), so the link stays until a session replaces it.
 
 ## Start here
@@ -203,9 +206,12 @@ scheduler's spec.
   `cancelling` in the same write (`lifecycle::cancels_run`); dismiss and retire
   also stop its session at once, resolve leaves that to the sweep. A cancelled
   run that finishes never makes its suggestion done, even one restored and
-  taken on again since; it records what it made. Accepting any other
-  suggestion except a routine suggestion makes it done (`done` in the feed);
-  accepting a done suggestion again changes nothing.
+  taken on again since; it records what it made. Accepting a reply
+  suggestion (opening its thread or draft) only takes it on: it stays `open`
+  in the feed until the person's reply makes it done (resolution, above), and
+  accepting it again changes nothing. Accepting any other suggestion except a
+  routine suggestion makes it done (`done` in the feed); accepting a done
+  suggestion again changes nothing.
 - Every state write follows the suggestion lifecycle table
   (`domain/lifecycle.rs`): the service asks it where an event moves a
   suggestion, and each SQL guard allows exactly its sources
