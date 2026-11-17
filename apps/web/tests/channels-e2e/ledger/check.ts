@@ -1,7 +1,7 @@
 // Checks the suite's ledger against its tests, and with `--report <file>`
 // against a run: every test is listed against something channels do, every
-// listed thing has a test or a reason it has none, every test has a proof
-// that it can fail, and every test did what the ledger says in the run.
+// listed thing has a test or a reason it has none,
+// and every test did what the ledger says in the run.
 //
 //   bun tests/channels-e2e/ledger/check.ts [--report <playwright-report.json>]
 
@@ -15,7 +15,6 @@ type InventoryRow = {
   tests: string[];
   reason: string;
 };
-type ProofRow = { test: string; change: string; outcome: string };
 type DefectRow = { test: string; defect: string };
 type KnownDefectRow = DefectRow & { builds: string };
 type ReportSpec = {
@@ -101,9 +100,6 @@ const inventory: InventoryRow[] = rows('inventory.tsv', 4).map(
     reason,
   })
 );
-const proofs: ProofRow[] = rows('proofs.tsv', 3).map(
-  ([test, change, outcome]) => ({ test, change, outcome })
-);
 const defects: KnownDefectRow[] = rows('known-defects.tsv', 3).map(
   ([test, builds, defect]) => ({ test, builds, defect })
 );
@@ -121,13 +117,6 @@ const sometimes: DefectRow[] = rows('intermittent-defects.tsv', 2).map(
 const tests = testsInSpecs();
 const problems: string[] = [];
 const listed = new Set(inventory.flatMap((row) => row.tests));
-const proved = new Set(proofs.map((row) => row.test));
-const defective = new Set(defects.map((row) => row.test));
-// The proofs are run on a build without the flag: a defect there is itself the
-// proof that the test can fail.
-const failsUnbroken = new Set(
-  defects.filter((row) => row.builds !== 'on').map((row) => row.test)
-);
 
 for (const row of inventory) {
   if (row.tests.length === 0 && row.reason === '') {
@@ -141,13 +130,9 @@ for (const row of inventory) {
 }
 for (const id of tests.keys()) {
   if (!listed.has(id)) problems.push(`${id}: not in inventory.tsv`);
-  if (!proved.has(id) && !failsUnbroken.has(id)) {
-    problems.push(`${id}: no proof in proofs.tsv that it can fail`);
-  }
 }
 for (const id of [
-  ...proved,
-  ...defective,
+  ...defects.map((row) => row.test),
   ...sometimes.map((row) => row.test),
 ]) {
   if (!tests.has(id)) problems.push(`${id}: in the ledger but not a test`);

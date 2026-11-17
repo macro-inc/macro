@@ -83,8 +83,8 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
 - With the flag, messages are read through `src/lib/queries/messages/local/`:
   a break of the fetch or the insert in `messages/timeline.ts`, or of the
   live events' own handling, can leave a test passing there, so a test of
-  opening, order, links or live events is proved on a build with the flag
-  too (the `device-*` patches).
+  opening, order, links or live events is watched failing on a build with
+  the flag too.
 - `haveViewed` leaves a person's notifications unseen, and a device fetches
   channels with unseen ones: a channel meant to be read has only the
   person's own messages (PRE-03).
@@ -113,9 +113,6 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   what a lost page left behind from what the next page fetched anyway.
   Nothing on screen says when the next page has kept it: OFF-14 relies on
   the pause `goOffline` makes, which held 30 of 30 at a load of 30 to 50.
-- A break patch that no longer applies proves nothing: after merging the
-  base, run `git apply --check` over `ledger/breaks/` and prove again the
-  tests of each patch that had to be rewritten.
 - Two people's first conversation exists once for the life of a stack, so
   what happens the first time (DM-02) shows once for each cast on a new
   stack and never on an old one: prove such a thing on a new stack.

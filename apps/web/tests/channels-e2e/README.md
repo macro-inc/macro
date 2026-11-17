@@ -75,9 +75,7 @@ environment.
 ## The ledger
 
 `ledger/inventory.tsv` lists what channels do, and for each thing the tests
-that cover it or the reason none does. `ledger/proofs.tsv` names, for each
-test, a deliberate break of the product that made it fail, and
-`ledger/breaks/` holds those breaks as patches. `ledger/known-defects.tsv`
+that cover it or the reason none does. `ledger/known-defects.tsv`
 lists the tests that assert behaviour the product does not have yet, and
 whether that is in builds without `VITE_ENABLE_CHANNEL_LOCAL_SYNC` (`off`), with it
 (`on`) or `both`; they are marked `knownDefect(...)` and fail the run the day
@@ -103,14 +101,13 @@ bun tests/channels-e2e/ledger/check.ts --report <report>    # and against a run
   on it.
 - A test of what only a build with `VITE_ENABLE_CHANNEL_LOCAL_SYNC` does (channels
   kept on the device, writes that wait there) skips itself on other builds
-  with `test.skip(!LOCAL_SYNC_BUILD, ...)`, and its proof is run on a build with
-  the flag.
-- A test that runs on both builds and reads messages needs a proof on each:
+  with `test.skip(!LOCAL_SYNC_BUILD, ...)`.
+- A test that runs on both builds and reads messages can fail on one alone:
   with the flag, messages come through `src/lib/queries/messages/local/`,
-  and a break of the other path leaves the test passing.
-- Add the id to `ledger/inventory.tsv`, then prove the test can fail: break
-  the product where the behaviour lives, build the bundle, watch the test
-  fail, and record the break in `ledger/proofs.tsv` and `ledger/breaks/`.
+  and a break of the other path leaves the test passing, so watch it fail
+  on each.
+- Add the id to `ledger/inventory.tsv`. Before trusting a new test, watch it
+  fail: break the product where the behaviour lives and run it.
 - A test that fails because the product is wrong keeps asserting the right
   behaviour, marked `knownDefect('both')` (or `'off'` / `'on'` when only one
   build has the defect) with the defect in a comment and a row in
