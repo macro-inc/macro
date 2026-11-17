@@ -732,14 +732,14 @@ pub(super) enum BranchFacts<'a> {
     /// None: the branches list a superset of the candidate threads, which
     /// the caller matches thread by thread with the full message check and
     /// its inboxes.
-    Skipped,
+    Skipped { indexed_recipients: bool },
 }
 
 impl BranchFacts<'_> {
     fn check(self) -> SqlFragment {
         match self {
             Self::Checked(resolved) => build_trash_check(resolved),
-            Self::Skipped => SqlFragment::raw("TRUE"),
+            Self::Skipped { .. } => SqlFragment::raw("TRUE"),
         }
     }
 
@@ -750,7 +750,7 @@ impl BranchFacts<'_> {
     fn message_scope(self, link_scope: Option<&[Uuid]>) -> Option<&[Uuid]> {
         match self {
             Self::Checked(_) => link_scope,
-            Self::Skipped => None,
+            Self::Skipped { .. } => None,
         }
     }
 }
@@ -844,11 +844,30 @@ fn text_recipient_branch(
     facts: BranchFacts,
     link_scope: Option<&[Uuid]>,
 ) -> SqlFragment {
+    // Fence all-role branches of the capped probe and sparse page: overestimated
+    // contact matches otherwise scan either whole table. Keep joined SQL for
+    // dense, checked, and role-restricted branches; a rare role can still read
+    // every recipient of a dense domain before the cap finds a matching row.
+    let joins = match facts {
+        BranchFacts::Skipped {
+            indexed_recipients: true,
+        } if kinds.to && kinds.cc && kinds.bcc => {
+            "CROSS JOIN LATERAL ( \
+                 SELECT message_id, recipient_type FROM email_message_recipients \
+                 WHERE contact_id = c.id OFFSET 0 \
+             ) mr \
+             CROSS JOIN LATERAL ( \
+                 SELECT id, thread_id, link_id FROM email_messages \
+                 WHERE id = mr.message_id OFFSET 0 \
+             ) m "
+        }
+        BranchFacts::Checked(_) | BranchFacts::Skipped { .. } => {
+            "JOIN email_message_recipients mr ON mr.contact_id = c.id \
+             JOIN email_messages m ON m.id = mr.message_id "
+        }
+    };
     let mut f = SqlFragment::raw(format!(
-        "SELECT m.thread_id FROM {cte_name} c \
-         JOIN email_message_recipients mr ON mr.contact_id = c.id \
-         JOIN email_messages m ON m.id = mr.message_id \
-         WHERE "
+        "SELECT m.thread_id FROM {cte_name} c {joins}WHERE "
     ));
     f.extend(facts.check());
     f.push_raw(kinds.recipient_type_sql());
@@ -989,6 +1008,8 @@ pub(super) fn build_matching_threads_ctes(
 pub(super) struct AddressSuperset {
     pub(super) contact_ctes: Vec<(String, SqlFragment)>,
     pub(super) branches: Vec<SqlFragment>,
+    /// Recipient probes for the initial capped count and a sparse page.
+    pub(super) indexed_branches: Vec<SqlFragment>,
 }
 
 /// [`AddressSuperset`] for a tree whose only pure-address top-level conjunct
@@ -1006,15 +1027,27 @@ pub(super) fn build_address_superset(
         return None;
     };
     let literals = flatten_or_tree_of_address_literals(conjunct)?;
+    let resolved = resolved.within_links(links);
     let (contact_ctes, branches) = address_groups::build(
+        literals.clone(),
+        &resolved,
+        BranchFacts::Skipped {
+            indexed_recipients: false,
+        },
+        Some(links),
+    );
+    let (_, indexed_branches) = address_groups::build(
         literals,
-        &resolved.within_links(links),
-        BranchFacts::Skipped,
+        &resolved,
+        BranchFacts::Skipped {
+            indexed_recipients: true,
+        },
         Some(links),
     );
     Some(AddressSuperset {
         contact_ctes,
         branches,
+        indexed_branches,
     })
 }
 
