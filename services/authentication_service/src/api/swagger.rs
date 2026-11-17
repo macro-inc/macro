@@ -20,7 +20,6 @@ use teams::domain::model::{
     PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamInviteLinkTeam,
     TeamInviteLinkToken, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
 };
-use teams::inbound::axum_router::domain_notice::SendDomainNoticeResponse;
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
 use teams::inbound::axum_router::invite_link::{
@@ -208,7 +207,6 @@ use model::user::{
                 team_agents::inbound::axum_router::delete_team_agent_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 team_agents::inbound::axum_router::get_team_agent_voice_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 team_agents::inbound::axum_router::set_team_agent_voice_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
-                teams::inbound::axum_router::domain_notice::handler::<crate::api::context::DomainNoticeServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::toggle_non_admin_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::get_user_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
@@ -400,7 +398,6 @@ use model::user::{
                         hosted_runtimes::inbound::axum_router::PurchaseState,
                         hosted_runtimes::inbound::axum_router::PowerBody,
                         hosted_runtimes::inbound::axum_router::ReleaseBody,
-                        SendDomainNoticeResponse,
                         ToggleNonAdminInvitesResponse,
                         TeamInviteLinkResponse,
                         CreatedTeamInviteLinkResponse,

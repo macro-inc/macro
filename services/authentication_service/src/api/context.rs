@@ -114,16 +114,6 @@ pub(crate) type SubscriptionStatusServiceType =
         StripePlanGatewayType,
     >;
 
-pub(crate) type DomainNoticeServiceType = teams::domain::domain_notice::DomainNoticeServiceImpl<
-    teams::outbound::colleague_directory::ContactsColleagueDirectory<
-        contacts::outbound::repository::DbContactsRepository,
-    >,
-    teams::domain::join_announcement::JoinAnnouncementServiceImpl<
-        teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl,
-        NotificationIngressType,
-    >,
->;
-
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
@@ -299,7 +289,6 @@ pub(crate) struct ApiContext {
     pub stripe_webhook_secret: LocalOrRemoteSecret<StripeWebhookSecretKey>,
     pub user_roles_and_permissions_service: Arc<UserRolesAndPermissionsServiceImpl<MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
-    pub domain_notice_service: Arc<DomainNoticeServiceType>,
     pub channel_service: Arc<ChannelServiceType>,
     pub channel_messages: Arc<dyn messages::domain::api::MessageCommands>,
     pub favorites_service: Arc<FavoritesServiceType>,

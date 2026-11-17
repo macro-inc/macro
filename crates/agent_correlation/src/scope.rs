@@ -162,7 +162,6 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/web/search"),
     ("POST", "/team/invite"),
     ("POST", "/team/invite-link"),
-    ("POST", "/team/domain-notice"),
     ("POST", "/referral/send"),
     ("POST", "/mobile-welcome-email"),
     ("POST", "/gtm-invite/links"),

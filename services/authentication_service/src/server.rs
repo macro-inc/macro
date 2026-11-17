@@ -767,23 +767,6 @@ async fn run_server() -> anyhow::Result<()> {
         feature_flags.clone(),
         crate::outbound::agent_addresses::AgentAddresses,
     ));
-    let domain_notice_service =
-        Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
-            teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
-                contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-            ),
-            teams::domain::join_announcement::JoinAnnouncementServiceImpl::new(
-                teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl::new(
-                    db.clone(),
-                ),
-                SqsNotificationIngress {
-                    queue: SqsQueue::new(
-                        aws_sdk_sqs::Client::new(&aws_config),
-                        notification_queue.to_string(),
-                    ),
-                },
-            ),
-        ));
     // Reminds people of team invites they have not answered. Replicas claim
     // disjoint invites, so every replica sweeps.
     let invite_reminders_stop = CancellationToken::new();
@@ -968,7 +951,6 @@ async fn run_server() -> anyhow::Result<()> {
             stripe_inbox,
             computer_service,
             team_agents_service,
-            domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,
             favorites_service: Arc::new(favorites_service),
