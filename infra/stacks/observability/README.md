@@ -236,7 +236,8 @@ packages, configuration, service users, resource limits and startup dependencies
 
 - `nixos/services.nix`: native application services and runtime credentials.
 - `nixos/grafana.nix` and `nixos/datasources.nix`: Grafana access policy and datasources.
-- `nixos/backend-config.nix`: Loki, Tempo and Prometheus settings.
+- `nixos/backend-config.nix`: Loki, Tempo and Prometheus settings, which the
+  EKS cluster's backends also use (`infra/k8s/observability/cluster`).
 - `nixos/ingest.alloy`: unprivileged OTLP receiver and export pipeline.
 - `nixos/host-telemetry.nix` and `nixos/host.alloy`: host metrics and journal logs.
 - `nixos/cloudwatch.nix`: independent disk and memory health metrics.
