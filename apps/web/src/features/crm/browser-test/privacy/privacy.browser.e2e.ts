@@ -689,58 +689,60 @@ test('email mention preview opens its thread and dismisses settings', async ({
   await expect(page.getByTestId('last-change')).toBeEmpty();
 });
 
-test('denied members keep consent controls without reading excluded-thread lists', async ({
+test('denied members can open and remove their excluded threads without CRM record reads', async ({
   page,
 }) => {
+  const dataRequests: string[] = [];
+  page.on('request', (request) => {
+    if (['fetch', 'xhr'].includes(request.resourceType()))
+      dataRequests.push(request.url());
+  });
   await page.goto('/?no-access&contributing');
-  await page
-    .getByRole('button', { name: 'Email settings', exact: true })
-    .waitFor();
   await page
     .getByRole('button', { name: 'Email settings', exact: true })
     .click();
   const dialog = page.getByRole('dialog');
-  const closeDialog = async () => {
-    const close = dialog.getByRole('button', { name: 'Dismiss', exact: true });
-    if (await close.isVisible()) await close.click();
-    else
-      await page
-        .locator('[data-corvu-drawer-overlay]')
-        .click({ position: { x: 8, y: 8 } });
-    await expect(dialog).toBeHidden();
-  };
   await expect(
     dialog.getByRole('button', { name: 'Stop sharing my emails', exact: true })
   ).toBeVisible();
   await expect(
     dialog.getByText('Excluded threads', { exact: true })
-  ).toHaveCount(0);
-  await expect(page.getByTestId('excluded-list-reads')).toHaveText('0');
-  await closeDialog();
-  await page
-    .getByRole('button', { name: 'Toggle CRM access', exact: true })
-    .click();
-  await page
-    .getByRole('button', { name: 'Email settings', exact: true })
-    .click();
-  await expect(
-    dialog.getByText('Excluded threads', { exact: true })
-  ).toBeVisible();
-  await expect(
-    dialog.getByText('Private conversation', { exact: true })
   ).toBeVisible();
   await expect(page.getByTestId('excluded-list-reads')).not.toHaveText('0');
-  await closeDialog();
-  await page
-    .getByRole('button', { name: 'Toggle CRM access', exact: true })
-    .click();
+  const thread = dialog.getByRole('link', {
+    name: 'Private conversation',
+    exact: true,
+  });
+  await expect(thread.locator('[data-document-mention]')).toHaveAttribute(
+    'data-block-name',
+    'email'
+  );
+  await thread.click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.locator(
+      '[data-testid="pane"][data-content="00000000-0000-4000-8000-000000000046"]'
+    )
+  ).toHaveAttribute('data-active', 'true');
   await page
     .getByRole('button', { name: 'Email settings', exact: true })
     .click();
+  await dialog
+    .getByRole('button', {
+      name: 'Remove Private conversation from excluded threads',
+      exact: true,
+    })
+    .click();
   await expect(
-    dialog.getByText('Private conversation', { exact: true })
-  ).toHaveCount(0);
-  await expect(
-    dialog.getByRole('button', { name: 'Stop sharing my emails', exact: true })
+    dialog.getByText('No excluded threads.', { exact: true })
   ).toBeVisible();
+  await expect(page.getByTestId('last-change')).toHaveText(
+    JSON.stringify({
+      action: 'set_thread_exclusion',
+      thread_id: '00000000-0000-4000-8000-000000000046',
+      excluded: false,
+    })
+  );
+  // Privacy I/O is the injected owner-scoped source; all other data reads are observable.
+  expect(dataRequests).toEqual([]);
 });

@@ -15,7 +15,7 @@ export * from '@core/context/user.ts';
 export * from '@queries/team/teams.ts';
 
 const params = new URLSearchParams(location.search);
-export const [crmAccess, setCrmAccess] = createSignal(!params.has('no-access'));
+const crmAccess = () => !params.has('no-access');
 export const [excludedListReads, setExcludedListReads] = createSignal(0);
 export const mailboxId = '00000000-0000-4000-8000-000000000045';
 const [state, setState] = createSignal<EmailPrivacy>({

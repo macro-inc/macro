@@ -220,7 +220,7 @@ export function CrmEmailPrivacySettings(props: {
   onOpenThread?: () => void;
 }) {
   const threadExclusions = useFeatureFlag(enableCrmThreadExclusions);
-  const { canAccess, createEmailPrivacy } = useCrmContext();
+  const { createEmailPrivacy } = useCrmContext();
   const source = createEmailPrivacy();
   const settings = () =>
     source.query.isSuccess ? source.query.data : undefined;
@@ -265,7 +265,7 @@ export function CrmEmailPrivacySettings(props: {
       </SettingsSection>
       <DomainBlocklist source={source} scope="team" />
       <DomainBlocklist source={source} scope="personal" />
-      <Show when={canAccess() && threadExclusions().enabled}>
+      <Show when={threadExclusions().enabled}>
         <ThreadExclusions source={source} onOpenThread={props.onOpenThread} />
       </Show>
       <div class="flex justify-end">

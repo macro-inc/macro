@@ -661,9 +661,9 @@ the back arrow is the only control in the header. It is the same page as
 Settings > CRM, with the same member and admin permissions; check both roles.
 Members without CRM access keep their email contribution controls. Revoke access
 while this page is open: **Stages** and **Email sync** disappear while contribution
-settings remain usable. The excluded-thread list and its email mentions also disappear
-without CRM access; the thread header only reads the viewer’s own mailbox consent
-and exclusion status. Restoring access returns the CRM settings sections.
+settings remain usable, including the owner’s excluded-thread list and email mentions.
+Open an excluded thread and remove its exclusion while CRM access is denied; no CRM
+record data is required. Restoring access returns Stages and Email sync.
 
 CRM access does not require contributing email. The banner **Your emails aren’t
 contributing to CRM** opens **Review and opt in**. The dialog shows the exact
@@ -761,9 +761,10 @@ existing interaction dates remain; later population recomputes dates from
 eligible history. Labels and folders are not supported yet.
 
 Members denied CRM viewing can still manage their own mailbox consent and
-exclude or restore their own threads from the email header. The excluded-thread
-list in CRM settings remains hidden until CRM access is restored. Viewing access
-does not authorize changes to another member's contribution.
+exclude or restore their own threads from the email header and the excluded-thread
+list in CRM settings. The list uses owner-scoped email references, so a member can
+open and remove an exclusion without fetching CRM record, company, or contact data.
+Viewing access does not authorize changes to another member's contribution.
 
 ## Member access
 

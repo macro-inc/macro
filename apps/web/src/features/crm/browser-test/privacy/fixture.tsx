@@ -16,11 +16,9 @@ import {
 } from '../../views/email-privacy';
 import { PrivacyNavigationFixture } from './navigation-fixture';
 import {
-  crmAccess,
   excludedListReads,
   lastChange,
   lastToast,
-  setCrmAccess,
   setStatusUnavailable,
 } from './preview-adapters';
 import { ThreadMenuFixture } from './thread-menu-fixture';
@@ -52,9 +50,6 @@ function Fixture() {
   return (
     <main class="min-h-dvh bg-page text-ink">
       <CrmEmailOptInBanner />
-      <Button onClick={() => setCrmAccess(!crmAccess())}>
-        Toggle CRM access
-      </Button>
       <output data-testid="excluded-list-reads">{excludedListReads()}</output>
       <output data-testid="toast">{lastToast()}</output>
       <div class="p-6">

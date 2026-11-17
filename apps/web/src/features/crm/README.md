@@ -7,9 +7,9 @@ export, and company actions belong here. The dependency rules are enforced by
 Read `crmAccessAllowed` for app-wide navigation, search, Quick Access, and actions;
 pass the same authority through `CrmContext.canAccess` for CRM-owned views.
 The retired CRM/activity/pipeline rollout flags never replace this access gate.
-Keep excluded-thread list queries and mentions inside the current CRM access gate.
-Email contribution controls remain available after access is revoked; the thread
-header uses only owner-scoped consent and exclusion reads.
+Keep owner-scoped email privacy controls, excluded-thread lists, and email mentions
+available after CRM viewing access is revoked. The context always supplies the plain
+email mention; privacy settings and the thread header never require CRM record data.
 Run the root CRM browser config for its immediate fixtures; the archive and privacy
 suites have separate configs and fixture servers in their own directories.
 
