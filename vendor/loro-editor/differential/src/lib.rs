@@ -227,6 +227,8 @@ pub struct Observation {
     pub undo_log: Vec<String>,
     /// Exports, keyed by mode description.
     pub exports: Vec<(String, Result<Vec<u8>, String>)>,
+    /// Shallow exports: name, cached-prefix eligibility, decoded fingerprint.
+    pub shallow: Vec<(String, bool, String)>,
     /// Whether the patched side took the suppressed path (patched side only).
     pub suppressed: bool,
 }
@@ -265,6 +267,9 @@ pub struct Stats {
     pub projected_checkpoints: usize,
     /// Shallow exports compared.
     pub shallow_exports: usize,
+    /// Eligible shallow exports whose bytes differed while decoding identically
+    /// (text fragmentation in the cached root; see tests/regressions.rs).
+    pub cached_prefix_byte_diffs: usize,
     /// Shallow exports that met every cached-prefix eligibility condition.
     pub cached_prefix_eligible: usize,
     /// Successful undo calls.
@@ -295,6 +300,7 @@ impl Stats {
         self.suppressed_commits += other.suppressed_commits;
         self.projected_checkpoints += other.projected_checkpoints;
         self.shallow_exports += other.shallow_exports;
+        self.cached_prefix_byte_diffs += other.cached_prefix_byte_diffs;
         self.cached_prefix_eligible += other.cached_prefix_eligible;
         self.undos += other.undos;
         self.redos += other.redos;
@@ -560,7 +566,15 @@ fn compare(step: usize, p: &Observation, u: &Observation, stats: &mut Stats) -> 
             upstream: format!("{:?}", u.exports.iter().map(|e| &e.0).collect::<Vec<_>>()),
         });
     }
+    field!(shallow);
     for ((pm, pr), (um, ur)) in p.exports.iter().zip(u.exports.iter()) {
+        // An eligible cached-prefix export may encode the same decoded state
+        // with different text fragmentation; `shallow` already matched.
+        let eligible = p.shallow.iter().any(|(name, eligible, _)| name == pm && *eligible);
+        if pm == um && eligible && pr.is_ok() && ur.is_ok() && pr != ur {
+            stats.cached_prefix_byte_diffs += 1;
+            continue;
+        }
         if pm != um || pr != ur {
             return Some(Divergence {
                 step,

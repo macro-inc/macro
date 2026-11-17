@@ -588,6 +588,7 @@ impl World {
         let p = &self.peers[i];
         let doc = &p.doc;
         let mut exports = Vec::new();
+        let mut shallow = Vec::new();
         if export {
             let mut push = |name: String, r: Result<Vec<u8>, li::LoroEncodeError>| {
                 exports.push((name, r.map_err(|e| crate::normalize(&e.to_string()))));
@@ -615,15 +616,23 @@ impl World {
             let attached = doc.state_frontiers() == doc.oplog_frontiers();
             for (name, f) in targets {
                 self.stats.shallow_exports += 1;
+                let mut eligible = false;
                 if attached && doc.is_shallow() && f != shallow_root {
                     if let Ok(vv) = doc.frontiers_to_vv(&f).ok_or(()) {
                         let tail: usize = latest_vv.sub_iter(&vv).map(|s| (s.counter.end - s.counter.start).unsigned_abs() as usize).sum();
                         if tail >= MIN_RETAINED_OPS_FOR_FORWARD_ROOT_STATE {
                             self.stats.cached_prefix_eligible += 1;
+                            eligible = true;
                         }
                     }
                 }
-                push(format!("shallow@{name}"), doc.export(ExportMode::shallow_snapshot(&f)));
+                let bytes = doc.export(ExportMode::shallow_snapshot(&f));
+                let decoded = match &bytes {
+                    Ok(b) => decoded_fingerprint(b),
+                    Err(_) => String::new(),
+                };
+                shallow.push((format!("shallow@{name}"), eligible, decoded));
+                push(format!("shallow@{name}"), bytes);
             }
         }
         // Exports commit pending ops; their events belong to this step.
@@ -656,9 +665,34 @@ impl World {
             event_to,
             undo_log,
             exports,
+            shallow,
             suppressed: self.suppressed[i],
         }
     }
+}
+
+/// Everything a shallow snapshot decodes to: latest state with ids, shallow
+/// root, versions, the state at the root, and the retained history as JSON.
+fn decoded_fingerprint(bytes: &[u8]) -> String {
+    let doc = LoroDoc::new();
+    if let Err(e) = doc.import(bytes) {
+        return format!("import err {}", crate::normalize(&e.to_string()));
+    }
+    let root = doc.shallow_since_frontiers();
+    let history = doc
+        .export_json_updates(&doc.shallow_since_vv().to_vv(), &doc.oplog_vv(), false)
+        .map(|json| serde_json::to_string(&json).unwrap_or_default())
+        .unwrap_or_else(|e| format!("json err {e}"));
+    let latest = canonical(&doc.get_deep_value_with_id());
+    let at_root = match doc.checkout(&root) {
+        Ok(()) => canonical(&doc.get_deep_value_with_id()),
+        Err(e) => format!("checkout err {e}"),
+    };
+    format!(
+        "root={:?} vv={:?} latest={latest} at_root={at_root} history={history}",
+        sorted_frontiers(&root),
+        sorted_vv(&doc.oplog_vv())
+    )
 }
 
 fn barrier(op: &Op) -> bool {
