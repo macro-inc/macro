@@ -105,9 +105,8 @@ remain read-only and appear only when their details are shared.
 An existing Macro call can keep its schedule during point metadata edits; adding
 a new Macro call requires giving the event a duration first.
 
-Calendar reads come from the local GraphQL cache when both `enable-graphql-soup`
-and `enable-graphql-calendar` are on (PostHog in production, on by default in dev
-for the calendar flag; set `VITE_ENABLE_GRAPHQL_CALENDAR=false` to test the REST
+Calendar reads come from the local GraphQL cache when `enable-graphql-calendar`
+is on (PostHog in production, on by default in dev; set `VITE_ENABLE_GRAPHQL_CALENDAR=false` to test the REST
 path). A range the cache has covered renders with no occurrence request, and a far
 jump fetches only the uncovered weeks. Cached records survive deploys, so an
 occurrence cached by an older build can lack a field the current one selects;
@@ -244,8 +243,9 @@ guests on a copy they can change. A solo entry listing the user's inbox as its
 organizer, as Macro writes on a primary calendar, and the mailbox organizer row
 Outlook puts on every event of a read-only calendar are not meetings. The switch shows once the setting loads,
 saves at once and restores itself with a toast when the save fails. Phones reach
-the same rows from the mobile Settings sheet's **Calendar** page; the calendar
-view's own phone settings sheet lists accounts, not calendars.
+the same rows from the mobile Settings sheet's **Calendar** page. The calendar
+view's own phone settings sheet (the header gear) shows and hides single
+calendars like the desktop sidebar (below) and, like it, has no Busy switch.
 
 The **Sidebar** section's **Next meeting countdown** switch (on by default, saved in
 the same browser-local preferences) controls the app rail's Calendar badge:
@@ -323,18 +323,23 @@ they open beside the row instead. With the overlay hidden they open beside the r
 A card opened beside a row stays there when the event's chip mounts later. The left-aligned
 `Settings` control with a gear icon fills the sidebar footer; booking management
 lives in the `Booking links` dropdown rather than a separate footer shortcut.
+On a tablet the footer adds `--mobile-content-inset-bottom` to its padding, so
+`Settings` sits above the floating dock instead of under it.
 An account checkbox toggles its calendars together in one update. The checkbox
 responds immediately; the upcoming list and each grid page refresh on deferred
 tasks rather than re-rendering all pages during the click.
 The sidebar can be resized or collapsed on desktop; in narrow desktop panes
 it opens over the grid. Phones do not show the sidebar or its navigation drawer.
 The mobile split header places a month selector and Today in its left island;
-selecting the month opens the date-selection drawer. The right island keeps
-full-sized Availability, Search, and Settings actions. The New menu
+selecting the month opens the date-selection drawer. On a phone the right
+island keeps full-sized Availability, `Booking links`, and Settings actions; on
+a tablet it holds the period selector, previous and next, Search, and (unless
+the pane is narrow, when the sidebar holds it) `Booking links`, and Settings
+stays in the sidebar footer. The New menu
 beside the bottom AI input offers Event, feature-gated Call, and feature-gated
-Reminder. Inline Calendar previews retain their host's chrome without adding
-another sidebar; their left header island has a compact New menu because the
-bottom New action follows the foreground host view.
+Reminder. Touch devices never show Calendar as an inline preview, so the touch
+header has no preview variant. On desktop, inline Calendar previews (Home,
+Notifications) keep their host's chrome without adding another sidebar.
 
 With `enable-calendar-team-sharing` enabled, **Settings → Calendar** also has
 **Team sharing**: one `Share with teammates` row whose select offers
@@ -533,8 +538,23 @@ group: a caret plus the account address header with a checkbox that shows or hid
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
 name, per-calendar checkbox). Accounts start collapsed. Subscribed system calendars
 (Google holidays, birthdays) carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
-warning icon whose tooltip shows the provider error; the account keeps syncing its other
-calendars and the badge clears on its own once that calendar syncs again.
+warning icon whose tooltip shows `Sync failed: <provider error>`, Settings → Calendar's
+wording; touch has no hover, so on phones and tablets that line is written under the
+calendar's name instead (the row grows to fit), as a menu item's disabled reason is. The
+account keeps syncing its other calendars and the badge clears on its own once that
+calendar syncs again.
+Phones have no sidebar, so the header gear's settings sheet carries the same list under
+`Calendars`, between Period and Display, laid out like the mobile filter drawer's
+groups (Tasks → Filters): each account is its own card whose header row shows or hides
+all of its calendars (a minus when only some show) with its selection filling the whole
+row, caret included. The trailing caret (`Expand <address>`) opens one
+`MobileFilterDrawer.Option` per calendar with the same swatch, warning and RSS marks, so
+neighbouring shown calendars join into one selection. Period, Week starts on and Time
+format use the same options as single choices, and Show weekends as a checkbox. Accounts
+start collapsed each time the sheet opens. The rows write the same browser-local
+visibility as the sidebar and Settings → Calendar, so all three agree. With accounts
+expanded the sheet scrolls under its pinned handle. The gear's dropdown form (the
+sidebar footer's `Settings`) has no `Calendars` group: the sidebar lists them itself.
 
 On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and

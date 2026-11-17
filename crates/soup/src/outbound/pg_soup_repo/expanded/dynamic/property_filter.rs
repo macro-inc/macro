@@ -7,29 +7,34 @@ use item_filters::ast::properties::{EntityRefId, PropertiesLiteral, PropertyMatc
 use recursion::CollapsibleExt;
 use uuid::Uuid;
 
-use super::{property_literal_predicate, sql_string_literal};
+use super::{PropertyProbe, property_literal_predicate, sql_string_literal};
+use crate::outbound::pg_soup_repo::candidate_gates::PER_CANDIDATE;
 
 #[cfg(test)]
 mod test;
 
-pub(super) fn predicate(expr: &Expr<PropertiesLiteral>, entity_id_sql: &str) -> String {
+pub(super) fn predicate(
+    expr: &Expr<PropertiesLiteral>,
+    entity_id_sql: &str,
+    probe: PropertyProbe,
+) -> String {
     // Fold once, retaining each maximal OR region until AND/NOT requires SQL.
     // Re-scanning subtrees for eligible leaves is quadratic on mixed skew trees.
     expr.collapse_frames(
         |frame: ExprFrame<Disjunction, PropertiesLiteral>| match frame {
             ExprFrame::And(left, right) => Disjunction::sql(format!(
                 "({} AND {})",
-                left.render(entity_id_sql),
-                right.render(entity_id_sql)
+                left.render(entity_id_sql, probe),
+                right.render(entity_id_sql, probe)
             )),
             ExprFrame::Or(left, right) => left.merge(right),
             ExprFrame::Not(inner) => {
-                Disjunction::sql(format!("(NOT {})", inner.render(entity_id_sql)))
+                Disjunction::sql(format!("(NOT {})", inner.render(entity_id_sql, probe)))
             }
-            ExprFrame::Literal(literal) => Disjunction::literal(literal, entity_id_sql),
+            ExprFrame::Literal(literal) => Disjunction::literal(literal, entity_id_sql, probe),
         },
     )
-    .render(entity_id_sql)
+    .render(entity_id_sql, probe)
 }
 
 /// One property definition (and entity type) whose values an OR region
@@ -74,7 +79,7 @@ impl Disjunction {
         }
     }
 
-    fn literal(literal: PropertiesLiteral, entity_id_sql: &str) -> Self {
+    fn literal(literal: PropertiesLiteral, entity_id_sql: &str, probe: PropertyProbe) -> Self {
         let key = (
             literal.property_definition_id,
             literal.entity_type.map(|value| value.to_string()),
@@ -103,7 +108,7 @@ impl Disjunction {
                 ..Self::default()
             },
             PropertyMatchValue::DateRange(_) => {
-                Self::sql(property_literal_predicate(&literal, entity_id_sql))
+                Self::sql(property_literal_predicate(&literal, entity_id_sql, probe))
             }
         }
     }
@@ -120,14 +125,14 @@ impl Disjunction {
         self
     }
 
-    fn render(self, entity_id_sql: &str) -> String {
+    fn render(self, entity_id_sql: &str, probe: PropertyProbe) -> String {
         let mut predicates = self.others;
         // Singleton groups retain their indexable JSON containment checks.
         predicates.extend(self.references.into_values().map(|group| {
             if group.members.len() == 1 {
-                property_literal_predicate(&group.first, entity_id_sql)
+                property_literal_predicate(&group.first, entity_id_sql, probe)
             } else {
-                reference_membership_predicate(&group, entity_id_sql)
+                reference_membership_predicate(&group, entity_id_sql, probe)
             }
         }));
         predicates.extend(self.options.into_values().map(|mut group| {
@@ -136,7 +141,7 @@ impl Disjunction {
             group.members.sort_unstable();
             group.members.dedup();
             if group.members.len() == 1 {
-                property_literal_predicate(&group.first, entity_id_sql)
+                property_literal_predicate(&group.first, entity_id_sql, probe)
             } else {
                 option_membership_predicate(&group, entity_id_sql)
             }
@@ -158,6 +163,7 @@ fn entity_type_clause(literal: &PropertiesLiteral) -> String {
 fn reference_membership_predicate(
     group: &MembershipGroup<EntityRefId>,
     entity_id_sql: &str,
+    probe: PropertyProbe,
 ) -> String {
     let ids = group
         .members
@@ -182,8 +188,9 @@ fn reference_membership_predicate(
             {entity_type_clause}
             AND ep_prop.property_definition_id = '{definition}'
             AND jsonb_typeof(ep_ref.value->'entity_id') = 'string'
-            AND ep_ref.value->>'entity_id' = ANY(ARRAY[{ids}]::text[])
-        )"#
+            AND ep_ref.value->>'entity_id' = ANY(ARRAY[{ids}]::text[]){fence}
+        )"#,
+        fence = probe.fence(),
     )
 }
 
@@ -199,13 +206,19 @@ fn option_membership_predicate(group: &MembershipGroup<Uuid>, entity_id_sql: &st
     // `?|` is the OR of `?` over its array, so one EXISTS reads the entity's
     // row once. One EXISTS per option was planned as a hashed subplan each,
     // every one reading that option's rows across all entities.
+    //
+    // Fenced on every arm, whatever its `PropertyProbe`. Unlike that OR, a
+    // single `EXISTS` can be pulled up into a semi-join, and Postgres drove
+    // the Tasks list from the property index's matching rows across every
+    // entity (misestimated ~40x), checking sub-type and access on each; cold,
+    // that read every matching task in the database.
     format!(
         r#"EXISTS (
             SELECT 1 FROM entity_properties ep_prop
             WHERE ep_prop.entity_id = {entity_id_sql}
             {entity_type_clause}
             AND ep_prop.property_definition_id = '{definition}'
-            AND ep_prop.values->'value' ?| ARRAY[{options}]::text[]
+            AND ep_prop.values->'value' ?| ARRAY[{options}]::text[] {PER_CANDIDATE}
         )"#
     )
 }

@@ -23,6 +23,10 @@ pub mod set_contact_name;
 /// visible contacts only; admin/owner see hidden contacts too.
 pub mod list_company_contacts;
 
+/// One page of a company's contacts, filtered by archive state and search,
+/// for the Team list. Same visibility rules as `list_company_contacts`.
+pub mod list_company_contacts_page;
+
 /// Fetch a single CRM contact by id. Role-aware: members 404 on hidden
 /// rows; admin/owner reach hidden contacts (and hidden parent companies).
 pub mod get_contact;
@@ -55,6 +59,9 @@ pub mod blocked_domains;
 /// Team-level CRM configuration (permission thresholds, closed stages,
 /// team saved views).
 pub mod team_settings;
+
+/// Fresh viewer authority for session cache retirement.
+pub mod member_access;
 
 /// Individual email consent and domain blocklists.
 pub mod email_privacy;
@@ -146,9 +153,17 @@ where
 {
     Router::new()
         .route(
+            "/member-access",
+            get(member_access::handler::<C, St, Eas, Auth>),
+        )
+        .route(
             "/email-privacy",
             get(email_privacy::get_handler::<C, St, Eas, Auth>)
                 .put(email_privacy::update_handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/email-privacy/threads",
+            get(email_privacy::excluded_threads_handler::<C, St, Eas, Auth>),
         )
         .route(
             "/companies",
@@ -175,6 +190,10 @@ where
             "/companies/{company_id}/contacts",
             get(list_company_contacts::handler::<C, St, Eas, Auth>)
                 .post(create_contact::handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/companies/{company_id}/contacts/page",
+            get(list_company_contacts_page::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/contacts",
@@ -254,6 +273,12 @@ impl IntoResponse for CrmError {
                     message: message.into(),
                 }),
             ),
+            CrmError::AccessDenied => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "CRM access is not enabled for this team member".into(),
+                }),
+            ),
             CrmError::AdminRoleRequired => (
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
@@ -264,6 +289,12 @@ impl IntoResponse for CrmError {
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
                     message: "changing CRM admin settings requires admin/owner team role".into(),
+                }),
+            ),
+            CrmError::ThreadExclusionsUnavailable => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "thread exclusions are not available".into(),
                 }),
             ),
             CrmError::StageEditRoleRequired(role) => (

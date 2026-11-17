@@ -113,8 +113,16 @@ People, Companies and company Team use an exclusive Visible/Archived filter.
 `people-visibility` keeps the workspace choice local to the account/team/role/view,
 preserves search and other display choices, and sanitizes shared/persisted contact
 filters. Archived People is current-administered-team scoped, server filtered
-before pagination; visible People remains viewer-wide. Team applies the same
-exclusive choice to its embedded contact response, including effective parent state.
+before pagination; visible People remains viewer-wide. Team reads its contacts a
+page at a time from `GET /crm/companies/{id}/contacts/page` (`queries/company-contacts.ts`):
+the server applies the Visible/Archived choice (a contact is archived when it or
+its company is) and the search, in the order the full list had, and the list loads
+the next page as its end scrolls into view. A cursor continues only the company,
+Visible/Archived choice and search it came from (anything else answers 400), and the
+loaded pages list each contact once. The server's search answer is shown as it
+came; only rows of an earlier search, kept while the new one loads, are narrowed
+on the client. The company read itself passes `includeContacts=false`. Confirmed visibility and contact edits patch cached Team
+pages in place and refresh the lists a contact can move between.
 
 Successful REST mutations write confirmed flags through the normalized Soup update
 path and patch paginated suggestions, company search pages, REST Soup and embedded
@@ -277,3 +285,21 @@ use the host composer so stage and date-range defaults reach Add deal. CSV write
 commit valid entries, and show record-specific failures; option labels enter the
 local cache only after their batch commits. The backend-free regression is
 `bunx playwright test --config src/features/crm/browser-test/playwright.config.ts stage-requirements.browser.e2e.ts`.
+
+A record page's **Add to pipeline** menu (`add-to-pipeline.tsx`, the device
+entry; `views/add-to-pipeline.tsx` and `views/mobile/add-to-pipeline.tsx`)
+reads nothing until it first opens: `add-to-pipeline-adapter.tsx` then reads
+the team's pipelines and the record's rows through the Pipelines card's own
+`CrmRecordPipelineEntries` query, cache-first (same document and variables, so
+on Overview the normalized cache answers from the card's request), and a
+pipeline's table and stage requirements once its stages or add form show; the
+menu's requirements read does not poll (a refused add reads them again), and the Add deal form it opens reads no
+Quick Access list because its record is fixed. Rows are created with `writeDatabaseRow`
+through the pipeline write path the table uses, so the server's stage guard
+applies; `core/add-to-pipeline.ts` decides which pipelines a record can join and
+whether a stage needs the Add deal form. `ADD_TO_PIPELINE_FLOW` switches between
+choosing a stage and always opening the form; `ADDS_AGAIN` says which record
+types may join a pipeline twice (companies, as separate deals). An add whose
+answer was lost refetches the rows and warns instead of retrying. The
+backend-free desktop/phone regression is
+`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts add-to-pipeline.browser.e2e.ts`.

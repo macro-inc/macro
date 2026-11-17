@@ -25,6 +25,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
 | Several short values picked from suggestions or typed (domains, people and companies) | `ChipCombobox`; message recipients use `RecipientSelector` | A comma-separated text `Input` |
 | Menu, popover, floating toolbar or editor panel | `Dropdown`, `Toolbar`, or `menu-surface` on the overlay root | A hand-built fill, border, and shadow, or `bg-menu-glass` |
 | Dialog or modal card | `Dialog`, or `elevated-surface` for a custom dialog root | `bg-dialog`/`bg-surface` with its own radius and shadow |
+| A card in a page or chat (agent tool cards, For you, routines) | `Card` (`variant="filled" depth={3}`) composed of `Card.Header` with an `Item`, `Card.Body`, `Card.Footer`; a block nested in one is `Card variant="filled" offset={1}` | A `rounded-xl border bg-panel` frame, hand-built tiles or pills, or a `primary` button inside the card |
 | Loading placeholder, view skeleton | `ListSkeleton` (`Root`, `Row`, `Bar`); `ViewSkeleton` with the view's tabs and `controls` | `animate-pulse` boxes with their own fill |
 | Transient notification or persistent notice | `toast` from `@core/component/Toast/Toast` | A second toast service or hand-built global notification overlay |
 

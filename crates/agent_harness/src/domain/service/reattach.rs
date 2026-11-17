@@ -1,11 +1,13 @@
 //! Restoring the sessions a runtime still serves when it dials in again.
 //!
 //! A runtime can list hundreds of sessions, and it redials whenever its
-//! socket drops, so a dial must never stampede the replica: idle sessions
-//! wait for their next prompt, every dial on this replica shares
-//! [`REATTACH_CONCURRENCY`] permits, each held until the session's ACP
-//! restore finishes, and a harness dialing again stops its previous dial
-//! from starting more (restores already running finish under their permit).
+//! socket drops, so a dial must never stampede the replica: dormant sessions
+//! cost it nothing, idle sessions wait for their next prompt, at most
+//! [`MAX_EAGER_PER_DIAL`] recent ones are restored now, every dial on
+//! this replica shares [`REATTACH_CONCURRENCY`] permits, each held until the
+//! session's ACP restore finishes, and a harness dialing again stops its
+//! previous dial from starting more (restores already running finish under
+//! their permit).
 
 use super::deliver::DialReattach;
 use super::*;
@@ -20,6 +22,11 @@ use tokio_util::sync::CancellationToken;
 /// every dial. An attach claims the session and provisions its egress, and
 /// its restore replays history over the runtime's socket.
 pub(crate) const REATTACH_CONCURRENCY: usize = 8;
+/// How many sessions one dial restores now. Sessions with work in flight or
+/// waiting are always restored, even past this; the rest of the slots go to
+/// the most recently active sessions, and every other one binds on its next
+/// prompt or delivery.
+pub(crate) const MAX_EAGER_PER_DIAL: usize = 50;
 /// How many times a dial tries to restore one session.
 const REATTACH_ATTEMPTS: u32 = 3;
 /// The delay before the first retry, doubled for each later one, plus up to
@@ -40,8 +47,17 @@ pub(super) struct Dial {
 pub struct ReattachReport {
     /// Restored now: attached and their ACP session reopened.
     pub eager: usize,
-    /// Left to bind on their next prompt or delivery.
+    /// Left to bind on their next prompt or delivery, `capped` included.
     pub lazy: usize,
+    /// Recently active, but left lazy because the dial had already
+    /// restored [`MAX_EAGER_PER_DIAL`].
+    pub capped: usize,
+    /// Restored however many others were, because work was in flight or
+    /// waiting on them; counted in `eager`, `failed` or `abandoned`.
+    pub required: usize,
+    /// Dormant (see [`crate::domain::model::ListedSessions::dormant`]): left
+    /// to their next prompt or delivery without any per-session work.
+    pub dormant: usize,
     /// Archived, or not an external session.
     pub skipped: usize,
     /// Not restored after every attempt this dial allowed.
@@ -53,13 +69,21 @@ pub struct ReattachReport {
     pub retries: u32,
 }
 
-/// What a dial did with one listed session.
+/// How a dial's attempt to restore one listed session ended.
 enum Outcome {
     Restored,
-    Lazy,
-    Skipped,
     Failed,
     Abandoned,
+}
+
+impl ReattachReport {
+    fn count(&mut self, outcome: Outcome) {
+        match outcome {
+            Outcome::Restored => self.eager += 1,
+            Outcome::Failed => self.failed += 1,
+            Outcome::Abandoned => self.abandoned += 1,
+        }
+    }
 }
 
 /// Whether retrying cannot help: the session is gone, refused, archived,
@@ -119,8 +143,9 @@ where
     ///
     /// Only sessions whose bot is bound to `harness` are touched, each on its
     /// own command worker, so a reattach waits behind whatever that session
-    /// is already doing. Which sessions are restored now is `dial_reattach`'s
-    /// call, which reads each session's `updated_at` from the listing. A
+    /// is already doing. `dial_reattach` classifies each session, reading its
+    /// `updated_at` from the listing, and [`MAX_EAGER_PER_DIAL`] bounds how
+    /// many recent ones are restored now. A
     /// failed restore is retried with jittered backoff unless retrying cannot
     /// help. One session failing never stops the others.
     #[tracing::instrument(
@@ -132,6 +157,9 @@ where
             agent.runtime.reattach_sessions = tracing::field::Empty,
             agent.runtime.reattach_eager = tracing::field::Empty,
             agent.runtime.reattach_lazy = tracing::field::Empty,
+            agent.runtime.reattach_capped = tracing::field::Empty,
+            agent.runtime.reattach_required = tracing::field::Empty,
+            agent.runtime.reattach_dormant = tracing::field::Empty,
             agent.runtime.reattach_skipped = tracing::field::Empty,
             agent.runtime.reattach_failures = tracing::field::Empty,
             agent.runtime.reattach_abandoned = tracing::field::Empty,
@@ -167,6 +195,9 @@ where
         let span = tracing::Span::current();
         span.record("agent.runtime.reattach_eager", report.eager);
         span.record("agent.runtime.reattach_lazy", report.lazy);
+        span.record("agent.runtime.reattach_capped", report.capped);
+        span.record("agent.runtime.reattach_required", report.required);
+        span.record("agent.runtime.reattach_dormant", report.dormant);
         span.record("agent.runtime.reattach_skipped", report.skipped);
         span.record("agent.runtime.reattach_failures", report.failed);
         span.record("agent.runtime.reattach_abandoned", report.abandoned);
@@ -188,59 +219,103 @@ where
             .into_iter()
             .filter_map(|listed| Some((listed.id, listed.updated_at?)))
             .collect();
-        let sessions = match self.inner.runtimes.sessions_on_harness(harness, &ids).await {
-            Ok(sessions) => sessions,
+        let listed = match self.inner.runtimes.sessions_on_harness(harness, &ids).await {
+            Ok(listed) => listed,
             Err(error) => {
                 tracing::error!(error = ?error, "could not resolve a runtime's live sessions");
                 return ReattachReport::default();
             }
         };
-        tracing::Span::current().record("agent.runtime.reattach_sessions", sessions.len());
+        tracing::Span::current().record("agent.runtime.reattach_sessions", listed.live.len());
 
-        let outcomes: Vec<(Outcome, u32)> = futures::stream::iter(sessions)
-            .map(|session_id| {
-                self.reattach_live_session(harness, session_id, &runtime_activity, cancelled)
+        let mut report = ReattachReport {
+            dormant: listed.dormant,
+            ..ReattachReport::default()
+        };
+        let mut required = Vec::new();
+        let mut recent = Vec::new();
+        let runtime_activity = &runtime_activity;
+        let mut classified = futures::stream::iter(listed.live)
+            .map(|session_id| async move {
+                let class = self
+                    .classify(harness, session_id, runtime_activity, cancelled)
+                    .await;
+                (session_id, class)
             })
+            .buffer_unordered(REATTACH_CONCURRENCY);
+        while let Some((session_id, class)) = classified.next().await {
+            match class {
+                Ok(DialReattach::Required) => required.push(session_id),
+                Ok(DialReattach::Recent(at)) => recent.push((at, session_id)),
+                Ok(DialReattach::Lazy) => report.lazy += 1,
+                Ok(DialReattach::Skip) => report.skipped += 1,
+                Err(outcome) => report.count(outcome),
+            }
+        }
+        drop(classified);
+
+        report.required = required.len();
+        if required.len() > MAX_EAGER_PER_DIAL {
+            tracing::warn!(
+                required = required.len(),
+                cap = MAX_EAGER_PER_DIAL,
+                "a dial restores more sessions with work in flight than its eager cap"
+            );
+        }
+        recent.sort_unstable_by(|(left, _), (right, _)| right.cmp(left));
+        let slots = MAX_EAGER_PER_DIAL.saturating_sub(required.len());
+        report.capped = recent.len().saturating_sub(slots);
+        report.lazy += report.capped;
+        let eager = required.into_iter().chain(
+            recent
+                .into_iter()
+                .take(slots)
+                .map(|(_, session_id)| session_id),
+        );
+
+        let outcomes: Vec<(Outcome, u32)> = futures::stream::iter(eager)
+            .map(|session_id| self.restore_with_retries(harness, session_id, cancelled))
             .buffer_unordered(REATTACH_CONCURRENCY)
             .collect()
             .await;
-
-        let mut report = ReattachReport::default();
         for (outcome, retries) in outcomes {
             report.retries += retries;
-            match outcome {
-                Outcome::Restored => report.eager += 1,
-                Outcome::Lazy => report.lazy += 1,
-                Outcome::Skipped => report.skipped += 1,
-                Outcome::Failed => report.failed += 1,
-                Outcome::Abandoned => report.abandoned += 1,
-            }
+            report.count(outcome);
         }
         report
     }
 
-    /// Restore one listed session if it needs it now, with how many times
-    /// it was retried.
-    async fn reattach_live_session(
+    /// What this dial does with one listed session, or why it decided
+    /// nothing.
+    async fn classify(
         &self,
         harness: harness_id::HarnessId,
         session_id: AgentSessionId,
         runtime_activity: &HashMap<SessionId, chrono::DateTime<chrono::Utc>>,
         cancelled: &CancellationToken,
+    ) -> std::result::Result<DialReattach, Outcome> {
+        if cancelled.is_cancelled() || !self.inner.runtimes.is_connected(harness) {
+            return Err(Outcome::Abandoned);
+        }
+        self.inner
+            .dial_reattach(session_id, runtime_activity)
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = ?error, %session_id, "could not decide whether to reattach a live session");
+                Outcome::Failed
+            })
+    }
+
+    /// Restore one listed session, with how many times it was retried.
+    async fn restore_with_retries(
+        &self,
+        harness: harness_id::HarnessId,
+        session_id: AgentSessionId,
+        cancelled: &CancellationToken,
     ) -> (Outcome, u32) {
         if cancelled.is_cancelled() || !self.inner.runtimes.is_connected(harness) {
             return (Outcome::Abandoned, 0);
         }
-        match self.inner.dial_reattach(session_id, runtime_activity).await {
-            Ok(DialReattach::Eager) => {}
-            Ok(DialReattach::Lazy) => return (Outcome::Lazy, 0),
-            Ok(DialReattach::Skip) => return (Outcome::Skipped, 0),
-            Err(error) => {
-                tracing::warn!(error = ?error, %session_id, "could not decide whether to reattach a live session");
-                return (Outcome::Failed, 0);
-            }
-        }
-
         let mut delay = REATTACH_RETRY_BASE;
         let mut retries = 0;
         loop {

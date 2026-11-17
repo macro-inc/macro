@@ -14,17 +14,17 @@ use item_filters::ast::email::EmailLiteral;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
 use owned_scope::OwnedRead;
+pub(crate) use owned_scope::{OwnedReadStats, OwnedReadTuning};
 #[cfg(test)]
-pub(crate) use owned_scope::inbox_window;
-pub(crate) use owned_scope::{OwnedReadTuning, OwnedStreams};
+pub(crate) use owned_scope::{OwnedStreams, inbox_window};
 use recursion::CollapsibleExt;
 use sqlx::postgres::PgRow;
 use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction};
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-use team_scope::TeamRead;
+use std::time::Instant;
 pub(crate) use team_scope::TeamReadTuning;
+use team_scope::read_team_page;
 use uuid::Uuid;
 
 struct QueryParams {
@@ -1296,8 +1296,8 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
 
 /// [`dynamic_email_thread_cursor`] with the owned address read's switch
 /// points given, or with `owned_read: None`, owned address filters read by
-/// the general builder, as the parity tests compare. Also returns the
-/// streams that read the page when the owned address read took it.
+/// the general builder, as the parity tests compare. Also returns how
+/// the owned address read took the page, when it did.
 #[cfg(test)]
 #[expect(
     clippy::too_many_arguments,
@@ -1312,7 +1312,7 @@ pub(crate) async fn dynamic_email_thread_cursor_owned_with(
     user_id: &str,
     team_id: Option<Uuid>,
     owned_read: Option<OwnedReadTuning>,
-) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedStreams>), sqlx::Error> {
+) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), sqlx::Error> {
     read_page(
         pool,
         link_ids,
@@ -1336,7 +1336,7 @@ struct Reads {
     owned: Option<OwnedReadTuning>,
 }
 
-/// A page, and the owned address read's streams when it read the page.
+/// A page, and how the owned address read took it when it did.
 #[expect(
     clippy::too_many_arguments,
     reason = "the entry point's arguments plus the reads' tunings"
@@ -1350,7 +1350,7 @@ async fn read_page(
     user_id: &str,
     team_id: Option<Uuid>,
     reads: Reads,
-) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedStreams>), sqlx::Error> {
+) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), sqlx::Error> {
     // A repeated inbox would list its threads twice.
     let link_ids = distinct_links(link_ids);
     let link_ids = link_ids.as_slice();
@@ -1389,16 +1389,17 @@ async fn read_page(
         PreviewView::StandardLabel(PreviewViewStandardLabel::Important)
     );
 
-    // Resolve Complete email addresses to contact ids and look up the TRASH
-    // label id once, so the candidate WHERE can use direct id equality
-    // instead of joining email_contacts/email_labels per message row.
-    //
-    // When team_id is set, resolution spans every team-member's link so the
-    // resulting contact_id / TRASH label_id sets cover all team mailboxes.
-    let resolved = resolve_filters(pool, link_ids, team_id, email_filter).await?;
-    if can_short_circuit(email_filter, &resolved) {
-        return Ok((Vec::new(), None));
-    }
+    // Team reads resolve addresses and contribution modes inside their read
+    // snapshot, before choosing SQL for all-mail or selected contributors.
+    let resolved = if team_id.is_some() {
+        ResolvedFilters::default()
+    } else {
+        let resolved = resolve_filters(pool, link_ids, None, email_filter).await?;
+        if can_short_circuit(email_filter, &resolved) {
+            return Ok((Vec::new(), None));
+        }
+        resolved
+    };
     let subject_subscans =
         team_id.is_none() && !link_ids.is_empty() && uses_subject_subscans(view, email_filter);
 
@@ -1421,8 +1422,8 @@ async fn read_page(
     let params = match reads.owned {
         Some(tuning) => match OwnedRead::new(view, email_filter, params, tuning) {
             Ok(read) => {
-                let (streams, rows) = read_owned_page(pool, read).await?;
-                return Ok((rows, Some(streams)));
+                let (stats, rows) = read_owned_page(pool, read).await?;
+                return Ok((rows, Some(stats)));
             }
             Err(params) => *params,
         },
@@ -1460,43 +1461,6 @@ async fn read_page(
     Ok((query.fetch_all(pool).await?, None))
 }
 
-/// How long a team-scoped (CRM) page may run in the database, across all its
-/// statements: under the web client's 12s Soup request timeout, after which
-/// nobody reads the page. The server never cancels a query its client
-/// dropped, so the database enforces the bound.
-const TEAM_READ_BUDGET: Duration = Duration::from_secs(10);
-
-/// Reads a team-scoped page with [`TeamRead`] when it covers the request, and
-/// with the general builder otherwise, within [`TEAM_READ_BUDGET`].
-async fn read_team_page(
-    pool: &PgPool,
-    view: &PreviewView,
-    email_filter: &Expr<EmailLiteral>,
-    params: QueryParams,
-    tuning: Option<TeamReadTuning>,
-) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
-    let deadline = Instant::now() + TEAM_READ_BUDGET;
-    let team_read = match tuning {
-        Some(tuning) => TeamRead::new(view, email_filter, params, tuning),
-        None => Err(Box::new(params)),
-    };
-    let mut transaction = pool.begin().await?;
-    let rows = match team_read {
-        Ok(read) => read.fetch(&mut transaction, deadline).await?,
-        Err(params) => {
-            limit_statement_time(&mut transaction, deadline).await?;
-            let mut qb = build_query(view, email_filter, *params);
-            qb.build()
-                .persistent(false)
-                .try_map(map_row)
-                .fetch_all(&mut *transaction)
-                .await?
-        }
-    };
-    transaction.commit().await?;
-    Ok(rows)
-}
-
 /// `link_ids` without repeats, in order.
 fn distinct_links(link_ids: &[Uuid]) -> Vec<Uuid> {
     let mut seen = HashSet::with_capacity(link_ids.len());
@@ -1508,13 +1472,13 @@ fn distinct_links(link_ids: &[Uuid]) -> Vec<Uuid> {
 }
 
 /// Reads an owned address page with [`OwnedRead`], all its statements on one
-/// snapshot: a short inbox page is final only if the window it read is the
-/// one the count sees. Like the general builder's owned requests, it has no
+/// snapshot: a round goes on below the last thread the window before it
+/// walked only if both see the same threads. Like the general builder's owned requests, it has no
 /// statement timeout, so it never errors where the general builder answers.
 async fn read_owned_page(
     pool: &PgPool,
     read: OwnedRead<'_>,
-) -> Result<(OwnedStreams, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
+) -> Result<(OwnedReadStats, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
     let mut transaction = begin_snapshot(pool).await?;
     let page = read.fetch(&mut transaction).await?;
     transaction.commit().await?;
@@ -1530,7 +1494,7 @@ pub(crate) async fn begin_snapshot(
 }
 
 /// Bounds the transaction's next statement by what is left until `deadline`.
-async fn limit_statement_time(
+pub(super) async fn limit_statement_time(
     connection: &mut PgConnection,
     deadline: Instant,
 ) -> Result<(), sqlx::Error> {

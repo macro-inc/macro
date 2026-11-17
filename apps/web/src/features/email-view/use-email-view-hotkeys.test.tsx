@@ -23,10 +23,11 @@ function press(key: string, init: KeyboardEventInit = {}) {
   document.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
 }
 
-function setup(initialTab: EmailTab = 'noise') {
+function setup(initialTab: EmailTab = 'noise', initialSearch = '') {
   const goHome = vi.fn(() => true);
   const openCreateMenu = vi.fn(() => true);
   const [tab, setTab] = createSignal<EmailTab>(initialTab);
+  const [search, setSearch] = createSignal(initialSearch);
   let pushUndo!: ReturnType<typeof useMutationUndoContext>['pushUndo'];
 
   function Harness() {
@@ -68,6 +69,7 @@ function setup(initialTab: EmailTab = 'noise') {
       setTab,
       listHasKeyboard: () => !isScopeInActiveBranch(readerScope),
       hasSelection: () => false,
+      hasSearch: () => search().length > 0,
     });
     // Flags loading later re-register the sidebar's letters.
     registerHome();
@@ -86,7 +88,14 @@ function setup(initialTab: EmailTab = 'noise') {
       <Harness />
     </MutationUndoProvider>
   ));
-  return { view, goHome, openCreateMenu, tab, pushUndo: () => pushUndo };
+  return {
+    view,
+    goHome,
+    openCreateMenu,
+    tab,
+    setSearch,
+    pushUndo: () => pushUndo,
+  };
 }
 
 it('goes to email tabs with g sequences only while Email is focused', () => {
@@ -122,6 +131,18 @@ it('returns to Signal on Escape and leaves c to the Create menu', () => {
   expect(tab()).toBe('important');
   press('c');
   expect(openCreateMenu).toHaveBeenCalledOnce();
+});
+
+it('stays on the tab on Escape while a search is on screen', () => {
+  const { view, tab, setSearch } = setup('archived', 'budget');
+  view.getByTestId('email').focus();
+
+  press('Escape');
+  expect(tab()).toBe('archived');
+
+  setSearch('');
+  press('Escape');
+  expect(tab()).toBe('important');
 });
 
 it('undoes the latest action with z', () => {

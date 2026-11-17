@@ -1,5 +1,4 @@
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import CopyIcon from '@icon/system/regular/copy.svg';
 import PauseIcon from '@icon/system/regular/pause.svg';
 import PlayIcon from '@icon/system/regular/play.svg';
 import { ButtonGroup, Dropdown } from '@ui';
@@ -15,7 +14,7 @@ export function RoutineRunButton(props: {
   runHint?: string;
   onRun: () => void;
   onEnabled: (enabled: boolean) => void;
-  onCopyPrompt: () => void;
+  onCopyPrompt: () => void | boolean | Promise<void | boolean>;
 }) {
   return (
     <Dropdown placement="bottom-end">
@@ -56,13 +55,12 @@ export function RoutineRunButton(props: {
             </Show>
             {props.enabled ? 'Turn off' : 'Turn on'}
           </Dropdown.Item>
-          <Dropdown.Item
+          <Dropdown.CopyItem
             disabled={props.copyDisabled}
-            onSelect={props.onCopyPrompt}
+            onCopy={props.onCopyPrompt}
           >
-            <CopyIcon class="size-4" />
             Copy prompt
-          </Dropdown.Item>
+          </Dropdown.CopyItem>
         </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>

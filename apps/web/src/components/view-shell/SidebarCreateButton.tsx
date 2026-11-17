@@ -14,6 +14,8 @@ export function SidebarCreateHeader(props: {
   createAction?: JSX.Element;
   search?: () => JSX.Element;
   searchLabel?: string;
+  searchOpen?: boolean;
+  onSearchOpenChange?: (open: boolean) => void;
 }) {
   return (
     <header class="flex shrink-0 flex-col">
@@ -21,6 +23,8 @@ export function SidebarCreateHeader(props: {
         <ViewSidebar.Header
           search={props.search}
           searchLabel={props.searchLabel}
+          searchOpen={props.searchOpen}
+          onSearchOpenChange={props.onSearchOpenChange}
           actions={props.actions}
         >
           <div class="flex min-w-0 items-center gap-1">

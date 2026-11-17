@@ -32,6 +32,8 @@ export type UseEmailViewHotkeysOptions = {
   /** The list is on screen and has the keyboard, not the reader or a thread. */
   listHasKeyboard: () => boolean;
   hasSelection: () => boolean;
+  /** A search is on screen; Escape clears it before leaving the tab. */
+  hasSearch: () => boolean;
 };
 
 /** Keys that work in Email's list, its reading pane and an open thread. */
@@ -69,6 +71,7 @@ export function useEmailViewHotkeys(options: UseEmailViewHotkeysOptions) {
       options.enabled() &&
       options.listHasKeyboard() &&
       !options.hasSelection() &&
+      !options.hasSearch() &&
       options.tab() !== DEFAULT_EMAIL_TAB,
     keyDownHandler: () => {
       options.setTab(DEFAULT_EMAIL_TAB);

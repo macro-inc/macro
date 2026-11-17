@@ -69,13 +69,39 @@ tools/HTTP/GraphQL surfaces over them.
 
 - `cargo test -p crm` (`SQLX_OFFLINE` unset; needs a local MacroDB — see
   `.agents/rules/rust/guardrails.md`). After query/migration changes, run
-  `nix develop --command just prepare_db` from the repository root.
+  `just sqlx::prepare_db "$DATABASE_URL"` from the repository root inside Nix,
+  using the same isolated database as the tests.
+- For member-access changes, also run `cargo test -p crm --all-features member_access`;
+  the HTTP, search and tool revocation test requires the `search` feature.
 - After tool input or description changes, regenerate frontend tool types and
   public MCP reference pages using the
   [entity creation guide](../../docs/guides/add-entity.md#13-ai-and-mcp-tools);
   CI checks both outputs.
 
 ## Gotchas
+
+- Selected-email policy types live in `domain/email_rules.rs`; their validation
+  checks format/resource bounds only. Target authorization and activation are
+  separate operations. Selected storage keeps legacy `enabled` false;
+  recognize `enabled OR selected_enabled` for compatible grant readers without
+  bypassing legacy-write guards. Keep the scalar predicate, set-based ingestion
+  and inlined Team reader in parity; live contact/company selectors follow
+  same-team role visibility and retain every exclusion veto. Activation remains
+  unavailable until the policy API and generation-safe backfill are ready.
+  Private rule controls use the membership boundary of `/crm/email-privacy`,
+  including after CRM viewing denial; resolving CRM details still needs record access.
+
+- Dormant policy storage lives in `domain/email_policy.rs` and
+  `outbound/companies_repo/email_policy/`. Initialize consent identity only via
+  `OpenEmailPolicy::Initialize`; `Existing` never creates a row and checks the
+  incarnation before idempotency lookup. The later API owns version CAS and
+  authentication. Worker checkpoints/completion must pass their captured
+  generation, never substitute the transaction's current version. Preview IDs
+  are immutable retry identities; a new ID replaces the member's slot.
+  Source events page raw contact/company rule references before filtering active
+  revisions. Wire event insertion inside the source edit's existing transaction,
+  under its privacy lock; do not call it as a separate post-commit effect.
+  No selected activation or policy worker is wired by this storage layer.
 
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
@@ -111,10 +137,11 @@ tools/HTTP/GraphQL surfaces over them.
   every property row (1.8 s). Revisit if a team's records near 40k (100 ms).
   Keep its visibility rules identical to the Activity arm's. It reads the
   pool `with_activity_edges_replica` names, the replica for DSS's list Soup,
-  so it lags like the rest of a list: a record hidden or a member removed
-  moments ago can still match, and a record just added may not yet. Each item
-  still passes its own source's access check. Every other CRM read and write
-  stays on the primary.
+  after checking the viewer's current permitted teams on the primary. Record
+  data lags like the rest of a list: a record hidden moments ago can still
+  match, and a record just added may not yet. Membership removal and CRM access
+  revocation take effect on the next request. Each item still passes its own
+  source's access check. Every other CRM read and write stays on the primary.
 - An archived call links to the companies whose domain a participant's address
   is at, and separately to every visible contact of the team holding the
   address as any of its addresses, with or without a company, together with
@@ -146,7 +173,19 @@ tools/HTTP/GraphQL surfaces over them.
   including hidden rows; skip ambiguous identities and preserve manual company choices.
 - Serialize single and bulk source teardown company-before-source/contact, and
   re-read the target after waiting; orphan deletion must not cascade a new manual link.
-- CRM availability is team membership, independent of contribution consent.
+- CRM availability requires current membership and effective `team_user.crm_access`;
+  admins/owners always qualify. Recheck `CrmTeamReceipt::check_access` on CRM
+  record and shared-setting operations; aggregate Soup/search paths return no
+  denied records. Entity receipts and requester-side email grants use the same
+  primary-backed predicate.
+  Contribution consent is independent and remains manageable after CRM denial.
+  Team preference writes remain disabled by the rollout gate until old removal
+  writers have drained; that gate never weakens these read checks.
+  `/crm/member-access` reads authority even for a denied viewer; storage's response
+  opt-in response hint lets an open client retire stale snapshots. Only that
+  hint has a three-second per-instance cache; receipts and the authority endpoint
+  stay fresh. See `docs/CRM_EMAIL_PRIVACY.md` for the request header and latency.
+- Population is independent of the contributor's CRM viewing permission.
   Population takes the shared `crm-email:{team}` advisory lock, then the
   `crm-contact:{team}:{link}:{email}` lock (which `depopulate_contact` also
   takes before its domain lock), parent team `KEY SHARE`, the mailbox scan,
@@ -169,6 +208,16 @@ tools/HTTP/GraphQL surfaces over them.
   connections needed by the holder's work.
 - When depopulating an email, prefer its domain-linked contact over a manual
   unfiled record so mailbox-source teardown reaches the synced contact.
+- Thread exceptions live in `crm_email_thread_exclusions`, scoped to one
+  team/member/mailbox/thread; mutations and paginated listing are owner-only.
+  Keep these contribution controls available to members denied CRM viewing,
+  like mailbox consent; use membership authority without `check_access`.
+  Require `enable-crm-thread-exclusions` in the domain before set/clear, failing
+  closed when unavailable; keep rollout off until ingestion and Team email readers
+  understand exceptions. Keep `crm_email_thread_excluded`, the Team reader's
+  `ALLOWED` rule and the set-based interaction scan in parity.
+  Another contributor's copy remains eligible. Restore queues backfill; exclusion
+  preserves records and prior interaction dates, like personal blocked domains.
 - Domain exclusions affect contribution and CRM email reads, never record
   visibility. Preserve archive state on block/unblock and consent withdrawal.
 - Keep ambiguous CSV contact lookups unresolved without creating records for
@@ -177,11 +226,12 @@ tools/HTTP/GraphQL surfaces over them.
 - `POST /crm/previews` titles up to 100 companies and 100 contacts in one
   read for web chips (`src/outbound/companies_repo/previews.rs`). It must
   answer each record as `GET /crm/companies/{id}` and `GET /crm/contacts/{id}`
-  do (team membership; members see no hidden company, hidden contact, or
+  do (current membership and effective CRM access; members see no hidden company, hidden contact, or
   contact under a hidden company; the name and first domain the read returns,
   domains ordered by `created_at`, then id), and leave out any record the
   reads refuse (401, for a missing record too). Change both together;
-  `companies_repo/test/previews.rs` compares them for every role and caller.
+  `companies_repo/test/previews.rs` compares them for every role and caller,
+  including revocation and regrant on the same session and contact-page route.
 
 - Company names/logos live in the global `crm_domain_directory`. Only the
   email pubsub workers carry a real `CompanyMetadataResolver`, using public

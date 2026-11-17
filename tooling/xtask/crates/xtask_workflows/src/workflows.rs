@@ -25,6 +25,7 @@ mod build_dmg_on_tag;
 mod build_web_app;
 mod cancel_stuck_cloud_storage_deploys;
 mod cargo_deny;
+mod cargo_deny_advisories;
 mod cargo_workspace_dependency_check;
 mod channels_e2e;
 mod check_generated;
@@ -45,6 +46,7 @@ mod deploy_fusionauth_instance;
 mod deploy_mcp_chatgpt_worker;
 mod deploy_observability;
 mod deploy_on_push;
+mod deploy_pulumi_stack;
 mod deploy_sdk_docs;
 mod deploy_sync_service;
 mod deploy_web_app;
@@ -223,6 +225,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(cargo_deny::cargo_deny)(),
     },
     WorkflowFile {
+        slug: "cargo_deny_advisories",
+        file_name: "cargo_deny_advisories.yml",
+        render_yaml: || render_gh_workflow(cargo_deny_advisories::cargo_deny_advisories)(),
+    },
+    WorkflowFile {
         slug: "cargo_workspace_dependency_check",
         file_name: "cargo_workspace_dependency_check.yml",
         render_yaml: || {
@@ -304,6 +311,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
             render_patched(
                 deploy_fusionauth_instance::deploy_fusionauth_instance,
                 deploy_fusionauth_instance::patch,
+            )
+        },
+    },
+    WorkflowFile {
+        slug: "deploy_pulumi_stack",
+        file_name: "deploy-pulumi-stack.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_pulumi_stack::deploy_pulumi_stack,
+                deploy_pulumi_stack::patch,
             )
         },
     },

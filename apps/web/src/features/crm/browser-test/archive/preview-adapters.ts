@@ -4,12 +4,14 @@ import type { CrmContactResponse } from '@service-storage/generated/schemas/crmC
 import { QueryClient } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { type Accessor, createSignal } from 'solid-js';
+import type { CompanyContactsFilter } from '../../context/crm-sources';
 import {
   useCompanyQuery,
   useSetCompanyHiddenMutation,
   useSetCompanyNameMutation,
   useSetEmailSyncMutation,
 } from '../../queries/companies';
+import { useCompanyContactsQuery } from '../../queries/company-contacts';
 import {
   useSetContactCompanyMutation,
   useSetContactEmailMutation,
@@ -19,6 +21,7 @@ import {
   useSetContactHiddenMutation,
   useSetContactNameMutation,
 } from '../../queries/contacts';
+import { companyContactsPage } from '../company-contacts-page';
 
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 export const analytics = { track() {} };
@@ -176,18 +179,32 @@ async function save() {
   }
   return true;
 }
+function companyNamed(companyId: string): CrmCompanyResponse {
+  return companyId === 'company-2'
+    ? { ...company, id: companyId, name: 'Second company' }
+    : company;
+}
 export const storageServiceClient = {
-  async getCompany({ companyId }) {
-    const selected =
-      companyId === 'company-2'
-        ? { ...company, id: companyId, name: 'Second company' }
-        : company;
+  async getCompany({ companyId, includeContacts = true }) {
+    const selected = companyNamed(companyId);
     return ok({
       ...selected,
-      contacts: contacts
-        .filter((contact) => contact.companyId === companyId)
-        .map((contact) => ({ ...contact })),
+      contacts: includeContacts
+        ? contacts
+            .filter((contact) => contact.companyId === companyId)
+            .map((contact) => ({ ...contact }))
+        : [],
     });
+  },
+  async listCompanyContactsPage({ companyId, ...params }) {
+    return ok(
+      companyContactsPage(
+        contacts,
+        companyNamed(companyId),
+        role() !== 'member',
+        params
+      )
+    );
   },
   async getContact({ contactId }) {
     return ok({ ...contacts.find((contact) => contact.id === contactId)! });
@@ -280,6 +297,7 @@ export const storageServiceClient = {
   | 'setContactCompany'
   | 'unlinkContactCompany'
   | 'getCompany'
+  | 'listCompanyContactsPage'
   | 'getContact'
   | 'setCompanyHidden'
   | 'setContactHidden'
@@ -293,8 +311,12 @@ const deps = {
 };
 export const useCrmContext = () => ({
   userId: () => 'user-1',
+  pipelinesEnabled: () => () => false,
   isTeamAdmin: () => () => role() !== 'member',
   createCompanySource: (id: Accessor<string>) => useCompanyQuery(deps, id),
+  createCompanyContactsSource: (
+    filter: Accessor<CompanyContactsFilter | undefined>
+  ) => useCompanyContactsQuery(deps, filter),
   createContactSource: (id: Accessor<string>) => useContactQuery(deps, id),
   hideCompany: () => useSetCompanyHiddenMutation(deps),
   hideContact: () => useSetContactHiddenMutation(deps),
@@ -334,6 +356,9 @@ Object.assign(window, {
     snapshot: () => ({ company, contacts }),
   },
 });
+
+// Pipelines are off here, so the headers never render this.
+export const AddToPipeline = () => null;
 
 export const useFeatureFlag = () => () => ({ enabled: true, loading: false });
 

@@ -91,8 +91,8 @@ export function TopBar(props: {
     };
   });
   const favoriteAction = makeFavoriteAction();
-  const copyLinkAction = makeCopyLinkAction();
-  const copyEntityIdAction = makeCopyEntityIdAction();
+  const copyLinkAction = makeCopyLinkAction({ silent: true });
+  const copyEntityIdAction = makeCopyEntityIdAction({ silent: true });
   const itemOperations = useItemOperations();
   const { replaceOrInsertSplit } = useSplitLayout();
   // One copy at a time: the menu can reopen while a copy is being written.
@@ -129,16 +129,8 @@ export function TopBar(props: {
         favoriteAction.execute([entity(detail)]),
         'database-actions'
       ),
-    onCopyLink: () =>
-      fireAndForget(
-        copyLinkAction.execute([entity(detail)]),
-        'database-actions'
-      ),
-    onCopyId: () =>
-      fireAndForget(
-        copyEntityIdAction.executeById(databaseId),
-        'database-actions'
-      ),
+    onCopyLink: () => copyLinkAction.execute([entity(detail)]),
+    onCopyId: () => copyEntityIdAction.executeById(databaseId),
     duplicating: duplicating(),
     onDuplicate: () => fireAndForget(duplicate(detail), 'database-actions'),
     onMoveToFolder:

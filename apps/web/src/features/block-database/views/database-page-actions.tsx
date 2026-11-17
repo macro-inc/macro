@@ -1,16 +1,15 @@
+import { EntityAppearanceMenu } from '@app/features/entity-appearance/appearance-menu';
 import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
-import { useChangeEntityIcon } from '@app/features/entity-appearance/entity-appearance';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
-import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import CopyIcon from '@icon/system/regular/copy.svg';
-import DuplicateIcon from '@icon/system/regular/copy-simple.svg';
+import DuplicateIcon from '@icon/system/regular/copy.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import StarIcon from '@icon/system/regular/star.svg';
@@ -51,8 +50,8 @@ type CsvImportFailure = DatabaseCsvFailure | { kind: 'unreadable' };
 export type DatabaseEntityActions = {
   favorited: boolean;
   onToggleFavorite: () => void;
-  onCopyLink: () => void;
-  onCopyId: () => void;
+  onCopyLink: () => void | boolean | Promise<void | boolean>;
+  onCopyId: () => void | boolean | Promise<void | boolean>;
   /** Whether a copy is being made; Duplicate waits for it. */
   duplicating: boolean;
   /** Copy the database into a new one the viewer owns, and open it. */
@@ -72,7 +71,6 @@ export function DatabasePageActions(props: {
   const [exporting, setExporting] = createSignal(false);
   const [reading, setReading] = createSignal(false);
   const [confirmDelete, setConfirmDelete] = createSignal(false);
-  const changeIcon = useChangeEntityIcon();
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [deleting, setDeleting] = createSignal(false);
   const [deleteError, setDeleteError] = createSignal('');
@@ -199,36 +197,30 @@ export function DatabasePageActions(props: {
               <>
                 <Dropdown.Group>
                   <Show when={editable() && appearanceFlag().enabled}>
-                    <Dropdown.Item
-                      onSelect={() =>
-                        changeIcon(
-                          {
-                            type: 'database',
-                            id: props.detail.database.id,
-                            name: props.detail.database.name,
-                            ownerId: props.detail.database.owner_id,
-                            grant: props.detail.grant,
-                            appearance: readEntityAppearance(
-                              props.detail.database.appearance
-                            ),
-                            projectId:
-                              props.detail.database.project_id ?? undefined,
-                          },
-                          menuButton
-                        )
-                      }
-                    >
-                      {t('appearance.title')}
-                    </Dropdown.Item>
+                    <EntityAppearanceMenu
+                      entity={{
+                        type: 'database',
+                        id: props.detail.database.id,
+                        name: props.detail.database.name,
+                        ownerId: props.detail.database.owner_id,
+                        grant: props.detail.grant,
+                        appearance: readEntityAppearance(
+                          props.detail.database.appearance
+                        ),
+                        projectId:
+                          props.detail.database.project_id ?? undefined,
+                      }}
+                    />
                   </Show>
-                  <Dropdown.Item onSelect={actions().onCopyLink}>
-                    <LinkIcon class="size-4 shrink-0" />
+                  <Dropdown.CopyItem
+                    icon={<LinkIcon class="size-4" />}
+                    onCopy={actions().onCopyLink}
+                  >
                     Copy Link
-                  </Dropdown.Item>
-                  <Dropdown.Item onSelect={actions().onCopyId}>
-                    <CopyIcon class="size-4 shrink-0" />
+                  </Dropdown.CopyItem>
+                  <Dropdown.CopyItem onCopy={actions().onCopyId}>
                     Copy ID
-                  </Dropdown.Item>
+                  </Dropdown.CopyItem>
                 </Dropdown.Group>
                 <Dropdown.Group>
                   <Dropdown.Item onSelect={actions().onToggleFavorite}>
@@ -238,7 +230,7 @@ export function DatabasePageActions(props: {
                   <Show when={actions().onMoveToFolder}>
                     {(moveToFolder) => (
                       <Dropdown.Item onSelect={moveToFolder()}>
-                        <ArrowRightIcon class="size-4 shrink-0" />
+                        <FolderIcon class="size-4 shrink-0" />
                         {t('entityActions.moveToFolder')}
                       </Dropdown.Item>
                     )}
@@ -298,6 +290,7 @@ export function DatabasePageActions(props: {
                     fireAndForget(exportCsv(), 'database-page-actions')
                   }
                 >
+                  <DownloadIcon class="size-4 shrink-0" />
                   Current table as CSV
                 </Dropdown.Item>
               </Dropdown.SubContent>
