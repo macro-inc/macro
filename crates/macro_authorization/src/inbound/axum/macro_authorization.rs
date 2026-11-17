@@ -5,16 +5,18 @@ use ::axum::{
     http::{StatusCode, request::Parts},
 };
 
+use macro_auth::credential::{CredentialKind, TokenSource};
+
 use crate::{MacroAuthorization, MacroAuthorizationService};
 
 use super::{
     AuthorizationPolicy, MacroAuthorizationRejection, MacroAuthorizationState,
-    bot::{BOT_TOKEN_HEADER, authorize_optional_bot_request},
-    harness::{HARNESS_TOKEN_HEADER, authorize_optional_harness_request},
+    bot::authorize_optional_bot_request,
+    harness::authorize_optional_harness_request,
     internal::{authorize_internal_request, internal_header_convention},
     rejection, status_rejection,
-    user::{authorize_optional_user_request, explicit_user_credential_present},
-    user_api_key::{USER_API_KEY_HEADER, authorize_user_api_key_request},
+    user::{UserToken, authorize_optional_user_request},
+    user_api_key::authorize_user_api_key_request,
 };
 
 /// Extracts and authorizes the request principal, then narrows it with `Policy`.
@@ -71,48 +73,42 @@ where
     Svc: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
-    let internal_convention = internal_header_convention(&parts.headers);
-    let has_bot_token = parts.headers.contains_key(BOT_TOKEN_HEADER);
-    let has_user_api_key = parts.headers.contains_key(USER_API_KEY_HEADER);
-    let has_harness_token = parts.headers.contains_key(HARNESS_TOKEN_HEADER);
-    let has_explicit_user_credential = explicit_user_credential_present(parts);
-    let explicit_credential_count = usize::from(internal_convention.is_some())
-        + usize::from(has_bot_token)
-        + usize::from(has_user_api_key)
-        + usize::from(has_harness_token)
-        + usize::from(has_explicit_user_credential);
+    // The one reading of the request's credential, shared with the agent
+    // scope check, so the two can't pick different ones.
+    let credential = macro_auth::credential::request_credential(parts)
+        .map_err(|error| status_rejection(StatusCode::BAD_REQUEST, error.code()))?;
+    let user_token = match credential.kind {
+        CredentialKind::Internal => {
+            let Some(convention) = internal_header_convention(&parts.headers) else {
+                return Err(rejection("unauthorized"));
+            };
+            return authorize_internal_request::<S, Svc>(parts, state, convention).await;
+        }
+        CredentialKind::UserApiKey => {
+            let user = authorize_user_api_key_request::<S, Svc>(parts, state).await?;
+            return Ok(Some(MacroAuthorization::User(user)));
+        }
+        CredentialKind::Bot => {
+            let bot = authorize_optional_bot_request::<S, Svc>(parts, state)
+                .await?
+                .ok_or_else(|| rejection("unauthorized"))?;
+            return Ok(Some(MacroAuthorization::Bot(bot)));
+        }
+        CredentialKind::Harness => {
+            let harness = authorize_optional_harness_request::<S, Svc>(parts, state)
+                .await?
+                .ok_or_else(|| rejection("unauthorized"))?;
+            return Ok(Some(MacroAuthorization::Harness(harness)));
+        }
+        CredentialKind::MalformedAuthorization => return Err(rejection("unauthorized")),
+        CredentialKind::UserToken { token, source } => Some(UserToken {
+            token,
+            explicit: source != TokenSource::Cookie,
+        }),
+        CredentialKind::None => None,
+    };
 
-    if explicit_credential_count > 1 {
-        return Err(status_rejection(
-            StatusCode::BAD_REQUEST,
-            "ambiguous credentials",
-        ));
-    }
-
-    if let Some(convention) = internal_convention {
-        return authorize_internal_request::<S, Svc>(parts, state, convention).await;
-    }
-
-    if has_user_api_key {
-        let user = authorize_user_api_key_request::<S, Svc>(parts, state).await?;
-        return Ok(Some(MacroAuthorization::User(user)));
-    }
-
-    if has_bot_token {
-        let bot = authorize_optional_bot_request::<S, Svc>(parts, state)
-            .await?
-            .expect("bot token presence was checked");
-        return Ok(Some(MacroAuthorization::Bot(bot)));
-    }
-
-    if has_harness_token {
-        let harness = authorize_optional_harness_request::<S, Svc>(parts, state)
-            .await?
-            .expect("harness token presence was checked");
-        return Ok(Some(MacroAuthorization::Harness(harness)));
-    }
-
-    authorize_optional_user_request::<S, Svc>(parts, state)
+    authorize_optional_user_request::<S, Svc>(state, user_token)
         .await
         .map(|user| user.map(MacroAuthorization::User))
 }

@@ -3,6 +3,7 @@ import type { SearchableOption } from '@app/features/next-soup/soup-view/filters
 import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
+import { peopleBeforeAgents } from '@core/user/people-before-agents';
 import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
 import { useAgentAssignees } from '@property/queries/agent-assignees';
 import { useTeamMembers } from '@queries/team/members';
@@ -38,9 +39,7 @@ export function useAssigneePicker(
   const options = createMemo(
     () => {
       const uid = userId();
-      const members = team.users();
-      const agentUsers = agents();
-      const people = [...agentUsers, ...members];
+      const people = [...team.users(), ...agents()];
       const result: SearchableOption[] = [];
       const add = (id: string) => {
         if (result.some((option) => option.id === id)) return;
@@ -55,21 +54,20 @@ export function useAssigneePicker(
         });
       };
 
-      for (const agent of agentUsers) add(agent.id);
       if (uid) add(uid);
       result.push({
         id: NO_ASSIGNEE,
         label: t('viewMenus.unassigned'),
         icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
       });
-      for (const member of members) add(member.id);
+      for (const person of people) add(person.id);
       for (const id of selectedIdsAtViewEntry()) {
         if (id !== NO_ASSIGNEE) add(id);
       }
       for (const id of activeIds()) {
         if (id !== NO_ASSIGNEE) add(id);
       }
-      return result;
+      return peopleBeforeAgents(result, (option) => option.id, uid);
     },
     undefined,
     {

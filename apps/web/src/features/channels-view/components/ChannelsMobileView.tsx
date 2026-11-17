@@ -63,6 +63,8 @@ export function ChannelsMobileView(props: {
   pinned: readonly ChannelEntity[];
   searchQuery: string;
   onClearSearch: () => void;
+  /** Admit a conversation into the host's inline preview when available. */
+  openPreview?: (channel: ChannelEntity) => boolean;
   horizontalPins?: boolean;
   preferences?: ChannelSectionPreferences;
   scrollKey?: string;
@@ -168,7 +170,11 @@ export function ChannelsMobileView(props: {
     const request = ++opening;
     const finishTouchHighlight = persistSoupNavigationTouchHighlight(event);
     try {
+      if (!event.shiftKey && props.openPreview?.(channel)) return;
       await openEntityInSplitFromUnifiedList(channel, {
+        ...(event.shiftKey && props.openPreview
+          ? { openInNewSplit: true }
+          : {}),
         splitHandle: panel.handle,
         referredFrom: 'channels',
         notificationSource,
@@ -397,10 +403,7 @@ export function ChannelsMobileView(props: {
         class="scrollbar-hidden size-full min-h-0 overflow-y-auto overscroll-none"
       >
         <div ref={setListHeader}>
-          <div
-            aria-hidden="true"
-            class="h-[calc(var(--mobile-content-inset-top,0px)+0.75rem)]"
-          />
+          <div aria-hidden="true" class="h-(--mobile-content-inset-top)" />
           <Show when={pinned().length > 0}>
             <ChannelPinGrid horizontal={props.horizontalPins}>
               <For each={pinned()}>
