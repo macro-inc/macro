@@ -1780,9 +1780,10 @@ Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx
 import it directly from Tasks and legacy `next-soup` consumers.
 Keep entity-picker navigation on its search input, before the enclosing menu handles the key.
 Order assignee menus and @ mention People rows with `@core/user/people-before-agents`:
-you, other people, then agents with Macro first. While searching, rank with
-`NAME_MATCH_RANKING`; an agent needs the typed words, not scattered letters, and never ranks
-above a person who matches as well. Cap a list's people (`capPeople`), never its agents, and
+you, other people, then agents with Macro first. @ menus pass `mention: true`, which lists
+Macro above everyone and keeps it first while its name starts with the query. While
+searching, rank with `NAME_MATCH_RANKING`; an agent needs the typed words, not scattered
+letters, and never ranks above a person who matches as well. Cap a list's people (`capPeople`), never its agents, and
 don't boost bots in a menu's search score.
 
 ### Tag picker selection and creation
