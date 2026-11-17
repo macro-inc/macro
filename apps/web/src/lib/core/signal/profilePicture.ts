@@ -49,36 +49,6 @@ function defaultUrlTransform(item: ProfilePictureItem): string | undefined {
   return item.url;
 }
 
-async function fetchProfilePictures(
-  ids: string[]
-): Promise<ProfilePictureItem[]> {
-  const result = await authServiceClient.postProfilePictures({
-    user_id_list: ids,
-  });
-  if (result.isErr()) {
-    console.error('Failed to fetch user profile pictures');
-    // Mark as not-loading with an expired timestamp so the next access
-    // retries the fetch instead of getting stuck forever (see
-    // `useProfilePictureUrl`'s `cacheExpired` check).
-    return ids.map((id) => ({
-      _createdAt: new Date(0),
-      id,
-      loading: false,
-    }));
-  }
-
-  // The server omits users without a picture; they're loaded too, with no url,
-  // or they'd stay `loading` (and never refetch) for the rest of the session.
-  const urls = new Map(result.value.pictures.map(({ id, url }) => [id, url]));
-  const fetchedAt = new Date();
-  return ids.map((id) => ({
-    _createdAt: fetchedAt,
-    id,
-    url: urls.get(id),
-    loading: false,
-  }));
-}
-
 type ProfilePictureUrlFetcher = [
   Accessor<string | undefined>,
   {
@@ -92,22 +62,8 @@ const processFetchQueue = debounce(async () => {
   if (items.length === 0) return;
 
   setProfilePictureFetchQueue([]);
-  await batchFetchProfilePictures(items);
+  await fetchPictures(items);
 }, 50);
-
-async function batchFetchProfilePictures(ids: string[]) {
-  const [nameResults] = await Promise.all([
-    ids.length > 0 ? fetchProfilePictures(ids) : Promise.resolve([]),
-  ]);
-
-  const updates: ProfilePictureStore = {};
-
-  [...nameResults].forEach((result) => {
-    updates[result.id] = result;
-  });
-
-  setUserProfilePictures((prev) => ({ ...prev, ...updates }));
-}
 
 export function useProfilePictureUrl(id?: string): ProfilePictureUrlFetcher {
   if (!id) {
@@ -172,34 +128,51 @@ export async function getProfilePictureUrl(
   return item.url;
 }
 
-/** Most user ids sent in one refresh request. */
-const REFRESH_BATCH_SIZE = 100;
+/** Most user ids sent in one request. */
+const FETCH_BATCH_SIZE = 100;
 
 /**
- * Refetches the given users' pictures, batched, and returns how many batches
- * failed. The old URL stays visible until the new one arrives, and a failed
- * batch keeps its URLs. Entries are versioned by when their request was sent,
- * so responses apply in send order however they arrive: one never overwrites
- * an entry from a request sent after it.
+ * Fetches the given users' pictures, batched, and returns how many batches
+ * failed. Every fetch (first load, TTL refetch, live update, reconnect sweep)
+ * writes through here, so entries are versioned by when their request was
+ * sent and responses apply in send order however they arrive: one never
+ * overwrites an entry written after its request was sent. The server omits
+ * users without a picture; they're loaded too, with no url.
+ *
+ * A failed batch keeps cached URLs; entries still `loading` are marked loaded
+ * with an expired timestamp so the next access retries instead of waiting
+ * forever (see `useProfilePictureUrl`'s `cacheExpired` check).
  */
-async function refreshPictures(ids: string[]): Promise<number> {
+async function fetchPictures(ids: string[]): Promise<number> {
   let failed = 0;
-  for (let start = 0; start < ids.length; start += REFRESH_BATCH_SIZE) {
-    const batch = ids.slice(start, start + REFRESH_BATCH_SIZE);
+  for (let start = 0; start < ids.length; start += FETCH_BATCH_SIZE) {
+    const batch = ids.slice(start, start + FETCH_BATCH_SIZE);
     const sentAt = new Date();
     const result = await authServiceClient.postProfilePictures({
       user_id_list: batch,
     });
+    const isNewer = (id: string) => {
+      const current = userProfilePictures[id];
+      return current !== undefined && current._createdAt > sentAt;
+    };
+
     if (result.isErr()) {
-      console.error('Failed to refresh user profile pictures');
+      console.error('Failed to fetch user profile pictures');
       failed += 1;
+      for (const id of batch) {
+        if (isNewer(id) || !userProfilePictures[id]?.loading) continue;
+        setUserProfilePictures(id, {
+          _createdAt: new Date(0),
+          id,
+          loading: false,
+        });
+      }
       continue;
     }
 
     const urls = new Map(result.value.pictures.map(({ id, url }) => [id, url]));
     for (const id of batch) {
-      const current = userProfilePictures[id];
-      if (current && current._createdAt > sentAt) continue;
+      if (isNewer(id)) continue;
       setUserProfilePictures(id, {
         _createdAt: sentAt,
         id,
@@ -218,7 +191,7 @@ async function refreshPictures(ids: string[]): Promise<number> {
  */
 export async function refreshProfilePicture(userId: string): Promise<void> {
   if (!userProfilePictures[userId]) return;
-  await refreshPictures([userId]);
+  await fetchPictures([userId]);
 }
 
 /**
@@ -233,9 +206,9 @@ export async function refreshCachedProfilePictures(): Promise<void> {
     span.setAttr('profile_pictures.resync.user_count', ids.length);
     span.setAttr(
       'profile_pictures.resync.batch_count',
-      Math.ceil(ids.length / REFRESH_BATCH_SIZE)
+      Math.ceil(ids.length / FETCH_BATCH_SIZE)
     );
-    const failed = await refreshPictures(ids);
+    const failed = await fetchPictures(ids);
     span.setAttr('profile_pictures.resync.failed_batches', failed);
   });
 }
