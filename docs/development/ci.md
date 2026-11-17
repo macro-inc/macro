@@ -44,11 +44,12 @@ failure when the channel shows the workflow passing, and a green run posts
 apart, since only the sweep runs the tests kept for known bugs. The job's last
 step records what the channel then shows, and the next run's job reads it; a
 workflow's alert jobs run one at a time. A red run while the channel already
-shows it failing, a run whose alert job comes after a newer run's, and a
+shows it failing, a run that ends after a newer run has ended, and a
 cancelled run post nothing; the job's summary says why. A run is red when one
-of its jobs failed or ran out of time. A failed post records nothing, so
-re-running the alert job, or the next run, posts it again. A flaky failure
-that passes on a re-run posts that it passes again.
+of its jobs failed or ran out of time. A failed post records nothing, so the
+next run posts it again, as does re-running the alert job while no newer run
+has ended. A flaky failure that passes on a re-run posts that it passes
+again.
 
 The alert names the commit and its pull request, the failed jobs with the
 step each failed at, the failed tests the coverage report names, the tests

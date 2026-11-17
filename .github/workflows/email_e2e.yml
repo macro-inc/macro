@@ -1131,8 +1131,8 @@ jobs:
         // shows the stream passing. A stream's alert jobs run one at a time (a
         // concurrency group), so each reads what the one before it left. A failed post
         // records nothing, so a re-run of this job, or the next run, posts again. A run
-        // whose alert job comes after a newer run's posts nothing, since its result is
-        // not the branch's latest.
+        // posts nothing once a newer run has ended, since its result is not the
+        // branch's latest; the newer run's own alert job tells the channel.
         //
         // A failure names the commit, each failed job with the step it failed at, and
         // what the run's coverage report (downloaded to EMAIL_E2E_REPORTS) says
@@ -1322,12 +1322,20 @@ jobs:
           const shown = recorded[0];
           const failing = shown?.failing ?? false;
 
-          const newer = recorded.filter((record) => record.run.run_number > run.run_number).sort(newestFirst)[0];
+          // A newer run that ended tells the channel itself, or has already; its
+          // alert job may wait behind this one.
+          const newer = entries
+            .filter(
+              (entry) =>
+                entry.run.run_number > run.run_number &&
+                (records(entry, names).length > 0 || passed(entry, names.job) !== null),
+            )
+            .sort(newestFirst)[0];
           if (newer) {
             return {
               post: null,
               failing,
-              why: `run #${newer.run.run_number}, which is newer, has already told the channel, so this result is not the branch's latest`,
+              why: `run #${newer.run.run_number}, which is newer, has ended, so this result is not the branch's latest`,
             };
           }
           if (red && !failing) {
@@ -1518,34 +1526,37 @@ jobs:
           ].join('\n');
         }
 
+        /**
+         * GETs a GitHub API path. Network errors, server errors and rate limits are
+         * tried three times, waiting as long as GitHub asks when that fits in the job.
+         */
         async function github(path: string): Promise<any> {
           for (let attempt = 1; ; attempt++) {
-            let response: Response | null = null;
-            try {
-              response = await fetch(`${process.env.GITHUB_API_URL ?? 'https://api.github.com'}${path}`, {
-                headers: {
-                  accept: 'application/vnd.github+json',
-                  authorization: `Bearer ${env('GH_TOKEN')}`,
-                  'x-github-api-version': '2022-11-28',
-                },
-              });
-            } catch (error) {
-              if (attempt === 3) {
-                throw error;
+            const { response, body } = await fetch(`${process.env.GITHUB_API_URL ?? 'https://api.github.com'}${path}`, {
+              headers: {
+                accept: 'application/vnd.github+json',
+                authorization: `Bearer ${env('GH_TOKEN')}`,
+                'x-github-api-version': '2022-11-28',
+              },
+            })
+              .then(async (response) => ({ response, body: await response.text() }))
+              .catch((error: unknown) => ({ response: null, body: String(error) }));
+            if (response?.ok) {
+              try {
+                return JSON.parse(body);
+              } catch {
+                // A body cut short: try again.
               }
             }
-            if (response?.ok) {
-              return response.json();
+            const limited = response?.status === 429 || (response?.status === 403 && /rate limit/i.test(body));
+            const retried = response === null || response.ok || response.status >= 500 || limited;
+            if (attempt === 3 || !retried) {
+              throw new Error(`GET ${path}: ${response ? `HTTP ${response.status} ` : ''}${body}`);
             }
             const retryAfter = Number(response?.headers.get('retry-after'));
             const reset = Number(response?.headers.get('x-ratelimit-reset')) - Date.now() / 1000;
-            const limited =
-              response?.status === 429 ||
-              (response?.status === 403 && (retryAfter > 0 || response.headers.get('x-ratelimit-remaining') === '0'));
-            if (response && (attempt === 3 || !(response.status >= 500 || limited))) {
-              throw new Error(`GET ${path}: HTTP ${response.status} ${await response.text()}`);
-            }
-            const seconds = retryAfter > 0 ? retryAfter : limited && reset > 0 ? reset : 5 * attempt;
+            const exhausted = response?.headers.get('x-ratelimit-remaining') === '0';
+            const seconds = retryAfter > 0 ? retryAfter : !limited ? 5 * attempt : exhausted && reset > 0 ? reset : 60;
             // The job's own time limit is ten minutes; a longer wait would not end in time.
             if (seconds > 120) {
               throw new Error(`GET ${path}: rate limited for ${Math.round(seconds)}s`);

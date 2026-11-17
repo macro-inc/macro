@@ -206,7 +206,7 @@ describe('decide', () => {
     assert.equal(decideThis(true, entries).post, null);
   });
 
-  test('a run whose alert job comes after a newer run’s posts nothing, and leaves the channel as it is', () => {
+  test('a run posts nothing once a newer run has told the channel, and leaves it as it is', () => {
     const entries = [
       entry(11, 'red', [alert({ minute: 25, posted: true, shows: 'failing' })]),
       entry(9, 'green', [alert({ minute: 20, shows: 'passing' })]),
@@ -215,17 +215,26 @@ describe('decide', () => {
       assert.deepEqual(decideThis(red, entries), {
         post: null,
         failing: true,
-        why: "run #11, which is newer, has already told the channel, so this result is not the branch's latest",
+        why: "run #11, which is newer, has ended, so this result is not the branch's latest",
       });
     }
   });
 
-  test('a newer run that has not told the channel does not hold this one back', () => {
-    const entries = [
-      entry(12, 'running'),
-      entry(11, 'red', [alert({ minute: 25 })]),
-      entry(9, 'green', [alert({ minute: 20, shows: 'passing' })]),
-    ];
+  test('a newer run that has ended holds this one back before its own alert job runs', () => {
+    // Its alert job waits behind this one, or was replaced by it, and tells
+    // the channel itself, or leaves that to the next run.
+    for (const alerts of [[], [alert({ minute: 25 })]]) {
+      const entries = [entry(11, 'red', alerts), entry(9, 'green', [alert({ minute: 20, shows: 'passing' })])];
+      assert.deepEqual(decideThis(true, entries), {
+        post: null,
+        failing: false,
+        why: "run #11, which is newer, has ended, so this result is not the branch's latest",
+      });
+    }
+  });
+
+  test('a newer run still going does not hold this one back', () => {
+    const entries = [entry(12, 'running'), entry(9, 'green', [alert({ minute: 20, shows: 'passing' })])];
     assert.equal(decideThis(true, entries).post, 'failure');
   });
 
