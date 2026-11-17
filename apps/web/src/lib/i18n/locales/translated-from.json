@@ -495,8 +495,6 @@
     "entityActions.toastRenameFailed": "8fcf8ce07d",
     "entityActions.toastRestoredFromTrash": "8fbb4ca5f2",
     "entityActions.toastRestoreFromTrashFailed": "87c6e5fbb1",
-    "entityActions.toastThreadsStayDone": "bdc0273d37",
-    "entityActions.toastThreadStaysDone": "9df690e0db",
     "entityActions.toastUndoFailed": "08e78d0c90",
     "entityActions.toastUnmuted": "f94d28a9e5",
     "entityActions.toastUnmutedCount": "1a0982c61d",

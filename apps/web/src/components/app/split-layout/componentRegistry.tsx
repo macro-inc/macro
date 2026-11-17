@@ -595,11 +595,6 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'agent-replay',
-    lazy(() => import('@app/features/block-agent/debug/replay/Replay'))
-  );
-
-  registerComponent(
     'agent-progress',
     lazy(() => import('@app/features/agent-activity/debug/ProgressPlayground'))
   );
@@ -642,13 +637,6 @@ if (DEV_MODE_ENV) {
       lazy(
         () => import('@app/features/next-soup/debug/DocumentWherePlayground')
       )
-    )
-  );
-
-  registerComponent(
-    'projection-playground',
-    withAuth(
-      lazy(() => import('@app/features/devtools/debug/ProjectionPlayground'))
     )
   );
 

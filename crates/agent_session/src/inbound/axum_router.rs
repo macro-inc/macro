@@ -1037,8 +1037,8 @@ async fn ensure_harness_serves_session<R: AgentSessionNotificationRecipient>(
 }
 
 /// Who is asking, as control policy tells them apart. A user's credential
-/// used by an agent's program (a code-mode run, or a token carrying an
-/// agent's attribution) is `Program`: it acts for the user but sits in no
+/// used by a program (a code-mode run, or a token signed for an agent or a
+/// routine's run) is `Program`: it acts for the user but sits in no
 /// app tab. The app itself may hold a session or a bearer token.
 pub(crate) fn control_principal(
     caller: &UserBotOrHarnessAuthorization,
@@ -1048,7 +1048,7 @@ pub(crate) fn control_principal(
 
     match caller {
         UserBotOrHarnessAuthorization::User(user)
-            if macro_authorization::is_agent_run(user.agent_id.is_some(), headers) =>
+            if macro_authorization::is_program_run(user.attribution(), headers) =>
         {
             ControlPrincipal::Program
         }

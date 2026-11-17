@@ -589,10 +589,6 @@ export default {
       other: '{{accepted}} van {{count}} items gemarkeerd als niet voltooid',
     },
     toastMarkNotDoneFailed: 'Markeren als niet voltooid mislukt',
-    toastThreadStaysDone:
-      'Deze thread heeft geen ontvangen berichten en blijft dus voltooid',
-    toastThreadsStayDone:
-      'Deze threads hebben geen ontvangen berichten en blijven dus voltooid',
     toastCountNotRestored: {
       one: '{{count}} kon niet worden teruggezet.',
       other: '{{count}} konden niet worden teruggezet.',

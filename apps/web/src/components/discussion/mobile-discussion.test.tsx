@@ -6,15 +6,24 @@ import {
 } from '@core/mobile/virtualKeyboard';
 import type { MessageListItem } from '@service-storage/messages';
 import {
+  render as baseRender,
   cleanup,
   fireEvent,
-  render,
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, For } from 'solid-js';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MobileDiscussion } from './mobile-discussion';
+
+const TestQueryClientProvider = (props: { children: JSX.Element }) => (
+  <QueryClientProvider client={new QueryClient()}>
+    {props.children}
+  </QueryClientProvider>
+);
+const render = (ui: Parameters<typeof baseRender>[0]) =>
+  baseRender(ui, { wrapper: TestQueryClientProvider });
 
 vi.mock('@channel/Message/SenderIcon', () => ({
   SenderIcon: () => null,

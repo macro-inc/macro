@@ -162,6 +162,10 @@ where
                 .put(email_privacy::update_handler::<C, St, Eas, Auth>),
         )
         .route(
+            "/email-privacy/threads",
+            get(email_privacy::excluded_threads_handler::<C, St, Eas, Auth>),
+        )
+        .route(
             "/companies",
             post(create_company::handler::<C, St, Eas, Auth>),
         )
@@ -285,6 +289,12 @@ impl IntoResponse for CrmError {
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
                     message: "changing CRM admin settings requires admin/owner team role".into(),
+                }),
+            ),
+            CrmError::ThreadExclusionsUnavailable => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "thread exclusions are not available".into(),
                 }),
             ),
             CrmError::StageEditRoleRequired(role) => (

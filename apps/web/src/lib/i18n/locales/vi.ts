@@ -568,10 +568,6 @@ export default {
       other: 'Đã đánh dấu {{accepted}}/{{count}} mục là chưa xong',
     },
     toastMarkNotDoneFailed: 'Không thể đánh dấu là chưa xong',
-    toastThreadStaysDone:
-      'Chuỗi này chưa nhận được tin nhắn nào nên vẫn ở trạng thái xong',
-    toastThreadsStayDone:
-      'Các chuỗi này chưa nhận được tin nhắn nào nên vẫn ở trạng thái xong',
     toastCountNotRestored: {
       other: 'Không thể khôi phục {{count}} mục.',
     },

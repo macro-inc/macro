@@ -624,10 +624,6 @@ export default {
       other: 'Oznaczono jako nieukończone {{accepted}} z {{count}} elementu',
     },
     toastMarkNotDoneFailed: 'Nie udało się oznaczyć jako nieukończone',
-    toastThreadStaysDone:
-      'Ten wątek nie zawiera odebranych wiadomości, więc pozostaje ukończony',
-    toastThreadsStayDone:
-      'Te wątki nie zawierają odebranych wiadomości, więc pozostają ukończone',
     toastCountNotRestored: {
       one: 'Nie udało się przywrócić {{count}} elementu.',
       few: 'Nie udało się przywrócić {{count}} elementów.',

@@ -555,8 +555,6 @@ export default {
       other: '已將 {{count}} 個項目中的 {{accepted}} 個標示為未完成',
     },
     toastMarkNotDoneFailed: '無法標示為未完成',
-    toastThreadStaysDone: '這個郵件串沒有收到的郵件，因此會維持完成狀態',
-    toastThreadsStayDone: '這些郵件串沒有收到的郵件，因此會維持完成狀態',
     toastCountNotRestored: {
       other: '有 {{count}} 個項目無法還原。',
     },

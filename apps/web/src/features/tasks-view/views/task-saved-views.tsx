@@ -1,9 +1,11 @@
 import { t } from '@app/lib/i18n';
+import { replacePaneSearchParams } from '@app/lib/split-router';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { useContactFilterLabels } from '@core/user/use-contact-filter-options';
+import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
@@ -50,6 +52,7 @@ import {
 } from '../filters/task-saved-view';
 import { useTaskFilters } from '../filters/use-task-filters';
 import { taskSavedViewTitle } from '../primitives/create-task-saved-view-draft';
+import { tasksTabSearch, tasksTabSearchCodec } from '../tasks-tab-search';
 import { useTasksView } from '../tasks-view-context';
 
 const LAYOUT_LABELS = { list: 'List', board: 'Board', gantt: 'Gantt' };
@@ -336,6 +339,7 @@ function TaskSavedViewMenuItems(props: {
         const record = props.record;
         props.defer(() => create(record));
       }}
+      onCopyLink={() => copySavedViewLink(props.record.id)}
     />
   );
 }
@@ -517,6 +521,21 @@ export function TaskSavedViewsPicker() {
       )}
     </Show>
   );
+}
+
+async function copySavedViewLink(id: string) {
+  const params = tasksTabSearchCodec.serialize({
+    ...tasksTabSearch.defaults,
+    savedView: id,
+  });
+  if (!params) return;
+  const url = new URL('/app/component/tasks', window.location.origin);
+  replacePaneSearchParams(url.searchParams, [
+    { [tasksTabSearch.namespace]: params },
+  ]);
+  const copied = await writeClipboardData({ 'text/plain': url.toString() });
+  if (!copied) toast.failure('Could not copy link');
+  return copied;
 }
 
 export function TaskSaveViewButton() {

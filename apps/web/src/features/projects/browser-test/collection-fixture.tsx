@@ -251,8 +251,8 @@ export function CollectionFixture() {
                 isActive={() => true}
                 ganttEnabled={false}
                 canOpenInNewSplit={() => false}
-                onCopyLink={() => {}}
-                onCopyId={() => {}}
+                onCopyLink={async () => {}}
+                onCopyId={async () => {}}
               />
             </ViewShell.Main>
           </ViewShell.Root>

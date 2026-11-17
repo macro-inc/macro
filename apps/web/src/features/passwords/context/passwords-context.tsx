@@ -30,7 +30,12 @@ import type {
   PasswordVersion,
 } from '../core/types';
 
-export type PasswordFailure = 'forbidden' | 'folderMissing' | 'failed';
+/** `unreachable`: no answer from Macro (offline, or a gateway that could not reach it). */
+export type PasswordFailure =
+  | 'forbidden'
+  | 'folderMissing'
+  | 'unreachable'
+  | 'failed';
 export type PasswordResult<T> = Promise<Result<T, PasswordFailure>>;
 export type PasswordSource = {
   list(): Promise<PasswordItem[]>;
@@ -176,6 +181,8 @@ export type PasswordCapabilities = {
   recipientsLoading: Accessor<boolean>;
   recipientsError: Accessor<boolean>;
   writeClipboard(value: string): Promise<void>;
+  /** Name to show for an account, such as an agent asking for access. */
+  displayName(accountId: string): string;
   /** Parses an export file in the browser; the file is never uploaded. */
   parseExport(file: File): Promise<ParseReply>;
   importResume: ImportResumeStore;

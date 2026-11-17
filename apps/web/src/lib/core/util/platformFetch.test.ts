@@ -8,6 +8,8 @@ vi.mock('../constant/servers', () => ({
     new URL('/auth', document.baseURI).href,
     'http://127.0.0.1:3006/sync',
   ],
+  SERVER_HOSTS: {},
+  SYNC_SERVICE_HOSTS: { worker: 'https://sync.example' },
 }));
 vi.mock('./platform', () => ({ isTauri: () => platform.native }));
 vi.mock('@tauri-apps/plugin-http', () => ({ fetch: nativeFetch }));
@@ -19,6 +21,7 @@ import {
   platformFetch,
   webviewFetch,
 } from './platformFetch';
+import { safeFetch } from './safeFetch';
 
 beforeEach(() => {
   platform.native = true;
@@ -204,3 +207,31 @@ it.each([
     expect(nativeFetch).not.toHaveBeenCalled();
   }
 );
+
+it('reports a native request that gets no response as a network error', async () => {
+  const failure =
+    'error sending request for url (https://sync.example/document/1/exists)';
+  nativeFetch.mockRejectedValue(failure);
+  vi.stubGlobal('fetch', initializePlatformFetch(vi.fn<typeof fetch>()));
+
+  await expect(platformFetch('https://sync.example/')).rejects.toThrow(
+    new TypeError(failure)
+  );
+  const result = await safeFetch('https://sync.example/document/1/exists', {
+    method: 'HEAD',
+  });
+  expect(result._unsafeUnwrapErr()).toEqual([
+    { code: 'NETWORK_ERROR', message: 'Network error occurred' },
+  ]);
+});
+
+it('keeps a cancelled native request out of network errors', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  nativeFetch.mockRejectedValue('Request canceled');
+  vi.stubGlobal('fetch', initializePlatformFetch(vi.fn<typeof fetch>()));
+
+  await expect(
+    platformFetch('https://sync.example/', { signal: controller.signal })
+  ).rejects.toBe('Request canceled');
+});

@@ -6,6 +6,7 @@ import type {
 import type {
   ApiDraftContactInfo,
   GetMessageResponses,
+  GetThreadResponses,
   MessageOperationResponse,
   ResolveMessageOperationRequest,
   TransferDraftRequest,
@@ -41,6 +42,78 @@ export interface SendEmailOptions {
    * name. An unverified or unknown address is refused.
    */
   from?: string;
+}
+
+type ThreadMessages = GetThreadResponses[200]['thread']['messages'];
+type AttachmentRecord = ThreadMessages[number]['attachments'][number];
+
+// One read of a thread serves the attachments of every sent message in it, per
+// client: a program walking a thread's messages and asking each for its
+// attachments otherwise reads the whole thread once per message. Only sent
+// messages are kept, since their attachments never change; an unsent draft, or
+// a message that arrived since, reads the thread again. Only the attachment
+// records are kept, for the most recent threads.
+const MAX_REMEMBERED_THREADS = 50;
+const rememberedThreads = new WeakMap<
+  MacroClient,
+  Map<string, Promise<Map<string, AttachmentRecord[]> | undefined>>
+>();
+
+async function readThreadMessages(
+  client: MacroClient,
+  threadId: string,
+): Promise<ThreadMessages> {
+  const { thread } = unwrap(
+    await client.email.getThread({
+      path: { thread_id: threadId },
+      query: { limit: 100 },
+    }),
+  );
+  return thread.messages;
+}
+
+// Undefined when the read failed: the caller sees that failure, and a later
+// call reads the thread again.
+async function sentAttachments(
+  read: Promise<ThreadMessages>,
+): Promise<Map<string, AttachmentRecord[]> | undefined> {
+  let messages: ThreadMessages;
+  try {
+    messages = await read;
+  } catch {
+    return undefined;
+  }
+  return new Map(
+    messages
+      .filter((m) => m.is_sent || !m.is_draft)
+      .map((m) => [m.db_id, m.attachments]),
+  );
+}
+
+async function messageAttachments(
+  client: MacroClient,
+  threadId: string,
+  messageId: string,
+): Promise<AttachmentRecord[] | undefined> {
+  let threads = rememberedThreads.get(client);
+  if (!threads) {
+    threads = new Map();
+    rememberedThreads.set(client, threads);
+  }
+  const remembered = threads.get(threadId);
+  if (remembered) {
+    const hit = (await remembered)?.get(messageId);
+    if (hit) return hit;
+  }
+  const read = readThreadMessages(client, threadId);
+  const kept = sentAttachments(read);
+  threads.delete(threadId);
+  threads.set(threadId, kept);
+  for (const oldest of threads.keys()) {
+    if (threads.size <= MAX_REMEMBERED_THREADS) break;
+    threads.delete(oldest);
+  }
+  return (await read).find((m) => m.db_id === messageId)?.attachments;
 }
 
 // The HTTP schema is opaque: the server serializes the Rust tool response,
@@ -226,18 +299,16 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
    */
   async attachments(): Promise<EmailAttachment[]> {
     const { thread_db_id } = await this.detail.get();
-    const { thread } = unwrap(
-      await this.client.email.getThread({
-        path: { thread_id: thread_db_id },
-        query: { limit: 100 },
-      }),
+    const attachments = await messageAttachments(
+      this.client,
+      thread_db_id,
+      this.id,
     );
-    const message = thread.messages.find((m) => m.db_id === this.id);
-    if (!message)
+    if (!attachments)
       throw new Error(
         `Message ${this.id} is not among its thread's first 100 messages`,
       );
-    return message.attachments.map((a) => EmailAttachment.from(this.client, a));
+    return attachments.map((a) => EmailAttachment.from(this.client, a));
   }
 
   /**

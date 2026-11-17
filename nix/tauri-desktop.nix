@@ -29,6 +29,10 @@
         };
       };
       gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
+      # The embedded bundle's commit, so the updater can tell the server it
+      # already runs the bundle deployed from it. `desktop-release.mjs prepare`
+      # records it, because the file it rewrites leaves the flake without a rev.
+      bundleGitSha = desktopRelease.gitSha or "";
 
       # Vite inlines `import.meta.env.VITE_*` at build time, so the desktop
       # bundle only reaches PostHog — and therefore only resolves feature
@@ -361,7 +365,7 @@
             cd apps/web
             MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
             printf '${appVersion}+${gitRev}\n' > dist/semver.txt
-            BUNDLE_BUILD_NUMBER=${toString desktopRelease.bundleBuild} MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
+            GIT_SHA='${bundleGitSha}' BUNDLE_BUILD_NUMBER=${toString desktopRelease.bundleBuild} MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
           )
 
           # A supplied key that never reaches the bundle means PostHog — and
@@ -390,9 +394,12 @@
           runHook postCheck
         '';
 
+        # The app streams web-hosted/ (videos) from the web deploy, like the
+        # mobile apps (`build-tauri`), so the desktop bundle leaves it out.
         installPhase = ''
           runHook preInstall
           cp -r apps/web/dist "$out"
+          rm -rf "$out/web-hosted"
           runHook postInstall
         '';
       };

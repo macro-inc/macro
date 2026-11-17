@@ -7,6 +7,7 @@ mod association;
 mod company_contacts;
 mod contact_listing;
 mod contact_update;
+mod email_policy;
 mod email_privacy;
 mod previews;
 
@@ -815,7 +816,7 @@ impl CompaniesRepositoryImpl {
         if !blocked {
             sqlx::query!(
                 r#"INSERT INTO crm_email_backfill_outbox (team_id, user_id, traceparent)
-                   SELECT team_id, user_id, $2 FROM crm_email_consent WHERE team_id = $1 AND enabled
+                   SELECT team_id, user_id, $2 FROM crm_email_consent WHERE team_id = $1 AND (enabled OR selected_enabled)
                    ON CONFLICT (team_id, user_id) DO UPDATE SET requested_at = now(), traceparent = EXCLUDED.traceparent"#,
                 team_id,
                 Self::current_traceparent()
@@ -2074,7 +2075,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             ).execute(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
             sqlx::query!(
                 r#"INSERT INTO crm_email_backfill_outbox (team_id, user_id, traceparent)
-                   SELECT team_id, user_id, $2 FROM crm_email_consent WHERE team_id = $1 AND enabled
+                   SELECT team_id, user_id, $2 FROM crm_email_consent WHERE team_id = $1 AND (enabled OR selected_enabled)
                    ON CONFLICT (team_id, user_id) DO UPDATE SET requested_at = now(), traceparent = EXCLUDED.traceparent"#,
                 team_id,
                 Self::current_traceparent()

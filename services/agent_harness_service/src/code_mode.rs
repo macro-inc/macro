@@ -66,7 +66,7 @@ async fn scope_of(
 /// through its scoped credential, and finding and reading tools.
 fn native_tool_allowed(scope: SessionScope, tool: &str) -> bool {
     match scope {
-        SessionScope::Generation | SessionScope::NoSend => matches!(
+        SessionScope::Generation | SessionScope::NoSend | SessionScope::DryRun => matches!(
             tool,
             "ExecuteCode"
                 | "DescribeCodeTools"

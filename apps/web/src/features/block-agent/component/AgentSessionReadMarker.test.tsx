@@ -1,35 +1,21 @@
 import type { NotificationSource } from '@notifications/notification-source';
-import type { UnifiedNotification } from '@notifications/types';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 
-const mocks = vi.hoisted(() => ({ markRead: vi.fn(async () => {}) }));
+const mocks = vi.hoisted(() => ({
+  markRead: vi.fn(async () => {}),
+}));
 vi.mock('@notifications/notification-helpers', () => ({
   markNotificationsForEntityAsRead: mocks.markRead,
 }));
-const notificationSource = {
-  notificationsByEntity: () => ({}),
-  isLoading: () => false,
-} as NotificationSource;
 
-function notification(id: string): UnifiedNotification {
+function createSource() {
   return {
-    id,
-    entity_id: 'opened-session',
-    entity_type: 'agent_session',
-    state: 'unseen',
-    created_at: '2026-09-22T00:00:00.000Z',
-    updated_at: '2026-09-22T00:00:00.000Z',
-    viewed_at: null,
-    sent: true,
-    notification_event_type: 'channel_message_send',
-    notification_metadata: {
-      tag: 'channel_message_send',
-      content: { messageId: id },
-    },
-  } as UnifiedNotification;
+    notificationsByEntity: vi.fn(() => ({})),
+    isLoading: vi.fn(() => false),
+  } as unknown as NotificationSource;
 }
 
 beforeEach(() => {
@@ -43,6 +29,7 @@ afterEach(() => {
 });
 
 it('marks the loaded active session only, including a direct route', async () => {
+  const notificationSource = createSource();
   const [id, setId] = createSignal<string>();
   const [active, setActive] = createSignal(false);
   render(() => (
@@ -66,6 +53,7 @@ it('marks the loaded active session only, including a direct route', async () =>
 });
 
 it('does not mark a previous session when navigation happens during the debounce', async () => {
+  const notificationSource = createSource();
   const [id, setId] = createSignal('first-session');
   render(() => (
     <AgentSessionReadMarker
@@ -89,7 +77,7 @@ it('cancels the read marker when the split loses focus before it is viewed', asy
     <AgentSessionReadMarker
       sessionId="opened-session"
       active={active()}
-      notificationSource={notificationSource}
+      notificationSource={createSource()}
     />
   ));
   setActive(false);
@@ -97,9 +85,8 @@ it('cancels the read marker when the split loses focus before it is viewed', asy
   expect(mocks.markRead).not.toHaveBeenCalled();
 });
 
-it('waits for the initial notification feed even when it takes longer than the viewing debounce', async () => {
-  const [loading, setLoading] = createSignal(true);
-  const source = { ...notificationSource, isLoading: loading };
+it('marks the session once without reading the notification feed', async () => {
+  const source = createSource();
   render(() => (
     <AgentSessionReadMarker
       sessionId="opened-session"
@@ -107,55 +94,20 @@ it('waits for the initial notification feed even when it takes longer than the v
       notificationSource={source}
     />
   ));
-  await vi.advanceTimersByTimeAsync(5_000);
+  await vi.advanceTimersByTimeAsync(1_999);
   expect(mocks.markRead).not.toHaveBeenCalled();
-  setLoading(false);
-  await vi.advanceTimersByTimeAsync(2_000);
+  await vi.advanceTimersByTimeAsync(1);
   expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(source, {
     type: 'agent_session',
     id: 'opened-session',
   });
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(mocks.markRead).toHaveBeenCalledOnce();
+  expect(source.notificationsByEntity).not.toHaveBeenCalled();
+  expect(source.isLoading).not.toHaveBeenCalled();
 });
 
-it('marks new notifications while the conversation stays active without repeating successful reads', async () => {
-  const [notifications, setNotifications] = createSignal([
-    notification('first'),
-  ]);
-  const source = {
-    ...notificationSource,
-    notificationsByEntity: () => ({
-      'agent_session@opened-session': notifications(),
-    }),
-  };
-  render(() => (
-    <AgentSessionReadMarker
-      sessionId="opened-session"
-      active
-      notificationSource={source}
-    />
-  ));
-  await vi.advanceTimersByTimeAsync(2_000);
-  expect(mocks.markRead).toHaveBeenCalledOnce();
-
-  setNotifications([{ ...notification('first'), state: 'seen' }]);
-  await vi.advanceTimersByTimeAsync(2_000);
-  expect(mocks.markRead).toHaveBeenCalledOnce();
-
-  setNotifications((previous) => [...previous, notification('second')]);
-  await vi.advanceTimersByTimeAsync(2_000);
-  expect(mocks.markRead).toHaveBeenCalledTimes(2);
-});
-
-it('does not retry a failed mark indefinitely when the notification cache rolls back', async () => {
-  const [notifications, setNotifications] = createSignal([
-    notification('first'),
-  ]);
-  const source = {
-    ...notificationSource,
-    notificationsByEntity: () => ({
-      'agent_session@opened-session': notifications(),
-    }),
-  };
+it('logs a failed mark once without retrying', async () => {
   const error = new Error('Notification write failed');
   const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
   mocks.markRead.mockRejectedValue(error);
@@ -164,12 +116,9 @@ it('does not retry a failed mark indefinitely when the notification cache rolls 
       <AgentSessionReadMarker
         sessionId="opened-session"
         active
-        notificationSource={source}
+        notificationSource={createSource()}
       />
     ));
-    await vi.advanceTimersByTimeAsync(2_000);
-    setNotifications([{ ...notification('first'), state: 'seen' }]);
-    setNotifications([notification('first')]);
     await vi.advanceTimersByTimeAsync(10_000);
     expect(mocks.markRead).toHaveBeenCalledOnce();
     expect(logError).toHaveBeenCalledWith(

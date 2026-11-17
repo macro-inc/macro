@@ -589,10 +589,6 @@ export default {
       other: '{{accepted}}/{{count}} kohdetta merkitty keskeneräisiksi',
     },
     toastMarkNotDoneFailed: 'Keskeneräiseksi merkitseminen epäonnistui',
-    toastThreadStaysDone:
-      'Tässä ketjussa ei ole vastaanotettuja viestejä, joten se pysyy valmiina',
-    toastThreadsStayDone:
-      'Näissä ketjuissa ei ole vastaanotettuja viestejä, joten ne pysyvät valmiina',
     toastCountNotRestored: {
       one: '{{count}} kohdetta ei voitu palauttaa.',
       other: '{{count}} kohdetta ei voitu palauttaa.',

@@ -20,7 +20,6 @@ import {
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import { queryClient } from '@queries/client';
 import {
@@ -198,8 +197,8 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
       return selected;
     },
   };
-  const copyLink = makeCopyLinkAction();
-  const copyId = makeCopyEntityIdAction();
+  const copyLink = makeCopyLinkAction({ silent: true });
+  const copyId = makeCopyEntityIdAction({ silent: true });
   const changeIcon = useChangeEntityIcon();
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [sharing, setSharing] = createSignal<string>();
@@ -228,10 +227,8 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
         canOpenInNewSplit={() =>
           globalSplitManager()?.canAppendSplit() ?? false
         }
-        onCopyLink={(id) =>
-          fireAndForget(copyLink.executeByBlock(id, 'initiative'), 'projects')
-        }
-        onCopyId={(id) => fireAndForget(copyId.executeById(id), 'projects')}
+        onCopyLink={(id) => copyLink.executeByBlock(id, 'initiative')}
+        onCopyId={(id) => copyId.executeById(id)}
         onShare={(projectId) => setSharing(projectId)}
         onChangeIcon={
           appearanceFlag().enabled

@@ -1,10 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
@@ -21,15 +16,11 @@ import {
   getGraphqlSoupClient,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
-import {
-  type InfiniteData,
-  useInfiniteQuery,
-  useMutation,
-} from '@tanstack/solid-query';
+import { type InfiniteData, useMutation } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
-import { optimisticUpdateSoupEntity, refetchSoupEntity } from '../soup/cache';
+import { refetchSoupEntity } from '../soup/cache';
 import {
   getUnmaintainedGraphqlSoupRevalidations,
   refreshActiveGraphqlSoupQueries,
@@ -37,7 +28,6 @@ import {
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-import { updateEmailThreadState } from './cache-cleanup';
 import { invalidateEmailFolderQueries } from './folder-cache';
 import {
   createGraphqlEmailThreadQuery,
@@ -101,19 +91,6 @@ function flattenThreadPages(
 export async function fetchAndCacheThread(
   threadId: string
 ): ReturnType<typeof emailClient.getThread> {
-  if (!isFeatureEnabled(enableGraphqlSoup)) {
-    const result = await catchToResult(() =>
-      queryClient.fetchInfiniteQuery(threadQueryOptions(threadId))
-    );
-    if (result.isErr()) return err(result.error as any);
-
-    const thread = flattenThreadPages(result.value);
-    if (!thread) {
-      return err([{ code: 'NOT_FOUND', message: 'Email thread not found' }]);
-    }
-    return ok({ thread });
-  }
-
   const result = await catchToResult(() => fetchGraphqlEmailThread(threadId));
 
   if (result.isErr()) return err(result.error as any);
@@ -159,38 +136,10 @@ export async function fetchFreshEmailThread(
   }
 }
 
-/**
- * Legacy REST eligibility preflight. GraphQL validates received-message history
- * in the email domain instead of guessing from an inbox-sorting timestamp or a
- * partial message page. Bulk callers must settle each email independently: one
- * rejected unarchive must not roll back successful or durably queued siblings.
- *
- * Failed legacy lookups remain permissive, so a transient read error does not
- * misreport an ordinary thread as permanently done.
- */
-export async function threadCanBeMarkedNotDone(
-  threadId: string
-): Promise<boolean> {
-  // GraphQL validates received-message history in the email domain. Its inbox
-  // sort timestamp can be null after archive, and a partial cached message page
-  // cannot prove a thread is sent-only. Let the mutation decide and roll back
-  // on rejection, without delaying the optimistic UI for another thread fetch.
-  if (isFeatureEnabled(enableGraphqlSoup)) return true;
-  const result = await fetchAndCacheThread(threadId);
-  if (result.isErr()) return true;
-  const { thread } = result.value;
-  return (
-    thread.has_received_mail !== false &&
-    thread.latest_inbound_message_ts != null
-  );
-}
-
 export type ThreadQueryData = {
   thread: Thread;
   hasMore: boolean;
 };
-
-export type ThreadQueryTransport = 'rest' | 'graphql';
 
 export type ThreadQueryResult<TData> = {
   /** Canonical identity for this route, including a resolved offline handle. */
@@ -204,20 +153,11 @@ export type ThreadQueryResult<TData> = {
   readonly isSuccess: boolean;
   readonly isEnabled: boolean;
   readonly hasNextPage: boolean;
-  readonly transport: ThreadQueryTransport;
   fetchNextPage(): Promise<void>;
   refetch(): Promise<void>;
 };
 
 type ThreadQuerySelector<TData> = (data: InfiniteData<Thread, number>) => TData;
-
-/** Preserve the server's canonical identity independently of consumer selection. */
-function selectThreadWithIdentity<TData>(select: ThreadQuerySelector<TData>) {
-  return (data: InfiniteData<Thread, number>) => ({
-    canonicalThreadId: data.pages[0]?.db_id,
-    value: select(data),
-  });
-}
 
 type UseThreadQueryOptions<TData> = {
   enabled?: boolean;
@@ -234,11 +174,7 @@ function selectThreadQueryData(
   };
 }
 
-/**
- * Transport-neutral live query for a thread and its paginated messages.
- * GraphQL uses urql-solid while the rollout flag is enabled; REST remains the
- * fallback and continues to own the legacy TanStack cache.
- */
+/** Live GraphQL query for a thread and its paginated messages. */
 export function useThreadQuery<TData>(
   threadId: Accessor<string>,
   options: Accessor<
@@ -253,80 +189,53 @@ export function useThreadQuery<TData = ThreadQueryData>(
   threadId: Accessor<string>,
   options?: Accessor<UseThreadQueryOptions<TData>>
 ): ThreadQueryResult<TData> {
-  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
-  const queryEnabled = () => options?.().enabled !== false;
-  const usesGraphql = () => graphqlSoupFlag().enabled;
   const select = () =>
     options?.().select ?? (selectThreadQueryData as ThreadQuerySelector<TData>);
 
-  const { query: graphqlQuery, resolvedThreadId } =
-    createGraphqlEmailThreadQuery<TData>(threadId, () => ({
-      enabled: queryEnabled() && usesGraphql(),
+  const { query, resolvedThreadId } = createGraphqlEmailThreadQuery<TData>(
+    threadId,
+    () => ({
+      enabled: options?.().enabled !== false,
       select: select(),
-    }));
-  const restQuery = useInfiniteQuery(() => ({
-    ...threadQueryOptions(threadId()),
-    ...options?.(),
-    select: selectThreadWithIdentity(select()),
-    enabled: queryEnabled() && !usesGraphql() && threadId().length > 0,
-  }));
+    })
+  );
 
   return {
     get resolvedThreadId() {
-      if (usesGraphql()) return resolvedThreadId();
-      return restQuery.isSuccess
-        ? (restQuery.data?.canonicalThreadId ?? threadId())
-        : threadId();
+      return resolvedThreadId();
     },
     get data() {
-      return usesGraphql()
-        ? graphqlQuery.data
-        : (restQuery.data?.value as TData | undefined);
+      return query.data;
     },
     get error() {
-      if (!usesGraphql()) return (restQuery.error as Error | null) ?? null;
-      return graphqlQuery.error
-        ? mapGraphqlThreadError(graphqlQuery.error)
-        : null;
+      return query.error ? mapGraphqlThreadError(query.error) : null;
     },
     get isLoading() {
-      return usesGraphql() ? graphqlQuery.isLoading : restQuery.isLoading;
+      return query.isLoading;
     },
     get isFetching() {
-      return usesGraphql() ? graphqlQuery.isFetching : restQuery.isFetching;
+      return query.isFetching;
     },
     get isFetchingNextPage() {
-      return usesGraphql()
-        ? graphqlQuery.isFetchingNextPage
-        : restQuery.isFetchingNextPage;
+      return query.isFetchingNextPage;
     },
     get isError() {
-      return usesGraphql() ? graphqlQuery.isError : restQuery.isError;
+      return query.isError;
     },
     get isSuccess() {
-      return usesGraphql() ? graphqlQuery.isSuccess : restQuery.isSuccess;
+      return query.isSuccess;
     },
     get isEnabled() {
-      return usesGraphql() ? graphqlQuery.isEnabled : restQuery.isEnabled;
+      return query.isEnabled;
     },
     get hasNextPage() {
-      return usesGraphql()
-        ? graphqlQuery.hasNextPage
-        : (restQuery.hasNextPage ?? false);
-    },
-    get transport() {
-      return usesGraphql() ? 'graphql' : 'rest';
+      return query.hasNextPage;
     },
     async fetchNextPage() {
-      if (usesGraphql()) await graphqlQuery.fetchNextPage();
-      else await restQuery.fetchNextPage();
+      await query.fetchNextPage();
     },
     async refetch() {
-      if (usesGraphql()) {
-        await graphqlQuery.refetch({ requestPolicy: 'network-only' });
-      } else {
-        await restQuery.refetch();
-      }
+      await query.refetch({ requestPolicy: 'network-only' });
     },
   };
 }
@@ -341,25 +250,7 @@ export function useMarkThreadAsSeenMutation(
   }));
 }
 
-type MarkThreadAsUnreadParams = {
-  threadId: string;
-  /** Owning inbox, retained for callers that also update their local views. */
-  linkId?: string;
-};
-
-/**
- * Optimistically flip the soup row to unread. The thread messages cache is
- * intentionally left alone for the same Suspense/scroll-reset reason as
- * markEmailThreadSeen.
- */
-function threadUnreadOnMutate(params: MarkThreadAsUnreadParams): void {
-  if (isFeatureEnabled(enableGraphqlSoup)) return;
-  optimisticUpdateSoupEntity({
-    tag: 'emailThread',
-    data: { id: params.threadId, isRead: false },
-    frecency_score: 0,
-  });
-}
+type MarkThreadAsUnreadParams = { threadId: string };
 
 /**
  * Mark a thread unread through the shared mailbox-state contract.
@@ -369,29 +260,18 @@ export function useMarkThreadAsUnreadMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsUnreadParams) => {
-      if (isFeatureEnabled(enableGraphqlSoup)) {
-        // The optimistic and committed `isRead` reach every list the cache
-        // maintains; the rest are read again when the write commits.
-        const disposition = await markGraphqlEmailThreadUnread(
-          getGraphqlSoupClient(),
-          params.threadId,
-          getUnmaintainedGraphqlSoupRevalidations()
-        );
-        if (disposition === 'committed' && !graphqlCacheEnabled())
-          await refreshActiveGraphqlSoupQueries();
-        return;
-      }
-      await throwOnErr(() =>
-        updateEmailThreadState({
-          thread_id: params.threadId,
-          field: 'read',
-          value: false,
-        })
+      // The optimistic and committed `isRead` reach every list the cache
+      // maintains; the rest are read again when the write commits.
+      const disposition = await markGraphqlEmailThreadUnread(
+        getGraphqlSoupClient(),
+        params.threadId,
+        getUnmaintainedGraphqlSoupRevalidations()
       );
+      if (disposition === 'committed' && !graphqlCacheEnabled())
+        await refreshActiveGraphqlSoupQueries();
     },
     ...withCallbacks<void, Error, MarkThreadAsUnreadParams>(
       {
-        onMutate: threadUnreadOnMutate,
         onSettled: () => invalidateEmailFolderQueries(),
       },
       callbacks
@@ -402,8 +282,6 @@ export function useMarkThreadAsUnreadMutation(
 type ArchiveThreadParams = {
   threadId: string;
   archive: boolean;
-  /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
-  linkId?: string;
   /** Suppress the success toast, e.g. for a send-triggered archive where the
    *  send toast (with its undo-send action) is already up and this
    *  toast's own Undo would reverse only the archive, not the send. */
@@ -414,7 +292,6 @@ type ArchiveThreadParams = {
 };
 type ArchiveThreadContext = {
   previousData: InfiniteData<Thread, number> | undefined;
-  disposition?: EmailArchiveDisposition;
 };
 
 /** Optimistically set `inbox_visible` when archiving a thread. */
@@ -484,17 +361,14 @@ export async function trackExternalThreadArchive(
  * call, rollback on failure, invalidate on settle. Mirrors what
  * `useUndoableArchiveThreadMutation` does through its mutation callbacks.
  */
-async function replayThreadArchive(
-  params: ArchiveThreadParams
-): Promise<EmailArchiveDisposition> {
+async function replayThreadArchive(params: ArchiveThreadParams): Promise<void> {
   const { previousData } = await threadArchiveOnMutate(params);
   let disposition: EmailArchiveDisposition | undefined;
   try {
-    disposition = await archiveEmailThread(
-      { id: params.threadId, value: params.archive },
-      params.linkId
-    );
-    return disposition;
+    disposition = await archiveEmailThread({
+      id: params.threadId,
+      value: params.archive,
+    });
   } catch (err) {
     if (previousData) {
       queryClient.setQueryData(
@@ -523,8 +397,7 @@ export function useUndoableArchiveThreadMutation(options: {
   /** Bind side effects (e.g. an undo toast) to the pushed undo entry. */
   onPushed?: (
     handle: UndoHandle,
-    params: ArchiveThreadParams,
-    disposition: () => EmailArchiveDisposition | undefined
+    params: ArchiveThreadParams
   ) => { onUndone?: () => void; onRedone?: () => void } | void;
   onError?: (params: ArchiveThreadParams) => void;
 }) {
@@ -535,15 +408,12 @@ export function useUndoableArchiveThreadMutation(options: {
     ArchiveThreadContext
   >(() => ({
     mutationFn: async (params: ArchiveThreadParams) => {
-      return await archiveEmailThread(
-        { id: params.threadId, value: params.archive },
-        params.linkId
-      );
+      return await archiveEmailThread({
+        id: params.threadId,
+        value: params.archive,
+      });
     },
     onMutate: async (params) => await threadArchiveOnMutate(params),
-    onSuccess: (disposition, _params, context) => {
-      if (context) context.disposition = disposition;
-    },
     onError: (_err, params, context) => {
       if (context?.previousData) {
         queryClient.setQueryData(
@@ -560,20 +430,14 @@ export function useUndoableArchiveThreadMutation(options: {
       });
       queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
     },
-    undoFn: async (params, context) => {
-      const disposition = await replayThreadArchive({
-        ...params,
-        archive: !params.archive,
-      });
-      if (context) context.disposition = disposition;
+    undoFn: async (params) => {
+      await replayThreadArchive({ ...params, archive: !params.archive });
     },
-    redoFn: async (params, context) => {
-      const disposition = await replayThreadArchive(params);
-      if (context) context.disposition = disposition;
+    redoFn: async (params) => {
+      await replayThreadArchive(params);
     },
     undoLabel: (params) => (params.archive ? 'Mark Done' : 'Mark Not Done'),
-    onPushed: (handle, params, context) =>
-      options.onPushed?.(handle, params, () => context?.disposition),
+    onPushed: (handle, params) => options.onPushed?.(handle, params),
   }));
 }
 

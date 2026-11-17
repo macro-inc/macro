@@ -4,16 +4,25 @@ import type { MessageData } from '@core/messages/types';
 import MacroLogo from '@icon/macro-logo.svg';
 import type { MessageListItem } from '@service-storage/messages';
 import {
+  render as baseRender,
   cleanup,
   fireEvent,
-  render,
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { DiscussionEntry } from './discussion-entry';
 import { discussionPreview } from './discussion-preview';
+
+const TestQueryClientProvider = (props: { children: JSX.Element }) => (
+  <QueryClientProvider client={new QueryClient()}>
+    {props.children}
+  </QueryClientProvider>
+);
+const render = (ui: Parameters<typeof baseRender>[0]) =>
+  baseRender(ui, { wrapper: TestQueryClientProvider });
 
 const avatarState = vi.hoisted(() => ({
   photoUrl: '',

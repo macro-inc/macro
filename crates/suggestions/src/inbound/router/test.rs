@@ -115,6 +115,7 @@ impl MacroAuthorizationService for FakeAuthorization {
                 identity: ValidatedIdentity {
                     agent_id: Some(bot_id::MACRO_NEW_BOT_ID),
                     agent_via: None,
+                    routine_id: None,
                     user_id: USER_ID.to_owned(),
                     fusion_user_id: context().fusion_user_id,
                     organization_id: None,

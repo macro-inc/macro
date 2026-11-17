@@ -235,12 +235,12 @@ fn a_program_cannot_create_an_event_the_user_has_not_seen() {
     );
     let browser = axum::http::HeaderMap::new();
 
-    let refusal = refuse_program_create(false, &program).unwrap_err();
+    let refusal = refuse_program_create(CredentialAttribution::Person, &program).unwrap_err();
     assert_eq!(refusal.status, StatusCode::FORBIDDEN);
     assert_eq!(
         refusal.code,
         CalendarMutationErrorCode::ConfirmationRequired
     );
-    assert!(refuse_program_create(true, &browser).is_err());
-    assert!(refuse_program_create(false, &browser).is_ok());
+    assert!(refuse_program_create(CredentialAttribution::Agent, &browser).is_err());
+    assert!(refuse_program_create(CredentialAttribution::Person, &browser).is_ok());
 }

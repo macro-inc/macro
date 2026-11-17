@@ -1420,6 +1420,12 @@ export type NotifEvent = {
     tag: 'channel_access_requested';
 } | {
     /**
+     * An agent asked for access to a vault item the user manages.
+     */
+    content: PasswordAccessRequestedMetadata;
+    tag: 'password_access_requested';
+} | {
+    /**
      * One of the user's routines finished a run, successfully or not.
      */
     content: RoutineRunFinishedMetadata;
@@ -1482,6 +1488,30 @@ export type NotificationState = 'unseen' | 'seen' | 'done';
  * newtype wrapper for the the typename of a Notification
  */
 export type NotificationTypeName = string;
+
+/**
+ * An agent asked for access to a team vault item. Sent to the item's current
+ * human creator and the team's current administrators, with the agent as
+ * sender. Carries the item name and opaque ids only, never values.
+ */
+export type PasswordAccessRequestedMetadata = {
+    /**
+     * Requested item.
+     */
+    itemId: string;
+    /**
+     * Item display name when the request was made.
+     */
+    itemName: string;
+    /**
+     * Request under review.
+     */
+    requestId: string;
+    /**
+     * Team owning the item.
+     */
+    teamId: string;
+};
 
 /**
  * the value we send as the payload in the ios notification
@@ -1735,6 +1765,10 @@ export type UserUnsubscribe = {
      */
     item_type: string;
     /**
+     * The item still notifies the user when a message @mentions them directly.
+     */
+    mentions_only?: boolean;
+    /**
      * None for permanent mutes; notifications resume automatically at this deadline.
      */
     snoozed_until?: string | null;
@@ -1830,6 +1864,11 @@ export type UnsubscribeItemData = {
          * A future resume time. Omit to mute indefinitely.
          */
         snoozed_until?: string | null;
+        /**
+         * Keep notifying for messages that @mention the user directly and silence
+         * the rest. Channels only; cannot be combined with `snoozed_until`.
+         */
+        mentions_only?: boolean;
     };
     url: '/unsubscribe/item/{item_type}/{item_id}';
 };

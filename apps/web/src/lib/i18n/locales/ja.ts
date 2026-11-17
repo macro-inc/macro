@@ -566,10 +566,6 @@ export default {
       other: '{{count}}件中{{accepted}}件を未完了にしました',
     },
     toastMarkNotDoneFailed: '未完了にできませんでした',
-    toastThreadStaysDone:
-      'このスレッドには受信したメッセージがないため、完了のままになります',
-    toastThreadsStayDone:
-      'これらのスレッドには受信したメッセージがないため、完了のままになります',
     toastCountNotRestored: {
       other: '{{count}}件を復元できませんでした。',
     },
