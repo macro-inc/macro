@@ -3,6 +3,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
+import { rankAgentsAfterPeople } from '@core/user/people-before-agents';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch } from '@core/util/freshSort';
@@ -442,7 +443,16 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     // Get visible entities based on search
     // Sort self to top BEFORE slicing to ensure self appears even if not in top 50 by default
     let localResults: CombinedEntity[];
-    if (term) {
+    if (term && props.config.users) {
+      localResults = rankAgentsAfterPeople(
+        entitySearch(allEntities, term),
+        (entity) => entity.id,
+        getEntitySearchText,
+        term
+      )
+        .slice(0, maxLocalResults)
+        .filter(excludeFilter);
+    } else if (term) {
       localResults = entitySearch(allEntities, term)
         .slice(0, maxLocalResults)
         .map((result) => result.item)

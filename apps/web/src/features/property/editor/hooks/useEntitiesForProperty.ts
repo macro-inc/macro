@@ -1,5 +1,6 @@
 import { useEmail, useUserId } from '@core/context/user';
 import { type IUser, useAugmentUserWithDmActivity } from '@core/user';
+import { rankAgentsAfterPeople } from '@core/user/people-before-agents';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EmailEntity } from '@entity';
 import { createEmailsInfiniteQuery } from '@entity';
@@ -192,9 +193,17 @@ export function useEntitiesForProperty(
       return visible;
     }
 
-    const localResults = entitySearch(available, query)
-      .slice(0, MAX_RESULTS)
-      .map((result) => result.item);
+    const results = entitySearch(available, query);
+    const localResults = (
+      options?.users?.()
+        ? rankAgentsAfterPeople(
+            results,
+            (entity) => entity.id,
+            getEntitySearchText,
+            query
+          )
+        : results.map((result) => result.item)
+    ).slice(0, MAX_RESULTS);
 
     if (needsEmailSearch()) {
       const localIds = new Set(localResults.map((e) => e.id));

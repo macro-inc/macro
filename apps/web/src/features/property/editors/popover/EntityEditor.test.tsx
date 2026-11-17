@@ -275,9 +275,12 @@ describe('assigning an agent through task and project properties', () => {
         await waitFor(() => expect(screen.queryByText('Alice')).toBeNull());
         await screen.findByText('Research assistant');
       }
-      fireEvent.keyDown(screen.getByRole('textbox'), {
-        key: 'ArrowDown',
-      });
+      // Unsearched, Teammate sits between the viewer and the agent.
+      for (let step = 0; step < (search ? 1 : 2); step++) {
+        fireEvent.keyDown(screen.getByRole('textbox'), {
+          key: 'ArrowDown',
+        });
+      }
       // Confirming an IME candidate must not select the highlighted assignee.
       for (const composition of [{ isComposing: true }, { keyCode: 229 }]) {
         expect(
@@ -400,6 +403,30 @@ describe('assigning an agent through task and project properties', () => {
 });
 
 describe('team-first assignees', () => {
+  it.each([EntityEditor, EntitySheetEditor])(
+    'lists you, then team members, then agents, and agents only on a real match',
+    async (Editor) => {
+      setup(undefined, { ...property, value: null }, Editor);
+      const row = (name: string) =>
+        Number(
+          screen
+            .getByText(name)
+            .closest('[data-entity-index]')
+            ?.getAttribute('data-entity-index')
+        );
+      expect(row('Alice')).toBeLessThan(row('Teammate'));
+      expect(row('Teammate')).toBeLessThan(row('Research assistant'));
+
+      // "Research assistant | @research" holds t…e…a only as scattered letters.
+      fireEvent.input(screen.getByRole('textbox'), {
+        target: { value: 'tea' },
+      });
+      await waitFor(() => expect(screen.queryByText('Alice')).toBeNull());
+      expect(screen.getByText('Teammate')).toBeTruthy();
+      expect(screen.queryByText('Research assistant')).toBeNull();
+    }
+  );
+
   it.each([EntityEditor, EntitySheetEditor])(
     'keeps selected rows in place until the picker reopens',
     async (Editor) => {
