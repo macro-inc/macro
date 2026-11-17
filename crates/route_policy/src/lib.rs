@@ -12,11 +12,14 @@
 mod caller;
 mod category;
 mod policy;
+mod resolve;
 
 pub use caller::Caller;
 pub use category::Category;
 pub use policy::{
-    CategorySet, Enforcement, Refusal, RefusalCode, ResolvedCaller, RouteDecision, Verdict, decide,
+    ActiveRollout, CategorySet, Enforcement, NoRollout, Refusal, RefusalCode, ResolvedCaller,
+    Rollout, RouteDecision, Verdict, decide,
 };
+pub use resolve::{Authenticated, CallerEvidence, ScopeEvidence, resolve_caller};
 
 pub mod inbound;

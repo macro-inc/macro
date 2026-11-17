@@ -13,7 +13,9 @@ the axum route constructors that declare each handler's category.
   `src/policy/test.rs` pins the whole table as one literal grid.
 - `src/category.rs`: what each category means; pick by what a route returns
   or causes, never by its HTTP method.
-- `src/caller.rs`: who a caller is, resolved from signed claims only.
+- `src/caller.rs` and `src/resolve.rs`: who a caller is, and
+  `resolve_caller`, which reads one from signed claims only, narrowest
+  reading winning.
 - `src/inbound/axum.rs`: `get`/`post`/... take a `Category`; the layer they
   put on the handler decides from the `Caller` in request extensions.
 
@@ -27,7 +29,8 @@ the axum route constructors that declare each handler's category.
 
 - Depends on: `serde`, `strum`, `utoipa`; `axum`, `tower`, `tracing` and
   `macro_tower_layers` (`ResponseSpanFields`) for `inbound::axum` only.
-- Used by: services adopt the constructors route by route.
+- Used by: `agent_correlation` (resolves the caller); services adopt the
+  constructors route by route.
 
 ## Checks
 
@@ -40,10 +43,18 @@ the axum route constructors that declare each handler's category.
 - `Enforcement::Observed` refusals are rollout state, not permission: keep
   every older check (internal-key extractors, scope lists, handler checks)
   until the refusal it duplicates is enforced.
-- Until a service puts a `ResolvedCaller` in request extensions, the layer
-  decides nothing (`Verdict::Unresolved`) and every request goes on. A
-  service that resolves callers must resolve one for every authenticated
-  request, before routing, so `Unresolved` never means "allowed" there.
+- `agent_correlation`'s `propagate`, `enforce_signed_scope` and
+  `refuse_signed_scopes` put the `ResolvedCaller` (and `propagate` the
+  service's `ActiveRollout`) in request extensions. On a service without
+  them the layer decides nothing (`Verdict::Unresolved`). A request with
+  nothing verified and nothing signed is `Unresolved` too; its route refuses
+  it itself.
+- `Rollout` names, per caller, the categories whose observed refusals are
+  enforced, applied where the route is decided. No flag feeds it yet; with
+  none, `NoRollout` enforces nothing beyond the table.
+- An internal key is resolved from its header, not verified: never let a
+  `Category::Internal` route rely on the policy alone. Keep its internal-key
+  extractor.
 - Chain methods with `merge`: `MethodRouter`'s own `.get`/`.post` add a
   handler with no category.
 - The layer can't reach the `http.request` span (other middleware opens

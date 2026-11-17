@@ -395,6 +395,7 @@ dependencies = [
  "macro_auth",
  "macro_db_migrator",
  "rootcause",
+ "route_policy",
  "serde",
  "serde_json",
  "sqlx",

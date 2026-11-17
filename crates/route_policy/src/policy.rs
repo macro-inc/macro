@@ -5,6 +5,8 @@
 #[cfg(test)]
 mod test;
 
+use std::sync::Arc;
+
 use crate::{Caller, Category};
 
 /// Why `decide` refused a request, for the answer, the logs and the rollout.
@@ -130,7 +132,7 @@ pub fn decide(caller: Caller, category: Category) -> Result<(), Refusal> {
             }
             Caller::ScopedGeneration => (!matches!(category, C::Read | C::Suggest | C::Public))
                 .then_some(RefusalCode::OutOfScope),
-            Caller::ScopedUnknown => {
+            Caller::ScopedReadOnly => {
                 (!matches!(category, C::Read | C::Public)).then_some(RefusalCode::OutOfScope)
             }
         }
@@ -138,15 +140,9 @@ pub fn decide(caller: Caller, category: Category) -> Result<(), Refusal> {
     let Some(code) = code else {
         return Ok(());
     };
-    let program = matches!(
-        caller,
-        Caller::Program
-            | Caller::ScopedNoSend
-            | Caller::ScopedGeneration
-            | Caller::ScopedUnknown
-            | Caller::AccountManager
-    );
-    let enforcement = if program && (PERSON_ONLY.contains(&category) || category == C::Internal) {
+    let enforced_from_the_start =
+        caller.is_program() && (PERSON_ONLY.contains(&category) || category == C::Internal);
+    let enforcement = if enforced_from_the_start {
         Enforcement::Enforced
     } else {
         Enforcement::Observed
@@ -160,14 +156,30 @@ pub fn decide(caller: Caller, category: Category) -> Result<(), Refusal> {
 }
 
 /// The caller a service resolved for a request, put in its extensions
-/// before routing, with the categories whose observed refusals the rollout
-/// enforces for this request.
+/// before routing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ResolvedCaller {
-    /// Who called.
-    pub caller: Caller,
-    /// Categories whose [`Enforcement::Observed`] refusals are enforced.
-    pub enforced: CategorySet,
+pub struct ResolvedCaller(pub Caller);
+
+/// The rollout a service applies, put in a request's extensions beside its
+/// [`ResolvedCaller`]. With none, observed refusals stay observed.
+#[derive(Clone)]
+pub struct ActiveRollout(pub Arc<dyn Rollout>);
+
+/// Which categories' observed refusals the rollout enforces for a caller:
+/// the rollout flag, applied wherever a route is decided.
+pub trait Rollout: Send + Sync {
+    /// The categories whose observed refusals are enforced for `caller`.
+    fn enforced(&self, caller: Caller) -> CategorySet;
+}
+
+/// The rollout before any flag: observed refusals stay observed.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoRollout;
+
+impl Rollout for NoRollout {
+    fn enforced(&self, _caller: Caller) -> CategorySet {
+        CategorySet::default()
+    }
 }
 
 /// A set of categories.
@@ -215,16 +227,16 @@ pub enum Verdict {
 }
 
 impl RouteDecision {
-    /// The decision for a request to a route of `category` from `resolved`,
-    /// with the rollout's enforced categories applied.
-    pub fn new(resolved: Option<ResolvedCaller>, category: Category) -> Self {
-        let verdict = match resolved {
+    /// The decision for a request to a route of `category` from `caller`,
+    /// with the categories `rollout` enforces for it.
+    pub fn new(caller: Option<Caller>, category: Category, rollout: &dyn Rollout) -> Self {
+        let verdict = match caller {
             None => Verdict::Unresolved,
-            Some(resolved) => match decide(resolved.caller, category) {
-                Ok(()) => Verdict::Allowed(resolved.caller),
+            Some(caller) => match decide(caller, category) {
+                Ok(()) => Verdict::Allowed(caller),
                 Err(refusal)
                     if refusal.enforcement == Enforcement::Enforced
-                        || resolved.enforced.contains(category) =>
+                        || rollout.enforced(caller).contains(category) =>
                 {
                     Verdict::Refused(Refusal {
                         enforcement: Enforcement::Enforced,

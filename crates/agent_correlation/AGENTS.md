@@ -71,12 +71,15 @@ code, not in its prompt. The harness also signs the scope into the credential
   that signs a scope, for a
   service no scope may reach at all (the image proxy, which fetches what
   its caller names).
+- Caller resolution: `propagate`, `enforce_signed_scope` and
+  `refuse_signed_scopes` feed every verified token's claims to
+  `route_policy::resolve_caller` and put the `ResolvedCaller` in the request.
 - `src/outbound.rs`: invocation mappings and session-agent lookup on the primary.
 
 ## Boundaries
 
 - Owns `agent_correlations`; reads the session's bound agent for validation.
-- Depends on `macro_auth` only for the HTTP adapter.
+- Depends on `macro_auth` and `route_policy` only for the HTTP adapter.
 - Used by code-mode credential minting, HTTP services, and the event broker.
 
 ## Checks

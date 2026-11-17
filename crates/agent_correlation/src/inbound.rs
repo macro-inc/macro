@@ -17,6 +17,9 @@ use macro_auth::{
     macro_api_token::MacroApiToken,
     middleware::decode_jwt::{JwtToken, JwtValidationArgs},
 };
+use route_policy::{
+    ActiveRollout, Authenticated, Caller, CallerEvidence, ResolvedCaller, Rollout, ScopeEvidence,
+};
 use serde::Serialize;
 use std::sync::Arc;
 use tracing::Instrument;
@@ -29,6 +32,9 @@ pub struct CorrelationState {
     pub jwt: JwtValidationArgs,
     /// Primary-database mapping lookup.
     pub repository: Arc<dyn CorrelationRepository>,
+    /// Which observed route-policy refusals the rollout enforces; set with
+    /// [`Self::with_rollout`].
+    rollout: Arc<dyn Rollout>,
 }
 
 #[cfg(feature = "postgres")]
@@ -38,7 +44,17 @@ impl CorrelationState {
         Self {
             jwt,
             repository: Arc::new(crate::outbound::PgCorrelationRepository(pool)),
+            rollout: Arc::new(route_policy::NoRollout),
         }
+    }
+}
+
+impl CorrelationState {
+    /// The same, with `rollout` deciding which observed route-policy
+    /// refusals are enforced.
+    #[must_use]
+    pub fn with_rollout(self, rollout: Arc<dyn Rollout>) -> Self {
+        Self { rollout, ..self }
     }
 }
 
@@ -76,8 +92,64 @@ where
 /// an unscoped token beside a scoped one gains nothing. Tokens of different
 /// users, or credentials that can't be told apart, are refused.
 struct VerifiedTokens {
+    /// What the request authenticates with, as far as verifying it here
+    /// tells.
+    authenticated: Authenticated,
     authenticating: Option<MacroApiToken>,
     others: Vec<MacroApiToken>,
+}
+
+impl VerifiedTokens {
+    /// Every verified Macro API token the request carries.
+    fn all(&self) -> impl Iterator<Item = &MacroApiToken> {
+        self.authenticating.iter().chain(&self.others)
+    }
+}
+
+/// What a request's verified tokens and headers say about who sent it,
+/// given the narrowest scope it is held to.
+fn evidence(tokens: &VerifiedTokens, scope: Option<SessionScope>, parts: &Parts) -> CallerEvidence {
+    let unknown_scope = tokens
+        .all()
+        .any(|token| SignedScope::from_claim(token.agent_scope.as_deref()) == SignedScope::Unknown);
+    let scope = match scope {
+        None => ScopeEvidence::Unscoped,
+        Some(SessionScope::NoSend) => ScopeEvidence::NoSend,
+        Some(SessionScope::Generation) => ScopeEvidence::Generation,
+        Some(SessionScope::DryRun) => ScopeEvidence::ReadOnly,
+    };
+    CallerEvidence {
+        authenticated: tokens.authenticated,
+        program: tokens.all().any(|token| {
+            token.agent_id.is_some()
+                || token.routine_id.is_some()
+                || token.agent_correlation_id.is_some()
+        }),
+        scope: if unknown_scope {
+            ScopeEvidence::ReadOnly
+        } else {
+            scope
+        },
+        code_execution: parts
+            .headers
+            .contains_key(macro_auth::credential::CODE_EXECUTION_HEADER),
+    }
+}
+
+/// Put the caller `evidence` names in the request's extensions, with the
+/// service's rollout if it has one, for the route policy layer; the caller,
+/// if any.
+fn insert_caller(
+    parts: &mut Parts,
+    evidence: CallerEvidence,
+    rollout: Option<&Arc<dyn Rollout>>,
+) -> Option<Caller> {
+    let caller = route_policy::resolve_caller(evidence)?;
+    parts.extensions.insert(ResolvedCaller(caller));
+    if let Some(rollout) = rollout {
+        parts.extensions.insert(ActiveRollout(Arc::clone(rollout)));
+    }
+    Some(caller)
 }
 
 fn verified_api_tokens(
@@ -91,9 +163,21 @@ fn verified_api_tokens(
         _ => None,
     };
     let mut verified = VerifiedTokens {
+        authenticated: match &credential.kind {
+            CredentialKind::None
+            | CredentialKind::MalformedAuthorization
+            | CredentialKind::UserToken { .. } => Authenticated::Nothing,
+            CredentialKind::UserApiKey => Authenticated::ApiCredential,
+            CredentialKind::Bot => Authenticated::Bot,
+            CredentialKind::Harness => Authenticated::Harness,
+            CredentialKind::Internal => Authenticated::Internal,
+        },
         authenticating: None,
         others: Vec::new(),
     };
+    // An internal key is checked only where its route reads it, so a user's
+    // token beside one is read instead, the narrowest of them if several.
+    let internal_key = credential.kind == CredentialKind::Internal;
     let mut users: Vec<String> = Vec::new();
     // Authentication remains the route's responsibility. Public webhooks and
     // non-Macro credentials may share the listener; only a verified Macro
@@ -104,13 +188,25 @@ fn verified_api_tokens(
         match macro_auth::middleware::decode_jwt::handler(jwt, token) {
             Ok(JwtToken::MacroApiToken(decoded)) => {
                 users.push(decoded.macro_user_id.clone());
+                if Some(token.as_str()) == authenticating_token || internal_key {
+                    verified.authenticated = Authenticated::ApiCredential;
+                }
                 if Some(token.as_str()) == authenticating_token {
                     verified.authenticating = Some(decoded);
                 } else {
                     verified.others.push(decoded);
                 }
             }
-            Ok(JwtToken::MacroAccessToken(decoded)) => users.push(decoded.macro_user_id),
+            Ok(JwtToken::MacroAccessToken(decoded)) => {
+                // A session is wider than an API credential: it never
+                // replaces one read from another token beside the same key.
+                if Some(token.as_str()) == authenticating_token
+                    || (internal_key && verified.authenticated == Authenticated::Internal)
+                {
+                    verified.authenticated = Authenticated::Session;
+                }
+                users.push(decoded.macro_user_id);
+            }
             Err(_) => {}
         }
     }
@@ -303,12 +399,12 @@ async fn propagate_request(
         Ok(scope) => scope,
         Err(rejection) => return rejection.into_response(),
     };
-    let token = tokens.authenticating;
-    let signed = match checked_signed_scope(token.as_ref(), &parts) {
+    let token = tokens.authenticating.as_ref();
+    let signed = match checked_signed_scope(token, &parts) {
         Ok(signed) => signed,
         Err(rejection) => return rejection.into_response(),
     };
-    let correlation = match accept_correlation(&state, token.as_ref()).await {
+    let correlation = match accept_correlation(&state, token).await {
         Ok(correlation) => correlation,
         Err(error) => return error.into_response(),
     };
@@ -337,13 +433,16 @@ async fn propagate_request(
         routine_id: token.and_then(|token| token.routine_id),
         session_id: correlation.map(|(_, correlation)| correlation.session_id),
         scope: narrowest(
-            correlation
-                .and_then(|(_, correlation)| correlation.scope)
-                .or(signed.known()),
+            narrowest(
+                correlation.and_then(|(_, correlation)| correlation.scope),
+                signed.known(),
+            ),
             others_scope,
         ),
         verb: correlation_id.and_then(|_| sdk_verb(&parts)),
     };
+    let caller = evidence(&tokens, attribution.scope, &parts);
+    insert_caller(&mut parts, caller, Some(&state.rollout));
     let handling = answer_sharing_refusals(next.run(Request::from_parts(parts, body)));
     crate::context::scope_attribution(attribution, handling)
         .instrument(tracing::info_span!(
@@ -376,13 +475,17 @@ async fn enforce_signed_scope_request(
         Ok(tokens) => tokens,
         Err(rejection) => return rejection.into_response(),
     };
-    if let Err(rejection) = other_tokens_scope(None, &tokens.others, &parts).await {
-        return rejection.into_response();
-    }
-    let token = tokens.authenticating;
-    if let Err(rejection) = checked_signed_scope(token.as_ref(), &parts) {
-        return rejection.into_response();
-    }
+    let others_scope = match other_tokens_scope(None, &tokens.others, &parts).await {
+        Ok(scope) => scope,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let signed = match checked_signed_scope(tokens.authenticating.as_ref(), &parts) {
+        Ok(signed) => signed,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let scope = narrowest(others_scope, signed.known());
+    let caller = evidence(&tokens, scope, &parts);
+    insert_caller(&mut parts, caller, None);
     next.run(Request::from_parts(parts, body)).await
 }
 
@@ -410,7 +513,7 @@ async fn refuse_signed_scopes_request(
     };
     // Every verified token the request carries, so an unscoped one beside a
     // scoped one gains nothing.
-    for token in tokens.authenticating.iter().chain(&tokens.others) {
+    for token in tokens.all() {
         let scope = SignedScope::from_claim(token.agent_scope.as_deref());
         if scope != SignedScope::Unscoped {
             tracing::warn!(
@@ -422,6 +525,8 @@ async fn refuse_signed_scopes_request(
             return CorrelationRejection(CorrelationError::OutOfScope).into_response();
         }
     }
+    let caller = evidence(&tokens, None, &parts);
+    insert_caller(&mut parts, caller, None);
     next.run(Request::from_parts(parts, body)).await
 }
 

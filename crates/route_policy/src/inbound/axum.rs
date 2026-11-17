@@ -44,7 +44,10 @@ use axum::{
 use macro_tower_layers::ResponseSpanFields;
 use tower::{Layer, Service};
 
-use crate::{Caller, Category, Refusal, RefusalCode, ResolvedCaller, RouteDecision, Verdict};
+use crate::{
+    ActiveRollout, Caller, Category, NoRollout, Refusal, RefusalCode, ResolvedCaller,
+    RouteDecision, Verdict,
+};
 
 macro_rules! method_constructor {
     ($(#[$doc:meta])* $name:ident, $filter:expr) => {
@@ -153,8 +156,16 @@ where
     }
 
     fn call(&mut self, mut request: Request) -> Self::Future {
-        let resolved = request.extensions().get::<ResolvedCaller>().copied();
-        let decision = RouteDecision::new(resolved, self.category);
+        let caller = request
+            .extensions()
+            .get::<ResolvedCaller>()
+            .map(|ResolvedCaller(caller)| *caller);
+        let decision = match request.extensions().get::<ActiveRollout>() {
+            Some(ActiveRollout(rollout)) => {
+                RouteDecision::new(caller, self.category, rollout.as_ref())
+            }
+            None => RouteDecision::new(caller, self.category, &NoRollout),
+        };
         if let Verdict::Refused(refusal) = decision.verdict {
             tracing::warn!(
                 route_policy.category = %refusal.category,

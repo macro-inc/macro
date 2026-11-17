@@ -13,7 +13,7 @@ api_credential     .  .  .  .  .  .  .  o  o  o  o  .  o  .
 program            .  .  .  .  .  .  o  R  R  R  R  o  R  .
 scoped_no_send     .  .  .  o  o  o  o  R  R  R  R  o  R  .
 scoped_generation  .  .  o  o  o  o  o  R  R  R  R  o  R  .
-scoped_unknown     .  o  o  o  o  o  o  R  R  R  R  o  R  .
+scoped_read_only   .  o  o  o  o  o  o  R  R  R  R  o  R  .
 account_manager    .  .  .  .  .  .  .  R  R  R  R  .  R  .
 bot                .  .  .  .  .  .  o  o  o  o  o  .  o  .
 harness            .  .  .  .  .  .  o  o  o  o  o  .  o  .

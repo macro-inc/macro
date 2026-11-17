@@ -31,9 +31,9 @@ pub enum Caller {
     /// A program in a suggestion generation session: it reads and makes
     /// suggestions.
     ScopedGeneration,
-    /// A program held to a scope this build doesn't know, signed by a newer
-    /// one: it only reads.
-    ScopedUnknown,
+    /// A program held to reads: a routine step's dry run, or a scope this
+    /// build doesn't know, signed by a newer one.
+    ScopedReadOnly,
     /// Another account's manager credential for this account.
     AccountManager,
     /// A bot.
@@ -42,4 +42,23 @@ pub enum Caller {
     Harness,
     /// Another Macro service.
     Internal,
+}
+
+impl Caller {
+    /// Whether the caller is a program acting with the person's access: an
+    /// agent's or routine's run, a scoped session, or another account's
+    /// manager. Their refusals of what only the person may do are enforced
+    /// from the start.
+    pub fn is_program(self) -> bool {
+        match self {
+            Self::Program
+            | Self::ScopedNoSend
+            | Self::ScopedGeneration
+            | Self::ScopedReadOnly
+            | Self::AccountManager => true,
+            Self::Person | Self::ApiCredential | Self::Bot | Self::Harness | Self::Internal => {
+                false
+            }
+        }
+    }
 }

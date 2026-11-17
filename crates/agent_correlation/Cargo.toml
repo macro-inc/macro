@@ -6,7 +6,7 @@ publish = false
 
 [features]
 default = []
-http = ["dep:axum", "dep:macro_auth"]
+http = ["dep:axum", "dep:macro_auth", "dep:route_policy"]
 postgres = ["dep:sqlx"]
 
 [dependencies]
@@ -15,6 +15,7 @@ axum = { workspace = true, optional = true }
 lazy-regex = { workspace = true }
 macro_auth = { path = "../macro_auth", optional = true }
 rootcause = { workspace = true }
+route_policy = { path = "../route_policy", optional = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
