@@ -25,6 +25,9 @@ const [state, setState] = createSignal<EmailPrivacy>({
   canRemoveTeamDomains: params.has('admin'),
 });
 export const [lastChange, setLastChange] = createSignal('');
+export const [statusUnavailable, setStatusUnavailable] = createSignal(
+  params.has('status-unavailable')
+);
 function apply(change: EmailPrivacyChange): EmailPrivacy {
   setLastChange(JSON.stringify(change));
   if (change.action === 'set_consent') {
@@ -137,15 +140,17 @@ export const crmEmailPrivacyClient = {
     _signal?: AbortSignal,
     threadId?: string
   ) => {
-    const matching = threadId
-      ? threads().filter((thread) => thread.threadId === threadId)
-      : threads();
+    if (threadId && statusUnavailable())
+      return err([{ code: 'NETWORK_ERROR' as const, message: 'Unavailable' }]);
+    const matching = threads()
+      .filter((thread) =>
+        threadId
+          ? thread.threadId === threadId
+          : !after || thread.threadId > after
+      )
+      .toSorted((a, b) => a.threadId.localeCompare(b.threadId));
     const page =
-      !threadId && params.has('paged')
-        ? after
-          ? matching.slice(1)
-          : matching.slice(0, 1)
-        : matching;
+      !threadId && params.has('paged') ? matching.slice(0, 1) : matching;
     return ok({
       threads: page.map((thread) => ({
         thread_id: thread.threadId,
@@ -153,9 +158,7 @@ export const crmEmailPrivacyClient = {
         subject: thread.subject,
       })),
       next_cursor:
-        !threadId && params.has('paged') && !after
-          ? matching[0]?.threadId
-          : null,
+        matching.length > page.length ? (page.at(-1)?.threadId ?? null) : null,
     });
   },
   update: async (change: EmailPrivacyChange) => {

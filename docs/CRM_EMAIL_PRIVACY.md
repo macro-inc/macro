@@ -92,6 +92,8 @@ messages, documents, or agent transcripts is not retroactively redacted.
 - Owners add an exception from their thread's **Exclude thread from CRM**
   action beside sharing in its menu, or the desktop icon before the reminder
   bell. Both explain when ownership or mailbox consent prevents exclusion.
+  A failed background check preserves the last known exclusion state while
+  disabling the action until a successful read.
   **Email settings → Excluded threads** lists only their own exclusions, fifty
   per page. Each thread uses the existing email mention (icon, subject, hover
   preview, and split navigation). Inline titles come from the owner-scoped list;

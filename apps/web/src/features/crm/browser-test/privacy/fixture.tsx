@@ -1,5 +1,6 @@
 import '../../../../index.css';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
 import { previewKeys } from '@queries/preview/keys';
@@ -8,15 +9,23 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
+import { crmKeys } from '../../queries/keys';
 import {
   CrmEmailOptInBanner,
   CrmEmailPrivacyDialog,
 } from '../../views/email-privacy';
 import { PrivacyNavigationFixture } from './navigation-fixture';
-import { lastChange, lastToast } from './preview-adapters';
+import {
+  lastChange,
+  lastToast,
+  setStatusUnavailable,
+} from './preview-adapters';
 import { ThreadMenuFixture } from './thread-menu-fixture';
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
+queryClient.setQueryDefaults(crmKeys.excludedEmailThreads._def, {
+  retry: false,
+});
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
   id: 'member@example.com',
   authenticated: true,
@@ -44,6 +53,19 @@ function Fixture() {
       <div class="p-6">
         <Button onClick={() => setOpen(true)}>Email settings</Button>
         <ThreadMenuFixture />
+        <Button
+          onClick={() => {
+            setStatusUnavailable(true);
+            fireAndForget(
+              queryClient.invalidateQueries({
+                queryKey: crmKeys.excludedEmailThreads._def,
+              }),
+              'crm'
+            );
+          }}
+        >
+          Fail thread status refresh
+        </Button>
         <pre class="overflow-auto text-xs" data-testid="last-change">
           {lastChange()}
         </pre>

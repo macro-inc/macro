@@ -270,6 +270,49 @@ test('owner can page through excluded threads and return to the first page', asy
   await expect(
     dialog.getByText('Private conversation', { exact: true })
   ).toBeVisible();
+  await dialog
+    .getByRole('button', {
+      name: 'Remove Private conversation from excluded threads',
+      exact: true,
+    })
+    .click();
+  await expect(
+    dialog.getByText('Another private conversation', { exact: true })
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Next page', exact: true })
+  ).toHaveCount(0);
+});
+
+test('cursor page survives deletion of an earlier exclusion', async ({
+  page,
+}, info) => {
+  test.skip(
+    info.project.name === 'phone',
+    'Uses the desktop header in another view.'
+  );
+  await page.goto('/?paged&contributing&excluded');
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Next page', exact: true }).click();
+  await expect(
+    dialog.getByText('Another private conversation', { exact: true })
+  ).toBeVisible();
+  // Simulate another open view changing an earlier row while this page stays mounted.
+  await page
+    .locator('button[aria-label="Remove from excluded threads"]')
+    .evaluate((button: HTMLButtonElement) => button.click());
+  await expect(page.getByTestId('toast')).toHaveText(
+    'Thread removed from excluded threads.'
+  );
+  await expect(
+    dialog.getByText('Another private conversation', { exact: true })
+  ).toBeVisible();
+  await expect(
+    dialog.getByText('No excluded threads.', { exact: true })
+  ).toHaveCount(0);
 });
 
 test('disabled rollout keeps the thread action and exception settings unavailable', async ({
@@ -302,6 +345,10 @@ for (const [query, reason] of [
   ['contributing&teammate', 'This thread is not in your mailbox.'],
   ['contributing&other-mailbox', 'This mailbox isn’t shared with CRM.'],
   ['no-team', 'Join a team to share email with CRM.'],
+  [
+    'contributing&status-unavailable',
+    'Could not check CRM email sharing. Try again.',
+  ],
 ]) {
   test(`thread privacy explains why it is disabled: ${query || 'no consent'}`, async ({
     page,
@@ -388,6 +435,56 @@ test('existing exclusions remain removable after contribution is withdrawn', asy
       'Your email isn’t shared with CRM.'
     );
   }
+});
+
+test('failed status refresh preserves the cached exclusion and disables actions', async ({
+  page,
+}, info) => {
+  await page.goto('/?contributing&excluded');
+  if (info.project.name === 'desktop') {
+    await expect(
+      page.getByRole('button', {
+        name: 'Remove from excluded threads',
+        exact: true,
+      })
+    ).toHaveAttribute('aria-pressed', 'true');
+  } else {
+    await page
+      .getByRole('button', { name: 'Thread actions', exact: true })
+      .click();
+    await expect(
+      page.getByRole('button', {
+        name: 'Remove from excluded threads',
+        exact: true,
+      })
+    ).toBeEnabled();
+    await page.getByText('Copy link', { exact: true }).click();
+  }
+  await page
+    .getByRole('button', { name: 'Fail thread status refresh' })
+    .click();
+  const reason = 'Could not check CRM email sharing. Try again.';
+  if (info.project.name === 'desktop') {
+    const button = page.getByRole('button', {
+      name: 'Remove from excluded threads',
+      exact: true,
+    });
+    await expect(button).toHaveAttribute('aria-disabled', 'true');
+    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    await button.focus();
+    await expect(page.getByRole('tooltip')).toContainText(reason);
+    await button.press('Enter');
+  }
+  await page
+    .getByRole('button', { name: 'Thread actions', exact: true })
+    .click();
+  const action = page.getByRole(
+    info.project.name === 'phone' ? 'button' : 'menuitem',
+    { name: /Remove from excluded threads/ }
+  );
+  await expect(action).toBeDisabled();
+  if (info.project.name === 'phone') await expect(action).toContainText(reason);
+  await expect(page.getByTestId('last-change')).toBeEmpty();
 });
 
 test('header exclusion and settings removal stay synchronized', async ({

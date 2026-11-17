@@ -43,8 +43,9 @@ export function useThreadExclusionAction(
     threadId
   );
   const excluded = () =>
-    status.isSuccess &&
-    status.data.threads.some((thread) => thread.threadId === threadId());
+    !status.isPending &&
+    (status.data?.threads.some((thread) => thread.threadId === threadId()) ??
+      false);
   const disabledReason = () => {
     if (!isOwner()) return t('crm.privacyThreadNotOwned');
     if (team.isError || consent.isError)
