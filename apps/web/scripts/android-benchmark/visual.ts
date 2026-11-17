@@ -1,7 +1,7 @@
 /**
  * Checks the spans against the screen: records the device's screen while the
  * harness runs one step, finds the frame where the touch appears (Android's
- * "show touches" dot) and the frame after which the screen stops changing,
+ * "show touches" dot) and the frame from which the screen stops changing,
  * and compares that interval with the step's span-based time.
  *
  *   bun scripts/android-benchmark/visual.ts --serial emulator-5580 \
@@ -31,6 +31,8 @@ const { values: options } = parseArgs({
     },
     out: { type: 'string', default: 'android-benchmark-results' },
     port: { type: 'string', default: '9333' },
+    // Keeps each recording; it shows real account content, so never commit it.
+    keep: { type: 'boolean', default: false },
   },
 });
 if (!options.serial) {
@@ -81,43 +83,31 @@ async function frames(video: string, width: number, height: number) {
   }));
 }
 
-/** Mean absolute grey difference, optionally inside or outside a box. */
-function difference(
-  a: Uint8Array,
-  b: Uint8Array,
-  width: number,
-  box: { x: number; y: number; r: number },
-  inside: boolean
-) {
+/** Mean absolute grey difference between two frames. */
+function difference(a: Uint8Array, b: Uint8Array) {
   let total = 0;
-  let count = 0;
-  for (let index = 0; index < a.length; index++) {
-    const x = index % width;
-    const y = Math.floor(index / width);
-    const within = Math.abs(x - box.x) <= box.r && Math.abs(y - box.y) <= box.r;
-    if (within !== inside) continue;
+  for (let index = 0; index < a.length; index++)
     total += Math.abs(a[index] - b[index]);
-    count++;
-  }
-  return count ? total / count : 0;
+  return total / a.length;
 }
 
-/** Touch-to-settled time from the video, in milliseconds. */
-function analyse(list: Frame[], width: number, tap: { x: number; y: number }) {
-  const box = { x: Math.round(tap.x / SCALE), y: Math.round(tap.y / SCALE), r: 6 };
+/**
+ * Touch-to-settled time from the video, in milliseconds. The target is in
+ * place and the screen still before recording starts, so the first change is
+ * the touch dot; the screen has settled at the first frame from which every
+ * later frame matches the last one.
+ */
+function analyse(list: Frame[]) {
   const touched = list.findIndex(
-    (frame, index) =>
-      index > 0 && difference(frame.pixels, list[index - 1].pixels, width, box, true) > 25
+    (frame, index) => index > 0 && difference(frame.pixels, list[index - 1].pixels) > 0.2
   );
-  if (touched < 0) return undefined;
   const final = list.at(-1)?.pixels;
-  if (!final) return undefined;
-  // The last frame that still differs from the final screen, outside the dot.
+  if (touched < 0 || !final) return undefined;
   let settled = touched;
   for (let index = touched; index < list.length; index++)
-    if (difference(list[index].pixels, final, width, box, false) > 1) settled = index + 1;
+    if (difference(list[index].pixels, final) > 1) settled = index + 1;
   const end = list[Math.min(settled, list.length - 1)];
-  return { touchedAt: list[touched].time, settledMs: end.time - list[touched].time };
+  return { settledMs: end.time - list[touched].time };
 }
 
 async function record(work: () => Promise<{ x: number; y: number; spanMs: number }>) {
@@ -159,14 +149,18 @@ try {
         await sleep(1500);
       }
       const step = steps[stepIndex];
+      // Scroll the target into place before recording, so the first change
+      // in the recording near it is the touch.
+      const point = await session.waitFor(step.target(targets));
+      await sleep(500);
       const recorded = await record(async () => {
-        const point = await session.waitFor(step.target(targets));
         // Android draws the touch dot only while the finger is down.
         const sample = await measureStep(session, step, targets, 'cold', iteration, 120);
         return { ...point, spanMs: sample.readyMs };
       });
-      const visual = analyse(await frames(recorded.video, width, height), width, recorded);
-      await rm(recorded.directory, { recursive: true, force: true });
+      const visual = analyse(await frames(recorded.video, width, height));
+      if (options.keep) console.log(`  recording: ${recorded.video}`);
+      else await rm(recorded.directory, { recursive: true, force: true });
       rows.push({ iteration, spanMs: recorded.spanMs, visualMs: visual?.settledMs });
       console.log(
         `  ${iteration} span ${Math.round(recorded.spanMs)} ms, screen ${visual ? Math.round(visual.settledMs) : '-'} ms`

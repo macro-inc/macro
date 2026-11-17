@@ -10,7 +10,7 @@
  * See README.md in this directory.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { homedir, loadavg } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { Device } from './device';
@@ -79,7 +79,7 @@ async function iteration(index: number) {
         for (const step of scenario.steps) {
           try {
             const sample = await measureStep(session, step, targets, variant, index);
-            samples.push(sample);
+            samples.push({ ...sample, hostLoad: loadavg()[0] });
             console.log(
               `  ${index} ${variant.padEnd(4)} ${step.id.padEnd(22)} ${Math.round(sample.readyMs)} ms`
             );

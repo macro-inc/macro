@@ -9,7 +9,8 @@ edits or changes settings.
 
 ```sh
 cd apps/web
-bun scripts/android-benchmark/run.ts --serial emulator-5580
+just android-benchmark --serial emulator-5580
+# the same as: bun scripts/android-benchmark/run.ts --serial emulator-5580
 ```
 
 It writes `android-benchmark-results/android-benchmark-<time>.json` and prints
@@ -44,7 +45,9 @@ Each sample also records, from the same traces: HTTP and GraphQL client spans,
 native GraphQL cache IPC requests, Soup reads answered locally (`soup.local`)
 or from the network (`soup.network`), which phases were already loaded
 (`<phase>.waited=false`), and native HTTP requests made over Tauri IPC while
-the step ran.
+the step ran. `spans` lists the flow's spans relative to the touch (frequent tiny
+cache and reconcile spans are counted, not listed), for finding where the time went, and
+`hostLoad` is the host's load average at the time.
 
 ## Build the benchmark APK
 
@@ -116,6 +119,8 @@ Recent lists; the harness finds rows by title, so that does not matter.
 | `--scenarios` | all | `cold-start,views,channel,document`. |
 | `--settle` | 1500 | Milliseconds between steps. |
 | `--boot-settle` | 5000 | Milliseconds after the first view before the first tap. |
+| `--targets` | `~/.config/macro-android-benchmark/targets.json` | Items to open. |
+| `--out` | `android-benchmark-results` | Results directory (git-ignored). |
 | `--label` | | Stored in the results. |
 | `--port` | 9333 | Host port for the DevTools forward. |
 
@@ -146,6 +151,9 @@ run and restores it.
 ```sh
 bun scripts/android-benchmark/visual.ts --serial emulator-5580 --step document.large.open --iterations 5
 ```
+
+`--keep` keeps the recordings for inspection. They show real account content: keep them
+out of the repository and pull requests.
 
 ## Files
 

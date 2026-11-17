@@ -48,6 +48,8 @@ export class Session {
   /** OTLP exports captured; a cold start that exported before attaching loses those spans. */
   exports = 0;
   #listeners: (() => void)[] = [];
+  /** Export bodies still being read; detaching waits for them. */
+  #captures: Promise<void>[] = [];
 
   private constructor(
     readonly cdp: Cdp,
@@ -109,9 +111,8 @@ export class Session {
         };
         if (request.url.includes('/__benchmark/otlp/')) {
           if (request.url.endsWith(OTLP_PATH))
-            this.#capture(String(params.requestId), request.postData).catch(
-              (error: Error) =>
-                console.error(`OTLP capture failed: ${error.message}`)
+            this.#captures.push(
+              this.#capture(String(params.requestId), request.postData)
             );
           return;
         }
@@ -131,13 +132,18 @@ export class Session {
   }
 
   async #capture(requestId: string, inline: string | undefined) {
-    const body =
-      inline ??
-      (
-        await this.cdp.send<{ postData: string }>('Network.getRequestPostData', {
-          requestId,
-        })
+    let body = inline;
+    try {
+      body ??= (
+        await this.cdp.send<{ postData: string }>(
+          'Network.getRequestPostData',
+          { requestId }
+        )
       ).postData;
+    } catch (error) {
+      console.error(`OTLP capture failed: ${(error as Error).message}`);
+      return;
+    }
     // An exporter retry would deliver the same spans again.
     const seen = new Set(this.spans.map((span) => span.spanId));
     this.spans.push(
@@ -150,7 +156,8 @@ export class Session {
   async waitForSpan(
     match: (span: CapturedSpan) => boolean,
     since: number,
-    timeoutMs = 15_000
+    // Slow flows plus the exporter's five-second batching.
+    timeoutMs = 40_000
   ): Promise<CapturedSpan | undefined> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
@@ -234,6 +241,7 @@ export class Session {
 
   async detach() {
     for (const unlisten of this.#listeners) unlisten();
+    await Promise.all(this.#captures);
     this.cdp.close();
     await this.device.removeForward(this.port);
   }

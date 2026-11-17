@@ -34,7 +34,14 @@ export type Sample = {
   /** Soup reads answered from the local cache vs. the network. */
   soup: { local: number; network: number };
   longAnimationFrameBlockingMs: number | undefined;
+  /** Host one-minute load average when the step ran (emulators share it). */
+  hostLoad?: number;
+  /** The flow's spans, from the touch: for finding where the time went. */
+  spans: { name: string; startMs: number; durationMs: number }[];
 };
+
+/** Frequent, tiny spans that the counts above already cover. */
+const UNLISTED_SPANS = new Set(['urql.reconcile', 'graphql_cache.ipc.request']);
 
 /** What finishes an action: the root span, and spans that must also end. */
 export type Readiness = {
@@ -127,5 +134,13 @@ export function sampleFrom(
       root,
       'ui.long_animation_frame_blocking_ms'
     ),
+    spans: spans
+      .filter((span) => !UNLISTED_SPANS.has(span.name))
+      .sort((a, b) => a.start - b.start)
+      .map((span) => ({
+        name: span.name,
+        startMs: Math.round(span.start - start),
+        durationMs: Math.round(span.end - span.start),
+      })),
   };
 }
