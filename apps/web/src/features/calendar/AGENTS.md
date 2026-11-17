@@ -57,7 +57,8 @@ host lives in `../block-calendar/`.
   [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
 - Extend `../../components/date-time-range/` for shared date/time fields and
   arithmetic; `DateTimeRange.Dates` stages and commits a two-click date range,
-  while the original per-end parts retain existing callers' behavior.
+  while the original per-end parts retain existing callers' behavior. Share typed
+  and picked clock state through its `primitives/create-time-input.ts` in both layouts.
 - Pass the calendar clock preference into shared date/time controls from their
   host; generic fields must not import calendar preferences.
 - Browse calendar foundations at `/app/component/ui?ui=date-tile`,
