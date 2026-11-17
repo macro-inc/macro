@@ -33,11 +33,12 @@ encoding) and hands the reply to `interpret`.
 
 - Owns: the generator, the runtime, the Eio and fetch transports,
   `code_mode`, the code-mode bundle's build (`code_mode/bundle/`; the nix
-  derivation is `codeModeOcaml` in `nix/cloud-storage.nix`), `generated/`.
+  derivation is `codeModeOcaml` in `nix/cloud-storage.nix`), code mode's
+  policy check (`code_mode/policy/`, a native tool the bundle ships),
+  `generated/`.
 - Not here: the specs (`../sdk/specs`, synced by `../sdk`); hand-written
   entity APIs like the TypeScript SDK's `src/` (none yet); code mode's
-  OCaml compile step and bootstrap (`crates/code_execution`; not built
-  yet).
+  OCaml compile step and bootstrap (`crates/code_execution`).
 
 ## Recipes
 
@@ -82,6 +83,6 @@ encoding) and hands the reply to `interpret`.
   files there: programs must not name the JavaScript interop.
 - `macroSdkOperation` on the `fetch` init is the contract with code mode's
   bootstrap (`crates/code_execution/src/outbound/deno/bootstrap.mjs`, which
-  reads it once OCaml programs run there); change both together. `fetch/test/` checks `sdk_method` against
+  reads it); change both together. `fetch/test/` checks `sdk_method` against
   `../sdk/generated/*/sdk.gen.ts`.
 - The host table is hand-copied: `.agents/rules/config-and-service-urls.md`.

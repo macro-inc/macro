@@ -156,8 +156,9 @@ bootstrap.
 ### What `fetch` is told
 
 Code mode's bootstrap wraps `globalThis.fetch` to gate a dry run's writes
-and add the `x-macro-sdk-verb` header (it will read the field below once it
-runs OCaml programs). The TypeScript SDK gives it each
+and add the `x-macro-sdk-verb` header; for OCaml programs it reads the
+field below (and gates, marks and reports with it, but sends no verb
+header yet). The TypeScript SDK gives it each
 call's `{service, operation}` through `gateRequests` and `sendVerbHeaders`
 (`packages/sdk/src/utils/activity.ts`). This transport passes the same pair
 on the `fetch` call itself, as an extra `init` field a plain `fetch`
@@ -202,7 +203,7 @@ service host. The value `main` returns becomes the final frame
 `{"type":"error","message":...}`, the same frames JavaScript programs end
 with. The bootstrap's side (`globalThis.__macroCodeMode`: the context as
 JSON, and `finish(frame)`) is specified in `code_mode/code_mode.mli`; code
-mode's bootstrap does not implement it yet. Like `fetch/`, `code_mode`
+mode's bootstrap (`crates/code_execution`) implements it. Like `fetch/`, `code_mode`
 builds only in the `wasm` profile; its Deno tests (`code_mode/test/`,
 `run.mjs` plays the bootstrap with code mode's Deno flags) run with:
 
@@ -216,8 +217,10 @@ Programs must not print to stdout: it carries the bootstrap's frames.
 
 Code mode compiles each program against a bundle built once per image, the
 `code-mode-ocaml` flake package (`nix/cloud-storage.nix`;
-`code_mode/bundle/build.sh` does the work). Its path is meant to reach the
-agent harness as `CODE_MODE_OCAML_DIR` (`codeModeOcamlEnv`, not wired yet):
+`code_mode/bundle/build.sh` does the work). A build of `code_mode_assets`
+with `CODE_MODE_OCAML_DIR` set to it (`code_mode_assets::OCAML_BUNDLE`; CI's
+Deno suite does this) runs OCaml programs; no service build sets it yet
+(`codeModeOcamlEnv` is unused):
 
 | Path | Contents |
 | --- | --- |
@@ -225,7 +228,7 @@ agent harness as `CODE_MODE_OCAML_DIR` (`codeModeOcamlEnv`, not wired yet):
 | `cmi/` | the interfaces a program may use: the SDK, its runtime, yojson, uri, `Macro_sdk_fetch`, `Code_mode` (not js_of_ocaml) |
 | `stdlib/` | the standard library's `.cmi` files (`ocamlc -nostdlib -I stdlib`) |
 | `assets/` | the library modules as `wasm_of_ocaml link` names them (`<library>-<content hash>.wasm`, the same for every program), served to every program's loader |
-| `bin/` | `ocamlc`, `wasm_of_ocaml`, `wasm-opt`, `wasm-merge`, `wasm-metadce` |
+| `bin/` | `ocamlc`, `wasm_of_ocaml`, `wasm-opt`, `wasm-merge`, `wasm-metadce`, and `code_mode_policy` (below) |
 | `findlib/` | the one findlib package (`stdlib`) wasm_of_ocaml looks up at start (`OCAMLFIND_CONF`) |
 | `compile.sh` | the reference per-program compile |
 | `fingerprint` | `<SDK version>+<12 hex of sha256 over cmi/>`, e.g. `0.1.0+65d27fd120f3` |
@@ -250,15 +253,37 @@ then deletes the copies of `assets/` from `main.assets/`, leaving `main.js`,
 reads the rest from `assets/` (see `code_mode/test/run.mjs`, which loads it
 without CommonJS or env access).
 
+Code mode (`crates/code_execution`) runs the same commands, with
+`-bin-annot` added to `ocamlc`, and between the first two runs
+`bin/code_mode_policy main.cmt`: a policy check on the typed tree
+(`code_mode/policy/`) that refuses `external` declarations and uses of
+`Obj`, `Marshal`, `Sys.command`, `input_value`/`output_value`,
+`Camlinternal*`, `Unix` and the JavaScript interop. It guarantees that no
+value the program names is one of those, by path or by the unit that
+declared it (so aliases and opens still name them). Since only a coercion
+to a signature the program writes (constraint, functor argument,
+first-class module, `include`) changes a value's declaring unit, it
+refuses every coercion whose source module's type, expanded in the
+program's own environment through aliases, named module types, submodules
+and functor results, holds a forbidden value or `Sys`/`Stdlib` as a
+submodule, and every one it cannot expand. `Sys` and `Stdlib` may be used
+as a path prefix, opened, or renamed (`module S = Sys`), but not otherwise
+as a module, and binding `Stdlib` itself to a module is refused (opening it
+is fine). It does not look inside the bundle's libraries, and it refuses
+some safe programs (a coerced module holding `Sys` that the signature
+hides). It prints `<file>:<line>:<column>: <message>` per finding and exits
+1 when there is any. It is defense in depth; Deno's permissions are the
+boundary. `dune test` runs its tests (`code_mode/policy/test/`).
+
 `nix build .#checks.x86_64-linux.code-mode-ocaml-sample` (CI: `OCaml SDK
 Check`) compiles `code_mode/test/sample.ml` that way and runs it under Deno
 2.9.6 with code mode's flags against a stand-in API
 (`code_mode/bundle/check.sh`, which prints the timings). On big-pickle,
 2026-11-16, median of 11 cold runs: compile 82 ms, spawn to `Code_mode.run`
-97 ms, whole run with one call 115 ms. The bundle's closure is 149 MiB
-(binaryen 50, glibc 34, the bundle itself 51: `ocamlc` and `wasm_of_ocaml`
-copied, with their references to the OCaml installation removed, which
-would otherwise add 640 MiB).
+97 ms, whole run with one call 115 ms. The bundle's closure is 162 MiB
+(binaryen 50, glibc 34, the bundle itself 64: `ocamlc`, `wasm_of_ocaml` and
+`code_mode_policy` (13 MiB) copied, with their references to the OCaml
+installation removed, which would otherwise add 640 MiB).
 
 ## How the spec maps to OCaml
 

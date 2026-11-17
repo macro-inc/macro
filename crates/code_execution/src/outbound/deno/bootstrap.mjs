@@ -73,8 +73,115 @@ for (const name of ["setTimeout", "setInterval", "setImmediate", "Worker"]) glob
 AbortSignal.timeout = sleepBanned("AbortSignal.timeout");
 Atomics.wait = sleepBanned("Atomics.wait");
 Atomics.waitAsync = sleepBanned("Atomics.waitAsync");
+// The token an unattended OCaml program's client holds instead of the run's:
+// the program never sees the credential, and fetch swaps this one for it.
+const UNATTENDED_TOKEN = "code-mode-unattended";
+// Runs a compiled OCaml program (main.js, wasm_of_ocaml's loader, beside its
+// own modules in main.assets/) and resolves to its final frame, the JSON
+// text Code_mode.run hands to finish(). The loader is CommonJS-style and,
+// since Deno defines globalThis.process, takes its Node path: it gets a
+// process without env, a require serving only the Node modules it reads
+// files with, and a node:fs/promises whose readFile serves the prebuilt
+// library modules from `assets`, so reads stay inside scratch and that
+// directory. Its stdout and stderr writes become log frames.
+async function runOcaml(context, assets) {
+  if (typeof WebAssembly.Suspending !== "function" || typeof WebAssembly.promising !== "function") {
+    throw new Error("OCaml programs need JSPI (WebAssembly.Suspending and WebAssembly.promising), which this Deno lacks.");
+  }
+  // Loaded here, not at the top, so JavaScript runs don't load them.
+  const [nodeFs, nodeFsPromises, nodePath, nodeTty] = await Promise.all(
+    ["node:fs", "node:fs/promises", "node:path", "node:tty"].map(name => import(name)));
+  const loaderPath = new URL("./main.js", import.meta.url).pathname;
+  const directory = nodePath.dirname(loaderPath);
+  let frame;
+  let exited;
+  globalThis.__macroCodeMode = {
+    context: stringify(context),
+    finish: text => { frame ??= text; },
+  };
+  const pending = {1: "", 2: ""};
+  // One streaming decoder per stream, so a character a buffer flush splits
+  // is decoded whole.
+  const decoders = {1: new TextDecoder(), 2: new TextDecoder()};
+  const flush = (fd, all) => {
+    if (all) pending[fd] += decoders[fd].decode();
+    const lines = pending[fd].split("\n");
+    pending[fd] = all ? "" : lines.pop();
+    for (const line of lines) if (!all || line !== "") emit({type: "log", level: fd === 1 ? "info" : "warn", message: line});
+  };
+  const fs = {
+    ...nodeFs,
+    writeSync(fd, buffer, offset, length, position) {
+      if (fd !== 1 && fd !== 2) return nodeFs.writeSync(fd, buffer, offset, length, position);
+      const bytes = typeof buffer === "string" ? encoder.encode(buffer) : buffer.subarray(offset ?? 0, (offset ?? 0) + (length ?? buffer.length));
+      pending[fd] += decoders[fd].decode(bytes, {stream: true});
+      flush(fd, false);
+      return bytes.length;
+    },
+  };
+  const prebuilt = new Set([...Deno.readDirSync(assets)].map(entry => entry.name));
+  const modules = {
+    "node:fs": fs,
+    "node:fs/promises": {
+      ...nodeFsPromises,
+      readFile: file => {
+        const name = nodePath.basename(String(file));
+        return Deno.readFile(prebuilt.has(name) ? nodePath.join(assets, name) : file);
+      },
+    },
+    "node:path": nodePath,
+    "node:tty": nodeTty,
+  };
+  const require = name => {
+    if (!hasOwn(modules, name)) throw new Error(`${name} is unavailable in ExecuteCode`);
+    return modules[name];
+  };
+  require.main = {filename: loaderPath};
+  const process = {
+    versions: {node: "deno"},
+    env: Object.freeze(Object.create(null)),
+    argv: ["deno", loaderPath],
+    platform: "linux",
+    cwd: () => directory,
+    chdir: () => { throw new Error("chdir is unavailable in ExecuteCode"); },
+    // Node's exit never returns; this one stops the program by throwing.
+    exit: code => {
+      exited ??= code;
+      throw new Error(`exit ${code}`);
+    },
+    on: () => {},
+    cpuUsage: () => ({user: performance.now() * 1000, system: 0}),
+  };
+  const shimGlobal = new Proxy(globalThis, {
+    get: (target, key) => key === "process" ? process : Reflect.get(target, key),
+  });
+  // The loader's first statement sets up globalThis; the rest is one
+  // expression that starts the program and returns its promise. Pinned by
+  // the OCaml tests: a wasm_of_ocaml upgrade that changes this shape fails
+  // with this message.
+  const source = Deno.readTextFileSync(loaderPath);
+  const marker = "(Object));";
+  const at = source.indexOf(marker);
+  if (at < 0) throw new Error("unexpected wasm_of_ocaml loader shape");
+  const loader = new Function("globalThis", "require", "process",
+    `${source.slice(0, at + marker.length)}return ${source.slice(at + marker.length)}`);
+  try {
+    await loader(shimGlobal, require, process);
+  } catch (error) {
+    // Exiting after Code_mode.run has finished is the normal end.
+    if (exited === undefined) throw error;
+  }
+  flush(1, true);
+  flush(2, true);
+  if (frame === undefined) {
+    throw new Error(exited === undefined
+      ? "The program ended without calling Code_mode.run."
+      : `The program exited with status ${exited} before Code_mode.run finished.`);
+  }
+  return parse(frame);
+}
 try {
-  const {maxResultBytes, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
+  const {maxResultBytes, operations, unattended, language, ocamlAssets, ...context} = await new Response(Deno.stdin.readable).json();
   // A dry run answers each write with an empty result, so it shows what the
   // program would do. Operations missing from the catalog count as writes.
   const dryRun = unattended?.dryRun === true;
@@ -88,9 +195,25 @@ try {
   const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
-  globalThis.fetch = (input, init) => {
+  // Requests SDK calls make, by id, so a completion reports only those started.
+  const activeRequests = new Set();
+  let observedRequests = 0;
+  const observe = value => {
+    // A gated operation reports once, as skipped or refused, with no start.
+    if (value.status === "started" || value.status === "skipped" || value.status === "refused") {
+      if (++observedRequests > 128) {
+        if (observedRequests === 129) emit({type: "progress", value: {truncated: true}});
+        return;
+      }
+      if (value.status === "started") activeRequests.add(value.id);
+    } else if (!activeRequests.delete(value.id)) return;
+    emit({type: "progress", value});
+  };
+  observeRequests(observe);
+  const sendRequest = (input, init) => {
     const request = new Request(input, init);
     if (request.headers.has("authorization") && origins.has(new URL(request.url).origin)) {
+      if (language === "ocaml" && unattended) request.headers.set("authorization", `Bearer ${context.token}`);
       for (const [name, value] of Object.entries(context.traceHeaders ?? {})) {
         if (name === "traceparent" || name === "tracestate") request.headers.set(name, value);
       }
@@ -107,19 +230,30 @@ try {
     }
     return originalFetch(request);
   };
-  const activeRequests = new Set();
-  let observedRequests = 0;
-  observeRequests(value => {
-    // A gated operation reports once, as skipped or refused, with no start.
-    if (value.status === "started" || value.status === "skipped" || value.status === "refused") {
-      if (++observedRequests > 128) {
-        if (observedRequests === 129) emit({type: "progress", value: {truncated: true}});
-        return;
-      }
-      if (value.status === "started") activeRequests.add(value.id);
-    } else if (!activeRequests.delete(value.id)) return;
-    emit({type: "progress", value});
-  });
+  // The OCaml SDK names each call's operation on fetch itself
+  // (init.macroSdkOperation, see packages/sdk-ocaml/fetch); the TypeScript
+  // SDK reports the same events and asks the same gate from inside. Ids
+  // are numbers, as the TypeScript SDK's are: the host's activity reads
+  // only those.
+  let nextOcamlRequest = 0;
+  globalThis.fetch = async (input, init) => {
+    const operation = init?.macroSdkOperation;
+    if (language !== "ocaml" || !operation) return sendRequest(input, init);
+    const event = {id: ++nextOcamlRequest, service: String(operation.service), operation: String(operation.operation)};
+    if (dryRun && catalog.get(`${event.service}.${event.operation}`)?.write !== false) {
+      observe({...event, status: "skipped"});
+      return Response.json({});
+    }
+    observe({...event, status: "started"});
+    try {
+      const response = await sendRequest(input, init);
+      observe({...event, status: response.ok ? "completed" : "failed"});
+      return response;
+    } catch (error) {
+      observe({...event, status: "failed"});
+      throw error;
+    }
+  };
   const macro = new Macro({token: context.token, hosts: context.hosts, webAppUrl: context.webAppUrl});
   // A literal dynamic import joins Deno's initial static graph, bypassing read
   // permissions. Compute this specifier so the entire generated graph is loaded
@@ -131,13 +265,25 @@ try {
     for (const name of ["connect", "connectTls", "startTls"]) Object.defineProperty(Deno, name, {value: undefined});
     globalThis.Worker = undefined;
   }
-  const { main } = await import(program);
   let value;
-  if (unattended) {
+  if (language === "ocaml") {
+    // Never the credential for an unattended program: fetch swaps it in.
+    const frame = await runOcaml({
+      token: unattended ? UNATTENDED_TOKEN : context.token,
+      hosts: context.hosts,
+      webAppUrl: context.webAppUrl,
+      sessionId: unattended ? null : context.sessionId,
+      executionId: unattended ? null : context.executionId,
+    }, ocamlAssets);
+    if (frame.type !== "result") throw new Error(String(frame.message));
+    value = frame.value;
+  } else if (unattended) {
+    const { main } = await import(program);
     if (typeof main !== "function") throw new Error("Export an async main(context: StepContext) function.");
     // Never the credential, hosts or trace context: only the SDK and the step's inputs.
     value = await main({...unattended.arguments, macro});
   } else {
+    const { main } = await import(program);
     const session = context.sessionId ? macro.agentSessions.byId(context.sessionId) : undefined;
     const execution = session && context.executionId ? session.codeExecutions.byId(context.executionId) : undefined;
     if (typeof main !== "function") throw new Error("Export an async main({macro, session, execution}) function.");

@@ -45,6 +45,7 @@ async fn run(
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms,
+                    language: Language::Javascript,
                 },
                 RunEnvironment::default(),
             )
@@ -157,6 +158,7 @@ export async function main({token, hosts, macro: supplied, session, execution}) 
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms: 5000,
+                    language: Language::Javascript,
                 },
                 environment,
             )
@@ -237,6 +239,7 @@ export async function main({execution}) {
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms: 5000,
+                    language: Language::Javascript,
                 },
                 environment,
             )
@@ -303,6 +306,7 @@ export async function main({token, hosts, webAppUrl, macro: supplied}) {
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms: 5000,
+                    language: Language::Javascript,
                 },
                 environment,
             )
@@ -440,7 +444,7 @@ async fn denies_unlisted_destinations_including_redirects() {
         read_request(&mut stream).await;
         stream.write_all(format!("HTTP/1.1 302 Found\r\nLocation: http://{forbidden_address}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes()).await.unwrap();
     });
-    let (_, outcome) = collect(service.execute(ExecuteRequest { source: format!("export async function main() {{ return await fetch('http://{allowed_address}'); }}"), timeout_ms: 5000 }, RunEnvironment { endpoints: SdkEndpoints { hosts: BTreeMap::from([("cognition".into(), format!("http://{allowed_address}"))]), ..SdkEndpoints::default() }, ..RunEnvironment::default() }).unwrap()).await;
+    let (_, outcome) = collect(service.execute(ExecuteRequest { source: format!("export async function main() {{ return await fetch('http://{allowed_address}'); }}"), timeout_ms: 5000, language: Language::Javascript }, RunEnvironment { endpoints: SdkEndpoints { hosts: BTreeMap::from([("cognition".into(), format!("http://{allowed_address}"))]), ..SdkEndpoints::default() }, ..RunEnvironment::default() }).unwrap()).await;
     assert!(
         matches!(outcome, Outcome::Failed { .. }),
         "redirect escaped allowlist: {outcome:?}"
@@ -468,6 +472,7 @@ async fn times_out_cancels_and_reaps_busy_processes() {
             ExecuteRequest {
                 source: "export function main() { console.log('ready'); while(true) {} }".into(),
                 timeout_ms: 5000,
+                language: Language::Javascript,
             },
             RunEnvironment::default(),
         )
@@ -594,6 +599,7 @@ async fn dropping_receiver_and_shutdown_reap_processes() {
             ExecuteRequest {
                 source: "export function main() { console.log('ready'); while(true) {} }".into(),
                 timeout_ms: 5000,
+                language: Language::Javascript,
             },
             RunEnvironment::default(),
         )
@@ -639,6 +645,7 @@ async fn redacts_run_token_from_results_keys_console_stderr_and_errors() {
                     ExecuteRequest {
                         source: source.into(),
                         timeout_ms: 5000,
+                        language: Language::Javascript,
                     },
                     RunEnvironment {
                         token: token.into(),
@@ -700,6 +707,7 @@ async fn run_unattended(
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms: 10_000,
+                    language: Language::Javascript,
                 },
                 environment,
             )
@@ -907,3 +915,5 @@ async fn the_cpu_limit_stops_a_busy_program() {
     );
     service.shutdown().await;
 }
+
+mod ocaml;
