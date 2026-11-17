@@ -522,9 +522,16 @@ async fn a_scoped_credential_is_refused_every_fetch() {
                     let response = send(&path, agent_credential(Some(scope)), internal)
                         .await
                         .unwrap();
+                    // Beside the internal key the bearer is a second
+                    // explicit credential, refused before its scope is read.
+                    let refused = if internal {
+                        StatusCode::BAD_REQUEST
+                    } else {
+                        StatusCode::FORBIDDEN
+                    };
                     assert_eq!(
                         response.status(),
-                        StatusCode::FORBIDDEN,
+                        refused,
                         "{scope} {path} internal={internal}"
                     );
                 }
@@ -537,6 +544,26 @@ async fn a_scoped_credential_is_refused_every_fetch() {
             assert_ne!(response.status(), StatusCode::FORBIDDEN, "{path}");
         }
     }
+    // An unscoped bearer beside a scoped cookie is held to the cookie's scope.
+    let mixed = app(context.clone())
+        .oneshot(
+            Request::builder()
+                .uri("/image-proxy/proxy?url=https%3A%2F%2Fexample.test")
+                .header(AUTHORIZATION, format!("Bearer {}", agent_credential(None)))
+                .header(
+                    COOKIE,
+                    format!(
+                        "{}={}",
+                        macro_auth::credential::access_token_cookie_name(),
+                        agent_credential(Some("no_send"))
+                    ),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(mixed.status(), StatusCode::FORBIDDEN);
     let health = app(context.clone())
         .oneshot(
             Request::builder()

@@ -10,4 +10,8 @@ export type ListCrmExcludedEmailThreadsParams = {
    * Read entries after this thread ID.
    */
   after?: string | null;
+  /**
+   * Look up one thread instead of paging. Cannot be combined with `after`.
+   */
+  thread_id?: string | null;
 };
