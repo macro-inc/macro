@@ -1,0 +1,33 @@
+apps/web/src/features/onboarding/components/trust-details.tsx
+  s_d5a7314213af12::t_8396ec00f44e64 18,23,35,45,55,74,85,98,112,124,134,152,276
+apps/web/src/lib/service-clients/service-connection/websocket.ts
+  s_d5a7314213af12::t_8396ec00f44e64 78
+  s_d5a7314213af12::t_80821bbbd4ff76 12
+apps/web/src/lib/core/signal/tabFocus.ts
+  s_d5a7314213af12::t_80821bbbd4ff76 4,11-13,26-30
+apps/web/src/features/block-md/component/FormatTools.tsx
+  s_d5a7314213af12::t_72da9c5858e3c5 98,138,144,150,319
+apps/web/src/lib/core/signal/module-ownership.test.ts
+  s_d5a7314213af12::t_6f3301c7528ffd 1-33,37-38
+  s_d5a7314213af12::t_ac72628f39d882 34-36
+apps/web/src/features/theme/signals/themeSignals.ts
+  s_d5a7314213af12::t_8396ec00f44e64 2,72-74,86-87
+apps/web/src/lib/service-clients/service-storage/websocket.ts
+  s_d5a7314213af12::t_8396ec00f44e64 9,66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "584ef4e6488be1b0f523ada0245725df6bb1eb87",
+  "prompts": {},
+  "sessions": {
+    "s_d5a7314213af12": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "466b147c-e4b2-49a4-860d-7a503e427a0f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
