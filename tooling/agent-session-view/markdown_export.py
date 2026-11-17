@@ -309,6 +309,7 @@ def render(export, contexts=()):
                     out.append(f"- turn {turn.number} step {step.number} `{step.name}`: {step.error}")
 
     full = [f"# Full code and results: {sid}", ""]
+    written = {}
     for turn in turns:
         took = f"{turn.ended - turn.started:.0f}s" if turn.ended else "unfinished"
         out += [
@@ -369,6 +370,16 @@ def render(export, contexts=()):
         answer = "".join(turn.answer).strip()
         if answer:
             out += ["", "Answer:", "", cut(answer, TEXT_BUDGET)]
+        literal = contexts[turn.number - 1].get("literal") if contexts else None
+        for part in (literal or {}).get("parts") or []:
+            if part.get("text") is None:
+                continue
+            full.append(f"## {turn.number} literal {part['label']} ({part['status']})\n")
+            if part["hash"] in written:
+                full.append(f"Same text as turn {written[part['hash']]}.\n")
+                continue
+            written[part["hash"]] = turn.number
+            full.append(fence(part["text"]) + "\n")
     return "\n".join(out) + "\n", "\n".join(full) + "\n"
 
 
@@ -408,8 +419,30 @@ def context_lines(context):
             for group in context["prompt"]["largest"] for name, size in group["parts"].items()
         ]
         lines.append(f"- largest prompt of {context['prompt']['calls']} model calls: {', '.join(parts)}")
+    literal = context.get("literal")
+    if literal:
+        lines += literal_lines(literal)
     for found in context["flags"]:
         lines.append(f"- **flag** `{found['id']}` ({found['level']}): {flag_text(found)}")
+    return lines
+
+
+def literal_lines(literal):
+    """How each rebuilt prompt part compares with the span; texts go to the full file."""
+    commit = literal.get("commit")
+    where = (
+        f"reconstructed from source at `{commit['sha'][:11]}`, "
+        f"{'exact' if commit['exact'] else '**closest**'}: {commit['reason']}"
+    ) if commit else "no commit"
+    if literal.get("error"):
+        return [f"- literal prompt parts: **not rebuilt** ({where}): {literal['error'][:300]}"]
+    lines = [f"- literal prompt parts, {where} (texts in the full file):"]
+    for part in literal["parts"]:
+        status = "**MISMATCH**" if part["status"] == "mismatch" else part["status"]
+        size = f"span {kilobytes(part['span_bytes'])}" if part["bytes"] is None else (
+            f"{kilobytes(part['bytes'])}, span {kilobytes(part['span_bytes'])}"
+        )
+        lines.append(f"  - {part['label']}: {status}, {size}" + (f" ({part['note']})" if part["note"] else ""))
     return lines
 
 

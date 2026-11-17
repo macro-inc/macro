@@ -62,6 +62,13 @@ prompt held only the entity catalog), the eager, loaded and deferred tools,
 and flags. Read the header's Flags first: `no-sdk-index` with
 `guessed-sdk-methods` is the `invented-api` pattern with its cause.
 
+To read what the model actually read, add `--reconstruct`: each turn's
+`<macro_sdk>` docs, preamble and Macro prompt are rebuilt from source at the
+commit that served it and checked against the span's bytes and hash. The
+viewer shows each part's text, and its status (verified, mismatch, or not
+reconstructed for per-user parts such as memory); the `.full.md` has the
+texts. The first run at a commit builds Rust, so expect a wait.
+
 ## Many sessions
 
 ```sh
