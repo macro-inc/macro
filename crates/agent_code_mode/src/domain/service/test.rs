@@ -73,6 +73,7 @@ impl ExecutionCredentials for Credentials {
         &self,
         identity: &ExecutionIdentity,
         _: &str,
+        _: ProgramLanguage,
         _: CancellationToken,
     ) -> Result<code_execution::domain::RunEnvironment, CodeModeError> {
         self.0
@@ -787,8 +788,13 @@ async fn ocaml_runs_record_language_and_fingerprint_and_retries_match_language()
     let record = store.get(session.id, other.execution_id).await.unwrap();
     assert_eq!(record.language, ProgramLanguage::Javascript);
     assert_eq!(record.sdk_fingerprint, None);
+    // A JavaScript record serializes as before languages: no language, no
+    // fingerprint.
     let stored = serde_json::to_value(&record).unwrap();
     assert!(stored.get("sdkFingerprint").is_none());
+    assert!(stored.get("language").is_none(), "{stored}");
+    let read: ExecutionRecord = serde_json::from_value(stored).unwrap();
+    assert_eq!(read.language, ProgramLanguage::Javascript);
 }
 
 #[test]

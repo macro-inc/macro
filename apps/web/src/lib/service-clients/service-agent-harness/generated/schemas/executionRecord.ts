@@ -31,7 +31,9 @@ export interface ExecutionRecord {
   error?: ExecutionRecordError;
   /** Execution identity. */
   executionId: ExecutionId;
-  /** The language `source` is written in; historical records are JavaScript. */
+  /** The language `source` is written in; historical records are JavaScript.
+JavaScript, the default, is left out, so records of sessions without
+OCaml serialize as they did before languages. */
   language?: ProgramLanguage;
   /** JSON returned by the program, if successful. */
   result?: unknown;

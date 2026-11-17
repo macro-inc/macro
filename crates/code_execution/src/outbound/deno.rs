@@ -79,6 +79,14 @@ impl DenoRunner {
         self.ocaml.as_ref()
     }
 
+    /// Tests only: compile OCaml programs without the policy step, to show
+    /// what Deno does with a program the policy would refuse.
+    #[cfg(test)]
+    pub(crate) fn without_ocaml_policy(mut self) -> Self {
+        self.ocaml = self.ocaml.map(|bundle| Arc::new(bundle.without_policy()));
+        self
+    }
+
     fn command(&self, root: &Path) -> Command {
         let mut command = Command::new(&self.binary);
         // No APP_SECRETS_JSON, AWS credentials, inspector flags, proxy settings,

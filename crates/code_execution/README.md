@@ -62,15 +62,30 @@ directory, CPU and priority limits and kill-on-drop as Deno, inside the run's
 deadline and cancellation, with fixed command lines (no dune, ocamlfind,
 `-pp` or `-ppx`, nothing from the program). Each step runs in its own
 process group, so stopping it also stops the binaryen tools wasm_of_ocaml
-starts. `Limits::max_cpu` applies to each step, and, like Deno's native
-memory, a step's memory is not capped:
+starts. `Limits::max_cpu` applies to each step, and each step's address
+space is capped at 1 GiB with core dumps off (`RLIMIT_AS`, `RLIMIT_CORE`;
+binaryen runs on one thread so its stacks fit): a program's source drives
+the compiler's memory, so one that builds types of exponential size fails
+saying it needs more memory than code mode allows. Ordinary programs
+compile in under 384 MiB.
 
 1. `ocamlc -nostdlib -I <stdlib> -I <cmi> -bin-annot -c main.ml`: only the
    SDK, its runtime, yojson, uri, `Macro_sdk_fetch` and `Code_mode` are
    visible, not the JavaScript interop.
 2. `code_mode_policy main.cmt`: refuses `external` declarations and uses of
-   `Obj`, `Marshal`, `Sys.command`, `Unix` and `Js_of_ocaml`, also through
-   aliases. Defense in depth; Deno's permissions are the boundary.
+   `Obj`, `Marshal`, `Sys.command`, `input_value`/`output_value`,
+   `Camlinternal*`, `Unix` and `Js_of_ocaml`. Values are matched by path
+   and by the unit that declared them, so local aliases and opens still
+   name them. A module that declares a forbidden value (`Sys`, `Stdlib`)
+   may only be used as a path prefix, opened, or renamed (`module S =
+   Sys`); any other use of it as a module (a signature constraint, a
+   functor argument, a first-class module, an `include`) is refused, and so
+   is any coerced module whose type still holds such a value, since a
+   signature the program writes could rename it. Binding `Stdlib` to a
+   module is refused. Defense in depth; Deno's permissions are the
+   boundary: with the policy skipped (a test-only compile), `Sys.command`
+   fails at run time because the loader's `require` has no
+   `node:child_process`, and Deno denies running processes.
 3. `wasm_of_ocaml compile` and `link` against the bundle's archives, keeping
    only the program's own modules in scratch.
 
@@ -197,5 +212,5 @@ The suite covers actual SDK HTTP authentication and concurrency, prebundled
 Handlebars, plain JavaScript entry modules, filesystem/import/process/network
 restrictions including redirects, output bounds, cancellation, deadlines,
 backpressure, and cleanup, and the same for OCaml programs plus compiling,
-the policy check and timeouts while compiling (they need
+the policy check, the compile memory cap and timeouts while compiling (they need
 `CODE_MODE_OCAML_DIR`, see `AGENTS.md`). It makes no model-provider calls.

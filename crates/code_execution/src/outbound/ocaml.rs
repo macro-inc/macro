@@ -21,6 +21,14 @@ use tokio_util::sync::CancellationToken;
 pub(crate) const PROGRAM: &str = "main.ml";
 /// Compiler output kept per step; diagnostics for a 64 KiB program fit.
 const MAX_TOOL_OUTPUT: u64 = 64 * 1024;
+/// Address space each compile step may map. A program's source drives the
+/// compiler's memory (types of exponential size), so each step is capped
+/// well below what would endanger the shared container. Ordinary programs
+/// compile in under 384 MiB, most of it the OCaml runtime's reservation for
+/// its minor heaps; 1 GiB leaves room for large ones.
+const MAX_STEP_ADDRESS_SPACE: u64 = 1024 * 1024 * 1024;
+/// What a program sees when a compile step runs out of memory.
+const OUT_OF_MEMORY: &str = "Error: compiling the program needs more memory than code mode allows (1 GiB); it may build very large types";
 
 /// Code mode's prebuilt OCaml bundle, checked when it is opened.
 #[derive(Debug)]
@@ -29,6 +37,10 @@ pub struct OcamlBundle {
     fingerprint: String,
     link: Vec<PathBuf>,
     shapes: Vec<PathBuf>,
+    /// Tests only: skip the policy step, to show what Deno does with a
+    /// program the policy would refuse.
+    #[cfg(test)]
+    skip_policy: bool,
 }
 
 impl OcamlBundle {
@@ -72,7 +84,21 @@ impl OcamlBundle {
             fingerprint,
             link,
             shapes,
+            #[cfg(test)]
+            skip_policy: false,
         })
+    }
+
+    /// Tests only: this bundle without its policy step.
+    #[cfg(test)]
+    pub(crate) fn without_policy(&self) -> Self {
+        Self {
+            root: self.root.clone(),
+            fingerprint: self.fingerprint.clone(),
+            link: self.link.clone(),
+            shapes: self.shapes.clone(),
+            skip_policy: true,
+        }
     }
 
     /// The SDK version plus a hash of the interfaces programs compile against.
@@ -148,17 +174,26 @@ impl OcamlBundle {
         }
 
         // 2. The policy check on the typed tree.
-        let output = step
-            .run(
-                "policy",
-                bin.join("code_mode_policy"),
-                vec!["main.cmt".into()],
+        #[cfg(test)]
+        let skip_policy = self.skip_policy;
+        #[cfg(not(test))]
+        let skip_policy = false;
+        let output = if skip_policy {
+            None
+        } else {
+            Some(
+                step.run(
+                    "policy",
+                    bin.join("code_mode_policy"),
+                    vec!["main.cmt".into()],
+                )
+                .await?,
             )
-            .await?;
-        match output.status.code() {
-            Some(0) => {}
-            Some(1) => return Err(policy_diagnostics(&output.stdout)),
-            _ => return Err(internal("the policy check failed")),
+        };
+        match output.map(|output| (output.status.code(), output.stdout)) {
+            None | Some((Some(0), _)) => {}
+            Some((Some(1), stdout)) => return Err(policy_diagnostics(&stdout)),
+            Some(_) => return Err(internal("the policy check failed")),
         }
         if typing_only {
             return Ok(());
@@ -284,7 +319,9 @@ impl Step<'_> {
         name = "code_execution.compile.step",
         skip_all,
         fields(step = name, exit_code = tracing::field::Empty),
-        err
+        // Cancelling and timing out are the run's, not the service's;
+        // a step that fails to run is logged at error level below.
+        err(level = "info")
     )]
     async fn run(
         &self,
@@ -306,6 +343,11 @@ impl Step<'_> {
                 "OCAMLFIND_CONF",
                 bundle.join("findlib").join("findlib.conf"),
             )
+            // One binaryen thread: each thread's stack and allocator arena
+            // count against the address-space cap, so a thread per core
+            // would exhaust it on a large host, and a small program gains
+            // nothing from more.
+            .env("BINARYEN_CORES", "1")
             .current_dir(self.directory)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -320,8 +362,9 @@ impl Step<'_> {
             .id()
             .and_then(|id| i32::try_from(id).ok())
             .and_then(rustix::process::Pid::from_raw);
-        if super::deno::limit(&child, self.limits).is_err() {
+        if super::deno::limit(&child, self.limits).is_err() || cap_memory(group).is_err() {
             stop(&mut child, group).await;
+            tracing::error!("could not limit a compile step");
             return Err(CompileError::Internal);
         }
         let stdout = child.stdout.take().expect("piped child stdout");
@@ -357,8 +400,58 @@ impl Step<'_> {
         {
             tracing::Span::current().record("exit_code", code);
         }
-        result
+        match result {
+            Ok(output) if !output.status.success() && out_of_memory(&output.stderr) => {
+                Err(CompileError::Diagnostics(vec![Diagnostic {
+                    file: None,
+                    message: OUT_OF_MEMORY.to_owned(),
+                }]))
+            }
+            Err(CompileError::Internal) => {
+                tracing::error!("a compile step failed to run");
+                Err(CompileError::Internal)
+            }
+            result => result,
+        }
     }
+}
+
+/// Cap a step's address space and turn off core dumps (a compiler that
+/// runs out of memory aborts, and its core would land in scratch). Its
+/// children (binaryen) inherit both.
+fn cap_memory(group: Option<rustix::process::Pid>) -> rustix::io::Result<()> {
+    let pid = group.ok_or(rustix::io::Errno::SRCH)?;
+    rustix::process::prlimit(
+        Some(pid),
+        rustix::process::Resource::As,
+        rustix::process::Rlimit {
+            current: Some(MAX_STEP_ADDRESS_SPACE),
+            maximum: Some(MAX_STEP_ADDRESS_SPACE),
+        },
+    )?;
+    rustix::process::prlimit(
+        Some(pid),
+        rustix::process::Resource::Core,
+        rustix::process::Rlimit {
+            current: Some(0),
+            maximum: Some(0),
+        },
+    )?;
+    Ok(())
+}
+
+/// Whether a failed step said it ran out of memory: the OCaml runtime's
+/// fatal errors and binaryen's (C++) allocation failure.
+fn out_of_memory(stderr: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(stderr);
+    [
+        "Out of memory",
+        "allocation failure",
+        "Not enough heap memory",
+        "std::bad_alloc",
+    ]
+    .iter()
+    .any(|marker| text.contains(marker))
 }
 
 /// Kill a step's whole process group and reap its leader. The group's other

@@ -1,6 +1,7 @@
 //! Composition of code execution credentials with the harness's owner approval gate.
 use agent_code_mode::domain::{
-    CodeModeError, ExecutionCredentials, ExecutionIdentity, UserExecutionCredentials,
+    CodeModeError, ExecutionCredentials, ExecutionIdentity, ProgramLanguage,
+    UserExecutionCredentials,
 };
 use agent_correlation::domain::{CorrelationRepository, SessionScope};
 use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, SignedCorrelation};
@@ -116,9 +117,10 @@ impl ExecutionCredentials for RunCredentials {
         &self,
         identity: &ExecutionIdentity,
         source: &str,
+        language: ProgramLanguage,
         cancel: CancellationToken,
     ) -> Result<RunEnvironment, CodeModeError> {
-        let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
+        let actor = approve_run(self.gate.as_ref(), identity, source, language, &cancel).await?;
         let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
         let correlation = self
             .correlations
@@ -350,9 +352,15 @@ async fn approve_run(
     gate: &dyn NativeToolGate,
     identity: &ExecutionIdentity,
     source: &str,
+    language: ProgramLanguage,
     cancel: &CancellationToken,
 ) -> Result<macro_user_id::user_id::MacroUserIdStr<'static>, CodeModeError> {
-    let args = serde_json::json!({"source": source, "acting_as": identity.acting_as, "turn_id": identity.turn});
+    let mut args = serde_json::json!({"source": source, "acting_as": identity.acting_as, "turn_id": identity.turn});
+    // The approver sees what the source is written in. JavaScript, the
+    // default, is left out, so its hold reads as it did before OCaml.
+    if language != ProgramLanguage::Javascript {
+        args["language"] = serde_json::json!(language);
+    }
     let verdict = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Err(CodeModeError::Forbidden),

@@ -257,9 +257,14 @@ Code mode (`crates/code_execution`) runs the same commands, with
 `-bin-annot` added to `ocamlc`, and between the first two runs
 `bin/code_mode_policy main.cmt`: a policy check on the typed tree
 (`code_mode/policy/`) that refuses `external` declarations and uses of
-`Obj`, `Marshal`, `Sys.command`, `Unix` and the JavaScript interop, also
-through aliases, and binding `Stdlib` itself to a module (opening it is
-fine). It prints `<file>:<line>:<column>: <message>` per finding and exits
+`Obj`, `Marshal`, `Sys.command`, `input_value`/`output_value`,
+`Camlinternal*`, `Unix` and the JavaScript interop, by path and by the unit
+that declared the value (so aliases and opens still name them). `Sys` and
+`Stdlib`, which declare forbidden values, may be used as a path prefix,
+opened, or renamed (`module S = Sys`), but not otherwise as a module (a
+signature constraint, functor argument, first-class module or `include`,
+any of which could rename the value behind a signature), and binding
+`Stdlib` itself to a module is refused (opening it is fine). It prints `<file>:<line>:<column>: <message>` per finding and exits
 1 when there is any. It is defense in depth; Deno's permissions are the
 boundary. `dune test` runs its tests (`code_mode/policy/test/`).
 

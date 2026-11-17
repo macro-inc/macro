@@ -7,7 +7,7 @@
 use super::*;
 use crate::domain::{
     CodeModeService, ExecutionCredentials, ExecutionIdentity, ExecutionRecord, ExecutionStatus,
-    ExecutionStore, ExecutionTurns, OcamlPrograms, OcamlRollout,
+    ExecutionStore, ExecutionTurns, OcamlPrograms, OcamlRollout, ProgramLanguage,
 };
 use agent_session::domain::model::AgentSessionId;
 use ai_toolset::ToolSet as _;
@@ -66,6 +66,7 @@ impl ExecutionCredentials for Credentials {
         &self,
         identity: &ExecutionIdentity,
         _: &str,
+        _: ProgramLanguage,
         _: CancellationToken,
     ) -> Result<RunEnvironment, CodeModeError> {
         Ok(RunEnvironment {

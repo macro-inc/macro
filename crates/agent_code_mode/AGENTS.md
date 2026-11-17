@@ -90,8 +90,9 @@ stacks. Process isolation belongs to
   (`CodeModeService::with_ocaml`) may run `ExecuteCode` with
   `language: "ocaml"` (`SessionCodeMode::ocaml_enabled`). Everyone else gets
   today's tool unchanged (`toolset()`); `execute` refuses an OCaml request
-  without the rollout before minting a credential. A record keeps its
-  `language` (absent on older records: JavaScript) and, for OCaml, the
+  without the rollout before minting a credential, and the approval hold
+  names `language` for OCaml runs. A record keeps its `language` (left out
+  for JavaScript, so those records read as before) and, for OCaml, the
   bundle's `sdkFingerprint`, all in the `agent_code_execution.record` JSON,
   so no migration. The flag must be created in PostHog at 0% before anyone
   can be targeted. The public MCP's `UserExecuteCode` stays JavaScript only.

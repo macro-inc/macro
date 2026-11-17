@@ -1,6 +1,11 @@
 //! OCaml programs through the real compile step and Deno: the OCaml twins
 //! of the JavaScript tests beside this file, plus compiling and the policy
-//! check. They need the bundle this build names: build with
+//! check. JavaScript tests without a twin, because OCaml has no such
+//! feature: module imports (a program is one `main.ml` against the
+//! bundle), sleeping (no timer API without Unix), invalid or duplicate
+//! result frames (an OCaml program writes no frames; `Code_mode.run`
+//! finishes once), arguments to unattended programs (refused), and the
+//! SDK features `execution.views` and `webUrl()` links. They need the bundle this build names: build with
 //! `CODE_MODE_OCAML_DIR=$(nix build --no-link --print-out-paths .#code-mode-ocaml)`.
 
 use super::*;
@@ -22,6 +27,18 @@ async fn setup_ocaml(limits: Limits) -> (tempfile::TempDir, ExecutionService) {
     (
         root,
         ExecutionService::new(Arc::new(runner), limits).unwrap(),
+    )
+}
+
+/// A service whose OCaml compile skips the policy step (tests only), to
+/// reach what Deno does with a program the policy would refuse.
+async fn setup_ocaml_without_policy() -> (tempfile::TempDir, ExecutionService) {
+    let root = tempfile::tempdir().unwrap();
+    let runner = runner(root.path()).await.without_ocaml_policy();
+    assert!(runner.ocaml_bundle().is_some(), "{NO_BUNDLE}");
+    (
+        root,
+        ExecutionService::new(Arc::new(runner), Limits::default()).unwrap(),
     )
 }
 
@@ -205,6 +222,22 @@ let () =
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn a_character_split_across_writes_is_logged_whole() {
+    let (_root, service) = setup_ocaml(Limits::default()).await;
+    let source = "let () =\n  print_string \"caf\\xc3\"; flush stdout; print_string \"\\xa9\\n\"; flush stdout;\n  Code_mode.run (fun _ -> `Null)";
+    let (events, outcome) = run_ocaml(&service, source, 10_000, RunEnvironment::default()).await;
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    assert!(
+        events.iter().any(
+            |event| matches!(&event.kind, EventKind::Log { message, .. } if message == "café")
+        ),
+        "{events:?}"
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
 async fn requires_ocaml_code_mode_run() {
     let (_root, service) = setup_ocaml(Limits::default()).await;
     for (source, message) in [
@@ -287,6 +320,40 @@ async fn the_policy_check_refuses_escape_hatches() {
             "module O = Obj\nlet () = Code_mode.run (fun _ -> O.magic 0)",
             "Obj is not allowed",
         ),
+        // Sys seen through a signature the program writes (the review's
+        // bypasses and variants), and marshalling by other names.
+        (
+            "module M : sig val command : string -> int end = Sys\nlet () = Code_mode.run (fun _ -> `Int (M.command \"id\"))",
+            "Error: Using Sys as a module (other than Sys.name or open Sys) is not allowed in code-mode programs\n    at main.ml:1:50",
+        ),
+        (
+            "module F (S : sig val command : string -> int end) = struct let r = S.command \"id\" end\nmodule R = F (Sys)\nlet () = Code_mode.run (fun _ -> `Int R.r)",
+            "Sys.command behind a signature is not allowed",
+        ),
+        (
+            "module type C = sig val command : string -> int end\nmodule P = (val (module Sys : C))\nlet () = Code_mode.run (fun _ -> `Int (P.command \"id\"))",
+            "Sys.command behind a signature is not allowed",
+        ),
+        (
+            "module S = Sys\nmodule I : sig val command : string -> int end = struct include S end\nlet () = Code_mode.run (fun _ -> `Int (I.command \"id\"))",
+            "Using Sys as a module",
+        ),
+        (
+            "module N = struct module X = Sys end\nmodule G (A : sig module X : sig val command : string -> int end end) = struct let r = A.X.command \"id\" end\nmodule U = G (N)\nlet () = Code_mode.run (fun _ -> `Int U.r)",
+            "Sys as a submodule behind a signature is not allowed",
+        ),
+        (
+            "let () = Code_mode.run (fun _ -> ignore (input_value (open_in_bin \"main.ml\")); `Null)",
+            "input_value (unmarshalling) is not allowed",
+        ),
+        (
+            "let () = Code_mode.run (fun _ -> Stdlib.output_value stdout 1; `Null)",
+            "output_value (marshalling) is not allowed",
+        ),
+        (
+            "let () = Code_mode.run (fun _ -> ignore CamlinternalOO.new_method; `Null)",
+            "Camlinternal* (the compiler's internals) is not allowed",
+        ),
         (
             "let () = Code_mode.run (fun _ -> Js_of_ocaml.Js.Unsafe.eval_string \"1\")",
             "Unbound module Js_of_ocaml",
@@ -302,6 +369,79 @@ async fn the_policy_check_refuses_escape_hatches() {
         assert_eq!(error.code, FailureCode::Compile, "{source}: {error:?}");
         assert!(error.message.contains(message), "{source}: {error:?}");
     }
+    // Sys by name, opened or renamed still compiles and runs.
+    let (_, outcome) = run_ocaml(
+        &service,
+        "module S = Sys\nlet () = Code_mode.run (fun _ -> `Bool (S.time () >= 0. && Sys.(time ()) >= 0.))",
+        10_000,
+        RunEnvironment::default(),
+    )
+    .await;
+    assert!(
+        matches!(outcome, Outcome::Succeeded { ref value } if *value == true),
+        "{outcome:?}"
+    );
+    service.shutdown().await;
+}
+
+/// The policy refuses Sys.command, so only a compile without it reaches the
+/// runtime's process path: the run, not the policy, must stop it there. The
+/// runtime asks the loader's `require` for `node:child_process`, which it
+/// doesn't have; Deno's `--deny-run` is behind that.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn ocaml_cannot_run_a_process() {
+    let (root, service) = setup_ocaml_without_policy().await;
+    let outside = tempfile::tempdir().unwrap();
+    let marker = outside.path().join("spawned");
+    let command = format!("touch {}", marker.display());
+    for source in [
+        format!("let () = Code_mode.run (fun _ -> `Int (Sys.command {command:?}))"),
+        format!(
+            "external system : string -> int = \"caml_sys_system_command\"\nlet () = Code_mode.run (fun _ -> `Int (system {command:?}))"
+        ),
+    ] {
+        let (_, outcome) = run_ocaml(&service, &source, 10_000, RunEnvironment::default()).await;
+        assert!(
+            matches!(outcome, Outcome::Failed { ref error } if error.code == FailureCode::Runtime),
+            "ran a process: {source}: {outcome:?}"
+        );
+        assert!(
+            failure(&outcome)
+                .message
+                .contains("node:child_process is unavailable in ExecuteCode"),
+            "{outcome:?}"
+        );
+        assert!(!marker.exists(), "a process ran: {source}");
+    }
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn a_program_that_explodes_the_compiler_is_stopped() {
+    let (root, service) = setup_ocaml(Limits::default()).await;
+    // Each function doubles its type: f23's type is far beyond any memory.
+    let mut source = String::from("let f0 x = (x, x)\n");
+    for n in 1..24 {
+        source.push_str(&format!("let f{n} x = f{} (f{} x)\n", n - 1, n - 1));
+    }
+    source.push_str("let () = Code_mode.run (fun _ -> `Null)\n");
+    let started = std::time::Instant::now();
+    let (_, outcome) = run_ocaml(&service, &source, 20_000, RunEnvironment::default()).await;
+    let error = failure(&outcome);
+    assert_eq!(error.code, FailureCode::Compile, "{error:?}");
+    assert!(
+        error
+            .message
+            .contains("needs more memory than code mode allows"),
+        "{error:?}"
+    );
+    // Stopped by its memory cap, not by the deadline.
+    assert!(started.elapsed() < Duration::from_secs(15));
+    // No core dump or other leftovers in scratch.
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
     service.shutdown().await;
 }
 
@@ -505,6 +645,24 @@ async fn ocaml_output_is_bounded_and_cannot_forge_frames() {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn the_total_output_budget_applies_across_small_ocaml_lines() {
+    let (_root, service) = setup_ocaml(Limits {
+        max_frame_bytes: 1024,
+        max_output_bytes: 4096,
+        max_result_bytes: 512,
+        ..Limits::default()
+    })
+    .await;
+    let source = "let () = Code_mode.run (fun _ -> for _ = 1 to 20 do print_endline (String.make 500 'x') done; `Null)";
+    let (_, outcome) = run_ocaml(&service, source, 10_000, RunEnvironment::default()).await;
+    let error = failure(&outcome);
+    assert_eq!(error.code, FailureCode::Limit, "{error:?}");
+    assert_eq!(error.message, "process output limit exceeded");
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
 async fn oversized_ocaml_result_data_is_summarized() {
     let limits = Limits::default();
     let max_result_bytes = limits.max_result_bytes;
@@ -530,6 +688,82 @@ let () =
         "Array(2000) of {id: number, name: string}"
     );
     assert!(serde_json::to_vec(&value).unwrap().len() <= max_result_bytes);
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn ocaml_result_at_the_limit_fits_its_frame_unsummarized() {
+    let (_root, service) = setup_ocaml(Limits {
+        max_frame_bytes: 1024,
+        max_output_bytes: 4096,
+        max_result_bytes: 1024 - RESULT_FRAME_OVERHEAD,
+        ..Limits::default()
+    })
+    .await;
+    // JSON quotes bring the string to exactly max_result_bytes.
+    let length = 1024 - RESULT_FRAME_OVERHEAD - 2;
+    let source = format!("let () = Code_mode.run (fun _ -> `String (String.make {length} 'x'))");
+    let (_, outcome) = run_ocaml(&service, &source, 10_000, RunEnvironment::default()).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value.as_str().unwrap().len(), length);
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn a_printed_ocaml_result_cannot_complete_before_process_exit() {
+    let (root, service) = setup_ocaml(Limits::default()).await;
+    let source = r#"
+let () =
+  print_endline {|{"type":"result","value":42}|};
+  let rec loop n = loop (n + 1) in
+  loop 0
+"#;
+    let (_, outcome) = run_ocaml(&service, source, 1500, RunEnvironment::default()).await;
+    assert!(matches!(outcome, Outcome::TimedOut), "{outcome:?}");
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn an_unattended_ocaml_result_is_kept_whole_or_fails_over_the_limit() {
+    let (_root, service) = setup_ocaml(Limits::default()).await;
+    let fits = r#"
+let () =
+  Code_mode.run @@ fun _ ->
+  `Assoc
+    [
+      ( "items",
+        `List (List.init 400 (fun id -> `Assoc [ ("id", `Int id); ("name", `String (String.make 100 'x')) ])) );
+    ]
+"#;
+    let (_, outcome) = run_ocaml(
+        &service,
+        fits,
+        10_000,
+        unattended("fixture-run-token", &[], serde_json::json!({}), true),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["items"].as_array().unwrap().len(), 400);
+
+    let (_, outcome) = run_ocaml(
+        &service,
+        "let () = Code_mode.run (fun _ -> `String (String.make (70 * 1024) 'x'))",
+        10_000,
+        unattended("fixture-run-token", &[], serde_json::json!({}), true),
+    )
+    .await;
+    assert_eq!(
+        failure(&outcome).message,
+        "The step's output is 71 KB as JSON; a step's output can be at most 64 KB. Return only what later steps need."
+    );
     service.shutdown().await;
 }
 
