@@ -181,8 +181,12 @@ impl<'a> TeamRead<'a> {
         let Some(inboxes) = inboxes else {
             return Err(Box::new(params));
         };
-        let Some(superset) = build_address_superset(email_filter, &params.resolved, &inboxes)
-        else {
+        let Some(superset) = build_address_superset(
+            email_filter,
+            &params.resolved,
+            &inboxes,
+            tuning.superset_limit,
+        ) else {
             return Err(Box::new(params));
         };
         let sort_ts_field = get_sort_timestamp_field(view);

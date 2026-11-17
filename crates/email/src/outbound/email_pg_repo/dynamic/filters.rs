@@ -732,7 +732,7 @@ pub(super) enum BranchFacts<'a> {
     /// None: the branches list a superset of the candidate threads, which
     /// the caller matches thread by thread with the full message check and
     /// its inboxes.
-    Skipped { indexed_recipients: bool },
+    Skipped { probe_limit: Option<i64> },
 }
 
 impl BranchFacts<'_> {
@@ -827,11 +827,27 @@ fn text_sender_branch(
     facts: BranchFacts,
     link_scope: Option<&[Uuid]>,
 ) -> SqlFragment {
-    let mut f = SqlFragment::raw(format!(
-        "SELECT m.thread_id FROM {cte_name} c \
-         JOIN email_messages m ON m.from_contact_id = c.id \
-         WHERE "
-    ));
+    let mut f = SqlFragment::raw(format!("SELECT m.thread_id FROM {cte_name} c "));
+    // The fence prevents a whole-message scan. The limit also lets generic
+    // plans stop on a dense sender's index instead of building its full bitmap.
+    // One contact reaching this limit already exceeds the global probe cap;
+    // a page proven sparse by that probe never reaches it.
+    match facts {
+        BranchFacts::Skipped {
+            probe_limit: Some(limit),
+        } => {
+            f.push_raw(
+                "CROSS JOIN LATERAL ( \
+                     SELECT id, thread_id, link_id FROM email_messages \
+                     WHERE from_contact_id = c.id LIMIT ",
+            );
+            f.extend(SqlFragment::bind_i64(limit));
+            f.push_raw(" OFFSET 0 ) m WHERE ");
+        }
+        BranchFacts::Checked(_) | BranchFacts::Skipped { .. } => {
+            f.push_raw("JOIN email_messages m ON m.from_contact_id = c.id WHERE ");
+        }
+    }
     f.extend(facts.check());
     f.extend(link_scope_fragment("m", link_scope));
     f
@@ -850,7 +866,7 @@ fn text_recipient_branch(
     // every recipient of a dense domain before the cap finds a matching row.
     let joins = match facts {
         BranchFacts::Skipped {
-            indexed_recipients: true,
+            probe_limit: Some(_),
         } if kinds.to && kinds.cc && kinds.bcc => {
             "CROSS JOIN LATERAL ( \
                  SELECT message_id, recipient_type FROM email_message_recipients \
@@ -1008,7 +1024,7 @@ pub(super) fn build_matching_threads_ctes(
 pub(super) struct AddressSuperset {
     pub(super) contact_ctes: Vec<(String, SqlFragment)>,
     pub(super) branches: Vec<SqlFragment>,
-    /// Recipient probes for the initial capped count and a sparse page.
+    /// Sender and recipient probes for the initial capped count and a sparse page.
     pub(super) indexed_branches: Vec<SqlFragment>,
 }
 
@@ -1017,10 +1033,13 @@ pub(super) struct AddressSuperset {
 /// and domains), scoped to `links`, and `None` for any other tree. A complete
 /// address keeps only the contacts of `links`' inboxes, so a record whose
 /// addresses have no contact there gets no branches: nothing can match.
+/// Indexed sender branches stop one past `superset_limit`: that proves the
+/// superset is too large, and cannot truncate a page the probe proved fits.
 pub(super) fn build_address_superset(
     ast: &Expr<EmailLiteral>,
     resolved: &ResolvedFilters,
     links: &[Uuid],
+    superset_limit: i64,
 ) -> Option<AddressSuperset> {
     let conjuncts = extract_address_only_conjuncts(ast);
     let [conjunct] = conjuncts.as_slice() else {
@@ -1031,16 +1050,14 @@ pub(super) fn build_address_superset(
     let (contact_ctes, branches) = address_groups::build(
         literals.clone(),
         &resolved,
-        BranchFacts::Skipped {
-            indexed_recipients: false,
-        },
+        BranchFacts::Skipped { probe_limit: None },
         Some(links),
     );
     let (_, indexed_branches) = address_groups::build(
         literals,
         &resolved,
         BranchFacts::Skipped {
-            indexed_recipients: true,
+            probe_limit: Some(superset_limit.saturating_add(1).max(0)),
         },
         Some(links),
     );
