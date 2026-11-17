@@ -31,6 +31,12 @@ export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
   // Has to be delayed until after browser's native keyboard-show scroll completes
   scrollTimer = setTimeout(() => {
     scrollTimer = undefined;
+    // Focus can move to a menu before the keyboard's delayed scroll runs.
+    if (
+      input.ownerDocument.activeElement !== input ||
+      !container.contains(input)
+    )
+      return;
     const inputRect = input.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
     container.scrollTo({
