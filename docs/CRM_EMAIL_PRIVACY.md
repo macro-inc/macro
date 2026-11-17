@@ -60,7 +60,7 @@ revocation just after a cache fill can leave an allowed hint for less than three
 seconds. The first opted-in request after expiry obtains a fresh hint or no
 hint within the signal budget; receiving it also takes the authentication time, the handler's remaining
 time, network delivery, and client retirement work. An idle or offline client
-has no finite retirement deadline. Fresh authority reads and protected requests
+has no finite retirement deadline. Fresh authority reads and newly started protected requests
 still enforce revocation immediately. Settings controls and retirement of
 already-cached client content are a separate client change; this server API alone
 does not remove previously downloaded content from an older client.
@@ -157,8 +157,13 @@ keep their parity tests against the functions passing.
 The Team reader calls `crm_email_thread_excluded` for each candidate and each
 competing copy before choosing the conversation's representative.
 The Team view's read takes the inboxes that contributed when its filters resolved
-and rechecks each thread against current consent, so a withdrawal hides an inbox
-at once and a new grant shows it from the next request. Its address superset
+and rechecks each thread's consent and exclusions. The optimized Team reader uses
+one read-only repeatable-read snapshot for its probe and page, like the Owned
+reader, so an import cannot make a previously sparse set dense between statements.
+An in-flight request answers from that snapshot; a withdrawal or new exclusion
+committed during it takes effect on the next request. A new grant also shows mail
+from the next request. General fallback reads keep their existing transaction.
+Its address superset
 relies on a message listing only its own inbox's contacts
 (`parse_and_upsert_message_contacts`): a message naming another inbox's contact
 can drop its thread from the Team view and let that thread hide the other copies
