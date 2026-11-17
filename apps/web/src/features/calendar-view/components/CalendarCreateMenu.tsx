@@ -4,12 +4,12 @@ import { type JSX, Show } from 'solid-js';
 
 /** Menu presentation; consumers compose its trigger and creation items. */
 export function CalendarCreateMenu(props: {
-  trigger: JSX.Element;
+  /** The trigger's content when there is no presentation. */
+  trigger?: JSX.Element;
   children: JSX.Element;
   class?: string;
   contentClass?: string;
   size?: ButtonSize;
-  label?: string;
   presentation?: 'sidebar' | 'toolbar';
 }) {
   return (
@@ -21,12 +21,7 @@ export function CalendarCreateMenu(props: {
       <Show
         when={props.presentation}
         fallback={
-          <Dropdown.Trigger
-            aria-label={props.label}
-            tooltip={props.label}
-            size={props.size ?? 'sm'}
-            class={props.class}
-          >
+          <Dropdown.Trigger size={props.size ?? 'sm'} class={props.class}>
             {props.trigger}
           </Dropdown.Trigger>
         }
