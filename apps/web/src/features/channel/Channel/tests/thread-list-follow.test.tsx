@@ -93,4 +93,44 @@ describe('following messages that arrive while pinned to the end', () => {
       expect(element.scrollTop).toBe(20 * 96 + 300 + 300 - 400)
     );
   });
+
+  it('does not follow the second message once the reader holds a disclosure', async () => {
+    const [keys, setKeys] = createSignal(
+      Array.from({ length: 20 }, (_, index) => String(index))
+    );
+    let navigation: ThreadListNavigation | undefined;
+    const { container } = render(() => (
+      <ThreadList
+        keys={keys}
+        holdOnDisclosure
+        onReady={(value) => {
+          navigation = value;
+        }}
+      >
+        {({ id }) => (
+          <div data-row={id}>
+            <button type="button" aria-expanded="false">
+              Called 2 tools
+            </button>
+          </div>
+        )}
+      </ThreadList>
+    ));
+    const element = container.querySelector<HTMLDivElement>(
+      '[data-channel-scroll]'
+    )!;
+    await waitFor(() => expect(navigation).toBeDefined());
+
+    rowHeights.set('20', 300);
+    rowHeights.set('21', 300);
+    setKeys((current) => [...current, '20']);
+    container
+      .querySelector('[data-row="19"] [aria-expanded]')!
+      .dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    const held = element.scrollTop;
+    setKeys((current) => [...current, '21']);
+
+    await waitFor(() => expect(element.scrollHeight).toBe(20 * 96 + 300 + 300));
+    expect(element.scrollTop).toBe(held);
+  });
 });

@@ -373,8 +373,12 @@ export function ThreadList(props: ThreadListProps) {
     // The patched core delegates iOS deferral to our visual compensation.
     useIOSScrollDeferral: !scrollCompensation,
     anchorTo: 'end',
+    // A reader holding a disclosure is not following, even while a scroll to
+    // the end is still settling.
     get followOnAppend() {
-      return lifecycle.isReady() && (props.followOnAppend ?? true);
+      return (
+        lifecycle.isReady() && !holding() && (props.followOnAppend ?? true)
+      );
     },
     // Use the same end tolerance for append, resize, navigation, and snapshots.
     // A loose tolerance also mistakes optimistic row estimates for a pin.
