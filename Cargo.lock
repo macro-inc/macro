@@ -209,6 +209,7 @@ dependencies = [
  "genai_telemetry",
  "jsonschema",
  "macro_env_var",
+ "macro_service_urls",
  "macro_user_id",
  "model-entity",
  "non_empty",
