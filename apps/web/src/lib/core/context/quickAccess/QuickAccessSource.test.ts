@@ -1732,3 +1732,35 @@ it('conceals CRM rows and excludes CRM search buckets after access is revoked', 
     expect(list.items().map((item) => item.id)).toContain(restCompany.id)
   );
 });
+
+it('withholds cached CRM lookups after revocation without requiring a list read', () => {
+  const [allowed, setAllowed] = createSignal(true);
+  mocks.crmAllowed = allowed;
+  mocks.cacheEnabled = false;
+  mocks.companies = [restCompany];
+  mocks.crmContacts = [
+    {
+      type: 'crm_contact',
+      id: 'contact-1',
+      name: 'Contact',
+      ownerId: 'owner',
+      companyId: restCompany.id,
+      email: 'contact@example.com',
+      hidden: false,
+    },
+  ];
+  mocks.history = retainedHistory;
+  const source = setup((source) => {
+    source.useList('crm_company', 'crm_contact', 'note').items();
+    return source;
+  });
+  expect(source.getById(restCompany.id)?.bucket).toBe('crm_company');
+  expect(source.getById('contact-1')?.bucket).toBe('crm_contact');
+  expect(source.getById('older-note')?.bucket).toBe('note');
+  setAllowed(false);
+  expect(source.getById(restCompany.id)).toBeUndefined();
+  expect(source.getById('contact-1')).toBeUndefined();
+  expect(source.getById('older-note')?.bucket).toBe('note');
+  setAllowed(true);
+  expect(source.getById(restCompany.id)?.bucket).toBe('crm_company');
+});

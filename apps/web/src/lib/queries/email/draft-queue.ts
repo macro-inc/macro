@@ -439,9 +439,15 @@ export async function saveEmailDraftQueued(
   if (outcome.kind === 'committed-without-content') {
     // Queue settlement already recorded opaque canonical ids in the authored
     // draft journal. Recover those without reopening a protected response cache.
-    const confirmed = await readLocalDraft(
-      local?.key ?? String(input.args.draftId)
-    );
+    let confirmed: Awaited<ReturnType<typeof readLocalDraft>>;
+    try {
+      confirmed = await readLocalDraft(
+        local?.key ?? String(input.args.draftId)
+      );
+    } catch (error) {
+      reportError(error);
+      return { kind: 'queued' };
+    }
     if (confirmed?.serverDraftId && confirmed.serverThreadId) {
       refreshAfterCommittedSave(input, confirmed.serverThreadId);
       return {

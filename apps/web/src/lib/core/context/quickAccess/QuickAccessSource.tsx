@@ -981,9 +981,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   });
 
   const getById = (id: string): QuickAccessItem | undefined => {
-    return (
-      draftItems().find((item) => item.id === id) ?? itemCache.get(id)?.item
-    );
+    const item =
+      draftItems().find((item) => item.id === id) ?? itemCache.get(id)?.item;
+    if (
+      !crmAccessAllowed() &&
+      (item?.bucket === 'crm_company' || item?.bucket === 'crm_contact')
+    )
+      return undefined;
+    return item;
   };
 
   const resolveEntries = (entries: IndexEntry[]): QuickAccessItem[] => {

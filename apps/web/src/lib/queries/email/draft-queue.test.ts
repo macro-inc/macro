@@ -684,3 +684,20 @@ it('keeps legacy saves accepted and completes deletes when committed content is 
   ).resolves.toEqual({ kind: 'committed' });
   expect(toast.failure).not.toHaveBeenCalled();
 });
+
+it.each([false, true])(
+  'keeps a committed save accepted when identity recovery fails (journal: %s)',
+  async (hasJournal) => {
+    const { operations } = await setup(true, true);
+    const failure = new Error('Draft journal unavailable');
+    vi.mocked(readLocalDraft)
+      .mockResolvedValueOnce(hasJournal ? workingCopy('dirty') : undefined)
+      .mockRejectedValueOnce(failure);
+    await expect(saveEmailDraftQueued({ args })).resolves.toEqual({
+      kind: 'queued',
+    });
+    expect(Telemetry.error).toHaveBeenCalledWith(failure);
+    expect(toast.failure).not.toHaveBeenCalled();
+    expect(operations).toHaveLength(1);
+  }
+);
