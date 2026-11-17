@@ -1,0 +1,53 @@
+services/lexical-service/src/types/markdown-loro-snapshot.d.ts
+  s_3d041cfc1737cf::t_8887e16621ac7b 2-3
+services/lexical-service/src/endpoints/mentions.ts
+  s_3d041cfc1737cf::t_a243d8dea7c8cb 10-12,55
+packages/lexical-core/tests/app-link-mentions.test.ts
+  s_3d041cfc1737cf::t_1f0482f5525400 9-10,14,16,18,24,32-45,47,51,58-73,79-84,87,100,105-106,108,111,115-122,126,130-133
+  s_3d041cfc1737cf::t_d9c9168b44c281 52-54,56-57
+services/lexical-service/src/endpoints/mentions.test.ts
+  s_3d041cfc1737cf::t_1350bd8e547eaa 1-45
+packages/lexical-core/utils/app-link-mentions.ts
+  s_3d041cfc1737cf::t_5aaa541efa0b8f 10-13,17,30,32,43-45,49-60,63-65,68-69,71-73,75,84-86,91,94-95,97,101
+packages/lexical-core/utils/markdown-mentions.ts
+  s_3d041cfc1737cf::t_a243d8dea7c8cb 13-16,20,29
+crates/lexical_client/AGENTS.md
+  s_3d041cfc1737cf::t_d9c9168b44c281 30,48-50
+  s_3d041cfc1737cf::t_3ec920b1df45f1 51
+packages/lexical-core/utils/markdown-state.ts
+  s_3d041cfc1737cf::t_a243d8dea7c8cb 25-27,30-31,41
+crates/lexical_client/Cargo.toml
+  s_3d041cfc1737cf::t_8c11e0eff0d4ac 11
+packages/lexical-core/markdown-loro-snapshot.ts
+  s_3d041cfc1737cf::t_a243d8dea7c8cb 46-47,50-51,62-65,67-68,74
+crates/lexical_client/src/parse_markdown/test.rs
+  s_3d041cfc1737cf::t_fa752a023de8bd 29-61
+services/lexical-service/src/endpoints/markdown-snapshot.ts
+  s_3d041cfc1737cf::t_d9c9168b44c281 1
+  s_3d041cfc1737cf::t_a243d8dea7c8cb 10-12,45-47
+crates/lexical_client/src/parse_markdown.rs
+  s_3d041cfc1737cf::t_8c11e0eff0d4ac 12
+  s_3d041cfc1737cf::t_0637e2ef4b455c 29,32-33,45-47,582-583,587,591-594,626,629-632,635-636,639-643,650
+services/lexical-service/README.md
+  s_3d041cfc1737cf::t_d9c9168b44c281 27-32
+packages/lexical-core/AGENTS.md
+  s_3d041cfc1737cf::t_d9c9168b44c281 47-56
+Cargo.lock
+  s_3d041cfc1737cf::t_715444fd9414bd 12076
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6c089cdd04dcc85af29c2775875db02b29abcd66",
+  "prompts": {},
+  "sessions": {
+    "s_3d041cfc1737cf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3bce9a72-c4a7-46f5-8279-df2fe79b7780",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
