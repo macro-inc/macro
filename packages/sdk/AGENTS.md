@@ -277,6 +277,9 @@ the existing gateway prefixes.
   with `system_properties`' `StatusOption` and `PriorityOption`. Task create
   `propertyValues` replace the service defaults (creator assigned, Not
   started), so `Task.create` spells them out when it sends any.
+- Selective CRM contribution endpoints are generated but explicitly backlogged
+  until the rule-management SDK phase; keep their CAS/preview semantics in
+  `docs/CRM_EMAIL_PRIVACY.md` when adding wrappers.
 - CRM records and initiatives share `messages/discussion.ts`: their comments are
   messages under a `crm_company`, `crm_contact` or `initiative` parent.
 - Meeting list lookup only covers the owner's newest 100 standalone meetings;

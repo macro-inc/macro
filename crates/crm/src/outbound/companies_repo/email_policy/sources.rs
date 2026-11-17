@@ -14,6 +14,7 @@ impl CompaniesRepositoryImpl {
         let kind = match event.source_kind {
             EmailPolicySourceKind::Contact => "contact",
             EmailPolicySourceKind::Company => "company",
+            EmailPolicySourceKind::Team => "team",
         };
         Ok(sqlx::query!(
             r#"INSERT INTO crm_email_policy_source_events
@@ -59,6 +60,20 @@ impl EmailPolicySourceTransaction for PgEmailPolicySourceTransaction {
                 self.event.source_id,
                 user,
                 revision
+            )
+            .fetch_all(&mut *self.tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into())),
+            // Raw consent owners bound work even when most of the team has no
+            // active selected policy. Revision 1 is only a cursor placeholder
+            // for legacy rows; source_candidates rechecks the stored revision.
+            EmailPolicySourceKind::Team => sqlx::query_as!(
+                EmailPolicySourceReference,
+                r#"SELECT user_id, COALESCE(active_rule_revision, 1) AS "revision!"
+                   FROM crm_email_consent WHERE team_id = $1 AND user_id > $2
+                   ORDER BY user_id LIMIT 100"#,
+                self.event.team_id,
+                user
             )
             .fetch_all(&mut *self.tx)
             .await

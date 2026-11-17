@@ -107,6 +107,10 @@ threads, pins, recents, notifications, folders, activity.
 
 - Inject the shared PostHog client into CRM's thread-exclusion gate; missing or
   failed `enable-crm-thread-exclusions` evaluation must refuse API writes.
+- Inject the same client into CRM's selective contribution gate. The owner-only
+  policy API stays default-off for grants; GET never initializes identity,
+  including when the flag is on. Keep its OpenAPI contract and generated storage
+  SDK current; public SDK wrappers are deferred to the next phase.
 
 - Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
   the CRM domain owns authorization, normalization and relation invariants.

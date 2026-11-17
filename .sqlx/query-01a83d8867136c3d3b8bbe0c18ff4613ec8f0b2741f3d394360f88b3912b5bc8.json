@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM crm_contacts ct WHERE ct.team_id=$1 AND ct.manually_created=FALSE\n               AND NOT EXISTS(SELECT 1 FROM crm_contact_sources WHERE contact_id=ct.id OFFSET 0)\n               RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "01a83d8867136c3d3b8bbe0c18ff4613ec8f0b2741f3d394360f88b3912b5bc8"
+}

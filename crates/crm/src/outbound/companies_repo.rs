@@ -67,6 +67,8 @@ pub struct CompaniesRepositoryImpl {
     #[cfg(test)]
     after_depopulate_source: Option<std::sync::Arc<test::ContactWriteGate>>,
     #[cfg(test)]
+    before_unreferenced_teardown: Option<std::sync::Arc<test::ContactWriteGate>>,
+    #[cfg(test)]
     after_personal_company: Option<std::sync::Arc<test::ContactWriteGate>>,
     #[cfg(test)]
     after_eligible_scan: Option<std::sync::Arc<test::ContactWriteGate>>,
@@ -80,6 +82,8 @@ impl CompaniesRepositoryImpl {
             pool,
             #[cfg(test)]
             after_depopulate_source: None,
+            #[cfg(test)]
+            before_unreferenced_teardown: None,
             #[cfg(test)]
             after_personal_company: None,
             #[cfg(test)]
@@ -832,6 +836,8 @@ impl CompaniesRepositoryImpl {
         if !blocked {
             Self::schedule_contribution_history(&mut tx, *team_id, None).await?;
         }
+
+        Self::invalidate_email_previews(&mut tx, *team_id).await?;
 
         tx.commit()
             .await
@@ -1759,10 +1765,16 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // 2. Drop every contact in this team that no longer has any
         //    source. Manually created or edited contacts are user data
         //    and survive teardown even after their last source is removed.
+        let mut unreferenced_deleted = false;
         if Self::has_contact_rule_references(&mut tx, *team_id).await? {
             Self::delete_referenced_orphan_contacts(&mut tx, *team_id).await?;
         } else {
-            sqlx::query!(
+            #[cfg(test)]
+            if let Some(gate) = &self.before_unreferenced_teardown {
+                gate.entered.notify_one();
+                gate.resume.notified().await;
+            }
+            unreferenced_deleted |= sqlx::query!(
                 r#"
             DELETE FROM crm_contacts ct
             WHERE ct.team_id = $1
@@ -1775,7 +1787,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             )
             .execute(&mut *tx)
             .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?
+            .rows_affected()
+                > 0;
         }
 
         // 3. Drop orphan non-killswitched companies. Manually created
@@ -1785,7 +1799,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         if Self::has_company_rule_references(&mut tx, *team_id).await? {
             Self::delete_referenced_orphan_companies(&mut tx, *team_id).await?;
         } else {
-            sqlx::query!(
+            unreferenced_deleted |= sqlx::query!(
                 r#"
             DELETE FROM crm_companies co
             WHERE co.team_id = $1
@@ -1799,7 +1813,13 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             )
             .execute(&mut *tx)
             .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?
+            .rows_affected()
+                > 0;
+        }
+
+        if unreferenced_deleted {
+            Self::reconcile_new_teardown_references(&mut tx, *team_id).await?;
         }
 
         tx.commit()
@@ -2098,6 +2118,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             ).execute(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
             Self::schedule_contribution_history(&mut tx, *team_id, None).await?;
         }
+
+        Self::invalidate_email_previews(&mut tx, *team_id).await?;
 
         tx.commit()
             .await
@@ -3099,6 +3121,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        if patch.exclude_personal_emails.is_some() {
+            Self::invalidate_email_previews(&mut tx, *team_id).await?;
+        }
 
         tx.commit()
             .await

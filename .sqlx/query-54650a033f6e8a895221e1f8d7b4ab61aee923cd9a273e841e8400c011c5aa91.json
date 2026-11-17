@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id, COALESCE(active_rule_revision, 1) AS \"revision!\"\n                   FROM crm_email_consent WHERE team_id = $1 AND user_id > $2\n                   ORDER BY user_id LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "revision!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "54650a033f6e8a895221e1f8d7b4ab61aee923cd9a273e841e8400c011c5aa91"
+}
