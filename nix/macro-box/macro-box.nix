@@ -58,12 +58,24 @@ in
       ...
     }:
     let
-      # What `incus image import` takes.
+      # What `incus image import` takes. The metadata tarball also carries
+      # boot/{kernel,initrd,cmdline}, the files systemd-boot would load: the
+      # host's macro-box-boot-files service copies them out so the fleet can
+      # boot the kernel directly (nix/hosts/_nixos/incus-host.nix).
       incusImage =
         name: nixos:
-        pkgs.runCommand name { } ''
-          mkdir $out
-          ln -s ${nixos.config.system.build.metadata}/tarball/*.tar.xz $out/metadata.tar.xz
+        let
+          inherit (nixos.config.system.build) toplevel;
+          cmdline = pkgs.writeText "cmdline" "init=${toplevel}/init ${toString nixos.config.boot.kernelParams}";
+        in
+        pkgs.runCommand name { nativeBuildInputs = [ pkgs.xz ]; } ''
+          mkdir -p $out metadata/boot
+          tar --extract --file ${nixos.config.system.build.metadata}/tarball/*.tar.xz --directory metadata
+          cp ${toplevel}/kernel metadata/boot/kernel
+          cp ${toplevel}/initrd metadata/boot/initrd
+          cp ${cmdline} metadata/boot/cmdline
+          (cd metadata && tar --create --xz --sort=name --mtime=@1 --owner=0 --group=0 \
+            --numeric-owner --file $out/metadata.tar.xz *)
           ln -s ${nixos.config.system.build.qemuImage}/nixos.qcow2 $out/disk.qcow2
         '';
       # `docker load < result` → <name>:latest; run as DockerFleet does

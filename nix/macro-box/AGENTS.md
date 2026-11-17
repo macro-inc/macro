@@ -207,6 +207,16 @@ The second command warms the image: Incus unpacks a new image into a cached
 volume on the pool (~30s) on first use, so no customer's computer waits for it.
 Use `init`, never `launch`, so the throwaway never boots or enrolls.
 
+The import also enables direct kernel boot, with no further step: the
+metadata tarball carries `boot/{kernel,initrd,cmdline}`, and the host's
+`macro-box-boot-files` service (`nix/hosts/_nixos/incus-host.nix`, started
+when an image lands in `/var/lib/incus/images` and every 10 minutes) copies
+them to `/var/lib/macro-box/boot/<fingerprint>/` and then sets the image
+property `user.macro.boot.append`. Check with
+`incus image get-property macro-box/<date> user.macro.boot.append`; run
+`systemctl start macro-box-boot-files` to do it at once. Until the property
+is set, computers from the image boot through firmware as before.
+
 Smoke test: `incus storage volume create default t-data --type=block size=10GiB`,
 `incus init macro-box/<date> t --vm --profile macro-box`,
 `incus storage volume attach default t-data t data`, `incus start t`, then
@@ -245,16 +255,40 @@ The control plane, per computer:
 
 ## Boot path
 
-- OVMF → systemd-boot (timeout 0) → kernel + initrd; Secure Boot is off in
-  the `macro-box` profile, so nothing is signed.
+- Direct kernel boot: when the host holds an image's boot files (the import
+  section above), the Incus fleet creates the computer from that image's
+  fingerprint with `raw.qemu` = `-kernel … -initrd … -append '<cmdline>'`,
+  so QEMU hands OVMF the kernel and skips systemd-boot and reading the kernel
+  and initrd off the root disk: about 7 s less before the kernel starts on
+  runtime-dev-1. The span `incus_fleet.create` records `boot.path`
+  (`direct` or `firmware`) and `boot.fallback_reason`.
+- Without the files (or for a remote image) it is the old path: OVMF →
+  systemd-boot (timeout 0) → kernel + initrd. Secure Boot is off in the
+  `macro-box` profile, so nothing is signed. The image keeps both paths.
+- An instance's `raw.qemu` names its image's fingerprint, and boot files are
+  never deleted, so an instance keeps booting after its image is removed. A
+  manual `incus rebuild` onto another image must also change `raw.qemu`:
+  `incus config set <instance> raw.qemu "-kernel /var/lib/macro-box/boot/<new fingerprint>/kernel -initrd /var/lib/macro-box/boot/<new fingerprint>/initrd -append '$(incus image get-property <new fingerprint> user.macro.boot.append)'"`,
+  or `incus config unset <instance> raw.qemu` to boot through firmware;
+  otherwise it boots the old kernel and init against the new root disk.
+- `incus-agent` waits for envfs's `/bin` mount (`_image.nix`): its setup
+  script is `#!/bin/sh`, and started before the mount it fails and retries
+  only after its 5 s RestartSec.
+- Enrollment and macrod do not wait for `network-online.target`; the claim
+  and macrod's dial retry from 250 ms instead.
 - `systemd-networkd-wait-online` waits for any link (30 s cap), not all.
-- The kernel command line has `quiet`; `ttyS0` stays the recovery console.
+- The kernel command line has `quiet` and loglevel 3; `ttyS0` stays the
+  recovery console.
 - `check-enrollment-source` waits up to 60 s for the Incus socket to appear,
   then gives the request 2 s.
-- To measure, boot `disk.qcow2` under QEMU with OVMF and read
-  `systemd-analyze` from the serial console.
-- Not done: a UKI as `\EFI\BOOT\BOOTX64.EFI` (skips systemd-boot) or
-  `raw.qemu` direct kernel boot. Both mean leaving nixpkgs' image module.
+- To measure on runtime-dev-1, boot throwaway VMs with a fake enrollment
+  pointing at 127.0.0.1 inside the guest and run `files/test-fake-macro.py`
+  there (pushed through incus-agent), so the claim and the runtime
+  connection complete without a backend; read the guest's monotonic times
+  from `systemctl show` and `systemd-analyze`.
+- Not done: a custom trimmed kernel. Most of the kernel's ~4.5 s is memory
+  setup, PCI/ACPI and unpacking the initrd, which trimming its config leaves;
+  it would save about a second at most and need its own kernel builds.
 
 ## Checks
 

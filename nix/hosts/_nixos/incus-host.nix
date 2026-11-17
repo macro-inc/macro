@@ -194,6 +194,48 @@ in
       '';
     };
 
+    # Direct kernel boot: copies each imported Macro computer image's kernel
+    # and initrd to /var/lib/macro-box/boot/<fingerprint>/ and marks the image
+    # (user.macro.boot.append), so the fleet can skip firmware and systemd-boot
+    # (crates/hosted_runtimes/src/outbound/incus_fleet/boot.rs). Runs when an
+    # image lands in Incus's store, and every 10 minutes as a backstop.
+    systemd.services.macro-box-boot-files = {
+      description = "Put Macro computer images' boot files on the host";
+      after = [ "incus.service" ];
+      requires = [ "incus.service" ];
+      environment = {
+        BOOT_FILES = "/var/lib/macro-box/boot";
+        IMAGE_STORE = "/var/lib/incus/images";
+      };
+      serviceConfig = {
+        Type = "oneshot";
+        StateDirectory = "macro-box/boot";
+        ExecStart = lib.getExe (
+          pkgs.writeShellApplication {
+            name = "macro-box-boot-files";
+            runtimeInputs = [
+              config.virtualisation.incus.clientPackage
+              pkgs.coreutils
+              pkgs.gnutar
+              pkgs.xz
+            ];
+            text = builtins.readFile ./macro-box-boot-files.sh;
+          }
+        );
+      };
+    };
+    systemd.paths.macro-box-boot-files = {
+      wantedBy = [ "multi-user.target" ];
+      pathConfig.PathChanged = "/var/lib/incus/images";
+    };
+    systemd.timers.macro-box-boot-files = {
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "1min";
+        OnUnitActiveSec = "10min";
+      };
+    };
+
     # The gateway initiates (no endpoint here) and masquerades the control
     # plane, so the only source seen on the tunnel is the peer address.
     networking.wireguard.interfaces.${tunnelInterface} = lib.mkIf (tunnel != null) {

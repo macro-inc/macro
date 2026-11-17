@@ -6,7 +6,8 @@ underscore keeps `import-tree` from loading them as flake-parts modules).
 
 | File | Contents |
 | --- | --- |
-| `_nixos/incus-host.nix` | Incus (preseed: API address, ZFS pool `default` on `tank/incus`, bridge `boxbr0` 10.210.0.1/24, profile `macro-box`), the control-plane WireGuard tunnel, control-plane cert trust, host/box nftables, `zfs_arc_max` 8 GiB. |
+| `_nixos/incus-host.nix` | Incus (preseed: API address, ZFS pool `default` on `tank/incus`, bridge `boxbr0` 10.210.0.1/24, profile `macro-box`), the control-plane WireGuard tunnel, control-plane cert trust, host/box nftables, `zfs_arc_max` 8 GiB, and `macro-box-boot-files` (copies each imported image's kernel and initrd to `/var/lib/macro-box/boot/<fingerprint>/` for direct kernel boot; see `nix/macro-box/AGENTS.md`). |
+| `_nixos/macro-box-boot-files.sh` | That service's script. |
 | `_nixos/gcp.nix` | GCE boot modules, DHCP, MTU, metadata NTP, guest agent, OS Login, root sshd with `keys/admin.pub`, and serial console. |
 | `_nixos/runtime-dev-1.nix` | Incus API address, WireGuard tunnel and peer, devbox box-access address/ports, hostname, `hostId`, GRUB (UEFI removable + BIOS), disko for `sda` (boot) and `sdb` (zpool `tank`). |
 | `_nixos/keys/admin.pub` | Root's authorized SSH key (over IAP). |
