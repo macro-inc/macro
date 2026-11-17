@@ -71,10 +71,10 @@ caller can access" (soup expands to the full set at the router edge). */
 these folders. Besides the caller's own threads, it reaches every
 thread in a folder shared with the caller, whoever's inbox holds it,
 as the folder's list does. Search takes at most 50 folders and
-rejects more with a 400, and reads at most 10,000 of their threads in
-all before it matches the query; threads past that are not searched,
-unless `email_thread_ids` names them, and at most 10,000 named threads
-are searched in all. Empty to ignore project filtering. */
+rejects more with a 400, and matches the query against at most 10,000
+of their threads in all; threads past that are not searched, unless
+`email_thread_ids` names them, and at most 10,000 named threads are
+searched in all. Empty to ignore project filtering. */
   project_ids?: string[];
   /** Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient. */
   recipients?: string[];

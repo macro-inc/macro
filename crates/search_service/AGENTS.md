@@ -138,7 +138,10 @@ per-entity-type search plus a unified search across them — mounted into
   their sources whoever's inbox holds it, and thread shares in the folders,
   at most `MAX_PROJECT_THREADS`, from at most `MAX_EMAIL_PROJECTS` folders
   (more is a 400); the other thread-level filters are then checked per hit.
-  Each folder's read stops at the cap, and thread shares are probed only for
+  Each folder's read stops once it has the cap's worth of threads the caller
+  reads, so a granted folder is not read whole; a folder without a grant is
+  read until then or to its end under the query's 5 s statement timeout.
+  Thread shares are probed only for
   threads in folders the caller holds no grant on. `crm_domains` and `crm_addresses` are rejected with a 400
   (`UnsupportedEmailFilter`): they need the list's CRM team scope and consent.
   Enrichment reads a shared hit through its owner's inbox after `shared_among`
