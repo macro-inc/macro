@@ -23,6 +23,7 @@ import {
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
+import { onlyType } from '../search/exclusions';
 import { entitySearch } from '../search/options';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
@@ -556,6 +557,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /** Search channels by content, most relevant first, auto-paginated. */
   static search = entitySearch({
     type: 'channel',
+    filters: onlyType('channel'),
     make: (client, hit) => new Channel(client, hit.channel_id),
   });
 }
