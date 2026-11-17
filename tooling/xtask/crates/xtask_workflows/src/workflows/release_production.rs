@@ -12,6 +12,7 @@ use gh_workflow::{
     Workflow,
 };
 
+use crate::workflows::actions::SoftpropsActionGhRelease;
 use crate::workflows::{build_web_app, deploy_web_app, runners, steps, vars};
 
 #[cfg(test)]
@@ -191,11 +192,7 @@ fn archive_dist() -> Step<Run> {
 }
 
 fn attach_to_release() -> Step<Use> {
-    Step::new("Upload Release Artifacts")
-        .uses(
-            "softprops",
-            "action-gh-release",
-            "3bb12739c298aeb8a4eeaf626c5b8d85266b0e65",
-        ) // v2
-        .add_with(("files", release_archive()))
+    SoftpropsActionGhRelease::new("Upload Release Artifacts")
+        .files(release_archive())
+        .step()
 }

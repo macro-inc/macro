@@ -105,8 +105,8 @@ jobs:
       - name: Upload dist
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: web-app-dist-${{ inputs.environment }}
           path: apps/web/dist
+          name: web-app-dist-${{ inputs.environment }}
           if-no-files-found: error
           retention-days: ${{ inputs.environment == 'prod' && 7 || 1 }}
           overwrite: 'true'

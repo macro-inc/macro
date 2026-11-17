@@ -7,7 +7,10 @@ use gh_workflow::{
     Env, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use, Workflow,
 };
 
-use crate::workflows::{runners, steps, vars};
+use crate::workflows::actions::{
+    ActionsCheckout, AwsActionsConfigureAwsCredentials, OvenShSetupBun,
+};
+use crate::workflows::{runners, vars};
 
 const PREVIEW_BUCKET: &str = "macro-preview-assets-dev";
 
@@ -48,23 +51,18 @@ fn cleanup() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses("actions", "checkout", steps::CHECKOUT_SHA)
+    ActionsCheckout::new("Checkout Repo").step()
 }
 
 fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun").uses("oven-sh", "setup-bun", steps::SETUP_BUN_SHA)
+    OvenShSetupBun::new("Setup Bun").step()
 }
 
 fn configure_aws_credentials() -> Step<Use> {
-    Step::new("Configure AWS Credentials")
-        .uses(
-            "aws-actions",
-            "configure-aws-credentials",
-            "e7f100cf4c008499ea8adda475de1042d6975c7b",
-        ) // v5
-        .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
-        .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
-        .add_with(("aws-region", "us-east-1"))
+    AwsActionsConfigureAwsCredentials::new("Configure AWS Credentials", "us-east-1")
+        .aws_access_key_id(vars::AWS_ACCESS_KEY)
+        .aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .step()
 }
 
 /// The branch name is attacker-controlled, so it reaches the script via env

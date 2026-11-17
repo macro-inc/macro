@@ -15,6 +15,7 @@ use gh_workflow::{
     Event, Job, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
 };
 
+use crate::workflows::actions::ActionsCheckout;
 use crate::workflows::{runners, steps, vars};
 
 pub(crate) struct ProjectNameOutputs {
@@ -104,7 +105,7 @@ fn preview() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses("actions", "checkout", steps::CHECKOUT_SHA)
+    ActionsCheckout::new("Checkout Repo").step()
 }
 
 fn get_project_name() -> Step<Use> {

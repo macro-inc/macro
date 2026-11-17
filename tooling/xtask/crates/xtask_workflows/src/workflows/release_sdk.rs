@@ -19,6 +19,7 @@
 use gh_workflow::expr::typed::{Flag, StepHandle, StepOutput, always, github};
 use gh_workflow::{Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Use, Workflow};
 
+use crate::workflows::actions::ActionsSetupNode;
 use crate::workflows::steps;
 
 #[cfg(test)]
@@ -86,10 +87,10 @@ fn guard(step: Step<Run>) -> Step<Run> {
 }
 
 fn setup_node() -> Step<Use> {
-    Step::new("Setup Node")
-        .uses("actions", "setup-node", steps::SETUP_NODE_SHA)
-        .add_with(("node-version", "24"))
-        .add_with(("registry-url", REGISTRY))
+    ActionsSetupNode::new("Setup Node")
+        .node_version("24")
+        .registry_url(REGISTRY)
+        .step()
 }
 
 fn setup_npm() -> Step<Run> {

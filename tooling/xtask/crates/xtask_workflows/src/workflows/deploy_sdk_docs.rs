@@ -5,6 +5,7 @@ use gh_workflow::{
     Concurrency, Event, Job, Level, Permissions, Push, Step, Workflow, WorkflowDispatch,
 };
 
+use crate::workflows::actions::ActionsSetupNode;
 use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
@@ -40,9 +41,9 @@ pub fn deploy_sdk_docs() -> Workflow {
                 .add_step(steps::checkout(false, false))
                 .add_step(steps::setup_bun())
                 .add_step(
-                    Step::new("Setup Node")
-                        .uses("actions", "setup-node", steps::SETUP_NODE_SHA)
-                        .add_with(("node-version", "22")),
+                    ActionsSetupNode::new("Setup Node")
+                        .node_version("22")
+                        .step(),
                 )
                 .add_step(Step::new("Install dependencies").run("bun install --frozen-lockfile"))
                 .add_step(

@@ -19,6 +19,7 @@ use gh_workflow::{
     WorkflowDispatch, WorkflowInput,
 };
 
+use crate::workflows::actions::ActionsSetupNode;
 use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
@@ -79,9 +80,9 @@ fn deploy() -> Job {
 }
 
 fn setup_node() -> Step<Use> {
-    Step::new("Setup Node")
-        .uses("actions", "setup-node", steps::SETUP_NODE_SHA)
-        .add_with(("node-version", "22"))
+    ActionsSetupNode::new("Setup Node")
+        .node_version("22")
+        .step()
 }
 
 fn install_deps() -> Step<Run> {

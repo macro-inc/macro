@@ -12,6 +12,9 @@ use gh_workflow::{
     Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
 };
 
+use crate::workflows::actions::{
+    ActionsCacheRestore, ActionsCacheSave, ActionsCheckout, ActionsUploadArtifact,
+};
 use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
@@ -86,9 +89,9 @@ fn build_job() -> Job {
 /// The pushed commit, not the branch tip: a merge that lands while this run's
 /// backend deploys must not ship its frontend against the older backend.
 pub fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo")
-        .uses("actions", "checkout", steps::CHECKOUT_SHA)
-        .add_with(("ref", github().sha()))
+    ActionsCheckout::new("Checkout Repo")
+        .r#ref(github().sha())
+        .step()
 }
 
 /// Saved entries are named by the set of package keys they hold plus the run
@@ -116,7 +119,7 @@ pub(crate) struct RestoreWasmOutputs {
 pub(crate) const RESTORE_WASM: StepHandle<RestoreWasmOutputs> = StepHandle::new(
     "restore-wasm",
     RestoreWasmOutputs {
-        cache_matched_key: StepOutput::new("restore-wasm", "cache-matched-key"),
+        cache_matched_key: ActionsCacheRestore::cache_matched_key_output("restore-wasm"),
     },
 );
 
@@ -134,17 +137,16 @@ pub(crate) const WASM: StepHandle<WasmOutputs> = StepHandle::new(
 );
 
 fn restore_wasm_packages() -> Step<Use> {
-    Step::new("Restore wasm packages")
-        .uses("actions/cache", "restore", ACTIONS_CACHE_SHA)
-        .id(RESTORE_WASM.id())
-        .continue_on_error(true)
-        .timeout_minutes(WASM_CACHE_TIMEOUT_MINUTES)
-        .add_with(("path", vars::DEPLOY_WASM_PKG_CACHE_DIR))
-        .add_with((
-            "key",
-            format!("{WASM_PACKAGES_KEY_PREFIX}{}", github().sha()),
-        ))
-        .add_with(("restore-keys", WASM_PACKAGES_KEY_PREFIX))
+    ActionsCacheRestore::new(
+        "Restore wasm packages",
+        vars::DEPLOY_WASM_PKG_CACHE_DIR,
+        format!("{WASM_PACKAGES_KEY_PREFIX}{}", github().sha()),
+    )
+    .restore_keys(WASM_PACKAGES_KEY_PREFIX)
+    .step()
+    .id(RESTORE_WASM.id())
+    .continue_on_error(true)
+    .timeout_minutes(WASM_CACHE_TIMEOUT_MINUTES)
 }
 
 /// Its own step, saved before the app build, so a run whose app build fails
@@ -163,13 +165,15 @@ fn build_wasm_packages() -> Step<Run> {
 }
 
 fn save_wasm_packages() -> Step<Use> {
-    Step::new("Save wasm packages")
-        .uses("actions/cache", "save", ACTIONS_CACHE_SHA)
-        .if_condition(WASM.outputs.key.read().ne(""))
-        .continue_on_error(true)
-        .timeout_minutes(WASM_CACHE_TIMEOUT_MINUTES)
-        .add_with(("path", vars::DEPLOY_WASM_PKG_CACHE_DIR))
-        .add_with(("key", WASM.outputs.key.read()))
+    ActionsCacheSave::new(
+        "Save wasm packages",
+        vars::DEPLOY_WASM_PKG_CACHE_DIR,
+        WASM.outputs.key.read(),
+    )
+    .step()
+    .if_condition(WASM.outputs.key.read().ne(""))
+    .continue_on_error(true)
+    .timeout_minutes(WASM_CACHE_TIMEOUT_MINUTES)
 }
 
 /// Build identical across dev/prod up to `MODE` (`just build-<env>`). Its
@@ -194,21 +198,16 @@ fn build() -> Step<Run> {
 }
 
 fn upload_dist() -> Step<Use> {
-    Step::new("Upload dist")
-        .uses(
-            "actions",
-            "upload-artifact",
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",
-        ) // v4
-        .add_with(("name", artifact(environment())))
-        .add_with(("path", xtask_paths::runtime_path!("apps/web/dist").as_str()))
-        .add_with(("if-no-files-found", "error"))
-        // The production release kept its build a week, so a failed release
-        // job can still be re-run days later.
-        .add_with((
-            "retention-days",
-            environment().eq("prod").then_else::<Num>(7_i64, 1_i64),
-        ))
-        // A full re-run of the same run uploads again under the same name.
-        .add_with(("overwrite", true))
+    ActionsUploadArtifact::new(
+        "Upload dist",
+        xtask_paths::runtime_path!("apps/web/dist").as_str(),
+    )
+    .name(artifact(environment()))
+    .if_no_files_found("error")
+    // The production release kept its build a week, so a failed release
+    // job can still be re-run days later.
+    .retention_days(environment().eq("prod").then_else::<Num>(7_i64, 1_i64))
+    // A full re-run of the same run uploads again under the same name.
+    .overwrite(true)
+    .step()
 }

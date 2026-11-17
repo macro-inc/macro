@@ -17,6 +17,9 @@ use gh_workflow::{
     WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
 };
 
+use crate::workflows::actions::{
+    ActionsCheckout, AwsActionsConfigureAwsCredentials, PulumiActions,
+};
 use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
@@ -129,9 +132,7 @@ fn build_deploy() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo")
-        .uses("actions", "checkout", steps::CHECKOUT_SHA)
-        .add_with(("lfs", true))
+    ActionsCheckout::new("Checkout Repo").lfs(true).step()
 }
 
 /// Without LFS content the site would publish pointer files as its videos.
@@ -175,30 +176,18 @@ fn install_infra_dependencies() -> Step<Run> {
 }
 
 fn configure_aws_credentials() -> Step<Use> {
-    Step::new("Configure AWS Credentials")
-        .uses(
-            "aws-actions",
-            "configure-aws-credentials",
-            "e7f100cf4c008499ea8adda475de1042d6975c7b",
-        ) // v5
-        .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
-        .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
-        .add_with(("aws-region", "us-east-1"))
+    AwsActionsConfigureAwsCredentials::new("Configure AWS Credentials", "us-east-1")
+        .aws_access_key_id(vars::AWS_ACCESS_KEY)
+        .aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .step()
 }
 
 /// The stack's own `invalidate-cache` command invalidates `/*` after the sync.
 fn pulumi_up() -> Step<Use> {
-    Step::new("Deploy with Pulumi")
-        .uses(
-            "pulumi",
-            "actions",
-            "8e5e406f4007fca908480587cb9893c07090f58d",
-        ) // v6
-        .add_with((
-            "command",
-            input::<Bool>("preview_only").then_else("preview", "up"),
-        ))
-        .add_with(("stack-name", format!("macro-inc/{}", environment())))
-        .add_with(("work-dir", "./infra/stacks/website"))
+    PulumiActions::new("Deploy with Pulumi")
+        .command(input::<Bool>("preview_only").then_else("preview", "up"))
+        .stack_name(format!("macro-inc/{}", environment()))
+        .work_dir("./infra/stacks/website")
+        .step()
         .add_env(Env::new("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN))
 }

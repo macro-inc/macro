@@ -14,6 +14,10 @@ use gh_workflow::{
     WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
 };
 
+use crate::workflows::actions::{
+    ActionsDownloadArtifact, ActionsUploadArtifact, AwsActionsConfigureAwsCredentials,
+    PulumiActions,
+};
 use crate::workflows::build_web_app::environment;
 use crate::workflows::{build_web_app, runners, steps, vars};
 
@@ -136,10 +140,10 @@ fn deploy() -> Job {
 
 /// `artifact` is a [`build_web_app::artifact`] name the same run uploaded.
 pub fn download_dist(artifact: &str) -> Step<Use> {
-    Step::new("Download dist")
-        .uses("actions", "download-artifact", steps::DOWNLOAD_ARTIFACT_SHA)
-        .add_with(("name", artifact))
-        .add_with(("path", xtask_paths::runtime_path!("apps/web/dist").as_str()))
+    ActionsDownloadArtifact::new("Download dist")
+        .name(artifact)
+        .path(xtask_paths::runtime_path!("apps/web/dist").as_str())
+        .step()
 }
 
 pub fn install_infra_dependencies() -> Step<Run> {
@@ -149,28 +153,19 @@ pub fn install_infra_dependencies() -> Step<Run> {
 }
 
 pub fn configure_aws_credentials() -> Step<Use> {
-    Step::new("Configure AWS Credentials")
-        .uses(
-            "aws-actions",
-            "configure-aws-credentials",
-            "e7f100cf4c008499ea8adda475de1042d6975c7b",
-        ) // v5
-        .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
-        .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
-        .add_with(("aws-region", "us-east-1"))
+    AwsActionsConfigureAwsCredentials::new("Configure AWS Credentials", "us-east-1")
+        .aws_access_key_id(vars::AWS_ACCESS_KEY)
+        .aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .step()
 }
 
 /// `environment` is a name or the [`environment`] input.
 pub fn pulumi_up(environment: impl Display) -> Step<Use> {
-    Step::new("Deploy with Pulumi")
-        .uses(
-            "pulumi",
-            "actions",
-            "8e5e406f4007fca908480587cb9893c07090f58d",
-        ) // v6
-        .add_with(("command", "up"))
-        .add_with(("stack-name", format!("macro-inc/{environment}")))
-        .add_with(("work-dir", "./infra/stacks/web-app"))
+    PulumiActions::new("Deploy with Pulumi")
+        .command("up")
+        .stack_name(format!("macro-inc/{environment}"))
+        .work_dir("./infra/stacks/web-app")
+        .step()
         .add_env(Env::new("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN))
         .add_env(Env::new("DD_APP_KEY", vars::DD_APP_KEY))
         .add_env(Env::new("DD_API_KEY", vars::DD_API_KEY))
@@ -187,14 +182,12 @@ pub fn upload_sourcemaps(environment: impl Display) -> Step<Run> {
 }
 
 fn upload_production_build() -> Step<Use> {
-    Step::new("Upload production build")
-        .uses(
-            "actions",
-            "upload-artifact",
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",
-        ) // v4
-        .if_condition(environment().eq("prod"))
-        .add_with(("name", "web-app-build"))
-        .add_with(("path", xtask_paths::runtime_path!("apps/web/dist").as_str()))
-        .add_with(("overwrite", true))
+    ActionsUploadArtifact::new(
+        "Upload production build",
+        xtask_paths::runtime_path!("apps/web/dist").as_str(),
+    )
+    .name("web-app-build")
+    .overwrite(true)
+    .step()
+    .if_condition(environment().eq("prod"))
 }

@@ -14,7 +14,8 @@ use gh_workflow::{
 
 use xtask_paths::RepoGlob;
 
-use crate::workflows::{runners, steps};
+use crate::workflows::actions::{ActionsCheckout, TjActionsChangedFiles};
+use crate::workflows::runners;
 
 #[cfg(test)]
 mod test;
@@ -150,28 +151,23 @@ fn preview_status() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses("actions", "checkout", steps::CHECKOUT_SHA)
+    ActionsCheckout::new("Checkout Repo").step()
 }
 
 fn changed_files() -> Step<Use> {
-    Step::new("Get changed files")
-        .uses(
-            "tj-actions",
-            "changed-files",
-            "24d32ffd492484c1d75e0c0b894501ddb9d30d62",
-        ) // v47
-        .id(CHANGED_FILES.id())
-        .add_with((
-            "files",
+    TjActionsChangedFiles::new("Get changed files")
+        .files(
             TRIGGER_PATHS
                 .iter()
                 .map(|path| path.as_str())
                 .collect::<Vec<_>>()
                 .join("\n"),
-        ))
-        .add_with(("json", true))
-        .add_with(("escape_json", false))
-        .add_with(("write_output_files", true))
+        )
+        .json(true)
+        .escape_json(false)
+        .write_output_files(true)
+        .step()
+        .id(CHANGED_FILES.id())
 }
 
 fn detect_affected_services() -> Step<Run> {

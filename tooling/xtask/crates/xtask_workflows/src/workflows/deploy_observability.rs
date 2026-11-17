@@ -16,6 +16,7 @@ use gh_workflow::{
     WorkflowInput,
 };
 
+use crate::workflows::actions::{AwsActionsConfigureAwsCredentials, PulumiActions};
 use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
@@ -103,15 +104,10 @@ pub(crate) fn nix_steps(job: Job) -> Job {
 
 /// The deploy credentials every deploy workflow uses, as in `deploy_web_app`.
 fn aws_credentials() -> Step<Use> {
-    Step::new("Configure AWS credentials")
-        .uses(
-            "aws-actions",
-            "configure-aws-credentials",
-            "e7f100cf4c008499ea8adda475de1042d6975c7b",
-        )
-        .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
-        .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
-        .add_with(("aws-region", "us-east-2"))
+    AwsActionsConfigureAwsCredentials::new("Configure AWS credentials", "us-east-2")
+        .aws_access_key_id(vars::AWS_ACCESS_KEY)
+        .aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .step()
 }
 
 fn release(name: &str, command: &str) -> Step<gh_workflow::Run> {
@@ -148,11 +144,7 @@ fn deploy_job() -> Job {
                 .shell("bash")
                 .working_directory("infra"),
         )
-        .add_step(Step::new("Install Pulumi").uses(
-            "pulumi",
-            "actions",
-            "8e5e406f4007fca908480587cb9893c07090f58d",
-        ))
+        .add_step(PulumiActions::new("Install Pulumi"))
         .add_step(
             release(
                 "Refuse a commit older than main's last stack change",

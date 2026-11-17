@@ -4,6 +4,7 @@
 use gh_workflow::expr::typed::github;
 use gh_workflow::{Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Use, Workflow};
 
+use crate::workflows::actions::ActionsSetupNode;
 use crate::workflows::steps;
 
 #[cfg(test)]
@@ -43,10 +44,10 @@ fn publish() -> Job {
 }
 
 fn setup_node() -> Step<Use> {
-    Step::new("Setup Node")
-        .uses("actions", "setup-node", steps::SETUP_NODE_SHA)
-        .add_with(("node-version", "24"))
-        .add_with(("registry-url", "https://registry.npmjs.org"))
+    ActionsSetupNode::new("Setup Node")
+        .node_version("24")
+        .registry_url("https://registry.npmjs.org")
+        .step()
 }
 
 fn setup_npm() -> Step<Run> {
