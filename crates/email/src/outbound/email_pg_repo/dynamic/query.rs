@@ -1470,7 +1470,13 @@ async fn read_team_page(
         Some(tuning) => TeamRead::new(view, email_filter, params, tuning),
         None => Err(Box::new(params)),
     };
-    let mut transaction = pool.begin().await?;
+    // The sparse page must see the same set the probe counted. A running
+    // request keeps its privacy snapshot; later requests see committed changes.
+    let mut transaction = if team_read.is_ok() {
+        begin_snapshot(pool).await?
+    } else {
+        pool.begin().await?
+    };
     let rows = match team_read {
         Ok(read) => read.fetch(&mut transaction, deadline).await?,
         Err(params) => {

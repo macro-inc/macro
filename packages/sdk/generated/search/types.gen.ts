@@ -81,6 +81,11 @@ export type AgentSessionSearchResult = {
 };
 
 /**
+ * A kind of attachment a thread's messages carry, by MIME type.
+ */
+export type AttachmentKind = 'pdf' | 'image' | 'document';
+
+/**
  * Filters for canonical calendar-event entities.
  */
 export type CalendarEventFilters = {
@@ -1080,6 +1085,11 @@ export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_descrip
  */
 export type EmailFilters = {
     /**
+     * Only threads with at least one attachment of one of these kinds, by
+     * MIME type, on any of their messages. Empty applies no constraint.
+     */
+    attachments?: Array<AttachmentKind>;
+    /**
      * Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC.
      */
     bcc?: Array<string>;
@@ -1167,6 +1177,7 @@ export type EmailFilters = {
      * Defaults to "exclude" (only the user's own threads).
      */
     shared?: SharedEmailFilter;
+    view?: null | EmailSearchView;
 };
 
 /**
@@ -1324,6 +1335,11 @@ export type EmailSearchResult = {
      */
     sent_at?: string | null;
 };
+
+/**
+ * A mailbox view the Email list scopes a search to, as its tabs do.
+ */
+export type EmailSearchView = 'sent' | 'drafts';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`

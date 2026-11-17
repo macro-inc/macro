@@ -3,15 +3,17 @@
 use std::collections::HashSet;
 
 use email_db_client::threads::search_filters::{
-    ThreadStateFilter, calendar_thread_ids, thread_ids_matching_states,
+    ThreadAttachmentKind, ThreadStateFilter, calendar_thread_ids, draft_thread_ids,
+    sent_thread_ids, thread_ids_matching_states,
 };
 use entity_access::outbound::shared_email_threads;
+use item_filters::ast::email::AttachmentKind;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use readonly_pool::ReadOnlyPool;
 use rootcause::Report;
 use uuid::Uuid;
 
-use crate::domain::email_search::{EmailSearchSource, SharedThread, ThreadStates};
+use crate::domain::email_search::{EmailSearchSource, SharedThread, ThreadSet, ThreadStates};
 
 pub(crate) struct EmailSearchPgSource {
     pub db: ReadOnlyPool,
@@ -19,6 +21,14 @@ pub(crate) struct EmailSearchPgSource {
 
 fn limit(limit: usize) -> i64 {
     i64::try_from(limit).unwrap_or(i64::MAX)
+}
+
+fn attachment_kind(kind: AttachmentKind) -> ThreadAttachmentKind {
+    match kind {
+        AttachmentKind::Pdf => ThreadAttachmentKind::Pdf,
+        AttachmentKind::Image => ThreadAttachmentKind::Image,
+        AttachmentKind::Document => ThreadAttachmentKind::Document,
+    }
 }
 
 impl EmailSearchSource for EmailSearchPgSource {
@@ -40,10 +50,18 @@ impl EmailSearchSource for EmailSearchPgSource {
             .collect())
     }
 
-    async fn calendar_threads(&self, link_ids: &[Uuid], max: usize) -> Result<Vec<Uuid>, Report> {
-        calendar_thread_ids(&self.db, link_ids, limit(max))
-            .await
-            .map_err(|error| rootcause::report!("{error:#}"))
+    async fn threads_in_set(
+        &self,
+        link_ids: &[Uuid],
+        set: ThreadSet,
+        max: usize,
+    ) -> Result<Vec<Uuid>, Report> {
+        let ids = match set {
+            ThreadSet::Calendar => calendar_thread_ids(&self.db, link_ids, limit(max)).await,
+            ThreadSet::Sent => sent_thread_ids(&self.db, link_ids, limit(max)).await,
+            ThreadSet::Drafts => draft_thread_ids(&self.db, link_ids, limit(max)).await,
+        };
+        ids.map_err(|error| rootcause::report!("{error:#}"))
     }
 
     async fn threads_in_states(
@@ -60,6 +78,14 @@ impl EmailSearchSource for EmailSearchPgSource {
                 .notification_states
                 .iter()
                 .map(|state| state.as_str().to_string())
+                .collect(),
+            sent: states.sent,
+            has_draft: states.has_draft,
+            attachment_kinds: states
+                .attachments
+                .iter()
+                .copied()
+                .map(attachment_kind)
                 .collect(),
         };
         let ids = thread_ids_matching_states(&self.db, thread_ids, user.as_ref(), &filter)
