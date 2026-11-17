@@ -46,3 +46,29 @@ fn local_suspension_preserves_queued_public_events() {
     assert_eq!(state.event_recorder.events.len(), 1);
     assert_eq!(state.event_recorder.events[0].origin.as_str(), "remote");
 }
+
+#[test]
+fn resuming_after_an_empty_suppressed_commit_keeps_the_unreported_start() {
+    let doc = crate::LoroDoc::new();
+    let mut state = doc.app_state().lock();
+    state.start_recording();
+    let unreported = Frontiers::from(ID::new(7, 3));
+    state.event_recorder.diff_start_version = Some(unreported.clone());
+    assert!(state.suspend_recording_for_local_commit());
+    state.start_recording();
+    assert_eq!(state.event_recorder.diff_start_version, Some(unreported));
+}
+
+#[test]
+fn resuming_after_a_suppressed_commit_starts_at_the_committed_version() {
+    let doc = crate::LoroDoc::new_auto_commit();
+    doc.set_peer_id(3).unwrap();
+    let _events = doc.subscribe_root(std::sync::Arc::new(|_| {}));
+    doc.get_list("list").insert(0, false).unwrap();
+    assert!(doc.app_state().lock().suspend_recording_for_local_commit());
+    doc.commit_then_renew();
+    let committed = doc.oplog_frontiers();
+    let mut state = doc.app_state().lock();
+    state.start_recording();
+    assert_eq!(state.event_recorder.diff_start_version, Some(committed));
+}

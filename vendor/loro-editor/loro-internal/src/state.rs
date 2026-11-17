@@ -552,6 +552,7 @@ impl DocState {
         }))
     }
 
+    #[cfg(not(feature = "native-editor"))]
     pub fn start_recording(&mut self) {
         if self.is_recording() {
             return;
@@ -559,6 +560,32 @@ impl DocState {
 
         self.event_recorder.recording_diff = true;
         self.event_recorder.diff_start_version = Some(self.frontiers.clone());
+    }
+
+    /// Resuming after suspend_recording_for_local_commit keeps the start
+    /// version upstream would have: note_unrecorded_local_commit moved it to
+    /// the committed version if the commit wrote a change; an empty commit
+    /// leaves the unreported start from before the suspension.
+    #[cfg(feature = "native-editor")]
+    pub fn start_recording(&mut self) {
+        if self.is_recording() {
+            return;
+        }
+
+        self.event_recorder.recording_diff = true;
+        if !std::mem::take(&mut self.event_recorder.suspended) {
+            self.event_recorder.diff_start_version = Some(self.frontiers.clone());
+        }
+    }
+
+    /// A local change committed while recording is suspended for it. Upstream
+    /// would have converted its diff into an event, so the next event starts
+    /// at the version it reached.
+    #[cfg(feature = "native-editor")]
+    pub(crate) fn note_unrecorded_local_commit(&mut self, new_version: &Frontiers) {
+        if self.event_recorder.suspended {
+            self.event_recorder.diff_start_version = Some(new_version.clone());
+        }
     }
 
     /// Suspend event materialization for one known local commit only when no
@@ -573,6 +600,7 @@ impl DocState {
             return false;
         }
         self.event_recorder.recording_diff = false;
+        self.event_recorder.suspended = true;
         true
     }
 
@@ -2868,6 +2896,9 @@ pub(crate) struct EventRecorder {
     diffs: Vec<InternalDocDiff<'static>>,
     events: Vec<DocDiff>,
     diff_start_version: Option<Frontiers>,
+    /// Suspended by suspend_recording_for_local_commit until recording resumes.
+    #[cfg(feature = "native-editor")]
+    suspended: bool,
 }
 
 impl EventRecorder {

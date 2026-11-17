@@ -10,7 +10,7 @@ publish = false
 [workspace]
 
 [dependencies]
-loro_patched = { package = "loro-internal", path = "../loro-internal" }
+loro_patched = { package = "loro-internal", path = "../loro-internal", features = ["native-editor"] }
 loro_upstream = { package = "loro-internal", version = "=1.17.1" }
 serde_json = "1"
 
