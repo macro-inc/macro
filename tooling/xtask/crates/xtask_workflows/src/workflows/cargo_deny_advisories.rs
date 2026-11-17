@@ -8,8 +8,9 @@
 //! channel: GitHub emails a scheduled run's failure only to whoever last
 //! edited its cron line, and only if they opted in.
 
+use gh_workflow::expr::typed::failure;
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, Run, Schedule, Step, Workflow, WorkflowDispatch,
+    Event, Job, Level, Permissions, Run, Schedule, Step, Workflow, WorkflowDispatch,
 };
 
 use crate::workflows::{cargo_deny, runners, steps, vars};
@@ -51,7 +52,7 @@ fn alert() -> Step<Run> {
                 --data-binary @- "$MACRO_WEBHOOK_URL"
         "#})
         .shell("bash")
-        .if_condition(Expression::new("failure()"))
+        .if_condition(failure())
         .add_env(("MACRO_WEBHOOK_URL", vars::MACRO_BUILD_ALERT_WEBHOOK_URL))
         .add_env(("MACRO_BOT_TOKEN", vars::MACRO_BUILD_ALERT_BOT_TOKEN))
 }

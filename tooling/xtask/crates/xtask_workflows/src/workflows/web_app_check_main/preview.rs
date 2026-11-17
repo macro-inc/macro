@@ -7,7 +7,8 @@
 //! status check doesn't read them. A `[no preview]` marker in the PR title opts
 //! out without skipping CI.
 
-use gh_workflow::{Env, Expression, Run, Step, Use};
+use gh_workflow::expr::typed::{self, Bool, Expr, Str, github, needs};
+use gh_workflow::{Env, Run, Step, Use};
 
 use crate::workflows::vars;
 
@@ -15,9 +16,21 @@ const PREVIEW_BUCKET: &str = "macro-preview-assets-dev";
 
 /// A fork has no credentials to deploy with, and a change that can't alter the
 /// bundle has nothing new to show.
-const WANTED: &str = "needs.path-check.outputs.web_artifact_changed == 'true' \
-    && !contains(github.event.pull_request.title, '[no preview]') \
-    && github.event.pull_request.head.repo.full_name == github.repository";
+fn wanted() -> Expr<Bool> {
+    needs("path-check")
+        .output("web_artifact_changed")
+        .is_true()
+        .and(
+            !github()
+                .event::<Str>("pull_request.title")
+                .contains("[no preview]"),
+        )
+        .and(
+            github()
+                .event::<Str>("pull_request.head.repo.full_name")
+                .eq(github().repository()),
+        )
+}
 
 /// Env for the build step, so the bundle can serve as the preview.
 pub fn build_env() -> [Env; 2] {
@@ -30,20 +43,19 @@ pub fn build_env() -> [Env; 2] {
 /// Every deploy step with its gate, in order. A step that continues on error
 /// still leaves `success()` true, so later steps check the steps they need.
 pub fn steps() -> (Step<Use>, Vec<Step<Run>>) {
-    let gate = |needs: &str| Expression::new(format!("{WANTED}{needs}"));
+    let gate = |after: &str| wanted().and(typed::steps(after).outcome().eq("success"));
     let credentials = configure_aws_credentials()
         .id("preview-credentials")
-        .if_condition(Expression::new(WANTED))
+        .if_condition(wanted())
         .continue_on_error(true);
-    let credentials_ok = " && steps.preview-credentials.outcome == 'success'";
-    let id_ok = " && steps.preview-id.outcome == 'success'";
-    let bucket_ok = " && steps.preview-bucket.outcome == 'success'";
-    let deployed = " && steps.preview-deploy.outcome == 'success'";
     let rest = vec![
-        (get_or_create_preview_id(), gate(credentials_ok)),
-        (validate_bucket_name().id("preview-bucket"), gate(id_ok)),
-        (deploy_to_s3().id("preview-deploy"), gate(bucket_ok)),
-        (comment_on_pr(), gate(deployed)),
+        (get_or_create_preview_id(), gate("preview-credentials")),
+        (
+            validate_bucket_name().id("preview-bucket"),
+            gate("preview-id"),
+        ),
+        (deploy_to_s3().id("preview-deploy"), gate("preview-bucket")),
+        (comment_on_pr(), gate("preview-deploy")),
     ]
     .into_iter()
     .map(|(step, condition)| {
@@ -78,7 +90,7 @@ fn get_or_create_preview_id() -> Step<Run> {
             echo "id=$PREVIEW_ID" >> "$GITHUB_OUTPUT"
             echo "Preview ID: $PREVIEW_ID"
         "#})
-        .add_env(Env::new("BRANCH", "${{ github.head_ref }}"))
+        .add_env(Env::new("BRANCH", github().head_ref()))
         .id("preview-id")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }

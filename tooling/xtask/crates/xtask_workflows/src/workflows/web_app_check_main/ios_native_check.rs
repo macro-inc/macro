@@ -39,7 +39,8 @@
 //! stale by then. The job name must stay stable: the release workflow, the
 //! watcher and that label workflow find the job by it.
 
-use gh_workflow::{Expression, Job, Level, Permissions, Run, Step, Use};
+use gh_workflow::expr::typed::{self, Bool, Expr, Json, Str, cancelled, github, raw, to_json};
+use gh_workflow::{Job, Level, Permissions, Run, Step, Use};
 
 use crate::workflows::{runners, steps, vars};
 
@@ -50,13 +51,18 @@ pub(super) const JOB_NAME: &str = "iOS Native Check";
 
 /// Native iOS code changed: the path filter matched, or the cache wasm
 /// version moved against the base branch.
-const NATIVE_CHANGED: &str = "(steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true')";
+fn native_changed() -> Expr<Bool> {
+    typed::steps("native-filter")
+        .output("ios_native")
+        .is_true()
+        .or(typed::steps("cache-wasm").output("bumped").is_true())
+}
+
 /// The PR opted out of the gate via the `skip-ios-update` label (as read at
-/// run time, see [`read_labels`]), and its negation. Spelled out rather than
-/// `!SKIP_LABEL`: in GitHub expressions `!` binds tighter than `==`, so
-/// `!a == 'true'` is `(!a) == 'true'`, false whatever `a` is.
-const SKIP_LABEL: &str = "steps.labels.outputs.skip == 'true'";
-const NOT_SKIPPED: &str = "steps.labels.outputs.skip != 'true'";
+/// run time, see [`read_labels`]).
+fn skip_label() -> Expr<Str> {
+    typed::steps("labels").output("skip")
+}
 
 pub(super) fn job() -> Job {
     Job::default()
@@ -83,8 +89,8 @@ pub(super) fn job() -> Job {
         .add_step(pr_comment())
 }
 
-fn gated() -> Expression {
-    Expression::new(format!("{NATIVE_CHANGED} && {NOT_SKIPPED}"))
+fn gated() -> Expr<Bool> {
+    native_changed().and(skip_label().ne("true"))
 }
 
 fn paths_filter() -> Step<Use> {
@@ -177,11 +183,14 @@ fn read_labels() -> Step<Run> {
             fi
         "#})
         .id("labels")
-        .if_condition(Expression::new(NATIVE_CHANGED))
+        .if_condition(native_changed())
         .shell("bash")
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env((
+            "PR_NUMBER",
+            github().event::<Str>("pull_request.number"),
+        ))
 }
 
 fn setup_bun() -> Step<Use> {
@@ -199,7 +208,7 @@ fn verify_bump() -> Step<Run> {
         .id("bump")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         // The base the merge result was built on (fetched by the cache-wasm step).
-        .add_env(("BASE_REF", "${{ steps.cache-wasm.outputs.base_sha }}"))
+        .add_env(("BASE_REF", typed::steps("cache-wasm").output("base_sha")))
 }
 
 /// Exports `APPLE_API_KEY` / `APPLE_API_ISSUER` via `GITHUB_ENV` and writes
@@ -232,9 +241,9 @@ fn require_approved_version() -> Step<Run> {
         .shell("bash")
         .id("live")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env(("PR_NUMBER", github().event::<Str>("pull_request.number")))
 }
 
 fn skip_notice() -> Step<Run> {
@@ -243,7 +252,7 @@ fn skip_notice() -> Step<Run> {
             "echo \"Native iOS changes detected, but the skip-ios-update label says they \
              don't break the native/web contract — skipping the App Store release gate.\"",
         )
-        .if_condition(Expression::new(format!("{NATIVE_CHANGED} && {SKIP_LABEL}")))
+        .if_condition(native_changed().and(skip_label().is_true()))
 }
 
 /// Keep release instructions visible on the PR even when an earlier step fails.
@@ -254,10 +263,14 @@ fn pr_comment() -> Step<Use> {
             "github-script",
             "f28e40c7f34bde8b3046d885e986cb6290c5673b",
         )
-        .if_condition(Expression::new(
-            "!cancelled() && github.event.pull_request.head.repo.full_name == github.repository",
-        ))
-        .add_env(("IOS_GATE_STEPS", "${{ toJSON(steps) }}"))
+        .if_condition(
+            (!cancelled()).and(
+                github()
+                    .event::<Str>("pull_request.head.repo.full_name")
+                    .eq(github().repository()),
+            ),
+        )
+        .add_env(("IOS_GATE_STEPS", to_json(raw::<Json>("steps"))))
         .add_with((
             "script",
             include_str!("../scripts/ios_native_check_comment.js"),

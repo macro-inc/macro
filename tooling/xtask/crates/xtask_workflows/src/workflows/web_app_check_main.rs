@@ -1,8 +1,9 @@
 //! `Web App Pr Checks` — frontend and mobile PR checks.
 //! Generated into `web-app-check-main.yml`.
 
+use gh_workflow::expr::typed::{self, Expr, Num, Str, always, github, matrix, needs};
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, Run, Step, Strategy, Use, Workflow, WorkflowCall,
+    Event, Job, Level, Permissions, Run, Step, Strategy, Use, Workflow, WorkflowCall,
 };
 
 use crate::workflows::{
@@ -60,23 +61,26 @@ fn path_check() -> Job {
     Job::default()
         .timeout_minutes(10u32)
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
+        .add_output("should_run", typed::steps("filter").output("should_run"))
         .add_output(
             "codegen_changed",
-            "${{ steps.codegen.outputs.codegen_changed }}",
+            typed::steps("codegen").output("codegen_changed"),
         )
         .add_output(
             "web_artifact_changed",
-            "${{ steps.filter.outputs.web_artifact_changed }}",
+            typed::steps("filter").output("web_artifact_changed"),
         )
-        .add_output("i18n_changed", "${{ steps.filter.outputs.i18n_changed }}")
+        .add_output(
+            "i18n_changed",
+            typed::steps("filter").output("i18n_changed"),
+        )
         .add_output(
             "database_grid_changed",
-            "${{ steps.filter.outputs.database_grid_changed }}",
+            typed::steps("filter").output("database_grid_changed"),
         )
         .add_output(
             "calendar_details_changed",
-            "${{ steps.filter.outputs.calendar_details_changed }}",
+            typed::steps("filter").output("calendar_details_changed"),
         )
         .add_step(path_check_checkout())
         .add_step(paths_filter())
@@ -89,9 +93,7 @@ fn path_check() -> Job {
 fn typescript() -> Job {
     Job::default()
         .needs(vec!["path-check".to_string()])
-        .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true'",
-        ))
+        .cond(path_check_output("should_run").is_true())
         .name("Typecheck")
         .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
@@ -243,9 +245,7 @@ fn typecheck_script(checks: &[(&str, &str, &str)]) -> String {
 fn generated_code() -> Job {
     Job::default()
         .needs(vec!["path-check".to_string()])
-        .cond(Expression::new(
-            "needs.path-check.outputs.codegen_changed == 'true'",
-        ))
+        .cond(path_check_output("codegen_changed").is_true())
         .name("Generated Code Check")
         .timeout_minutes(25u32)
         .runs_on(mid_web_runner())
@@ -297,7 +297,7 @@ fn biome_check() -> Job {
 }
 
 fn test() -> Job {
-    gated_web_job("Test (${{ matrix.shard }}/6)")
+    gated_web_job(&format!("Test ({}/6)", matrix::<Num>("shard")))
         .timeout_minutes(20u32)
         .runs_on(mid_web_runner())
         .strategy(
@@ -402,7 +402,7 @@ fn status_check() -> Job {
     Job::default()
         .name("Web App Status Check")
         .timeout_minutes(5u32)
-        .cond(Expression::new("always()"))
+        .cond(always())
         .needs(vec![
             "path-check".to_string(),
             android_native_check::JOB_ID.to_string(),
@@ -420,12 +420,15 @@ fn status_check() -> Job {
         .add_step(check_job_results())
 }
 
+/// An output of the `path-check` job.
+fn path_check_output(name: &str) -> Expr<Str> {
+    needs("path-check").output(name)
+}
+
 fn gated_web_job(name: &str) -> Job {
     Job::default()
         .needs(vec!["path-check".to_string()])
-        .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true'",
-        ))
+        .cond(path_check_output("should_run").is_true())
         .name(name)
         .runs_on(web_runner())
 }
@@ -457,7 +460,7 @@ fn detect_schema_changes() -> Step<Run> {
         .id("codegen")
         .add_env((
             "CODEGEN_INPUTS",
-            "${{ steps.filter.outputs.codegen_inputs }}",
+            typed::steps("filter").output("codegen_inputs"),
         ))
 }
 
@@ -570,7 +573,10 @@ fn check_specta_types() -> Step<Run> {
         // features of one package's dependencies, which recompiled 101 and 131
         // crates for them. The other two need a `cli` feature that would change
         // the libraries every schema binary links, so they keep `cargo run -p`.
-        .add_env(("SPECTA_BIN_DIR", "${{ github.workspace }}/target/debug"))
+        .add_env((
+            "SPECTA_BIN_DIR",
+            format!("{}/target/debug", github().workspace()),
+        ))
 }
 
 /// The tail of `just update-generated` in `packages/sdk`: its first line reruns
@@ -687,9 +693,7 @@ fn run_signup_browser_tests() -> Step<Run> {
 fn run_i18n_browser_tests() -> Step<Run> {
     Step::new("Interface Language Browser Tests")
         .run("bunx playwright install-deps chromium\njust test-i18n-browser")
-        .if_condition(Expression::new(
-            "needs.path-check.outputs.i18n_changed == 'true'",
-        ))
+        .if_condition(path_check_output("i18n_changed").is_true())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -698,9 +702,7 @@ fn run_i18n_browser_tests() -> Step<Run> {
 fn run_database_browser_tests() -> Step<Run> {
     Step::new("Database Grid Browser Tests")
         .run("bunx playwright install-deps chromium\njust test-database-browser")
-        .if_condition(Expression::new(
-            "needs.path-check.outputs.database_grid_changed == 'true'",
-        ))
+        .if_condition(path_check_output("database_grid_changed").is_true())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -710,9 +712,7 @@ fn run_database_browser_tests() -> Step<Run> {
 fn run_calendar_details_browser_tests() -> Step<Run> {
     Step::new("Calendar Event Details Browser Tests")
         .run("bunx playwright install-deps chromium\njust test-calendar-details-browser")
-        .if_condition(Expression::new(
-            "needs.path-check.outputs.calendar_details_changed == 'true'",
-        ))
+        .if_condition(path_check_output("calendar_details_changed").is_true())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 

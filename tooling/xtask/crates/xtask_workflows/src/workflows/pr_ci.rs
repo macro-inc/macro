@@ -22,9 +22,12 @@
 //! post a result. Fork PRs get a read-only token, so `ci_gate_fork` removes
 //! their label and sets their status.
 
+use gh_workflow::expr::typed::{
+    Bool, Expr, Json, Str, cancelled, github, needs, raw, steps, to_json,
+};
 use gh_workflow::{
-    CallJob, Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType,
-    Run, Step, Use, Workflow,
+    CallJob, Concurrency, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step,
+    Use, Workflow,
 };
 use xtask_paths::RepoGlob;
 
@@ -46,7 +49,13 @@ pub const GATE_CONTEXT: &str = "CI gate";
 pub const GATE_DOCS_URL: &str =
     "https://github.com/macro-inc/macro/blob/main/.agents/skills/run-ci/SKILL.md";
 
-const REQUESTED: &str = "github.event.label.name == 'run-ci'";
+fn requested() -> Expr<Bool> {
+    github().event::<Str>("label.name").eq(RUN_LABEL)
+}
+
+fn pr_number() -> Expr<Str> {
+    github().event("pull_request.number")
+}
 
 /// Job names the fork step reads back from a finished run (`ci_gate.ts`).
 pub const START_JOB: &str = "Start";
@@ -148,9 +157,11 @@ pub fn pr_ci() -> Workflow {
         .concurrency(
             // One group per PR for requests, so a newer request cancels the
             // older run; a group per run for every other label.
-            Concurrency::new(Expression::new(format!(
-                "pr-ci-${{{{ github.event.pull_request.number }}}}-${{{{ {REQUESTED} && 'requested' || github.run_id }}}}"
-            )))
+            Concurrency::new(format!(
+                "pr-ci-{}-{}",
+                pr_number(),
+                requested().then_else("requested", github().run_id())
+            ))
             .cancel_in_progress(true),
         )
         .add_job("start", start());
@@ -176,27 +187,34 @@ pub(crate) fn gate_step(name: &str, mode: &str) -> Step<Run> {
         .add_env(("CI_GATE_MODE", mode))
         .add_env(("CI_GATE_CONTEXT", GATE_CONTEXT))
         .add_env(("CI_GATE_LABEL", RUN_LABEL))
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
+        .add_env(("GH_TOKEN", github().token()))
 }
 
 /// The PR facts the start and gate steps act on.
 fn with_pull_request(step: Step<Run>) -> Step<Run> {
-    step.add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
-        .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
+    step.add_env(("PR_NUMBER", pr_number()))
+        .add_env(("HEAD_SHA", github().event::<Str>("pull_request.head.sha")))
         .add_env((
             "SAME_REPO",
-            "${{ github.event.pull_request.head.repo.full_name == github.repository }}",
+            github()
+                .event::<Str>("pull_request.head.repo.full_name")
+                .eq(github().repository()),
         ))
         .add_env((
             "RUN_URL",
-            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            format!(
+                "{}/{}/actions/runs/{}",
+                github().server_url(),
+                github().repository(),
+                github().run_id()
+            ),
         ))
 }
 
 fn start() -> Job {
     let job = Job::default()
         .name(START_JOB)
-        .cond(Expression::new(REQUESTED))
+        .cond(requested())
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(5u32)
         .permissions(Permissions {
@@ -208,7 +226,7 @@ fn start() -> Job {
         })
         .add_step(
             with_pull_request(gate_step("Take the request", "start"))
-                .add_env(("MERGE_SHA", "${{ github.sha }}")),
+                .add_env(("MERGE_SHA", github().sha())),
         )
         .add_step(paths_filter());
 
@@ -217,10 +235,7 @@ fn start() -> Job {
         .filter(|call| call.paths.is_some())
         .fold(job, |job, call| {
             let output = output_name(call);
-            job.add_output(
-                output.clone(),
-                format!("${{{{ steps.filter.outputs.{output} }}}}"),
-            )
+            job.add_output(output.clone(), steps("filter").output(&output))
         })
 }
 
@@ -256,10 +271,7 @@ fn call_job(call: &Call) -> CallJob {
         .inherit_secrets();
 
     match call.paths {
-        Some(_) => job.cond(Expression::new(format!(
-            "needs.start.outputs.{} == 'true'",
-            output_name(call)
-        ))),
+        Some(_) => job.cond(needs("start").output(&output_name(call)).is_true()),
         None => job,
     }
 }
@@ -267,17 +279,15 @@ fn call_job(call: &Call) -> CallJob {
 /// Runs unless the run was cancelled (a newer request superseded it) or was
 /// never a request. A skipped call is a path filter that didn't match.
 fn gate() -> Job {
-    let needs = std::iter::once("start")
+    let needed = std::iter::once("start")
         .chain(CALLS.iter().map(|call| call.id))
         .map(str::to_string)
         .collect::<Vec<_>>();
 
     Job::default()
         .name(GATE_JOB)
-        .needs(needs)
-        .cond(Expression::new(
-            "!cancelled() && needs.start.result != 'skipped'",
-        ))
+        .needs(needed)
+        .cond((!cancelled()).and(needs("start").result().ne("skipped")))
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(5u32)
         .permissions(Permissions {
@@ -286,6 +296,6 @@ fn gate() -> Job {
         })
         .add_step(
             with_pull_request(gate_step("Set the CI gate status", "finish"))
-                .add_env(("NEEDS", "${{ toJSON(needs) }}")),
+                .add_env(("NEEDS", to_json(raw::<Json>("needs")))),
         )
 }

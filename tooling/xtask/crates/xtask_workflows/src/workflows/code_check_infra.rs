@@ -4,7 +4,8 @@
 //! `Infra Status Check`, which is unchanged, so branch protection is
 //! unaffected by the file rename).
 
-use gh_workflow::{Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::expr::typed::{always, steps};
+use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
 
 use crate::workflows::{
     runners,
@@ -35,7 +36,7 @@ fn path_check() -> Job {
     Job::default()
         .timeout_minutes(10u32)
         .runs_on(runners::Runner::Small.to_string())
-        .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
+        .add_output("should_run", steps("filter").output("should_run"))
         .add_step(checkout(false))
         .add_step(paths_filter())
 }
@@ -72,7 +73,7 @@ fn status_check() -> Job {
     Job::default()
         .timeout_minutes(5u32)
         .name("Infra Status Check")
-        .cond(Expression::new("always()"))
+        .cond(always())
         .needs(vec![
             "path-check".to_string(),
             "biome-check".to_string(),

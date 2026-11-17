@@ -10,10 +10,8 @@
 //! `test`. `check` (fmt + clippy), `build-service-bins`, `doppler-config`, and
 //! `graphql-schema-compat` run alongside `test`.
 
-use gh_workflow::expr::typed;
-use gh_workflow::{
-    Container, Env, Event, Expression, Job, Port, Run, Step, Workflow, WorkflowCall,
-};
+use gh_workflow::expr::typed::{self, Bool, Expr, Str, always, env, needs};
+use gh_workflow::{Container, Env, Event, Job, Port, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RuntimePath;
 
 use crate::workflows::{
@@ -52,22 +50,22 @@ fn path_check() -> Job {
     Job::default()
         .timeout_minutes(10u32)
         .runs_on(runners::Runner::Small.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
+        .add_output("should_run", typed::steps("filter").output("should_run"))
         .add_output(
             "doppler_candidates",
-            "${{ steps.filter.outputs.doppler_candidates }}",
+            typed::steps("filter").output("doppler_candidates"),
         )
         .add_output(
             "graphql_schema",
-            "${{ steps.filter.outputs.graphql_schema }}",
+            typed::steps("filter").output("graphql_schema"),
         )
         .add_output(
             "rust_packages",
-            "${{ steps.nextest-filter.outputs.rust_packages }}",
+            typed::steps("nextest-filter").output("rust_packages"),
         )
         .add_output(
             "skip_tests",
-            "${{ steps.nextest-filter.outputs.skip_tests }}",
+            typed::steps("nextest-filter").output("skip_tests"),
         )
         // PR merge commits need both parents for `git merge-base`; fetching
         // the entire repo (every branch) is not required.
@@ -76,7 +74,7 @@ fn path_check() -> Job {
         .add_step(paths_filter())
         .add_step(
             compute_changed_files()
-                .if_condition(Expression::new("steps.filter.outputs.should_run == 'true'")),
+                .if_condition(typed::steps("filter").output("should_run").is_true()),
         )
         .add_step(
             steps::mount_nextest_filter_cache(FILTER_CACHE_DIR).if_condition(
@@ -126,9 +124,11 @@ fn with_check_env(job: Job) -> Job {
 fn doppler_config() -> Job {
     steps::gated_job()
         .timeout_minutes(20u32)
-        .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.doppler_candidates == 'true'",
-        ))
+        .cond(
+            path_check_output("should_run")
+                .is_true()
+                .and(path_check_output("doppler_candidates").is_true()),
+        )
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
         .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
@@ -152,9 +152,11 @@ fn doppler_config() -> Job {
 fn graphql_schema_compat() -> Job {
     steps::gated_job()
         .timeout_minutes(15u32)
-        .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.graphql_schema == 'true'",
-        ))
+        .cond(
+            path_check_output("should_run")
+                .is_true()
+                .and(path_check_output("graphql_schema").is_true()),
+        )
         .runs_on(runners::Runner::Small.to_string())
         .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
         .add_step(steps::setup_rust_light())
@@ -171,14 +173,14 @@ fn graphql_schema_compat() -> Job {
 fn test() -> Job {
     steps::gated_job()
         .timeout_minutes(20u32)
-        .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
-        ))
+        .cond(
+            path_check_output("should_run")
+                .is_true()
+                .and(path_check_output("rust_packages").ne("none"))
+                .and(path_check_output("skip_tests").ne("true")),
+        )
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_env((
-            "RUST_PACKAGES",
-            "${{ needs.path-check.outputs.rust_packages }}",
-        ))
+        .add_env(("RUST_PACKAGES", path_check_output("rust_packages")))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
         .add_env(("REDIS_URI", "redis://127.0.0.1:6379"))
         .map(with_test_compile_env)
@@ -219,12 +221,9 @@ fn with_test_compile_env(job: Job) -> Job {
 fn build_service_bins() -> Job {
     steps::gated_job()
         .timeout_minutes(20u32)
-        .cond(Expression::new(BUILD_SERVICE_BINS_CONDITION))
+        .cond(build_service_bins_condition())
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_env((
-            "RUST_PACKAGES",
-            "${{ needs.path-check.outputs.rust_packages }}",
-        ))
+        .add_env(("RUST_PACKAGES", path_check_output("rust_packages")))
         .map(with_test_compile_env)
         .add_env(("SQLX_OFFLINE", "true"))
         .add_step(steps::checkout(false, false))
@@ -240,13 +239,34 @@ fn build_service_bins() -> Job {
         .add_step(steps::teardown_nix())
 }
 
-const BUILD_SERVICE_BINS_CONDITION: &str = "needs.path-check.outputs.should_run == 'true' \
-     \
-     && needs.path-check.outputs.skip_tests != 'true' \
-     && (needs.path-check.outputs.rust_packages == 'all' \
-     || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') \
-     || contains(needs.path-check.outputs.rust_packages, 'email_service') \
-     || contains(needs.path-check.outputs.rust_packages, 'authentication_service'))";
+fn build_service_bins_condition() -> Expr<Bool> {
+    let rust_packages = || path_check_output("rust_packages");
+    path_check_output("should_run")
+        .is_true()
+        .and(path_check_output("skip_tests").ne("true"))
+        .and(
+            rust_packages()
+                .eq("all")
+                .or(rust_packages().contains("document_storage_service"))
+                .or(rust_packages().contains("email_service"))
+                .or(rust_packages().contains("authentication_service")),
+        )
+}
+
+/// An output of the `path-check` job.
+fn path_check_output(name: &str) -> Expr<Str> {
+    needs("path-check").output(name)
+}
+
+/// Whether the selected packages run code through the pinned Deno runtime.
+fn tests_execution_runtime() -> Expr<Bool> {
+    let rust_packages = || env("RUST_PACKAGES");
+    rust_packages()
+        .eq("all")
+        .or(rust_packages().contains("code_execution"))
+        .or(rust_packages().contains("agent_code_mode"))
+        .or(rust_packages().contains("agent_harness_service"))
+}
 
 /// Install the same pinned runtime shipped in the agent harness container.
 fn setup_execution_runtime() -> Step<gh_workflow::Use> {
@@ -257,9 +277,7 @@ fn setup_execution_runtime() -> Step<gh_workflow::Use> {
             "22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
         ) // v2
         .add_with(("deno-version", "2.9.6"))
-        .if_condition(Expression::new(
-            "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')",
-        ))
+        .if_condition(tests_execution_runtime())
 }
 
 /// Exercise the real permission boundary, authenticated SDK execution, and
@@ -269,9 +287,7 @@ fn test_execution_runtime() -> Step<Run> {
     Step::new("Test Deno sandbox and authenticated SDK execution")
         .run(include_str!("scripts/run_tests.sh"))
         .add_env(("NEXTEST_RUN_DENO_TESTS", "true"))
-        .if_condition(Expression::new(
-            "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')",
-        ))
+        .if_condition(tests_execution_runtime())
 }
 
 /// Always-run collector used as the required status check. Its name must stay
@@ -281,7 +297,7 @@ fn status_check() -> Job {
         .timeout_minutes(5u32)
         .name("Cloud Storage Status Check")
         .runs_on(runners::Runner::Small.to_string())
-        .cond(Expression::new("always()"))
+        .cond(always())
         .needs(vec![
             "path-check".to_string(),
             "check".to_string(),
@@ -382,7 +398,7 @@ fn compute_nextest_filter() -> Step<Run> {
     Step::new("compute nextest package filter")
         .run(include_str!("scripts/compute_nextest_filter.sh"))
         .id("nextest-filter")
-        .if_condition(Expression::new("steps.filter.outputs.should_run == 'true'"))
+        .if_condition(typed::steps("filter").output("should_run").is_true())
         .add_env(("FILTER_CACHE_DIR", FILTER_CACHE_DIR.as_str()))
         .shell("bash")
 }
@@ -393,12 +409,14 @@ fn compute_nextest_filter() -> Step<Run> {
 fn validate_doppler_configs() -> Step<Run> {
     Step::new("validate Doppler configs")
         .run(include_str!("scripts/validate_doppler_configs.sh"))
-        .if_condition(Expression::new(
-            "steps.doppler-bins.outputs.doppler_config_bins != ''",
-        ))
+        .if_condition(
+            typed::steps("doppler-bins")
+                .output("doppler_config_bins")
+                .ne(""),
+        )
         .add_env((
             "DOPPLER_CONFIG_BINS",
-            "${{ steps.doppler-bins.outputs.doppler_config_bins }}",
+            typed::steps("doppler-bins").output("doppler_config_bins"),
         ))
         .add_env(("DOPPLER_TOKEN", vars::DOPPLER_TOKEN))
 }
@@ -419,10 +437,7 @@ fn cargo_shear() -> Step<Run> {
 fn cargo_clippy() -> Step<Run> {
     Step::new("clippy")
         .run(include_str!("scripts/cargo_clippy.sh"))
-        .add_env((
-            "RUST_PACKAGES",
-            "${{ needs.path-check.outputs.rust_packages }}",
-        ))
+        .add_env(("RUST_PACKAGES", path_check_output("rust_packages")))
 }
 
 /// Match production's PostgreSQL major version so CI rejects incompatible migrations.

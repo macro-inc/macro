@@ -8,7 +8,8 @@
 //! packages it adds to `Cargo.lock` (`scripts/cargo_deny_new_advisories.ts`);
 //! [`super::cargo_deny_advisories`] fails on the rest, daily on `main`.
 
-use gh_workflow::{Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::expr::typed::{self, cancelled};
+use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
 use crate::workflows::{runners, steps};
@@ -60,9 +61,7 @@ fn cargo_deny_job() -> Job {
                 .shell("bash")
                 // Report advisories even when bans, licenses or sources fail,
                 // as one `cargo deny check` did, but not when setup failed.
-                .if_condition(Expression::new(
-                    "!cancelled() && steps.bans.outcome != 'skipped'",
-                ))
+                .if_condition((!cancelled()).and(typed::steps("bans").outcome().ne("skipped")))
                 .add_env(("DENY_ARGS", DENY_ARGS))
                 .add_env(("BASE_REV", "HEAD^1")),
         )

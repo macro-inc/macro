@@ -7,9 +7,8 @@
 //! CodeRabbit's ast-grep integration on changed code instead. The rules encode
 //! conventions from `docs/development/style-guide.md` at the repo root.
 
-use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowCall,
-};
+use gh_workflow::expr::typed::{always, steps};
+use gh_workflow::{Event, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowCall};
 
 use crate::workflows::{runners, steps, vars};
 
@@ -37,7 +36,7 @@ fn path_check() -> Job {
     Job::default()
         .timeout_minutes(10u32)
         .runs_on(runners::Runner::Small.to_string())
-        .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
+        .add_output("should_run", steps("filter").output("should_run"))
         .add_step(steps::checkout(false, false))
         .add_step(paths_filter())
 }
@@ -61,7 +60,7 @@ fn status_check() -> Job {
     Job::default()
         .timeout_minutes(5u32)
         .name("Conventions Status Check")
-        .cond(Expression::new("always()"))
+        .cond(always())
         .needs(vec!["path-check".to_string(), "ast-grep".to_string()])
         .runs_on(runners::Runner::Small.to_string())
         .add_step(check_job_results())

@@ -19,12 +19,13 @@
 //! must never check out or execute PR head code — there is deliberately no
 //! checkout step; it only reads event metadata and calls two APIs.
 
+use gh_workflow::expr::typed::{Bool, Str, github};
 use gh_workflow::{
-    Concurrency, Event, Expression, IssueComment, IssueCommentType, Job, Level, Permissions,
-    PullRequestTarget, PullRequestType, Step, Use, Workflow,
+    Concurrency, Event, IssueComment, IssueCommentType, Job, Level, Permissions, PullRequestTarget,
+    PullRequestType, Step, Use, Workflow,
 };
 
-use crate::workflows::runners;
+use crate::workflows::{runners, vars};
 
 /// Base URL of the signing worker (`services/cla-worker`). On workers.dev
 /// like the account's other workers; if it ever moves to a vanity host,
@@ -49,8 +50,11 @@ pub fn cla() -> Workflow {
         // Serialize runs per PR so a burst of events can't interleave status
         // writes; never cancel — a dropped run could leave a stale status.
         .concurrency(
-            Concurrency::new(Expression::new(
-                "cla-${{ github.event.pull_request.number || github.event.issue.number }}",
+            Concurrency::new(format!(
+                "cla-{}",
+                github()
+                    .event::<Str>("pull_request.number")
+                    .or_else(github().event::<Str>("issue.number"))
             ))
             .cancel_in_progress(false),
         )
@@ -63,10 +67,15 @@ fn cla_job() -> Job {
         .runs_on(runners::Runner::TinyNoCache.to_string())
         // Skip non-PR comments and comments that can't be a command; the
         // command itself is exact-matched in the script.
-        .cond(Expression::new(
-            "github.event_name == 'pull_request_target' || \
-             (github.event.issue.pull_request && startsWith(github.event.comment.body, '/macro-cla'))",
-        ))
+        .cond(
+            github().event_name().eq("pull_request_target").or(github()
+                .event::<Bool>("issue.pull_request")
+                .and(
+                    github()
+                        .event::<Str>("comment.body")
+                        .starts_with("/macro-cla"),
+                )),
+        )
         // `pull_requests` must be WRITE, not read. Posting the invitation goes
         // through the issues API (`POST /issues/{n}/comments`), but GitHub
         // scopes that call by the *target resource*: when the target is a PR
@@ -94,11 +103,11 @@ fn cla_script() -> Step<Use> {
         // token) so private members pass without signing.
         .add_env((
             "ORG_READ_TOKEN",
-            "${{ secrets.CLA_ORG_READ_TOKEN || github.token }}",
+            vars::CLA_ORG_READ_TOKEN.expr().or_else(github().token()),
         ))
         // Shared secret for the signing worker's /cla/check endpoint.
-        .add_env(("CLA_CHECK_API_KEY", "${{ secrets.CLA_CHECK_API_KEY }}"))
-        .add_with(("github-token", "${{ secrets.GITHUB_TOKEN }}"))
+        .add_env(("CLA_CHECK_API_KEY", vars::CLA_CHECK_API_KEY))
+        .add_with(("github-token", vars::GITHUB_TOKEN))
         .add_with(("script", script()))
 }
 

@@ -1119,7 +1119,7 @@ jobs:
         shell: bash
       - id: labels
         name: Read the PR's current labels
-        if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true')
+        if: steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true'
         run: |
           set -euo pipefail
           labels=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json labels --jq '[.labels[].name] | join(",")')

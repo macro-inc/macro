@@ -2,7 +2,7 @@
 
 use gh_workflow::{Event, Job, Level, Permissions, PullRequest, PullRequestType, Step, Workflow};
 
-use crate::workflows::runners;
+use crate::workflows::{runners, vars};
 
 /// Build the workflow.
 pub fn assign_labels() -> Workflow {
@@ -34,7 +34,7 @@ fn label_by_paths() -> Step<gh_workflow::Use> {
             "github-script",
             "f28e40c7f34bde8b3046d885e986cb6290c5673b",
         )
-        .add_with(("github-token", "${{ secrets.GITHUB_TOKEN }}"))
+        .add_with(("github-token", vars::GITHUB_TOKEN))
         .add_with((
             "script",
             indoc::indoc! {r#"

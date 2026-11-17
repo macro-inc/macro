@@ -9,7 +9,8 @@
 //! runs only for those.
 //! Generated into `check_tauri_lockfiles.yml`.
 
-use gh_workflow::{Event, Expression, Job, Level, Permissions, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::expr::typed::{self, needs};
+use gh_workflow::{Event, Job, Level, Permissions, Step, Use, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
 use crate::workflows::{runners, steps, vars};
@@ -44,7 +45,7 @@ fn check_tauri_lockfiles_job() -> Job {
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_output(
             "vendoring_inputs",
-            "${{ steps.filter.outputs.vendoring_inputs }}",
+            typed::steps("filter").output("vendoring_inputs"),
         )
         .add_step(steps::checkout(false, false))
         .add_step(vendoring_inputs_filter())
@@ -84,9 +85,11 @@ fn check_tauri_vendoring_job() -> Job {
         .timeout_minutes(45u32)
         .name("check Tauri vendoring")
         .needs(vec!["check-tauri-lockfiles".to_string()])
-        .cond(Expression::new(
-            "needs.check-tauri-lockfiles.outputs.vendoring_inputs == 'true'",
-        ))
+        .cond(
+            needs("check-tauri-lockfiles")
+                .output("vendoring_inputs")
+                .is_true(),
+        )
         .runs_on(runners::Runner::Small.with_cache_tag(vars::NIX_CHECKS_CACHE_TAG))
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_nix_cache_volume())

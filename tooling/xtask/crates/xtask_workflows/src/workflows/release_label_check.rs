@@ -15,8 +15,9 @@
 //! deliberately no checkout step; it only reads event metadata and calls the
 //! PR API.
 
+use gh_workflow::expr::typed::{Bool, Expr, Str, github};
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, PullRequestTarget, PullRequestType, Step, Workflow,
+    Event, Job, Level, Permissions, PullRequestTarget, PullRequestType, Step, Workflow,
 };
 
 use crate::workflows::runners;
@@ -29,38 +30,47 @@ pub fn release_label_check() -> Workflow {
         .add_job("check", check_job())
 }
 
+fn label() -> Expr<Str> {
+    github().event("label.name")
+}
+
+fn ios() -> Expr<Bool> {
+    label().eq("ios-update")
+}
+
 fn check_job() -> Job {
     Job::default()
         .name("Announce the release the label started")
-        .cond(Expression::new(
-            "github.event.label.name == 'ios-update' || github.event.label.name == 'android-update'",
-        ))
+        .cond(ios().or(label().eq("android-update")))
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(10u32)
         // Write: the job comments on the PR and removes the label.
         .permissions(Permissions::default().pull_requests(Level::Write))
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
-        .add_env(("HEAD_REPO", "${{ github.event.pull_request.head.repo.full_name }}"))
-        .add_env(("HEAD_REF", "${{ github.event.pull_request.head.ref }}"))
-        .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
-        .add_env(("LABEL", "${{ github.event.label.name }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env(("PR_NUMBER", github().event::<Str>("pull_request.number")))
         .add_env((
-            "PLATFORM",
-            "${{ github.event.label.name == 'ios-update' && 'iOS' || 'Android' }}",
+            "HEAD_REPO",
+            github().event::<Str>("pull_request.head.repo.full_name"),
         ))
+        .add_env(("HEAD_REF", github().event::<Str>("pull_request.head.ref")))
+        .add_env(("HEAD_SHA", github().event::<Str>("pull_request.head.sha")))
+        .add_env(("LABEL", label()))
+        .add_env(("PLATFORM", ios().then_else("iOS", "Android")))
         .add_env((
             "WORKFLOW",
-            "${{ github.event.label.name == 'ios-update' && 'iOS App Store Release' || 'Android Play Release' }}",
+            ios().then_else("iOS App Store Release", "Android Play Release"),
         ))
         .add_env((
             "WORKFLOW_FILE",
-            "${{ github.event.label.name == 'ios-update' && 'ios-app-store-release.yml' || 'android-play-release.yml' }}",
+            ios().then_else("ios-app-store-release.yml", "android-play-release.yml"),
         ))
         .add_env((
             "CONF_PATH",
-            "${{ github.event.label.name == 'ios-update' && 'apps/web/tauri/src-tauri/tauri.ios.conf.json' || 'apps/web/tauri/src-tauri/tauri.android.conf.json' }}",
+            ios().then_else(
+                "apps/web/tauri/src-tauri/tauri.ios.conf.json",
+                "apps/web/tauri/src-tauri/tauri.android.conf.json",
+            ),
         ))
         .add_step(
             Step::new("Announce the release, or explain why none started")
