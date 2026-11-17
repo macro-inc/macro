@@ -74,6 +74,7 @@ export function AddToPipelineMenu(props: {
               <Dropdown.Group>
                 <Dropdown.Item
                   closeOnSelect={false}
+                  aria-label={t('crm.addToPipelineBack')}
                   onSelect={() => setStagesOf(undefined)}
                 >
                   <CaretLeftIcon class="size-4 shrink-0" />

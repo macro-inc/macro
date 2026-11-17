@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import type {
   AddToPipelineSource,
@@ -16,14 +16,26 @@ import { createAddToPipeline } from './add-to-pipeline';
 const sales = fixturePipeline('sales', 'Sales', 'company') as TrackedPipeline;
 const columns = fixtureColumns('company');
 
-function setup(outcome: PipelineRowAdded = { kind: 'added' }) {
-  const addRow = vi.fn(async () => outcome);
+const hiring = fixturePipeline(
+  'hiring',
+  'Hiring',
+  'contact'
+) as TrackedPipeline;
+
+function setup(
+  outcome: PipelineRowAdded = { kind: 'added' },
+  type: 'company' | 'contact' = 'company'
+) {
+  const addRow = vi.fn(async (): Promise<PipelineRowAdded> => outcome);
+  const [entries, setEntries] = createSignal([
+    fixtureEntry(sales, 'row-1', 'Lead'),
+  ]);
   const source: AddToPipelineSource = {
-    pipelines: () => [sales],
+    pipelines: () => [sales, hiring],
     loading: () => false,
     error: () => false,
     retry: async () => {},
-    entries: () => [fixtureEntry(sales, 'row-1', 'Lead')],
+    entries,
     createSchema: () => ({
       columns: () => columns,
       requirements: () => FIXTURE_REQUIREMENTS,
@@ -37,13 +49,13 @@ function setup(outcome: PipelineRowAdded = { kind: 'added' }) {
   const feedback = { success: vi.fn(), failure: vi.fn() };
   const controller = createRoot(() =>
     createAddToPipeline({ createSource, feedback }, () => ({
-      type: 'company',
-      id: 'company-1',
+      type,
+      id: `${type}-1`,
       name: 'Northwind Ceramics',
       detail: 'northwind.example',
     }))
   );
-  return { controller, createSource, addRow, feedback };
+  return { controller, createSource, addRow, feedback, setEntries };
 }
 
 describe('createAddToPipeline', () => {
@@ -89,7 +101,7 @@ describe('createAddToPipeline', () => {
     expect(controller.form()).toEqual({ pipeline: sales, stage: 'Proposal' });
   });
 
-  it('reports a refused add and keeps the form open', async () => {
+  it('reports a refused add with its reason', async () => {
     const { controller, feedback } = setup({
       kind: 'failed',
       message: 'This property is read-only.',
@@ -111,5 +123,43 @@ describe('createAddToPipeline', () => {
     ).toBe(true);
     expect(feedback.success).not.toHaveBeenCalled();
     expect(feedback.failure).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('createAddToPipeline after an add', () => {
+  const choices = (controller: ReturnType<typeof setup>['controller']) => {
+    const state = controller.state();
+    return state.kind === 'ready' ? state.choices : [];
+  };
+
+  it('refuses the contact pipeline it joined while the rows lag', async () => {
+    const { controller } = setup({ kind: 'added' }, 'contact');
+    controller.load();
+    expect(choices(controller)[0]?.state).toBe('available');
+    await controller.addRow(hiring, fixtureColumns('contact'), {
+      values: {},
+      open: false,
+    });
+    expect(choices(controller)[0]?.state).toBe('already-in');
+  });
+
+  it('can add again after an add throws', async () => {
+    const { controller, addRow } = setup();
+    addRow.mockRejectedValueOnce(new Error('network'));
+    controller.load();
+    await expect(
+      controller.addRow(sales, columns, { values: {}, open: false })
+    ).rejects.toThrow('network');
+    expect(controller.adding()).toBe(false);
+  });
+
+  it('keeps an unchanged row when the rows are read again', () => {
+    const { controller, setEntries } = setup();
+    controller.load();
+    const [before] = choices(controller);
+    setEntries([fixtureEntry(sales, 'row-1', 'Lead')]);
+    expect(choices(controller)[0]).toBe(before);
+    setEntries([fixtureEntry(sales, 'row-1', 'Proposal')]);
+    expect(choices(controller)[0]).not.toBe(before);
   });
 });

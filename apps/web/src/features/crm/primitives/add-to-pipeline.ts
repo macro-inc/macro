@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { deepEqual } from '@core/util/compareUtils';
 import {
   type Accessor,
   createMemo,
@@ -14,6 +15,7 @@ import type { RecordCreation } from '../../database/primitives/record-actions';
 import type {
   AddToPipelineRecord,
   AddToPipelineSource,
+  PipelineRowAdded,
 } from '../context/pipelines';
 import {
   type PipelineChoice,
@@ -58,6 +60,9 @@ export function createAddToPipeline(
   const [source, setSource] = createSignal<AddToPipelineSource>();
   const [form, setForm] = createSignal<AddToPipelineForm>();
   const [adding, setAdding] = createSignal(false);
+  // Pipelines this page added the record to; a refetch that reads a lagging
+  // replica must not offer a contact the same pipeline again.
+  const [added, setAdded] = createSignal<string[]>([]);
   const entryRecord = createMemo<PipelineEntryRecord>(
     () => ({ type: record().type, id: record().id }),
     { type: record().type, id: record().id },
@@ -70,6 +75,9 @@ export function createAddToPipeline(
     setSource(runWithOwner(owner, () => deps.createSource(entryRecord)));
   }
 
+  // An unchanged choice keeps its object, so a refetch under the open menu
+  // does not remount its row and close the stages it shows.
+  let previous: PipelineChoice[] = [];
   const state = createMemo((): AddToPipelineMenuState => {
     const current = source();
     if (!current || current.loading()) return { kind: 'loading' };
@@ -77,8 +85,12 @@ export function createAddToPipeline(
     const choices = pipelineChoices(
       current.pipelines(),
       record().type,
-      current.entries()
+      current.entries(),
+      added()
+    ).map(
+      (choice) => previous.find((kept) => deepEqual(kept, choice)) ?? choice
     );
+    previous = choices;
     return choices.length ? { kind: 'ready', choices } : { kind: 'empty' };
   });
 
@@ -90,8 +102,16 @@ export function createAddToPipeline(
     const current = source();
     if (!current) return false;
     setAdding(true);
-    const outcome = await current.addRow(pipeline, columns, creation);
-    setAdding(false);
+    let outcome: PipelineRowAdded;
+    try {
+      outcome = await current.addRow(pipeline, columns, creation);
+    } finally {
+      setAdding(false);
+    }
+    if (outcome.kind !== 'failed')
+      setAdded((ids) =>
+        ids.includes(pipeline.id) ? ids : [...ids, pipeline.id]
+      );
     const stage = stageLabel(columns, creation.values);
     if (outcome.kind === 'failed') {
       deps.feedback.failure(outcome.message);

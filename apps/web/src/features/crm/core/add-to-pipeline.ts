@@ -63,11 +63,16 @@ export function stageColumn(
   return stages.find((column) => column.name === 'Stage') ?? stages[0];
 }
 
-/** The pipelines a record of `recordType` can go in, by name, marked with the rows it already has. */
+/**
+ * The pipelines a record of `recordType` can go in, by name, marked with the
+ * rows it already has. `added` names pipelines it was just added to, which a
+ * lagging read of `entries` may not show yet.
+ */
 export function pipelineChoices(
   pipelines: readonly Pipeline[],
   recordType: PipelineRecordType,
-  entries: readonly PipelineEntry[]
+  entries: readonly PipelineEntry[],
+  added: readonly string[] = []
 ): PipelineChoice[] {
   return pipelines
     .filter(
@@ -85,7 +90,7 @@ export function pipelineChoices(
         )?.value;
         return typeof value === 'string' && value ? [value] : [];
       });
-      const inPipeline = rows.length > 0;
+      const inPipeline = rows.length > 0 || added.includes(pipeline.id);
       let state: PipelineChoiceState = 'available';
       if (pipeline.grant !== 'owner' && pipeline.grant !== 'edit')
         state = 'view-only';

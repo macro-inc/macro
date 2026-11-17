@@ -51,6 +51,11 @@ describe('pipelineChoices', () => {
     });
   });
 
+  it('refuses a contact pipeline it was just added to before its rows show', () => {
+    const [choice] = pipelineChoices([hiring], 'contact', [], ['hiring']);
+    expect(choice).toMatchObject({ inPipeline: true, state: 'already-in' });
+  });
+
   it("marks a company's deals and still lets it add another", () => {
     const [choice] = pipelineChoices([sales], 'company', [
       fixtureEntry(sales, 'row-1', 'Lead'),

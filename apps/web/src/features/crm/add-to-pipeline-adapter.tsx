@@ -47,8 +47,13 @@ export function createAddToPipelineSource(
       team.isPending ||
       pipelines.loading() ||
       (entries.pending() && !entries.failed()),
-    error: () => team.isError || pipelines.error() || entries.failed(),
+    // A failed refetch keeps the list it already has on screen.
+    error: () =>
+      (team.isError && !queryReadyGate(team)) ||
+      (pipelines.error() && pipelines.pipelines().length === 0) ||
+      entries.failed(),
     retry: async () => {
+      if (!queryReadyGate(team)) await team.refetch();
       await Promise.all([pipelines.refresh(), entries.refetch()]);
     },
     entries: entries.entries,

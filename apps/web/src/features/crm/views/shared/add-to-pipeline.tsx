@@ -40,6 +40,7 @@ export function PipelineChoiceLabel(props: { choice: PipelineChoice }) {
         <Show when={props.choice.inPipeline}>
           <CheckIcon
             class="size-3.5 shrink-0 text-ink-muted"
+            role="img"
             aria-label={t('crm.addToPipelineIn')}
           />
         </Show>
@@ -59,7 +60,7 @@ export function PipelineChoiceLabel(props: { choice: PipelineChoice }) {
 export function choiceDisabledReason(
   choice: PipelineChoice
 ): string | undefined {
-  if (choice.state === 'view-only') return t('crm.addToPipelineViewOnly');
+  if (choice.state === 'view-only') return t('crm.addToPipelineReadOnly');
   if (choice.state === 'already-in')
     return t('crm.addToPipelineContactAlreadyIn');
   return undefined;
