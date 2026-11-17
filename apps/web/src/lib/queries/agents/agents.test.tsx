@@ -11,7 +11,7 @@ import { ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { botKeys, botProfileKeys } from '../bots/keys';
+import { botKeys } from '../bots/keys';
 import { channelKeys } from '../channel/keys';
 import { agentKeys } from './keys';
 
@@ -136,12 +136,6 @@ describe('agent channel-bot cache invalidation', () => {
       agent(['channel-old']),
     ]);
     const updated = agent(['channel-new']);
-    const profileKey = botProfileKeys.detail(updated.bot.id).queryKey;
-    testQueryClient.setQueryData(profileKey, {
-      name: 'Previous name',
-      avatarUrl: undefined,
-      deleted: false,
-    });
     vi.mocked(storageServiceClient.updateAgent).mockResolvedValue(ok(updated));
     for (const id of ['channel-old', 'channel-new']) {
       testQueryClient.setQueryData(channelKeys.channelBots(id).queryKey, []);
@@ -159,7 +153,6 @@ describe('agent channel-bot cache invalidation', () => {
     expect(
       testQueryClient.getQueryData(botKeys.detail(updated.bot.id).queryKey)
     ).toEqual(updated.bot);
-    expect(testQueryClient.getQueryState(profileKey)?.isInvalidated).toBe(true);
   });
 
   it('refreshes cached channel and bot profiles when a global team agent changes its avatar', async () => {
@@ -211,12 +204,6 @@ describe('agent channel-bot cache invalidation', () => {
   it('removes a deleted agent and invalidates its channel bot queries', async () => {
     const existing = agent(['channel-old']);
     testQueryClient.setQueryData(agentKeys.list.queryKey, [existing]);
-    const profileKey = botProfileKeys.detail(existing.bot.id).queryKey;
-    testQueryClient.setQueryData(profileKey, {
-      name: existing.bot.name,
-      avatarUrl: undefined,
-      deleted: false,
-    });
     vi.mocked(storageServiceClient.deleteBot).mockResolvedValue(ok(undefined));
     const invalidateQueries = vi.spyOn(testQueryClient, 'invalidateQueries');
     const mutation = renderHook(() => useDeleteAgentMutation());
@@ -232,7 +219,6 @@ describe('agent channel-bot cache invalidation', () => {
     expect(
       testQueryClient.getQueryData<Agent[]>(agentKeys.list.queryKey)
     ).toEqual([]);
-    expect(testQueryClient.getQueryState(profileKey)?.isInvalidated).toBe(true);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: channelKeys.channelBots('channel-old').queryKey,
     });

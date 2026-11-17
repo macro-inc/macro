@@ -1,5 +1,5 @@
 import { throwOnErr } from '@core/util/result';
-import { botKeys, botProfileKeys } from '@queries/bots/keys';
+import { botKeys } from '@queries/bots/keys';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
@@ -165,9 +165,6 @@ export function useUpdateAgentMutation() {
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
-        queryClient.invalidateQueries({
-          queryKey: botProfileKeys.detail(updated.bot.id).queryKey,
-        }),
         // Global agents have no selected channel IDs but can still appear in
         // a channel's bot list, which takes precedence in the mention menu.
         queryClient.invalidateQueries({
@@ -204,9 +201,6 @@ export function useDeleteAgentMutation() {
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
-        queryClient.invalidateQueries({
-          queryKey: botProfileKeys.detail(vars.agentId).queryKey,
-        }),
         ...[...new Set(vars.channelIds)].flatMap((channelId) => [
           queryClient.invalidateQueries({
             queryKey: channelKeys.channelBots(channelId).queryKey,
