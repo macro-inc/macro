@@ -32,6 +32,59 @@ workflow run email_e2e.yml --ref <branch>` (`-f known_bugs=true` adds the
 known bugs). The [suite's README](../../apps/web/tests/email-e2e/README.md)
 has the trigger table and the other commands.
 
+### When an email end-to-end alert fires
+
+The last job of each of the three workflows, `Tell Macro Alerts`
+(`xtask_workflows`' `email_e2e_alert.rs`), posts to the Macro Alerts channel
+through the webhook the `cargo deny advisories` run uses. It posts for pushes
+to `main` and for the sweep, never for a run by hand, and only when the
+result changes: the first red run after a green one, and the first green run
+after red ones (`✅ Resolved`). Pushes and the sweep are counted apart, since
+only the sweep runs the tests kept for known bugs. A red run after a red
+one, a run that ends after a newer one has ended, and a cancelled run post
+nothing; the job's summary says why. A re-run is compared with its previous
+attempt, so a flaky failure that passes on a re-run posts that it passes
+again.
+
+The alert names the commit and its pull request, the failed jobs with the
+step each failed at, the failed tests the coverage report names, the tests
+kept for a known bug that now pass, and the commit the workflow last passed
+at with the changes since. The author of the pull request it names looks
+first; for the sweep, start from the changes since the last pass.
+
+1. Open the run. The summary of its coverage job lists what failed, and the
+   coverage report is an artifact of the run: `email-e2e-coverage`,
+   `email-e2e-browser-coverage` or `email-e2e-full-stack-coverage`. A failed
+   job keeps its service logs (`email-e2e-logs-<part>`,
+   `email-e2e-browser-logs-<shard>`, `email-e2e-full-stack-logs`) and the
+   browser suite its Playwright traces (`email-e2e-browser-traces-<shard>`,
+   `email-e2e-full-stack-traces`).
+2. Run the test locally: `just email-e2e <scenario>` for a Rust scenario,
+   `just email-e2e-browser <test>` for a browser test, and the
+   [full-stack tier's commands](../../apps/web/tests/email-e2e/README.md#the-full-stack-tier)
+   for a `full-stack-*` test.
+3. A change broke it: fix or revert the change. It fails for a product bug
+   that will not be fixed now: keep the test, asserting the right behaviour,
+   and mark it as a known bug, so it stops gating. A Rust scenario gets
+   `#[ignore = "known bug: <class id>"]`
+   ([`crates/email_e2e/AGENTS.md`](../../crates/email_e2e/AGENTS.md)); a
+   browser test gets `{ tag: '@known-bug' }` and a line in
+   `ledger/waivers.tsv`
+   ([README](../../apps/web/tests/email-e2e/README.md)). A bug that shows
+   only in some runs is also tagged `@sometimes` (browser) or named under
+   `[[intermittent_bug]]` in `crates/email_e2e/coverage/waivers.toml` (Rust).
+4. Kept for a known bug and now passing: the bug is fixed, and the alert
+   comes from the known-bug report, not from a gating test. Remove the
+   `#[ignore]` and the `bug` line of its function in
+   `crates/email_e2e/coverage/functions.toml`, or the `@known-bug` tag and
+   its waiver line, so the test gates again.
+5. "This commit passed in an earlier run" means the failure may be flaky:
+   re-run the failed jobs, and treat a test that passes only on a retry as a
+   defect of the test or the product.
+
+Run the fix on its branch by hand, as above, before merging it. The next push
+or sweep that passes posts `✅ Resolved`.
+
 ## RustSec advisories
 
 `cargo deny` reads the live RustSec advisory database. On a PR it fails only
