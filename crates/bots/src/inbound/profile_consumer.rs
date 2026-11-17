@@ -140,6 +140,11 @@ impl<R: BotRepo, P: BotProfilePublisher> BotProfileConsumer<R, P> {
                         BotTopicEvent::Created(metadata) => metadata.bot_id,
                         BotTopicEvent::Updated(metadata) => metadata.bot_id,
                         BotTopicEvent::Deleted(metadata) => metadata.bot_id,
+                        // Joining or leaving a channel changes no profile.
+                        BotTopicEvent::ChannelChanged(_) => {
+                            commit_logged(&consumer, kafka_message);
+                            continue;
+                        }
                     };
 
                     // Shutting down mid-retry leaves the event uncommitted so

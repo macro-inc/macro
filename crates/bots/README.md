@@ -18,6 +18,7 @@ the JSON envelope.
 | `bot.created` | Regular or channel-scoped bot creation | `bot_id`, `kind`, `owner`, `name`, `handle`, `description`, `avatar_url`, `created_by_user_id`, `channel_id`, `created_at` |
 | `bot.updated` | Bot PATCH | `bot_id`, `owner`, `actor_user_id`, requested `name`, `handle`, `description`, and `avatar_url` fields, plus `updated_at` |
 | `bot.deleted` | Bot soft deletion | `bot_id`, `owner`, `actor_user_id` |
+| `bot.channel_changed` | A bot added to or removed from a channel (`add_bot_to_channel`, `remove_bot_from_channel`), or an agent update that changes its selected channels (one event per channel left or joined) | `bot_id`, `channel_id`, `change` (`joined` or `left`), `actor_user_id` |
 
 `owner` is a tagged union. A user owner is encoded as
 `{"type":"user","user_id":"..."}`, while a team owner is encoded as
@@ -25,6 +26,10 @@ the JSON envelope.
 channel UUID for channel-scoped creation and `null` for regular creation. On
 `bot.updated`, the mutable fields describe the requested PATCH rather than a
 full bot snapshot; an omitted field is serialized as `null`.
+
+`bot.channel_changed` was added after the other three. A consumer deployed
+before it fails to decode it and skips it (the profile push commits and moves
+on), so consumers must tolerate event types they do not know.
 
 A created event has this wire-envelope shape:
 
@@ -80,6 +85,20 @@ bot profile cache, which messages, mention chips and agent sessions read, and
 refetches its agent, bot and channel-bot lists. A failed push is retried with
 backoff, then logged and dropped; clients refetch profiles when their gateway
 connection reopens.
+
+## Live updates over GraphQL
+
+Every Document Storage Service process also reads `macro.bots` through
+`BotTopicChanges`: no consumer group, every partition assigned from its end,
+nothing committed. For each event, `BotUpdates` reads the bot's current
+`BotIdentity` and `bot_audience` from the primary. It hands the identity to
+that audience's `botUpdates` subscribers on that process. Processing joins the
+publisher's trace through the Kafka trace headers. For `bot.channel_changed`,
+the channel's current members hear it too, since a bot that left a channel is
+no longer in its audience there. A change made while a
+process restarts is not replayed; clients refetch the bots they show when they
+resubscribe. This replaces the profile push once web clients read bots through
+GraphQL.
 
 ## Delivery semantics and rollout
 

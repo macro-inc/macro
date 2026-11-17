@@ -16,13 +16,16 @@ lookups and lists and the resolvers other domains' edges use.
   `GraphqlSoupAgentSession.botProfile` (in `complete_graph`) reads through.
 - `src/context.rs`: `BotsGraphqlContext`, the type-erased request data, over the
   narrow `BotReads` and `ChannelMemberAuthorizer` ports.
+- `src/subscription.rs`: `BotsSubscriptionRoot` (`botUpdates`), over
+  `BotUpdatesGraphqlContext` and the bots crate's `BotUpdateSubscriptions`.
 
 ## Scope
 
 - Owns: the bot GraphQL types and read fields, and mapping bot and access errors to
   GraphQL error codes.
 - Not here: bot reads and policy → `crates/bots`; composition and Soup edges →
-  `crates/complete_graph`; live updates (planned `botUpdates` subscription).
+  `crates/complete_graph`; reading changes off the bot topic → `crates/bots`
+  (`bot_updates`).
 
 ## Boundaries
 
@@ -45,8 +48,13 @@ lookups and lists and the resolvers other domains' edges use.
   query costs seconds of database time per page.
 - DSS builds the context over the read replica; a bot changed in the last few
   seconds can read stale.
-- DSS must insert both `BotsGraphqlContext` and `bot_identity_loader(...)` in
-  `insert_graphql_context_data`; a missing insert only fails at query time.
+- DSS must insert `BotsGraphqlContext`, `bot_identity_loader(...)` and
+  `BotUpdatesGraphqlContext` in `insert_graphql_context_data`; a missing insert
+  only fails at query time.
+- `botUpdates` ends with an error when the subscriber falls behind (16 buffered
+  updates); the client resubscribes and refetches the bots it shows. Updates are
+  sent only to `bot_audience`, so a bot that becomes visible some new way must be
+  added there.
 
 ## Related
 

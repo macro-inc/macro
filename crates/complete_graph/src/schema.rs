@@ -24,7 +24,7 @@ use graphql_activity::{
     resolve_activity_feed, resolve_activity_overview, resolve_database_activity,
     resolve_form_activity,
 };
-use graphql_bots::GraphqlBotsQuery;
+use graphql_bots::{BotsSubscriptionRoot, GraphqlBotsQuery};
 use graphql_calendar::{CalendarMutationRoot, GraphqlCalendarQuery};
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
@@ -161,6 +161,7 @@ pub struct CompleteSubscriptionRoot<R, NS, AS, EAS, Auth, St, NR, PR, ER, FR, AR
     WorkFeedSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
     NotificationInboxSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
     RegisteredWorkSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    BotsSubscriptionRoot,
 )
 where
     R: SoupRealtimeSubscriptionService,
@@ -479,6 +480,7 @@ where
             WorkFeedSubscriptionRoot::default(),
             NotificationInboxSubscriptionRoot::default(),
             RegisteredWorkSubscriptionRoot::default(),
+            BotsSubscriptionRoot,
         ),
     )
     .finish()

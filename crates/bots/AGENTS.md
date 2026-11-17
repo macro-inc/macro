@@ -25,11 +25,16 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   `src/outbound/connection_gateway_profiles.rs` (feature `realtime`, run by
   DSS): push each changed bot's current profile to its owner, team and channel
   members as `bot_profile_changed`, so web views update without a reload.
+- `src/domain/bot_updates.rs` + `src/outbound/bot_topic_changes.rs` (feature
+  `realtime`, run by DSS): every DSS process reads the whole bot topic itself
+  (no consumer group, from the end) and hands each changed bot's current
+  identity to its subscribers in `bot_audience`, for the GraphQL `botUpdates`
+  subscription in `crates/graphql_bots`. Delivery joins the publisher's trace.
 
 ## Scope
 
-- Owns: bot CRUD, ownership (user or team), bot lifecycle events, and the
-  profile push to web clients.
+- Owns: bot CRUD, ownership (user or team), bot lifecycle events, the
+  profile push to web clients, and live identity delivery to GraphQL subscribers.
 - Not here: agent sessions, channel message triggers, or trigger detection →
   `crates/agent_session`, `crates/channel_bots`.
 
@@ -37,7 +42,7 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 - Depends on: `harnesses` (ports), `channels` (inbound, optional), `entity_access`, `entity_registry`,
   `messages`, `macro_event_broker`/`macro_event_topics`, `macro_authorization`,
-  `connection_gateway_client` and `kafka_util` (`realtime`).
+  `connection_gateway_client`, `kafka_util` and `broadcast` (`realtime`).
 - Used by: `memory`, `ai_tools`, `agent_trigger`, `complete_graph`, `graphql_bots`, `agent_session`.
 
 ## Recipes

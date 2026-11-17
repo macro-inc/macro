@@ -1,5 +1,8 @@
 //! Domain layer for bots.
 
+#[cfg(feature = "ports")]
+/// Live delivery of changed bot identities.
+pub mod bot_updates;
 /// Bot lifecycle event contracts.
 pub mod events;
 /// Bot domain models.

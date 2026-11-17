@@ -620,6 +620,14 @@ type CompleteSubscriptionRoot {
 	and refetches.
 	"""
 	registeredWorkUpdates(accountIds: [ID!]!): [GraphqlRegisteredWorkPatch!]!
+	"""
+	Bots the authenticated user sees, each time one is created, renamed,
+	given a new picture or deleted, as it is now. Each payload is a batch
+	of bots, each once. The stream ends with an error when it falls
+	behind, after which the client resubscribes and refetches the bots it
+	shows.
+	"""
+	botUpdates: [GraphqlBot!]!
 }
 
 """

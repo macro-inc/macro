@@ -942,6 +942,7 @@ fn bot_identity_is_one_entity_reached_from_the_user_and_sessions() {
         "bots(ids: [ID!]!): [GraphqlBot!]!",
         "mentionableBots(channelId: ID): [GraphqlBot!]!",
         "botProfile: GraphqlBot",
+        "botUpdates: [GraphqlBot!]!",
         "bot: GraphqlAgentSessionLogBot! @deprecated(reason: \"Use the session's botProfile. Remove after 2026-12-17.\")",
     ] {
         assert_sdl_line(&sdl, expected);

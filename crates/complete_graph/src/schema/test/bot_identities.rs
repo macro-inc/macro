@@ -1,9 +1,14 @@
+use async_graphql::futures_util::StreamExt as _;
+use bots::domain::bot_updates::{BotUpdateSubscription, BotUpdateSubscriptions, BotUpdatesExit};
 use bots::domain::{
     models::{Bot, BotId, BotIdentity},
     ports::BotError,
 };
 use entity_access::domain::models::{MemberParticipantRole, ParticipantRole};
-use graphql_bots::{BotReads, BotsGraphqlContext, ChannelMemberAuthorizer, bot_identity_loader};
+use graphql_bots::{
+    BotReads, BotUpdatesGraphqlContext, BotsGraphqlContext, ChannelMemberAuthorizer,
+    bot_identity_loader,
+};
 
 use super::*;
 
@@ -168,5 +173,48 @@ async fn agent_sessions_read_their_bot_as_the_shared_bot_record() {
                 "avatarUrl": "https://static.example/scout.png"
             }
         }] } } })
+    );
+}
+
+/// Hands each subscriber the session bot as it now is, then closes.
+struct OneUpdate;
+
+impl BotUpdateSubscriptions for OneUpdate {
+    fn subscribe(&self, _user_id: MacroUserIdStr<'static>) -> BotUpdateSubscription {
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        sender.try_send(session_bot()).unwrap();
+        let (exit_sender, exit_reason) = tokio::sync::oneshot::channel();
+        let _ = exit_sender.send(BotUpdatesExit::Closed);
+        BotUpdateSubscription::from_parts(receiver, exit_reason)
+    }
+}
+
+#[tokio::test]
+async fn changed_bots_arrive_on_the_bot_updates_subscription() {
+    let harness = harness();
+
+    let responses = harness
+        .schema
+        .execute_stream(
+            async_graphql::Request::new(
+                "subscription { botUpdates { __typename id name handle avatarUrl } }",
+            )
+            .data(MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap())
+            .data(BotUpdatesGraphqlContext::new(Arc::new(OneUpdate))),
+        )
+        .collect::<Vec<_>>()
+        .await;
+
+    assert_eq!(responses.len(), 1);
+    assert!(responses[0].errors.is_empty(), "{:?}", responses[0].errors);
+    assert_eq!(
+        responses[0].data,
+        async_graphql::value!({ "botUpdates": [{
+            "__typename": "GraphqlBot",
+            "id": "00000000-0000-0000-0000-000000000063",
+            "name": "Ship Scout",
+            "handle": "scout",
+            "avatarUrl": "https://static.example/scout.png"
+        }] })
     );
 }

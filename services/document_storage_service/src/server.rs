@@ -2124,6 +2124,40 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
+    // Live bot updates read the primary: a change arrives as its write
+    // commits, before a replica may have it.
+    let bot_updates = Arc::new(bots::domain::bot_updates::BotUpdates::new(
+        PgBotsRepo::new(db.clone()),
+        bots::outbound::bot_topic_changes::BotTopicChanges::from_env(config.kafka_brokers.as_ref())
+            .map_err(|error| {
+                anyhow::anyhow!("failed to create the bot update consumer: {error:?}")
+            })?,
+    ));
+    consumer_tracker.spawn({
+        let bot_updates = Arc::clone(&bot_updates);
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = bot_updates.run() => result,
+                };
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+                let _ = result.inspect_err(|error| {
+                    tracing::error!(error = ?error, "bot update consumer stopped");
+                });
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
+            }
+        }
+    });
+
     let soup_realtime_service = Arc::new(SoupRealtimeConsumerService::new(
         SoupTopicConsumer::from_env(config.kafka_brokers.as_ref()).map_err(|error| {
             anyhow::anyhow!("failed to create realtime Soup topic consumer: {error:?}")
@@ -2692,6 +2726,7 @@ async fn run_server() -> anyhow::Result<()> {
         ),
         graphql_contacts_context,
         graphql_bots_context,
+        graphql_bot_updates_context: graphql_bots::BotUpdatesGraphqlContext::new(bot_updates),
         graphql_calendar_context,
         graphql_calendar_mutation_context,
         initiative_state: InitiativeRouterState::new(
