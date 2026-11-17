@@ -694,11 +694,6 @@ export const enableSoupFilterPersistence = defineFlag({
   env: 'ENABLE_SOUP_FILTER_PERSISTENCE',
 });
 
-export const enableTaskDuplicates = defineFlag({
-  key: 'enable-task-duplicates',
-  default: onInDev,
-});
-
 // Snippets: reusable markdown documents, the `c` launcher entry, and the `;`
 // insert menu. PostHog-gated (currently targeted at the Macro team) with a
 // dev-mode default; override with VITE_ENABLE_SNIPPETS.
