@@ -112,6 +112,9 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     result
 }
 
+/// Where [`items_router`] is mounted.
+pub(crate) const ITEMS_PATH: &str = "/items";
+
 fn items_router(state: ApiContext) -> Router<ApiContext> {
     hide_sign_in_emails_from_programs(
         soup::inbound::axum_router::soup_router(state.soup_router_state.clone()),
@@ -232,7 +235,7 @@ fn api_router(state: ApiContext) -> Router {
             ]),
         )
         .nest("/instructions", instructions::router())
-        .nest("/items", items_router(state.clone()))
+        .nest(ITEMS_PATH, items_router(state.clone()))
         .nest(
             "/threads",
             threads::router(state.clone()).layer(axum::middleware::from_fn(

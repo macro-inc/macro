@@ -47,7 +47,8 @@ export type ChannelAttachment =
  */
 export class Channel extends PropertiedEntity<ChannelDetail> {
   /**
-   * Start or join this channel's call, ringing members if a new call starts.
+   * Start or join this channel's call, ringing members if a new call starts;
+   * refused to an agent's program (ExecuteCode, a routine).
    *
    * @write
    * @mcp-exclude Returns a live call room credential; MCP calls carry JSON only.

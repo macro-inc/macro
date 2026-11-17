@@ -31,13 +31,16 @@ The SDK adds `x-macro-sdk-verb` to each generated call from the hand-assigned
 registry; the header is attached to that call's options before request dispatch.
 
 Every request to an SDK origin carries `x-macro-code-execution: 1`, whatever
-credential it carries; it is the only mark a run under a plain user
-token (public MCP) has. APIs that ask a program to
+credential it carries. A program can drop it with a raw `fetch`, so a refusal
+that must hold reads the credential's signed claims too: every code-mode
+credential, public MCP's included, signs an agent or a routine
+(`macro_authorization::is_program_run`). APIs that ask a program to
 confirm what a person picks by opening something read it; the calendar
 mutation routes demand the copy's `inbox` from such requests, the calendar
 create route refuses them, and the email send and schedule routes refuse
 them unless the schedule quotes the user's approval
-(`macro_authorization::is_agent_run`).
+(`macro_authorization::is_agent_run`). The email sign-in and the MCP OAuth
+broker take no credential, so the header is what refuses a program there.
 
 A program reads Macro's own sign-in emails redacted (email and storage-service responses, `models_email::sign_in_email`), and GraphQL refuses it.
 

@@ -51,7 +51,7 @@ pub use policy::{
     UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
     UserOrInternalServiceAuthorization,
 };
-pub use program::{CODE_EXECUTION_HEADER, is_agent_run, is_program_run};
+pub use program::{CODE_EXECUTION_HEADER, PROGRAM_SIGN_IN_REFUSAL, is_agent_run, is_program_run};
 pub use program_json::{request_is_program, rewrite_program_json};
 pub use user_api_key::USER_API_KEY_HEADER;
 
