@@ -1148,11 +1148,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   bridge without changing the route). Webview origins are not desktop
   callbacks. Settings → Integrations refetches connection status on window
   `focus`, because returning from the browser does not change page visibility.
-  A route a deep link opens must not read `useSearchParams` once at mount: the
-  split router mounts it before it writes the URL to Solid Router, so the
-  query is still the previous route's. Read it reactively, or wait until the
-  location shows the route, as `EmailLinkCallback` does
-  (`features/auth/tests/inbox-link-deep-link.test.tsx`).
+  A route the split router takes a navigation over for (a deep link, or any
+  in-app navigation into it) mounts before Solid Router's location shows it,
+  so `useSearchParams` first returns the previous route's query. Never act on
+  a missing parameter until the location shows the route, as
+  `EmailLinkCallback` does (`features/auth/tests/inbox-link-deep-link.test.tsx`).
 - Keep send reservations, leases, and cancellation in the email journal; the general GraphQL queue handles draft autosaves only.
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
 - Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable. Never retry a superseded build (`cache-superseded`), stop after `MAX_RECOVERY_RELAPSES` restarts in a row whose cache failed again before staying up (restarts that fail outright keep retrying), and reset the count and backoff only after a restarted cache stays up for `RECOVERY_HEALTHY_MS`.
