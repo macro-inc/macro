@@ -31,7 +31,8 @@ use xtask_paths::RepoGlob;
 
 use crate::workflows::{
     cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
-    check_tauri_lockfiles, observability_aws, observability_image, runners, sdk_check, steps, test_macrod_update,
+    check_tauri_lockfiles, observability_aws, observability_image, runners, sdk_check, steps,
+    test_macrod_update,
 };
 
 #[cfg(test)]
