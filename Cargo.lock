@@ -390,6 +390,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "lazy-regex",
  "macro_auth",
  "macro_db_migrator",
  "rootcause",
@@ -402,6 +403,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "urlencoding",
  "uuid",
  "workspace-hack",
 ]

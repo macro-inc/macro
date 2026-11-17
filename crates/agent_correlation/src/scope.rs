@@ -197,8 +197,13 @@ const SENDS: &[(&str, &str)] = &[
 
 /// Requests that run any of a service's writes behind one path, outside
 /// every scope whatever their method: GraphQL runs mutations sent by POST or
-/// over its WebSocket, which opens with a GET. The SDK sends neither.
-const ANY_WRITE: &[(&str, &str)] = &[("POST", "/soup/graphql"), ("GET", "/soup/graphql/ws")];
+/// over its WebSocket, which opens with a GET. The SDK sends neither. Paths
+/// as document storage mounts them (its `items` router); its tests hold
+/// them to the mount.
+const ANY_WRITE: &[(&str, &str)] = &[
+    ("POST", "/items/soup/graphql"),
+    ("GET", "/items/soup/graphql/ws"),
+];
 
 /// Requests a generation session may make besides reads by method: its own
 /// tools and drafting email. Paths as the SDK sends them, `{…}` one segment.
@@ -378,21 +383,41 @@ const SERVICE_PREFIXES: &[&str] = &[
 ];
 
 /// Whether `path` is `template`'s SDK path, alone or under one service
-/// prefix, a `{…}` segment standing for any one segment.
+/// prefix, then alone or under one API version (`/v1`: document storage,
+/// cognition and notification also serve every route under `/{version}`).
+/// A `{…}` segment stands for any one segment. Segments are compared
+/// percent-decoded, as routers decode the parameters they match, so
+/// `/%76%31` is a version too.
 pub fn matches(path: &str, template: &str) -> bool {
-    let path = path.trim_end_matches('/');
-    let exact = |path: &str| {
-        let path: Vec<&str> = path.split('/').collect();
-        let template: Vec<&str> = template.trim_end_matches('/').split('/').collect();
+    let segments: Vec<std::borrow::Cow<'_, str>> = path
+        .trim_end_matches('/')
+        .split('/')
+        .map(|segment| urlencoding::decode(segment).unwrap_or(segment.into()))
+        .collect();
+    let template: Vec<&str> = template.trim_end_matches('/').split('/').collect();
+    let (Some((root, path)), Some((template_root, template))) =
+        (segments.split_first(), template.split_first())
+    else {
+        return false;
+    };
+    if !root.is_empty() || !template_root.is_empty() {
+        return false;
+    }
+    let exact = |path: &[std::borrow::Cow<'_, str>]| {
         path.len() == template.len()
-            && path.iter().zip(&template).all(|(segment, wanted)| {
+            && path.iter().zip(template).all(|(segment, wanted)| {
                 (wanted.starts_with('{') && wanted.ends_with('}') && !segment.is_empty())
                     || segment == wanted
             })
     };
-    exact(path)
-        || SERVICE_PREFIXES.iter().any(|prefix| {
-            path.strip_prefix(prefix)
-                .is_some_and(|rest| rest.starts_with('/') && exact(rest))
+    let unversioned = |path: &[std::borrow::Cow<'_, str>]| {
+        exact(path)
+            || path.split_first().is_some_and(|(version, rest)| {
+                lazy_regex::regex_is_match!(r"^v[0-9]+$", version) && exact(rest)
+            })
+    };
+    unversioned(path)
+        || path.split_first().is_some_and(|(prefix, rest)| {
+            SERVICE_PREFIXES.contains(&format!("/{prefix}").as_str()) && unversioned(rest)
         })
 }
