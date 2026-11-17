@@ -1,15 +1,20 @@
+import { PaneVisibilityContext } from '@core/context/pane-visibility';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { createSignal, onMount } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { AppView } from './app-route-shell';
+import { AppView, usePageViewTracking } from './app-route-shell';
 
 const device = vi.hoisted(() => ({
   touch: true,
   width: (): number | undefined => 1000,
 }));
 
+const pageViews = vi.hoisted((): string[] => []);
 vi.mock('@app/lib/analytics/analytics-context', () => ({
-  useAnalytics: () => ({ pageView: () => {}, track: () => {} }),
+  useAnalytics: () => ({
+    pageView: (title: string) => pageViews.push(title),
+    track: () => {},
+  }),
 }));
 vi.mock('@core/component/LoadingBlock', () => ({ LoadingBlock: () => null }));
 vi.mock('@core/mobile/isTouchDevice', () => ({
@@ -29,6 +34,7 @@ vi.mock('@components/app/split-layout/context', async () => {
 });
 
 beforeEach(() => {
+  pageViews.length = 0;
   device.touch = true;
   device.width = () => 1000;
 });
@@ -140,4 +146,23 @@ it('retains desktop Home previews', () => {
   ));
   expect(screen.getByText('Home preview')).toBeTruthy();
   expect(screen.queryByText('Standalone Home detail')).toBeNull();
+});
+
+it('counts a parked view shown again as another page view, and none while hidden', () => {
+  const [hidden, setHidden] = createSignal(false);
+  function TrackedView() {
+    usePageViewTracking('mail');
+    return null;
+  }
+  render(() => (
+    <PaneVisibilityContext.Provider value={{ hidden, suspended: () => false }}>
+      <TrackedView />
+    </PaneVisibilityContext.Provider>
+  ));
+  expect(pageViews).toEqual(['mail']);
+
+  setHidden(true);
+  expect(pageViews).toEqual(['mail']);
+  setHidden(false);
+  expect(pageViews).toEqual(['mail', 'mail']);
 });
