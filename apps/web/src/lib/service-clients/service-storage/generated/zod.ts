@@ -9208,6 +9208,12 @@ export const updateCrmEmailPrivacyResponse = zod
  */
 export const listCrmExcludedEmailThreadsQueryParams = zod.object({
   after: zod.uuid().nullish().describe('Read entries after this thread ID.'),
+  thread_id: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'Look up one thread instead of paging. Cannot be combined with `after`.'
+    ),
 });
 
 export const listCrmExcludedEmailThreadsResponse = zod

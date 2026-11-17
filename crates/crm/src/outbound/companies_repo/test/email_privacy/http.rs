@@ -220,7 +220,7 @@ async fn privacy_http_preserves_records_and_enforces_mailbox_and_role_boundaries
         );
     }
     assert!(
-        repo.excluded_email_threads(team, OWNER, None)
+        repo.excluded_email_threads(team, OWNER, None, None)
             .await?
             .threads
             .is_empty()
@@ -272,6 +272,27 @@ async fn privacy_http_preserves_records_and_enforces_mailbox_and_role_boundaries
             assert_eq!(body["threads"][0]["thread_id"], thread.to_string());
         }
     }
+
+    // The header lookup remains owner-only and has no continuation page.
+    let lookup = format!("/crm/email-privacy/threads?thread_id={thread}");
+    for (actor, expected_count) in [("owner", 1), ("member", 0)] {
+        let (status, body) = request_path(&app, actor, &lookup, None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["threads"].as_array().unwrap().len(), expected_count);
+        assert!(body["next_cursor"].is_null());
+        if actor == "owner" {
+            assert_eq!(body["threads"][0]["thread_id"], thread.to_string());
+        }
+    }
+    let absent = format!("/crm/email-privacy/threads?thread_id={}", Uuid::now_v7());
+    let (status, body) = request_path(&app, "owner", &absent, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["threads"], json!([]));
+    let mixed = format!("{lookup}&after={thread}");
+    assert_eq!(
+        request_path(&app, "owner", &mixed, None).await.0,
+        StatusCode::BAD_REQUEST
+    );
 
     assert_eq!(
         request(

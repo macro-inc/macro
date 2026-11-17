@@ -22,6 +22,8 @@ use macro_authorization::MacroAuthorizationService;
 pub struct ExcludedThreadsQuery {
     /// Read entries after this thread ID.
     pub after: Option<uuid::Uuid>,
+    /// Look up one thread instead of paging. Cannot be combined with `after`.
+    pub thread_id: Option<uuid::Uuid>,
 }
 
 /// List only the authenticated member's thread exclusions.
@@ -40,7 +42,7 @@ pub async fn excluded_threads_handler<
     Ok(Json(
         state
             .service
-            .excluded_email_threads(&access, query.after)
+            .excluded_email_threads(&access, query.after, query.thread_id)
             .await?,
     ))
 }

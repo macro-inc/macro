@@ -10066,6 +10066,16 @@
               "type": ["string", "null"],
               "format": "uuid"
             }
+          },
+          {
+            "name": "thread_id",
+            "in": "query",
+            "description": "Look up one thread instead of paging. Cannot be combined with `after`.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
           }
         ],
         "responses": {

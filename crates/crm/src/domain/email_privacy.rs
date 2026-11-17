@@ -113,6 +113,7 @@ pub trait EmailPrivacyRepository: Clone + Send + Sync + 'static {
         team: Uuid,
         user: &str,
         after: Option<Uuid>,
+        thread_id: Option<uuid::Uuid>,
     ) -> impl Future<Output = Result<ExcludedEmailThreads, CrmError>> + Send;
 
     /// Return a mailbox only when primary, currently in the team, and consented.
@@ -154,6 +155,7 @@ pub trait EmailPrivacyService: Clone + Send + Sync + 'static {
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         after: Option<Uuid>,
+        thread_id: Option<uuid::Uuid>,
     ) -> impl Future<Output = Result<ExcludedEmailThreads, CrmError>> + Send;
 
     /// Trusted background workers must resolve consent before historical fan-out.

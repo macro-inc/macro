@@ -240,6 +240,7 @@ impl crate::domain::email_privacy::EmailPrivacyService for FakeCrmService {
         &self,
         _: &crate::domain::auth::CrmTeamReceipt<entity_access::domain::models::MemberTeamRole>,
         _: Option<uuid::Uuid>,
+        _: Option<uuid::Uuid>,
     ) -> Result<crate::domain::email_privacy::ExcludedEmailThreads, crate::domain::model::CrmError>
     {
         panic!("unexpected excluded_email_threads call")

@@ -197,7 +197,10 @@ tools/HTTP/GraphQL surfaces over them.
 - When depopulating an email, prefer its domain-linked contact over a manual
   unfiled record so mailbox-source teardown reaches the synced contact.
 - Thread exceptions live in `crm_email_thread_exclusions`, scoped to one
-  team/member/mailbox/thread; mutations and paginated listing are owner-only.
+  team/member/mailbox/thread; mutations, paginated listing and the optional
+  `thread_id` lookup on that list are owner-only. Exact lookup returns zero or
+  one row without a cursor through an indexed owner lookup; reject it with
+  `after`.
   Keep these contribution controls available to members denied CRM viewing,
   like mailbox consent; use membership authority without `check_access`.
   Require `enable-crm-thread-exclusions` in the domain before set/clear, failing

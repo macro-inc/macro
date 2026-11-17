@@ -35,6 +35,7 @@ impl EmailPrivacyRepository for StubRepo {
         _: uuid::Uuid,
         _: &str,
         _: Option<uuid::Uuid>,
+        _: Option<uuid::Uuid>,
     ) -> Result<crate::domain::email_privacy::ExcludedEmailThreads, CrmError> {
         panic!("unexpected excluded_email_threads call")
     }

@@ -130,6 +130,7 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
         team: Uuid,
         user: &str,
         after: Option<Uuid>,
+        thread_id: Option<uuid::Uuid>,
     ) -> Result<ExcludedEmailThreads, CrmError> {
         let mut tx = self
             .pool
@@ -140,10 +141,30 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
             .execute(&mut *tx)
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        // Page the member's indexed exceptions before loading thread metadata.
-        let mut threads = sqlx::query_as!(
-            ExcludedEmailThread,
-            r#"SELECT e.thread_id, e.link_id, message.subject
+        // An exact lookup drives the header without scanning the member's pages.
+        let mut threads = if let Some(thread_id) = thread_id {
+            sqlx::query_as!(
+                ExcludedEmailThread,
+                r#"SELECT e.thread_id, e.link_id, message.subject
+                   FROM crm_email_thread_exclusions e
+                   JOIN email_links l ON l.id = e.link_id AND l.macro_id = $2
+                   LEFT JOIN LATERAL (
+                       SELECT subject FROM email_messages WHERE thread_id = e.thread_id
+                       ORDER BY internal_date_ts DESC LIMIT 1
+                   ) message ON TRUE
+                   WHERE e.team_id = $1 AND e.user_id = $2 AND e.thread_id = $3"#,
+                team,
+                user,
+                thread_id
+            )
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?
+        } else {
+            // Page the member's indexed exceptions before loading thread metadata.
+            sqlx::query_as!(
+                ExcludedEmailThread,
+                r#"SELECT e.thread_id, e.link_id, message.subject
                FROM (
                    SELECT thread_id, link_id FROM crm_email_thread_exclusions
                    WHERE team_id = $1 AND user_id = $2
@@ -156,13 +177,14 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
                    ORDER BY internal_date_ts DESC LIMIT 1
                ) message ON TRUE
                ORDER BY e.thread_id"#,
-            team,
-            user,
-            after
-        )
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                team,
+                user,
+                after
+            )
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?
+        };
         let next_cursor = if threads.len() > 50 {
             threads.truncate(50);
             threads.last().map(|thread| thread.thread_id)
