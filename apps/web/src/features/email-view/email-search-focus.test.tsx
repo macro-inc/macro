@@ -13,7 +13,7 @@ import {
 import { setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { fireEvent, render } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, expect, it } from 'vitest';
 import {
   focusEmailSearchResults,
@@ -33,11 +33,12 @@ function press(key: string, init: KeyboardEventInit = {}) {
  * Email's search field, list and tab keys over the real hotkey engine: the
  * search hands the keyboard to Email's split panel, and Tab is Email's own.
  */
-function setup() {
+function setup(options: { list?: boolean } = {}) {
+  const withList = options.list ?? true;
   const [tab, setTab] = createSignal('noise');
   const [search, setSearch] = createSignal('macro');
   let split!: HTMLDivElement;
-  let list!: HTMLDivElement;
+  let list: HTMLDivElement | undefined;
 
   function Harness() {
     useHotKeyRoot();
@@ -56,13 +57,15 @@ function setup() {
       shouldHandleSequentialKeyEvent: switchesEmailTabs,
     });
     // The list's own jump to its first row, as use-list-interactions has it.
-    registerHotkey({
-      hotkey: 'home',
-      hotkeyToken: TOKENS.entity.jump.home,
-      scopeId: splitScope,
-      description: 'Go to first item',
-      keyDownHandler: () => true,
-    });
+    if (withList) {
+      registerHotkey({
+        hotkey: 'home',
+        hotkeyToken: TOKENS.entity.jump.home,
+        scopeId: splitScope,
+        description: 'Go to first item',
+        keyDownHandler: () => true,
+      });
+    }
 
     return (
       <div ref={(element) => attachGlobalDOMScope(element)}>
@@ -78,15 +81,17 @@ function setup() {
               label="Search email"
               value={search()}
               onValueChange={setSearch}
-              focusResults={() => focusEmailSearchResults(panel)}
+              focusResults={() => focusEmailSearchResults(panel, list)}
               registerFocus={() => {}}
             />
           </SplitPanelContext.Provider>
-          <div ref={list} role="grid" aria-label="Email" tabIndex={0}>
-            <div role="row">
-              <button type="button">teo</button>
+          <Show when={withList}>
+            <div ref={list} role="grid" aria-label="Email" tabIndex={0}>
+              <div role="row">
+                <button type="button">teo</button>
+              </div>
             </div>
-          </div>
+          </Show>
         </div>
       </div>
     );
@@ -94,7 +99,7 @@ function setup() {
 
   const view = render(() => <Harness />);
   const field = () => view.getByRole('searchbox', { name: 'Search email' });
-  return { tab, search, field, split: () => split, list: () => list };
+  return { tab, search, field, split: () => split, list: () => list! };
 }
 
 it('switches tabs with Tab after Escape leaves the search', () => {
@@ -128,4 +133,12 @@ it('keeps Tab for the rows while the list itself has focus', () => {
 
   press('Tab');
   expect(tab()).toBe('noise');
+});
+
+it('keeps ArrowDown with the field while no list is on screen', () => {
+  const { field } = setup({ list: false });
+  field().focus();
+
+  press('ArrowDown');
+  expect(document.activeElement).toBe(field());
 });

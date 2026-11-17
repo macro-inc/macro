@@ -104,6 +104,7 @@ function EmailListFallback() {
 function EmailPanes(props: {
   list: JSX.Element;
   focusList: () => void;
+  focusSearchResults: () => void;
   setListPane: (pane: EmailListPane | undefined) => void;
   onListWidthChange: (width: number) => void;
 }) {
@@ -146,7 +147,7 @@ function EmailPanes(props: {
     <>
       <EmailHeader
         tabOnly={beside === 'reader'}
-        focusSearchResults={() => focusEmailSearchResults(panel)}
+        focusSearchResults={props.focusSearchResults}
         registerSearch={search.registerListSearch}
         searchSuggestions={searchSuggestions()}
       />
@@ -157,7 +158,7 @@ function EmailPanes(props: {
             suggestions={suggestions()}
             onPick={(index) => {
               suggestions().pick(index);
-              focusEmailSearchResults(panel);
+              props.focusSearchResults();
             }}
           />
         )}
@@ -193,6 +194,7 @@ function EmailPanes(props: {
 function EmailDesktopLayout(props: {
   list: JSX.Element;
   focusList: () => void;
+  focusSearchResults: () => void;
   setListPane: (pane: EmailListPane | undefined) => void;
 }) {
   const { readingPane, composing } = useEmailView();
@@ -230,6 +232,7 @@ function EmailDesktopLayout(props: {
       <EmailPanes
         list={props.list}
         focusList={props.focusList}
+        focusSearchResults={props.focusSearchResults}
         setListPane={props.setListPane}
         onListWidthChange={setListWidth}
       />
@@ -302,6 +305,8 @@ function EmailViewRoot() {
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
   const [listPane, setListPane] = createSignal<EmailListPane>();
   const focusList = () => listElement()?.focus();
+  const focusSearchResults = () =>
+    focusEmailSearchResults(panel, listElement());
 
   onMount(() => panel.handle.setDisplayName('Email'));
 
@@ -366,6 +371,7 @@ function EmailViewRoot() {
               <EmailDesktopLayout
                 list={list()}
                 focusList={focusList}
+                focusSearchResults={focusSearchResults}
                 setListPane={setListPane}
               />
             }

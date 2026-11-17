@@ -17,10 +17,14 @@ export function switchesEmailTabs(event: KeyboardEvent | undefined) {
  * Where Email's search field hands the keyboard on ArrowDown, Enter and
  * Escape: the split panel, where the list's keys run before anyone searched,
  * so Tab still switches tabs. The list element would turn Tab into browser
- * focus moves through its rows.
+ * focus moves through its rows. Without a list on screen (a saved view that
+ * is loading or unavailable) the keyboard stays with the field.
  */
 export function focusEmailSearchResults(
-  panel: Pick<SplitPanelContextType, 'panelRef'>
+  panel: Pick<SplitPanelContextType, 'panelRef'>,
+  list: HTMLElement | undefined
 ) {
+  if (!list?.isConnected) return;
+
   panel.panelRef()?.focus();
 }
