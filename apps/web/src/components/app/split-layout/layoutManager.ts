@@ -1217,6 +1217,10 @@ export function createSplitLayout(
       return;
     }
 
+    setActiveSplit(id);
+  }
+
+  function setActiveSplit(id: SplitId) {
     const current = state.activeSplitId;
     if (current !== id) setState('lastActiveSplitId', current);
     if (state.spotlightId && state.spotlightId !== id) {
@@ -1226,12 +1230,17 @@ export function createSplitLayout(
     viewState.activate(id);
   }
 
-  /** Stacked panes bring a pane behind the front forward; the panes that were in front of it stay, behind it. */
+  /**
+   * Stacked panes bring a pane behind the front forward; the panes that were in
+   * front of it stay, behind it. The splits follow the router's new order only
+   * once their computations run, which inside a reactive update or a router
+   * commit is after this returns, so the split is activated without waiting.
+   */
   function bringToFront(id: SplitId) {
     if (splitIndexById(id) < 0) return;
 
     router.move(paneOf(id), state.splits.length - 1);
-    activateSplit(id);
+    setActiveSplit(id);
   }
 
   function spotlightSplit(id: SplitId) {
