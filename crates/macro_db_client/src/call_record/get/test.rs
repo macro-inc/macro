@@ -479,8 +479,10 @@ async fn grants_are_read_by_source_and_granted_calls_looked_up_by_id(
             .map(|line| line.trim_start().trim_start_matches("->").trim_start())
             .collect();
 
+        // An index-only scan, or a bitmap scan when the visibility map is not
+        // set yet: either reads the grants by source.
         let grants_by_source = nodes.windows(2).any(|pair| {
-            pair[0].contains("using idx_entity_access_source_type_entity_plain on entity_access")
+            pair[0].contains("idx_entity_access_source_type_entity_plain")
                 && pair[1].starts_with("Index Cond: ((source_id = ANY")
         });
         assert!(
