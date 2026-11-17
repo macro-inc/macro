@@ -100,6 +100,12 @@ OTA manifests just as strictly: a bundle persisted before stamping (no
 `commitTime`) is rejected as `manifest_invalid` at startup, and the app serves
 its embedded bundle until the next update.
 
+iOS and Android store builds are cut from their PR head, so they embed that
+commit's time, not the time it merged. Once installed they are offered the OTA
+bundle of their own squash-merge commit (a redundant download), and a main commit
+merged before their PR head was committed is not offered until a newer deploy.
+Both settle within one release; neither is the old embedded-versus-OTA desync.
+
 ## File saving and sharing
 
 The optional `file_export_plugin` registers iOS save/share commands. The web
