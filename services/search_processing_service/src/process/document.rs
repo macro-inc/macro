@@ -100,3 +100,23 @@ pub async fn process_extract_sync_message(
 
     Ok(())
 }
+
+/// Mark released documents as no longer email attachments. A refusal or a
+/// failed item fails the attempt, so the event is retried like any other
+/// action; the update is idempotent.
+pub async fn process_release_email_attachments(
+    opensearch_client: &OpensearchClient,
+    document_ids: &[String],
+) -> anyhow::Result<()> {
+    let result = opensearch_client
+        .bulk_update_email_attachment(document_ids, false)
+        .await?;
+    if !result.failed.is_empty() {
+        anyhow::bail!(
+            "{} of {} released documents failed to update",
+            result.failed.len(),
+            document_ids.len()
+        );
+    }
+    Ok(())
+}

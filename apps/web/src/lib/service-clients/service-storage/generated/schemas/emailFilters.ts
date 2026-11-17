@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmailFiltersCalendarOnly } from './emailFiltersCalendarOnly';
+import type { EmailFiltersDone } from './emailFiltersDone';
 import type { EmailFiltersImportance } from './emailFiltersImportance';
 import type { EmailFiltersIsRead } from './emailFiltersIsRead';
 import type { NotificationFilters } from './notificationFilters';
@@ -36,6 +37,10 @@ against `crm_domains` + `crm_companies` (must exist for the caller's
 team, company must not be hidden, `email_sync` must be true).
 Mutually exclusive with `crm_addresses`. */
   crm_domains?: string[];
+  /** Filter by whether the thread is done: true for threads out of the
+inbox (archived), false for threads still in it. This is the mailbox
+state the Email view's Done filter uses, independent of notifications. */
+  done?: EmailFiltersDone;
   /** Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads. */
   email_thread_ids?: string[];
   /** Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. "CATEGORY_PROMOTIONS") and user-created labels. Empty to not exclude any labels.

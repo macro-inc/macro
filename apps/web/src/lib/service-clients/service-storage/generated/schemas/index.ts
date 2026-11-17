@@ -1342,6 +1342,7 @@ export * from './emailAttachmentsReleasedMetadata';
 export * from './emailBlockScope';
 export * from './emailFilters';
 export * from './emailFiltersCalendarOnly';
+export * from './emailFiltersDone';
 export * from './emailFiltersImportance';
 export * from './emailFiltersIsRead';
 export * from './emailFollowup';
