@@ -1,7 +1,5 @@
 import { DEFAULT_TASK_COMPOSER_PROPERTY_IDS } from '@app/features/task-composer/property-defaults';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
-import { enableProjects } from '@core/constant/featureFlags';
 import { createTaskWithInitialSnapshot } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import {
@@ -50,13 +48,11 @@ export function taskComposerWritableDefinitions(
 /** Keep the default order unless a host supplies its own visible property list. */
 export function taskComposerVisiblePropertyIds(
   requested: readonly string[] | undefined,
-  available: readonly PropertyDefinition[],
-  projectsEnabled: boolean
+  available: readonly PropertyDefinition[]
 ): string[] {
   const ids = new Set(available.map((definition) => definition.id));
   return [...new Set(requested ?? DEFAULT_TASK_COMPOSER_PROPERTY_IDS)].filter(
-    (id) =>
-      ids.has(id) && (id !== SYSTEM_PROPERTY_IDS.PROJECT || projectsEnabled)
+    (id) => ids.has(id)
   );
 }
 
@@ -341,8 +337,6 @@ export function createTaskComposerProperties(args: {
     );
   };
 
-  const projects = useFeatureFlag(enableProjects);
-
   const visibleIds = () =>
     taskComposerVisiblePropertyIds(
       [
@@ -351,14 +345,11 @@ export function createTaskComposerProperties(args: {
           ...(args.additionalPropertyIds?.() ?? []),
         ]),
       ],
-      availableDefinitions(),
-      projects().enabled
+      availableDefinitions()
     ).filter((id) => !args.hiddenPropertyIds?.includes(id));
   const addableDefinitions = () =>
     availableDefinitions().filter(
-      (definition) =>
-        !visibleIds().includes(definition.id) &&
-        (definition.id !== SYSTEM_PROPERTY_IDS.PROJECT || projects().enabled)
+      (definition) => !visibleIds().includes(definition.id)
     );
   const addProperty = async (
     id: string,
@@ -376,12 +367,7 @@ export function createTaskComposerProperties(args: {
   };
   const availableProperties = () =>
     availableDefinitions()
-      .filter(
-        (definition) =>
-          (definition.id !== SYSTEM_PROPERTY_IDS.PROJECT ||
-            projects().enabled) &&
-          !args.hiddenPropertyIds?.includes(definition.id)
-      )
+      .filter((definition) => !args.hiddenPropertyIds?.includes(definition.id))
       .map((definition) =>
         toPropertyDefinitionDomain(definition, options().get(definition.id))
       );

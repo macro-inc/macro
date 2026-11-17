@@ -27,14 +27,6 @@ vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => device.touch,
 }));
-vi.mock('@core/constant/featureFlags', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@core/constant/featureFlags')>();
-  return {
-    ...actual,
-    isFeatureEnabled: (flag: unknown) => flag === actual.enableAgentNavigation,
-  };
-});
 
 const NativeChannel = globalThis.BroadcastChannel;
 const opened: BroadcastChannel[] = [];

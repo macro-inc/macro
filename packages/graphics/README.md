@@ -16,7 +16,10 @@ the pure core. Expanding peer support is deferred.
 
 - `@macro-inc/graphics`: document, affine math, scene queries, selection, editing,
   validation and local history. No DOM, Solid, app or Loro imports.
-- `@macro-inc/graphics/browser`: pointer capture, keyboard and wheel input.
+- `@macro-inc/graphics/browser`: pointer capture, keyboard, wheel and touch input.
+- `@macro-inc/graphics/pan-zoom`: the inertial glide and two-finger step shared
+  by Canvas and the image viewers. It owns no transform and imports nothing
+  from the scene, so other pan/zoom surfaces can use it.
 - `@macro-inc/graphics/solid`: read-only reactive projection and keyed renderers.
 - `@macro-inc/graphics/loro`: optional Loro backend and presence APIs. The
   in-memory peer transport lives in test support only.

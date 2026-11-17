@@ -11,22 +11,18 @@ import { usePlatformNotificationState } from '@notifications';
 import { DefaultUserNameResolver } from '@notifications/notification-resolvers';
 import { invalidateActiveMeetings } from '@queries/call/meetings';
 import { useNavigate } from '@solidjs/router';
-import { onCleanup, type ParentProps, Show } from 'solid-js';
+import { onCleanup, type ParentProps } from 'solid-js';
 import { IncomingMeetingInvitationsContext } from './context/incoming-meeting-invitations';
 import { meetingInvitationRingKey } from './core/meeting-invitations';
 import { createIncomingMeetingInvitations } from './primitives/incoming-meeting-invitations';
-import { useQuickCallsFlag } from './use-quick-calls-flag';
 import { IncomingCallNotifications } from './views/incoming-call-notifications';
 
 /** App-wide receiver, mounted under the router so Answer opens meeting setup. */
 export function IncomingMeetingInvitationsProvider(props: ParentProps) {
-  const flag = useQuickCallsFlag();
   return (
     <>
       {props.children}
-      <Show when={!flag().loading && flag().enabled}>
-        <IncomingMeetingInvitationsReceiver />
-      </Show>
+      <IncomingMeetingInvitationsReceiver />
     </>
   );
 }

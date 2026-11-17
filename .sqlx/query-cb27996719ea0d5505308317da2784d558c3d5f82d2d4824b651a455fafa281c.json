@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE((SELECT TRUE FROM crm_email_rule_contacts WHERE team_id=$1 ORDER BY user_id,revision,contact_id LIMIT 1), FALSE) AS \"referenced!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "referenced!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cb27996719ea0d5505308317da2784d558c3d5f82d2d4824b651a455fafa281c"
+}

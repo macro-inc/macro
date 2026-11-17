@@ -4,6 +4,7 @@ export { ProjectBreadCrumb } from './components/ProjectBreadCrumb';
 export { UnreadIndicator } from './components/UnreadIndicator';
 export { InlineEntity } from './composed/InlineEntity';
 export {
+  type EmailRowStyle,
   ListEntity,
   ListLayoutProvider,
   MaybeEntityRow,

@@ -51,12 +51,40 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 /// Builds the complete production HTTP surface without opening a listener.
 pub(crate) fn app(state: ApiContext) -> Router {
     let correlation = state.correlation.clone();
-    let traced_api = traced(api_router(state.clone()).with_state(state).layer(
-        axum::middleware::from_fn_with_state(correlation, agent_correlation::inbound::propagate),
-    ));
+    let authorization = state.authorization_state.clone();
+    let traced_api = traced(
+        // Inside compression, so it reads the handler's JSON.
+        hide_sign_in_emails_from_programs(
+            api_router(state.clone()).with_state(state),
+            authorization,
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            correlation,
+            agent_correlation::inbound::propagate,
+        )),
+    );
     let health = health::router();
     mount_at_root_and_prefix(traced_api.merge(health)).merge(swagger_ui())
 }
+
+/// A program reads Macro's own sign-in emails only redacted: one that read
+/// the code could sign in as the user. A person's responses pass unchanged.
+fn hide_sign_in_emails_from_programs<S: Clone + Send + Sync + 'static>(
+    router: Router<S>,
+    authorization: macro_authorization::MacroAuthorizationState<context::AuthorizationService>,
+) -> Router<S> {
+    router.layer(axum::middleware::from_fn(move |request, next| {
+        macro_authorization::rewrite_program_json(
+            authorization.clone(),
+            request,
+            next,
+            models_email::sign_in_email::hide_sign_in_emails,
+        )
+    }))
+}
+
+#[cfg(test)]
+mod sign_in_email_test;
 
 /// Wraps the API in the request id, server span, CORS and compression layers.
 /// The server span is the shared INFO-level `http.request` span that adopts an

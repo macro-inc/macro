@@ -54,6 +54,8 @@ resolve it before credentials, strip it before upstream dispatch, and ask for
 approval only when the selected account differs from the verified requester.
 Check turn authority through `TurnPrompter::acting_user()`: System turns never
 inherit requester access, including malformed records retaining a user ID.
+A Program turn (a program or routine prompted it for the user) acts with that
+user's access, so its calls are held or not exactly as the user's own turn's.
 Keep discovery on the session owner's configured catalog. Requester-only
 integrations are not advertised by this version. A missing selected connection
 returns an actionable tool error; never fall back to another account.
@@ -76,7 +78,8 @@ client label (public MCP code mode signs the MCP client's name) and a
 `SignedCorrelation`: the code-mode correlation and its session's scope, signed
 as `agent_scope` so services with no database enforce it too; `mint_for`
 signs none of these claims. `mint_for_routine` signs the routine whose run the
-token acts for (and optionally an agent; `None` writes as the owner).
+token acts for (and optionally an agent; `None` writes as the owner, and a
+scope, `dry_run` for a routine's dry run).
 
 ## Gotchas
 

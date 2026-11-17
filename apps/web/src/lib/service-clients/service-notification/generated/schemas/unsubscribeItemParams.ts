@@ -10,4 +10,9 @@ export type UnsubscribeItemParams = {
    * A future resume time. Omit to mute indefinitely.
    */
   snoozed_until?: string | null;
+  /**
+ * Keep notifying for messages that @mention the user directly and silence
+the rest. Channels only; cannot be combined with `snoozed_until`.
+ */
+  mentions_only?: boolean;
 };
