@@ -1202,7 +1202,7 @@ export default function AgentUiGallery() {
             />
           </Item>
 
-          <Item label="MagicChip asking (form, url, tool draft)">
+          <Item label="MagicChip asking (form, url)">
             <MagicChipAskingDemo
               request={{ kind: 'form', schema: FIXTURE_ELICITATION }}
             />
@@ -1211,26 +1211,6 @@ export default function AgentUiGallery() {
                 kind: 'url',
                 elicitationId: 'gh-1',
                 url: 'https://github.com/login/device?user_code=ABCD-1234',
-              }}
-            />
-            <MagicChipAskingDemo
-              request={{
-                kind: 'user_tool',
-                tool: 'CreateCalendarEvent',
-                draft: {
-                  title: 'Q3 sync',
-                  time: {
-                    kind: 'timed',
-                    startsAt: '2026-08-20T17:00:00Z',
-                    endsAt: '2026-08-20T17:30:00Z',
-                    timeZone: 'UTC',
-                  },
-                  attendees: [],
-                  recurrenceLines: [],
-                  addConference: false,
-                  eventType: 'default',
-                },
-                schema: FIXTURE_ELICITATION,
               }}
             />
           </Item>

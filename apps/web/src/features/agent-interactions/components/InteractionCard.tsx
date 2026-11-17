@@ -6,18 +6,14 @@ import type {
   AgentInteraction,
   InteractionController,
 } from '../context/interaction';
-import {
-  LiveQuestionCard,
-  parseDraftedTool,
-  type RespondToElicitation,
-  UserToolComposer,
-} from './LiveElicitation';
+import { LiveQuestionCard, type RespondToElicitation } from './LiveElicitation';
 import { PermissionCard } from './PermissionCard';
 
 /**
  * Full live approvals and questions shared by conversation surfaces. Each
- * card is capped at a fixed height and scrolls inside, so a long form or a
- * draft under review never pushes the conversation off screen.
+ * card is capped at a fixed height and scrolls inside, so a long form never
+ * pushes the conversation off screen. A user tool review from an older
+ * session shows as the flat form the agent also sent.
  */
 export function InteractionCard(props: {
   request: AgentInteraction;
@@ -59,38 +55,6 @@ export function InteractionCard(props: {
       // Keep the answer's typed shape intact; the controller checks liveness.
       const onRespond: RespondToElicitation = (answer) =>
         props.controller.respond({ ...request, answer });
-      const content = () => {
-        if (request.request.kind !== 'user_tool')
-          return (
-            <LiveQuestionCard
-              request={request.request}
-              locked={locked()}
-              onRespond={onRespond}
-            />
-          );
-        const fallback = (
-          <LiveQuestionCard
-            request={{ kind: 'form', schema: request.request.schema }}
-            locked={locked()}
-            onRespond={onRespond}
-          />
-        );
-        const toolCall = request.toolCall ?? String(request.requestId);
-        const draft = parseDraftedTool(request.request, toolCall);
-        return (
-          <Show when={draft} fallback={fallback}>
-            {(tool) => (
-              <UserToolComposer
-                tool={tool()}
-                toolCall={toolCall}
-                cancel
-                fallback={fallback}
-                review={{ canAnswer: () => !locked(), respond: onRespond }}
-              />
-            )}
-          </Show>
-        );
-      };
       return (
         <section
           aria-label="Agent question"
@@ -103,7 +67,15 @@ export function InteractionCard(props: {
               conversation.
             </p>
           </Show>
-          {content()}
+          <LiveQuestionCard
+            request={
+              request.request.kind === 'user_tool'
+                ? { kind: 'form', schema: request.request.schema }
+                : request.request
+            }
+            locked={locked()}
+            onRespond={onRespond}
+          />
         </section>
       );
     })

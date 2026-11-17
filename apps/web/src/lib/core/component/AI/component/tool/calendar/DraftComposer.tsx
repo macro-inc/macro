@@ -3,8 +3,8 @@
  * no opinion about where the draft came from or where the decision goes.
  *
  * Chat mounts it over a pending user tool and finishes the call through the
- * cognition endpoints; an agent session mounts it over a review elicitation
- * and answers the agent. Both hand in a {@link UserToolReviewSink}; the
+ * cognition endpoints; an agent session mounts it on a saved review card
+ * and submits the review. Both hand in a {@link UserToolReviewSink}; the
  * composer only knows how to edit the draft and what the two buttons mean.
  */
 

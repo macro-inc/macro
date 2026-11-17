@@ -6,24 +6,16 @@
  * Fields and decisions are separate components over one draft so a surface
  * can place them apart - the chip crops the fields in its area and keeps the
  * decisions on the row beneath - while `LiveQuestionCard` stacks them for
- * the session. A Macro user tool under review opens in the tool's own
- * composer (`UserToolComposer`); a draft the tool's schema rejects falls
- * back to the flat form the agent also sent, through these.
+ * the session. A Macro user tool review from an older session answers
+ * through the flat form the agent also sent.
  */
 
-import { CalendarDraftComposer } from '@core/component/AI/component/tool/calendar/DraftComposer';
-import { EmailDraftComposer } from '@core/component/AI/component/tool/email/DraftComposer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   ElicitationRequest,
   ElicitationSchema,
 } from '@service-agent-fold/generated/types';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
-import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
-import type {
-  CreateCalendarEvent,
-  SendEmail,
-} from '@service-cognition/generated/tools/types';
 import { Button } from '@ui';
 import {
   type Accessor,
@@ -43,14 +35,13 @@ import {
   toContent,
   validate,
 } from '../state/elicitation-form';
-import { createElicitationReviewSink } from '../state/elicitation-review-sink';
 import { ElicitationForm } from './ElicitationForm';
 
 export type RespondToElicitation = (
   answer: ElicitationAnswer
 ) => Promise<boolean>;
 
-/** Every request the shared controls answer; a user tool is the surface's. */
+/** Every request the shared controls answer; a surface shows a user tool as its form. */
 export type LiveQuestionRequest = Exclude<
   ElicitationRequest,
   { kind: 'user_tool' }
@@ -296,134 +287,5 @@ export function LiveQuestionCard(props: {
         </Show>
       </div>
     </div>
-  );
-}
-
-export type UserToolRequest = Extract<
-  ElicitationRequest,
-  { kind: 'user_tool' }
->;
-
-/** A drafted Macro user tool, as its schema reads it. */
-export type DraftedTool = { name: string; data: unknown };
-
-/** What a review needs to know to act: the session's or the chip's answer. */
-export type ReviewInputs = Parameters<typeof createElicitationReviewSink>[0];
-
-/**
- * The draft as the tool's schema reads it, or undefined for a tool this
- * client has no schema for. A draft that a known tool's schema rejects is a
- * contract break between the agent and this build: it is reported, not
- * rendered around, before the caller falls back to the flat form.
- */
-export function parseDraftedTool(
-  request: UserToolRequest,
-  toolCall: string
-): DraftedTool | undefined {
-  // Old sessions may still contain a booking review. Keep its internal IDs out
-  // of the generic form and let the user dismiss it to resume the conversation.
-  if (
-    request.tool === 'CreateBookingLink' ||
-    request.tool === 'EditBookingLink'
-  ) {
-    return { name: request.tool, data: request.draft };
-  }
-  const call = deserializeToolCall({
-    id: toolCall,
-    name: request.tool,
-    json: request.draft,
-  });
-  if (call.isOk()) return { name: call.value.name, data: call.value.data };
-  if (call.error.some((problem) => problem.code === 'parse_error')) {
-    console.error(
-      '[elicitation] a user tool draft was rejected by its schema',
-      {
-        tool: request.tool,
-        problems: call.error,
-      }
-    );
-  }
-  return undefined;
-}
-
-/**
- * A drafted Macro user tool in the tool's own composer: the calendar event
- * form for `CreateCalendarEvent`, the email compose for `SendEmail`. The
- * composer's Create/Send accepts the review with the whole edited draft; its
- * Cancel, where it has one, declines. The email composer has only Send, so
- * `cancel` adds a Cancel beneath it for a surface with no other refusal.
- * `fallback` renders a tool this client has no composer for.
- */
-export function UserToolComposer(props: {
-  tool: DraftedTool;
-  toolCall: string;
-  review: ReviewInputs;
-  cancel?: boolean;
-  fallback?: JSX.Element;
-}) {
-  const sink = <T,>() => createElicitationReviewSink<T>(props.review);
-  const locked = () => !props.review.canAnswer();
-  return (
-    <Switch fallback={props.fallback}>
-      <Match
-        when={
-          props.tool.name === 'CreateBookingLink' ||
-          props.tool.name === 'EditBookingLink'
-        }
-      >
-        <div class="flex flex-col items-start gap-2 text-sm text-ink-muted">
-          <p>
-            Booking links are now confirmed in conversation. Dismiss this older
-            request and ask the agent to summarize the details.
-          </p>
-          <Button
-            size="xs"
-            variant="ghost"
-            disabled={locked()}
-            onClick={() =>
-              fireAndForget(
-                props.review.respond({ action: 'decline' }),
-                'agent-interactions'
-              )
-            }
-          >
-            Dismiss request
-          </Button>
-        </div>
-      </Match>
-      <Match when={props.tool.name === 'CreateCalendarEvent'}>
-        <CalendarDraftComposer
-          initialData={props.tool.data as CreateCalendarEvent}
-          sink={sink<CreateCalendarEvent>()}
-          previewKey={props.toolCall}
-        />
-      </Match>
-      <Match when={props.tool.name === 'SendEmail'}>
-        <div class="flex flex-col gap-2">
-          <EmailDraftComposer
-            initialData={props.tool.data as SendEmail}
-            sink={sink<SendEmail>()}
-            debugName={`agent-review:${props.toolCall}`}
-          />
-          <Show when={props.cancel}>
-            <div class="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="xs"
-                disabled={locked()}
-                onClick={() =>
-                  fireAndForget(
-                    props.review.respond({ action: 'decline' }),
-                    'agent-interactions'
-                  )
-                }
-              >
-                Cancel
-              </Button>
-            </div>
-          </Show>
-        </div>
-      </Match>
-    </Switch>
   );
 }
