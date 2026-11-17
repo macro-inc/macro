@@ -738,8 +738,10 @@ key, and projects sort by name with No Project last. Data a grouped list shows
 about its groups (labels, order, membership) is computed on the server and
 mirrored by the cache's local grouping projection; never add a side cache in
 feature code to cover a remount.
-Project identity chips use cache-first reads and the shared `GraphqlUser.initiative`
+Project identity chips use cache-first reads and the shared `GraphqlUser.visibleInitiative`
 entity resolver to reuse complete authorized records from project lists or details.
+A missing or hidden project reads as `null`, and a cached null outranks a record
+that arrives later, so project reads ask the server once before showing it.
 Keep cold row metadata reads non-suspending so virtual scrolling never detaches
 its list; permission revalidation remains independent of row mounts. Project
 reads retain client-scoped denial state across remounts and immediately reauthorize
