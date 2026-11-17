@@ -78,6 +78,7 @@ async fn canceled_subscription_does_not_get_another_trial_or_a_paid_fallback() {
         history: SubscriptionHistory {
             has_previous_subscription: true,
             has_existing_subscription: false,
+            has_trialing_subscription: false,
         },
         ..Default::default()
     });
@@ -94,6 +95,7 @@ async fn active_and_trialing_customers_cannot_buy_a_second_subscription() {
         history: SubscriptionHistory {
             has_previous_subscription: true,
             has_existing_subscription: true,
+            has_trialing_subscription: false,
         },
         ..Default::default()
     });
@@ -126,6 +128,7 @@ async fn ordinary_checkout_keeps_its_paid_terms_and_invite_promotion() {
         history: SubscriptionHistory {
             has_previous_subscription: true,
             has_existing_subscription: false,
+            has_trialing_subscription: false,
         },
         ..Default::default()
     });
@@ -220,10 +223,12 @@ async fn trial_eligibility_and_checkout_use_the_same_subscription_history() {
         SubscriptionHistory {
             has_previous_subscription: true,
             has_existing_subscription: false,
+            has_trialing_subscription: false,
         },
         SubscriptionHistory {
             has_previous_subscription: true,
             has_existing_subscription: true,
+            has_trialing_subscription: false,
         },
     ] {
         let service = CheckoutService::new(FakeGateway {
@@ -266,4 +271,20 @@ async fn missing_billing_customer_cannot_be_confirmed_trial_eligible() {
         service.trial_eligibility(&request(true).user_id).await,
         Err(CheckoutError::MissingCustomer)
     ));
+}
+
+#[test]
+fn a_live_subscription_reads_as_a_trial_or_a_charge() {
+    assert_eq!(SubscriptionHistory::default().subscribed(), None);
+    let live = SubscriptionHistory {
+        has_previous_subscription: true,
+        has_existing_subscription: true,
+        has_trialing_subscription: false,
+    };
+    assert_eq!(live.subscribed(), Some(Subscribed::Paid));
+    let trialing = SubscriptionHistory {
+        has_trialing_subscription: true,
+        ..live
+    };
+    assert_eq!(trialing.subscribed(), Some(Subscribed::Trial));
 }

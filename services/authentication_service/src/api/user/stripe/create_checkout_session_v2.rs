@@ -111,6 +111,12 @@ pub async fn create_checkout_session<Eas: EntityAccessService>(
             metadata,
         })
         .await?;
+    // Tells the support follow-up a new user opened a checkout.
+    if let Some(follow_ups) = &ctx.support_follow_ups {
+        follow_ups
+            .note_checkout(&user.authorization.user.macro_user_id)
+            .await;
+    }
     Ok(Json(CheckoutSessionV2Response {
         url: checkout.url,
         trial_days: checkout.trial_days,

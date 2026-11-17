@@ -19,6 +19,15 @@ use super::{
     user_create_webhook_error_response,
 };
 
+/// The follow-up is posted with its sender's own membership of the channel.
+#[test]
+fn support_follow_up_sender_joins_every_support_channel() {
+    assert!(
+        MACRO_SUPPORT_EMAILS
+            .contains(&crate::service::user::support_channel_follow_up::SENDER_EMAIL)
+    );
+}
+
 /// A bad entry would skip support channel creation for every signup.
 #[test]
 fn support_emails_are_distinct_user_ids() {

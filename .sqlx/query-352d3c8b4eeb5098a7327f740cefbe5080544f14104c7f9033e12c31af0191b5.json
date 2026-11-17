@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE support_follow_ups\n            SET gmail_attempted_at = NOW()\n            WHERE user_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "352d3c8b4eeb5098a7327f740cefbe5080544f14104c7f9033e12c31af0191b5"
+}
