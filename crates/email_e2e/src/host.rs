@@ -4,8 +4,10 @@
 //! hundreds of connections. The browser suite keeps a dozen stacks at once,
 //! and the connections of the stacks it ended keep their local ports for
 //! another minute (TIME_WAIT). Ports are therefore looked for again, after a
-//! growing wait, when every port was held; and when a stack cannot start,
-//! [`resources`] says what was left of both.
+//! growing wait, when every port was held. A service's port is held until the
+//! service starts ([`ReservedPort`]), so the harness's own listeners cannot
+//! take it. When a stack cannot start, [`resources`] says what was left of
+//! both.
 
 use std::io;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -119,22 +121,51 @@ pub(crate) fn resources() -> String {
 /// A listener on a port of 127.0.0.1 the kernel picks.
 pub(crate) async fn local_listener() -> io::Result<TcpListener> {
     with_a_free_port(|| {
-        let socket = reusable_socket()?;
+        let socket = port_zero_socket()?;
         socket.bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))?;
         socket.listen(LISTEN_BACKLOG)
     })
     .await
 }
 
-/// A port no socket holds right now on any address, for a service, which
-/// listens on all of them. The port is free again when this answers; a
-/// service that finds it taken by then is started again on another
-/// ([`PORT_ATTEMPTS`]).
-pub(crate) async fn free_port() -> io::Result<u16> {
+/// A port for a service, which listens on every address, held until the
+/// service is about to start.
+///
+/// Held, it is listened on, so no other socket can bind it: not the
+/// listeners the harness puts in front of the service before starting it.
+/// One that took the port it sends to would send every request back to
+/// itself, opening a connection per turn until the machine runs out of
+/// ports and files.
+pub(crate) struct ReservedPort {
+    port: u16,
+    listener: TcpListener,
+}
+
+impl ReservedPort {
+    /// The port held.
+    pub(crate) fn port(&self) -> u16 {
+        self.port
+    }
+
+    /// Lets the port go, for the service to listen on it. Another process
+    /// can take it in between; a service that finds it taken is started
+    /// again on another ([`PORT_ATTEMPTS`]).
+    pub(crate) fn release(self) -> u16 {
+        drop(self.listener);
+        self.port
+    }
+}
+
+/// Holds a port no socket holds on any address, for a service.
+pub(crate) async fn free_port() -> io::Result<ReservedPort> {
     with_a_free_port(|| {
-        let socket = reusable_socket()?;
+        let socket = port_zero_socket()?;
         socket.bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))?;
-        Ok(socket.local_addr()?.port())
+        let listener = socket.listen(1)?;
+        Ok(ReservedPort {
+            port: listener.local_addr()?.port(),
+            listener,
+        })
     })
     .await
 }
@@ -145,12 +176,11 @@ pub(crate) fn port_backoff(attempt: u8) -> Duration {
     PORT_BACKOFF.saturating_mul(2u32.saturating_pow(u32::from(attempt.saturating_sub(1))))
 }
 
-/// A socket that may take a port whose only sockets wait out a closed
-/// connection, as the services' listeners do (`SO_REUSEADDR`).
-fn reusable_socket() -> io::Result<TcpSocket> {
-    let socket = TcpSocket::new_v4()?;
-    socket.set_reuseaddr(true)?;
-    Ok(socket)
+/// A socket for binding port 0. Without `SO_REUSEADDR`: on Linux it changes
+/// nothing for port 0, and on macOS it would let the kernel pick a port held
+/// on another address, a [`ReservedPort`] included.
+fn port_zero_socket() -> io::Result<TcpSocket> {
+    TcpSocket::new_v4()
 }
 
 /// Runs `bind`, which binds port 0, again after a growing wait while the

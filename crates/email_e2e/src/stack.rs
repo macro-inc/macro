@@ -355,7 +355,8 @@ impl Stack {
         let mut attempt = 0;
         loop {
             attempt += 1;
-            let port = free_port().await?;
+            let reserved = free_port().await?;
+            let port = reserved.port();
             let mut env = document_storage_environment::document_storage_env(
                 &document_storage_environment::DocumentStorage {
                     port,
@@ -366,6 +367,8 @@ impl Stack {
             );
             env.extend(options.env.iter().cloned());
 
+            // Held until now, so no listener of the harness took it.
+            reserved.release();
             let mut service = ServiceProcess::spawn(DOCUMENT_STORAGE, &env, &self.log_dir)?;
             let url = format!("http://127.0.0.1:{port}");
             match wait_for_health(&self.http, &url, &mut service).await {
@@ -419,7 +422,8 @@ impl Stack {
         let mut attempt = 0;
         loop {
             attempt += 1;
-            let port = free_port().await?;
+            let reserved = free_port().await?;
+            let port = reserved.port();
             let mut env = document_storage_environment::document_storage_env(
                 &document_storage_environment::DocumentStorage {
                     port,
@@ -431,6 +435,8 @@ impl Stack {
             env.extend(document_storage_environment::search_indexer_settings());
             env.extend(options.env.iter().cloned());
 
+            // Held until now, so no listener of the harness took it.
+            reserved.release();
             let mut service = ServiceProcess::spawn(SEARCH_INDEXER, &env, &self.log_dir)?;
             let url = format!("http://127.0.0.1:{port}");
             match wait_for_health(&self.http, &url, &mut service).await {
@@ -548,7 +554,8 @@ impl Stack {
         let mut attempt = 0;
         let (api, tls, api_proxy, env) = loop {
             attempt += 1;
-            let port = free_port().await?;
+            let reserved = free_port().await?;
+            let port = reserved.port();
             let api_url = format!("http://127.0.0.1:{port}");
             // Everything but the health check reaches the API through the
             // proxy, Outlook's notifications included.
@@ -569,6 +576,8 @@ impl Stack {
             });
             env.extend(options.env.iter().cloned());
 
+            // Held until now, so no listener of the harness took it.
+            reserved.release();
             let mut api = ServiceProcess::spawn(API, &env, log_dir)?;
             match wait_for_health(&http, &api_url, &mut api).await {
                 Ok(()) => break (api, tls, api_proxy, env),
@@ -1441,8 +1450,11 @@ async fn start_calendar(
     let mut attempt = 0;
     let (service, port, env) = loop {
         attempt += 1;
-        let port = free_port().await?;
+        let reserved = free_port().await?;
+        let port = reserved.port();
         let env = calendar_environment::calendar_env(email_env, port, app_url, overrides);
+        // Held until now, so no listener of the harness took it.
+        reserved.release();
         let mut service = ServiceProcess::spawn(CALENDAR, &env, log_dir)?;
         match wait_for_health(http, &format!("http://127.0.0.1:{port}"), &mut service).await {
             Ok(()) => break (service, port, env),
@@ -1542,12 +1554,12 @@ async fn wait_for_health(
     .await
 }
 
-/// A port for a service, free on every address.
-async fn free_port() -> Result<u16, Report> {
-    let port = crate::host::free_port()
+/// A port for a service, free on every address and held until released.
+async fn free_port() -> Result<crate::host::ReservedPort, Report> {
+    let reserved = crate::host::free_port()
         .await
         .context("could not find a free port for a service")?;
-    Ok(port)
+    Ok(reserved)
 }
 
 /// The directory the scenario's service logs go to: one per scenario, named
