@@ -1,0 +1,63 @@
+bun.lock
+  s_1bdeec8ad1cef4::t_c1f02e241c0e06 244,951-952,1365-1420,2149-2152,2431-2432,2483-2484,2955-2956,3023-3024,3111-3112,3215-3216,3371-3372,3379-3380,3717,3819-3820,3881-3886,3947-3948,3957-3958,4235-4236,4341-4342,4405-4406,4431-4432,4497-4498,4551-4552,4651-4652,4783-4814,5179-5180,5319-5320,5377-5378
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_1bdeec8ad1cef4::t_386d490e60a6de 123,186
+crates/agent_code_mode/src/inbound/toolset/session/discovery.md
+  s_1bdeec8ad1cef4::t_e656257ac5a4e4 3
+crates/agent_code_mode/src/inbound/toolset/session/execute_code.md
+  s_1bdeec8ad1cef4::t_4c9e1654ca4712 1
+crates/agent_code_mode/src/inbound/toolset/session/overview.md
+  s_1bdeec8ad1cef4::t_e3e168286fa92c 1
+crates/agent_code_mode/src/inbound/toolset/user/execute_code.md
+  s_1bdeec8ad1cef4::t_ddf21704f9522e 1
+crates/agent_code_mode/src/inbound/toolset/user/overview.md
+  s_1bdeec8ad1cef4::t_f790c813686617 1
+crates/code_execution/AGENTS.md
+  s_1bdeec8ad1cef4::t_63251150f29af5 26
+crates/code_execution/README.md
+  s_1bdeec8ad1cef4::t_ab022910bbb02f 5
+crates/code_execution/src/outbound/deno.rs
+  s_1bdeec8ad1cef4::t_1cbf8396ca60a2 143,247-249
+crates/code_execution/src/outbound/deno/test.rs
+  s_1bdeec8ad1cef4::t_e7761597647466 278-300
+crates/code_mode_assets/AGENTS.md
+  s_1bdeec8ad1cef4::t_1cf6d1fcc69c26 5
+crates/code_mode_assets/src/lib.rs
+  s_1bdeec8ad1cef4::t_f52485ec86811f 11-13
+docs/agent-guide/ai-chat.md
+  s_1bdeec8ad1cef4::t_c7c51f82341a29 1431
+nix-support/node_modules-hashes.json
+  s_1ed68b4f177b4b::t_1c45706798939a 4
+packages/code-mode-sdk/AGENTS.md
+  s_1bdeec8ad1cef4::t_a43f1a8204be9d 5
+packages/code-mode-sdk/README.md
+  s_1bdeec8ad1cef4::t_16297e06203ff5 3-4,10,56
+packages/code-mode-sdk/package.json
+  s_1bdeec8ad1cef4::t_efae9a7f047856 15-16
+packages/code-mode-sdk/scripts/generate.ts
+  s_1bdeec8ad1cef4::t_f8ace40edb4823 40,49-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "840976b4b0cd41df13460742040916e5e8316b0b",
+  "prompts": {},
+  "sessions": {
+    "s_1bdeec8ad1cef4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3958bab-cd72-473c-9a8e-8d126becb13e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_1ed68b4f177b4b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "939d077b-4e0c-43ab-90e7-a9c7d15e7081",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
