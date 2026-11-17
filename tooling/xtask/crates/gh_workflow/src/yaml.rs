@@ -57,6 +57,13 @@ fn canonicalize_expressions(node: &mut Node, path: &mut Vec<String>) -> Result<(
                 path: keys.join("."),
                 message,
             };
+            if is_script(&keys) && text.contains("${{") {
+                return Err(invalid(
+                    "GitHub pastes `${{ }}` into a script as code; set it in the step's \
+                     `env` and read the variable instead"
+                        .to_string(),
+                ));
+            }
             match expr::scope::at(&keys) {
                 Some(scope) => {
                     *text = expr::canonicalize(text, scope.contexts, scope.whole_expression)
@@ -71,6 +78,15 @@ fn canonicalize_expressions(node: &mut Node, path: &mut Vec<String>) -> Result<(
         Node::Null | Node::Bool(_) | Node::Int(_) | Node::Float(_) => {}
     }
     Ok(())
+}
+
+/// A step's shell `run` or an action's `script` input (`actions/github-script`),
+/// where an expression would become code rather than data.
+fn is_script(path: &[&str]) -> bool {
+    matches!(
+        path,
+        ["jobs", _, "steps", "[]", "run"] | ["jobs", _, "steps", "[]", "with", "script"]
+    )
 }
 
 fn emit(node: &Node) -> String {

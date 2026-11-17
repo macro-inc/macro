@@ -22,7 +22,11 @@ fn a_well_formed_graph_renders() {
         Job::new("Deploy")
             .add_needs("build")
             .cond(needs("build").output("sha").ne(""))
-            .add_step(Step::new("Use").run(format!("echo {}", needs("build").output("sha")))),
+            .add_step(
+                Step::new("Use")
+                    .run("echo \"$SHA\"")
+                    .add_env(("SHA", needs("build").output("sha"))),
+            ),
     );
 
     assert!(render(workflow).is_ok());
@@ -81,7 +85,11 @@ fn a_step_reads_only_earlier_steps_of_its_job() {
     let later = Workflow::new("CI").add_job(
         "build",
         Job::new("Build")
-            .add_step(Step::new("Use").run(format!("echo {}", steps("sha").output("value"))))
+            .add_step(
+                Step::new("Use")
+                    .run("echo \"$SHA\"")
+                    .add_env(("SHA", steps("sha").output("value"))),
+            )
             .add_step(Step::new("Find").run("true").id("sha")),
     );
     assert_eq!(

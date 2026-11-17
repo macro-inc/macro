@@ -20,6 +20,9 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
 - Build expressions with `gh_workflow::expr::typed` (`github()`, `needs()`,
   `steps()`, `input()`, ...). Rendering rejects any expression, raw or typed,
   that reads a context its key doesn't offer (e.g. `secrets` in a step `if:`).
+- Never put an expression inside a `run` script or `actions/github-script`
+  `script`: GitHub pastes it in as code. Set it in the step's `env` and read
+  `"$NAME"` (shell) or `process.env.NAME` (JS); rendering rejects `${{` there.
 - Name a job or step output once, as a `JobOutput<T>` / `StepOutput<T>` const
   (`Flag` for `'true'`/`'false'` outputs), and use that const both to declare
   and to read it. Rendering fails when a job reads `needs.X` without listing X,

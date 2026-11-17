@@ -249,3 +249,18 @@ fn handles_carry_the_id_and_typed_outputs() {
     );
     assert_eq!(FILTER.outcome().to_string(), "${{ steps.filter.outcome }}");
 }
+
+#[test]
+fn rendering_rejects_an_expression_inside_a_script() {
+    let workflow = crate::Workflow::new("CI").add_job(
+        "build",
+        crate::Job::new("Build")
+            .add_step(crate::Step::new("Echo").run("echo ${{ github.event.pull_request.title }}")),
+    );
+
+    let error = workflow.to_string().unwrap_err().to_string();
+    assert!(
+        error.starts_with("expression at `jobs.build.steps.[].run`: GitHub pastes"),
+        "{error}"
+    );
+}

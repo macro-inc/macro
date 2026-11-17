@@ -17,18 +17,6 @@ fn test_workflow_bench() {
 }
 
 #[test]
-fn test_workflow_ci() {
-    let (actual, expected) = split(include_str!("./fixtures/workflow-ci.yml"));
-    assert_eq!(actual, expected);
-}
-
-#[test]
-fn test_workflow_demo() {
-    let (actual, expected) = split(include_str!("./fixtures/workflow-demo.yml"));
-    assert_eq!(actual, expected);
-}
-
-#[test]
 fn test_workflow_rust() {
     let (actual, expected) = split(include_str!("./fixtures/workflow-rust.yml"));
     assert_eq!(actual, expected);

@@ -98,25 +98,6 @@ rules:
       - build_agent_daemon_on_tag.yml
       - build_desktop_on_tag.yml
       - release-production.yml
-  template-injection:
-    ignore:
-      # `inputs.environment`: set by a calling workflow or a writer's dispatch,
-      # never by PR content. Moving every `${{ }}` out of run bodies is its own
-      # change.
-      - build_web_app.yml
-      - deploy_ai_editing_worker.yml
-      - deploy_mcp_chatgpt_worker.yml
-      - deploy_sync_service.yml
-      - deploy_web_app.yml
-      # `github.ref_name`: release tags, pushed only by writers.
-      - release-production.yml
-      # Step and job outputs our own steps write (ids, version codes, flags).
-      - android-play-release.yml
-      - cleanup_preview.yml
-      - ios-app-store-release.yml
-      - pulumi_preview_pr.yml
-      - release-sdk.yml
-      - web-app-check-main.yml
   use-trusted-publishing:
     ignore:
       # Publishes an AMI to AWS, which has no trusted publishing.
