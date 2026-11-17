@@ -5,7 +5,7 @@
 What runs on the observability EKS cluster, as nixidy modules rendered to
 `manifests/prod/`, which Argo CD applies from `main`. Merging here deploys.
 The [README](README.md) has the application list, bootstrap and contract with
-`../aws/`.
+`../aws/` (OpenTofu, its own flake).
 
 ## Start here
 
@@ -47,6 +47,12 @@ The [README](README.md) has the application list, bootstrap and contract with
   host paths go in their own namespace, as `alloy-node` does.
 - Pod Identity matches service account names exactly; they are fixed by `../aws/`
   (README, "What `../aws/` must provide").
+- Applications have no resources finalizer: deleting a module removes its
+  Application but leaves its workloads running; delete those by hand.
+- `kubernetesVersion` in `env/prod.nix` matches the cluster version in `../aws/`;
+  Helm renders and kubeconform validates for it.
+- CI checks the render against `main` as of the run. If another change to this
+  directory merges first, re-render on the new `main` before merging.
 - Argo CD syncs with server-side apply; ignore a field (`ignoreDifferences`) only
   after seeing it drift on a cluster.
 

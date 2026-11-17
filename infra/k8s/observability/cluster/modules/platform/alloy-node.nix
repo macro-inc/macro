@@ -56,14 +56,13 @@ let
     };
     mount = {
       inherit name;
-      mountPath = "/host${if path == "/" then "/root" else path}";
+      mountPath = "/host${path}";
       readOnly = true;
     };
   };
   hostMounts = [
     (hostMount "proc" "/proc")
     (hostMount "sys" "/sys")
-    (hostMount "root" "/")
   ];
 in
 {
@@ -103,21 +102,37 @@ in
           type = "daemonset";
           # Every node, whatever its taints.
           tolerations = [ { operator = "Exists"; } ];
-          volumes.extra = map (m: m.volume) hostMounts;
+          volumes.extra = map (m: m.volume) hostMounts ++ [
+            # Log read positions and the remote-write WAL outlive the pod, so a
+            # restart or rollout neither re-ships logs nor drops samples.
+            {
+              name = "data";
+              hostPath = {
+                path = "/var/lib/alloy-node";
+                type = "DirectoryOrCreate";
+              };
+            }
+          ];
         };
 
         alloy = {
           configMap.content = alloyConfig;
+          storagePath = "/var/lib/alloy";
           mounts = {
             varlog = true;
-            extra = map (m: m.mount) hostMounts;
+            extra = map (m: m.mount) hostMounts ++ [
+              {
+                name = "data";
+                mountPath = "/var/lib/alloy";
+              }
+            ];
           };
-          # Pod log files are readable by root only.
+          # Pod log files belong to root (no capabilities needed to read them as
+          # their owner); the data directory is written as root too.
           securityContext = {
             runAsUser = 0;
             allowPrivilegeEscalation = false;
             capabilities.drop = [ "ALL" ];
-            capabilities.add = [ "DAC_READ_SEARCH" ];
           };
           resources = {
             requests = {

@@ -3,14 +3,16 @@
 // it. Where they go is set in alloy-node.nix (`macro.alloyNode`); the
 // placeholders below are filled from there.
 
-// Host metrics, read from the node's /proc, /sys and / mounted read-only.
+// Host metrics, read from the node's /proc and /sys mounted read-only.
 // Network collectors are off: the pod has its own network namespace, so they
-// would report the pod's interfaces. cAdvisor's root container has the node's.
+// would report the pod's interfaces; cAdvisor's root container has the
+// node's. The filesystem collector is off because it needs the node's whole
+// root mounted, which would let Alloy read every pod's service account token;
+// the kubelet reports node disk usage instead.
 prometheus.exporter.unix "node" {
   procfs_path        = "/host/proc"
   sysfs_path         = "/host/sys"
-  rootfs_path        = "/host/root"
-  disable_collectors = ["arp", "netdev", "netstat", "sockstat", "softnet"]
+  disable_collectors = ["arp", "filesystem", "netdev", "netstat", "sockstat", "softnet"]
 }
 
 prometheus.scrape "node" {

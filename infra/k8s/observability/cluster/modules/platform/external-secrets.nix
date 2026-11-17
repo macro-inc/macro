@@ -19,6 +19,14 @@ in
       chart = charts.external-secrets.external-secrets;
       values = {
         serviceAccount.name = "external-secrets";
+        # The controller reads AWS with its own Pod Identity for any store
+        # without an auth block, so creating a SecretStore is as good as
+        # reading the secret. Keep that out of the namespace edit and admin
+        # roles; only cluster admins create stores.
+        rbac = {
+          aggregateToEdit = false;
+          aggregateToAdmin = false;
+        };
         # Its own cert controller issues the webhook certificate at runtime.
         webhook.certManager.enabled = false;
       };
@@ -43,7 +51,7 @@ in
             inherit (cluster) region;
             # No auth block: the controller's Pod Identity credentials.
           };
-          # Only the observability apps may read it.
+          # Only ExternalSecrets in the observability namespace may use it.
           conditions = [ { namespaces = [ "observability" ]; } ];
         };
       })

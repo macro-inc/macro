@@ -37,12 +37,13 @@
           tools = import ./scripts { inherit pkgs; };
         in
         {
-          # The tree committed under manifests/prod: every application, plus the
-          # app-of-apps Application that `scripts/bootstrap.sh` applies once.
+          # The tree committed under manifests/prod. The app of apps
+          # (Application-apps.yaml) goes into apps/ with the Applications it
+          # syncs, so after `scripts/bootstrap.sh` applies it once it manages
+          # itself too.
           prod = pkgs.runCommand "observability-cluster-prod" { } ''
-            mkdir -p $out/bootstrap
             cp -rL --no-preserve=mode ${prod.environmentPackage}/. $out/
-            cp -L --no-preserve=mode ${prod.bootstrapPackage}/*.yaml $out/bootstrap/
+            cp -L --no-preserve=mode ${prod.bootstrapPackage}/*.yaml $out/apps/
           '';
           inherit (tools)
             render

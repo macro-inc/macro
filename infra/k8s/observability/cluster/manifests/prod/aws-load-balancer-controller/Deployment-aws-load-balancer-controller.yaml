@@ -42,6 +42,7 @@ spec:
             - --cluster-name=observability
             - --ingress-class=alb
             - --aws-region=us-east-2
+            - --feature-gates=EnableServiceController=false
             - --aws-vpc-tags=environment=prod,project=observability
           image: public.ecr.aws/eks/aws-load-balancer-controller:v3.6.3
           imagePullPolicy: IfNotPresent

@@ -9,7 +9,7 @@
   macro.cluster = {
     name = "observability";
     region = "us-east-2";
-    kubernetesVersion = "1.36.0";
+    kubernetesVersion = "1.37.0";
     # The Pulumi observability stack tags its VPC with these and no Name.
     vpcTags = {
       project = "observability";

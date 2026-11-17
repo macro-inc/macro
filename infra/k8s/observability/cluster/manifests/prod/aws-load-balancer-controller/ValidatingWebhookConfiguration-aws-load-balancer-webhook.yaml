@@ -57,24 +57,3 @@ webhooks:
         resources:
           - targetgroupbindings
     sideEffects: None
-  - admissionReviewVersions:
-      - v1
-    clientConfig:
-      service:
-        name: aws-load-balancer-webhook-service
-        namespace: kube-system
-        path: /validate-networking-v1-ingress
-    failurePolicy: Fail
-    matchPolicy: Equivalent
-    name: vingress.elbv2.k8s.aws
-    rules:
-      - apiGroups:
-          - networking.k8s.io
-        apiVersions:
-          - v1
-        operations:
-          - CREATE
-          - UPDATE
-        resources:
-          - ingresses
-    sideEffects: None

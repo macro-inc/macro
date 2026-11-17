@@ -1,12 +1,10 @@
 # Bootstrap Argo CD on a throwaway kind cluster from this branch (pushed: Argo
-# CD reads it from GitHub) and wait for every application to settle. There is
-# no AWS here, so two applications can't become healthy and are reported, not
-# failed: the load balancer controller can't look up its VPC, and the
-# ClusterSecretStore can't authenticate.
+# CD reads it from GitHub) and wait until every application is synced and all
+# but the two that need AWS are healthy.
 #
 #   nix run .#kind-smoke [-- --revision <branch>] [--delete]
 name=observability-smoke
-image="kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed"
+image="kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5"
 revision="$(git rev-parse --abbrev-ref HEAD)"
 delete=false
 while [ $# -gt 0 ]; do
@@ -30,14 +28,16 @@ context="kind-$name"
 nix run "$(git rev-parse --show-toplevel)/infra/k8s/observability/cluster#bootstrap" -- \
   --context "$context" --revision "$revision"
 
-# Expected without AWS.
+# Every application must sync. Without AWS two can't become healthy: the
+# load balancer controller can't look up its VPC, and the ClusterSecretStore
+# can't authenticate.
 expected_unhealthy="aws-load-balancer-controller external-secrets"
 deadline=$((SECONDS + 1200))
 while :; do
   table=$(kubectl --context "$context" -n argocd get applications \
     -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status}{"\n"}{end}')
   pending=$(awk -v skip=" $expected_unhealthy " \
-    'index(skip, " " $1 " ") == 0 && ($2 != "Synced" || $3 != "Healthy")' <<<"$table")
+    '$2 != "Synced" || (index(skip, " " $1 " ") == 0 && $3 != "Healthy")' <<<"$table")
   if [ -z "$pending" ]; then break; fi
   if [ $SECONDS -ge $deadline ]; then
     echo "Timed out; not Synced and Healthy:" >&2

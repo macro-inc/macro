@@ -62,7 +62,7 @@ in
     };
     kubernetesVersion = mkOption {
       type = types.str;
-      example = "1.36.0";
+      example = "1.37.0";
       description = ''
         Kubernetes version the charts render for (`helm template --kube-version`)
         and the manifests are validated against. Bump it with the control plane.

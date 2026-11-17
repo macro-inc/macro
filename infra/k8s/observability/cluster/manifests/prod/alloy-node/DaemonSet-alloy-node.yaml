@@ -28,7 +28,7 @@ spec:
         - args:
             - run
             - /etc/alloy/config.alloy
-            - --storage.path=/tmp/alloy
+            - --storage.path=/var/lib/alloy
             - --server.http.listen-addr=0.0.0.0:12345
             - --server.http.ui-path-prefix=/
             - --disable-reporting
@@ -66,8 +66,6 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
-              add:
-                - DAC_READ_SEARCH
               drop:
                 - ALL
             runAsUser: 0
@@ -83,9 +81,8 @@ spec:
             - mountPath: /host/sys
               name: sys
               readOnly: true
-            - mountPath: /host/root
-              name: root
-              readOnly: true
+            - mountPath: /var/lib/alloy
+              name: data
         - args:
             - --watched-dir=/etc/alloy
             - --reload-url=http://localhost:12345/-/reload
@@ -128,5 +125,6 @@ spec:
             path: /sys
           name: sys
         - hostPath:
-            path: /
-          name: root
+            path: /var/lib/alloy-node
+            type: DirectoryOrCreate
+          name: data

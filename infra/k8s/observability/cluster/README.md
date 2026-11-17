@@ -5,7 +5,7 @@ us-east-2), written as [nixidy](https://github.com/arnarg/nixidy) modules and
 rendered to plain YAML under `manifests/prod/`. Argo CD on the cluster reads
 `manifests/prod/` from `main` and applies it, so merging a change here deploys
 it. The cluster itself, its IAM and the Pod Identity associations are
-OpenTofu under `../aws/`.
+OpenTofu under `../aws/` (added in its own pull request).
 
 ```
 modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──main──▶ Argo CD ──▶ cluster
@@ -15,11 +15,11 @@ modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──
 
 | Application | Namespace | What it is |
 | --- | --- | --- |
-| `apps` | `argocd` | The app of apps: one Application per directory below. Applied once by hand (bootstrap). |
+| `apps` | `argocd` | The app of apps: one Application per directory below. Applied once by hand (bootstrap); it is in `apps/` itself, so from then on it manages itself too. |
 | `argocd` | `argocd` | Argo CD, managing itself. Every Application auto-syncs with prune and self-heal. |
 | `cert-manager` | `cert-manager` | Issues the load balancer controller's webhook certificate. |
-| `aws-load-balancer-controller` | `kube-system` | Registers pods in ALB/NLB target groups (`TargetGroupBinding`). Creates no load balancers: no IngressClass, no Service mutator. |
-| `external-secrets` | `external-secrets` | External Secrets Operator and the `secrets-manager` ClusterSecretStore over the Secrets Manager secret `observability/prod`. |
+| `aws-load-balancer-controller` | `kube-system` | Registers pods in ALB/NLB target groups (`TargetGroupBinding`). Creates no load balancers: no IngressClass, Service controller, Service mutator or Ingress validation, and its role can only register targets. |
+| `external-secrets` | `external-secrets` | External Secrets Operator and the `secrets-manager` ClusterSecretStore over the Secrets Manager secret `observability/prod`. Only cluster admins can create stores (namespace `edit` and `admin` can't), since a store without credentials reads with the operator's. |
 | `storage` | `kube-system` | The default `gp3` StorageClass (EBS CSI, encrypted, expandable). |
 | `observability-namespace` | `observability` | The namespace the backends and Grafana run in, default-deny NetworkPolicies and the policies they share. |
 | `alloy-node` | `alloy` | One Alloy per node for the cluster's own node, kubelet, cAdvisor and pod-log telemetry. Collects and drops until the backends land. |
@@ -35,13 +35,14 @@ Run from this directory.
 | `nix run .#render` | Renders the modules into `manifests/prod/`. Commit the result with the change. |
 | `nix run .#check` | Fails when `manifests/prod/` differs from a fresh render, then validates. CI runs this (`observability_cluster.yml`). |
 | `nix run .#validate` | Validates the manifests strictly with kubeconform: core kinds against the Kubernetes schemas for the cluster's version, custom resources against the CRDs being installed. |
-| `nix run .#kind-smoke` | Bootstraps the pushed branch onto a throwaway kind cluster and waits for the applications. Without AWS, the load balancer controller and the ClusterSecretStore are expected to stay unhealthy. Pass `--delete` to remove the cluster afterwards. |
+| `nix run .#kind-smoke` | Bootstraps the pushed branch onto a throwaway kind cluster and waits for the applications. Every application must sync and all must be healthy except `aws-load-balancer-controller` and `external-secrets`, which need AWS (VPC lookup, the ClusterSecretStore). Pass `--delete` to remove the cluster afterwards. |
 | `nix run .#bootstrap -- --context <ctx>` | The one-time bootstrap below. |
 
 ## Bootstrap (once, after the cluster exists)
 
-Argo CD can't install itself on an empty cluster. After `../aws/` has created the
-cluster and its Pod Identity associations:
+Argo CD can't install itself on an empty cluster. Once `../aws/` has created the
+cluster and its Pod Identity associations, and this directory is on `main`, run
+this from a clean checkout of `main` (the script refuses anything else):
 
 ```sh
 aws eks update-kubeconfig --name observability --region us-east-2 --alias observability
@@ -50,8 +51,9 @@ nix run .#bootstrap -- --context observability
 
 `bootstrap` installs Argo CD from `manifests/prod/argocd/` with server-side apply
 as Argo CD's own field manager, waits for it, and applies
-`manifests/prod/bootstrap/Application-apps.yaml`. From then on Argo CD syncs
-everything, itself included, from `main`; nothing is applied by hand again.
+`manifests/prod/apps/Application-apps.yaml`. From then on Argo CD syncs
+everything from `main`, Argo CD and the `apps` Application included; nothing is
+applied by hand again.
 
 To look at it:
 
@@ -62,13 +64,17 @@ kubectl --context observability -n argocd get secret argocd-initial-admin-secret
 kubectl --context observability -n argocd port-forward svc/argocd-server 8080:443
 ```
 
+After the first login, change the admin password (`argocd account update-password`)
+and delete `argocd-initial-admin-secret`. Any pod in the cluster can reach the
+Argo CD API, and admin there controls the cluster.
+
 The repository is public, so Argo CD clones it over HTTPS without a deploy key
 (shallow, `depth: 1`). If it ever goes private, add a read-only deploy key to
 `observability/prod` and an ExternalSecret for the repository Secret.
 
 ## What `../aws/` must provide
 
-- An EKS cluster named `observability` in us-east-2, Kubernetes 1.36
+- An EKS cluster named `observability` in us-east-2, Kubernetes 1.37
   (`env/prod.nix`), with the EBS CSI driver and the Pod Identity agent add-ons.
 - A VPC tagged `project=observability`, `environment=prod`: the load balancer
   controller finds it by tag, because pods can't reach IMDS.
@@ -108,4 +114,7 @@ The metrics and logs backends also point the node Alloy at themselves through
 - **CRD schemas without descriptions or examples.** They mean nothing to the
   API server and made up most of the YAML.
 - **Alloy in its own namespace.** It mounts host paths, which the
-  `observability` namespace's Pod Security level (baseline) forbids.
+  `observability` namespace's Pod Security level (baseline) forbids. It
+  mounts only `/proc`, `/sys` and `/var/log` read-only, plus its own data
+  directory: with the node's whole root it could read every pod's service
+  account token, so the filesystem collector is off.
