@@ -229,7 +229,7 @@ pub async fn approve_pairing_handler<S: HarnessService, Auth: MacroAuthorization
             "refused a harness pairing approval to a program"
         );
         return Err(HarnessesHandlerErr::Forbidden(
-            "An agent's program cannot approve a harness pairing. Tell the user to approve it in Macro, under Settings, Harness.",
+            "An agent's program cannot approve a harness pairing. Tell the user to approve it in Macro, under Settings, Machines.",
         ));
     }
     let harness = state
