@@ -875,13 +875,13 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
     }
     // Tools the SDK does not replace.
-    for name in [
-        "SearchTools",
-        "LoadTools",
-        "BashCodeExecution",
-        "TextEditorCodeExecution",
-    ] {
+    for name in ["SearchTools", "LoadTools"] {
         assert!(direct.toolset.tools.contains_key(name), "{name}");
+    }
+    // Provider code execution is no longer offered on any host.
+    for name in ["BashCodeExecution", "TextEditorCodeExecution"] {
+        assert!(!standard.toolset.tools.contains_key(name), "{name}");
+        assert!(!direct.toolset.tools.contains_key(name), "{name}");
     }
     for name in standard.toolset.user_tools.keys() {
         assert!(direct.toolset.user_tools.contains_key(name), "{name}");

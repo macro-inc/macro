@@ -1,4 +1,3 @@
-use anthropic::toolset::AnthropicToolContext;
 use axum::extract::FromRef;
 use bots::{
     domain::service::BotServiceImpl, inbound::toolset::BotToolContext,
@@ -2225,8 +2224,6 @@ pub struct ToolServiceContext {
     pub crm_transfer_tool_context: ToolCrmTransferToolContext,
     pub skill_tool_context: ToolSkillToolContext,
     pub schedule_tool_context: RoutineToolContext,
-    #[from_ref(skip)]
-    pub anthropic_tool_context: AnthropicToolContext,
     /// The web search vendor behind `WebSearch` and `WebFetch`.
     #[from_ref(skip)]
     pub web_search_provider: Arc<dyn web_search::domain::ports::SearchProvider>,
@@ -2265,16 +2262,6 @@ pub fn build_connector_tool_context(
                 Arc::new(mcp_select::NativeOverlayConnections::new(native_servers)),
             ),
         ),
-    }
-}
-
-impl FromRef<ToolServiceContext> for AnthropicToolContext {
-    fn from_ref(context: &ToolServiceContext) -> Self {
-        let mut tools = context.anthropic_tool_context.clone();
-        tools.admission = context.admission.clone();
-        tools.recorder = context.recorder.clone();
-        tools.usage_context = context.usage_context.clone();
-        tools
     }
 }
 
