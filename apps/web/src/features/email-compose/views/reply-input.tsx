@@ -222,10 +222,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     state.replyType() === 'forward' ? 'forwarded message' : 'quoted text';
   const quoteToggleLabel = () =>
     `${form.replyAppended() ? 'Hide' : 'Show'} ${quotedContent()}`;
-  const signatureHtml = () =>
-    composeContext.presentation.signaturesEnabled()
-      ? state.signatureHtml()
-      : undefined;
+  const signatureHtml = () => state.signatureHtml();
   const writtenText = createWrittenText(editor);
   const createEvent = () => {
     const recipients = form.recipients();

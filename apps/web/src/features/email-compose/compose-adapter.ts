@@ -1,4 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useHasPaidAccess } from '@core/auth';
 import {
@@ -6,10 +5,7 @@ import {
   getDragDropPosition,
 } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_EMAIL_SCHEDULED_SEND,
-  enableEmailSignatures,
-} from '@core/constant/featureFlags';
+import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useEmail, useUserContext, useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
@@ -152,7 +148,6 @@ export function createEmailComposeContext(): EmailComposeContext {
   const inboxSource = createEmailInboxSource(viewerEmail, accounts, (email) =>
     getDisplayName(tryMacroId(`macro|${email}`))
   );
-  const signatures = useFeatureFlag(enableEmailSignatures);
   const calendarEvents = useCreateEmailEvent();
   const remove = useDeleteDraftMutation();
   const upload = useUploadDraftAttachmentsMutation();
@@ -246,7 +241,6 @@ export function createEmailComposeContext(): EmailComposeContext {
       isTouch: isTouchDevice,
       isMobile,
       scheduleEnabled: ENABLE_EMAIL_SCHEDULED_SEND,
-      signaturesEnabled: () => signatures().enabled,
     },
     editorFiles: {
       readDroppedFiles: readDroppedEmailFiles,

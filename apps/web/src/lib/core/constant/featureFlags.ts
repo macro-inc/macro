@@ -533,15 +533,6 @@ export const enableQuickCalls = defineFlag({
   default: true,
 });
 
-// Email signatures: the settings editor, the compose / reply / AI-chat signature
-// previews, and the per-message include toggle. PostHog-gated with a dev-mode
-// default; override with VITE_ENABLE_EMAIL_SIGNATURES.
-export const enableEmailSignatures = defineFlag({
-  key: 'enable-email-signatures',
-  env: 'ENABLE_EMAIL_SIGNATURES',
-  default: onInDev,
-});
-
 // Email read receipts: the per-inbox switch in Settings › Email and the
 // opened status on sent messages. Which copies load Macro's pixels, and so
 // count as opens, does not depend on this flag.

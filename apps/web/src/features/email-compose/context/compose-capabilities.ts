@@ -394,7 +394,6 @@ export interface EmailComposePresentation {
   isTouch: Accessor<boolean>;
   isMobile: Accessor<boolean>;
   scheduleEnabled: boolean;
-  signaturesEnabled: Accessor<boolean>;
 }
 
 /** A file stored as a Macro document, as a body link names it. */
