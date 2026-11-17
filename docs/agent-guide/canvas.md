@@ -56,7 +56,7 @@ for multiple selections, groups, videos, and non-image shapes.
 
 ## Artifacts
 
-Artifacts are behind the `enable-canvas-artifacts` flag. **Insert** offers
+**Insert** offers
 **Artifact**, which places a node with starter HTML. The Canvas inspector edits its
 title and HTML. The document runs in a sandboxed frame; **Interact** or a
 double-click passes pointer input to it, and **Done** or a click elsewhere returns

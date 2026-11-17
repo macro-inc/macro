@@ -1,7 +1,5 @@
 import { TutorialPill } from '@app/features/video-tutorials';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createImageActions } from '@core/component/ImageActions';
-import { enableCanvasArtifacts } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type DocumentGeometry,
@@ -117,7 +115,6 @@ function createCanvasView(props: CanvasViewProps) {
   const imageActionsDisabled = () =>
     !imageSource.url() || imageActions.isPrefetching() || imageActions.isBusy();
 
-  const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
   const [presenting, setPresenting] = createSignal<string>();
   // Outlives the inspector, which unmounts whenever nothing is selected.
   const [lockAspectRatio, setLockAspectRatio] = createSignal(false);
@@ -154,7 +151,6 @@ function createCanvasView(props: CanvasViewProps) {
               ),
           }
         : undefined,
-    artifactsEnabled: () => artifactsFlag().enabled,
     presenting,
     setPresenting,
     lockAspectRatio,
@@ -505,14 +501,10 @@ function InsertMenu() {
           location={location}
           onClose={props.insert.close}
           onRestoreFocus={view.focus}
-          onArtifact={
-            view.artifactsEnabled()
-              ? () => {
-                  props.assets.artifact(location.world);
-                  props.insert.close();
-                }
-              : undefined
-          }
+          onArtifact={() => {
+            props.assets.artifact(location.world);
+            props.insert.close();
+          }}
           onSelect={(asset, mode) => {
             if (mode === 'media')
               fireAndForget(
@@ -539,7 +531,7 @@ function InsertMenu() {
 function Presentation() {
   const view = useCanvasView();
   return (
-    <Show when={view.artifactsEnabled() ? view.presenting() : undefined} keyed>
+    <Show when={view.presenting()} keyed>
       {(startId) => (
         <ArtifactPresentation
           editor={view.editor}

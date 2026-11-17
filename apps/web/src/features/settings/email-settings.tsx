@@ -3,13 +3,8 @@ import {
   chosenEmailRowStyle,
   setEmailRowStyle,
 } from '@app/features/email-view/primitives/email-row-style';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableEmailReadReceipts,
-  enableEmailSignatures,
-} from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
@@ -33,8 +28,6 @@ import { SignatureSection } from './SignatureSection';
  * it out because phones always show Minimalist rows.
  */
 export function EmailSettings(props: { displayOptions: boolean }) {
-  const signatures = useFeatureFlag(enableEmailSignatures);
-  const readReceipts = useFeatureFlag(enableEmailReadReceipts);
   const { openSettings } = useSettingsState();
   const isAvailable = useSettingsTabAvailable();
   return (
@@ -65,38 +58,34 @@ export function EmailSettings(props: { displayOptions: boolean }) {
           <EmailDisplayOptions />
         </SettingsSection>
       </Show>
-      <Show when={signatures().enabled}>
-        <SettingsSection
-          title="Signatures"
-          description="Create a signature for each email account and preview it before sending."
+      <SettingsSection
+        title="Signatures"
+        description="Create a signature for each email account and preview it before sending."
+      >
+        <Suspense
+          fallback={
+            <p role="status" class="text-sm text-ink-muted">
+              Loading signatures…
+            </p>
+          }
         >
-          <Suspense
-            fallback={
-              <p role="status" class="text-sm text-ink-muted">
-                Loading signatures…
-              </p>
-            }
-          >
-            <EmailSignatures />
-          </Suspense>
-        </SettingsSection>
-      </Show>
-      <Show when={readReceipts().enabled}>
-        <SettingsSection
-          title="Read receipts"
-          description="See when recipients open messages you send."
+          <EmailSignatures />
+        </Suspense>
+      </SettingsSection>
+      <SettingsSection
+        title="Read receipts"
+        description="See when recipients open messages you send."
+      >
+        <Suspense
+          fallback={
+            <p role="status" class="text-sm text-ink-muted">
+              Loading accounts…
+            </p>
+          }
         >
-          <Suspense
-            fallback={
-              <p role="status" class="text-sm text-ink-muted">
-                Loading accounts…
-              </p>
-            }
-          >
-            <EmailReadReceipts />
-          </Suspense>
-        </SettingsSection>
-      </Show>
+          <EmailReadReceipts />
+        </Suspense>
+      </SettingsSection>
       <Show when={isAvailable('Notifications') || isAvailable('Calendar')}>
         <SettingsSection title="Related settings">
           <SettingsCard>

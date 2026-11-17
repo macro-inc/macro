@@ -69,13 +69,6 @@ describe('individual settings search', () => {
       false
     );
   });
-  it('omits disabled signature controls', () => {
-    expect(
-      searchSettings(SETTINGS_TAB_GROUPS, 'signature', {
-        emailSignatures: false,
-      }).some((result) => result.title === 'Email signatures')
-    ).toBe(false);
-  });
   it('finds the email row style except on phones', () => {
     const rowStyle = (options?: { emailRowStyle: boolean }) =>
       searchSettings(SETTINGS_TAB_GROUPS, 'row style', options).some(

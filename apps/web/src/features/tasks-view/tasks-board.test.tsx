@@ -65,7 +65,6 @@ vi.mock('./tasks-view-context', () => ({
       isLoadingMore: () => false,
     },
     openTask: mocks.openTask,
-    projectsEnabled: () => false,
     showTaskProject: () => false,
     calendar: () =>
       createDateBucketBoundaries(new Date('2026-10-01T12:00:00Z'), 'UTC'),

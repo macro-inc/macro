@@ -79,9 +79,7 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
   const loginEmail = useEmail();
   // Until the inbox addresses load, the viewer's own alias would be invited.
   const canCreateEvent = () =>
-    emailEvent.enabled() &&
-    !!props.source.thread() &&
-    queryReadyGate(emailLinks);
+    !!props.source.thread() && queryReadyGate(emailLinks);
   const createEvent = () => {
     const thread = props.source.thread();
     if (!thread || !canCreateEvent()) return false;
