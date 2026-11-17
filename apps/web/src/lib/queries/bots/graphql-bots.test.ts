@@ -290,44 +290,36 @@ describe('botUpdates', () => {
     expect(server.requests).toEqual([[RELEASE_BOT], [RELEASE_BOT]]);
   });
 
-  it('refreshes the settings lists on every change, and channel bot lists only on a deletion', () => {
+  it('refreshes the settings and channel bot lists on every bot push', () => {
     client = createClient({
       url: '/graphql',
       exchanges: [createServer(new Map()).exchange],
     });
-    const channelBotsKey = channelKeys.channelBots('channel-1').queryKey;
     testQueryClient.setQueryData(agentKeys.list.queryKey, []);
     testQueryClient.setQueryData(botKeys.list.queryKey, []);
     testQueryClient.setQueryData(botKeys.detail(RELEASE_BOT).queryKey, {});
-    testQueryClient.setQueryData(channelBotsKey, []);
-    const handler = createBotUpdatesHandler(client);
+    testQueryClient.setQueryData(
+      channelKeys.channelBots('channel-1').queryKey,
+      []
+    );
 
-    handler.onResult(pushed([bot(RELEASE_BOT, 'Shipper')], true));
+    // A push carries no channel, and joining or leaving one pushes the bot
+    // to its members: every channel's bot list reads again.
+    createBotUpdatesHandler(client).onResult(
+      pushed([bot(RELEASE_BOT, 'Shipper')], true)
+    );
 
     for (const queryKey of [
       agentKeys.list.queryKey,
       botKeys.list.queryKey,
       botKeys.detail(RELEASE_BOT).queryKey,
+      channelKeys.channelBots('channel-1').queryKey,
     ]) {
       expect(testQueryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
     }
-    // A channel's rows read the bot's name from its identity; only who is
-    // in the channel comes from this list.
-    expect(testQueryClient.getQueryState(channelBotsKey)?.isInvalidated).toBe(
-      false
-    );
-
-    handler.onResult(
-      pushed(
-        [{ ...bot(RELEASE_BOT, 'Shipper'), deletedAt: '2026-11-17T00:00:00Z' }],
-        true
-      )
-    );
-    expect(testQueryClient.getQueryState(channelBotsKey)?.isInvalidated).toBe(
-      true
-    );
   });
 });
+
 describe('createMentionableBots', () => {
   const NEW_BOT = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d';
 

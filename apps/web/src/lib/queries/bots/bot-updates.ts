@@ -12,19 +12,18 @@ import { revalidateBotReads } from './graphql-bots';
 import { botKeys } from './keys';
 
 /**
- * The REST lists settings reads (bots, agents) hold copies the normalized
- * cache can't reach, so every change to a bot refetches them. A channel's bot
- * list only says which bots are in it; its rows read names from the bots'
- * identities, so it refetches only when a bot is deleted. `bots` null means
- * changes may have been missed.
+ * The REST bot lists (settings' bots and agents, each channel's bots) hold
+ * copies the normalized cache can't reach, and a push carries no channel,
+ * while a bot joining or leaving a channel is pushed to its members. So
+ * every bot push refetches them; pushes are rare. `bots` null means changes
+ * may have been missed.
  */
 export function invalidateRestBotLists(
   bots: readonly Pick<BotFieldsFragment, 'id' | 'deletedAt'>[] | null
 ) {
   queryClient.invalidateQueries({ queryKey: agentKeys.list.queryKey });
   queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey });
-  if (bots === null || bots.some((bot) => bot.deletedAt != null))
-    queryClient.invalidateQueries({ queryKey: channelKeys.channelBots._def });
+  queryClient.invalidateQueries({ queryKey: channelKeys.channelBots._def });
   if (bots === null) {
     queryClient.invalidateQueries({ queryKey: botKeys.detail._def });
     return;
