@@ -15,23 +15,21 @@ between different teams is unspecified.
 
 | Event name | Emitted after | Metadata |
 | --- | --- | --- |
-| `team.created` | Team creation and all rollback-capable creation side effects succeed | `team_id`, `name`, `slug`, `owner`, `enterprise`, `paid`, `auto_join_domain` |
+| `team.created` | Team creation and all rollback-capable creation side effects succeed | `team_id`, `name`, `slug`, `owner`, `enterprise`, `paid` |
 | `team.updated` | A team PATCH containing `name` or `slug` is persisted | `team_id`, `actor_user_id`, requested `name`, requested `slug` |
 | `team.deleted` | Team deletion succeeds | `team_id`, `actor_user_id`, `member_user_ids` |
 | `team.invite_created` | A new invite is persisted; one event is produced per newly invited lowercase email | `team_id`, `invite_id`, `email`, `invited_by`, `team_name` |
 | `team.invite_rejected` | The invitee successfully rejects and deletes an invite | `team_id`, `invite_id`, `email`, `actor_user_id` |
 | `team.invite_revoked` | An administrator successfully deletes an invite | `team_id`, `invite_id`, `email`, `actor_user_id` |
-| `team.member_joined` | An invited, domain-auto-joined, invite-link, or team-agent membership and all rollback-capable side effects succeed | `team_id`, `member_id`, `teammate_ids`, `role`, `join_method` |
+| `team.member_joined` | An invited, invite-link, or team-agent membership and all rollback-capable side effects succeed | `team_id`, `member_id`, `teammate_ids`, `role`, `join_method` |
 | `team.member_removed` | Membership removal and all rollback-capable side effects succeed | `team_id`, `member_id`, `removed_by`, `role` |
 | `team.member_role_changed` | Each individual member role update succeeds | `team_id`, `actor_user_id`, `member_id`, `role`, `previous_role` |
-| `team.auto_join_domain_toggled` | An explicit auto-join-domain toggle succeeds | `team_id`, `actor_user_id`, `auto_join_domain` |
 
 Roles are lowercase (`member`, `admin`, or `owner`). Optional metadata is
 serialized as `null`: the mutable fields on an updated event describe the
 requested PATCH, and `null` means that field was omitted. `team_name` is a
 best-effort invite-time lookup. `previous_role` is the role in the pre-PATCH
-team snapshot when known. `auto_join_domain` is the resulting domain or `null`
-when disabled. Team deletion produces one event whose `member_user_ids` lists
+team snapshot when known. Team deletion produces one event whose `member_user_ids` lists
 the members present before deletion; it does not produce an individual removal
 event for every member. For self-service removal, `removed_by` equals
 `member_id`.
@@ -42,9 +40,11 @@ the user owns produces `team.deleted` with the deleted owner as
 `actor_user_id`; a team the user belongs to produces `team.member_removed` with
 `removed_by` equal to `member_id`.
 
-The automatic domain toggle performed during creation is represented only by
-`auto_join_domain` on the created event. The explicit settings operation
-produces the toggle event. A role-only PATCH produces role-change events but no
+Domain auto-join is turned off: no team claims an email domain, so no event
+carries one. Events published earlier can still carry `auto_join_domain` on
+`team.created`, be `team.auto_join_domain_toggled`, or have a
+`{"type":"domain_auto_join"}` join method. A role-only
+PATCH produces role-change events but no
 updated event. Role updates are committed in request order: if a later update
 fails, earlier successful updates and their events remain committed, while no
 event is produced for the failed update.
@@ -56,8 +56,8 @@ default a missing field to `[]` so events published before this field existed
 still decode.
 
 `join_method` is a tagged union. An accepted invite includes its invite UUID and
-the inviter; a domain auto-join is encoded as `{"type":"domain_auto_join"}` and
-a join through the team's shareable invite link as `{"type":"invite_link"}`,
+the inviter; a join through the team's shareable invite link is encoded as
+`{"type":"invite_link"}`,
 and a team agent an admin added as
 `{"type":"team_agent","added_by":"macro|admin@example.com"}`.
 Consumers should ignore join methods they don't recognize.

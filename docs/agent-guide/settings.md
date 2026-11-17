@@ -184,8 +184,8 @@ Macro applies the temporary pause per entity and keeps the entity visible.
 
 ### Team membership
 
-Team membership has no size cap, including free teams. Invitations and domain
-auto-join must keep working beyond five members and the former stage-plan limits.
+Team membership has no size cap, including free teams. Invitations and invite
+links must keep working beyond five members and the former stage-plan limits.
 Free-team joins do not create a paid subscription, bill a seat, or grant premium
 roles. Teams with an existing paid subscription retain their per-seat billing;
 enterprise teams retain their billing bypass.
@@ -310,14 +310,14 @@ Members row, notifications, Bring your AI and the DM banner):
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`
 from `apps/web` (desktop 1440 and phone 390).
 
-Under **Team → Members** (**Invite settings**), owners/admins can turn
-**Auto-join on domain** off and can restrict invitations to admins with
-**Members can invite**. These controls still apply.
+Under **Team → Members** (**Invite settings**), owners/admins can restrict
+invitations to admins with **Members can invite**. There is no domain auto-join
+setting: nobody joins a team by email domain.
 To verify the membership flow, use a local free team with five members: invite
-and accept a sixth member, then sign up another user on its enabled auto-join
-domain. Both should appear in the team's member list and configured auto-join
-channels without an upgrade prompt. Repeat with auto-join disabled to verify a
-same-domain signup is not added automatically.
+and accept a sixth member, and join a seventh through the team's invite link.
+Both should appear in the team's member list and its auto-join channels without
+an upgrade prompt. Then sign up another user on the owner's email domain: they
+must not be added to the team.
 
 ### Team subscription breakdown
 
@@ -419,8 +419,7 @@ Left nav (feature and platform gates still apply):
 
 - **Team · <team name>** (just **Team** without a team): General (name, slug,
   GitHub autolink, default link sharing, Delete Team), Members (member list,
-  roles and seat plans, **Invite**, pending invites, auto-join and
-  members-can-invite). Without a team only General shows, with pending
+  roles and seat plans, **Invite**, pending invites, members-can-invite). Without a team only General shows, with pending
   invitations or **Create Team**. Search finds these by `invite`, `members`,
   `teammates`, and similar terms; results name their group, e.g.
   **Team · Members**. The team Slack export import and the GitHub App live in

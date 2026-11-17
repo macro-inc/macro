@@ -13,8 +13,7 @@ use std::sync::Arc;
 mod test;
 
 /// The account email's domain when it can back a domain team (not a
-/// generic consumer provider), `None` otherwise. The same judgment the
-/// teams service applies to domain auto-join and claiming.
+/// generic consumer provider), `None` otherwise.
 fn suggested_team_domain(user: &MacroUserIdStr<'_>) -> Option<String> {
     let email = user.email_part().lowercase();
     let domain = email.domain_part();

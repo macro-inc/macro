@@ -10,15 +10,12 @@ event contract (schema, sanitization, delivery semantics).
 ## Start here
 
 - `src/domain/team_service.rs`: the main service — creation, invites,
-  membership, role changes, auto-join-domain toggle. Team-wide settings
+  membership, role changes. Team-wide settings
   (default link share, interface language) are fields on `PatchTeamRequest`.
 - `src/domain/team_service/invite_link.rs`: the team's shareable invite link
   (`TeamInviteLinkService`) — who may see, create, reset, or turn it off, and
-  joining through it via the same direct-join path as domain auto-join.
-- `src/domain/domain_notice.rs` + `join_announcement.rs`: the one-time email a
-  new work-domain team sends to the creator's same-domain contacts who are not
-  on Macro yet (`POST /team/domain-notice`, at most 25 per team). Its
-  unsubscribe link is signed by the notification service at send time.
+  joining through it via the same direct-join path as team agents
+  (`join_team_directly`).
 - `src/domain/team_service/invite_reminders.rs` +
   `src/inbound/invite_reminder_worker.rs`: reminder emails for unanswered
   invites, swept hourly in `authentication_service`. The repository claims
@@ -94,7 +91,12 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Gotchas
 
-- Inviting, creating an invite link, patching the team (roles, CRM access, default share scope), changing a member's plan, and the auto-join-domain and non-admin-invite toggles refuse an agent's program or a bot (`refuse_programs` in `inbound/axum_router.rs`, `macro_authorization::is_program_run`, 403). A person does those in Settings, Team; an agent account's own key counts as a person.
+- Inviting, creating an invite link, patching the team (roles, CRM access, default share scope), changing a member's plan, and the non-admin-invite toggle refuse an agent's program or a bot (`refuse_programs` in `inbound/axum_router.rs`, `macro_authorization::is_program_run`, 403). A person does those in Settings, Team; an agent account's own key counts as a person.
+- Domain auto-join is off: nothing joins a user to a team by email domain,
+  creation claims no domain, and `team.auto_join_domain` (with its index) is
+  kept in the database but never read or written, so the feature could be
+  revived. Every join takes an invite, an invite link, or an admin adding a
+  team agent.
 - Carry async-stripe's `stripe::PriceId` through generic item changes; validate
   once at configuration/provider boundaries.
 

@@ -1,13 +1,12 @@
 #![deny(missing_docs)]
 //! The canonical list of generic (free / consumer) email provider domains.
 //!
-//! This is the single source of truth for "is this a company domain?"
-//! wherever that judgment drives team behavior: signup-time domain
-//! auto-join, claiming a domain on team creation, and the onboarding
-//! flow's team suggestions all consult this list, so the UI can never
-//! promise a domain team the server would refuse. (The CRM keeps its own,
-//! much broader list for filtering bulk-mail senders — a different
-//! concept; do not merge them.)
+//! This is the single source of truth for "is this a company domain?":
+//! the onboarding flow's team suggestion, the mobile welcome email's
+//! personal-address check, and the colleague direct messages opened when
+//! an inbox connects all consult this list. (The CRM keeps its own, much
+//! broader list for filtering bulk-mail senders — a different concept; do
+//! not merge them.)
 
 #[cfg(test)]
 mod test;
@@ -77,8 +76,8 @@ pub const GENERIC_EMAIL_DOMAINS: &[&str] = &[
 ];
 
 /// Returns true when the email domain belongs to a generic (free /
-/// consumer) email provider that may not be used for automatic team
-/// joining. Matching is case-insensitive.
+/// consumer) email provider, so sharing it says nothing about working
+/// together. Matching is case-insensitive.
 pub fn is_generic_email_domain(domain: &str) -> bool {
     let domain = domain.to_ascii_lowercase();
     GENERIC_EMAIL_DOMAINS

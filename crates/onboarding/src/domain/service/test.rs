@@ -159,8 +159,7 @@ async fn completing_records_how_the_flow_ended() {
 
 #[test]
 fn suggested_team_domain_offers_custom_domains_only() {
-    // Custom domain: worth suggesting a domain team — the same judgment
-    // the teams service applies when claiming a domain on create.
+    // Custom domain: worth suggesting a domain team.
     assert_eq!(suggested_team_domain(&user()).as_deref(), Some("macro.com"));
 
     // Generic consumer provider: no domain team to suggest.

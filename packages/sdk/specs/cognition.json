@@ -6383,7 +6383,7 @@
           },
           "suggested_team_domain": {
             "type": ["string", "null"],
-            "description": "The account email's domain when it can back a domain team — i.e. it\nis not a generic consumer provider — `None` otherwise. Judged with\nthe same list the teams service uses for domain auto-join and\nclaiming, so the client never suggests a domain team the server\nwould refuse."
+            "description": "The account email's domain when it can back a domain team — i.e. it\nis not a generic consumer provider — `None` otherwise. The client\nnames a suggested team after it and pre-fills same-domain contacts\nas invites; nobody joins a team by the domain alone."
           }
         }
       },

@@ -7,9 +7,8 @@
 
 /**
  * The account email's domain when it can back a domain team — i.e. it
-is not a generic consumer provider — `None` otherwise. Judged with
-the same list the teams service uses for domain auto-join and
-claiming, so the client never suggests a domain team the server
-would refuse.
+is not a generic consumer provider — `None` otherwise. The client
+names a suggested team after it and pre-fills same-domain contacts
+as invites; nobody joins a team by the domain alone.
  */
 export type OnboardingStateSuggestedTeamDomain = string | null;
