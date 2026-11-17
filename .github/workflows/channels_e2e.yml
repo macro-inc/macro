@@ -16,8 +16,8 @@ env:
 permissions:
   contents: read
 jobs:
-  graphql-off:
-    name: Channels end-to-end (GraphQL sources off)
+  local-sync-off:
+    name: Channels end-to-end (channel local sync off)
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'
@@ -26,7 +26,6 @@ jobs:
       SQLX_OFFLINE: 'true'
       SCCACHE_IDLE_TIMEOUT: '0'
       CHANNELS_E2E_INSTANCE: channels-e2e
-      VITE_ENABLE_GRAPHQL_SOUP: 'false'
       VITE_ENABLE_CHANNEL_LOCAL_SYNC: 'false'
     timeout-minutes: 45
     steps:
@@ -156,7 +155,7 @@ jobs:
         set -euo pipefail
 
         # Builds every service and the web app, starts the stack and returns once it
-        # answers. The app is built with the job's VITE_ENABLE_GRAPHQL_SOUP.
+        # answers. The app is built with the job's VITE_ENABLE_CHANNEL_LOCAL_SYNC.
         # A service built without optimization exhausts a worker thread's default stack
         # on a Soup request (docs/development/running-locally.md), which every page of
         # the suite makes.
@@ -221,8 +220,8 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
-  graphql-on:
-    name: Channels end-to-end (GraphQL sources on)
+  local-sync-on:
+    name: Channels end-to-end (channel local sync on)
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'
@@ -231,7 +230,6 @@ jobs:
       SQLX_OFFLINE: 'true'
       SCCACHE_IDLE_TIMEOUT: '0'
       CHANNELS_E2E_INSTANCE: channels-e2e
-      VITE_ENABLE_GRAPHQL_SOUP: 'true'
       VITE_ENABLE_CHANNEL_LOCAL_SYNC: 'true'
     timeout-minutes: 45
     steps:
@@ -361,7 +359,7 @@ jobs:
         set -euo pipefail
 
         # Builds every service and the web app, starts the stack and returns once it
-        # answers. The app is built with the job's VITE_ENABLE_GRAPHQL_SOUP.
+        # answers. The app is built with the job's VITE_ENABLE_CHANNEL_LOCAL_SYNC.
         # A service built without optimization exhausts a worker thread's default stack
         # on a Soup request (docs/development/running-locally.md), which every page of
         # the suite makes.

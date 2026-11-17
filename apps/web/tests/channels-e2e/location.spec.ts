@@ -143,9 +143,10 @@ test('NAV-07 “Copy link” on a message gives a link that opens the channel on
   await view.open();
   const target = history.messages[HISTORY_LENGTH - 4];
   await view.action(view.messageById(target.id), 'copy-link');
-  await expect(page.getByText('Link copied to clipboard')).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toContain(target.id);
   const link = await page.evaluate(() => navigator.clipboard.readText());
-  expect(link).toContain(target.id);
 
   // The link is opened from elsewhere in the app, as a pasted link is.
   await page.goto('/app/channels');

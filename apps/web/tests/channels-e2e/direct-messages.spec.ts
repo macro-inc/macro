@@ -1,11 +1,6 @@
 import { unique } from './harness/api';
 import { ChannelView, conversationRow } from './harness/channel';
-import {
-  expect,
-  failsSometimesWithSoup,
-  knownDefect,
-  test,
-} from './harness/fixtures';
+import { expect, failsSometimes, test } from './harness/fixtures';
 import {
   addRecipient,
   findConversations,
@@ -105,10 +100,10 @@ test('DM-02 writing to the same person again from “New direct message” conti
   const cyRow = section(cyPage, 'direct_messages').locator(
     `[data-key="channel:${id}"]`
   );
-  // Defect with VITE_ENABLE_GRAPHQL_SOUP: the first conversation these two
+  // Defect: the first conversation these two
   // ever have does not reach the other person's open list, so this shows
   // once for each cast in the life of a stack.
-  await failsSometimesWithSoup(async () => {
+  await failsSometimes(async () => {
     await expect(cyRow).toContainText('Ada Owner');
   });
   const cyView = new ChannelView(cyPage, id);
@@ -281,11 +276,6 @@ test('DM-06 typing a teammate’s name in “New direct message” offers that p
   ada,
   people,
 }) => {
-  // Product defect: the box offers nobody for a name. It shows "Options
-  // unavailable. Selected values are kept." and "Retry options" changes
-  // nothing; only a whole email address is accepted.
-  // Not with VITE_ENABLE_GRAPHQL_SOUP: there the person is offered.
-  knownDefect('off');
   const channel = await ada.createChannel({ members: [people.ben] });
   await new ChannelView(page, channel.id).open();
 

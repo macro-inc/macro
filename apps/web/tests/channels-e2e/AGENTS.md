@@ -44,7 +44,7 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   transient: observe them before waiting on anything slow.
 - A test for a known defect is `knownDefect(...)` (from the fixtures) plus a
   row in `ledger/known-defects.tsv`, never a weakened assertion; both name the
-  builds that have the defect, with or without `VITE_ENABLE_GRAPHQL_SOUP`. A defect that shows
+  builds that have the defect, with or without `VITE_ENABLE_CHANNEL_LOCAL_SYNC`. A defect that shows
   only sometimes cannot be marked that way: wrap its check in `failsSometimes`
   and list the test in `ledger/intermittent-defects.tsv`.
 - ArrowUp from the composer can lose the keyboard to the composer again on a
@@ -114,6 +114,6 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   what happens the first time (DM-02) shows once for each cast on a new
   stack and never on an old one: prove such a thing on a new stack.
 - Channels are kept on the device only by a build with
-  `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true` as well as `VITE_ENABLE_GRAPHQL_SOUP`:
-  "with the flag" in this suite means both, and CI's flag job sets both. A
-  build with the second alone is not a build the suite knows.
+  `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true`, which has no default; without it
+  channel messages go over REST. That flag alone tells the suite's two builds
+  apart, and CI runs both.

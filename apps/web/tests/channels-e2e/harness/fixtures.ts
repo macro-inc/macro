@@ -106,11 +106,12 @@ export async function failsSometimes(
 }
 
 /**
- * Whether the app under test was built with `VITE_ENABLE_GRAPHQL_SOUP=true`,
+ * Whether the app under test was built with `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true`,
  * which the page cannot show. CI sets the variable for the build and the run
  * alike; a local run against a stack built with it must set it too.
  */
-export const SOUP_BUILD = process.env.VITE_ENABLE_GRAPHQL_SOUP === 'true';
+export const LOCAL_SYNC_BUILD =
+  process.env.VITE_ENABLE_CHANNEL_LOCAL_SYNC === 'true';
 
 /**
  * Marks the test as one a known product defect fails in every run, on the
@@ -118,13 +119,5 @@ export const SOUP_BUILD = process.env.VITE_ENABLE_GRAPHQL_SOUP === 'true';
  * `ledger/known-defects.tsv` with the same builds.
  */
 export function knownDefect(builds: 'off' | 'on' | 'both'): void {
-  test.fail(builds === 'both' || (builds === 'on') === SOUP_BUILD);
-}
-
-/** `failsSometimes` on the builds with the flag, a plain check on the others. */
-export async function failsSometimesWithSoup(
-  check: () => Promise<void>
-): Promise<void> {
-  if (SOUP_BUILD) await failsSometimes(check);
-  else await check();
+  test.fail(builds === 'both' || (builds === 'on') === LOCAL_SYNC_BUILD);
 }

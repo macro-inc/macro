@@ -18,8 +18,15 @@ export async function chooseChannelAction(
   page: Page,
   name: string
 ): Promise<void> {
-  await page.getByRole('button', { name: 'Channel actions' }).click();
-  await channelAction(page, name).click();
+  // The menu can still be open, or closing, from the choice before: its
+  // button would then close it under the click.
+  const menu = page.getByRole('menu', { name: 'Channel actions' });
+  await expect(async () => {
+    if (!(await menu.isVisible())) {
+      await page.getByRole('button', { name: 'Channel actions' }).click();
+    }
+    await channelAction(page, name).click({ timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
 }
 
 /** An entry of the open "Channel actions" menu. */

@@ -42,7 +42,7 @@ CHANNELS_E2E_STACK_URL=https://localhost:22609 \
 | `CHANNELS_E2E_WORKERS` | Parallel workers, default 4. The seed scenario has people for six. |
 | `CHANNELS_E2E_FIRST_CAST` | The first worker's people, counted from 0 (default). A second run at the same time on the same stack needs people of its own: give it the number of workers the first run has. |
 | `CHANNELS_E2E_VIDEO` | Set to record a video of every test. |
-| `VITE_ENABLE_GRAPHQL_SOUP` | Set to `true` when the app under test was built with it and with `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true`, as CI does for both the build and the run: some known defects exist only with the flags, others only without. The suite knows two builds, both flags or neither; a build with the first alone keeps no channels on the device and fails the device tests. |
+| `VITE_ENABLE_CHANNEL_LOCAL_SYNC` | Set to `true` when the app under test was built with it, as CI does for both the build and the run: only that build keeps channels on the device, and some known defects exist only with the flag, others only without. |
 
 The people sign in through the passwordless code flow of a local stack, so
 the suite needs a stack that offers it; it does not run against a deployed
@@ -79,7 +79,7 @@ that cover it or the reason none does. `ledger/proofs.tsv` names, for each
 test, a deliberate break of the product that made it fail, and
 `ledger/breaks/` holds those breaks as patches. `ledger/known-defects.tsv`
 lists the tests that assert behaviour the product does not have yet, and
-whether that is in builds without `VITE_ENABLE_GRAPHQL_SOUP` (`off`), with it
+whether that is in builds without `VITE_ENABLE_CHANNEL_LOCAL_SYNC` (`off`), with it
 (`on`) or `both`; they are marked `knownDefect(...)` and fail the run the day
 the defect is fixed, so the mark gets removed. `ledger/intermittent-defects.tsv`
 lists the tests with a check a defect fails only in some runs, wrapped in
@@ -101,9 +101,9 @@ bun tests/channels-e2e/ledger/check.ts --report <report>    # and against a run
   of what a page has fetched is `codeFetched`, with which `goOffline` lets a
   page finish fetching the app's code before it cuts it off: no test asserts
   on it.
-- A test of what only a build with `VITE_ENABLE_GRAPHQL_SOUP` does (channels
+- A test of what only a build with `VITE_ENABLE_CHANNEL_LOCAL_SYNC` does (channels
   kept on the device, writes that wait there) skips itself on other builds
-  with `test.skip(!SOUP_BUILD, ...)`, and its proof is run on a build with
+  with `test.skip(!LOCAL_SYNC_BUILD, ...)`, and its proof is run on a build with
   the flag.
 - A test that runs on both builds and reads messages needs a proof on each:
   with the flag, messages come through `src/lib/queries/messages/local/`,

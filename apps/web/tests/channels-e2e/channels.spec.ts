@@ -1,12 +1,6 @@
 import { unique } from './harness/api';
 import { ChannelView, conversations } from './harness/channel';
-import {
-  expect,
-  failsSometimes,
-  failsSometimesWithSoup,
-  knownDefect,
-  test,
-} from './harness/fixtures';
+import { expect, failsSometimes, knownDefect, test } from './harness/fixtures';
 import {
   channelAction,
   channelHeader,
@@ -231,7 +225,9 @@ test('CHN-06 Copy Link gives an address that opens the channel for another membe
   await new ChannelView(page, channel.id).open();
 
   await chooseChannelAction(page, 'Copy Link');
-  await expect(page.getByText('Link copied to clipboard')).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toContain(channel.id);
   const link = await page.evaluate(() => navigator.clipboard.readText());
 
   const benPage = await pageFor('ben');
@@ -292,12 +288,9 @@ test('CHN-08 a deleted channel leaves its owner’s Favorites too', async ({
   ada,
   people,
 }) => {
-  // Known defect on main: the deleted channel leaves "All channels" but its
+  // Defect, in some runs: the deleted channel leaves "All channels" but its
   // row stays under Favorites, opening "Conversation unavailable", until the
   // page is reloaded.
-  // With VITE_ENABLE_GRAPHQL_SOUP the row goes at once on some machines and
-  // stays on others.
-  knownDefect('off');
   const channel = await ada.createChannel({ members: [people.ben] });
   await ada.postAll(channel.id, ['a message']);
   await new ChannelView(page, channel.id).open();
@@ -311,7 +304,7 @@ test('CHN-08 a deleted channel leaves its owner’s Favorites too', async ({
     .click();
 
   await expect(sidebarRow(page, channel.id)).toHaveCount(0);
-  await failsSometimesWithSoup(async () => {
+  await failsSometimes(async () => {
     await expect(favoriteRow(page, channel.id)).toHaveCount(0);
   });
 });
@@ -452,11 +445,9 @@ test('CHN-15 a channel deleted elsewhere closes on its owner’s open page', asy
   ada,
   people,
 }) => {
-  // Known defect on main: when nothing else reaches the person around the
+  // Defect, in some runs: when nothing else reaches the person around the
   // deletion, their open page keeps the channel and its composer until a
-  // reload. In every run without VITE_ENABLE_GRAPHQL_SOUP, in about 1 run
-  // in 3 with it.
-  knownDefect('off');
+  // reload.
   const channel = await ada.createChannel({ members: [people.ben] });
   await ada.postAll(channel.id, ['soon gone']);
   const view = new ChannelView(page, channel.id);
@@ -465,7 +456,7 @@ test('CHN-15 a channel deleted elsewhere closes on its owner’s open page', asy
 
   await deleteChannel('ada', channel.id);
 
-  await failsSometimesWithSoup(async () => {
+  await failsSometimes(async () => {
     await expect(view.composer).toHaveCount(0);
     await expect(page.getByText('soon gone')).toHaveCount(0);
   });

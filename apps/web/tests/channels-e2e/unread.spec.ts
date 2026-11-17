@@ -1,12 +1,7 @@
 import { type Api, unique } from './harness/api';
 import { ChannelView, conversationRow } from './harness/channel';
 import { mentionPerson } from './harness/composer';
-import {
-  expect,
-  failsSometimesWithSoup,
-  knownDefect,
-  test,
-} from './harness/fixtures';
+import { expect, failsSometimes, knownDefect, test } from './harness/fixtures';
 import type { Person } from './harness/people';
 import {
   chooseFromRowMenu,
@@ -179,9 +174,9 @@ test('UNR-04 scrolled up in an open channel, a new message shows “1 unread …
   const chip = page.getByRole('button', {
     name: '1 unread notification stack below',
   });
-  // Known defect with VITE_ENABLE_GRAPHQL_SOUP, in about 1 run in 10: the
+  // Known defect, in about 1 run in 10: the
   // notice never appears.
-  await failsSometimesWithSoup(async () => {
+  await failsSometimes(async () => {
     await expect(chip).toBeVisible();
     await expect(view.message('came in below')).not.toBeInViewport();
     await chip.click();
@@ -336,10 +331,10 @@ test('UNR-08 a channel I am added to appears in my list at once, and opens', asy
   });
   await ada.post(added.id, 'welcome');
 
-  // Known defect with VITE_ENABLE_GRAPHQL_SOUP, in some runs: the rows shown
+  // Known defect, in some runs: the rows shown
   // while "Search conversations" is open do not take in a new channel (the
   // defect UNR-10 is about), so it is missing until the search is run again.
-  await failsSometimesWithSoup(async () => {
+  await failsSometimes(async () => {
     await expect(row).toBeVisible();
   });
   if (!(await row.isVisible())) {
@@ -388,9 +383,9 @@ test('UNR-10 a row found with “Search conversations” is marked unread at onc
   ben,
   people,
 }) => {
-  // Known defect with VITE_ENABLE_GRAPHQL_SOUP: rows shown while the list
-  // is being searched are not marked until the search is closed.
-  knownDefect('on');
+  // Known defect: rows shown while the list is being searched are not marked
+  // until the search is closed.
+  knownDefect('both');
   const made = await channelsNamed(ada, [people.ben], 'open', 'found');
   await ada.post(made.found, 'read before');
   await new ChannelView(page, made.open).open();

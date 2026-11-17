@@ -8,7 +8,7 @@ import {
   readAndReturn,
   startAfresh,
 } from './harness/device';
-import { expect, SOUP_BUILD, test } from './harness/fixtures';
+import { expect, LOCAL_SYNC_BUILD, test } from './harness/fixtures';
 import { noAccess } from './harness/management';
 import { Conversation } from './harness/messages';
 import { goOffline, goOnline } from './harness/network';
@@ -204,7 +204,7 @@ test('SYN-05 what a device caught up on is what it shows the next time it opens 
   ada,
   ben,
 }) => {
-  test.skip(!SOUP_BUILD, 'channels open offline only with the flag');
+  test.skip(!LOCAL_SYNC_BUILD, 'channels open offline only with the flag');
   const made = await scene(ada, ben);
   const first = await pageFor('ben');
   const view = new Conversation(first, made.channel.id);

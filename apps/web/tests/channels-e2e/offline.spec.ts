@@ -14,7 +14,7 @@ import {
   expect,
   failsSometimes,
   knownDefect,
-  SOUP_BUILD,
+  LOCAL_SYNC_BUILD,
   test,
 } from './harness/fixtures';
 import { historyText } from './harness/history';
@@ -29,7 +29,10 @@ import {
 
 // What a device shows of a channel with no connection, or with a very slow
 // one. Only a build that keeps channels on the device does any of this.
-test.skip(!SOUP_BUILD, 'channels are kept on the device only with the flag');
+test.skip(
+  !LOCAL_SYNC_BUILD,
+  'channels are kept on the device only with the flag'
+);
 
 const WHOLE = [
   'one, edited',

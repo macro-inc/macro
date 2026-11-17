@@ -1,10 +1,5 @@
 import { ChannelView } from './harness/channel';
-import {
-  expect,
-  failsSometimesWithSoup,
-  knownDefect,
-  test,
-} from './harness/fixtures';
+import { expect, failsSometimes, test } from './harness/fixtures';
 import {
   expectTimelineEndsWith,
   findConversation,
@@ -118,11 +113,9 @@ test('MEM-03 a person removed while the channel is open loses it at once', async
   people,
   pageFor,
 }) => {
-  // Known defect on main: when nothing else reaches the removed person
+  // Defect, in some runs: when nothing else reaches the removed person
   // around the removal, their page keeps the channel, its composer and its
   // row in the list until a reload; what they send then vanishes unsaid.
-  // With VITE_ENABLE_GRAPHQL_SOUP the same shows in some runs only.
-  knownDefect('off');
   const channel = await ada.createChannel({
     members: [people.ben, people.cy],
   });
@@ -135,7 +128,7 @@ test('MEM-03 a person removed while the channel is open loses it at once', async
 
   await ada.removeParticipants(channel.id, [people.cy]);
 
-  await failsSometimesWithSoup(async () => {
+  await failsSometimes(async () => {
     await expect(cyView.composer).toHaveCount(0);
     await expect(noAccess(cyPage)).toBeVisible();
     await expect(cyPage.getByText('all three here')).toHaveCount(0);

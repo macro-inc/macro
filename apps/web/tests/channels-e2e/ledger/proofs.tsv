@@ -162,3 +162,7 @@ WRT-13	ledger/breaks/queued-writes-never-sent.patch	failed: Error: the channel a
 WRT-14	ledger/breaks/waiting-write-not-shown-in-other-window.patch	failed: Error: the channel as it is on the screen
 WRT-15	ledger/breaks/stored-send-never-forgotten.patch	failed: Error: the channel as the services hold it
 CHN-16	none: the build as it is, with or without the flag	failed: Error: expect(locator).toContainText(expected) failed
+CHN-15	none: marked a known defect until the GraphQL sources flag was removed; no break has been built for it since	not run
+DM-06	none: marked a known defect until the GraphQL sources flag was removed; no break has been built for it since	not run
+MEM-03	none: marked a known defect until the GraphQL sources flag was removed; no break has been built for it since	not run
+CHN-08	none: marked a known defect until the GraphQL sources flag was removed; no break has been built for it since	not run

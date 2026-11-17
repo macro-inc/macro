@@ -1,6 +1,6 @@
 import type { Api, SentMessage } from './harness/api';
 import { expectShown, loseKeptData, type Named } from './harness/device';
-import { expect, SOUP_BUILD, test } from './harness/fixtures';
+import { expect, LOCAL_SYNC_BUILD, test } from './harness/fixtures';
 import { Conversation } from './harness/messages';
 import {
   blockWrites,
@@ -13,7 +13,7 @@ import { serverChannel } from './harness/server';
 // What Ben writes while his device cannot reach the services: it shows at
 // once, waits on the device, and reaches the services once, in order, when
 // it can. Only a build that queues writes on the device does this.
-test.skip(!SOUP_BUILD, 'writes wait on the device only with the flag');
+test.skip(!LOCAL_SYNC_BUILD, 'writes wait on the device only with the flag');
 
 type Scene = { channel: Named; messages: SentMessage[] };
 

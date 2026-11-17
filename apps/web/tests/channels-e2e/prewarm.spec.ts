@@ -10,14 +10,17 @@ import {
   openFromList,
   readAndReturn,
 } from './harness/device';
-import { expect, SOUP_BUILD, test } from './harness/fixtures';
+import { expect, LOCAL_SYNC_BUILD, test } from './harness/fixtures';
 import { Conversation } from './harness/messages';
 import { goOffline, goOnline } from './harness/network';
 import { findConversations, haveViewed } from './harness/sidebar';
 
 // A device left alone fetches the channels its person is likely to open
 // next, so that they open without a connection too.
-test.skip(!SOUP_BUILD, 'channels are kept on the device only with the flag');
+test.skip(
+  !LOCAL_SYNC_BUILD,
+  'channels are kept on the device only with the flag'
+);
 
 // If this fails, a channel with unread messages that the person has never
 // opened on this device needs a connection the first time they open it.
