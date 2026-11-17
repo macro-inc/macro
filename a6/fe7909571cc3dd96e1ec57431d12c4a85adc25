@@ -1,0 +1,37 @@
+crates/code_execution/README.md
+  s_e4b3032e8c4db7::t_10f8300d2fa4c2 65-70,76-88,215
+crates/code_execution/src/outbound/deno.rs
+  s_e4b3032e8c4db7::t_1027714b193663 82-89
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_e4b3032e8c4db7::t_cfdd978dd13444 103-105,107,117
+crates/code_execution/src/outbound/deno/test/ocaml.rs
+  s_e4b3032e8c4db7::t_477f15ffb9e142 3-8,33-44,223-238,323-356,372-444,646-663,692-767
+crates/code_execution/src/outbound/ocaml.rs
+  s_e4b3032e8c4db7::t_a2d22d0e117578 24-31,40-43,87-88,92-103,177-190,192-196,322-324,346-350,365,367,403-415,419-456
+packages/sdk-ocaml/README.md
+  s_e4b3032e8c4db7::t_f6844cd923bb97 260-267
+packages/sdk-ocaml/code_mode/policy/code_mode_policy.ml
+  s_e4b3032e8c4db7::t_75f9c74a892496 12-25,47-48,56-57,60-66,78-84,94-112,114,120-122,129-183,190,196,200-205,209-219,278
+packages/sdk-ocaml/code_mode/policy/test/allowed.ml
+  s_e4b3032e8c4db7::t_48fb789baf83bc 11-29
+packages/sdk-ocaml/code_mode/policy/test/rejected.expected
+  s_e4b3032e8c4db7::t_0d851c308b2936 15-30
+packages/sdk-ocaml/code_mode/policy/test/rejected.ml
+  s_e4b3032e8c4db7::t_f3afa77cde2469 31-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a6fe7909571cc3dd96e1ec57431d12c4a85adc25",
+  "prompts": {},
+  "sessions": {
+    "s_e4b3032e8c4db7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24925383-e21a-4525-9705-fbe4754c37cc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
