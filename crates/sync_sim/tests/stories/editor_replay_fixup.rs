@@ -134,9 +134,11 @@ fn startup_adoption_precedes_editor_attachment_and_dependent_edits() {
     // Startup now replays before model attachment, avoiding the former own
     // repair operation. Both user characters still require durable delivery.
     // That first local commit also carries the stored-drift normalization the
-    // writers left behind, as Source's Mirror does: each list item was stored with
-    // checked null, which Source's import clears outside a check list, so the
-    // reopened client deletes it once per item. 2 characters + 2 deletions.
+    // writers left behind: each list item was stored with checked null, which
+    // Source's import clears outside a check list, so the reopened client deletes
+    // it once per item. 2 characters + 2 deletions. Source control:
+    // storedFieldSync.test.ts over
+    // crates/client/document_session/tests/testdata/source-stored-field-sync.
     assert_eq!(client.oplog_vv.get(&peer), Some(&4));
     fn list_items(node: &serde_json::Value, out: &mut Vec<serde_json::Value>) {
         if node.get("type").and_then(serde_json::Value::as_str) == Some("listitem") {
