@@ -347,7 +347,8 @@ Focus rows have a backend-free browser regression over the real row and mapping
 at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
 extra height or lost subject, touch rows of at least 44px, and the importance
 meter on every row except on phones, with the direction in its label while
-importance moves:
+importance moves, and a preview cut short ending in an ellipsis (its box must
+not be a flex container, whose text never gets one):
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
