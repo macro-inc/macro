@@ -34,6 +34,9 @@ fn deploy_checks_the_live_bundle_right_before_publishing() {
         Some("${{ inputs.environment }}")
     );
     let script = steps[guard]["run"].as_str().expect("guard script");
-    assert!(script.contains("apps/web/dist/bundle-manifest.json"), "{script}");
+    assert!(
+        script.contains("apps/web/dist/bundle-manifest.json"),
+        "{script}"
+    );
     assert!(!script.contains("cargo"), "the deploy job compiles nothing");
 }
