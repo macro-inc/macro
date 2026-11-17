@@ -21,24 +21,45 @@ export function projectLocation(content: SplitContent | null) {
   const leaf: unknown = matches.at(-1);
   if (!isRecord(leaf)) return;
   if (leaf.id === 'tasks-projects') return { kind: 'list' as const };
-  if (leaf.id !== 'tasks-project' || !isRecord(leaf.params)) return;
-  const { projectId, section } = leaf.params;
+  const task = leaf.id === 'tasks-project-task';
+  if (
+    task &&
+    (!isRecord(leaf.params) ||
+      typeof leaf.params.taskId !== 'string' ||
+      !leaf.params.taskId)
+  )
+    return;
+  const project = task ? matches.at(-2) : leaf;
+  if (
+    !isRecord(project) ||
+    project.id !== 'tasks-project' ||
+    !isRecord(project.params)
+  )
+    return;
+  const { projectId, section } = project.params;
   if (typeof projectId !== 'string' || !projectId) return;
   if (section !== 'overview' && section !== 'tasks') return;
+  if (task) return { kind: 'task' as const, projectId, section };
   return { kind: 'detail' as const, projectId, section };
 }
 
-/** A phone project is one page; direct links return to the Projects list. */
+/** Nested tasks return to their project; direct project links return to the list. */
 export function projectBackFallback(
   content: SplitContent
 ): SplitContent | undefined {
   const location = projectLocation(content);
-  if (location?.kind !== 'detail') return;
+  if (!location || location.kind === 'list') return;
   const parent = { id: 'view-tasks', params: {} };
-  const route = paneRoute(parent, {
-    id: 'tasks-projects',
-    params: { projectsTab: 'projects' },
-  });
+  const route =
+    location.kind === 'task'
+      ? paneRoute(parent, {
+          id: 'tasks-project',
+          params: { projectId: location.projectId, section: location.section },
+        })
+      : paneRoute(parent, {
+          id: 'tasks-projects',
+          params: { projectsTab: 'projects' },
+        });
   return {
     type: 'component',
     id: 'tasks',
@@ -56,11 +77,19 @@ export function runProjectBack(
   handle: Pick<SplitHandle, 'content' | 'goBackTo' | 'replace'>
 ) {
   const current = projectLocation(handle.content());
-  if (current?.kind !== 'detail') return;
+  if (!current || current.kind === 'list') return;
   const navigated = handle.goBackTo((content) => {
     const previous = projectLocation(content);
+    // Closing a nested task returns to its project, not another task or pane.
+    if (current.kind === 'task')
+      return (
+        previous?.kind === 'detail' && previous.projectId === current.projectId
+      );
+    // Closing a project skips both former sections and tasks already closed there.
     return (
-      previous?.kind !== 'detail' || previous.projectId !== current.projectId
+      !previous ||
+      previous.kind === 'list' ||
+      previous.projectId !== current.projectId
     );
   });
   if (navigated) return;

@@ -16,8 +16,9 @@ export function createMobileBackNavigation(options: {
     const id = options.stack.front();
     if (!id) return;
     const handle = options.getSplit(id);
-    if (handle && projectLocation(handle.content())?.kind === 'detail')
-      return handle;
+    if (!handle) return;
+    const location = projectLocation(handle.content());
+    if (location && location.kind !== 'list') return handle;
   };
 
   return {

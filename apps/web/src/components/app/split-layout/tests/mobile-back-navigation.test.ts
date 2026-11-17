@@ -1,3 +1,4 @@
+import { paneRoute } from '@app/routes/app-route';
 import { describe, expect, it, vi } from 'vitest';
 import type { SplitContent, SplitId } from '../layoutManager';
 import { createMobileBackNavigation } from '../mobile/createMobileBackNavigation';
@@ -17,6 +18,24 @@ function projectContent(section: string, projectId = PROJECT): SplitContent {
           { id: 'tasks-project', params: { projectId, section } },
         ],
       },
+    },
+  };
+}
+
+function projectTaskContent(): SplitContent {
+  return {
+    type: 'component',
+    id: 'tasks',
+    entryMetadata: {
+      route: paneRoute(
+        { id: 'view-tasks', params: {} },
+        {
+          id: 'tasks-project',
+          params: { projectId: PROJECT, section: 'tasks' },
+        },
+        { id: 'tasks-project-task', params: { taskId: 'task' } }
+      ),
+      search: { projects: { savedView: ['saved-projects'] } },
     },
   };
 }
@@ -120,6 +139,74 @@ describe('native phone project Back', () => {
     }
   );
 
+  it.each([true, false])(
+    'returns a nested project task to its project (pane behind: %s)',
+    (stackBack) => {
+      const test = setup({
+        current: projectTaskContent(),
+        previous: projectContent('tasks'),
+        stackBack,
+      });
+      expect(test.back.canGoBack()).toBe(true);
+      expect(test.back.canGoBackInPane()).toBe(true);
+      test.back.goBack();
+      expect(test.routeBack).toHaveBeenCalledOnce();
+      expect(test.stackBack).not.toHaveBeenCalled();
+      expect(test.replace).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([true, false])(
+    'returns a direct project task link to its project (pane behind: %s)',
+    (stackBack) => {
+      const test = setup({
+        current: projectTaskContent(),
+        previous: { type: 'component', id: 'home' },
+        stackBack,
+      });
+      test.back.goBack();
+      expect(test.replace).toHaveBeenCalledWith({
+        mergeHistory: true,
+        next: expect.objectContaining({
+          entryMetadata: {
+            route: paneRoute(
+              { id: 'view-tasks', params: {} },
+              {
+                id: 'tasks-project',
+                params: { projectId: PROJECT, section: 'tasks' },
+              }
+            ),
+            search: { projects: { savedView: ['saved-projects'] } },
+          },
+        }),
+      });
+      expect(test.routeBack).not.toHaveBeenCalled();
+      expect(test.stackBack).not.toHaveBeenCalled();
+    }
+  );
+
+  it('skips closed nested tasks when leaving their owning project', () => {
+    const test = setup({
+      current: projectContent('tasks'),
+      previous: projectTaskContent(),
+    });
+    test.back.goBack();
+    expect(test.routeBack).not.toHaveBeenCalled();
+    expect(test.stackBack).not.toHaveBeenCalled();
+    expect(test.replace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        next: expect.objectContaining({
+          entryMetadata: expect.objectContaining({
+            route: paneRoute(
+              { id: 'view-tasks', params: {} },
+              { id: 'tasks-projects', params: { projectsTab: 'projects' } }
+            ),
+          }),
+        }),
+      })
+    );
+  });
+
   it.each([
     ['overview', 'tasks-projects', false],
     ['overview', 'tasks-projects', true],
@@ -199,6 +286,8 @@ describe('native phone project Back', () => {
 
   it.each([
     { phone: false },
+    { phone: false, current: projectTaskContent() },
+    { current: { type: 'md', id: 'task' } satisfies SplitContent },
     { current: { type: 'component', id: 'home' } satisfies SplitContent },
     { current: { type: 'initiative', id: PROJECT } satisfies SplitContent },
     {

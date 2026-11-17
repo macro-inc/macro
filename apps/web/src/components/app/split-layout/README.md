@@ -60,7 +60,10 @@ previous destination, preserving its scope, filters, and saved view. Direct link
 without another destination replace the current entry with Projects. The browser
 phone header uses the same operation. Detect project detail from route metadata,
 not the shared `tasks` component id, so the list-only rule does not hide its caret.
-Other entries and tablets retain pane-stack navigation. Route swipes keep the current pane still
+A nested project task returns to its owning project before closing a pane,
+including direct task links; leaving that project skips its already-closed tasks.
+Separately opened tasks, other entries, and tablets retain pane-stack navigation.
+Route swipes keep the current pane still
 until completion because there is no second pane to reveal. Clear the swipe
 transform before route Back, even when the route changes during a pane drag.
 

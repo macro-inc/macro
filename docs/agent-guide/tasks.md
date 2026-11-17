@@ -1226,7 +1226,10 @@ and in empty projects. No inline Add task remains on phones; empty states keep
 their explanation and Documentation link. The list reserves space below its last
 row for the floating chrome. Back returns to the previous destination or Projects for a direct link, skipping
 obsolete same-project section entries. Check 390px with a long name, expanded
-description, grouped task scrolling, Back/Forward, Share, and Details.
+description, grouped task scrolling, Back/Forward, Share, and Details. For a task
+opened inside a project's route, the header caret, Android Back, and edge swipe
+return to that project, including direct task links. Separately opened task panes
+retain normal pane Back behavior; leaving the project does not reopen a closed task.
 
 Choose `Add existing tasks` from Add task on desktop, or from the floating Task
 control's stacked menu on phones. Search, select several, and confirm `Add N tasks`.

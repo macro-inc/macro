@@ -143,10 +143,8 @@ function SplitBackButton() {
         runSplitBack({
           canGoBack,
           goBack: () => {
-            if (
-              isMobile() &&
-              projectLocation(context.handle.content())?.kind === 'detail'
-            ) {
+            const project = projectLocation(context.handle.content());
+            if (isMobile() && project && project.kind !== 'list') {
               runProjectBack(context.handle);
               return;
             }
@@ -375,7 +373,8 @@ export function SplitHeader(props: {
 
   const hideMobileBack = () => {
     const content = panel.handle.content();
-    if (isMobile() && projectLocation(content)?.kind === 'detail') return false;
+    const project = projectLocation(content);
+    if (isMobile() && project && project.kind !== 'list') return false;
     return (
       isListViewID(content.id) ||
       (content.type === 'component' &&
