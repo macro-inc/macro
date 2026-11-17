@@ -100,7 +100,11 @@ async function runOcaml(context, assets) {
     finish: text => { frame ??= text; },
   };
   const pending = {1: "", 2: ""};
+  // One streaming decoder per stream, so a character a buffer flush splits
+  // is decoded whole.
+  const decoders = {1: new TextDecoder(), 2: new TextDecoder()};
   const flush = (fd, all) => {
+    if (all) pending[fd] += decoders[fd].decode();
     const lines = pending[fd].split("\n");
     pending[fd] = all ? "" : lines.pop();
     for (const line of lines) if (!all || line !== "") emit({type: "log", level: fd === 1 ? "info" : "warn", message: line});
@@ -110,7 +114,7 @@ async function runOcaml(context, assets) {
     writeSync(fd, buffer, offset, length, position) {
       if (fd !== 1 && fd !== 2) return nodeFs.writeSync(fd, buffer, offset, length, position);
       const bytes = typeof buffer === "string" ? encoder.encode(buffer) : buffer.subarray(offset ?? 0, (offset ?? 0) + (length ?? buffer.length));
-      pending[fd] += decoder.decode(bytes);
+      pending[fd] += decoders[fd].decode(bytes, {stream: true});
       flush(fd, false);
       return bytes.length;
     },
