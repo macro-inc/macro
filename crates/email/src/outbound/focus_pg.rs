@@ -494,6 +494,23 @@ impl FocusStore for FocusPgRepository {
             .collect()
     }
 
+    #[tracing::instrument(skip(self), fields(inboxes = tracing::field::Empty), err)]
+    async fn syncing_inboxes(&self) -> Result<Vec<FocusInboxOwner>, Report> {
+        // One row per connected mailbox: a small table, read whole.
+        let rows = sqlx::query!("SELECT id, macro_id FROM email_links WHERE is_sync_active")
+            .fetch_all(&self.0)
+            .await?;
+        tracing::Span::current().record("inboxes", rows.len());
+        rows.into_iter()
+            .map(|row| {
+                Ok(FocusInboxOwner {
+                    link_id: row.id,
+                    owner: MacroUserIdStr::try_from(row.macro_id)?,
+                })
+            })
+            .collect()
+    }
+
     #[tracing::instrument(skip(self), fields(threads = tracing::field::Empty), err)]
     async fn focus_thread_ids(
         &self,

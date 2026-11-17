@@ -216,8 +216,11 @@ tools — hexagonal, heavily feature-gated.
   change both.
 - Focus classifies an inbox only while its owner is in the rollout
   (`FocusEnrollment`, the worker's cached `enable-email-focus` read). Check it
-  after `thread_inbox` and before any mail is read. The sweep goes inbox by inbox
-  (`inboxes_with_focus` plus those seen enrolled), and `stale_threads` reads one
+  after `thread_inbox` and before any mail is read. `enrolled_inboxes` checks every
+  `syncing_inboxes` owner, so an owner who joins is found without mail, and
+  `backfill` fills one inbox several threads at a time. The sweep goes inbox by
+  inbox (`inboxes_with_focus` plus those seen enrolled) and leaves an inbox being
+  backfilled to the backfill, so no thread is classified twice at once; `stale_threads` reads one
   inbox through its latest-inbound and latest-outbound indexes; keep its
   `OFFSET 0` fence, or the per-thread calendar and contact checks run on every
   thread in the window.

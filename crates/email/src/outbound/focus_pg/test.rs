@@ -422,6 +422,48 @@ async fn inboxes_with_focus_are_those_holding_a_focus_thread(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("email_focus"))
 )]
+async fn syncing_inboxes_are_every_connected_inbox_still_syncing(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let mut inboxes = repo.syncing_inboxes().await?;
+    inboxes.sort_by_key(|inbox| inbox.link_id);
+    assert_eq!(
+        inboxes,
+        vec![
+            FocusInboxOwner {
+                link_id: OWNER_LINK,
+                owner: owner(),
+            },
+            FocusInboxOwner {
+                link_id: OTHER_LINK,
+                owner: MacroUserIdStr::try_from_email("other@elsewhere.example").unwrap(),
+            },
+        ]
+    );
+
+    // An inbox whose sync stopped is left out.
+    sqlx::query!(
+        "UPDATE email_links SET is_sync_active = false WHERE id = $1",
+        OTHER_LINK
+    )
+    .execute(&pool)
+    .await?;
+    let inboxes = repo.syncing_inboxes().await?;
+    assert_eq!(
+        inboxes
+            .iter()
+            .map(|inbox| inbox.link_id)
+            .collect::<Vec<_>>(),
+        vec![OWNER_LINK]
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
 async fn threads_with_the_same_latest_mail_do_not_fall_between_pages(
     pool: Pool<Postgres>,
 ) -> Result<(), Report> {
