@@ -6,7 +6,7 @@ throughout the audit; an attached `run_local`'s startup and quit command rebuild
 remove instance data. Use the `r` hotkey or `just run_local rebuild` to rebuild
 services without replacing data.
 
-For an optimized headless frontend, explicitly set `VITE_ENABLE_DATABASES=true`,
+For an optimized headless frontend, explicitly set
 `VITE_ENABLE_BROWSER_OTEL=true` and
 `VITE_OTEL_EXPORTER_URL=/i/otlp/v1/traces` when building. The static build does not
 inherit the interactive Vite server's tracing configuration. Before recording

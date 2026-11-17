@@ -12,7 +12,6 @@ import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Badge, Tooltip } from '@ui';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { AddToPipeline } from '../add-to-pipeline';
-import { useCrmContext } from '../context/crm-context';
 import { CompanyVisibilityButton } from './company-visibility-button';
 import { useSetCompanyNameMutation } from './use-crm';
 
@@ -79,7 +78,6 @@ function TitleEditor(props: { company: CrmCompanyEntity }) {
  * facts as pills beneath it, then its pre-generated description.
  */
 export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
-  const pipelinesEnabled = useCrmContext().pipelinesEnabled();
   return (
     <div>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -99,7 +97,7 @@ export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
             <CompanyVisibilityButton identity companyId={company().id} />
           )}
         </Show>
-        <Show when={pipelinesEnabled() && props.company}>
+        <Show when={props.company}>
           {(company) => (
             <AddToPipeline
               record={{

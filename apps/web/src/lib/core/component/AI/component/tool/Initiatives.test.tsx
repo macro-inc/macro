@@ -17,7 +17,6 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: projectsEnabled() }),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableProjects: { key: 'enable-projects' },
   isFeatureEnabled: () => projectsEnabled(),
 }));
 vi.mock('@app/features/projects/queries/project-revalidation', () => ({
@@ -134,38 +133,4 @@ it('reports a failed project deletion truthfully', () => {
 it('refreshes live project queries after a completed tool mutation', async () => {
   await initiativeToolHandlers.CreateInitiative.handleResponse?.({} as never);
   expect(refreshProjects).toHaveBeenCalledOnce();
-});
-
-it('keeps historical results readable while disabling project navigation', () => {
-  setProjectsEnabled(false);
-  tool(
-    'ListInitiatives',
-    {},
-    {
-      projects: [
-        {
-          initiativeId: projectId,
-          name: 'Launch',
-          completedTaskCount: 2,
-          taskCount: 5,
-        },
-      ],
-      truncated: false,
-    }
-  );
-  fireEvent.click(screen.getByRole('button', { name: '1 project' }));
-  expect(screen.getByText('Launch')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Launch' })).toBeNull();
-
-  setProjectsEnabled(true);
-  expect(screen.getByRole('button', { name: 'Launch' })).toBeTruthy();
-  setProjectsEnabled(false);
-  expect(screen.queryByRole('button', { name: 'Launch' })).toBeNull();
-  expect(open).not.toHaveBeenCalled();
-});
-
-it('does not refresh project data when projects are disabled', async () => {
-  setProjectsEnabled(false);
-  await initiativeToolHandlers.CreateInitiative.handleResponse?.({} as never);
-  expect(refreshProjects).not.toHaveBeenCalled();
 });

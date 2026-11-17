@@ -1,5 +1,4 @@
 import { supportsEntityAppearance } from '@app/features/entity-appearance/core/appearance';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -14,7 +13,6 @@ import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import {
-  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueuePreviewWakeup,
   type ItemEntity,
   isAccessiblePreviewItem,
@@ -50,11 +48,8 @@ export function useItemPreviewData(
   const [item, { documentProperties }] = suppliedPreview
     ? ([suppliedPreview, { documentProperties: () => undefined }] as const)
     : useItemPreview(entity);
-  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
 
   createEffect(() => {
-    if (!bulkWakeupEnabled().enabled) return;
-
     enqueuePreviewWakeup(item());
   });
 

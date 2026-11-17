@@ -90,7 +90,7 @@ function setup(options: GraphicsInputOptions) {
   ) => pointer('touch', id, type, x, y, elapsed);
   const pen = (type: PointerEventType, x: number, y: number) =>
     pointer('pen', 9, type, x, y, 10);
-  return { editor, viewport, finger, pen };
+  return { editor, viewport, finger, pen, detach };
 }
 
 it('zooms around the midpoint of two fingers and leaves the selection alone', () => {
@@ -333,6 +333,238 @@ it('navigates again after a pen whose release was lost to another window', () =>
   finger(1, 'pointermove', 150, 200);
   finger(2, 'pointermove', 350, 200);
   expect(editor.getCamera().scale).toBe(2);
+});
+
+it('turns a finger held still into a long press and spends the finger', () => {
+  vi.useFakeTimers();
+  const pressed = vi.fn();
+  const { editor, finger } = setup({
+    tool: () => 'select',
+    longPress: () => pressed,
+  });
+  const before = editor.document;
+
+  // The press lands on the shape, which starts a move, and drifts a little.
+  finger(1, 'pointerdown', 20, 20);
+  finger(1, 'pointermove', 24, 23);
+  expect(editor.getSession().transform).toBeDefined();
+  vi.advanceTimersByTime(500);
+
+  expect(pressed).toHaveBeenCalledWith({ x: 20, y: 20 });
+  expect(editor.getSession().transform).toBeUndefined();
+
+  // Dragging on afterwards moves nothing.
+  finger(1, 'pointermove', 120, 90);
+  finger(1, 'pointerup', 120, 90);
+  expect(editor.document).toBe(before);
+  expect(editor.getSession().canUndo).toBe(false);
+});
+
+/**
+ * A row of the menu a host opens for a long press, under the finger, and the
+ * events a browser sends it as that finger lifts.
+ */
+function menuRowUnderFinger() {
+  const row = document.createElement('button');
+  document.body.append(row);
+  const pressed = vi.fn();
+  for (const type of ['mousedown', 'mouseup', 'click'])
+    row.addEventListener(type, pressed);
+  // The test DOM marks every dispatched event as a script's. A browser's own
+  // are trusted, and the mark is kept on the event's implementation object.
+  let scripted = false;
+  const trust = (event: Event) => {
+    if (scripted) return;
+    const implementation = Object.getOwnPropertySymbols(event)
+      .map((symbol) => (event as unknown as Record<symbol, unknown>)[symbol])
+      .find(
+        (value): value is { isTrusted: boolean } =>
+          typeof value === 'object' && value !== null && 'isTrusted' in value
+      );
+    if (!implementation) throw new Error('The test DOM changed its events');
+    implementation.isTrusted = true;
+  };
+  for (const type of ['mousedown', 'mouseup', 'click'])
+    window.addEventListener(type, trust, true);
+  cleanups.push(() => {
+    row.remove();
+    for (const type of ['mousedown', 'mouseup', 'click'])
+      window.removeEventListener(type, trust, true);
+  });
+  /** Whether the event was left alone. */
+  const send = (type: string) =>
+    row.dispatchEvent(
+      new MouseEvent(type, { bubbles: true, cancelable: true })
+    );
+  const liftClick = () => ['mousedown', 'mouseup', 'click'].map(send);
+  /** A click a script makes, which no finger had a part in. */
+  const scriptClick = () => {
+    scripted = true;
+    row.click();
+    scripted = false;
+  };
+  return { row, pressed, send, liftClick, scriptClick };
+}
+
+it('lets the lift of a long press click nothing', () => {
+  vi.useFakeTimers();
+  // The row first, so that its events are trusted by the time they are judged.
+  const { pressed, liftClick, send, scriptClick } = menuRowUnderFinger();
+  const { finger } = setup({ tool: () => 'select', longPress: () => vi.fn() });
+
+  // However long the finger rests before it lifts.
+  finger(1, 'pointerdown', 20, 20);
+  vi.advanceTimersByTime(500);
+  vi.advanceTimersByTime(2000);
+  // A script's click meanwhile is not the finger's, and changes nothing.
+  scriptClick();
+  expect(pressed).toHaveBeenCalledTimes(1);
+  finger(1, 'pointerup', 20, 20);
+  expect(liftClick()).toEqual([false, false, false]);
+  expect(pressed).toHaveBeenCalledTimes(1);
+
+  // That was the lift's click. The next one is somebody's own.
+  send('click');
+  expect(pressed).toHaveBeenCalledTimes(2);
+});
+
+it('still swallows the lift after another finger joined the long press', () => {
+  vi.useFakeTimers();
+  const { pressed, liftClick } = menuRowUnderFinger();
+  const { finger } = setup({ tool: () => 'select', longPress: () => vi.fn() });
+
+  finger(1, 'pointerdown', 20, 20);
+  vi.advanceTimersByTime(500);
+  finger(2, 'pointerdown', 120, 20);
+  finger(1, 'pointerup', 20, 20);
+  expect(liftClick()).toEqual([false, false, false]);
+  finger(2, 'pointerup', 120, 20);
+  expect(pressed).not.toHaveBeenCalled();
+});
+
+it('leaves a click alone once the long press is over', () => {
+  vi.useFakeTimers();
+  const { row, pressed, send } = menuRowUnderFinger();
+  const { finger } = setup({ tool: () => 'select', longPress: () => vi.fn() });
+  const longPress = () => {
+    finger(1, 'pointerdown', 20, 20);
+    vi.advanceTimersByTime(500);
+  };
+
+  // Not every lift is followed by a click. A tap on the row afterwards starts
+  // with its own press.
+  longPress();
+  finger(1, 'pointerup', 20, 20);
+  row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  send('click');
+  expect(pressed).toHaveBeenCalledTimes(1);
+
+  // So does a tap after a lift that was never reported.
+  longPress();
+  row.dispatchEvent(
+    new PointerEvent('pointerdown', { bubbles: true, isPrimary: true })
+  );
+  send('click');
+  expect(pressed).toHaveBeenCalledTimes(2);
+
+  // A key that presses the row is its own too.
+  longPress();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+  send('click');
+  expect(pressed).toHaveBeenCalledTimes(3);
+  finger(1, 'pointerup', 20, 20);
+
+  // And so is a click with no press before it, a while after the lift,
+  // whether the finger lifted or the system took it away.
+  for (const lift of ['pointerup', 'pointercancel'] as const) {
+    pressed.mockClear();
+    longPress();
+    finger(1, lift, 20, 20);
+    vi.advanceTimersByTime(499);
+    expect(send('click')).toBe(false);
+    longPress();
+    finger(1, lift, 20, 20);
+    vi.advanceTimersByTime(500);
+    expect(send('click')).toBe(true);
+    expect(pressed).toHaveBeenCalledTimes(1);
+  }
+});
+
+it('swallows no click after a tap, a drag, or a press the host did not take', () => {
+  vi.useFakeTimers();
+  const { pressed, send } = menuRowUnderFinger();
+  const taken = setup({ tool: () => 'select', longPress: () => vi.fn() });
+
+  taken.finger(1, 'pointerdown', 20, 20);
+  taken.finger(1, 'pointerup', 20, 20);
+  send('click');
+  expect(pressed).toHaveBeenCalledTimes(1);
+
+  taken.finger(1, 'pointerdown', 20, 20);
+  taken.finger(1, 'pointermove', 60, 20);
+  vi.advanceTimersByTime(600);
+  taken.finger(1, 'pointerup', 60, 20);
+  send('click');
+  expect(pressed).toHaveBeenCalledTimes(2);
+
+  const left = setup({ tool: () => 'rectangle', longPress: () => undefined });
+  left.finger(1, 'pointerdown', 150, 150);
+  vi.advanceTimersByTime(600);
+  left.finger(1, 'pointerup', 150, 150);
+  send('click');
+  expect(pressed).toHaveBeenCalledTimes(3);
+});
+
+it('stops swallowing when the surface goes away', () => {
+  vi.useFakeTimers();
+  const { pressed, send } = menuRowUnderFinger();
+  const { finger, detach } = setup({
+    tool: () => 'select',
+    longPress: () => vi.fn(),
+  });
+
+  finger(1, 'pointerdown', 20, 20);
+  vi.advanceTimersByTime(500);
+  detach();
+  send('click');
+  expect(pressed).toHaveBeenCalledTimes(1);
+});
+
+it('does not long press once the finger has started dragging or lifted', () => {
+  vi.useFakeTimers();
+  const pressed = vi.fn();
+  const { finger } = setup({ tool: () => 'select', longPress: () => pressed });
+
+  finger(1, 'pointerdown', 20, 20);
+  finger(1, 'pointermove', 40, 20);
+  vi.advanceTimersByTime(600);
+  finger(1, 'pointerup', 40, 20);
+
+  finger(1, 'pointerdown', 200, 200);
+  finger(1, 'pointerup', 200, 200);
+  vi.advanceTimersByTime(600);
+
+  // A second finger makes it a pinch, not a press.
+  finger(1, 'pointerdown', 200, 200);
+  finger(2, 'pointerdown', 260, 200);
+  vi.advanceTimersByTime(600);
+
+  expect(pressed).not.toHaveBeenCalled();
+});
+
+it('leaves a still finger to the tool when the host takes no long press', () => {
+  vi.useFakeTimers();
+  const { editor, finger } = setup({
+    tool: () => 'rectangle',
+    longPress: () => undefined,
+  });
+
+  finger(1, 'pointerdown', 150, 150);
+  vi.advanceTimersByTime(600);
+  finger(1, 'pointermove', 220, 230);
+  finger(1, 'pointerup', 220, 230);
+
+  expect(Object.keys(editor.document.items)).toHaveLength(3);
 });
 
 it('leaves a single finger to the tool', () => {

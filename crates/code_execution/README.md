@@ -132,6 +132,13 @@ starts processes nor loads other built-ins (`NODE_ALLOWED` in
 map doesn't know. Like a dry run, this is held inside the process: the
 sandbox's `--allow-net` still reaches the API origins directly.
 
+A proxied run (`Egress::Proxied`) is the exception: `--allow-net` names only
+a loopback forwarder the runner starts for that run. The program keeps the
+real hosts for its links, its fetch sends their requests to the forwarder,
+and the forwarder, outside the realm, sets the mark and
+the trace context (a child of the run's span) on every request, dropping
+the ones the program set. It follows no redirects and stops with the run.
+
 Deno shares the harness container. The heap setting does not hard-limit native
 memory, ArrayBuffers, or CPU; a container OOM can affect the harness and other
 executions. A separate executor service remains a future isolation option.

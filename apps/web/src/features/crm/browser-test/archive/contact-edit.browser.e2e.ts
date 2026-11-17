@@ -149,9 +149,9 @@ test('personal company link, switch and separate Go to', async ({
   await expect(page).toHaveURL(/opened=company-2/);
 });
 
-test('company picker exposes additional browse and search pages without saving', async ({
+test('company picker lists further browse and search pages as it scrolls, without saving', async ({
   page,
-}, info) => {
+}) => {
   await page.goto('/?personal&unlinked&pagedCompanies');
   await page
     .getByRole('button', { name: 'Add company', exact: true })
@@ -162,61 +162,61 @@ test('company picker exposes additional browse and search pages without saving',
     page
       .locator('[data-entity-index]')
       .filter({ hasText: `Company ${String(index).padStart(2, '0')}` });
-  const next = page.getByRole('button', { name: 'Next options', exact: true });
-  const loadNext = async () => {
-    if (info.project.name === 'phone') await next.tap();
-    else await search.press('PageDown');
-  };
+  const scrollToEnd = () =>
+    page.locator('[data-entity-index]').last().scrollIntoViewIfNeeded();
 
   await expect(company(0)).toBeVisible();
   await expect(company(50)).toHaveCount(0);
-  await loadNext();
+  await scrollToEnd();
+  await company(50).scrollIntoViewIfNeeded();
   await expect(company(50)).toBeVisible();
-  await expect(next).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Next options', exact: true })
+  ).toHaveCount(0);
 
   await search.fill('company');
   await expect(company(50)).toHaveCount(0);
   await expect(company(20)).toHaveCount(0);
-  await loadNext();
+  await scrollToEnd();
+  await company(20).scrollIntoViewIfNeeded();
   await expect(company(20)).toBeVisible();
   expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
 });
 
-test('company picker exposes page loading, failure, and successful retry', async ({
+test('company picker shows page loading, failure, and successful retry', async ({
   page,
-}, info) => {
+}) => {
   await page.goto('/?personal&unlinked&pagedCompanies');
   await page
     .getByRole('button', { name: 'Add company', exact: true })
     .first()
     .click();
-  const search = page.getByPlaceholder('Search companies…');
-  const next = page.getByRole('button', { name: 'Next options', exact: true });
-  const loadNext = async () => {
-    if (info.project.name === 'phone') await next.tap();
-    else await search.press('PageDown');
-  };
+  await expect(
+    page.locator('[data-entity-index]').filter({ hasText: 'Company 00' })
+  ).toBeVisible();
   await page.evaluate(() => {
     window.companyPickerFixture.holdNext();
     window.companyPickerFixture.failNext();
   });
-  await loadNext();
+  await page.locator('[data-entity-index]').last().scrollIntoViewIfNeeded();
   await expect(
-    page.getByRole('button', { name: 'Loading options…', exact: true })
-  ).toBeDisabled();
+    page.getByRole('status').filter({ hasText: 'Loading options…' })
+  ).toBeVisible();
   await page.evaluate(() => window.companyPickerFixture.release());
   await expect(
     page.getByRole('status').filter({ hasText: 'Options unavailable' })
   ).toBeVisible();
-  await expect(next).toBeEnabled();
-  await loadNext();
+  // A failed page waits for Retry rather than reading again by itself.
+  const retry = page.getByRole('button', { name: 'Retry options' });
+  await expect(retry).toBeEnabled();
+  await retry.click();
   await expect(
     page.locator('[data-entity-index]').filter({ hasText: 'Company 50' })
-  ).toBeVisible();
+  ).toHaveCount(1);
   await expect(
     page.getByRole('status').filter({ hasText: 'Options unavailable' })
   ).toHaveCount(0);
-  await expect(next).toHaveCount(0);
+  await expect(retry).toHaveCount(0);
   expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
 });
 

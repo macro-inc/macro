@@ -50,11 +50,7 @@ import {
   openInNewTab,
 } from '@components/app/tab-layout/open-in-new-tab';
 import { itemToBlockName } from '@core/constant/allBlocks';
-import {
-  enableEntityAppearance,
-  enableProjects,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
+import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -161,7 +157,6 @@ export function createSoupEntityActions(
   isFavorited: (entity: EntityData) => boolean;
 } {
   const analytics = useAnalytics();
-  const projectsFlag = useFeatureFlag(enableProjects);
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const userId = useUserId();
   const changeIcon = useChangeEntityIcon();
@@ -258,11 +253,9 @@ export function createSoupEntityActions(
 
     // Projects act through the Projects view's dialogs. Rows carry no access
     // level, so rename and delete wait for ownership, which allows both.
-    const projectIds =
-      projectsFlag().enabled &&
-      canExecuteAll((entity) => entity.type === 'initiative')
-        ? entities.map((entity) => entity.id)
-        : [];
+    const projectIds = canExecuteAll((entity) => entity.type === 'initiative')
+      ? entities.map((entity) => entity.id)
+      : [];
     const ownsProjects =
       projectIds.length > 0 &&
       entities.every((entity) => entity.ownerId === userId());
@@ -550,18 +543,12 @@ export function createSoupEntityActions(
       });
     }
 
-    if (
-      projectsFlag().enabled &&
-      openProjectPicker &&
-      canExecuteAll(isTaskEntity)
-    ) {
+    if (openProjectPicker && canExecuteAll(isTaskEntity)) {
       middleItems.push({
         id: 'set-initiative',
         icon: CubeIcon,
         label: t('entityActions.addToProject'),
-        onClick: () => {
-          if (isFeatureEnabled(enableProjects)) openProjectPicker();
-        },
+        onClick: () => openProjectPicker(),
       });
     }
 

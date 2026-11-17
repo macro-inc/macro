@@ -1,9 +1,7 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { getIconConfig } from '@core/component/EntityIcon';
-import { enableCrmActivity } from '@core/constant/featureFlags';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import ExportIcon from '@icon/system/regular/download-simple.svg';
 import GearIcon from '@icon/system/regular/gear-six.svg';
@@ -48,7 +46,6 @@ export function CrmSidebar(props: {
   onExport: () => void;
   onSettings: () => void;
 }) {
-  const activityFlag = useFeatureFlag(enableCrmActivity);
   const [recordsOpen, setRecordsOpen] = createSignal(true);
   const [listsOpen, setListsOpen] = createSignal(true);
   return (
@@ -83,12 +80,7 @@ export function CrmSidebar(props: {
               aria-label={t('crm.recordsNavigation')}
               ref={tourTarget(COMPANIES_TOUR.records)}
             >
-              <For
-                each={[
-                  ...CRM_RECORDS,
-                  ...(activityFlag().enabled ? CRM_ACTIVITY_TABS : []),
-                ]}
-              >
+              <For each={[...CRM_RECORDS, ...CRM_ACTIVITY_TABS]}>
                 {(record) => (
                   <ViewSidebar.Item
                     active={props.active === record.id}

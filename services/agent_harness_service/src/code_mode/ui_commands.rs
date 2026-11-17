@@ -1,25 +1,20 @@
 //! Adapters for a running program's UI commands (`macro.ui.open`): the
-//! session's turn, the rollout flag, shared budgets in Redis and delivery
+//! session's turn, shared budgets in Redis and delivery
 //! through the connection gateway. `UiCommandService` decides everything;
 //! these only answer and carry.
 
 use agent_code_mode::domain::CodeModeError;
 use agent_code_mode::domain::ui_commands::{
-    UiBudget, UiBudgetScope, UiCommandBudgets, UiCommandDelivery, UiCommandFrame, UiNavigationFlag,
-    UiTurn, UiTurns,
+    UiBudget, UiBudgetScope, UiCommandBudgets, UiCommandDelivery, UiCommandFrame, UiTurn, UiTurns,
 };
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::ports::AgentSessionRepo;
 use async_trait::async_trait;
 use connection_gateway_client::ConnectionGatewayClient;
-use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
 use std::sync::Arc;
-
-/// The PostHog flag, the same key the web app reads.
-const NAVIGATION_FLAG: &str = "enable-agent-navigation";
 
 /// The gateway message type the web app handles.
 const UI_COMMAND_MESSAGE: &str = "ui_command";
@@ -56,27 +51,6 @@ impl<Sessions: AgentSessionRepo> UiTurns for SessionUiTurns<Sessions> {
             prompter,
             agent_name,
         })
-    }
-}
-
-/// `enable-agent-navigation` for one person. Without a flag client (local
-/// stacks without PostHog) or when the flags can't be read, it is off.
-pub struct NavigationFlag<Flags>(pub Option<Flags>);
-
-#[async_trait]
-impl<Flags: FeatureFlags + 'static> UiNavigationFlag for NavigationFlag<Flags> {
-    async fn enabled(&self, user: &MacroUserIdStr<'static>) -> bool {
-        let Some(flags) = &self.0 else {
-            return false;
-        };
-
-        flags
-            .load(user)
-            .await
-            .inspect_err(|error| {
-                tracing::warn!(error = ?error, "could not read the agent navigation flag");
-            })
-            .is_ok_and(|snapshot| snapshot.is_enabled(NAVIGATION_FLAG))
     }
 }
 
