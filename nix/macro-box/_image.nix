@@ -31,4 +31,12 @@
     "rd.udev.log_level=3"
   ];
   boot.consoleLogLevel = 3;
+
+  # The initrd only has to find virtio-scsi disks (the qemu-guest profile's
+  # modules), not the generic SATA, USB, HID and MMC ones, and q35's empty
+  # AHCI controller costs ~0.6 s of link probing: Incus attaches every disk
+  # over virtio-scsi.
+  boot.initrd.includeDefaultModules = false;
+  boot.initrd.availableKernelModules = [ "sd_mod" ];
+  boot.blacklistedKernelModules = [ "ahci" ];
 }
