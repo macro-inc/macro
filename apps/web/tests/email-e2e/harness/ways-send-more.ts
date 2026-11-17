@@ -8,7 +8,7 @@
 // `l.provider = 'OUTLOOK'` claim).
 
 import type { Browser, Page, Request } from '@playwright/test';
-import { closeCalendarPrompts } from './calendar-prompt';
+import { keepCalendarPromptClosed } from './calendar-prompt';
 import { loadAppSteadily } from './drafts';
 import type { Mailbox } from './fixtures';
 
@@ -31,7 +31,7 @@ export async function anotherDevice(
   await page.addInitScript(() => {
     localStorage.setItem('macro:login', 'true');
   });
-  await closeCalendarPrompts(page);
+  await keepCalendarPromptClosed(page, mailbox.inbox.linkId);
   const broken = process.env.EMAIL_E2E_BREAK;
   if (broken) {
     await page.addInitScript((name) => {

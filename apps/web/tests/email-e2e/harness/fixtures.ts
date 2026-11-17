@@ -9,7 +9,7 @@ import {
   type WebSocketRoute,
 } from '@playwright/test';
 import { record } from '../ledger/record';
-import { closeCalendarPrompts } from './calendar-prompt';
+import { keepCalendarPromptsClosed } from './calendar-prompt';
 import {
   bundleFile,
   FROM_TEST,
@@ -186,7 +186,7 @@ export const test = base.extend<
         await page.addInitScript(() => {
           localStorage.setItem('macro:login', 'true');
         });
-        await closeCalendarPrompts(page);
+        await keepCalendarPromptsClosed(page, stack, user, [inbox.linkId]);
         // Proving a test (`ledger/README.md`): a bundle built with breaks
         // that each wait for a name, and the one this run switches on.
         const broken = process.env.EMAIL_E2E_BREAK;

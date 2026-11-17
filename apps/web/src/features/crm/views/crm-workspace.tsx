@@ -41,7 +41,6 @@ import {
   createEffect,
   createSignal,
   type JSX,
-  on,
   onCleanup,
   onMount,
   Show,

@@ -269,7 +269,7 @@ async fn a_program_turn_never_sends_a_command() {
         kind: PrompterKind::Program,
         ..typed_in_tab()
     };
-    let harness = harness(Some(prompter), true, 1);
+    let harness = harness(Some(prompter), 1);
 
     assert_eq!(harness.open(DOC).await, UiCommandOutcome::NoClient);
     assert!(harness.gateway.frames().is_empty());
