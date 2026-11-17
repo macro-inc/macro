@@ -626,8 +626,15 @@ fn classify_email_attachment_update_response(
         operation: OPERATION,
     })?;
 
+    // A success without per-item results acknowledges nothing.
+    let items = response["items"].as_array().ok_or_else(|| {
+        OpensearchClientError::DeserializationFailed {
+            details: "bulk response has no items array".to_owned(),
+            operation: OPERATION,
+        }
+    })?;
     let mut result = EmailAttachmentUpdateResult::default();
-    for item in response["items"].as_array().into_iter().flatten() {
+    for item in items {
         let update = &item["update"];
         let item_status = update["status"]
             .as_u64()

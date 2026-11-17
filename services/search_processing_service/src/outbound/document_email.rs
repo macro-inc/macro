@@ -19,7 +19,7 @@ pub async fn is_email_attachment(db: &PgPool, document_id: &str) -> sqlx::Result
 }
 
 /// Linked documents for the email attachment status backfill, read from the
-/// backfill pool (the read replica when one is configured).
+/// primary: a lagging replica could still show a link a release removed.
 pub struct PgLinkedDocuments {
     db: PgPool,
 }
@@ -41,7 +41,7 @@ impl LinkedDocumentSource for PgLinkedDocuments {
 
         // A page is one bounded walk of the `document_email` primary key and
         // one `Document` probe per row, a few milliseconds. Give up well
-        // before a slow replica holds the job.
+        // before a slow page holds the job.
         sqlx::query!("SET LOCAL statement_timeout = '10s'")
             .execute(&mut *transaction)
             .await?;

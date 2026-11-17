@@ -276,6 +276,15 @@ impl<S: LinkedDocumentSource, I: EmailAttachmentFlagIndex> EmailAttachmentStatus
         span.record("updated", update.updated);
         span.record("missing", update.missing);
         span.record("failed", update.failed);
+        if update.failed > 0 {
+            // Stop before the cursor moves past them, so a resume repeats the
+            // page; the update is idempotent.
+            span.record("outcome", "items_failed");
+            return Err(BackfillError::Stopped {
+                reason: format!("{} documents failed to update", update.failed),
+                cursor: after_document_id.map(str::to_owned),
+            });
+        }
         span.record("outcome", "finished");
 
         Ok(Some(FinishedPage {

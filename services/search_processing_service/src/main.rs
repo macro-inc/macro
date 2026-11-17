@@ -258,7 +258,10 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let email_attachment_status_backfill = Arc::new(EmailAttachmentStatusBackfill::new(
-        outbound::document_email::PgLinkedDocuments::new(backfill_db.clone()),
+        // The primary, not the backfill replica: a lagging replica can still
+        // show a link a release already removed, and the backfill would then
+        // write `true` after the release consumer wrote `false`.
+        outbound::document_email::PgLinkedDocuments::new(db.clone()),
         outbound::email_attachment_search::OpenSearchEmailAttachmentFlags(
             opensearch_client.clone(),
         ),

@@ -55,6 +55,8 @@ impl LinkedDocumentSource for FakeSource {
 enum Reply {
     /// Report the first `missing` documents of the batch as not indexed.
     Missing(usize),
+    /// Report the first `failed` documents of the batch as failed.
+    Fail(usize),
     Refuse,
     /// Cancel the job while the batch is in flight.
     CancelJob(CancellationToken),
@@ -91,9 +93,10 @@ impl EmailAttachmentFlagIndex for FakeIndex {
             .lock()
             .unwrap()
             .push((document_ids.to_vec(), is_email_attachment));
-        let missing = match self.replies.lock().unwrap().pop_front() {
-            None => 0,
-            Some(Reply::Missing(missing)) => missing,
+        let (missing, failed) = match self.replies.lock().unwrap().pop_front() {
+            None => (0, 0),
+            Some(Reply::Missing(missing)) => (missing, 0),
+            Some(Reply::Fail(failed)) => (0, failed),
             Some(Reply::Refuse) => {
                 return Err(FlagIndexError::Refused(
                     "disk usage exceeded flood-stage watermark".to_owned(),
@@ -101,13 +104,13 @@ impl EmailAttachmentFlagIndex for FakeIndex {
             }
             Some(Reply::CancelJob(cancel)) => {
                 cancel.cancel();
-                0
+                (0, 0)
             }
         };
         Ok(FlagUpdate {
-            updated: document_ids.len() - missing,
+            updated: document_ids.len() - missing - failed,
             missing,
-            failed: 0,
+            failed,
         })
     }
 }
@@ -238,6 +241,28 @@ async fn a_refusal_stops_the_job_at_the_last_finished_page() {
     // Nothing is sent or read after the refusal.
     assert_eq!(backfill.index.batches().len(), 2);
     assert_eq!(backfill.source.pages_after().len(), 2);
+    assert_eq!(progress.local_progress().cursor.as_deref(), Some("doc-b"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_page_with_failed_updates_stops_without_moving_the_cursor_past_it() {
+    let backfill = EmailAttachmentStatusBackfill::new(
+        FakeSource::new(&LINKED),
+        FakeIndex::replying(vec![Reply::Missing(0), Reply::Fail(1)]),
+    );
+    let progress = Arc::new(JobProgress::detached());
+
+    let error = backfill
+        .backfill(request(None, 2), progress.clone(), CancellationToken::new())
+        .await
+        .unwrap_err();
+
+    let BackfillError::Stopped { reason, cursor } = error else {
+        panic!("expected the job to stop, got {error:?}");
+    };
+    assert!(reason.contains("1 documents failed"), "{reason}");
+    // A resume from here repeats the page holding the failed document.
+    assert_eq!(cursor.as_deref(), Some("doc-b"));
     assert_eq!(progress.local_progress().cursor.as_deref(), Some("doc-b"));
 }
 

@@ -221,7 +221,10 @@ and `cursor`, the last document id it finished, recorded after every page.
 
 A 429 or a cluster block from OpenSearch stops the job instead of retrying:
 its status becomes `stopped`, `error` holds the reason, and `cursor` the last
-finished page. Once the cluster recovers (for a flood-stage block, once disk is
+finished page. So does a page in which any document failed to update; resuming
+repeats that page. Pages are read from the primary, not the backfill replica:
+a lagging replica could still show a link that a release already removed, and
+the backfill would write `true` after the release cleared it. Once the cluster recovers (for a flood-stage block, once disk is
 freed and the block is cleared), resume with
 `{"after_document_id": "<cursor>"}`. A failed or cancelled job resumes the same
 way. Shutdown cancels a job on its own pod between pages, not on others.

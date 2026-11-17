@@ -550,3 +550,14 @@ async fn a_refused_update_is_not_resent() {
         "{result:?}"
     );
 }
+
+#[test]
+fn a_success_without_items_acknowledges_nothing() {
+    for body in ["{}", r#"{"items":null}"#, r#"{"errors":false}"#] {
+        let error = classify_email_attachment_update_response(200, body).unwrap_err();
+        assert!(
+            matches!(error, OpensearchClientError::DeserializationFailed { .. }),
+            "{body}: {error:?}"
+        );
+    }
+}
