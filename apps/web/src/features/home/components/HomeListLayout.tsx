@@ -1,9 +1,9 @@
-import { SearchBar } from '@app/components/view-shell';
+import { ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tourTarget } from '@ui/components/Tour';
-import { type JSX, type ParentProps, Show } from 'solid-js';
+import { createSignal, type JSX, type ParentProps, Show } from 'solid-js';
 import { useHomeView } from '../home-view-context';
 import { HOME_TOUR } from '../tour';
 import { HomeFilterDropdown } from './HomeFilters';
@@ -27,7 +27,13 @@ export function HomeListLayout(
     footer?: JSX.Element;
   }>
 ) {
-  const { state, setState } = useHomeView();
+  const { state, setState, focusList } = useHomeView();
+  // A query on the list keeps its field on screen, also when the header
+  // remounts, and closing the field clears the query, as in the list headers.
+  const [searchOpened, setSearchOpened] = createSignal(
+    state.search.trim().length > 0
+  );
+  const searchOpen = () => searchOpened() || state.search.trim().length > 0;
   return (
     <div
       ref={tourTarget(HOME_TOUR.list)}
@@ -45,12 +51,19 @@ export function HomeListLayout(
             onCreate={props.onNewChat}
             actions={<HomeFilterDropdown />}
             searchLabel="Search Home"
+            searchOpen={searchOpen()}
+            onSearchOpenChange={(open) => {
+              setSearchOpened(open);
+              if (!open) setState('search', '');
+            }}
             search={() => (
-              <SearchBar
+              <ViewSidebar.Search
                 label="Search Home"
-                placeholder="Search Home"
                 value={state.search}
                 onValueChange={(search) => setState('search', search)}
+                focusResults={() => {
+                  focusList();
+                }}
               />
             )}
           />

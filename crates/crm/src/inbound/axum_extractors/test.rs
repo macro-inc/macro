@@ -66,6 +66,7 @@ impl JwtValidator for FakeJwtValidator {
                 identity: ValidatedIdentity {
                     agent_id: None,
                     agent_via: None,
+                    routine_id: None,
                     user_id: USER_ID.to_string(),
                     fusion_user_id: "test-fusion-user".to_string(),
                     organization_id: None,
@@ -235,6 +236,15 @@ impl EntityAccessService for FakeEntityAccessService {
 struct FakeCrmService;
 
 impl crate::domain::email_privacy::EmailPrivacyService for FakeCrmService {
+    async fn excluded_email_threads(
+        &self,
+        _: &crate::domain::auth::CrmTeamReceipt<entity_access::domain::models::MemberTeamRole>,
+        _: Option<uuid::Uuid>,
+    ) -> Result<crate::domain::email_privacy::ExcludedEmailThreads, crate::domain::model::CrmError>
+    {
+        panic!("unexpected excluded_email_threads call")
+    }
+
     async fn contribution_mailbox(
         &self,
         _: Uuid,
@@ -260,6 +270,10 @@ impl crate::domain::email_privacy::EmailPrivacyService for FakeCrmService {
 }
 
 impl CrmService for FakeCrmService {
+    async fn current_member_access(&self, _: &str) -> Result<Option<(uuid::Uuid, bool)>, CrmError> {
+        Ok(None)
+    }
+
     async fn list_contacts_for_soup(
         &self,
         _user_id: &str,
@@ -448,7 +462,7 @@ impl CrmService for FakeCrmService {
 
     async fn crm_scope_precheck(
         &self,
-        _team_id: &Uuid,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
         _domains: &[String],
         _addresses: &[String],
     ) -> Result<CrmScopePrecheck, CrmError> {

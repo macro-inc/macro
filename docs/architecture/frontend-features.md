@@ -311,8 +311,11 @@ views/shared/<name>-parts.tsx  parts both views render
   outside `mobile/` and `shared/`.
 - **A mobile view composes its header with `MobileHeader`**
   (`components/app/mobile-header`). While it is mounted it owns the pane's
-  header: nothing else in the pane can add to it. A mobile view may branch on
-  `isMobile()` / `mobile:` for phone versus tablet.
+  header: nothing else in the pane can add to it. A file block's mobile header
+  uses `MobileBlockHeader` from the same directory: the file's title with its
+  menu, the view's own left islands, the permissions badge, then the view's
+  right islands and Info. A mobile
+  view may branch on `isMobile()` / `mobile:` for phone versus tablet.
 - **A block's desktop header uses `BlockToolbar`**
   (`components/app/block-toolbar`): its tools in one group, the side panel's
   header actions, trailing controls such as Share, and the title menu with the
@@ -336,7 +339,12 @@ switches between a desktop `views/*-header.tsx` and a
 `views/mobile/*-header.tsx`, while the body below them is still shared and its
 files are still in the baseline. A hook above the switch
 (`useAgentSessionHeader`) can hold the header's state and actions so both
-views list from the same source.
+views list from the same source. The file blocks (image, video, code, PDF,
+canvas, slides, Word and the rest) and the chat block are at the same stage:
+each has `views/<block>-header.tsx`, `views/mobile/<block>-header.tsx`, and
+`views/shared/<block>-header-parts.tsx`, which returns the header's actions by
+name. The entries of the split views are listed in
+`rules/ast-grep/tsx-no-device-composition.yml`.
 
 ### `context/`: the feature's capability contract
 

@@ -153,7 +153,7 @@ describe('logout notification cache isolation', () => {
   it('cancels an old in-flight snapshot even when its transport ignores abort', async () => {
     const queryClient = new QueryClient();
     client.current = queryClient;
-    const queryKey = notificationKeys.user({ limit: 500 }).queryKey;
+    const queryKey = notificationKeys.unsubscribes.queryKey;
     let resolveTransport!: (value: { owner: string }) => void;
     const transport = new Promise<{ owner: string }>((resolve) => {
       resolveTransport = resolve;
@@ -179,7 +179,6 @@ describe('logout notification cache isolation', () => {
     const queryClient = new QueryClient();
     client.current = queryClient;
     const keys = [
-      notificationKeys.user({ limit: 500 }).queryKey,
       notificationKeys.entity({ eventItemId: 'reminder-1' }).queryKey,
       notificationKeys.unsubscribes.queryKey,
       notificationKeys.preferences.queryKey,

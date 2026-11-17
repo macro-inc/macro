@@ -80,6 +80,7 @@ vi.mock('../../component/useEmailThreadTools', () => ({
         share: action('Share'),
         moveToFolder: action('Move to folder'),
         downloadEml: action('Download'),
+        excludeFromCrm: action('Keep this thread out of CRM'),
         trash: action('Delete'),
         senderToSignal: action('Sender → Signal'),
         senderToNoise: action('Sender → Noise'),
@@ -98,7 +99,6 @@ it('keeps the header to the subject and details, with thread actions in the titl
     title: 'A shared email',
     threadId: () => 'thread-1',
     source: {},
-    threadTransport: {},
     host: {},
   } as ComponentProps<typeof MobileEmailThread>;
   render(() => <MobileEmailThread {...props} />);

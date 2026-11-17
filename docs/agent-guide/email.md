@@ -72,13 +72,32 @@ Compose via the `Email` button (or `Create` → `Email E`). On a fresh local use
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
 use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface: both focus the list header's search field. When a thread or a new email has replaced the list, `/` returns to the list, as Back does, and focuses that field, and `Ctrl+F` is left to the browser's find. The Email sidebar has no search field.
 
+### Wide search (flagged)
+
+With `enable-email-wide-search` on (on in dev), opening search on desktop
+widens the field across the list header; Filters, the view actions and New are
+hidden until the search is closed (the X, `Escape` on an empty field, or
+`Escape` in the list). Results still update as you type. While a new query
+loads, the rows already on screen stay, dimmed, instead of a blank list and a
+spinner. With the field focused, up to five recent searches containing the
+typed text are listed above the results: `ArrowDown` walks them before it
+reaches the results, `Enter` or a click runs one and moves to its first
+result. A search is remembered when the field is left with it, at most eight
+per person, in this browser only and not per inbox. Check with a slow search
+that rows never blank between two queries, that switching tabs never shows
+the previous tab's rows, and that with the flag off the compact field and the
+spinner are unchanged.
+
 Mail-client keys work in the list, the reading pane, and the open thread while
 Email is focused: `s` star, `z` undo the last action, and `g` then a letter
 for a tab (`i` Signal, `o` Noise, `s` Favorites, `t` Sent, `d` Drafts, `e`
 Archived, `a` All). These letters replace the app-wide `g` targets only inside
 Email (`g t` is still Tasks elsewhere); `g h` still goes Home. `Escape` in a
-list with nothing selected returns to Signal; in the reading pane it first
-hands the keyboard back to the list. `?` lists every shortcut for the focused
+list steps back one level: it clears a selection, then a search, and with
+neither returns to Signal; in the reading pane it first hands the keyboard back
+to the list. From the search field, `ArrowDown` or `Enter` moves to the first
+result and `Escape` leaves the field with the search kept (see
+[list search keys](navigation.md)). `?` lists every shortcut for the focused
 view. `Shift+M` mutes the selected rows or the open thread, and `S` and
 `Shift+M` also work on a thread opened in its own split. In a thread, `O` opens
 or closes the selected message (the latest when none is selected), `Shift+O`
@@ -112,11 +131,10 @@ place, even though its sort time falls back to the last real message, until
 the tab, filters, or sort change; only the badge and preview change back to
 that message. Check it on a reply draft in All: the row must not move.
 
-Star and mute feedback reports what happened to the write. With GraphQL Soup
-enabled, a star queued while offline toasts that it is waiting to sync (for
-example `Added to favorites, waiting to sync`) rather than confirming it. A REST
-star and a mute fail offline with an error toast and roll back instead of
-waiting for reconnect, so pressing them again works at once.
+Star and mute feedback reports what happened to the write. A star queued
+while offline toasts that it is waiting to sync (for example `Added to favorites,
+waiting to sync`) rather than confirming it. A mute fails offline with an error
+toast and rolls back instead of waiting for reconnect, so pressing it again works at once.
 
 Recipient fields turn complete addresses into chips when the typed or pasted
 text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
@@ -200,13 +218,12 @@ from `apps/web`.
 `Favorites`, directly below Inbox on desktop, lists starred Macro emails across
 Signal, Noise, and archived mail. It respects the selected inboxes and filters; search
 within the tab is also restricted to favorites. Removing a star removes the row
-from this view. The tab persists across reloads. With `enable-graphql-soup` on,
-the paginated GraphQL Soup query uses `favoritesOnly: true`. With the flag off,
-REST Soup uses `favorites_only: true`. Starring changes membership without
+from this view. The tab persists across reloads. The paginated
+GraphQL Soup query uses `favoritesOnly: true`. Starring changes membership without
 changing the list query. Text search still resolves favorite IDs for the search
 service. An empty favorites list shows `No favorite emails`.
 
-With `enable-email-focus` and `enable-graphql-soup` on, a `Focus` tab leads the
+With `enable-email-focus` on, a `Focus` tab leads the
 desktop Inbox tabs and the mobile pills. It lists inbox
 threads from the last 30 days that the email focus worker
 (`services/email_focus_worker`) classified as worth attention, including inboxes
@@ -393,7 +410,7 @@ filters, tab, inbox, or user resets admission. Check that unread mail is discove
 even after 100 newer read threads, then verify focus through Mark Read and refresh
 in both list and search, including with more than one loaded page.
 
-With GraphQL Soup enabled, **Mark read/unread** updates the normalized email row
+**Mark read/unread** updates the normalized email row
 optimistically. Permanent server errors roll it back; retryable transport failures
 can leave the action in the durable queue. Mark unread sends only the thread ID;
 the server resolves that inbox's UNREAD label and returns the canonical thread
@@ -406,7 +423,7 @@ continuation pages. Once replay commits (even after a reload), only those querie
 refresh from the server; they should not refetch over the optimistic state merely
 because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
-The GraphQL-disabled REST path is unchanged. With GraphQL enabled, archive-based
+Archive-based
 Mark Done, Mark Not Done, and Undo/Redo use `setEmailThreadArchived`: `inboxVisible`
 updates optimistically in the normalized cache, and each reversal is a distinct
 ordered queue entry. The server resolves the thread's owning/delegated inbox;
@@ -431,7 +448,7 @@ Threads without received mail hide Mark Not Done in the header, row, menu, and
 hotkeys. REST Soup rows lack that fact, so their row action stays and then says
 the thread stays done. Older sent-only threads still offer it until their
 metadata is next recomputed, and the server rejects it.
-With GraphQL Soup enabled, bulk Mark Not Done settles per email: a rejected
+Bulk Mark Not Done settles per email: a rejected
 sent-only/draft thread stays done, while successful and durably queued siblings
 remain restored. Only accepted
 threads get their notifications restored. Notification or list-refresh failures
@@ -447,11 +464,9 @@ thread again plus Home's unread presence, whose `unreadReminders` edge no cached
 write fills. Home's work-feed Done and Undo return no notification rows, so they
 still read every notification reader again. In the
 network panel one `e` in the Email view sends its two mutations and no `Soup`,
-`SoupNotifications` or `ChannelUnreadPresence` query. Verify the open-thread header too: with GraphQL enabled,
+`SoupNotifications` or `ChannelUnreadPresence` query. Verify the open-thread header too:
 Mark Not Done remains available for an archived received thread whose inbox timestamp is
 missing; the server decides whether its received-message history allows restoration.
-The REST path retains its timestamp preflight, whole-batch handling, notification
-ordering, and existing cache reconciliation.
 For optimistic mutation interface changes, delay the network response and verify
 that only the affected row's read/done indicator changes, with scroll position and
 unrelated rows retained. Quickly reverse the action, then reject the first request:

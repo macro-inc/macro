@@ -7,8 +7,8 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal, is_agent_run,
+    CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, UserOrInternal, is_agent_run,
 };
 use model_error_response::ErrorResponse;
 use thiserror::Error;
@@ -45,12 +45,12 @@ pub const PROGRAM_SEND_REFUSAL: &str = "An agent's program cannot send email wit
 /// composer, which is their confirmation; a route that takes no
 /// `confirmation` refuses every program.
 pub fn refuse_program_send(
-    agent_attributed: bool,
+    attribution: CredentialAttribution,
     headers: &HeaderMap,
     confirmation: Option<&str>,
 ) -> Result<(), SendMessageError> {
     let confirmed = confirmation.is_some_and(|quote| !quote.trim().is_empty());
-    if is_agent_run(agent_attributed, headers) && !confirmed {
+    if is_agent_run(attribution, headers) && !confirmed {
         return Err(SendMessageError::ConfirmationRequired);
     }
     Ok(())
@@ -146,7 +146,7 @@ pub async fn send_message_handler<T: EmailService, Auth: MacroAuthorizationServi
     Json(body): Json<SendMessageRequest>,
 ) -> Result<impl IntoResponse, SendMessageError> {
     refuse_program_send(
-        authorization.authorization.user.agent_id.is_some(),
+        authorization.authorization.user.attribution(),
         &headers,
         None,
     )?;

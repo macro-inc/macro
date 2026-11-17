@@ -417,11 +417,21 @@ export class DocumentNamespace {
   }
 
   /**
-   * The user's recently soft-deleted documents.
+   * The documents among the user's 100 most recently trashed items; page
+   * through the whole trash with `trashed()`.
    *
    * @readonly
    */
   recentlyDeleted(): Promise<Document[]> {
     return Document.recentlyDeleted(this.client);
+  }
+
+  /**
+   * The user's trashed documents, most recently trashed first, auto-paginated.
+   *
+   * @readonly
+   */
+  trashed(opts?: { pageSize?: number }): AsyncGenerator<Document> {
+    return Document.trashed(this.client, opts);
   }
 }

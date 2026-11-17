@@ -291,7 +291,6 @@ it('maps agent sessions without discarding persona, favorites or notifications',
 
 const mocks = vi.hoisted(() => {
   let enabled = true;
-  let graphqlEnabled = true;
   let tauri = false;
   let signedIn = true;
   let releaseApi: (() => void) | undefined;
@@ -341,12 +340,6 @@ const mocks = vi.hoisted(() => {
     },
     set enabled(value: boolean) {
       enabled = value;
-    },
-    get graphqlEnabled() {
-      return graphqlEnabled;
-    },
-    set graphqlEnabled(value: boolean) {
-      graphqlEnabled = value;
     },
     get tauri() {
       return tauri;
@@ -423,8 +416,6 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_BEARER_TOKEN_AUTH: false,
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => mocks.graphqlEnabled,
 }));
 vi.mock('@core/constant/servers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/servers')>()),
@@ -447,7 +438,7 @@ vi.mock('@core/util/platformFetch', () => ({
 }));
 vi.mock('@graphql-cache/rollout', () => ({
   getBrowserTursoCacheRolloutDecision: (): BrowserTursoCacheRolloutDecision => {
-    const enabled = mocks.tauri ? mocks.graphqlEnabled : mocks.enabled;
+    const enabled = mocks.tauri || mocks.enabled;
     return {
       enabled,
       cohort: mocks.tauri ? 'unknown' : enabled ? 'treatment' : 'control',
@@ -455,7 +446,7 @@ vi.mock('@graphql-cache/rollout', () => ({
         ? 'tauri-native-unchanged'
         : enabled
           ? 'graphql-transport-enabled'
-          : 'graphql-transport-disabled',
+          : 'emergency-disabled',
       nativeCacheUnchanged: mocks.tauri,
     };
   },
@@ -479,15 +470,19 @@ vi.mock('@macro-inc/observability', () => ({
     error: mocks.telemetryError,
     warn: mocks.telemetryWarn,
     captureContext: () => ({ run: <T>(work: () => T) => work() }),
-    span: (_name: string, work: (span: unknown) => Promise<unknown>) =>
-      work({
+    span: (_name: string, work?: (span: unknown) => Promise<unknown>) => {
+      const span = {
         run: <T>(work: () => T) => work(),
         event: vi.fn(),
         setAttr: vi.fn(),
+        error: vi.fn(),
+        end: vi.fn(),
         injectTraceHeaders: (headers: Record<string, string>) => {
           headers.traceparent = mocks.traceparent;
         },
-      }),
+      };
+      return work ? work(span) : span;
+    },
   },
 }));
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
@@ -810,7 +805,6 @@ describe('GraphQL Soup browser cache session gate', () => {
     vi.resetModules();
     vi.clearAllMocks();
     mocks.enabled = true;
-    mocks.graphqlEnabled = true;
     mocks.tauri = false;
     mocks.signedIn = true;
     mocks.resetQueue();
@@ -1417,6 +1411,48 @@ describe('GraphQL Soup browser cache session gate', () => {
     }
   });
 
+  it('stops restarting the cache once a newer build took it over', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      mocks.failInitialization(
+        Object.assign(
+          new Error('a newer version of the app took over the local cache'),
+          { errorCode: 'cache-superseded' }
+        )
+      );
+      expect(soup.graphqlCacheRecoveryState()).toBe('recovery-required');
+      expect(soup.graphqlCacheEnabled()).toBe(false);
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledOnce();
+      expect(mocks.telemetryError).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps retrying while another context holds the owner lock', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      mocks.failInitialization(
+        Object.assign(new Error('owner lock is held by another context'), {
+          errorCode: 'owner-lock-unavailable',
+        })
+      );
+      expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('rejects drafts from both retired and uncached transports after recovery', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const soup = await import('./graphql-soup');
@@ -1528,6 +1564,17 @@ describe('GraphQL Soup browser cache session gate', () => {
       'graphql cache async init failed; using uncached client',
       expect.objectContaining({ message: 'injected initialization failure' })
     );
+  });
+
+  it('does not hand out a host that is already unusable', async () => {
+    const soup = await import('./graphql-soup');
+    mocks.createWorkerCacheHost.mockImplementationOnce(() => ({
+      ...mocks.host,
+      disabled: true,
+    }));
+    soup.getGraphqlSoupClient();
+    expect(soup.getGraphqlSoupCacheHost()).toBeUndefined();
+    expect(soup.getGraphqlCacheHost()).toBeUndefined();
   });
 
   it('retires a failed host so the replaced client degrades instead of rejecting', async () => {
@@ -1671,10 +1718,9 @@ describe('GraphQL Soup browser cache session gate', () => {
 
     const soup = await import('./graphql-soup');
     const nativeClient = soup.getGraphqlSoupClient();
-    mocks.graphqlEnabled = false;
 
-    expect(soup.graphqlCacheEnabled()).toBe(false);
-    expect(soup.getGraphqlSoupClient()).toBe(mocks.plainClient);
+    expect(soup.graphqlCacheEnabled()).toBe(true);
+    expect(soup.getGraphqlSoupClient()).toBe(nativeClient);
     expect(nativeClient).not.toBe(mocks.plainClient);
     expect(mocks.host.dispose).not.toHaveBeenCalled();
     expect(mocks.createTauriCacheHost).toHaveBeenCalledOnce();

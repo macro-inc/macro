@@ -501,7 +501,7 @@ export const SoupView = (props: SoupViewProps) => {
                   label={`Search ${props.viewName}`}
                   value={soupView.searchText()}
                   onValueChange={soupView.setSearchText}
-                  onEscape={() => panel.panelRef()?.focus()}
+                  focusResults={() => panel.panelRef()?.focus()}
                   registerFocus={(focus) => (focusSearch = focus)}
                 />
               </Show>

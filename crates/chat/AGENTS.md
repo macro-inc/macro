@@ -54,8 +54,7 @@ calls. Duplicating a folder or an item still copies a chat's history.
 - `FREE_MODEL` is published as the `FreeTierModel` OpenAPI schema; the web
   client's free tier is generated from it. After changing it, run
   `bun run gen-api document-cognition` in `apps/web`, update the web model
-  catalog if the id is new, and keep `ai_projections::FREE_TIER_MODELS` equal
-  (`document_cognition_service` tests both).
+  catalog if the id is new (`agent_harness_service` tests the published schema).
 - `patch_chat_handler` refuses a share permission change from a scoped agent
   session (`agent_correlation::context::refuse_sharing`, 403); a new sharing
   field that isn't a grant joins that check. Creating or moving a chat into a

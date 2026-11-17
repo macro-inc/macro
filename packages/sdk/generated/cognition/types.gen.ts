@@ -176,6 +176,34 @@ export type AttachmentMetadata = {
 export type AttachmentType = 'document' | 'image' | 'channel' | 'email' | 'project' | 'skill';
 
 /**
+ * Request body for executing a pending tool call.
+ */
+export type CallToolRequest = {
+    /**
+     * Optional updated arguments. Uses original args if omitted.
+     */
+    args?: unknown;
+    /**
+     * The message ID containing the tool call.
+     */
+    messageId: string;
+    /**
+     * The tool call ID to execute.
+     */
+    toolCallId: string;
+};
+
+/**
+ * Response body for a successful tool call.
+ */
+export type CallToolResponse = {
+    /**
+     * The tool execution result.
+     */
+    result: unknown;
+};
+
+/**
  * The channel share permission
  */
 export type ChannelSharePermission = {
@@ -289,23 +317,16 @@ export type ChatMessage = {
 export type ChatMessageContent = string | Array<AssistantMessagePart>;
 
 /**
- * Error response for the chat message endpoint.
+ * Error response for chat message endpoints
  */
 export type ChatMessageError = {
     /**
-     * Stable machine-readable code.
+     * Stable machine-readable code for admission errors (402 or 503).
      */
-    code: ChatMessageErrorCode;
-    /**
-     * Human-readable message.
-     */
+    code?: string | null;
     error: string;
+    stream_id?: string | null;
 };
-
-/**
- * Why a chat message was refused.
- */
-export type ChatMessageErrorCode = 'chat_read_only';
 
 export type ChatMessageWithAttachments = {
     /**
@@ -458,6 +479,20 @@ export type ConversationRecord = {
     chat_id: string;
     messages: Array<MessageWithAttachments>;
     title: string;
+};
+
+/**
+ * Request body for creating a chat.
+ */
+export type CreateChatRequest = {
+    /**
+     * Optional name for the chat.
+     */
+    name?: string | null;
+    /**
+     * Optional project to associate the chat with.
+     */
+    projectId?: string | null;
 };
 
 /**
@@ -638,11 +673,6 @@ export type ErrorResponse = {
      */
     message: string;
 };
-
-/**
- * How long a projection remains active without being requested.
- */
-export type Expiry = 'day' | 'week' | 'month';
 
 /**
  * A private explicit memory document and its optimistic concurrency token.
@@ -832,6 +862,41 @@ export type GetChatsForAttachmentResponse = {
 export type Granularity = 'day' | 'week' | 'month' | 'summary';
 
 /**
+ * HTTP request payload for sending a chat message.
+ * Unlike the WebSocket payload, this does not include stream_id as it's generated server-side.
+ */
+export type HttpSendChatMessageRequest = {
+    /**
+     * Additional system instructions appended to the base system prompt
+     */
+    additional_instructions?: string | null;
+    /**
+     * Attachments for the message
+     */
+    attachments?: Array<Entity> | null;
+    /**
+     * Id of the chat the message belongs to (optional - if not provided, a new chat is created)
+     */
+    chat_id?: string | null;
+    /**
+     * The content of the message
+     */
+    content: string;
+    /**
+     * The model to respond with (`provider/model` id)
+     */
+    model: string;
+    /**
+     * Inference speed, validated against the selected model. Defaults to standard.
+     */
+    speed?: ModelSpeed;
+    /**
+     * Which toolset to use. Defaults to `all`
+     */
+    toolset?: ToolSet;
+};
+
+/**
  * The caller's ledger rows.
  */
 export type ImportEntitiesResponse = {
@@ -972,6 +1037,10 @@ export type ImportRun = {
      * presented while it is still `running`; rows staged after that take it.
      */
     review_id?: string | null;
+    /**
+     * The agent session presenting that review.
+     */
+    review_session_id?: string | null;
     scanned?: null | ScanCounts;
     /**
      * The source this run discovered from.
@@ -1017,6 +1086,10 @@ export type ImportStatus = 'staged' | 'importing' | 'imported' | 'discarded';
  * visibility filter.
  */
 export type Initiator = 'onboarding' | 'chat' | 'archive' | 'manual';
+
+export type JwtPayload = {
+    token: string;
+};
 
 /**
  * Metadata for one staged Linear issue.
@@ -1106,6 +1179,11 @@ export type MessageWithAttachments = {
     content: string;
     date: string;
 };
+
+/**
+ * The requested inference speed. Standard is backward compatible with old clients.
+ */
+export type ModelSpeed = 'standard' | 'priority' | 'fast' | 'ultrafast';
 
 export type NewAttachment = {
     attachment_id: string;
@@ -1689,42 +1767,6 @@ export type Price = {
 };
 
 /**
- * The current state of a user's projection instance.
- */
-export type ProjectionStateResponse = {
-    /**
-     * The cached result, if any. JSON-encoded when the projection defines an
-     * `output_schema`.
-     */
-    data?: string | null;
-    /**
-     * The most recent materialization error, if any.
-     */
-    error?: string | null;
-    /**
-     * When the result was generated.
-     */
-    generated_at?: string | null;
-    /**
-     * The projection id.
-     */
-    id: string;
-    /**
-     * When the result becomes stale.
-     */
-    stale_at?: string | null;
-    /**
-     * The materialization status.
-     */
-    status: ProjectionStatus;
-};
-
-/**
- * The materialization status of a user's projection instance.
- */
-export type ProjectionStatus = 'loading' | 'cold' | 'ready' | 'refreshing' | 'error';
-
-/**
  * Response from [`ReadActivity`].
  */
 export type ReadActivityResponse = {
@@ -1739,9 +1781,18 @@ export type ReadActivityResponse = {
 };
 
 /**
- * How frequently an active projection is regenerated.
+ * Request body for rejecting a pending tool call.
  */
-export type RefreshCadence = 'high' | 'medium' | 'low';
+export type RejectToolCallRequest = {
+    /**
+     * The message ID containing the tool call.
+     */
+    messageId: string;
+    /**
+     * The tool call ID to reject.
+     */
+    toolCallId: string;
+};
 
 /**
  * The role of a message participant.
@@ -1793,6 +1844,55 @@ export type ScanCounts = {
      * Pages found.
      */
     pages: number;
+};
+
+export type SendChatMessagePayload = JwtPayload & {
+    /**
+     * Additional system instructions appended to the base system prompt
+     */
+    additional_instructions?: string | null;
+    /**
+     * Use citation prompt
+     */
+    attachments?: Array<Entity> | null;
+    /**
+     * Id of the chat the message belongs to
+     */
+    chat_id: string;
+    /**
+     * The content of the message
+     */
+    content: string;
+    /**
+     * the chat model to respond with (`provider/model` id)
+     */
+    model: string;
+    /**
+     * Stream ID for tracking the response
+     */
+    stream_id: string;
+    /**
+     * Which toolset to use. Defaults to `all`
+     */
+    toolset?: ToolSet;
+};
+
+/**
+ * Response for initiating a chat message stream
+ */
+export type SendChatMessageResponse = {
+    /**
+     * The chat ID (may differ from request if a new chat was created)
+     */
+    chat_id: string;
+    /**
+     * The message ID for the AI response
+     */
+    message_id: string;
+    /**
+     * The stream ID that will receive the response chunks (same as message_id)
+     */
+    stream_id: string;
 };
 
 /**
@@ -2069,6 +2169,10 @@ export type StreamError = {
     stream_id: string;
 };
 
+export type StringIdResponse = {
+    id: string;
+};
+
 export type StructuredCompletionError = {
     /**
      * Stable machine-readable code for admission errors (402 or 503).
@@ -2113,11 +2217,6 @@ export type StructuredToolActivity = {
     name: string;
     outcome: ToolOutcome;
 };
-
-/**
- * The kind of entity a projection is materialized for.
- */
-export type TargetType = 'user' | 'team';
 
 /**
  * One activity action returned to the AI.
@@ -2358,54 +2457,39 @@ export type UpdateSharePermissionRequestV2 = {
 };
 
 /**
- * Request body for getting or creating an ai projection. The concrete target
- * id is resolved from the authenticated user, so only the target type is sent.
+ * Request body for updating a tool call's arguments.
  */
-export type UpsertProjectionRequest = {
+export type UpdateToolCallRequest = {
     /**
-     * When `true` and generation is needed (cold instance or `regenerate`),
-     * the server generates inline and responds with the finished result
-     * instead of returning immediately and pushing an update through the
-     * connection gateway.
+     * The new arguments for the tool call.
      */
-    await?: boolean;
+    args: unknown;
     /**
-     * How long the projection remains active without being requested.
+     * The message ID containing the tool call.
      */
-    expiry: Expiry;
+    messageId: string;
     /**
-     * The frontend-defined projection id (e.g. `notification_important_widget`).
+     * The tool call ID to update.
      */
-    id: string;
+    toolCallId: string;
+};
+
+/**
+ * Request body for updating a tool response.
+ */
+export type UpdateToolResponseRequest = {
     /**
-     * Optional `provider/model` id used for generation (e.g.
-     * `cerebras/llama-3.3-70b`). The default model is used when absent.
+     * The message ID containing the tool response.
      */
-    model?: string | null;
+    messageId: string;
     /**
-     * Optional JSON schema the generated result must conform to. When set,
-     * `data` holds the JSON serialization of a conforming value. Enforcement
-     * is prompted (non-strict), so it works across providers.
+     * The new user tool response.
      */
-    output_schema?: {
-        [key: string]: unknown;
-    } | null;
+    response: UserToolResponseValue;
     /**
-     * The prompt used to materialize the projection.
+     * The tool call ID whose response should be updated.
      */
-    prompt: string;
-    /**
-     * How frequently the projection should be regenerated.
-     */
-    refresh_cadence: RefreshCadence;
-    /**
-     * When `true`, regenerate even if a cached result exists.
-     */
-    regenerate?: boolean;
-    /**
-     * Whether the projection is materialized for the requesting user or their team.
-     */
-    target_type: TargetType;
+    toolCallId: string;
 };
 
 /**
@@ -2495,6 +2579,13 @@ export type UserPdfRect = {
     page_index: number;
     top: number;
     width: number;
+};
+
+/**
+ * User tools are pending until a user executes them
+ */
+export type UserToolResponseValue = 'PendingUserExecution' | 'Rejected' | {
+    UserAction: unknown;
 };
 
 /**
@@ -2751,27 +2842,6 @@ export type GetUsageHandlerResponses = {
 
 export type GetUsageHandlerResponse = GetUsageHandlerResponses[keyof GetUsageHandlerResponses];
 
-export type UpsertAiProjectionData = {
-    body: UpsertProjectionRequest;
-    path?: never;
-    query?: never;
-    url: '/ai-projections';
-};
-
-export type UpsertAiProjectionErrors = {
-    400: ErrorResponse;
-    403: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UpsertAiProjectionError = UpsertAiProjectionErrors[keyof UpsertAiProjectionErrors];
-
-export type UpsertAiProjectionResponses = {
-    200: ProjectionStateResponse;
-};
-
-export type UpsertAiProjectionResponse = UpsertAiProjectionResponses[keyof UpsertAiProjectionResponses];
-
 export type GetChatsForAttachmentHandlerData = {
     body?: never;
     path: {
@@ -2907,6 +2977,27 @@ export type PermanentlyDeleteChatResponses = {
     200: unknown;
 };
 
+export type CreateChatData = {
+    body: CreateChatRequest;
+    path?: never;
+    query?: never;
+    url: '/chats';
+};
+
+export type CreateChatErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type CreateChatError = CreateChatErrors[keyof CreateChatErrors];
+
+export type CreateChatResponses = {
+    200: StringIdResponse;
+};
+
+export type CreateChatResponse = CreateChatResponses[keyof CreateChatResponses];
+
 export type GetChatHistoryHandlerData = {
     body?: never;
     path: {
@@ -2994,6 +3085,32 @@ export type GetChatResponses = {
 
 export type GetChatResponse2 = GetChatResponses[keyof GetChatResponses];
 
+export type CopyChatData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the chat to copy
+         */
+        chat_id: string;
+    };
+    query?: never;
+    url: '/chats/{chat_id}/copy';
+};
+
+export type CopyChatErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type CopyChatError = CopyChatErrors[keyof CopyChatErrors];
+
+export type CopyChatResponses = {
+    200: StringIdResponse;
+};
+
+export type CopyChatResponse = CopyChatResponses[keyof CopyChatResponses];
+
 export type GetChatPermissionsData = {
     body?: never;
     path: {
@@ -3039,6 +3156,132 @@ export type RevertDeleteChatErrors = {
 export type RevertDeleteChatError = RevertDeleteChatErrors[keyof RevertDeleteChatErrors];
 
 export type RevertDeleteChatResponses = {
+    200: unknown;
+};
+
+export type CallToolData = {
+    body: CallToolRequest;
+    path: {
+        /**
+         * ID of the chat
+         */
+        chat_id: string;
+    };
+    query?: never;
+    url: '/chats/{chat_id}/tool/call';
+};
+
+export type CallToolErrors = {
+    /**
+     * Validation or execution failed
+     */
+    400: string;
+    /**
+     * Tool call not found
+     */
+    404: string;
+    500: string;
+};
+
+export type CallToolError = CallToolErrors[keyof CallToolErrors];
+
+export type CallToolResponses = {
+    /**
+     * Tool executed successfully
+     */
+    200: CallToolResponse;
+};
+
+export type CallToolResponse2 = CallToolResponses[keyof CallToolResponses];
+
+export type RejectToolCallData = {
+    body: RejectToolCallRequest;
+    path: {
+        /**
+         * ID of the chat
+         */
+        chat_id: string;
+    };
+    query?: never;
+    url: '/chats/{chat_id}/tool/reject';
+};
+
+export type RejectToolCallErrors = {
+    /**
+     * Tool call not found
+     */
+    404: string;
+    500: string;
+};
+
+export type RejectToolCallError = RejectToolCallErrors[keyof RejectToolCallErrors];
+
+export type RejectToolCallResponses = {
+    /**
+     * Tool call rejected
+     */
+    200: unknown;
+};
+
+export type UpdateToolResponseData = {
+    body: UpdateToolResponseRequest;
+    path: {
+        /**
+         * ID of the chat
+         */
+        chat_id: string;
+    };
+    query?: never;
+    url: '/chats/{chat_id}/tool/response/update';
+};
+
+export type UpdateToolResponseErrors = {
+    /**
+     * Tool call not found
+     */
+    404: string;
+    500: string;
+};
+
+export type UpdateToolResponseError = UpdateToolResponseErrors[keyof UpdateToolResponseErrors];
+
+export type UpdateToolResponseResponses = {
+    /**
+     * Tool response updated
+     */
+    200: unknown;
+};
+
+export type UpdateToolCallData = {
+    body: UpdateToolCallRequest;
+    path: {
+        /**
+         * ID of the chat
+         */
+        chat_id: string;
+    };
+    query?: never;
+    url: '/chats/{chat_id}/tool/update';
+};
+
+export type UpdateToolCallErrors = {
+    /**
+     * Validation failed
+     */
+    400: string;
+    /**
+     * Tool call not found
+     */
+    404: string;
+    500: string;
+};
+
+export type UpdateToolCallError = UpdateToolCallErrors[keyof UpdateToolCallErrors];
+
+export type UpdateToolCallResponses = {
+    /**
+     * Tool call args updated
+     */
     200: unknown;
 };
 
@@ -3814,6 +4057,10 @@ export type EditExplicitMemoryErrors = {
      * Internal server error
      */
     500: MemoryErrorBody;
+    /**
+     * Privacy review is unavailable; nothing was saved
+     */
+    503: MemoryErrorBody;
 };
 
 export type EditExplicitMemoryError = EditExplicitMemoryErrors[keyof EditExplicitMemoryErrors];
@@ -4247,7 +4494,7 @@ export type ReadSkillResponses = {
 export type ReadSkillResponse = ReadSkillResponses[keyof ReadSkillResponses];
 
 export type SendChatMessageData = {
-    body?: never;
+    body: HttpSendChatMessageRequest;
     path?: never;
     query?: never;
     url: '/stream/chat/message';
@@ -4255,12 +4502,37 @@ export type SendChatMessageData = {
 
 export type SendChatMessageErrors = {
     /**
-     * Legacy AI chats are read-only; continue the chat in Agents instead
+     * Bad request
      */
-    410: ChatMessageError;
+    400: ChatMessageError;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Payment required — the user's AI allowance is used up
+     */
+    402: ChatMessageError;
+    /**
+     * Forbidden — user lacks access to the requested model
+     */
+    403: ChatMessageError;
+    /**
+     * AI usage validation unavailable — retry later
+     */
+    503: ChatMessageError;
 };
 
 export type SendChatMessageError = SendChatMessageErrors[keyof SendChatMessageErrors];
+
+export type SendChatMessageResponses = {
+    /**
+     * Stream initiated successfully
+     */
+    200: SendChatMessageResponse;
+};
+
+export type SendChatMessageResponse2 = SendChatMessageResponses[keyof SendChatMessageResponses];
 
 export type StopChatStreamData = {
     body: StopChatStreamRequest;
