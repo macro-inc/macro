@@ -2,7 +2,6 @@ import {
   TurnOffCalendarDialog,
   type TurnOffCalendarTarget,
 } from '@app/features/calendar/components/TurnOffCalendarDialog';
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_INBOX_RESYNC,
@@ -472,7 +471,6 @@ function InboxRow(props: {
   onRemove: () => void;
   onTurnOffCalendar: () => void;
 }) {
-  const calendarUiEnabled = useCalendarUiFlag();
   return (
     <SettingsSurface class="flex flex-col">
       <div class="flex flex-wrap items-center justify-between gap-3 min-h-14 py-3 px-4">
@@ -542,9 +540,7 @@ function InboxRow(props: {
           </Show>
           {/* Explicitly enabling calendar also restores mailbox access when
               the Google grant has expired. */}
-          <Show
-            when={calendarUiEnabled() && props.link.needs_calendar_permission}
-          >
+          <Show when={props.link.needs_calendar_permission}>
             <Button
               variant="secondary"
               size="md"
@@ -561,7 +557,6 @@ function InboxRow(props: {
               set still has events to remove. */}
           <Show
             when={
-              calendarUiEnabled() &&
               props.isOwn &&
               (!props.link.needs_calendar_permission ||
                 props.link.has_calendar_data)

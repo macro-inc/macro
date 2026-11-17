@@ -1,5 +1,4 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/use-unified-notifications-flag';
 import { useSuggestionsFlag } from '@app/features/suggestions/use-suggestions-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -24,7 +23,6 @@ import { useSidebarPrefs } from './use-sidebar-prefs';
 export function useNavItemGates(): Accessor<NavItemGates> {
   const notifications = useUnifiedNotificationsFlag();
   const suggestions = useSuggestionsFlag();
-  const calendar = useCalendarUiFlag();
   const scheduling = useFeatureFlag(enableCalendarScheduling);
   const crm = useFeatureFlag(enableCrm);
   const reviews = useFeatureFlag(enableTasksReviews);
@@ -37,7 +35,6 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   return createMemo(() => ({
     showNotifications: notifications(),
     showForYou: suggestions(),
-    showCalendar: calendar(),
     showScheduling: scheduling().enabled,
     showCustomers: crm().enabled,
     showCalls: ENABLE_CALLS,

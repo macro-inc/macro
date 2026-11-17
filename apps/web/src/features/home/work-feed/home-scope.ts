@@ -34,7 +34,6 @@ const ALL_ITEM_TYPES: WorkFeedItemType[] = [
 ];
 
 export type HomeWorkFeedCapabilities = {
-  calendar: boolean;
   foreignEntities: boolean;
   snippets: boolean;
 };
@@ -58,9 +57,7 @@ export function homeWorkFeedScope(
       ? ALL_ITEM_TYPES
       : selected.flatMap((t) => ITEM_TYPES[t]);
   const types = [...new Set(requested)].filter(
-    (type) =>
-      (type !== 'calendar_event' || capabilities.calendar) &&
-      (type !== 'pull_request' || capabilities.foreignEntities)
+    (type) => type !== 'pull_request' || capabilities.foreignEntities
   );
   if (types.length === 0) return undefined;
   return {

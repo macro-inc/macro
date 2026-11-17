@@ -8,7 +8,6 @@ import { withEntityNotifications } from '@app/features/soup/entity-notifications
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
-  enableCalendarUi,
   enableSnippets,
   enableSupportedSoupForeignEntities,
   isFeatureEnabled,
@@ -74,7 +73,6 @@ export function useWorkFeedHomeDataSource(
 
   const scope = createMemo(() =>
     homeWorkFeedScope(state.facets.type, {
-      calendar: isFeatureEnabled(enableCalendarUi),
       foreignEntities: foreignEntities().enabled,
       snippets: isFeatureEnabled(enableSnippets),
     })

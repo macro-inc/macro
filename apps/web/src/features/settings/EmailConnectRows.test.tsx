@@ -41,9 +41,6 @@ vi.mock('@queries/email/link', () => ({
 vi.mock('@app/features/calendar/components/TurnOffCalendarDialog', () => ({
   TurnOffCalendarDialog: () => null,
 }));
-vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
-  useCalendarUiFlag: () => () => false,
-}));
 vi.mock('./InboxSettingsOperations', () => ({
   InboxSettingsOperations: () => null,
 }));

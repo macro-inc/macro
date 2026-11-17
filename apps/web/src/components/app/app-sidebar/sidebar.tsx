@@ -5,7 +5,6 @@ import {
   type ListView,
 } from '@app/constants/list-views';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
@@ -240,7 +239,6 @@ export const GoToHotkeys = () => {
     },
   });
 
-  const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
   const reviews = useFeatureFlag(enableTasksReviews);
@@ -249,7 +247,6 @@ export const GoToHotkeys = () => {
   const crm = useFeatureFlag(enableCrm);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
-      calendarUiEnabled(),
       activityFeedEnabled(),
       recentViewEnabled(),
       reviews().enabled,
@@ -413,13 +410,12 @@ const EXTERNAL_LINK: SidebarItem = {
 
 /**
  * Assemble the ordered sidebar link list: the static links plus the
- * flag-gated Notifications, Recent, Activity, Calendar, Calls, Reviews, CRM,
+ * flag-gated Notifications, Recent, Activity, Calls, Reviews, CRM,
  * and External entries in their correct positions. Callers subscribe to the
  * flags and pass them in, so a flag that resolves after mount still rebuilds
  * the list.
  */
 export const buildSidebarLinks = (
-  showCalendar: boolean,
   showActivity: boolean,
   showRecent: boolean,
   showReviews: boolean,
@@ -427,9 +423,7 @@ export const buildSidebarLinks = (
   showExternal: boolean,
   showCustomers: boolean
 ): SidebarItem[] => {
-  let links: SidebarItem[] = SIDEBAR_LINKS.filter(
-    (link) => showCalendar || link.id !== 'calendar'
-  );
+  let links: SidebarItem[] = SIDEBAR_LINKS;
 
   const insertAfter = (anchorId: string, link: SidebarItem) => {
     const idx = links.findIndex((l) => l.id === anchorId);

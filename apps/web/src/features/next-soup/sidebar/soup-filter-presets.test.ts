@@ -1,13 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  calendarUiEnabled: true,
   calendarSearchEnabled: true,
   snippetsEnabled: true,
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
-  enableCalendarUi: { key: 'enable-calendar-ui' },
   enableSnippets: { key: 'enable-snippets' },
   enableSupportedSoupForeignEntities: {
     key: 'enable-supported-soup-foreign-entities',
@@ -15,8 +13,6 @@ vi.mock('@core/constant/featureFlags', () => ({
   isCalendarSearchUiEnabled: () => mocks.calendarSearchEnabled,
   isFeatureEnabled: (flag: { key?: string }) => {
     switch (flag.key) {
-      case 'enable-calendar-ui':
-        return mocks.calendarUiEnabled;
       case 'enable-snippets':
         return mocks.snippetsEnabled;
       case 'enable-supported-soup-foreign-entities':
@@ -28,7 +24,6 @@ vi.mock('@core/constant/featureFlags', () => ({
 }));
 
 afterEach(() => {
-  mocks.calendarUiEnabled = true;
   mocks.calendarSearchEnabled = true;
   mocks.snippetsEnabled = true;
 });
@@ -176,17 +171,6 @@ describe('inbox view presets', () => {
     // not-done notification come back.
     expect(ast.calf).toEqual({
       '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }],
-    });
-  });
-
-  it('keeps calendar events nil-scoped when the calendar flag is off', () => {
-    mocks.calendarUiEnabled = false;
-
-    const filters = getViewPreset('home', 'signal')?.filters;
-    const ast = compileToAst(queryStateFrom(filters!));
-
-    expect(ast.calf).toEqual({
-      l: { id: '00000000-0000-0000-0000-000000000000' },
     });
   });
 });

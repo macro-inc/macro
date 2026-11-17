@@ -37,7 +37,6 @@ vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: (type: string) => (type === 'task' ? 'md' : type),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableCalendarUi: false,
   enableProjects: { key: 'enable-projects' },
   enableReminders: false,
   isFeatureEnabled: vi.fn(),

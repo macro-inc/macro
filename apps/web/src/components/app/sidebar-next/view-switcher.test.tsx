@@ -42,7 +42,6 @@ vi.mock('@app/signal/splitLayout', () => ({
 // Flags are PostHog-backed; the rail's own gates decide what is listed.
 vi.mock('./use-nav-item-gates', () => ({
   useNavItemGates: () => () => ({
-    showCalendar: true,
     showScheduling: false,
     showCustomers: false,
     showCalls: true,

@@ -56,9 +56,8 @@ export function hasHomeUnreadWitness(
         { __typename: 'GraphqlSoupProject' },
         (entity) => isRecent(entity) && unread(entity.unreadNotifications)
       )
-      .with(
-        { __typename: 'GraphqlSoupCalendarEvent' },
-        (event) => capabilities.calendar && unread(event.unreadNotifications)
+      .with({ __typename: 'GraphqlSoupCalendarEvent' }, (event) =>
+        unread(event.unreadNotifications)
       )
       .with(
         { __typename: 'GraphqlSoupForeignEntity' },

@@ -16,7 +16,6 @@ import { HOME_FACETS, type HomeFacetContext } from '../home-facets';
 import type { HomeTab } from '../types';
 
 export type HomeQueryCapabilities = {
-  calendar: boolean;
   foreignEntities: boolean;
   notifiedSort: boolean;
   snippets: boolean;
@@ -89,9 +88,7 @@ function signalClause(
     );
   }
 
-  if (capabilities.calendar) {
-    filters.calf = clause.eq('calendarEventDone', false);
-  }
+  filters.calf = clause.eq('calendarEventDone', false);
 
   return confine(filters);
 }

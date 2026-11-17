@@ -422,7 +422,6 @@ export interface EmailEditorFiles {
 
 /** Opens a calendar event drafted from an email. */
 export interface EmailCalendarEvents {
-  enabled: Accessor<boolean>;
   open(email: { subject: string; guests: string[]; text: string }): boolean;
 }
 

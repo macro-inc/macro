@@ -721,21 +721,9 @@ export const botManagement = defineFlag({
   default: onInDev,
 });
 
-// Calendar UI: calendar surfaces and the elevated-permissions upgrade flow
-// that re-runs Google consent for inboxes connected before the calendar
-// scope existed. PostHog-gated with a dev-mode default; override with
-// VITE_ENABLE_CALENDAR_UI.
-export const enableCalendarUi = defineFlag({
-  key: 'enable-calendar-ui',
-  env: 'ENABLE_CALENDAR_UI',
-  default: onInDev,
-});
-
 // Calendar event search UI: the Search view's Calendar type (and calendar
-// rows) plus the in-calendar keyword search. A sub-feature of the calendar UI
-// — opening a hit needs the calendar block — so it only takes effect where
-// `enable-calendar-ui` is also on. PostHog-gated with a dev-mode default;
-// override with VITE_ENABLE_CALENDAR_SEARCH_UI.
+// rows) plus the in-calendar keyword search. PostHog-gated with a dev-mode
+// default; override with VITE_ENABLE_CALENDAR_SEARCH_UI.
 export const enableCalendarSearchUi = defineFlag({
   key: 'enable-calendar-search-ui',
   env: 'ENABLE_CALENDAR_SEARCH_UI',
@@ -743,10 +731,7 @@ export const enableCalendarSearchUi = defineFlag({
 });
 
 export function isCalendarSearchUiEnabled(): boolean {
-  return (
-    isFeatureEnabled(enableCalendarUi) &&
-    isFeatureEnabled(enableCalendarSearchUi)
-  );
+  return isFeatureEnabled(enableCalendarSearchUi);
 }
 
 // Scheduling settings, calendar shortcuts, and public booking/receipt pages.
@@ -757,32 +742,9 @@ export const enableCalendarScheduling = defineFlag({
   default: onInDev,
 });
 
-// The "Enable calendar" prompt on phones. Off by default everywhere,
-// including dev: the mobile toast layout drops the body and the close button,
-// so the prompt lands as an undismissable one-line bar over the composer.
-// Settings › Email keeps a per-inbox "Enable calendar" button, so nothing
-// becomes unreachable while this is off. Flip it on in PostHog once the
-// mobile layout is fixed, or locally with
-// VITE_ENABLE_CALENDAR_PROMPT_MOBILE=true.
-export const enableCalendarPromptMobile = defineFlag({
-  key: 'enable-calendar-prompt-mobile',
-  env: 'ENABLE_CALENDAR_PROMPT_MOBILE',
-});
-
-// The "Enable calendar" prompt on desktop/web, the counterpart to
-// `enable-calendar-prompt-mobile`. Off by default everywhere, including dev,
-// until the PostHog rollout is raised; Settings › Email keeps a per-inbox
-// "Enable calendar" button, so nothing becomes unreachable while this is off.
-// Override locally with VITE_ENABLE_CALENDAR_PROMPT_WEB=true.
-export const enableCalendarPromptWeb = defineFlag({
-  key: 'enable-calendar-prompt-web',
-  env: 'ENABLE_CALENDAR_PROMPT_WEB',
-});
-
 // Team out of office: the calendar side panel's "Team out of office" section
 // and the read-only teammate absence chips on the grid. Purely additive: when
 // off, the section never mounts and no team out-of-office query is issued.
-// Lives inside the calendar block, so `enable-calendar-ui` already gates it.
 // PostHog-gated with a dev-mode default; override with
 // VITE_ENABLE_CALENDAR_TEAM_OOO.
 export const enableCalendarTeamOoo = defineFlag({

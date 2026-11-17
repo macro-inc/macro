@@ -7,7 +7,6 @@ import {
   type Query,
 } from '@app/features/next-soup/filters/filter-store';
 import {
-  enableCalendarUi,
   enableSnippets,
   enableSupportedSoupForeignEntities,
   isCalendarSearchUiEnabled,
@@ -128,9 +127,7 @@ const getInboxSignalFilters = () => {
       // Calendar events with a not-done notification (a fired event alarm).
       // Referencing `calf` opts the calendar arm into the signal query, which
       // `defineQueryFilters` otherwise excludes with a nil id filter.
-      ...(isFeatureEnabled(enableCalendarUi)
-        ? { calendarEventDone: false }
-        : {}),
+      calendarEventDone: false,
     },
     exclude: getDisabledSnippetSubtypeExclude(),
     emailView: 'inbox',

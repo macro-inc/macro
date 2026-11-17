@@ -15,7 +15,6 @@ import {
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
-  enableCalendarUi,
   enableInboxNotifiedSort,
   enableSnippets,
   enableSupportedSoupForeignEntities,
@@ -87,7 +86,6 @@ function matchesCapabilities(
   entity: EntityData,
   capabilities: HomeQueryCapabilities
 ): boolean {
-  if (entity.type === 'calendar_event') return capabilities.calendar;
   if (entity.type === 'foreign') return capabilities.foreignEntities;
   if (isSnippetEntity(entity)) return capabilities.snippets;
 
@@ -145,7 +143,6 @@ export function useHomeEntitiesQuery(
   const facetContext = (): HomeFacetContext => ({ notificationSource });
 
   const capabilities = (): HomeQueryCapabilities => ({
-    calendar: isFeatureEnabled(enableCalendarUi),
     foreignEntities: foreignEntities().enabled,
     notifiedSort: notifiedSort().enabled,
     snippets: isFeatureEnabled(enableSnippets),

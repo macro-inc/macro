@@ -202,7 +202,7 @@ the only linked account lacks calendar permission, the Calendar accounts row
 shows just a filled Connect button for it, with no account list or
 visibility note. Disconnect removes calendar access/data, not the Gmail connection.
 Settings → Calendar lists only the viewer's own inboxes. The **Enable calendar**
-toast (behind `enable-calendar-prompt-web` and `enable-calendar-prompt-mobile`)
+toast
 follows the same rule: it asks once per own inbox missing calendar permission,
 never for an inbox another Macro user delegated to the viewer (a **Shared** row
 in Settings → Email, whose per-inbox Enable calendar button stays available).

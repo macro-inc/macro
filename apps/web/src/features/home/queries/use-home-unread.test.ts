@@ -273,12 +273,6 @@ describe('Home unread presence', () => {
       { ...documentRow, fileType: 'md', subType: { type: 'snippet' } },
       {
         ...base,
-        type: 'calendar_event',
-        status: 'confirmed',
-        isReadOnly: false,
-      },
-      {
-        ...base,
         type: 'foreign',
         foreignSource: 'unknown',
         rawForeignSource: 'test',

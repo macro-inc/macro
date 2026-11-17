@@ -819,7 +819,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <AttachButton />
-                <Show when={composeContext.calendarEvents?.enabled()}>
+                <Show when={composeContext.calendarEvents}>
                   <CreateEventButton
                     suggested={proposesMeeting(writtenText())}
                     shortcut="b"
