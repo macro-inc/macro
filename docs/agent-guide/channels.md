@@ -169,8 +169,13 @@ repeat with a plus-addressed DM recipient to check the email-name fallback.
 An agent's name and picture show as they are now everywhere: the `@` menu,
 mention chips, and the sender of every message it has sent, including older
 ones. Creating, renaming, re-picturing or deleting a bot (from settings, the
-SDK, or an agent's own tools) pushes a `bot_profile_changed` message to its
-owner, team and channel members, and open views update without a reload. To
+SDK, or an agent's own tools) pushes the bot over the `botUpdates` GraphQL
+subscription to its owner, team and channel members; every view reads the bot
+from one `GraphqlBot` record (`@queries/bots/graphql-bots`), so open views
+update without a reload or a refetch. Clients without the Soup GraphQL
+websocket take the same change from the gateway's `bot_profile_changed`
+message (`gateway-profile-bridge.ts`, removed once that websocket ships to
+everyone). To
 check it, open the same channel in two windows, ask an agent in one to create
 an agent or change its own name or picture, and confirm the other window's `@`
 menu, chips and earlier messages follow, on desktop and at phone width.
