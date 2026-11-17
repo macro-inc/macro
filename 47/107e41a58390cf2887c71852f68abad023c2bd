@@ -1,0 +1,30 @@
+apps/web/src/features/agents-view/components/AgentsSidebar.tsx
+  s_7eb83d47cc9269::t_8f320a4c6eefb3 435-439
+docs/agent-guide/ai-chat.md
+  s_7eb83d47cc9269::t_f79e23c6b8fbac 530-533
+apps/web/src/features/agents-view/components/AgentsSidebar.test.tsx
+  s_7eb83d47cc9269::t_be7101fa727b07 217
+apps/web/src/features/agents-view/core/conversation-filters.ts
+  s_7eb83d47cc9269::t_10c0d29d5d0165 140-142,153,160
+  s_7eb83d47cc9269::t_8f320a4c6eefb3 6,11,103-107,114,122,128,135,144-147,154-159
+apps/web/src/features/agents-view/primitives/conversation-list-view.ts
+  s_7eb83d47cc9269::t_8f320a4c6eefb3 21-22
+apps/web/src/features/agents-view/core/conversation-filters.test.ts
+  s_7eb83d47cc9269::t_10c0d29d5d0165 87,95,98-113,117,121-125,127,129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "47107e41a58390cf2887c71852f68abad023c2bd",
+  "prompts": {},
+  "sessions": {
+    "s_7eb83d47cc9269": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bf207c25-42b2-42ad-9693-c8cd82a5479a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
