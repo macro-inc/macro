@@ -77,8 +77,8 @@ for (const provider of PROVIDERS) {
         .poll(async () => (await rowIds(page)).sort())
         .toEqual([zeppelin.id, lunch.id].sort());
 
-      await page.keyboard.press('/');
-      did('AL-013');
+      await page.keyboard.press('ControlOrMeta+f');
+      did('AL-015');
       await expect(field).toBeFocused();
       const asked = await search(page, () => page.keyboard.type('zeppelin'));
       did('AL-012');

@@ -24,6 +24,12 @@ function clipboard(page: Page): Promise<string> {
   return page.evaluate(() => navigator.clipboard.readText());
 }
 
+/**
+ * The check a copy item of a menu shows in place of its icon while what it
+ * copied is on the clipboard (`CopyFeedback`), for a moment after the copy.
+ */
+const COPIED = '[data-copy-feedback]';
+
 /** Delivers two threads, "Agenda" and "Minutes", and answers both. */
 async function twoThreads(mailbox: Mailbox) {
   await mailbox.deliver({
@@ -172,12 +178,16 @@ for (const provider of PROVIDERS) {
     });
 
     // When this fails, Copy Link in a row's menu copies nothing or another
-    // address than the thread's, or says nothing about it.
+    // address than the thread's, or says nothing about it: the menu stays
+    // open and the item's icon turns to a check.
     test("Copy Link in the row menu puts the thread's link on the clipboard", async ({
       page,
       mailbox,
     }) => {
       const { agenda, minutes } = await twoThreads(mailbox);
+      const copyLink = page
+        .getByRole('menu')
+        .getByRole('menuitem', { name: /^Copy Link/ });
 
       await mailbox.open();
       await expect
@@ -185,12 +195,9 @@ for (const provider of PROVIDERS) {
         .toEqual(expect.arrayContaining([agenda.id, minutes.id]));
       await page.evaluate(() => navigator.clipboard.writeText('nothing yet'));
       await row(page, agenda.id).click({ button: 'right' });
-      await page
-        .getByRole('menu')
-        .getByRole('menuitem', { name: /^Copy Link/ })
-        .click();
+      await copyLink.click();
       did('AL-084');
-      await expect(notice(page, 'Link copied to clipboard')).toBeVisible();
+      await expect(copyLink.locator(COPIED)).toBeAttached();
       await expect
         .poll(() => clipboard(page))
         .toBe(`${mailbox.front.origin}/app/mail/${agenda.id}`);
@@ -223,12 +230,16 @@ for (const provider of PROVIDERS) {
     });
 
     // When this fails, Copy ID in a row's menu copies nothing or something
-    // other than the thread's ID, or says nothing about it.
+    // other than the thread's ID, or says nothing about it: the menu stays
+    // open and the item's icon turns to a check.
     test("Copy ID in the row menu puts the thread's ID on the clipboard", async ({
       page,
       mailbox,
     }) => {
       const { agenda, minutes } = await twoThreads(mailbox);
+      const copyId = page
+        .getByRole('menu')
+        .getByRole('menuitem', { name: 'Copy ID' });
 
       await mailbox.open();
       await expect
@@ -236,12 +247,9 @@ for (const provider of PROVIDERS) {
         .toEqual(expect.arrayContaining([agenda.id, minutes.id]));
       await page.evaluate(() => navigator.clipboard.writeText('nothing yet'));
       await row(page, minutes.id).click({ button: 'right' });
-      await page
-        .getByRole('menu')
-        .getByRole('menuitem', { name: 'Copy ID' })
-        .click();
+      await copyId.click();
       did('AL-603');
-      await expect(notice(page, 'ID copied to clipboard')).toBeVisible();
+      await expect(copyId.locator(COPIED)).toBeAttached();
       await expect.poll(() => clipboard(page)).toBe(minutes.id);
       saw('STL-948');
     });

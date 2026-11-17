@@ -153,8 +153,6 @@ AL-009	The list's z hotkey handler in use-email-view-hotkeys.ts consumes the key
 AL-010	The desktop sidebar's New email button (SidebarCreateButton under ViewSidebar.Primary in EmailSidebar.tsx) no longer calls composeEmail; the touch sidebar's button is unchanged.
 AL-011	the header's New email opens no new email
 AL-012	The email list header's search field (ListHeaderSearch in EmailHeader.tsx) drops every change in its onValueChange, so text typed into "Search email" never becomes the list's search.
-AL-013	The / hotkey's handler in use-email-search-hotkeys.ts returns before focusing the list's search field.
-AL-014	pressing / beside an open thread leaves the thread open instead of showing the list
 AL-015	pressing Ctrl+F does not focus the search field
 AL-017	The list header search field's Escape handler (onEscape in ListHeader.tsx) returns before closing the search.
 AL-018	The desktop Filter email menu in EmailControls.tsx drops its request to open instead of passing it to the header's filterOpen signal, so the button opens nothing.
@@ -460,7 +458,6 @@ AX-306	the universal input's email ignores the From picked, the Cc/Bcc button an
 AX-314	Home's registration of the entity action hotkeys in HomeList.tsx is switched off, so e no longer marks the focused Home row done (the row's context menu "Mark done" is the other way in and is not reached).
 AX-315	The desktop "Filter Home" dropdown in HomeFilters.tsx drops every change to its Type group, so "Select only Email" no longer filters Home.
 AX-316	Connect email under Welcome home opens no chooser
-AX-317	Connect your inbox on Home does not open Settings
 AX-319	The text paste plugin (textPastePlugin.ts) treats a pasted link that resolves to an email thread as plain text, so it is pasted as a bare address instead of becoming a mention.
 AX-320	The onChange of the "Email importance" (Signal / All) tabs of a contact's Emails section in contact-emails-section.tsx no longer sets the view.
 AX-321	The onChange of the "Email inboxes" (Team / Me) tabs of a contact's Emails section in contact-emails-section.tsx no longer sets the view.

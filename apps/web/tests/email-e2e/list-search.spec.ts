@@ -1,6 +1,7 @@
-// Searching mail from the list: the / key reaches the search field, a query
-// of any length is searched, a query with no match says so, and Escape
-// leaves the search. Each for a Gmail and an Outlook inbox.
+// Searching mail from the list: Ctrl+F reaches the search field, a query of
+// any length is searched, a query with no match says so, Escape leaves the
+// field with the search kept, and Escape again, in the list, leaves the
+// search. Each for a Gmail and an Outlook inbox.
 //
 // The stack runs no search service, so the page's search request is
 // answered here: these tests prove what the list does with the field and
@@ -19,9 +20,10 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
-    // When this fails, / does not reach the search field, a query of two
+    // When this fails, Ctrl+F does not reach the search field, a query of two
     // characters is not searched, a query is not sent to the search, a search
-    // without a match looks like an empty inbox, or Escape leaves the list
+    // without a match looks like an empty inbox, Escape in the field drops
+    // the search or keeps the keyboard, or Escape in the list leaves it
     // searching.
     test('the list searches what is typed, says when nothing matches, and Escape leaves the search', async ({
       page,
@@ -38,8 +40,9 @@ for (const provider of PROVIDERS) {
 
       await mailbox.open();
       await expect.poll(() => rowIds(page)).toEqual([alpha.id]);
-      await page.keyboard.press('/');
-      did('AL-013');
+      // `/` opens the app's Search view from Email, as from every other view.
+      await page.keyboard.press('ControlOrMeta+f');
+      did('AL-015');
       await expect(field).toBeFocused();
 
       await page.keyboard.type('ze');
@@ -56,9 +59,17 @@ for (const provider of PROVIDERS) {
       // asked while it was typed).
       await expect.poll(() => asked.at(-1) ?? '').toContain('zeppelin');
 
+      // Escape hands the keyboard to the list and keeps the search on screen.
       await page.keyboard.press('Escape');
       did('AL-017');
+      await expect(field).not.toBeFocused();
+      await expect(field).toHaveValue('zeppelin');
+      await expect(page.getByText('No results for "zeppelin"')).toBeVisible();
+
+      // Escape again, now in the list, clears the search.
+      await page.keyboard.press('Escape');
       await expect(page.getByText('No results for "zeppelin"')).toHaveCount(0);
+      await expect(field).toHaveCount(0);
       await expect.poll(() => rowIds(page)).toEqual([alpha.id]);
     });
   });

@@ -1,11 +1,11 @@
-// The list header's other ways in: Ctrl+F and / (from an open thread) to the
-// search field, f to the filter menu, Revert and Save view once a tab's
-// filters changed, and the header's own New button. For a Gmail and an
-// Outlook inbox.
+// The list header's other ways in: Ctrl+F to the search field, f to the
+// filter menu, Revert and Save view once a tab's filters changed, and the
+// header's own New button. For a Gmail and an Outlook inbox. (`/` opens the
+// app's Search view from Email, as from every other view.)
 
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
-import { deliverNoise, openThreadId } from './harness/list';
+import { deliverNoise } from './harness/list';
 import { anInbox, PROVIDERS } from './harness/providers';
 import {
   closeMenus,
@@ -14,7 +14,6 @@ import {
   filterSubmenu,
   GRACE,
   pickFilter,
-  row,
   storedViews,
 } from './harness/ways-list1';
 import { confirmed, did } from './ledger/record';
@@ -24,12 +23,11 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
-    // When this fails, a key of the list header is dead (Ctrl+F or / does not
-    // reach the search field, / does not bring the list back from a thread,
-    // f does not open the filter menu), Revert leaves the changed filters,
-    // Save view stores no view or one without the filters, or the header's
-    // New button opens no composer.
-    test('Ctrl+F, /, f, Revert, Save view and New each do their work', async ({
+    // When this fails, a key of the list header is dead (Ctrl+F does not
+    // reach the search field, f does not open the filter menu), Revert
+    // leaves the changed filters, Save view stores no view or one without
+    // the filters, or the header's New button opens no composer.
+    test('Ctrl+F, f, Revert, Save view and New each do their work', async ({
       page,
       mailbox,
     }) => {
@@ -59,24 +57,14 @@ for (const provider of PROVIDERS) {
       await expect(field).toBeFocused();
       await page.keyboard.type('zeppelin');
       await expect.poll(() => asked.at(-1) ?? '').toContain('zeppelin');
+      // Escape leaves the field with the search kept; Escape again, in the
+      // list, clears it.
+      await page.keyboard.press('Escape');
+      await expect(field).not.toBeFocused();
       await page.keyboard.press('Escape');
       await expectRows(page, [lunch]);
 
-      // A thread takes the list's place; / brings the list back, in its
-      // search field.
-      await row(page, lunch).click();
-      await expect.poll(() => openThreadId(page)).toBe(lunch);
-      await expect(page.getByText('Noon?')).toBeVisible();
-      await page.keyboard.press('/');
-      did('AL-014');
-      await expect.poll(() => openThreadId(page)).toBeUndefined();
-      await expect(field).toBeFocused();
-      await page.keyboard.type('quartz');
-      await expect.poll(() => asked.at(-1) ?? '').toContain('quartz');
-      await page.keyboard.press('Escape');
-      await expectRows(page, [lunch]);
-
-      // Escape folds the field back into its button: f is no longer typed.
+      // Clearing folds the field back into its button: f is no longer typed.
       await expect(field).toHaveCount(0);
       await expect(
         page.getByRole('main').getByRole('button', { name: 'Search email' })

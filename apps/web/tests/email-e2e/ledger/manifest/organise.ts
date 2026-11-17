@@ -879,11 +879,13 @@ export const organise = {
       id: 'STL-604',
       surface: 'SL-25',
       fn: ['F-065'],
-      state: 'toast "Link copied to clipboard" / "ID copied to clipboard"',
+      state:
+        "the menu stays open and the item's icon turns to a check (no toast)",
       trigger: 'Copy Link / Copy ID',
       source: [
         'src/features/next-soup/actions/make-copy-link-action.ts',
         'src/features/next-soup/actions/make-copy-entity-id-action.ts',
+        'src/lib/core/component/ContextMenu.tsx',
       ],
     },
     {
