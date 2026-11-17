@@ -54,6 +54,8 @@ fn dependency_check() -> Job {
     rust_ci_job()
         .add_step(install_checker())
         .add_step(run_checker())
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
@@ -68,6 +70,8 @@ fn dependency_check() -> Job {
 fn hakari_and_dep_closures() -> Job {
     rust_ci_job()
         .add_step(deps_check())
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 

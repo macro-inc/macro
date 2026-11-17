@@ -15,8 +15,9 @@ action, pinned to that reviewed commit. It reads the triggering attempt's GitHub
 metadata and sends OTLP/HTTP protobuf traces to our existing endpoint. The trace
 hierarchy is workflow → jobs → steps, stored in Tempo with
 `service.name=github-actions` and `deployment.environment=ci`. There is no
-triggering PR checkout, artifact download, raw build-log collection, or Datadog
-export. Individual test cases are outside this integration.
+triggering PR checkout, raw build-log collection, or Datadog export, and the only
+artifact read is each job's compiler cache stats (below). Individual test cases are
+outside this integration.
 
 ### GitHub API budget
 
@@ -63,7 +64,7 @@ only when the run's `export` line has no `untraced`.
 | `event` | Fields |
 | --- | --- |
 | `push` | `pr_type`, `wall_seconds`, `wall_start`, `start_lag_seconds`, `conclusion`, `last_workflow`, `last_job`, `slowest_job`, `queue_max_seconds`, `cold_volumes`, `files_changed`, `rust_crates_changed`, `experiment`, `rerun`, `pr_draft` |
-| `job` | `workflow`, `job`, `conclusion`, `run_seconds`, `queue_seconds`, `runner_profile`, `volume_state`, `dev_shell_seconds` |
+| `job` | `workflow`, `job`, `conclusion`, `run_seconds`, `queue_seconds`, `runner_profile`, `volume_state`, `dev_shell_seconds`, and the `sccache_*` fields below |
 | `step` | `workflow`, `job`, `step`, `conclusion`, `run_seconds` |
 | `export` | The exporter's own cost: `collect_seconds`, `api_calls` (the run's GitHub calls: the preflight's, the collector's, and two for a trace the preflight passed, not counting the trace action's retries), `rate_remaining`, `rate_limit`, `skipped` (`budget`, `no_listing`) when it made no calls, and `untraced` when it sent no trace (`no_job_ran`, `job_never_ran`, `job_unfinished`, `no_conclusion`, `step_timing`, `duplicate_name`, `over_100_jobs`, `over_511_spans`) |
 
@@ -99,10 +100,36 @@ shell step takes 30 s or more, an inference from step timing.
 Collection and sending are best effort and cannot fail the exporter, and neither
 touches the observed PR's jobs. Collection runs before any credential is read.
 
+### Compiler cache numbers
+
+Every job that configures Namespace's remote sccache ends with `show sccache
+stats`, which also writes `sccache --show-stats --stats-format json`, and uploads it
+as the one-day artifact `ci-cache-stats-<check run id>` (`steps::show_sccache_stats`
+and `upload_sccache_stats`; a test fails a job that has one without the other). The
+collector lists the run's artifacts once, downloads only those named for this
+attempt's jobs and under 64 KiB, and adds to that job's `job` line:
+
+| Field | From sccache |
+| --- | --- |
+| `sccache_backend` | `remote`, or `local` for a fork PR's disk fallback |
+| `sccache_requests` | compile requests |
+| `sccache_hits`, `sccache_misses` | hits and misses over every language |
+| `sccache_hit_percent` | hits over hits and misses, when there were any |
+| `sccache_errors`, `sccache_timeouts` | cache, read and write errors; cache timeouts |
+| `sccache_not_cacheable` | requests sccache can't cache, such as linking |
+| `sccache_read_ms`, `sccache_write_ms` | time reading hits, and writing misses back |
+| `sccache_compile_ms` | time compiling misses |
+
+PR code writes the file, fork PRs included, so the collector copies no string from
+it: anything but whole non-negative numbers in sccache's shape drops that job's
+stats, and the cache location, which names the remote endpoint, only decides
+`sccache_backend`. A job that compiled nothing has no fields. The **Compiler cache
+by PR job** table on `/d/macro-ci` and in the daily report reads them.
+
 `nixos/ci-report.json` holds the queries over these events: real PR wall time
 overall and by PR type, what finished last, the slowest PR jobs and steps, queue
-by runner and job, warm and cold cache volumes, CI hours by trigger, and the
-exporter's own cost. The top of `/d/macro-ci` renders them over the selected
+by runner and job, warm and cold cache volumes, compiler cache hit rates, CI hours
+by trigger, and the exporter's own cost. The top of `/d/macro-ci` renders them over the selected
 range, and the daily report prints the same tables as Markdown, plus one summary
 row per UTC day:
 

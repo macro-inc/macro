@@ -198,6 +198,8 @@ fn linux_job(target: &DaemonTarget) -> Job {
         ))
         .add_step(package_step(target))
         .add_step(upload_step(target))
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
