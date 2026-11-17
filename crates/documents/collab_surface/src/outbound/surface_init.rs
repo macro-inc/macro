@@ -1,7 +1,7 @@
 //! Sync-service session initializer backed by lexical-service and
 //! sync-service HTTP clients.
 //!
-//! Mirrors `crates/documents/src/outbound/markdown_init.rs`, with one
+//! Mirrors `crates/documents/documents/src/outbound/markdown_init.rs`, with one
 //! deliberate difference: initialization here is awaited by the caller (with
 //! the same bounded retry) instead of being spawned fire-and-forget, so
 //! surface creation can report `ready` truthfully.

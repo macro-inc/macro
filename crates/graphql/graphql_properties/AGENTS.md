@@ -23,7 +23,7 @@ edge.
 
 - Owns: GraphQL types/resolvers for property definitions and values.
 - Not here: property storage, selectable-option management, and filter
-  evaluation → `crates/properties`, `crates/properties_types`.
+  evaluation → `crates/databases/properties`, `crates/types/properties_types`.
 
 ## Boundaries
 

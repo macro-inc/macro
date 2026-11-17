@@ -1,4 +1,4 @@
-//! The engine's transcripts (`crates/database_sql_engine/fixtures/transcripts`),
+//! The engine's transcripts (`crates/databases/database_sql_engine/fixtures/transcripts`),
 //! replayed through this source over a Soup that answers each read with the
 //! page the transcript fed, as the browser's GraphQL source replays them:
 //! every statement must reach the transcript's outcome, and each read must be

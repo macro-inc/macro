@@ -12,7 +12,7 @@ use crate::workflows::{runners, steps};
 /// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("tooling/xtask/**"),
-    xtask_paths::repo_glob!("crates/macro_event_topics/**"),
+    xtask_paths::repo_glob!("crates/platform/macro_event_topics/**"),
     xtask_paths::repo_glob!(".github/workflows/**"),
     xtask_paths::repo_glob!(".github/kafka-cluster-topics.json"),
 ];

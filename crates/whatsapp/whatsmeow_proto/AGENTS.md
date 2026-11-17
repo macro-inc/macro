@@ -5,12 +5,12 @@
 The protobuf types of the `whatsmeow` port (WhatsApp linked-device client):
 prost code generated at build time from whatsmeow's `proto/` tree, kept in its
 own crate so the ~29k generated lines don't recompile with every edit to
-`crates/whatsmeow`.
+`crates/whatsapp/whatsmeow`.
 
 ## Start here
 
 - `proto/<goPackage>/*.proto`: copies of whatsmeow's `.proto` files with MPL-2.0 headers at
-  the revision pinned in `crates/whatsmeow/AGENTS.md`.
+  the revision pinned in `crates/whatsapp/whatsmeow/AGENTS.md`.
 - `build.rs`: compiles them with `protox` (pure Rust, no `protoc` needed) and
   `prost-build`.
 - `src/lib.rs`: the generated module tree plus aliases named after the Go
@@ -29,4 +29,4 @@ own crate so the ~29k generated lines don't recompile with every edit to
 
 ## Related
 
-- `crates/whatsmeow/AGENTS.md`
+- `crates/whatsapp/whatsmeow/AGENTS.md`

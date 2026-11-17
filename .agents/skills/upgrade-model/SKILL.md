@@ -13,15 +13,15 @@ These are separate choices; the application no longer has a two-entry
 
 ## Model definitions and routing
 
-- `crates/agent/src/model/types.rs` accepts `provider/model` IDs. Routing in
-  `crates/agent/src/model/router.rs` selects the provider from that prefix.
-- `crates/agent/src/model/predefined_model.rs` defines the serialize-only
+- `crates/ai/agent_loop/src/model/types.rs` accepts `provider/model` IDs. Routing in
+  `crates/ai/agent_loop/src/model/router.rs` selects the provider from that prefix.
+- `crates/ai/agent_loop/src/model/predefined_model.rs` defines the serialize-only
   `PredefinedModel` convenience enum and internal Smart/Fast defaults. Update its
   serialization, conversion, context window, and thinking parameters when the
   requested change affects one of those predefined models.
-- Check provider-specific behavior and speed support in `crates/agent/src/model/`
+- Check provider-specific behavior and speed support in `crates/ai/agent_loop/src/model/`
   before assigning a new model the capabilities of its predecessor.
-- `crates/chat/src/domain/models/model_access.rs` owns the selectable chat
+- `crates/comms/ai_chat/src/domain/models/model_access.rs` owns the selectable chat
   `CHAT_MODELS`, `PAID_DEFAULT_MODEL`, and `FREE_MODEL`. Change the relevant
   catalog/default and preserve the intended plan restrictions.
 
@@ -37,7 +37,7 @@ pretty names, provider icons, and relevant paid/free/database defaults. Search
 for the retired ID in callers and tests rather than assuming a particular input
 component contains it. Keep the frontend catalog aligned with the backend.
 
-Check the pricing setup under `crates/ai_billing` and MacroDB pricing migrations;
+Check the pricing setup under `crates/billing/ai_billing` and MacroDB pricing migrations;
 a new provider ID needs the corresponding pricing configuration.
 
 When retiring a model, migrate saved selections as well. Routines

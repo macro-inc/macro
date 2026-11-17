@@ -16,10 +16,10 @@ follow-up fix; those misses are called out inline.
 
 | Building | Copy | Why |
 | --- | --- | --- |
-| The smallest correct registration | `CrmPipeline` (`crates/crm`, `crm_pipeline_entities`) | Newest kind; touches every core registration point with the least feature code |
-| A full-stack kind outside Soup | Forms (`crates/forms`, `apps/web/src/features/block-form`) | Newest end-to-end launch: access, public audience, entity mutation, mentions, Drive catalog, AI tools, SDK entity, agent guide |
-| A Soup kind with properties, discussions, activity, MCP | Initiatives (`crates/initiative`, `crates/graphql/graphql_initiative`) | Built in clean layers; the [design doc](../design/initiatives-projects.md) records the order |
-| A kind on reusable storage | Databases (`crates/databases`, `database_entities`) | Separates storage from the app entity; read the [database-core skill](../../.agents/skills/database-core/SKILL.md) |
+| The smallest correct registration | `CrmPipeline` (`crates/databases/crm`, `crm_pipeline_entities`) | Newest kind; touches every core registration point with the least feature code |
+| A full-stack kind outside Soup | Forms (`crates/databases/forms`, `apps/web/src/features/block-form`) | Newest end-to-end launch: access, public audience, entity mutation, mentions, Drive catalog, AI tools, SDK entity, agent guide |
+| A Soup kind with properties, discussions, activity, MCP | Initiatives (`crates/projects/project`, `crates/graphql/graphql_initiative`) | Built in clean layers; the [design doc](../design/initiatives-projects.md) records the order |
+| A kind on reusable storage | Databases (`crates/databases/databases`, `database_entities`) | Separates storage from the app entity; read the [database-core skill](../../.agents/skills/database-core/SKILL.md) |
 
 Collaborative markdown on the entity (descriptions, notes) follows the
 [collab-surface-core skill](../../.agents/skills/collab-surface-core/SKILL.md).
@@ -117,7 +117,7 @@ migrations, the SQLx cache, and tests.
   paths in `src/api/swagger.rs`.
 - Other services build the same domain service (agent harness, agent trigger,
   authentication, MCP, document cognition). Give the crate one `wiring.rs` that
-  every host calls, as `crates/forms/src/wiring.rs` does. Hosts built separately
+  every host calls, as `crates/databases/forms/src/wiring.rs` does. Hosts built separately
   drift: tools in one host have pointed at the wrong service, and writes from a
   host with a no-op event broker never reached the activity feed.
 - If it calls `sqlx::query!`, run `nix develop --command just prepare_db` and
@@ -167,13 +167,13 @@ Postgres repo.
   for kinds with `entity_access` rows.
 - **Entity mutation:** implement the `crates/entities/entity_mutation` capability traits
   (`RenameEntity`, `TrashEntity`, `RestoreEntity`, `DeleteEntityPermanently`, ...)
-  in the domain crate, as `crates/forms/src/domain/entity_mutation.rs` does, then
+  in the domain crate, as `crates/databases/forms/src/domain/entity_mutation.rs` does, then
   add the arms in `services/document_storage_service/src/service/entity_mutation.rs`
   and the adapters in `src/outbound/entity_mutation.rs`. GraphQL mutations
   (`crates/graphql/graphql_entity_mutation`) are generic. Initiatives still use a
   hand-written delete route; don't copy that.
 - **Owned content:** purge owned documents through the documents domain
-  (`crates/documents/src/domain/purge.rs`). Initiatives first reimplemented the
+  (`crates/documents/documents/src/domain/purge.rs`). Initiatives first reimplemented the
   purge in the service with raw SQL and queue messages, and lost the content
   cleanup when the purge failed after the row was deleted. Owned collab surfaces
   are retired through `OwnedSurfaceService`.
@@ -190,16 +190,16 @@ Postgres repo.
 
 ## 6. Properties (optional)
 
-- `crates/properties_types/src/shared/entity_type.rs` (maps to the Postgres enum
+- `crates/types/properties_types/src/shared/entity_type.rs` (maps to the Postgres enum
   `property_entity_type`; see the enum rule in section 2) and
   `src/api/property_target.rs`.
-- `crates/properties/src/domain/model.rs` (`canonical_entity_type`,
+- `crates/databases/properties/src/domain/model.rs` (`canonical_entity_type`,
   `storage_entity_type`; return `None` if the kind has no properties), plus
   `inbound/axum_router/extract.rs`, `outbound/permission_queries.rs`,
   `outbound/permission_service.rs`, and `domain/activity.rs`.
-- System properties: `crates/system_properties/src/domain/model/constants/system_property_key.rs`
+- System properties: `crates/databases/system_properties/src/domain/model/constants/system_property_key.rs`
   and an `attach_<kind>_properties` call at create in
-  `crates/system_properties/src/domain/service.rs`.
+  `crates/databases/system_properties/src/domain/service.rs`.
 - Filters: `crates/graphql/graphql_common/src/property_filter.rs` and
   `crates/graphql/graphql_properties`.
 - **Lessons:** a create that fails after properties are attached must remove
@@ -211,7 +211,7 @@ Postgres repo.
 
 Required for anything people act on; Recent is built from activity.
 
-- **Topic:** add it to `topics!` in `crates/macro_event_topics/src/lib.rs` (and its
+- **Topic:** add it to `topics!` in `crates/platform/macro_event_topics/src/lib.rs` (and its
   test), then `cargo x kafka-topics`. Never hand-edit
   `.github/kafka-cluster-topics.json`. The topic must exist before the producer
   deploys, or events are lost.
@@ -221,12 +221,12 @@ Required for anything people act on; Recent is built from activity.
 - **Activity:** implement `activity::ActivitySource` in
   `crates/<kind>/src/domain/activity.rs` with an exhaustive match. Shared actions
   use `CommonAction`; new `Action` variants go in
-  `crates/activity/src/domain/models.rs` (codec and `ActionTag`),
-  `crates/activity/src/domain/activity_range.rs` (`ToolActivityAction`), and
+  `crates/search/activity/src/domain/models.rs` (codec and `ActionTag`),
+  `crates/search/activity/src/domain/activity_range.rs` (`ToolActivityAction`), and
   `crates/graphql/graphql_activity/src/objects.rs`.
 - Register the topic in `services/document_storage_service/src/service/activity.rs`
   (`declare_topics!` and an `ingest` arm). Hard deletes return `Ingest::Purge`.
-- **`crates/activity/src/outbound/pg_activity_repo.rs`:** the const fn
+- **`crates/search/activity/src/outbound/pg_activity_repo.rs`:** the const fn
   `_rankable_entity_types_are_exhaustive` forces an arm, but the list in
   `rankable_entity_types()` beside it is not checked. Update both.
 - **Lesson:** events that reference other entities (an initiative's tasks) must be
@@ -243,14 +243,14 @@ target, but REST Soup still serves queries GraphQL cannot translate (such as
 `notified_at` sorting), so the kind must work on both; a kind that only worked on one path showed empty lists
 on the other.
 
-- **Model:** `crates/soup_types/src/<kind>.rs` and a `SoupItem` variant in
+- **Model:** `crates/search/soup_types/src/<kind>.rs` and a `SoupItem` variant in
   `item.rs`.
-- **Filters:** `crates/item_filters/src/ast/<kind>.rs`, a field on
+- **Filters:** `crates/search/item_filters/src/ast/<kind>.rs`, a field on
   `EntityFilterAst` in `ast.rs` (plus `expand_ast` and `IsEmpty`), and
   `<Kind>Filters` in `lib.rs`. Make the kind **opt-in**: an empty filter excludes
   it. Set the new field in every `EntityFilterAst { .. }` literal the compiler
   reports.
-- **Postgres legs** in `crates/soup/src/outbound/pg_soup_repo/`: `<kind>.rs` with
+- **Postgres legs** in `crates/search/soup/src/outbound/pg_soup_repo/`: `<kind>.rs` with
   `<kind>/by_ids.sql` (hydration, registered in both by-ids paths of
   `pg_soup_repo.rs`); `expanded/dynamic/<kind>.rs` with detail and grouped SQL;
   an `include_<kind>` gate in both builders of `expanded/dynamic.rs`; and a
@@ -260,11 +260,11 @@ on the other.
 - **Feeds** (if it belongs in Recent, inbox, or the Home work feed):
   `candidate_gates.rs`, `touched.rs` (Recent, which reads activity, so section 7
   is a prerequisite), `notified.rs` with `notified/query.sql`, `attention/`, and
-  the routing arms in `crates/soup/src/domain/service.rs` and
+  the routing arms in `crates/search/soup/src/domain/service.rs` and
   `domain/service/favorites.rs`. Keep new gates index-only; these queries have
   been cancelled on the replica in production for scanning too much.
-- **Prefer a listing port** owned by your crate (`crates/soup/src/domain/models/contact_listing.rs`
-  is the pattern) over SQL inside `crates/soup` when the kind's data lives in its
+- **Prefer a listing port** owned by your crate (`crates/search/soup/src/domain/models/contact_listing.rs`
+  is the pattern) over SQL inside `crates/search/soup` when the kind's data lives in its
   own crate.
 - **Projection:** `crates/soup_filter_projection/src/lib.rs` returns `Ok(None)` and
   `crates/item_filter_index/src/lib.rs` returns `Unsupported(..)` unless you build
@@ -290,7 +290,7 @@ appear in Home or Recent; say so in the PR.
   `crates/graphql/graphql_soup_filter_input`, edges to `crates/graphql/complete_graph/src/edges.rs`,
   and the possible-types assertion (and count) in
   `crates/client/cache-core/src/meta/test.rs`.
-- **Kind crate (optional):** `crates/graphql_<kind>` with `context`, `inputs`,
+- **Kind crate (optional):** `crates/graphql/graphql_<kind>` with `context`, `inputs`,
   `loaders`, `mutation`, `objects`, `query`, copied from `crates/graphql/graphql_initiative`.
   Compose it in `crates/graphql/complete_graph/src/schema.rs`; viewer-scoped reads go under
   `GraphqlUser` (see `crates/graphql/complete_graph/AGENTS.md`). Wire it in
@@ -309,11 +309,11 @@ appear in Home or Recent; say so in the PR.
 
 ## 10. Discussions and notifications (optional)
 
-- **Parent:** a `MessageParent` variant in `crates/messages/src/domain/models.rs`
+- **Parent:** a `MessageParent` variant in `crates/comms/messages/src/domain/models.rs`
   and a migration widening the parent-type CHECK (two-step, section 2). The
-  compiler then walks you through `crates/messages`, `agent_trigger`,
+  compiler then walks you through `crates/comms/messages`, `agent_trigger`,
   `agent_harness`, `agent_session`, `channel_bots`, and `macrod`.
-  The discussion-parent authorization in `crates/messages/src/domain/service.rs`
+  The discussion-parent authorization in `crates/comms/messages/src/domain/service.rs`
   ends in a `Forbidden` arm.
 - **Not caught by the compiler:** the zod enum in
   `services/lexical-service/src/endpoints/agent-context.ts` and
@@ -322,12 +322,12 @@ appear in Home or Recent; say so in the PR.
 - **Notifications:** a metadata module in `crates/notifications/model_notifications/src/metadata/`
   with its `define_notif_event!` variant, a GraphQL event in
   `crates/graphql/graphql_notification/src/notification_event/`, the sender in
-  `crates/messages/src/outbound/notification_sender.rs`, and
+  `crates/comms/messages/src/outbound/notification_sender.rs`, and
   `BLOCKABLE_NOTIFICATIONS` in `services/notification_service/src/api/user_notification.rs`.
   The web list in `apps/web/src/features/notifications/notification-event-catalog.ts`
   must match it by hand.
 - A new **agent-trigger event** shape also needs an arm in
-  `crates/webhook/src/domain/ingestion.rs`, or the SSE fan-out drops it silently.
+  `crates/integrations/webhook/src/domain/ingestion.rs`, or the SSE fan-out drops it silently.
 
 ## 11. Mentions and channel references
 
@@ -336,18 +336,18 @@ Four vocabularies must agree:
 1. `packages/lexical-core/utils/mentions.ts` (block name to reference type). Its
    match ends in `P._ => 'document'`, so a missing kind becomes a document.
 2. `packages/lexical-core/utils/message-references.ts` (allowed reference kinds).
-3. `crates/messages/src/domain/mentions.rs` `MessageReferenceKind` and the
-   reference authorization in `crates/messages/src/domain/service.rs`. Unknown
+3. `crates/comms/messages/src/domain/mentions.rs` `MessageReferenceKind` and the
+   reference authorization in `crates/comms/messages/src/domain/service.rs`. Unknown
    kinds are stored without an access check.
-4. `crates/channels/src/domain/models.rs` `ReferencedShareItemType` and
+4. `crates/comms/channels/src/domain/models.rs` `ReferencedShareItemType` and
    `reference_sharing.rs`. **`grant_level` defaults any kind to View**, so
    posting a mention shares the entity with the whole channel unless you decide
    otherwise (initiatives opt out). Add the kind to the `matches!` list in
    `crates/comms/channels_outbound/src/pg_channel_reference_share_permissions.rs`, or it
    falls through to legacy share permissions and fails at runtime.
 
-- **Agent prompt:** add the kind to `crates/agents/prompt/src/mentions.rs` and, if it has
-  URLs, `crates/agents/prompt/src/mcp_item_links.rs`. Without it agents linked forms as
+- **Agent prompt:** add the kind to `crates/agents/agent_prompts/src/mentions.rs` and, if it has
+  URLs, `crates/agents/agent_prompts/src/mcp_item_links.rs`. Without it agents linked forms as
   plain URLs.
 - **Deploy skew:** lexical-service and the web app deploy separately, so either
   can run against the other's previous release. New node data must parse in the
@@ -363,27 +363,27 @@ Quick Access (section 15) and agents through their list tools. That is the
 minimum.
 
 For full-text search, follow the `AGENTS.md` recipes in
-`crates/clients/opensearch_client` (index shapes), `crates/search_types`,
-`crates/search_service` (queries), and `services/search_processing_service`
+`crates/clients/opensearch_client` (index shapes), `crates/search/search_types`,
+`crates/search/search_service` (queries), and `services/search_processing_service`
 (Kafka consumer and backfill). Agent sessions are the newest example.
-`crates/name_search` covers name-only search from Postgres. **Deploys never
+`crates/search/name_search` covers name-only search from Postgres. **Deploys never
 create OpenSearch indices or aliases**; that is a manual step for a person, and
 upserts must not create an index by accident.
 
 ## 13. AI and MCP tools
 
 Follow the [create-ai-tool skill](../../.agents/skills/create-ai-tool/SKILL.md)
-and `crates/ai_toolset/TOOL_DESIGN.md`. A new kind adds a whole toolset, which
+and `crates/ai/ai_toolset/TOOL_DESIGN.md`. A new kind adds a whole toolset, which
 the skill doesn't cover:
 
-- Register it in `crates/agent_tools/src/lib.rs` (`base_toolset()` or the
+- Register it in `crates/ai/agent_tools/src/lib.rs` (`base_toolset()` or the
   host-specific branches of `tools_for`), eager or deferred.
 - Give its context to every place `ToolServiceContext` is built:
-  `crates/agent_tools/src/build_context.rs`,
+  `crates/ai/agent_tools/src/build_context.rs`,
   `services/agent_harness_service/src/cognition/server.rs` and its
   `services/agent_harness_service/src/cognition/api/context/test.rs`, and `services/agent_harness_service/src/public_mcp/context.rs`. Add it to
-  `with_actor` in `crates/agent_tools/src/tool_context.rs`, or agent writes are
-  attributed to the default bot. Add a test in `crates/agent_tools/src/test.rs` that
+  `with_actor` in `crates/ai/agent_tools/src/tool_context.rs`, or agent writes are
+  attributed to the default bot. Add a test in `crates/ai/agent_tools/src/test.rs` that
   the tools resolve on every host; hosts have shipped with tools unwired.
 - Agent guidance: a `@routing` sentence ("Use when …; not …") and, when agents
   need rules beyond the API, an `@agent` block in the SDK namespace's TSDoc

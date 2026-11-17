@@ -2,7 +2,7 @@
 
 ## What it is
 
-Read-only Linear workspace inventory. Used by the reviewed workspace importer in `crates/import`.
+Read-only Linear workspace inventory. Used by the reviewed workspace importer in `crates/integrations/import`.
 
 ## Start here
 

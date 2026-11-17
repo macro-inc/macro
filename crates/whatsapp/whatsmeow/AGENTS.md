@@ -90,7 +90,7 @@ business profiles and links, communities admin, bots and Meta AI (`msmsg`,
 WASA), Messenger/Instagram (`sendfb.go`, Armadillo `v=3`, FB device lists),
 WASA/bot parts of `msgsecret.go`, reporting tokens, `armadillomessage.go`, `push.go`,
 `update.go`, `store/sqlstore` (the Postgres store lives in
-`crates/whatsapp_store_pg`).
+`crates/whatsapp/whatsapp_store_pg`).
 
 ## Porting rules
 
@@ -108,7 +108,7 @@ WASA/bot parts of `msgsecret.go`, reporting tokens, `armadillomessage.go`, `push
   and say so in the doc comment.
 - Go callbacks and channels become event receivers (`socket::FrameEvent`,
   `socket::NoiseEvent`); `context.Context` parameters are dropped.
-- Protobuf types come from `crates/whatsmeow_proto`, re-exported as `proto`.
+- Protobuf types come from `crates/whatsapp/whatsmeow_proto`, re-exported as `proto`.
 - whatsmeow has almost no Go tests. Tests here use expected values produced by
   running whatsmeow's Go code at the pinned revision, so the port is checked
   byte for byte. The generators live in `testdata/generator/` (see its
@@ -178,7 +178,7 @@ Every Signal call goes through the traits in `src/signal.rs`:
 - `SignalProtocolStore`: opaque protocol records, implemented by
   `store::DeviceSignalStore`.
 
-`crates/whatsmeow_signal` implements these traits with Signal's official
+`crates/whatsapp/whatsmeow_signal` implements these traits with Signal's official
 AGPL-3.0-only libsignal core and vendored X3DH protocol modules. The repository
 is AGPL-3.0; retain MPL-2.0 headers on the whatsmeow port and Signal's SPDX
 headers and NOTICE on its protocol implementation. Client unit tests use fakes;
@@ -228,4 +228,4 @@ Signal interop and linked-device end-to-end tests exercise the implementation.
 
 ## Related
 
-- `crates/whatsmeow_proto/AGENTS.md`
+- `crates/whatsapp/whatsmeow_proto/AGENTS.md`

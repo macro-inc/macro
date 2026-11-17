@@ -1,7 +1,7 @@
 # Stripe event inbox: deploy, rollback and replay
 
 How to ship, roll back and recover the Stripe event inbox
-(`crates/stripe_inbox`, consumers in `services/authentication_service`). How
+(`crates/billing/stripe_inbox`, consumers in `services/authentication_service`). How
 it works: [architecture](../architecture/stripe-event-inbox.md).
 
 ## Migrations run before the service rolls

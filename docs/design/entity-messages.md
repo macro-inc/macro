@@ -2,7 +2,7 @@
 
 Channel messages and document comments share one message implementation:
 `comms_messages` holds the content, `comms_message_threads` holds root-level thread
-state, and `crates/messages` owns the use cases for both parents. This document
+state, and `crates/comms/messages` owns the use cases for both parents. This document
 describes what is live after the messages crate PR and what the remaining PRs of
 the staged rollout add.
 

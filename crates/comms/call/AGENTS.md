@@ -38,8 +38,8 @@ in-call chat.
 
 - Owns: call creation/ringing/join lifecycle, LiveKit room management, call
   recordings, and persistent in-call chat.
-- Not here: channel messages and threads outside calls → `crates/channels`;
-  calendar meeting scheduling → `crates/calendar_events`, `crates/calendar_scheduling`.
+- Not here: channel messages and threads outside calls → `crates/comms/channels`;
+  calendar meeting scheduling → `crates/calendar/calendar_events`, `crates/calendar/calendar_scheduling`.
 
 ## Boundaries
 
@@ -53,14 +53,14 @@ in-call chat.
 - Add a call event/activity: `src/domain/activity.rs` → `src/domain/events.rs`
   → `src/outbound/pg_call_repo.rs`.
 - Add a public call notification: `src/domain/notification_events.rs` →
-  `src/domain/service.rs` or its meeting/channel submodule → `crates/webhook`.
+  `src/domain/service.rs` or its meeting/channel submodule → `crates/integrations/webhook`.
 - Change ringing/decline behavior: `src/domain/service.rs` → `src/inbound/axum_router.rs`.
 - Add an AI tool over calls: `src/inbound/toolset.rs` (feature `ai_tools`).
 
 ## Checks
 
 - `cargo test -p call` (`SQLX_OFFLINE` unset).
-- `just -f crates/call/justfile check` for an all-features compile check.
+- `just -f crates/comms/call/justfile check` for an all-features compile check.
 
 ## Gotchas
 

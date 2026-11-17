@@ -47,8 +47,9 @@ These stay at the top level:
   and `item_filter_index`: `apps/web/tauri` builds them by path, and editing
   its manifests trips the native store-release gates. They move with
   `client/` in a native release.
-- `macrod`: the public install command fetches
-  `install/install.sh` from this path on `main`.
+- `coding_agent_worker/install/`: compatibility shims retain previously
+  published install URLs. The daemon crate and canonical installers live
+  under `agents/macrod/`.
 
 ## Recipes
 

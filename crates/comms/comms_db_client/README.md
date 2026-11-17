@@ -13,7 +13,7 @@ From the repository root:
 just run_dbs -d
 ```
 
-Now go to `crates/comms_db_client`:
+Now go to `crates/comms/comms_db_client`:
 
 Your DATABASE_URL environment variable should already be set in the `.env` file
 

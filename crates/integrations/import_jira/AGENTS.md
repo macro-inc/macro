@@ -2,7 +2,7 @@
 
 ## What it is
 
-Read-only Jira Cloud workspace inventory. Used by the reviewed workspace importer in `crates/import`.
+Read-only Jira Cloud workspace inventory. Used by the reviewed workspace importer in `crates/integrations/import`.
 
 ## Start here
 

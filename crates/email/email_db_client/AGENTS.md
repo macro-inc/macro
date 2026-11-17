@@ -18,7 +18,7 @@ backfill — plus legacy storage/workflow helpers that remain to be separated.
 
 - Owns: email-table statements, relational predicates and transaction-scoped
   storage operations. The schema lives in `crates/macro_db_client/migrations/`.
-- Put new workflow policy in `crates/email` and provider protocol implementations
+- Put new workflow policy in `crates/email/email` and provider protocol implementations
   in `email_api_client_outbound`. Preserve SQL guards and lock order when extracting
   existing Rust decisions into domain services.
 - Purge batching/cursors/pacing, pending-label folding/restoration and scheduled
@@ -31,7 +31,7 @@ backfill — plus legacy storage/workflow helpers that remain to be separated.
 ## Boundaries
 
 - Depends on: `email_types`, `pagination_types`, `email_utils`.
-- Used by: `crates/email`, `crates/search_service`, `services/calendar_service`,
+- Used by: `crates/email/email`, `crates/search/search_service`, `services/calendar_service`,
   `services/authentication_service`, `services/search_processing_service`,
   `services/email_service`.
 

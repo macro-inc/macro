@@ -32,6 +32,14 @@
   `waivers.toml` and the atoms (`<kind> <key> where <conditions>`). `src/report/render.rs`: the
   job summary and the page.
 
+- `src/row/test.rs`: row serialization roundtrips; `testdata/roundtrip-source.txt`
+  and `testdata/roundtrip.tsv` retain independent historical synthetic payloads.
+- `src/repo.rs` uses `xtask_graph`'s locked Cargo workspace metadata to locate
+  library names and source targets, including grouped and nested crates.
+
+- `src/list/test.rs`: provider matching uses `testdata/provider-source.txt` as
+  a synthetic source label; it does not open that path in the repository.
+
 ## Recipes
 
 - Add a kind: variant in `src/row.rs` `Kind` → section in `src/sources.rs` and

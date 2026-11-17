@@ -21,7 +21,7 @@ agent tools (any model, any host) and cognition's `POST /web/search` and
 ## Scope
 
 - Owns: web search/fetch request policy, the vendor adapter, routes and tools.
-- Not here: pricing rows and quota counting → `crates/ai_usage`, `crates/ai_billing`.
+- Not here: pricing rows and quota counting → `crates/billing/ai_usage`, `crates/billing/ai_billing`.
 
 ## Recipes
 

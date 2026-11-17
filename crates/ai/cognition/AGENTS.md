@@ -20,7 +20,7 @@ HTTP endpoints directly; this crate does not register tools into a runtime.
 - Owns: bounded client requests, sanitized response mapping and tool contracts.
 - Not here: provider execution, model access and generation metering →
   `services/agent_harness_service`; decision admission and classification →
-  `crates/jev_classifier`.
+  `crates/ai/jev_classifier`.
 
 ## Boundaries
 

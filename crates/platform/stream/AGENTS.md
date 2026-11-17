@@ -28,7 +28,7 @@ consumer-group event log without a full Kafka dependency.
 ## Checks
 
 - `cargo test -p stream` for unit tests (no Redis required).
-- `just crates/stream/test_integration` — starts a local Redis container via
+- `just crates/platform/stream/test_integration` — starts a local Redis container via
   the `redis-test` feature, for the `#[ignore]`d integration tests.
 
 ## Related

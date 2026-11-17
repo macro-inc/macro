@@ -64,4 +64,4 @@ before changing ingestion or delivery behavior.
 
 ## Related
 
-- Docs: `crates/webhook/README.md` · Rules: `.agents/rules/rust/architecture.md`
+- Docs: `crates/integrations/webhook/README.md` · Rules: `.agents/rules/rust/architecture.md`

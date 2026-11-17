@@ -34,7 +34,7 @@ link flow, following the hexagonal architecture pattern.
   stack. A personal installation counts only while the account that installed
   it is the one linked.
 - Not here: the pull request model, merge rules, and PR listing/service →
-  `crates/github_pull_requests`, which this crate re-exports and calls into.
+  `crates/integrations/github_pull_requests`, which this crate re-exports and calls into.
 
 ## Boundaries
 

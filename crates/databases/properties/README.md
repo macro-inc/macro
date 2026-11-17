@@ -164,9 +164,9 @@ task-property adapter writes, and document-deletion cleanup.
 does not call `with_event_broker`. The following composition sites retain that
 no-op default and do not publish property events:
 
-- `crates/properties_service/src/api/context.rs` omits the broker generic from
+- `crates/databases/properties_service/src/api/context.rs` omits the broker generic from
   its concrete `PropertiesService` alias.
-- `crates/agent_tools/src/tool_context.rs` builds `ToolPropertiesService` over
+- `crates/ai/agent_tools/src/tool_context.rs` builds `ToolPropertiesService` over
   `MaybeToolEventBroker`. Hosts that call `build_properties_service_with_broker`
   publish; `build_properties_service` uses the no-op variant, so writes through
   hosts that build it that way (no Kafka configured) do not publish.

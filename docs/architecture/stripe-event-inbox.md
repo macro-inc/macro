@@ -1,7 +1,7 @@
 # Stripe event inbox
 
 How Macro receives and applies Stripe billing events. Code:
-`crates/stripe_inbox` (inbox, translator, worker, audit) and
+`crates/billing/stripe_inbox` (inbox, translator, worker, audit) and
 `services/authentication_service` (webhook, consumers).
 
 ## Flow
@@ -141,7 +141,7 @@ Webhook payloads arrive in the endpoint's version (`2019-12-03` on dev,
 `2023-10-16`. The translator reads all of them into the same facts (the
 period lives on the subscription in older versions and on each item in
 newer ones). A webhook payload in any other version dead-letters; adding one
-needs fixtures and tests (`crates/stripe_inbox/fixtures`).
+needs fixtures and tests (`crates/billing/stripe_inbox/fixtures`).
 
 ## Known limits
 

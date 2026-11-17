@@ -15,7 +15,7 @@ supported versus unsupported search filters. This is a development regression
 suite, not an untouched holdout; validate final rules on fresh phrases as well.
 Follow the [prompt evaluation guidance](../prompts/README.md) and
 do not change expectations to accommodate predictions. Run the command below,
-adding `--suite crates/universal_input/eval/generalization.json`; save a separate
+adding `--suite crates/ai/universal_input/eval/generalization.json`; save a separate
 before/after report because each suite has its own fixture hash. Intent-only
 expectations check routing, while the search and calendar groups also check fields.
 
@@ -30,7 +30,7 @@ Run against a local or test harness with an existing account's bearer token in
 `UNIVERSAL_INPUT_USER_ID` set in the environment:
 
 ```sh
-python3 crates/universal_input/eval/compare.py \
+python3 crates/ai/universal_input/eval/compare.py \
   --url https://localhost:8090/agent-harness \
   --ca-file infra/local/certs/ca.pem \
   --report /tmp/universal-input-before.json
@@ -65,7 +65,7 @@ Credentials are never written to the report.
 After changing prompts or providers, compare another run with the saved report:
 
 ```sh
-python3 crates/universal_input/eval/compare.py \
+python3 crates/ai/universal_input/eval/compare.py \
   --url https://localhost:8090/agent-harness \
   --ca-file infra/local/certs/ca.pem \
   --report /tmp/universal-input-after.json \
@@ -82,7 +82,7 @@ a changed case to a code change.
 Test the comparison logic without a backend or model credentials:
 
 ```sh
-python3 -m unittest discover -s crates/universal_input/eval -p 'test_*.py'
+python3 -m unittest discover -s crates/ai/universal_input/eval -p 'test_*.py'
 ```
 
 ## Thread due dates

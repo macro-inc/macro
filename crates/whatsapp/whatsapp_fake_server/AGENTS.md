@@ -3,7 +3,7 @@
 ## What it is
 
 Test support for WhatsApp linked devices: a fake WhatsApp server that the real
-whatsmeow port (`crates/whatsmeow`) connects to over a local websocket, and fake
+whatsmeow port (`crates/whatsapp/whatsmeow`) connects to over a local websocket, and fake
 phones (the other people) with real Signal sessions from `whatsmeow_signal`.
 Lets the session service and its tests run end to end without WhatsApp.
 
@@ -75,5 +75,5 @@ Lets the session service and its tests run end to end without WhatsApp.
 
 ## Related
 
-- `crates/whatsmeow/AGENTS.md`, `crates/whatsmeow_signal/AGENTS.md`,
-  `crates/whatsapp_e2e/AGENTS.md`
+- `crates/whatsapp/whatsmeow/AGENTS.md`, `crates/whatsapp/whatsmeow_signal/AGENTS.md`,
+  `crates/whatsapp/whatsapp_e2e/AGENTS.md`

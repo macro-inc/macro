@@ -23,7 +23,7 @@ lists visible PRs.
 - Owns: the PR domain model, merge-on-refresh semantics, PR listing/filtering,
   and the changeset/diff path.
 - Not here: GitHub App auth, webhook receipt, and account linking →
-  `crates/github`, which depends on this crate, not the reverse.
+  `crates/integrations/github`, which depends on this crate, not the reverse.
 
 ## Boundaries
 

@@ -24,8 +24,8 @@ DMs, and the shared message store other domains discuss things on.
 
 - Owns: channels, channel messages, threads, reactions, DMs, and message-level
   attachment/reference sharing.
-- Not here: channel labels → `crates/channel_labels`; calls/video →
-  `crates/call`; built-in agent triggers → `crates/channel_bots`.
+- Not here: channel labels → `crates/comms/channel_labels`; calls/video →
+  `crates/comms/call`; built-in agent triggers → `crates/comms/channel_bots`.
 
 ## Boundaries
 
@@ -54,7 +54,7 @@ DMs, and the shared message store other domains discuss things on.
 - The channel read tools return `senderName` beside `senderId`: the name the app shows (imported author, bot, call guest, or the person's profile name from `get_user_display_names`). One lookup per call; a failed lookup omits names instead of failing the read.
 - `EditChannelMessage` and `DeleteChannelMessage` act as the tool's bot only on
   a message that bot posted for the caller (`Message::posted_by_bot_for`), and
-  as the caller otherwise; see the receipt rule in `crates/messages/AGENTS.md`.
+  as the caller otherwise; see the receipt rule in `crates/comms/messages/AGENTS.md`.
 
 ## Checks
 

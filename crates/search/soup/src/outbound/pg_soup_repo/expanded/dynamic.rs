@@ -3148,7 +3148,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     let item_tables =
         expanded_dynamic_cursor_soup_hydrated(db, args.clone(), ItemSource::ItemTables).await?;
     // The migrations install no maintenance triggers: turn them on and rebuild the projection
-    // from what the fixtures wrote, so reads trust it; `crates/source_items` tests the triggers.
+    // from what the fixtures wrote, so reads trust it; `crates/search/source_items` tests the triggers.
     sqlx::query!("SELECT source_items_install_triggers()")
         .execute(db)
         .await?;

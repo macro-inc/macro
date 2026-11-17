@@ -22,10 +22,10 @@ service with Axum, agent-tool and Postgres adapters.
 - Owns: database/table/column/row/view/saved-query persistence, the typed ops
   batch API, sharing, provisioning, duplication, and the `database_entities`
   app-entity layer.
-- Not here: the SQL grammar agents and the console compile → `crates/database_sql_engine`
+- Not here: the SQL grammar agents and the console compile → `crates/databases/database_sql_engine`
   (pure parse/resolve/fold engine, also runs in wasm); the agent-facing SQL
   adapter that runs that engine over this crate's ops and Soup →
-  `crates/database_sql_runner`.
+  `crates/databases/database_sql_runner`.
 
 ## Boundaries
 
@@ -93,4 +93,4 @@ service with Axum, agent-tool and Postgres adapters.
 - Skill: `database-core` · Rules: `.agents/rules/rust/db.md`,
   `.agents/rules/rust/architecture.md`
 
-- Creating a database webhook (`POST /databases/{id}/webhooks`, `crates/database_webhooks`) refuses an agent's program or a bot (403): its URL is a lasting secret that writes rows as its creator.
+- Creating a database webhook (`POST /databases/{id}/webhooks`, `crates/databases/database_webhooks`) refuses an agent's program or a bot (403): its URL is a lasting secret that writes rows as its creator.

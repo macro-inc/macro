@@ -20,7 +20,7 @@ depending on `attachment` directly.
   "static file service resolves/serves it."
 - Not here: the static file service's HTTP client itself →
   `crates/clients/static_file_service_client`; attachment storage/lifecycle →
-  `crates/attachment`.
+  `crates/ai/attachment`.
 
 ## Boundaries
 

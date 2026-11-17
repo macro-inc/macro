@@ -14,8 +14,8 @@ client plumbing. For an AI or MCP tool, use the
 
 | Building | Copy |
 | --- | --- |
-| Read one entity by id, access-checked | `get_github_pull_request_handler` in `crates/github_pull_requests/src/inbound/axum_router.rs` |
-| A new router in a domain crate: scoped CRUD, path and body types, mounted in DSS | `crates/channel_labels/src/inbound/axum_router.rs` and its wiring in `services/document_storage_service/src/` |
+| Read one entity by id, access-checked | `get_github_pull_request_handler` in `crates/integrations/github_pull_requests/src/inbound/axum_router.rs` |
+| A new router in a domain crate: scoped CRUD, path and body types, mounted in DSS | `crates/comms/channel_labels/src/inbound/axum_router.rs` and its wiring in `services/document_storage_service/src/` |
 | A compatible change to an existing endpoint (optional query param, new response field) | `services/notification_service/src/api/unsubscribe/unsubscribe_item.rs` |
 | Web query module for it | `apps/web/src/lib/queries/channel-labels/` (`keys.ts` + query/mutation file) |
 
@@ -44,7 +44,7 @@ services (notification, auth) keep handlers in `services/<svc>/src/api/`; extend
 those in place, but new routers live in the crate.
 
 - **Authentication:** `MacroAuthorizationExtractor<Auth, Policy>` with the
-  narrowest policy in `crates/macro_authorization/src/inbound/axum/policy.rs`
+  narrowest policy in `crates/platform/macro_authorization/src/inbound/axum/policy.rs`
   (`UserOnly`, `UserOrInternal`, `InternalOnly`, `UserOrBot`, ...).
   Use `AccountHolderOrInternal` for a route that mints a credential outliving its
   request, changes who can sign in, or deletes the account: it refuses an account
@@ -107,7 +107,7 @@ copy `channel_labels`:
   derive `ToSchema`.
 - **Register the handler** in the service's `#[openapi(paths(...))]` list and its
   types in `components(schemas(...))`, in `services/<svc>/src/api/swagger.rs`
-  (properties: `crates/properties_service/src/api/swagger.rs`). An unregistered
+  (properties: `crates/databases/properties_service/src/api/swagger.rs`). An unregistered
   handler serves traffic but never reaches any client. A domain crate was once merged with
   its routes unwired and needed a second PR to mount and register them.
 - Schema names are global per spec. Give types domain-specific names (or

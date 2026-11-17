@@ -5,8 +5,8 @@
 Part of Contacts: the contact graph, meaning who each user knows, built from
 message and call activity and explicit relationships. Models, the ports the
 adapters implement, and `ContactsDomainService`. HTTP and the SQS worker are
-`crates/chat/contacts_inbound`; the Postgres, SQS and connection gateway
-adapters are `crates/chat/contacts_outbound`.
+`crates/comms/contacts_inbound`; the Postgres, SQS and connection gateway
+adapters are `crates/comms/contacts_outbound`.
 
 ## Start here
 
@@ -24,7 +24,7 @@ adapters are `crates/chat/contacts_outbound`.
 ## Scope
 
 - Owns: the contact graph and its use cases.
-- Not here: CRM companies/contacts (external organizations) → `crates/crm`;
+- Not here: CRM companies/contacts (external organizations) → `crates/databases/crm`;
   connection-level presence/relay → `crates/clients/connection_gateway_client`.
 
 ## Boundaries

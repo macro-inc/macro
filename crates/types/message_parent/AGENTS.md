@@ -9,7 +9,7 @@ depend on the `messages` domain.
 
 - Owns: parsing and canonical `entity_type`/`entity_id` strings for message
   parents, and their serde form (`{"type": ..., "id": ...}`).
-- Not here: message storage, threads, anchors → `crates/messages`.
+- Not here: message storage, threads, anchors → `crates/comms/messages`.
 
 ## Boundaries
 

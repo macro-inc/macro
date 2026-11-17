@@ -42,7 +42,7 @@ feedback.
 
 ### What already exists
 
-[`crates/initiative`](../../crates/projects/project/src/lib.rs) owns lifecycle and task membership through domain ports, a service, a PostgreSQL adapter, and HTTP handlers. DSS mounts these routes:
+[`crates/projects/project`](../../crates/projects/project/src/lib.rs) owns lifecycle and task membership through domain ports, a service, a PostgreSQL adapter, and HTTP handlers. DSS mounts these routes:
 
 | Operation | Existing route |
 | --- | --- |

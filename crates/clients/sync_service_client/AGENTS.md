@@ -18,17 +18,17 @@ Object): document CRUD, state, surfaces, and wakeup calls.
 ## Scope
 
 - Owns: the HTTP contract with the sync service.
-- Not here: the sync service's own domain/ports → `crates/sync_service`;
+- Not here: the sync service's own domain/ports → `crates/documents/document_sync`;
   the sync service implementation itself → `services/sync-service`.
 
 ## Boundaries
 
 - Depends on: `macro_sync_service_jwt`, `model`, `document_sync`
-  (`crates/sync_service`, aliased).
+  (`crates/documents/document_sync`, aliased).
 - Used by: `services/document_storage_service`, `services/agent_harness_service`,
   `services/document_upload_finalizer_handler`, `services/agent_harness_service`,
-  `crates/documents`, `crates/collab_surface`, `crates/agent_tools`,
-  `crates/memory`, `tooling/seed_cli`.
+  `crates/documents/documents`, `crates/documents/collab_surface`, `crates/ai/agent_tools`,
+  `crates/ai/memory`, `tooling/seed_cli`.
 
 ## Recipes
 

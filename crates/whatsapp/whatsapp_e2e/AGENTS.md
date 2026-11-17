@@ -74,5 +74,5 @@ database. Nothing talks to WhatsApp or AWS (the KMS is
 
 ## Related
 
-- `crates/whatsapp_fake_server/AGENTS.md`, `services/whatsapp_session_service/AGENTS.md`,
-  `crates/whatsapp_linked/AGENTS.md`
+- `crates/whatsapp/whatsapp_fake_server/AGENTS.md`, `services/whatsapp_session_service/AGENTS.md`,
+  `crates/whatsapp/whatsapp_linked/AGENTS.md`

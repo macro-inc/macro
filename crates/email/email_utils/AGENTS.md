@@ -21,13 +21,13 @@ sender/generic-address checks.
 
 - Owns: provider-neutral email text transforms with no I/O.
 - Not here: provider API calls → `email_api_client_outbound`; DB storage →
-  `email_db_client`; domain logic → `crates/email`.
+  `email_db_client`; domain logic → `crates/email/email`.
 
 ## Boundaries
 
 - Depends on: `ammonia`, `scraper` (no Macro crates).
-- Used by: `crates/email`, `crates/email_db_client`, `crates/email/email_api_client_outbound`,
-  `crates/graphql/graphql_email`, `crates/google_token`, `crates/email_types`,
+- Used by: `crates/email/email`, `crates/email/email_db_client`, `crates/email/email_api_client_outbound`,
+  `crates/graphql/graphql_email`, `crates/email/google_token`, `crates/types/email_types`,
   `services/calendar_service`, `services/email_service`.
 
 ## Recipes

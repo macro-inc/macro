@@ -455,7 +455,7 @@ where
 }
 
 /// People an entity knob may name: Macro users, as notifications find them.
-struct RoutinePeople(notification::outbound::user_existence_checker::DbUserExistenceChecker);
+struct RoutinePeople(notification_outbound::user_existence_checker::DbUserExistenceChecker);
 
 impl KnownPeople for RoutinePeople {
     async fn exists(&self, user: &MacroUserIdStr<'_>) -> Result<bool, rootcause::Report> {
@@ -585,7 +585,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let knob_entities: Arc<dyn KnobEntities> = Arc::new(KnobEntityAccess::new(
         access.as_ref().clone(),
         RoutinePeople(
-            notification::outbound::user_existence_checker::DbUserExistenceChecker::new(db.clone()),
+            notification_outbound::user_existence_checker::DbUserExistenceChecker::new(db.clone()),
         ),
         RoutineLiveItems {
             documents: documents::outbound::pg_document_repo::PgDocumentRepo::new(

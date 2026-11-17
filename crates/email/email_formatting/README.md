@@ -38,7 +38,7 @@ FusionAuth template changes require deploying the `fusionauth-instance` stack.
 
 ## Preview
 
-With Jinja2 installed, run `python3 crates/email_formatting/preview_digest.py`
+With Jinja2 installed, run `python3 crates/email/email_formatting/preview_digest.py`
 from the repository root to preview a digest using sample notifications and the
 public logo (requires network access). This
 convenience preview translates Askama expressions to Jinja2; Rust compilation

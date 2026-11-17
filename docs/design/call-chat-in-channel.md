@@ -206,7 +206,7 @@ no second row. Past calls keep their channel-targeted `CallEnded`.
 
 ### Notifications
 
-In `crates/channels/src/domain/side_effects.rs`, connected participants are left out of the
+In `crates/comms/channels/src/domain/side_effects.rs`, connected participants are left out of the
 recipients of all three effects: `Reply`, `UserMention` and document mention.
 `get_thread_notification_context` reads them from active `call_participants` rows, only when the
 thread's root is a `call_root`. A failed read notifies rather than loses the notification.
@@ -315,12 +315,12 @@ that reads `discussion` has reached people.
 
 ## Tests
 
-- `crates/call`: flag on, off and failing; winner-only root creation; the discussion type survives
+- `crates/comms/call`: flag on, off and failing; winner-only root creation; the discussion type survives
   archival; deleting a record keeps the thread.
-- `crates/messages`: root rejects edit, delete, thread delete and reactions for users, bots and agent
+- `crates/comms/messages`: root rejects edit, delete, thread delete and reactions for users, bots and agent
   tools; a client cannot set `kind`; first-reply retry creates the root once under races; call-parent
   posts are rejected on `channel_thread`; timeline entries for each status, with one query per page.
-- `crates/channels`: channel members connected to the call get all three effects like followers,
+- `crates/comms/channels`: channel members connected to the call get all three effects like followers,
   connected guests outside the channel get none, and normal thread rules apply to everyone else; the caller is not a follower for starting the call; a call root does not suppress
   first-message invites; normal channel mentions during a call still notify.
 - `crates/agents/agent_trigger`, `crates/agents/scheduled_action`: a root triggers nothing, and a reply triggers
@@ -336,5 +336,5 @@ that reads `discussion` has reached people.
 
 ## Docs
 
-Done in this change: `docs/agent-guide/calls.md`, `channels.md`, the `AGENTS.md` of `crates/call`,
-`crates/messages` and `services/document_storage_service`, and `docs/design/entity-messages.md`.
+Done in this change: `docs/agent-guide/calls.md`, `channels.md`, the `AGENTS.md` of `crates/comms/call`,
+`crates/comms/messages` and `services/document_storage_service`, and `docs/design/entity-messages.md`.

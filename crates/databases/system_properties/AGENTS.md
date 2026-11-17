@@ -19,14 +19,14 @@ for their fixed property catalogs.
 
 - Owns: the fixed catalog of system property definitions and the operations
   to attach their values to entities.
-- Not here: user-defined properties → `crates/properties`; CRM-specific
-  property usage → `crates/crm` (consumes this crate for stage definitions).
+- Not here: user-defined properties → `crates/databases/properties`; CRM-specific
+  property usage → `crates/databases/crm` (consumes this crate for stage definitions).
 
 ## Boundaries
 
 - Depends on: `macro_user_id`, `macro_uuid`, `properties_types`, `sqlx`.
-- Used by: `crates/crm`, `crates/initiative`, `crates/projects`,
-  `crates/messages`, `crates/soup`, `crates/search/soup_realtime_inbound`, `crates/agent_tools`,
+- Used by: `crates/databases/crm`, `crates/projects/project`, `crates/projects/folder`,
+  `crates/comms/messages`, `crates/search/soup`, `crates/search/soup_realtime_inbound`, `crates/ai/agent_tools`,
   `crates/agents/agent_trigger`, `crates/item_filter_index`, `crates/projects/task_dedup`,
   `services/agent_harness_service`, `services/agent_trigger_service`,
   `services/email_service`, `crates/agents/scheduled_action`.

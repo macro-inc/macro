@@ -24,6 +24,7 @@ strum = { workspace = true }
 syn = { workspace = true, features = ["visit"] }
 toml = { workspace = true }
 xtask_paths = { workspace = true }
+xtask_graph = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

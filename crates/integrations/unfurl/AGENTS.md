@@ -23,7 +23,7 @@ favicon) with SSRF protections.
 ## Boundaries
 
 - Depends on: `scraper`, `reqwest` (feature `outbound`).
-- Used by: `services/unfurl_service`, `services/email_service`, `crates/crm`.
+- Used by: `services/unfurl_service`, `services/email_service`, `crates/databases/crm`.
 
 ## Checks
 

@@ -4,7 +4,7 @@
 that soup reads newest first. Database triggers keep it equal to what
 `entity_access`, the item tables and `document_sub_type` say, for every writer:
 application code, foreign-key cascades, scripts, and fixtures loaded in replica
-mode. The migration's header comment describes the locking; `crates/source_items`
+mode. The migration's header comment describes the locking; `crates/search/source_items`
 holds the backfill, the audit and the tests.
 
 ## Release order
@@ -121,6 +121,6 @@ sources), not bounds on the rows a page reads.
 Soup's query tests run every case on both paths and require identical pages,
 over a projection backfilled from each fixture and audited; the feed tests
 install the triggers before their fixtures, so the projection follows their
-writes. `crates/source_items`
+writes. `crates/search/source_items`
 tests every kind of write, forced interleavings of each race, and concurrent
 random writes with an audit of every committed snapshot.

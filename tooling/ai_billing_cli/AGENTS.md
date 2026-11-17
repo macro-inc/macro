@@ -4,7 +4,7 @@
 
 Operator CLI for AI billing (`ai-billing`). `grant-credits` adds prepaid AI
 credit to the account that pays for a user, e.g. to refund usage. The use case
-lives in `crates/ai_billing` (`domain/credit_grant.rs`); this binary only
+lives in `crates/billing/ai_billing` (`domain/credit_grant.rs`); this binary only
 parses arguments and prints.
 
 ## Recipes

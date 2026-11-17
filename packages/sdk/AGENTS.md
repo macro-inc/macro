@@ -139,7 +139,7 @@ enforced by the ordinary backend APIs.
   `CommentOnText` tool's domain function); a 422 becomes
   `CommentQuoteNotPlacedError` carrying the reason.
 - `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
-  `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
+  `POST /web/search`, `/web/fetch`, Tavily via `crates/ai/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /
   `WebFetch` tools in their favour.
 - `src/entities/bots/`: `macro.bots` manages bots (`Bot`: profile, channel
@@ -229,7 +229,7 @@ the existing gateway prefixes.
   not …") that agents route on, and may carry an `@agent` block: how that area
   of Macro works, for agents only. Both are stripped from the public
   reference, and code-mode generation fails without the routing sentence. Put
-  an area's rules there, never in `crates/agents/prompt`; cross-namespace search
+  an area's rules there, never in `crates/agents/agent_prompts`; cross-namespace search
   guidance lives on `SearchNamespace` in `search/namespace.ts`.
 - Code mode puts each relevant entity's index in the agent turn, at most 48
   KiB: a method's signature and the first sentence of its doc, cut at 160

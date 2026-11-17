@@ -67,7 +67,7 @@ remove it in a later migration after rollback compatibility is retired.
   gate it behind a Cargo feature in `Cargo.toml` only if it's optional (see
   `account_merge_request`, `team`).
 
-- Composed-memory tables and refresh leases are owned by `crates/memory`; migrations leave legacy memory rows intact.
+- Composed-memory tables and refresh leases are owned by `crates/ai/memory`; migrations leave legacy memory rows intact.
 
 ## Checks
 
@@ -123,7 +123,7 @@ data checks and explicit vault purge. It does not depend on a successful item.
   signals by `(requested_at, team_id, user_id)`; it adds no email-table index.
 
 - `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
-- `contacts_connections` keeps its raw forward/reverse paging indexes; upstream migration `20261101055556` owns `idx_contacts_connections_user2_user1`, so do not add a duplicate branch migration. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/contacts`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
+- `contacts_connections` keeps its raw forward/reverse paging indexes; upstream migration `20261101055556` owns `idx_contacts_connections_user2_user1`, so do not add a duplicate branch migration. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/comms/contacts`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
 
 - `item_access::get_accessible_items::get_user_accessible_items` (cached 10 s)
   and `call_record::get::get_accessible_call_ids` (uncached) share one run of

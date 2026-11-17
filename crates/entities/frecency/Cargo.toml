@@ -17,4 +17,3 @@ workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 frecency_core = { workspace = true }
 frecency_inbound = { workspace = true, optional = true }
 frecency_outbound = { workspace = true, optional = true }
-

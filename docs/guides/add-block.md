@@ -156,19 +156,19 @@ in `block.ts`.
 
 ## 4. File type (file-backed blocks)
 
-Skip this section if the type already exists in `crates/model_file_type` and
+Skip this section if the type already exists in `crates/types/model_file_type` and
 you are only giving it an editor (as `pptx` and `docx` did).
 
 - **Backend enum.** Add a `generate_file_types!` row to
-  `crates/model_file_type/src/lib.rs`: variant, extension, MIME, app category.
-  Check `ContentTypeExt` in `crates/model/src/document/file_type.rs`: Photoshop
+  `crates/types/model_file_type/src/lib.rs`: variant, extension, MIME, app category.
+  Check `ContentTypeExt` in `crates/types/shared_types/src/document/file_type.rs`: Photoshop
   files carry an `image/` MIME and had to be excluded from `is_image`, or image
   pipelines would try to decode them.
 - **Generated clients.** The `FileType` enum reaches the storage, cognition, and
   search OpenAPI specs. Regenerate the web clients (`bun run gen-api` in
   `apps/web`) and the SDK (`just update-generated` in `packages/sdk`); CI's
   Generated Code Check fails on stale output. The `item_filters` snapshot
-  `crates/item_filters/src/ast/tests/other.json` also changes with each new
+  `crates/search/item_filters/src/ast/tests/other.json` also changes with each new
   type in a category it expands.
 - **Frontend mirror.** `apps/web/src/lib/service-clients/service-storage/fileTypeMap.ts`
   is a copy of the Rust enum that no codegen step refreshes. Generate the rows
@@ -192,12 +192,12 @@ you are only giving it an editor (as `pptx` and `docx` did).
   `fileTypeToBlockName` and `verifyBlockName` in `allBlocks.ts` as `write`
   does.
 - **Search.** Add the type to `is_searchable_file_type` in
-  `crates/search_types/src/unified.rs`, a parser in
+  `crates/search/search_types/src/unified.rs`, a parser in
   `services/search_processing_service/src/parsers/<type>.rs` (registered in
   `parsers/mod.rs`), and the dispatch in
   `services/search_processing_service/src/process/document/raw_document.rs`.
 - **AI tools.** To let agents read or edit the file, add a domain module and
-  toolset under `crates/documents` (`domain/photoshop.rs`,
+  toolset under `crates/documents/documents` (`domain/photoshop.rs`,
   `inbound/toolset/photoshop.rs`), route it in
   `inbound/toolset/read_content.rs`, and give attachments context in
   `inbound/attachment/service.rs`. Follow the
@@ -241,7 +241,7 @@ when they apply. Then, on the web:
   the Soup row actions in `apps/web/src/features/next-soup/actions/`. An entity
   outside Soup is invisible in Drive, search, and Cmd+K until each is wired;
   databases shipped missing from Drive and needed a follow-up for all of them.
-- Agent mentions: add the `blockName` to `crates/agents/prompt/src/mentions.rs`, or
+- Agent mentions: add the `blockName` to `crates/agents/agent_prompts/src/mentions.rs`, or
   agents link the entity as a plain URL.
 
 ## 6. Wasm engine (blocks with a Rust engine)

@@ -2,7 +2,7 @@
 
 ## What it is
 
-A pinned copy of Macro Connect's public Rust client, `crates/connect_client`
+A pinned copy of Macro Connect's public Rust client, [upstream source](https://github.com/macro-inc/macro-connect/tree/0814a613fe2d62c2aea6ce34863f7d14830c12df/crates/connect_client)
 in the private repo macro-inc/macro-connect, at commit `0814a61`. Macro reaches
 Connect only through this crate.
 

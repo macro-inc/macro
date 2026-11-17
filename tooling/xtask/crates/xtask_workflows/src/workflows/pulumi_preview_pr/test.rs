@@ -61,17 +61,10 @@ fn detect(changed: &[&str], config: &serde_json::Value) -> serde_json::Value {
 
 #[test]
 fn previews_only_stacks_whose_infra_changed() {
-    let config = serde_json::json!({"services": {
-        "email-service": {
-            "source_paths": ["services/email_service/**", "crates/email/**"],
-            "stack_path": "infra/stacks/email-service/**",
-            "deploy_binaries": ["email_service"]
-        },
-        "kafka-cluster": {
-            "source_paths": ["crates/macro_event_topics/**"],
-            "stack_path": "infra/stacks/kafka-cluster/**"
-        }
-    }});
+    let config: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../testdata/pulumi-preview-services.json"
+    ))
+    .unwrap();
     let all = serde_json::json!(["email-service", "kafka-cluster"]);
     let none = serde_json::json!([]);
     let cases: &[(&[&str], serde_json::Value)] = &[
@@ -79,8 +72,19 @@ fn previews_only_stacks_whose_infra_changed() {
         (&["Cargo.lock"], none.clone()),
         (&["Cargo.toml", ".sqlx/query-abc.json"], none.clone()),
         (&["services/email_service/src/main.rs"], none.clone()),
-        (&["crates/email/src/lib.rs", "flake.lock"], none.clone()),
-        (&["crates/macro_event_topics/src/lib.rs"], none.clone()),
+        (
+            &[
+                include_str!("../../../testdata/pulumi-preview-email-source.txt"),
+                "flake.lock",
+            ],
+            none.clone(),
+        ),
+        (
+            &[include_str!(
+                "../../../testdata/pulumi-preview-topic-source.txt"
+            )],
+            none.clone(),
+        ),
         (&[".github/workspace-dep-closures.json"], none.clone()),
         (
             &["infra/stacks/email-service/index.ts"],
