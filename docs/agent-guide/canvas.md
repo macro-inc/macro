@@ -27,7 +27,8 @@ swatches, so a colour can be tried with the shape still in view; the swatch
 beside the hex field still opens the full picker. **More**, or a
 long press on the canvas with Select or Hand, opens the sheet of clipboard,
 group, arrange, select-all and delete actions; the long press selects what is
-under the finger first. Pressed on an item that is part of a group, the sheet
+under the finger first, and lifting the finger leaves the sheet open without
+pressing the row under it. Pressed on an item that is part of a group, the sheet
 also offers **Select inside group**, which selects that item alone (what
 Cmd/Ctrl-click does with a mouse). **Attach** opens a sheet with Media, Upload media and
 Reference (and Artifact where artifacts are enabled): Media and Reference open a
