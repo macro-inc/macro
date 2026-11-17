@@ -304,22 +304,24 @@ With `enable-suggestions` on (desktop only), the idle pane shows, below the comp
   For you** opens the page.
 
 For you lists the suggestions under **To do**, **Running** (failed runs
-included) and **Done today**, with how many are done in its header. Pressing a
-row's text opens it in place: its source, a drafted reply's text, and
-**Review** (a routine) or **Open in chat** (a background run). Each row has
-one action for its kind: **Open in chat** opens the composer with the prompt,
-unsent; **Run in background** starts the run at once (the row says what it
-will post or send first), then moves to Running and, when done, to Done today
-with **Open result**; **Open** or **Open draft** opens the item or the drafted
-reply (the thread, with the draft in its reply composer and a footer under it
-that reads **Drafted by Macro**, links what else the suggestion cites, and
-offers **Rewrite**, which opens the agent composer with the thread mentioned
-and the request typed, unsent); **Turn on** saves a routine suggestion. The
-`x` (shown on hover or focus) dismisses at once and leaves an Undo row for the
+included) and **Done today**, with how many are done in its header. A reply,
+a review or a composer prompt leads with a circle that marks it done without
+opening anything; pointing at its row shows **Open**, **Open draft** or
+**Open in chat** and the `x`. A background run shows what it sends and
+**Run**, which starts it at once; it moves to Running and, when done, to Done
+today with **Open result**. A routine suggestion shows **Turn on**. Pressing a
+row's text opens it in place: its source, a drafted reply's text, and its
+actions, **Review** (a routine) and **Open in chat** (a background run) among
+them. **Open draft** opens the thread with the draft in its reply composer and
+a footer under it that reads **Drafted by Macro**, links what else the
+suggestion cites, and offers **Rewrite**, which opens the agent composer with
+the thread mentioned and the request typed, unsent. Done today shows the
+latest finished suggestion; the earlier ones are behind **Logbook**. The `x`
+(shown on hover or focus) dismisses at once and leaves an Undo row for the
 visit; Undo restores the suggestion, which the server allows for a few
 minutes. Dismissing a running suggestion stops its run, and restoring it
 brings it back open, not running.
-**Refresh suggestions** in the header asks for a fresh run, at most once an
+**Refresh suggestions** in the top bar asks for a fresh run, at most once an
 hour; while one runs it reads "Looking for suggestions", and during the
 cooldown "Available at" a time.
 

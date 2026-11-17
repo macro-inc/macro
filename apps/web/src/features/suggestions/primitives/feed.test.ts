@@ -334,6 +334,23 @@ describe('suggestions feed', () => {
     });
   });
 
+  it('marks a reply done by taking it up, without opening anything', async () => {
+    await withFeed([replySuggestion], async (feed, { source, actions }) => {
+      await feed.markDone(replySuggestion);
+
+      expect(source.accept).toHaveBeenCalledWith(replySuggestion);
+      expect(actions.openItem).not.toHaveBeenCalled();
+    });
+  });
+
+  it('never marks a background prompt done, since taking it up starts its run', async () => {
+    await withFeed([backgroundSuggestion], async (feed, { source }) => {
+      await feed.markDone(backgroundSuggestion);
+
+      expect(source.accept).not.toHaveBeenCalled();
+    });
+  });
+
   it('sends a dismissal at once and keeps the suggestion as a row to undo', async () => {
     await withFeed(
       [composerSuggestion, replySuggestion],

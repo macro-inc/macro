@@ -29,7 +29,7 @@ for (const theme of ['dark', 'light']) {
     ).toHaveText('Posts the weekly status summary in #ops');
     await expect(
       card(page, 'suggestion-quiet').locator('[data-suggestion-sends]')
-    ).toHaveText('Runs in the background. It posts and sends nothing.');
+    ).toHaveText('Sends nothing');
     // A reply suggestion says how long the other side has waited, not when it arrived.
     await expect(
       card(page, 'suggestion-reply').locator('[data-suggestion-time]')
@@ -56,16 +56,16 @@ test('Run on a composer suggestion opens the composer with its prompt', async ({
   await expect(requests(page)).toContainText('accept suggestion-composer');
 });
 
-test('Run in background starts the run, shows it running, then its result', async ({
+test('Run starts the run, shows it running, then its result', async ({
   page,
 }) => {
   await page.goto('/');
   const suggestion = card(page, 'suggestion-background');
-  await suggestion.getByRole('button', { name: 'Run in background' }).click();
+  await suggestion.getByRole('button', { name: 'Run', exact: true }).click();
 
   await expect(suggestion).toHaveAttribute('data-suggestion-status', 'running');
   await expect(
-    suggestion.getByRole('button', { name: 'Run in background' })
+    suggestion.getByRole('button', { name: 'Run', exact: true })
   ).toHaveCount(0);
   await expect(
     requests(page).getByText('accept suggestion-background')
@@ -221,6 +221,36 @@ test('opening a drafted reply’s row shows the thread and the draft in place', 
   await expect(reply.locator('[data-suggestion-draft]')).toHaveCount(0);
 });
 
+test('the circle marks a suggestion done without opening anything', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page
+    .getByRole('button', { name: 'Mark “Reply about the invoice” done' })
+    .click();
+
+  await expect(card(page, 'suggestion-reply')).toHaveAttribute(
+    'data-suggestion-status',
+    'done'
+  );
+  await expect(requests(page).getByRole('listitem')).toHaveText([
+    'accept suggestion-reply',
+  ]);
+});
+
+test('earlier finished suggestions fold into the Logbook', async ({ page }) => {
+  await page.goto('/');
+  await page
+    .getByRole('button', { name: 'Mark “Reply about the invoice” done' })
+    .click();
+  const logbook = page.locator('[data-suggestions-logbook]');
+  await expect(logbook).toContainText('1 earlier today');
+  await expect(card(page, 'suggestion-done')).toHaveCount(0);
+
+  await logbook.click();
+  await expect(card(page, 'suggestion-done')).toBeVisible();
+});
+
 test('with nothing waiting or running, the page says so above what was done', async ({
   page,
 }) => {
@@ -263,7 +293,7 @@ test('Run on an suggestion that changed shows the new text and starts nothing un
 }) => {
   await page.goto('/?scenario=changed');
   const suggestion = card(page, 'suggestion-background');
-  await suggestion.getByRole('button', { name: 'Run in background' }).click();
+  await suggestion.getByRole('button', { name: 'Run', exact: true }).click();
 
   await expect(suggestion.locator('[data-suggestion-changed]')).toBeVisible();
   await expect(suggestion).toContainText(
@@ -271,7 +301,7 @@ test('Run on an suggestion that changed shows the new text and starts nothing un
   );
   await expect(suggestion).toHaveAttribute('data-suggestion-status', 'open');
 
-  await suggestion.getByRole('button', { name: 'Run in background' }).click();
+  await suggestion.getByRole('button', { name: 'Run', exact: true }).click();
   await expect(suggestion).toHaveAttribute('data-suggestion-status', 'running');
   await expect(suggestion.locator('[data-suggestion-changed]')).toHaveCount(0);
 });

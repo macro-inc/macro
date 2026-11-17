@@ -87,26 +87,36 @@ only, behind `enable-suggestions`.
 - The page is one list in sections by status, each in the server's order:
   To do (`open`), Running (`running` and `failed`), Done today (`done`),
   then Dismissed for the visit. The header and the section headings show the
-  server's counts (`sectionCounts`); with nothing waiting or running, a card
-  says so above what was done. Rows are the app's `Item` from `@ui`
-  (`Item.Icon`, `Item.Title`, `Item.Description`, `Item.Metadata`); an opened
-  row is `variant="filled" depth={3}` and its draft a nested
-  `Card variant="filled" offset={1}`. Don't restyle these with local surface,
-  border or type classes.
-- A row shows only what the person needs to act: its kind's glyph (or its
-  run's state), the title, one line of text, and a quiet fact over its one
-  action. A background run also shows what it sends, not its prompt (Open in
-  chat shows that). Pressing a row's text opens it in place, one at a time
-  (the one opened from Home to begin with): its source link, a drafted
-  reply's draft, and its other actions (Review, Open in chat). Every finished
-  suggestion is one line. The one part that reads the app's items
-  (`SuggestionItemParts`: the source link's icon and name) is supplied by
-  `suggestion-items.tsx`.
-- Nothing on a row is loud: its action is the app's `link` button, an opened
-  row's other actions are `secondary` (no `primary`), line icons take the
-  muted ink, and dismiss shows on hover or keyboard focus. Colour is left to
-  the glyph (each kind has its own, from the routine cards' tints), a failed
-  run and the values AI picked.
+  server's counts (`sectionCounts`). While something waits or runs, Done
+  today shows the latest finished one and folds the earlier ones into the
+  Logbook row; with nothing waiting or running, a card says so and every
+  finished one is listed. Refresh sits in the bar above the page
+  (`ForYouRefresh`).
+- Rows are the app's `Item` from `@ui` with `text-base` titles; an opened row
+  is `variant="filled" depth={3}` and its draft a nested
+  `Card variant="filled" offset={1}`. Don't give them local surfaces or
+  borders.
+- A row leads with what pressing it does: a circle where taking the
+  suggestion up is all there is to do (a reply, a review, a composer
+  prompt), a play mark for a background run, the repeat mark for a routine,
+  or its run's state. The circle marks it done without opening anything
+  (`feed.markDone`); the server counts that as taken up, exactly like Open,
+  and it is never offered where taking up starts a run or saves a routine.
+- After the title and one line of text, the right side holds a quiet fact:
+  the kind's glyph and how long it has waited, with Draft ready under it. A
+  suggestion that opens something swaps these for Open and dismiss when
+  pointed at or focused. One that runs something keeps its action in view
+  under the fact, since pressing it is the approval; what it sends is a line
+  of its own, or "Sends nothing" beside Run.
+- Pressing a row's text opens it in place, one at a time (the one opened
+  from Home to begin with): its source link, a drafted reply's draft, and
+  its actions (Review and Open in chat among them). A background run's
+  prompt is not shown; Open in chat shows that. The one part that reads the
+  app's items (`SuggestionItemParts`: the source link's icon and name) is
+  supplied by `suggestion-items.tsx`.
+- Nothing on a row is loud: actions are `secondary`, `ghost` or `link`
+  buttons (no `primary`), line icons take the muted ink, and colour is left
+  to the kind's glyph, a failed run, Draft ready and the values AI picked.
 - The API has no due times; a reply's "waiting 2 days" is the feed's
   `waitingSince`. Without it a card shows when the suggestion arrived.
 - Rows are kept by suggestion id (`Key`), so a feed read updates a row in

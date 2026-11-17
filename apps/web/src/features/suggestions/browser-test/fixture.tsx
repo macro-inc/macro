@@ -26,7 +26,7 @@ import {
   routineSuggestion,
   runningSuggestion,
 } from '../tests/fixtures';
-import { ForYouView } from '../views/for-you-view';
+import { ForYouRefresh, ForYouView } from '../views/for-you-view';
 import { HomePrioritiesView } from '../views/home-priorities-view';
 
 const PARAMS = new URLSearchParams(location.search);
@@ -240,11 +240,13 @@ function Fixture() {
   return (
     <main class="flex h-dvh bg-page p-1.5 font-sans text-ink">
       <div class="flex min-w-0 flex-1 flex-col rounded-xl border border-edge-muted bg-panel">
+        <header class="flex h-12 shrink-0 items-center justify-end px-3">
+          <ForYouRefresh refresh={refresh} />
+        </header>
         <ForYouView
           feed={feed}
           actions={actions}
           parts={PARTS}
-          refresh={refresh}
           focusedId={PARAMS.get('suggestion') ?? undefined}
           onRetry={source.retry}
         />

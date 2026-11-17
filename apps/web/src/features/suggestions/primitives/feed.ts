@@ -154,6 +154,23 @@ export function createSuggestionsFeed(
     view,
     accept,
     /**
+     * Take a suggestion up without opening anything: the person has dealt
+     * with it. Only for a suggestion that taking up finishes: a background
+     * prompt would start its run, and a routine suggestion be saved.
+     */
+    markDone: (suggestion: Suggestion) =>
+      act(suggestion, 'done', async () => {
+        const finishes =
+          suggestion.kind === 'entity' ||
+          (suggestion.kind === 'prompt' && suggestion.runMode === 'composer');
+        if (!finishes) return;
+
+        const answer = await source.accept(suggestion);
+        if (answer === 'changed') {
+          setChangedIds((ids) => [...ids, suggestion.id]);
+        }
+      }),
+    /**
      * Open what a finished suggestion left, a running one's session, else
      * what taking it up opened.
      */
