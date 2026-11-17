@@ -75,6 +75,10 @@ The app has no Trash view, so the document simply leaves **Email
 attachments**. Verify by deleting a test message whose attachment was opened,
 then checking that the document is in neither **Email attachments** nor
 **My Files**, and that its `"deletedAt"` is set.
+Drive search leaves email attachments out of its results in **My Files**,
+**Shared with me** and **Recent**, and searching **Email attachments** finds
+only them; verify by searching an opened attachment's name in **My Files**
+and in **Email attachments**.
 
 On touch devices (phones and tablets), the Drive header is a scrollable pill
 strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
