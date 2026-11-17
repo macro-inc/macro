@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -75,17 +74,11 @@ function main([command, ...args]) {
     if (!ref) throw new Error('Missing build ref');
     const config = JSON.parse(readFileSync(CONFIG, 'utf8'));
     const release = ref.startsWith('refs/tags/') || /^v\d/.test(ref);
-    const commitSeconds = Number(execFileSync('git', ['log', '-1', '--format=%ct'], { encoding: 'utf8' }).trim());
-    if (!Number.isSafeInteger(commitSeconds) || commitSeconds <= 0) throw new Error('Missing source commit timestamp');
     if (release) {
       Object.assign(config, releaseIdentity(ref));
       if (!config.publicKey.trim()) throw new Error('The desktop updater public key must be configured before release');
     }
     config.enabled = release;
-    config.bundleBuild = commitSeconds * 1000;
-    // Rewriting this tracked file dirties the tree, so the Nix flake has no
-    // shortRev: record the commit here for the embedded bundle manifest.
-    config.gitSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
     writeFileSync(CONFIG, `${JSON.stringify(config, null, 2)}\n`);
   } else if (command === 'manifest') {
     const [directory, tag, repository] = args;

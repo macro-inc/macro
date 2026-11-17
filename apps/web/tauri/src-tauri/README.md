@@ -618,15 +618,14 @@ branch, and `--no-default-features` builds do not auto-install native updates.
 `../desktop-release.json` is the public release configuration; its checked-in
 defaults disable updates for local builds. `bun apps/web/scripts/desktop-release.mjs prepare <ref>`
 (run from the repository root) updates this tracked file in CI
-before Nix evaluates either package. Both packages receive the same native version,
-OTA compatibility build number, and source commit timestamp for the embedded
-frontend. That timestamp is earlier than the OTA bundle the web deploy builds from
-the same commit (numbered by build time), so the embedded bundle manifest also
-records the commit (`prepare` writes `gitSha` into `desktop-release.json`, since
-the file it rewrites leaves the Nix flake without a rev; Nix passes it as
-`GIT_SHA`), and desktop update checks send it as
-`current_git_sha` while the embedded bundle is active: the server offers no
-update when the deployed bundle comes from that commit. Existing `vYEAR.MONTH.DAY.REVISION` tags map to
+before Nix evaluates either package. Both packages receive the same native version
+and OTA compatibility build number. The embedded frontend is stamped by
+`bundle-stamp` (`tooling/bundle_stamp`) from the flake's source commit
+(`self.rev`/`dirtyRev` and `self.lastModified`), so it carries the same
+`bundleBuild` (commit time in milliseconds) as the OTA bundle the web deploy
+builds from that commit, and the server offers no update for it. Desktop update
+checks still send the embedded commit as `current_git_sha`, for servers that
+predate commit-derived numbering. Existing `vYEAR.MONTH.DAY.REVISION` tags map to
 `YEAR.MMDD.REVISION` SemVer, e.g. `v2026.10.6.1` → `2026.1006.1`. Three-part stable
 SemVer tags also work. Each component must be at most 9999. Do not reuse a version
 or rebuild an already published tag; publish a higher version for fixes/reverts.

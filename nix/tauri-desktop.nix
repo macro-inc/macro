@@ -29,10 +29,11 @@
         };
       };
       gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
-      # The embedded bundle's commit, so the updater can tell the server it
-      # already runs the bundle deployed from it. `desktop-release.mjs prepare`
-      # records it, because the file it rewrites leaves the flake without a rev.
-      bundleGitSha = desktopRelease.gitSha or "";
+      # The embedded bundle's identity comes from the source commit (see
+      # crates/bundle_identity). Flake metadata names HEAD even on the dirty
+      # tree `desktop-release.mjs prepare` leaves, and in shallow clones.
+      bundleCommit = lib.removeSuffix "-dirty" (inputs.self.rev or inputs.self.dirtyRev or "");
+      bundleCommitTime = inputs.self.lastModified or 0;
 
       # Vite inlines `import.meta.env.VITE_*` at build time, so the desktop
       # bundle only reaches PostHog — and therefore only resolves feature
@@ -306,6 +307,12 @@
         package = "coding_agent_worker";
       };
 
+      # The only bundle-manifest producer (tooling/bundle_stamp).
+      bundleStamp = workspaceBinary {
+        pname = "bundle-stamp";
+        package = "bundle_stamp";
+      };
+
       # The agent sign-in daemon baked into the Macro computer image
       # (nix/macro-box).
       harnessdBinary = workspaceBinary {
@@ -329,6 +336,7 @@
         nativeBuildInputs = [
           pkgs.bun
           pkgs.git
+          bundleStamp
         ];
 
         dontConfigure = true;
@@ -365,7 +373,9 @@
             cd apps/web
             MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
             printf '${appVersion}+${gitRev}\n' > dist/semver.txt
-            GIT_SHA='${bundleGitSha}' BUNDLE_BUILD_NUMBER=${toString desktopRelease.bundleBuild} MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
+            bundle-stamp stamp --dist dist --package-json package.json \
+              --commit '${bundleCommit}' --commit-time ${toString bundleCommitTime} \
+              --no-built-at --min-native-build 0
           )
 
           # A supplied key that never reaches the bundle means PostHog — and
