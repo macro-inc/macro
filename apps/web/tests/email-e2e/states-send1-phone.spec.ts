@@ -12,6 +12,7 @@ import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { notice } from './harness/send';
 import { hold, scheduleRequest } from './harness/states-send1';
+import { backfilled } from './harness/states-send2';
 import { openPhoneComposer, phone, phoneBody } from './harness/ways-compose1';
 import {
   clock,
@@ -49,7 +50,14 @@ const TIME = String.raw`[A-Z][a-z]{2} \d+, \d{4}\s+8:00 AM`;
 
 test.describe("the phone composer's send time, Gmail inbox", () => {
   test.use({ ...phone, provider: 'GMAIL' });
-  test.beforeEach(({ page }) => loadAppSteadily(page));
+  // A phone shows one notice at a time: "Inbox synced", raised when the
+  // inbox's first backfill is announced, would take the place of a send's
+  // notice within half a second. A page opened after the backfill never
+  // hears of it.
+  test.beforeEach(async ({ page, mailbox }) => {
+    await backfilled(mailbox);
+    await loadAppSteadily(page);
+  });
 
   // When this fails, the phone's composer hides a chosen time: its header
   // no longer says when the message will go, its picker no longer offers to
