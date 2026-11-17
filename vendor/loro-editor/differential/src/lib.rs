@@ -227,8 +227,10 @@ pub struct Observation {
     pub undo_log: Vec<String>,
     /// Exports, keyed by mode description.
     pub exports: Vec<(String, Result<Vec<u8>, String>)>,
-    /// Shallow exports: name, cached-prefix eligibility, decoded fingerprint.
+    /// Snapshot-type exports: name, cached-prefix eligibility, decoded fingerprint.
     pub shallow: Vec<(String, bool, String)>,
+    /// Bytes a shallow reload adopted on this peer during the step, if any.
+    pub adopted: Option<Vec<u8>>,
     /// Whether the patched side took the suppressed path (patched side only).
     pub suppressed: bool,
 }
@@ -270,6 +272,9 @@ pub struct Stats {
     /// Eligible shallow exports whose bytes differed while decoding identically
     /// (text fragmentation in the cached root; see tests/regressions.rs).
     pub cached_prefix_byte_diffs: usize,
+    /// Snapshot-type exports whose bytes differed, decoding identically, after
+    /// the case already carried an accepted fragmentation difference.
+    pub inherited_byte_diffs: usize,
     /// Shallow exports that met every cached-prefix eligibility condition.
     pub cached_prefix_eligible: usize,
     /// Successful undo calls.
@@ -301,6 +306,7 @@ impl Stats {
         self.projected_checkpoints += other.projected_checkpoints;
         self.shallow_exports += other.shallow_exports;
         self.cached_prefix_byte_diffs += other.cached_prefix_byte_diffs;
+        self.inherited_byte_diffs += other.inherited_byte_diffs;
         self.cached_prefix_eligible += other.cached_prefix_eligible;
         self.undos += other.undos;
         self.redos += other.redos;
@@ -462,6 +468,8 @@ pub fn generate(seed: u64, len: usize, bulk: bool) -> Case {
 pub fn run(config: &Config, ops: &[Op], stats: &mut Stats) -> Option<Divergence> {
     let mut patched = side::patched::World::new(config);
     let mut upstream = side::upstream::World::new(config);
+    // Set once an accepted cached-prefix byte difference enters the case.
+    let mut fragmented = false;
     for (step, op) in ops.iter().enumerate() {
         let p = patched.step(op);
         let u = upstream.step(op);
@@ -489,7 +497,7 @@ pub fn run(config: &Config, ops: &[Op], stats: &mut Stats) -> Option<Divergence>
             }
         };
         for (p, u) in p.iter().zip(u.iter()) {
-            if let Some(d) = compare(step, p, u, stats) {
+            if let Some(d) = compare(step, p, u, stats, &mut fragmented) {
                 return Some(d);
             }
             if p.suppressed {
@@ -513,7 +521,13 @@ fn fnv(bytes: &[u8]) -> u64 {
     bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x100_0000_01b3))
 }
 
-fn compare(step: usize, p: &Observation, u: &Observation, stats: &mut Stats) -> Option<Divergence> {
+fn compare(
+    step: usize,
+    p: &Observation,
+    u: &Observation,
+    stats: &mut Stats,
+    fragmented: &mut bool,
+) -> Option<Divergence> {
     macro_rules! field {
         ($name:ident) => {
             if p.$name != u.$name {
@@ -567,13 +581,31 @@ fn compare(step: usize, p: &Observation, u: &Observation, stats: &mut Stats) -> 
         });
     }
     field!(shallow);
+    // A shallow reload that adopted differently fragmented bytes: the outcome
+    // (decoded fingerprint) already matched; the case now carries the difference.
+    if p.adopted != u.adopted {
+        *fragmented = true;
+        stats.inherited_byte_diffs += 1;
+    }
     for ((pm, pr), (um, ur)) in p.exports.iter().zip(u.exports.iter()) {
         // An eligible cached-prefix export may encode the same decoded state
-        // with different text fragmentation; `shallow` already matched.
-        let eligible = p.shallow.iter().any(|(name, eligible, _)| name == pm && *eligible);
-        if pm == um && eligible && pr.is_ok() && ur.is_ok() && pr != ur {
-            stats.cached_prefix_byte_diffs += 1;
-            continue;
+        // with different text fragmentation; `shallow` already matched. Once a
+        // case carries such a state, every snapshot-type export may differ in
+        // bytes too. Update exports never may.
+        let entry = p.shallow.iter().find(|(name, _, _)| name == pm);
+        if pm == um && pr.is_ok() && ur.is_ok() && pr != ur {
+            match entry {
+                Some((_, true, _)) => {
+                    *fragmented = true;
+                    stats.cached_prefix_byte_diffs += 1;
+                    continue;
+                }
+                Some((_, false, _)) if *fragmented => {
+                    stats.inherited_byte_diffs += 1;
+                    continue;
+                }
+                _ => {}
+            }
         }
         if pm != um || pr != ur {
             return Some(Divergence {
@@ -659,25 +691,22 @@ pub fn check(case: &Case, stats: &mut Stats) -> Result<(), String> {
     ))
 }
 
-/// Strip the crate source location from Loro error messages: the two builds
-/// report the same `src/...:line` under different roots.
+/// Strip crate source roots from Loro error messages: the two builds report
+/// the same `src/...:line` under different absolute roots.
 pub fn normalize(message: &str) -> String {
-    let mut out = String::with_capacity(message.len());
-    let mut rest = message;
-    while let Some(at) = rest.find("Position: /") {
-        out.push_str(&rest[..at + "Position: ".len()]);
-        let tail = &rest[at + "Position: ".len()..];
-        let path_end = tail.find(':').unwrap_or(tail.len());
-        match tail[..path_end].rfind("/src/") {
-            Some(src) => rest = &tail[src + 1..],
-            None => {
-                rest = tail;
-                break;
+    message
+        .split(' ')
+        .map(|token| {
+            let start = token.find('/').unwrap_or(token.len());
+            match token[start..].rfind("/src/") {
+                Some(at) if token[start..].starts_with('/') => {
+                    format!("{}{}", &token[..start], &token[start + at + 1..])
+                }
+                _ => token.to_owned(),
             }
-        }
-    }
-    out.push_str(rest);
-    out
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Panic messages carry no source path; normalize anyway for safety.

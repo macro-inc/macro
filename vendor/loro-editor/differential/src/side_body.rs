@@ -105,6 +105,7 @@ pub struct World {
     clock: i64,
     suppressed: Vec<bool>,
     next_renewed_peer: u64,
+    adopted: Vec<Option<Vec<u8>>>,
 }
 
 fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
@@ -308,6 +309,7 @@ impl World {
             clock: 0,
             suppressed: vec![false; crate::PEERS],
             next_renewed_peer: 1_000,
+            adopted: vec![None; crate::PEERS],
         }
     }
 
@@ -320,6 +322,7 @@ impl World {
     pub fn step(&mut self, op: &Op) -> Result<Vec<Observation>, String> {
         self.clock += 1;
         self.suppressed.iter_mut().for_each(|s| *s = false);
+        self.adopted.iter_mut().for_each(|a| *a = None);
         let outcome = catch_unwind(AssertUnwindSafe(|| self.apply(op))).map_err(panic_message)?;
         // Detached editing renews to a random peer id on checkout; pin each
         // renewal to the same fresh id on both sides.
@@ -574,7 +577,9 @@ impl World {
         match Peer::new(id, &self.config, Some(&bytes)) {
             Ok(fresh) => {
                 self.peers[usize::from(peer)] = fresh;
-                format!("replaced {} bytes", bytes.len())
+                let decoded = decoded_fingerprint(&bytes);
+                self.adopted[usize::from(peer)] = Some(bytes);
+                format!("replaced; decodes to {decoded}")
             }
             Err(e) => format!("import err {e}"),
         }
@@ -588,12 +593,17 @@ impl World {
         let p = &self.peers[i];
         let doc = &p.doc;
         let mut exports = Vec::new();
-        let mut shallow = Vec::new();
+        let mut shallow: Vec<(String, bool, String)> = Vec::new();
         if export {
             let mut push = |name: String, r: Result<Vec<u8>, li::LoroEncodeError>| {
                 exports.push((name, r.map_err(|e| crate::normalize(&e.to_string()))));
             };
-            push("snapshot".into(), doc.export(ExportMode::Snapshot));
+            {
+                let name = "snapshot".to_string();
+                let bytes = doc.export(ExportMode::Snapshot);
+                shallow.push((name.clone(), false, bytes.as_ref().map_or(String::new(), |b| decoded_fingerprint(b))));
+                push(name, bytes);
+            }
             push("all_updates".into(), doc.export(ExportMode::all_updates()));
             for (j, other) in self.peers.iter().enumerate() {
                 let vv = other.doc.oplog_vv();
@@ -602,8 +612,18 @@ impl World {
             let n = p.history.len();
             let mid = n / 2;
             push(format!("updates_since_h{mid}"), doc.export(ExportMode::updates(&p.history_vv[mid])));
-            push("state_only".into(), doc.export(ExportMode::state_only(None)));
-            push(format!("snapshot_at_h{mid}"), doc.export(ExportMode::snapshot_at(&p.history[mid])));
+            {
+                let name = "state_only".to_string();
+                let bytes = doc.export(ExportMode::state_only(None));
+                shallow.push((name.clone(), false, bytes.as_ref().map_or(String::new(), |b| decoded_fingerprint(b))));
+                push(name, bytes);
+            }
+            {
+                let name = format!("snapshot_at_h{mid}");
+                let bytes = doc.export(ExportMode::snapshot_at(&p.history[mid]));
+                shallow.push((name.clone(), false, bytes.as_ref().map_or(String::new(), |b| decoded_fingerprint(b))));
+                push(name, bytes);
+            }
             let shallow_root = doc.shallow_since_frontiers();
             let mut targets = vec![("shallow_root".to_string(), shallow_root.clone())];
             targets.push(("latest".into(), doc.oplog_frontiers()));
@@ -666,6 +686,7 @@ impl World {
             undo_log,
             exports,
             shallow,
+            adopted: self.adopted[i].clone(),
             suppressed: self.suppressed[i],
         }
     }
