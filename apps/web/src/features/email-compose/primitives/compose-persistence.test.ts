@@ -771,13 +771,11 @@ it('reads the draft afresh long after a notice that never reported closing', asy
   later.dispose();
 });
 
-it('starts a composer from what it reads once the schedule moved elsewhere', async () => {
+it('follows a schedule moved elsewhere and keeps its notice', async () => {
   const composeContext = createComposeContext();
+  const sendTime = new Date('2026-12-01T12:00:00Z');
   const moved = new Date('2026-12-02T14:30:00Z');
-  const { host } = await scheduleAndShowThread(
-    composeContext,
-    new Date('2026-12-01T12:00:00Z')
-  );
+  const { host } = await scheduleAndShowThread(composeContext, sendTime);
   const threadView = mountEmailComposer(composeContext, host, {
     draft: message('draft', { is_draft: true }),
   });
@@ -792,20 +790,24 @@ it('starts a composer from what it reads once the schedule moved elsewhere', asy
   });
   await vi.advanceTimersByTimeAsync(0);
   expect(threadView.state.context.schedule.confirmedTime()).toEqual(moved);
+  // The notice and its Undo stay for the schedule wherever it went.
+  expect(composeContext.notices.feedback.dismiss).not.toHaveBeenCalled();
   threadView.dispose();
   vi.mocked(composeContext.notices.feedback.alert).mockClear();
 
-  // Starting from the schedule this tab made, it would take the move for news.
-  const later = mountEmailComposer(composeContext, host, {
-    draft: message('draft', {
-      is_draft: true,
-      scheduled_send_time: moved.toISOString(),
-    }),
-  });
-  await vi.advanceTimersByTimeAsync(0);
-  expect(later.state.context.schedule.confirmedTime()).toEqual(moved);
+  // Neither a read of the move nor one from before it is news to this tab.
+  for (const read of [moved, sendTime]) {
+    const later = mountEmailComposer(composeContext, host, {
+      draft: message('draft', {
+        is_draft: true,
+        scheduled_send_time: read.toISOString(),
+      }),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(later.state.context.schedule.confirmedTime()).toEqual(moved);
+    later.dispose();
+  }
   expect(composeContext.notices.feedback.alert).not.toHaveBeenCalled();
-  later.dispose();
 });
 
 it('does not give its own schedule the delivery status of an older one', async () => {

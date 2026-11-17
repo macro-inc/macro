@@ -219,13 +219,12 @@ export function createEmailSendSchedule(options: {
     }
     scheduledDraftId = options.draftId() ?? scheduledDraftId;
     // Seen at another time, the schedule this tab announced has moved since:
-    // composers mounted from now on start from what they read.
+    // composers mounted from now on start from where it went, and its notice
+    // keeps its Undo.
     const recorded = scheduledDraftId
       ? scheduledNotices.get(scheduledDraftId)
       : undefined;
-    if (recorded && !sameTime(recorded.sendTime, sendTime)) {
-      dismissScheduledNotice();
-    }
+    if (recorded) recorded.sendTime = sendTime;
     selectionRevision += 1;
     setState({ type: 'scheduled', confirmedTime: sendTime, deliveryStatus });
   };
