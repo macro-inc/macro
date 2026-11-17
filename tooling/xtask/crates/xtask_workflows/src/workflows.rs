@@ -76,6 +76,7 @@ mod reusable_deploy_service;
 mod reusable_preview_service;
 mod runners;
 mod sdk_check;
+mod sdk_ocaml_check;
 mod steps;
 mod test_macrod_update;
 mod vars;
@@ -530,6 +531,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "sdk_check",
         file_name: "sdk-check.yml",
         render_yaml: || render_gh_workflow(sdk_check::sdk_check)(),
+    },
+    WorkflowFile {
+        slug: "sdk_ocaml_check",
+        file_name: "sdk-ocaml-check.yml",
+        render_yaml: || render_gh_workflow(sdk_ocaml_check::sdk_ocaml_check)(),
     },
 ];
 

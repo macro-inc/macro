@@ -1,0 +1,11 @@
+# OCaml SDK tasks. Run inside the dev shell: nix-shell shell.nix
+
+# Regenerate ./generated from ../sdk/specs (the TypeScript SDK's specs).
+generate:
+    dune build ./gen/main.exe
+    ./_build/default/gen/main.exe sdk --specs ../sdk/specs --out generated --format-as generated --main macro_sdk --untyped generated/untyped.txt
+
+# Build everything and run the tests, including the drift check.
+test:
+    dune build
+    dune test
