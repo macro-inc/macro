@@ -1,0 +1,27 @@
+apps/web/src/lib/queries/persistence.test.ts
+  s_82ef84232c57d7::t_f422714a2e439b 1,24-27
+apps/web/src/lib/queries/storage/documentLoad/sync-document-context.test.ts
+  s_82ef84232c57d7::t_f422714a2e439b 1,32-34
+  s_82ef84232c57d7::t_0fd2f06b2e633e 35
+apps/web/src/lib/queries/persistence-scopes.desktop.test.ts
+  s_82ef84232c57d7::t_94b36fd75fec75 2-6,8-24
+  s_82ef84232c57d7::t_9904a7ab3c3880 1,7
+apps/web/src/lib/queries/persistence-scopes.ts
+  s_82ef84232c57d7::t_acc3da519cf6f8 3,100-105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "853646c1854d974a0e0fb3b966327f28bd4ea32f",
+  "prompts": {},
+  "sessions": {
+    "s_82ef84232c57d7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ea97bd8-0972-423a-93a7-c3b5d856061a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
