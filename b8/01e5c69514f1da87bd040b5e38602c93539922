@@ -1,0 +1,353 @@
+.agents/rules/config-and-service-urls.md
+  s_e4b3032e8c4db7::t_55f68ca4142a16 58-60
+.github/workflows/code_check_cloud_storage.yml
+  s_e4b3032e8c4db7::t_aea12f995059c8 62,899-907
+.github/workflows/pr-ci.yml
+  s_e4b3032e8c4db7::t_58af57688de233 27,529-536,612-618,646
+.github/workflows/sdk-ocaml-check.yml
+  s_e4b3032e8c4db7::t_a5f2a94b6bfb53 1-57
+Cargo.lock
+  s_e4b3032e8c4db7::t_87d492c07c0805 374
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecord.ts
+  s_e4b3032e8c4db7::t_89fa9f2cd2d821 12,15,34-37,40-43
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecordSdkFingerprint.ts
+  s_e4b3032e8c4db7::t_b8fe42eefec710 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_e4b3032e8c4db7::t_2c24acde9e841e 266,350
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/programLanguage.ts
+  s_e4b3032e8c4db7::t_df4add6aebb898 1-19
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_e4b3032e8c4db7::t_5c2f103bfb83a6 6837-6840,6844-6847,6850,7545-7549
+crates/agent_code_mode/AGENTS.md
+  s_e4b3032e8c4db7::t_74fd100934a8f5 10-12,98-113,149-150
+crates/agent_code_mode/Cargo.toml
+  s_e4b3032e8c4db7::t_bd6abcacfc79f7 54-55
+crates/agent_code_mode/SKILL.md
+  s_e4b3032e8c4db7::t_9d2d21bdede8cc 45-52
+crates/agent_code_mode/src/domain/connected_apps/test.rs
+  s_e4b3032e8c4db7::t_bbf234a8071605 155-156,220-221,268-269,305-306
+crates/agent_code_mode/src/domain/models.rs
+  s_e4b3032e8c4db7::t_f113dec0a2c86f 58-96,160,162-170
+crates/agent_code_mode/src/domain/ports.rs
+  s_e4b3032e8c4db7::t_d47659540f4d7b 2-3,26,31,79-85
+crates/agent_code_mode/src/domain/reviews/test.rs
+  s_e4b3032e8c4db7::t_93f7960cfd44ad 110-111
+crates/agent_code_mode/src/domain/service.rs
+  s_e4b3032e8c4db7::t_22a62e7e852b5d 5,33-44,54,78,116-136,149-150,164,202,532-538,559-560,621-630,726-729
+crates/agent_code_mode/src/domain/service/test.rs
+  s_e4b3032e8c4db7::t_1a0eee99687ea2 77,158,319-320,537-538,800-925
+crates/agent_code_mode/src/domain/ui_commands/test.rs
+  s_e4b3032e8c4db7::t_34e7321405494f 162-163
+crates/agent_code_mode/src/domain/user/test.rs
+  s_e4b3032e8c4db7::t_b58cdccae2014f 70,137,142
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_e4b3032e8c4db7::t_5f1e78962d3341 3-5,13,43-63,173-282,336
+crates/agent_code_mode/src/inbound/toolset/session/ocaml.md
+  s_e4b3032e8c4db7::t_8f8735728def1c 1-19
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_e4b3032e8c4db7::t_7516e21d72ee8a 3-4,237-370
+crates/agent_code_mode/src/inbound/toolset/test/ocaml.rs
+  s_e4b3032e8c4db7::t_8fe15f6db4f8cb 1-253
+crates/agent_code_mode/src/outbound/postgres/test.rs
+  s_e4b3032e8c4db7::t_f0f88b455ca72d 18-19,78-79
+crates/agent_code_mode/src/outbound/reviews/test.rs
+  s_e4b3032e8c4db7::t_4537ead2176f7c 25-26
+crates/code_execution/AGENTS.md
+  s_e4b3032e8c4db7::t_289ceda521a447 1,5-7,20-21,62-70,75-78
+crates/code_execution/README.md
+  s_e4b3032e8c4db7::t_ad90c978a2b5e0 3-4,44-118,159-160,224-226
+crates/code_execution/src/domain/models.rs
+  s_e4b3032e8c4db7::t_6094319faca38c 11-12,16-17,19,21-46,198-199
+crates/code_execution/src/domain/service.rs
+  s_e4b3032e8c4db7::t_5c4901ee9a196d 76
+crates/code_execution/src/domain/service/test.rs
+  s_e4b3032e8c4db7::t_e361ca704d42ff 27,55-56
+crates/code_execution/src/outbound.rs
+  s_e4b3032e8c4db7::t_483eee5d704e06 1-2,5
+crates/code_execution/src/outbound/deno.rs
+  s_e4b3032e8c4db7::t_23fc62fbdece0d 1-3,5,14,25,142-145,153-155,168-171,180-182,187,202,207,211-224,260-281,283-286,309,337-349,367,383-388,392,400,429-437,477,506,527-532,582,597-598
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_e4b3032e8c4db7::t_49926723a69de4 84-190,192,219,228-229,242-257,261,278-304,328-340,345
+crates/code_execution/src/outbound/deno/test.rs
+  s_e4b3032e8c4db7::t_a60caf48e5a740 48,161,242,309,512,672,700,827,873,935,1201,1411,1421-1422
+crates/code_execution/src/outbound/deno/test/ocaml.rs
+  s_e4b3032e8c4db7::t_0727c9ff842923 1-1058
+crates/code_execution/src/outbound/ocaml.rs
+  s_e4b3032e8c4db7::t_7c8fe3605702c8 1-568
+crates/code_execution/src/outbound/ocaml/check.rs
+  s_e4b3032e8c4db7::t_aded342959cabf 1-140
+crates/code_execution/src/outbound/ocaml/test.rs
+  s_e4b3032e8c4db7::t_ad7c615d9700ac 1-53
+crates/code_mode_assets/AGENTS.md
+  s_e4b3032e8c4db7::t_1e0d39abcc5f7c 30-47
+crates/code_mode_assets/build.rs
+  s_e4b3032e8c4db7::t_bd0245ac6f2538 41-42
+crates/code_mode_assets/src/lib.rs
+  s_e4b3032e8c4db7::t_9986488d51ca8b 26-32
+docs/agent-guide/ai-chat.md
+  s_e4b3032e8c4db7::t_bc358a29ea0821 1361-1370
+nix/cloud-storage.nix
+  s_e4b3032e8c4db7::t_a9c6c36b208fc3 270-378,722-725,1280,1378
+packages/sdk-ocaml/.gitignore
+  s_e4b3032e8c4db7::t_1c00bce41217ff 1-3
+packages/sdk-ocaml/.ocamlformat
+  s_e4b3032e8c4db7::t_c655a7701d7ddd 1-4
+packages/sdk-ocaml/AGENTS.md
+  s_e4b3032e8c4db7::t_1edf08716ead06 1-88
+packages/sdk-ocaml/CLAUDE.md
+  s_e4b3032e8c4db7::t_d176bc0774d92f 1
+packages/sdk-ocaml/README.md
+  s_e4b3032e8c4db7::t_f5348c1fe02676 1-347
+packages/sdk-ocaml/code_mode/bundle/build.sh
+  s_e4b3032e8c4db7::t_bea4ee6821a96b 1-114
+packages/sdk-ocaml/code_mode/bundle/check.sh
+  s_e4b3032e8c4db7::t_12add6cfc2e96c 1-53
+packages/sdk-ocaml/code_mode/bundle/compile.sh
+  s_e4b3032e8c4db7::t_d86e1c711d2324 1-39
+packages/sdk-ocaml/code_mode/code_mode.ml
+  s_e4b3032e8c4db7::t_0fd82f35d304eb 1-78
+packages/sdk-ocaml/code_mode/code_mode.mli
+  s_e4b3032e8c4db7::t_d84401931e6fdc 1-48
+packages/sdk-ocaml/code_mode/dune
+  s_e4b3032e8c4db7::t_16b7aa29430d2d 1-19
+packages/sdk-ocaml/code_mode/policy/code_mode_policy.ml
+  s_e4b3032e8c4db7::t_f19522700b1539 1-311
+packages/sdk-ocaml/code_mode/policy/dune
+  s_e4b3032e8c4db7::t_f969b0fa270435 1-7
+packages/sdk-ocaml/code_mode/policy/test/allowed.ml
+  s_e4b3032e8c4db7::t_bbfd604143487f 1-29
+packages/sdk-ocaml/code_mode/policy/test/dune
+  s_e4b3032e8c4db7::t_352f925d65ac42 1-30
+packages/sdk-ocaml/code_mode/policy/test/rejected.expected
+  s_e4b3032e8c4db7::t_9266f53b90d251 1-30
+packages/sdk-ocaml/code_mode/policy/test/rejected.ml
+  s_e4b3032e8c4db7::t_61c84b65b28839 1-91
+packages/sdk-ocaml/code_mode/test/denied.expected.json
+  s_e4b3032e8c4db7::t_873f33fc363a79 1
+packages/sdk-ocaml/code_mode/test/denied.ml
+  s_e4b3032e8c4db7::t_80b127afadb59d 1-18
+packages/sdk-ocaml/code_mode/test/dune
+  s_e4b3032e8c4db7::t_210f212961e3b5 1-89
+packages/sdk-ocaml/code_mode/test/nan.expected.json
+  s_e4b3032e8c4db7::t_a061d42d622c35 1
+packages/sdk-ocaml/code_mode/test/nan.ml
+  s_e4b3032e8c4db7::t_7756683374accf 1-2
+packages/sdk-ocaml/code_mode/test/raises.expected.json
+  s_e4b3032e8c4db7::t_fffb503c7ccfc5 1
+packages/sdk-ocaml/code_mode/test/raises.ml
+  s_e4b3032e8c4db7::t_149827839f3442 1-2
+packages/sdk-ocaml/code_mode/test/run.mjs
+  s_e4b3032e8c4db7::t_efdcda30011613 1-115
+packages/sdk-ocaml/code_mode/test/sample.expected.json
+  s_e4b3032e8c4db7::t_294348ffb4a008 1
+packages/sdk-ocaml/code_mode/test/sample.ml
+  s_e4b3032e8c4db7::t_a166f6fca5cdab 1-17
+packages/sdk-ocaml/dune-project
+  s_e4b3032e8c4db7::t_dafe8db580922c 1-49
+packages/sdk-ocaml/dune-workspace
+  s_e4b3032e8c4db7::t_4dd899259edc18 1
+packages/sdk-ocaml/eio/dune
+  s_e4b3032e8c4db7::t_045f07c8f90f60 1-16
+packages/sdk-ocaml/eio/macro_sdk_eio.ml
+  s_e4b3032e8c4db7::t_cd34958dbbdca4 1-84
+packages/sdk-ocaml/eio/macro_sdk_eio.mli
+  s_e4b3032e8c4db7::t_9be0231c2027e3 1-37
+packages/sdk-ocaml/examples/dune
+  s_e4b3032e8c4db7::t_dec42a51c4b74d 1-5
+packages/sdk-ocaml/examples/similar_tasks.ml
+  s_e4b3032e8c4db7::t_e664a8635a59b3 1-28
+packages/sdk-ocaml/fetch/await.js
+  s_e4b3032e8c4db7::t_86cea270dd0610 1-14
+packages/sdk-ocaml/fetch/await.wat
+  s_e4b3032e8c4db7::t_b8a9d8cb687686 1-14
+packages/sdk-ocaml/fetch/bigstringaf.wat
+  s_e4b3032e8c4db7::t_1b41bcebbcb52b 1-40
+packages/sdk-ocaml/fetch/dune
+  s_e4b3032e8c4db7::t_4d125f58b3cdf1 1-21
+packages/sdk-ocaml/fetch/macro_sdk_fetch.ml
+  s_e4b3032e8c4db7::t_46ddbbd6dfc3dc 1-99
+packages/sdk-ocaml/fetch/macro_sdk_fetch.mli
+  s_e4b3032e8c4db7::t_a70675dd906b76 1-54
+packages/sdk-ocaml/fetch/test/dune
+  s_e4b3032e8c4db7::t_d3c2ee27f34bbb 1-33
+packages/sdk-ocaml/fetch/test/run.mjs
+  s_e4b3032e8c4db7::t_ca1f7918051dee 1-101
+packages/sdk-ocaml/fetch/test/test_fetch.ml
+  s_e4b3032e8c4db7::t_86447dbcdc8639 1-205
+packages/sdk-ocaml/gen/dune
+  s_e4b3032e8c4db7::t_54a1fe478e0560 1-7
+packages/sdk-ocaml/gen/emit_ops.ml
+  s_e4b3032e8c4db7::t_91139e15dd914a 1-421
+packages/sdk-ocaml/gen/emit_tests.ml
+  s_e4b3032e8c4db7::t_7d419a9c457e20 1-212
+packages/sdk-ocaml/gen/emit_types.ml
+  s_e4b3032e8c4db7::t_2de1c2910eb05a 1-510
+packages/sdk-ocaml/gen/ir.ml
+  s_e4b3032e8c4db7::t_ffae96cd9bbc4b 1-125
+packages/sdk-ocaml/gen/lower_ops.ml
+  s_e4b3032e8c4db7::t_3a6f17cd853ddc 1-329
+packages/sdk-ocaml/gen/lower_schema.ml
+  s_e4b3032e8c4db7::t_18493f2d793174 1-621
+packages/sdk-ocaml/gen/main.ml
+  s_e4b3032e8c4db7::t_dea5ba604b9f61 1-152
+packages/sdk-ocaml/gen/naming.ml
+  s_e4b3032e8c4db7::t_e9e840af00b7b2 1-150
+packages/sdk-ocaml/gen/print.ml
+  s_e4b3032e8c4db7::t_a1be012954fa6d 1-288
+packages/sdk-ocaml/gen/spec.ml
+  s_e4b3032e8c4db7::t_ed4eb3c8fb2081 1-82
+packages/sdk-ocaml/gen/syntax.ml
+  s_e4b3032e8c4db7::t_8b08fda10e2ce4 1-33
+packages/sdk-ocaml/generated/agent_harness.ml
+  s_e4b3032e8c4db7::t_41966156df30e0 1-8770
+packages/sdk-ocaml/generated/agent_harness.mli
+  s_e4b3032e8c4db7::t_5888096f688fc4 1-4669
+packages/sdk-ocaml/generated/auth.ml
+  s_e4b3032e8c4db7::t_4a40ab55a10aab 1-9367
+packages/sdk-ocaml/generated/auth.mli
+  s_e4b3032e8c4db7::t_04cf59df2df8d6 1-4541
+packages/sdk-ocaml/generated/calendar.ml
+  s_e4b3032e8c4db7::t_0936375f8b4136 1-4170
+packages/sdk-ocaml/generated/calendar.mli
+  s_e4b3032e8c4db7::t_02cacac3a52351 1-2116
+packages/sdk-ocaml/generated/cognition.ml
+  s_e4b3032e8c4db7::t_99225efb0def0b 1-9419
+packages/sdk-ocaml/generated/cognition.mli
+  s_e4b3032e8c4db7::t_70da53bdd28697 1-4501
+packages/sdk-ocaml/generated/connection.ml
+  s_e4b3032e8c4db7::t_f3a3e0656eeaba 1-739
+packages/sdk-ocaml/generated/connection.mli
+  s_e4b3032e8c4db7::t_cfbae4d2279257 1-331
+packages/sdk-ocaml/generated/contacts.ml
+  s_e4b3032e8c4db7::t_29eeedc213fd69 1-170
+packages/sdk-ocaml/generated/contacts.mli
+  s_e4b3032e8c4db7::t_21dfa9a3de2818 1-88
+packages/sdk-ocaml/generated/dune
+  s_e4b3032e8c4db7::t_364957852ef2a6 1-10
+packages/sdk-ocaml/generated/email.ml
+  s_e4b3032e8c4db7::t_83b5a62a99a322 1-7778
+packages/sdk-ocaml/generated/email.mli
+  s_e4b3032e8c4db7::t_507125a942625c 1-3688
+packages/sdk-ocaml/generated/macro_sdk.ml
+  s_e4b3032e8c4db7::t_157d24307bb7e8 1-20
+packages/sdk-ocaml/generated/notification.ml
+  s_e4b3032e8c4db7::t_ea98ad1da8829a 1-5167
+packages/sdk-ocaml/generated/notification.mli
+  s_e4b3032e8c4db7::t_ddc41456387896 1-2632
+packages/sdk-ocaml/generated/properties.ml
+  s_e4b3032e8c4db7::t_beb4b4e950eab8 1-2740
+packages/sdk-ocaml/generated/properties.mli
+  s_e4b3032e8c4db7::t_071d742d3d7a34 1-1349
+packages/sdk-ocaml/generated/scheduled_action.ml
+  s_e4b3032e8c4db7::t_4c599ddbdf8930 1-6381
+packages/sdk-ocaml/generated/scheduled_action.mli
+  s_e4b3032e8c4db7::t_920dd186dbb0e8 1-3216
+packages/sdk-ocaml/generated/search.ml
+  s_e4b3032e8c4db7::t_7606ef0f7868f2 1-8105
+packages/sdk-ocaml/generated/search.mli
+  s_e4b3032e8c4db7::t_e2276ab08729b3 1-4066
+packages/sdk-ocaml/generated/static_files.ml
+  s_e4b3032e8c4db7::t_4179fe197798d8 1-326
+packages/sdk-ocaml/generated/static_files.mli
+  s_e4b3032e8c4db7::t_28c7c065af8efc 1-159
+packages/sdk-ocaml/generated/storage.ml
+  s_e4b3032e8c4db7::t_c57777c3d62009 1-66278
+packages/sdk-ocaml/generated/storage.mli
+  s_e4b3032e8c4db7::t_deff9d8b513d99 1-33202
+packages/sdk-ocaml/generated/unfurl.ml
+  s_e4b3032e8c4db7::t_4ec681e023fd88 1-263
+packages/sdk-ocaml/generated/unfurl.mli
+  s_e4b3032e8c4db7::t_6bff2586fd3095 1-144
+packages/sdk-ocaml/generated/untyped.txt
+  s_e4b3032e8c4db7::t_d97dbf41dcd0c6 1-101
+packages/sdk-ocaml/justfile
+  s_e4b3032e8c4db7::t_0bac0bc9c90091 1-15
+packages/sdk-ocaml/macro_sdk.opam
+  s_e4b3032e8c4db7::t_2e5fc37cf4eaeb 1-32
+packages/sdk-ocaml/macro_sdk_eio.opam
+  s_e4b3032e8c4db7::t_449c889ae8d31d 1-43
+packages/sdk-ocaml/nix/deno.nix
+  s_e4b3032e8c4db7::t_277592870d5970 1-44
+packages/sdk-ocaml/runtime/config.ml
+  s_e4b3032e8c4db7::t_2eeb433e36db28 1-188
+packages/sdk-ocaml/runtime/dune
+  s_e4b3032e8c4db7::t_5a3388d03f1848 1-4
+packages/sdk-ocaml/runtime/error.ml
+  s_e4b3032e8c4db7::t_dba766b1682941 1-26
+packages/sdk-ocaml/runtime/json.ml
+  s_e4b3032e8c4db7::t_bb4f3ae94c4d7d 1-157
+packages/sdk-ocaml/runtime/request.ml
+  s_e4b3032e8c4db7::t_ea72566f3d63ac 1-195
+packages/sdk-ocaml/shell.nix
+  s_e4b3032e8c4db7::t_b0bdccc41d30b9 1-53
+packages/sdk-ocaml/test/drift.ml
+  s_e4b3032e8c4db7::t_ada68c69ca47b2 1-75
+packages/sdk-ocaml/test/dune
+  s_e4b3032e8c4db7::t_7e8e71aca17944 1-71
+packages/sdk-ocaml/test/fixtures/kinds.json
+  s_e4b3032e8c4db7::t_b9823feed17b51 1-147
+packages/sdk-ocaml/test/operations/cases_support.ml
+  s_e4b3032e8c4db7::t_e97d3fe8eca279 1-41
+packages/sdk-ocaml/test/operations/dune
+  s_e4b3032e8c4db7::t_c4e47e4a73c793 1-19
+packages/sdk-ocaml/test/operations/spec_check.ml
+  s_e4b3032e8c4db7::t_7611a510c21b09 1-504
+packages/sdk-ocaml/test/operations/test_operations.ml
+  s_e4b3032e8c4db7::t_7cba52c800f4ac 1-65
+packages/sdk-ocaml/test/test_config.ml
+  s_e4b3032e8c4db7::t_2fd8971a5e9329 1-187
+packages/sdk-ocaml/test/test_kinds.ml
+  s_e4b3032e8c4db7::t_63ea23395d72b3 1-264
+packages/sdk-ocaml/test/test_tls.ml
+  s_e4b3032e8c4db7::t_b14edd9eb14542 1-177
+packages/sdk-ocaml/test/test_transport.ml
+  s_e4b3032e8c4db7::t_59e70e327d0ef5 1-215
+packages/sdk/AGENTS.md
+  s_e4b3032e8c4db7::t_3d55b5ea001e9e 252-254
+services/agent_harness_service/src/code_mode.rs
+  s_e4b3032e8c4db7::t_579cd9aa3fb695 3-4,120,123,255-280,359,362-367
+services/agent_harness_service/src/code_mode/test.rs
+  s_e4b3032e8c4db7::t_d14b430ad466b2 43-50,56-63,72-126,148-156,702-707
+services/agent_harness_service/src/internal_mcp.rs
+  s_e4b3032e8c4db7::t_47ae548810d043 124,145-173,278-288
+services/agent_harness_service/src/internal_mcp/test.rs
+  s_e4b3032e8c4db7::t_eda48549e1f037 432-561
+services/agent_harness_service/src/internal_mcp/test/code_mode.rs
+  s_e4b3032e8c4db7::t_4dce2654b15f6d 48
+services/agent_harness_service/src/lib.rs
+  s_e4b3032e8c4db7::t_e2ae7899590d41 686-689,733,740,816,879,931-965,2681
+services/agent_harness_service/src/routine_code.rs
+  s_e4b3032e8c4db7::t_2f6ac935ab8378 18,315
+tooling/xtask/crates/xtask_nextest_filter/determinator.toml
+  s_e4b3032e8c4db7::t_0d446598b0cd9d 27-32
+tooling/xtask/crates/xtask_workflows/src/workflows.rs
+  s_e4b3032e8c4db7::t_795745ec2e08a3 76,517-521
+tooling/xtask/crates/xtask_workflows/src/workflows/code_check_cloud_storage.rs
+  s_e4b3032e8c4db7::t_c3cb77edf23022 197,252-260,270,280,340
+tooling/xtask/crates/xtask_workflows/src/workflows/pr_ci.rs
+  s_e4b3032e8c4db7::t_798d69ac803ee4 34-35,128-133
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/code_mode_ocaml.sh
+  s_e4b3032e8c4db7::t_cd56f40f58c524 1-6
+tooling/xtask/crates/xtask_workflows/src/workflows/sdk_ocaml_check.rs
+  s_e4b3032e8c4db7::t_10d223b5c058eb 1-96
+tooling/xtask/crates/xtask_workflows/src/workflows/sdk_ocaml_check/test.rs
+  s_e4b3032e8c4db7::t_7a3141fb27b5f4 1-45
+tooling/xtask/crates/xtask_workflows/src/workflows/steps.rs
+  s_e4b3032e8c4db7::t_4ba5032d396031 441-447
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b801e5c69514f1da87bd040b5e38602c93539922",
+  "prompts": {},
+  "sessions": {
+    "s_e4b3032e8c4db7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24925383-e21a-4525-9705-fbe4754c37cc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
