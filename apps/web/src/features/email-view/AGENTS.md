@@ -3,8 +3,7 @@
 ## What it is
 
 Mail's list view: desktop sidebar and header, mobile pills and filter drawer,
-the Soup-backed thread list, and saved email views (flag
-`enable-email-saved-views`).
+the Soup-backed thread list, and saved email views.
 
 ## Start here
 

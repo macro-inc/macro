@@ -27,7 +27,6 @@ import {
 } from 'solid-js';
 import { SpreadsheetSkeleton } from '../../block-spreadsheet/components/SpreadsheetSkeleton';
 import { isUploadedWorkbook } from '../../block-spreadsheet/core/uploaded-workbook';
-import { useSpreadsheetAccess } from '../../block-spreadsheet/primitives/use-spreadsheet-access';
 import {
   legacyOfficeUpgradeTarget,
   pollForLegacyUpgrade,
@@ -54,9 +53,8 @@ export default function BlockUnknown() {
 }
 
 function BlockUnknownContent() {
-  const enabled = useSpreadsheetAccess();
   const spreadsheet = () =>
-    enabled() && isUploadedWorkbook(blockMetadataSignal.get()?.fileType);
+    isUploadedWorkbook(blockMetadataSignal.get()?.fileType);
   const fileName = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
   const blockId = useBlockId();

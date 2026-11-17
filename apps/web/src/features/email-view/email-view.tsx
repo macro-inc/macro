@@ -24,10 +24,7 @@ import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsla
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import {
-  enableEmailSavedViews,
-  enableEmailWideSearch,
-} from '@core/constant/featureFlags';
+import { enableEmailWideSearch } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { useAndroidBackNavigation } from '@core/mobile/androidBack';
@@ -536,16 +533,11 @@ function EmailViewRoot() {
 
 /** Email shares one list across desktop sidebar and mobile pill layouts. */
 export function EmailView(props: EmailViewProps) {
-  const savedViewsFlag = useFeatureFlag(enableEmailSavedViews);
-  const userId = useUserId();
-  // A loading flag is not off; it only keeps saved views hidden meanwhile.
-  const savedViewsEnabled = () => savedViewsFlag().enabled;
-  const viewerId = () => (savedViewsEnabled() ? userId() : undefined);
+  const viewerId = useUserId();
   return (
     <ListEntityMetadataQueryProvider>
       <EmailViewProvider
         initialState={props.initialState}
-        savedViewsEnabled={savedViewsEnabled}
         savedViewsSource={() =>
           useSavedViews({ viewerId, kind: EMAIL_SAVED_VIEW_KIND })
         }

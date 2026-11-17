@@ -4683,8 +4683,12 @@ name = "code_execution"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "axum",
  "code_mode_assets",
  "futures",
+ "macro_tower_layers",
+ "opentelemetry",
+ "reqwest 0.13.4",
  "rootcause",
  "rustix 1.1.6",
  "serde",
@@ -4694,6 +4698,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-opentelemetry",
  "url",
  "uuid",
  "workspace-hack",

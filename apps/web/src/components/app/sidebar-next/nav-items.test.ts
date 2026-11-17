@@ -18,9 +18,6 @@ const defaultPrefs = (overrides: Partial<SidebarPrefs> = {}): SidebarPrefs => ({
 const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showNotifications: true,
   showForYou: false,
-  showCalendar: true,
-  showScheduling: true,
-  showCustomers: true,
   showCalls: true,
   showReviews: true,
   showActivity: true,
@@ -140,22 +137,6 @@ describe('sidebar visibility preferences', () => {
     expect(
       moreMenuItems(gates).some((item) => item.id === 'booking-links')
     ).toBe(false);
-  });
-
-  it('keeps Scheduling absent everywhere when its feature flag is off', () => {
-    for (const hidden of [new Set<string>(), new Set(DEFAULT_HIDDEN_IDS)]) {
-      const gates = defaultGates({
-        showScheduling: false,
-        prefs: defaultPrefs({ hidden }),
-      });
-      for (const items of [
-        customizableNavItems(gates),
-        visibleNavItems(gates),
-        moreMenuItems(gates),
-      ]) {
-        expect(items.some((item) => item.id === 'booking-links')).toBe(false);
-      }
-    }
   });
 });
 

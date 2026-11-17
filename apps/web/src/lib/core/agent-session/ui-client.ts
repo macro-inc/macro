@@ -16,10 +16,6 @@
  * the page.
  */
 
-import {
-  enableAgentNavigation,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { z } from 'zod';
@@ -169,11 +165,10 @@ export function startUiClientId() {
 }
 
 /**
- * The id to send with a prompt typed in this tab: none while agent navigation
- * is off or on mobile, so the harness records no tab for the turn.
+ * The id to send with a prompt typed in this tab: none on mobile, so the
+ * harness records no tab for the turn.
  */
 export function typedInClientId(): string | undefined {
-  if (!isFeatureEnabled(enableAgentNavigation)) return undefined;
   if (!agentNavigationRunsHere()) return undefined;
 
   return uiClientId();

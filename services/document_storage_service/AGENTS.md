@@ -112,10 +112,9 @@ threads, pins, recents, notifications, folders, activity.
 - Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
   the CRM domain owns authorization, normalization and relation invariants.
 
-- Provision required `POSTHOG_API_KEY` before startup; `enable-call-channel-thread`
-  evaluation has a 300 ms timeout and keeps the call's own chat on failure.
-- The same flag client evaluates `enable-programmatic-calls` per caller for the
-  explicit call start, join, and leave routes; failures disable those routes.
+- Provision required `POSTHOG_API_KEY` before startup; the flag client
+  evaluates `enable-programmatic-calls` per caller for the explicit call start,
+  join, and leave routes; failures disable those routes.
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 
