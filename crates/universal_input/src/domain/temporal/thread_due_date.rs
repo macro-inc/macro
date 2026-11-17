@@ -52,10 +52,38 @@ pub struct ThreadDueDateRequest {
 }
 
 /// The thread's due date.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadDueDateResponse {
     /// The day it is due, as `YYYY-MM-DD`; absent when no open deadline stands.
     pub due_on: Option<NaiveDate>,
+    /// What reading it cost, for the caller's own cost tracking; the request is
+    /// metered here either way. Absent when the model reported no token usage.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<DueDateUsage>,
+}
+
+/// The tokens one due date read took, as the usage journal records them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DueDateUsage {
+    /// The model that read the thread, as recorded with its usage.
+    pub model: String,
+    /// Input tokens neither read from nor written to a prompt cache.
+    pub input_tokens: u64,
+    /// Output tokens.
+    pub output_tokens: u64,
+    /// Input tokens read from a prompt cache.
+    pub cache_read_tokens: u64,
+    /// Input tokens written to a prompt cache.
+    pub cache_write_tokens: u64,
+}
+
+/// What the model read in a thread, and what reading it took.
+#[derive(Debug, Clone)]
+pub struct ExtractedFacts {
+    /// The facts the model stated.
+    pub facts: ThreadFacts,
+    /// The tokens it took, when the model reported them.
+    pub usage: Option<DueDateUsage>,
 }
 
 /// A deadline a message states, never a model-computed date.
@@ -95,7 +123,7 @@ pub trait ThreadFactExtractor: Send + Sync {
         &self,
         request: &ThreadDueDateRequest,
         usage: UsageContext,
-    ) -> impl Future<Output = Result<ThreadFacts, InputError>> + Send;
+    ) -> impl Future<Output = Result<ExtractedFacts, InputError>> + Send;
 }
 
 fn validate(request: &ThreadDueDateRequest) -> Result<(), InputError> {
@@ -206,12 +234,13 @@ impl<E: ThreadFactExtractor> ThreadDueDateService<E> {
         self.admission.admit(&owner, AiFeature::EmailFocus).await?;
         let usage =
             UsageContext::new(AiFeature::EmailFocus, owner).with_entity(Some(request.thread_id));
-        let facts = self.extractor.extract_thread_facts(&request, usage).await?;
+        let ExtractedFacts { facts, usage } =
+            self.extractor.extract_thread_facts(&request, usage).await?;
         let span = tracing::Span::current();
         span.record("deadlines", facts.deadlines.len());
         span.record("closures", facts.closures.len());
         let due_on = resolve_due_date(&facts, &request.messages)?;
         span.record("due_date_found", due_on.is_some());
-        Ok(ThreadDueDateResponse { due_on })
+        Ok(ThreadDueDateResponse { due_on, usage })
     }
 }

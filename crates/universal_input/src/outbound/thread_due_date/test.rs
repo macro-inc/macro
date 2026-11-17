@@ -114,3 +114,47 @@ fn the_schema_fits_what_the_examples_in_the_prompt_answer() {
         serde_json::from_value::<ThreadFacts>(answer).unwrap();
     }
 }
+
+#[derive(Default)]
+struct Journal(Mutex<Vec<ai_usage::UsageEvent>>);
+
+impl UsageRecorder for Journal {
+    fn record(&self, event: ai_usage::UsageEvent) {
+        self.0.lock().unwrap().push(event);
+    }
+}
+
+#[test]
+fn a_read_reports_the_tokens_it_records_and_still_records_them() {
+    let journal = Journal::default();
+    let recorder = Captured {
+        inner: &journal,
+        usage: Mutex::new(None),
+    };
+    let owner = macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@macro.com").unwrap();
+    for (input, output) in [(2_000, 10), (500, 1)] {
+        recorder.record(
+            UsageContext::new(ai_usage::AiFeature::EmailFocus, owner.clone()).into_event(
+                "fireworks/nemotron".to_owned(),
+                UsageAmount::Tokens {
+                    input,
+                    output,
+                    cache_read: 7,
+                    cache_write: 0,
+                },
+            ),
+        );
+    }
+
+    assert_eq!(journal.0.lock().unwrap().len(), 2);
+    assert_eq!(
+        recorder.usage.into_inner().unwrap(),
+        Some(DueDateUsage {
+            model: "fireworks/nemotron".to_owned(),
+            input_tokens: 2_500,
+            output_tokens: 11,
+            cache_read_tokens: 14,
+            cache_write_tokens: 0,
+        })
+    );
+}

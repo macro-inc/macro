@@ -341,9 +341,12 @@ impl ThreadFactExtractor for RecordingExtractor {
         &self,
         request: &ThreadDueDateRequest,
         _usage: UsageContext,
-    ) -> Result<ThreadFacts, InputError> {
+    ) -> Result<ExtractedFacts, InputError> {
         self.requests.lock().unwrap().push(request.clone());
-        Ok(only(vec![]))
+        Ok(ExtractedFacts {
+            facts: only(vec![]),
+            usage: None,
+        })
     }
 }
 
@@ -390,14 +393,17 @@ async fn a_full_answer_flows_through_to_the_response() {
             &self,
             _: &ThreadDueDateRequest,
             _: UsageContext,
-        ) -> Result<ThreadFacts, InputError> {
-            Ok(serde_json::from_value(json!({
-                "deadlines": [{"message": 0, "date": {
-                    "kind": "weekday", "span": "Friday", "weekday": "friday", "week": "upcoming"
-                }}],
-                "closures": [],
-            }))
-            .unwrap())
+        ) -> Result<ExtractedFacts, InputError> {
+            Ok(ExtractedFacts {
+                facts: serde_json::from_value(json!({
+                    "deadlines": [{"message": 0, "date": {
+                        "kind": "weekday", "span": "Friday", "weekday": "friday", "week": "upcoming"
+                    }}],
+                    "closures": [],
+                }))
+                .unwrap(),
+                usage: Some(nemotron_usage()),
+            })
         }
     }
     let service = ThreadDueDateService::new(Friday, Arc::new(DisabledAiAdmissionService));
@@ -411,4 +417,15 @@ async fn a_full_answer_flows_through_to_the_response() {
         .unwrap();
 
     assert_eq!(response.due_on, Some(day(2026, 10, 23)));
+    assert_eq!(response.usage, Some(nemotron_usage()));
+}
+
+fn nemotron_usage() -> DueDateUsage {
+    DueDateUsage {
+        model: "fireworks/nemotron".to_owned(),
+        input_tokens: 2_500,
+        output_tokens: 11,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+    }
 }
