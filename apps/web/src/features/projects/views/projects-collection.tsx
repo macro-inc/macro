@@ -599,6 +599,7 @@ export function ProjectsCollection(props: {
           navigation={props.mobileNavigation}
           search={
             <ListHeaderSearch
+              wide
               label="Search projects"
               value={collection.search()}
               onValueChange={collection.setSearch}

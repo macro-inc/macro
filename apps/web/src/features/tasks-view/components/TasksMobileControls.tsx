@@ -32,8 +32,9 @@ export function TasksMobileControls(props: {
     <div class="flex min-h-10 min-w-0 flex-1 items-center justify-between gap-2">
       <ViewSidebar.Toggle action="expand" presentation="pill" />
       <Show when={!isProjectTab(state.tab)}>
-        <div class="ml-auto flex min-w-0 items-center justify-end gap-2">
+        <div class="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2">
           <ListHeaderSearch
+            wide
             label="Search tasks"
             value={state.search}
             onValueChange={(search) => setState('search', search)}

@@ -11,7 +11,7 @@ export function ProjectCollectionControls(props: {
     <div class="flex min-w-0 flex-col gap-2">
       <div class="flex min-h-10 min-w-0 items-center justify-between gap-2">
         <div class="shrink-0">{props.navigation}</div>
-        <div class="ml-auto flex min-w-0 items-center justify-end gap-2">
+        <div class="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2">
           {props.search}
           {props.filters}
         </div>
