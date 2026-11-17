@@ -3,7 +3,8 @@
 ## Search
 
 Sidebar `Search` button → `/app/search` with a focused query box. Until you type
-or add a filter, desktop Search lists nothing and shows its empty state. Results
+or add a filter, desktop Search lists nothing and shows its empty state, which
+points to `⌘K` (Ctrl+K elsewhere) for the command menu. Results
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
