@@ -203,7 +203,10 @@ async fn main() -> anyhow::Result<()> {
         ),
     );
     let outlook_provider = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-        email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate(redis_conn.clone()),
+        email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate::new(
+            redis_conn.clone(),
+            email_api_client::outbound::microsoft_gate::RequestBudget::Live,
+        ),
     ))?
     .with_rejected_token_refresh(Arc::new(CalendarTokenProviderAdapter::new(
         redis_conn.clone(),

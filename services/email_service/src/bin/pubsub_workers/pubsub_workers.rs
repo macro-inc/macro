@@ -296,7 +296,10 @@ async fn main() -> anyhow::Result<()> {
         RateBudget::Live,
     );
     let outlook_repository = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-        email_service::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
+        email_service::outbound::email_api::RedisMicrosoftRequestGate::new(
+            redis_conn.clone(),
+            email_api_client::outbound::microsoft_gate::RequestBudget::Live,
+        ),
     ))?;
     let outlook_api = email_api_client::domain::service::mailbox::MailboxApiService::new(
         outlook_repository.clone(),

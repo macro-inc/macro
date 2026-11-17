@@ -164,8 +164,9 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             PgCalendarRepository::new(db.clone()),
             calendar_events::domain::providers::CalendarProviders {
                 outlook: email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-                    email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate(
+                    email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate::new(
                         redis_conn.clone(),
+                        email_api_client::outbound::microsoft_gate::RequestBudget::Live,
                     ),
                 ))?
                 .with_rejected_token_refresh(Arc::new(
@@ -191,7 +192,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
     let outlook_api: crate::api::context::OutlookApi =
         email_api_client::domain::service::mailbox::MailboxApiService::new(
             email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-                crate::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
+                crate::outbound::email_api::RedisMicrosoftRequestGate::new(
+                    redis_conn.clone(),
+                    email_api_client::outbound::microsoft_gate::RequestBudget::Live,
+                ),
             ))?,
             crate::api::context::MicrosoftTokens::new(
                 email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
@@ -331,7 +335,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         }),
         inbox_lifecycle: Arc::new(crate::composition::inbox_lifecycle(
             email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-                crate::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
+                crate::outbound::email_api::RedisMicrosoftRequestGate::new(
+                    redis_conn.clone(),
+                    email_api_client::outbound::microsoft_gate::RequestBudget::Live,
+                ),
             ))?,
             db.clone(),
             auth_service_client.as_ref().clone(),

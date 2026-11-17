@@ -108,8 +108,9 @@ pub(crate) async fn context(
                 .get_multiplexed_async_connection()
                 .await?;
             Ok::<_, anyhow::Error>(email_api_client::OutlookApiClientRepository::with_gate(
-                Arc::new(crate::outbound::email_api::RedisMicrosoftRequestGate(
+                Arc::new(crate::outbound::email_api::RedisMicrosoftRequestGate::new(
                     connection,
+                    email_api_client::outbound::microsoft_gate::RequestBudget::Live,
                 )),
             )?)
         }
