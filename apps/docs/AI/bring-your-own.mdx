@@ -15,10 +15,6 @@ Watch a 1:17 walkthrough of MacroD.
 
 <video src="https://macro.com/video/tutorials/macrod.mp4" poster="https://macro.com/video/tutorials/macrod-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
 
-Watch a 1:17 walkthrough of MacroD.
-
-<video src="https://macro.com/video/tutorials/macrod.mp4" poster="https://macro.com/video/tutorials/macrod-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
-
 ## On the Macro desktop app
 
 The desktop app bundles `macrod`, so there is nothing to download. Open **Settings → Machines** and use the **This computer** card. **Set up** looks for a coding agent already installed on your machine, then **Set up** that agent configures, pairs, and starts macrod and creates the agent. No terminal and no pairing code. Open **Options** to choose a different agent, set the **Workspace folder**, or turn on **Full access**. Keep the app open while agents run.
@@ -86,6 +82,8 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
 
     On first launch, **Quickstart** lists the agents available on your machine. Select one, or choose **Custom command** to enter an ACP launch command.
 
+    When you start `macrod` inside [Herdr](https://herdr.dev), **Quickstart** also offers **Claude Code in herdr** and **Codex in herdr**. Each session then runs in the agent's own terminal interface, in a Herdr tab you can open and type into.
+
     Set **Workspace** to the directory your agent should work in. Everything else about the machine is managed in Macro.
 
     Select **Create and pair** to generate your device code.
@@ -114,13 +112,19 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
 
 **This computer** creates the agent for you. For a machine you paired from a terminal, open **Settings → Agents** and click **Add agent**.
 
-In **New agent**, set the name, **@tag**, and instructions. Under **Where it runs**, choose **In your harness** and pick the machine under **Harness**. Under **Who can use it**, choose **Private** or **Team**, then save. @mention the agent to start a session on your machine. A **Private** agent can only be mentioned by you.
+In **New agent**, set the name, **@tag**, and instructions. Under **Where it runs**, choose **On your machine** and pick the machine under **Machine**. Under **Who can use it**, choose **Private** or **Team**, then save. @mention the agent to start a session on your machine. A **Private** agent can only be mentioned by you.
 
 ## Keep your machine connected
 
 Leave `macrod` running and your computer awake while you use the machine. Its terminal shows your sessions, configuration, and logs. You can also check the machine in **Settings → Machines**.
 
 To reconnect later, run `macrod` again; it loads `~/.macrod/macrod.toml` from any directory. If you remove the machine, pair it again before using it. Only one `macrod` can run with a given configuration at a time.
+
+## Run agents on a cloud server
+
+To keep agents running while your laptop is off, run `macrod` on a cloud server instead. Connect to the server over SSH, install and sign in to your coding agent there, then follow [Connect your machine](#connect-your-machine). Open the pairing link in your own browser; the server does not need one.
+
+`macrod` connects out to Macro, so the server needs no public address, open port, reverse proxy, or tunnel. Keep `macrod` running after you disconnect, for example in `tmux` or Herdr.
 
 ## Run more than one machine on a computer
 
