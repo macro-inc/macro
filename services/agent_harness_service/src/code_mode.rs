@@ -94,9 +94,9 @@ impl NativeToolGate for ScopedToolGate {
     ) -> std::pin::Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
         Box::pin(async move {
             match self.scopes.scope(session.as_uuid()).await {
-                Ok(Some(scope)) if !native_tool_allowed(scope, tool) => {
-                    NativeToolVerdict::Refuse(outside_scope(tool))
-                }
+                Ok(Some(scope)) if !native_tool_allowed(scope, tool) => NativeToolVerdict::Refuse(
+                    format!("This session can't use {tool}; it works through code only."),
+                ),
                 Ok(_) => self.inner.check(session, tool, arguments).await,
                 Err(error) => {
                     tracing::error!(?error, "could not read a session's scope");
@@ -118,7 +118,9 @@ impl NativeToolGate for ScopedToolGate {
     ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
         Box::pin(async move {
             match self.scopes.scope(session.as_uuid()).await {
-                Ok(Some(_)) => Some(outside_scope(tool)),
+                Ok(Some(_)) => Some(format!(
+                    "This session can't use {tool}; it reaches no app outside Macro."
+                )),
                 Ok(None) => self.inner.refuse_remote_mcp(session, tool).await,
                 Err(error) => {
                     tracing::error!(?error, "could not read a session's scope");
@@ -127,11 +129,6 @@ impl NativeToolGate for ScopedToolGate {
             }
         })
     }
-}
-
-/// What the model hears for a tool its session's scope never calls.
-fn outside_scope(tool: &str) -> String {
-    format!("This session can't use {tool}; it works through code only.")
 }
 
 /// What the model hears when a session's scope can't be read.

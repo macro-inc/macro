@@ -146,6 +146,23 @@ struct GatedToolSet<Context> {
     session: agent_session::domain::model::AgentSessionId,
     awaiting: Arc<crate::domain::engine::AwaitingUser>,
     reviewed_tools: Vec<String>,
+    /// The turn's remote MCP tools, to tell which server a call reaches.
+    remote: Option<mcp_toolset::RemoteMcpToolSet>,
+}
+
+impl<Context> GatedToolSet<Context> {
+    /// Whether `tool_name` is a remote MCP tool of a server other than the
+    /// harness's internal one, which gates its own tools. Decided by the
+    /// server the tool was registered under, never by its name's server
+    /// segment, which another server's name can mangle to.
+    fn reaches_remote_server(&self, tool_name: &str) -> bool {
+        tool_name.starts_with(mcp_select::MANGLED_PREFIX)
+            && self
+                .remote
+                .as_ref()
+                .and_then(|remote| remote.server_of(tool_name))
+                != Some(crate::domain::mcp::MACRO_INTERNAL_MCP_NAME)
+    }
 }
 
 impl<Context> AiToolSet<Context> for GatedToolSet<Context>
@@ -161,8 +178,7 @@ where
     ) -> ai_toolset::ToolCallFuture<'a> {
         Box::pin(async move {
             let mut request_context = request_context;
-            if let Some((server, _)) = mcp_toolset::unmangle(tool_name)
-                && server != crate::domain::mcp::MACRO_INTERNAL_MCP_NAME
+            if self.reaches_remote_server(tool_name)
                 && let Some(reason) = self.gate.refuse_remote_mcp(self.session, tool_name).await
             {
                 return Ok(Err(ai_toolset::ToolCallError {
@@ -858,7 +874,9 @@ async fn drive_turn(
     // their final reviewed arguments. Remote MCP tools use the egress gate.
     // Keep remote MCP tools alongside the native and AskUser tools. The
     // finisher above reviews only Macro's native user tools.
-    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools.filter(|_| !summarizing) {
+    let mcp_tools = mcp_tools.filter(|_| !summarizing);
+    let remote = mcp_tools.clone();
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
         Some(mcp) if unseen => Arc::new(
             mcp_select::CombinedToolSet::new(toolset, unseen::CodeModeOnly::new(mcp))
                 .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS),
@@ -878,6 +896,7 @@ async fn drive_turn(
         session: session_id,
         awaiting,
         reviewed_tools,
+        remote,
     });
     let session = agent_loop
         .session(toolset, Arc::new(tool_context), system_prompt, loop_usage)

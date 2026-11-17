@@ -29,13 +29,24 @@ pub const MACRO_MCP_NAME: &str = "macro";
 pub const MACRO_INTERNAL_MCP_NAME: &str = "macro_internal";
 
 /// The servers this runtime should dial out of an ACP server list: HTTP
-/// entries other than Macro's own. SSE and stdio entries are not something an
-/// in-process runtime can serve and are dropped with a warning.
+/// entries other than Macro's own, each name once. SSE and stdio entries are
+/// not something an in-process runtime can serve and are dropped with a
+/// warning.
+///
+/// A name is the first entry's: the harness lists its own servers first, and
+/// a tool's server is told by the name it registered under
+/// ([`mcp_toolset::RemoteMcpToolSet::server_of`]), so an owner's app whose
+/// slug repeats [`MACRO_INTERNAL_MCP_NAME`] must never be dialed under it.
 pub fn dialable_servers(servers: Vec<AcpMcpServer>) -> Vec<McpServerHttp> {
+    let mut names = std::collections::BTreeSet::new();
     servers
         .into_iter()
         .filter_map(|server| match server {
             AcpMcpServer::Http(http) if http.name == MACRO_MCP_NAME => None,
+            AcpMcpServer::Http(http) if !names.insert(http.name.clone()) => {
+                tracing::warn!(server = %http.name, "a second MCP server under one name; skipped");
+                None
+            }
             AcpMcpServer::Http(http) => Some(http),
             other => {
                 tracing::warn!(
