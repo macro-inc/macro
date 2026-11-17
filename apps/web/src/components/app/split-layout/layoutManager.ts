@@ -189,6 +189,10 @@ export type ReplaceAllSplitsOptions = {
   referredFrom?: ReferredFrom;
   /** Router state validated by the destination route, separate from runtime EntryState. */
   routeState?: unknown;
+  /** Open splits to park, kept mounted off screen, instead of closing. */
+  park?: readonly SplitId[];
+  /** Recorded on the navigation's perf span. */
+  attributes?: SplitNavigateOptions['attributes'];
 };
 
 export type SplitState = {
@@ -1940,6 +1944,8 @@ export function createSplitLayout(
           activate: true,
         }),
         ...(options.routeState !== undefined && { state: options.routeState }),
+        park: options.park?.map(paneOf),
+        attributes: options.attributes,
       }
     );
     const showAlone = (outcome: NavigationResult) => {

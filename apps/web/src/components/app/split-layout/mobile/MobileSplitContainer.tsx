@@ -1,56 +1,62 @@
+import type { PaneId } from '@app/lib/split-router';
+import { PaneSuspensionContext } from '@core/context/pane-suspension';
 import { useAndroidBackNavigation } from '@core/mobile/androidBack';
 import {
   type Accessor,
   createComputed,
   createMemo,
   createSignal,
-  Index,
+  For,
   Show,
   Suspense,
 } from 'solid-js';
 import { runSplitBack } from '../back-interceptor';
 import { SplitPanel } from '../components/SplitPanel';
-import type {
-  SplitHandle,
-  SplitId,
-  SplitManager,
-  SplitState,
+import {
+  paneOf,
+  type SplitHandle,
+  type SplitId,
+  type SplitManager,
+  splitOf,
 } from '../layoutManager';
 import type { MobilePaneStack } from './createMobilePaneStack';
 import { createMobileSplitMotion } from './createMobileSplitMotion';
 
 export type MobileSplitContainerProps = {
-  splitManager: Pick<SplitManager, 'getSplit'>;
+  splitManager: Pick<SplitManager, 'getSplit' | 'splitState'>;
   stack: MobilePaneStack;
-  splits: Accessor<ReadonlyArray<SplitState>>;
+  /** Panes kept mounted off screen (parked dock views). */
+  parkedPanes: Accessor<readonly PaneId[]>;
+  /** Whether parked panes hold their query results until shown. */
+  suspendsParked: Accessor<boolean>;
   panelRefs: Map<SplitId, HTMLDivElement>;
 };
 
-type Slots = readonly [SplitId | undefined, SplitId | undefined];
-
 /**
- * Two fixed slots hold the front pane and the one behind it. A pane keeps
- * its slot while it changes role, so going forward or back never moves or
- * remounts it.
+ * The mounted panes: the front pane, the one behind it, and any parked ones.
+ * A pane keeps its place in the document while it changes role, so going
+ * forward, back, or to a parked pane never moves or remounts it.
  */
-function createPaneSlots(stack: MobilePaneStack): Accessor<Slots> {
-  const [slots, setSlots] = createSignal<Slots>([undefined, undefined]);
+function createMountedPanes(
+  stack: MobilePaneStack,
+  parked: Accessor<readonly PaneId[]>
+): Accessor<readonly SplitId[]> {
+  const [mounted, setMounted] = createSignal<readonly SplitId[]>([]);
 
   createComputed(() => {
     const shown = [stack.behind(), stack.front()].filter(
       (id): id is SplitId => id !== undefined
     );
+    const wanted = [...shown, ...parked().map(splitOf)];
 
-    setSlots(([first, second]) => {
-      const keepFirst = first && shown.includes(first) ? first : undefined;
-      const keepSecond = second && shown.includes(second) ? second : undefined;
-      const free = shown.filter((id) => id !== keepFirst && id !== keepSecond);
-
-      return [keepFirst ?? free.shift(), keepSecond ?? free.shift()];
+    setMounted((current) => {
+      const kept = current.filter((id) => wanted.includes(id));
+      const added = wanted.filter((id) => !kept.includes(id));
+      return [...kept, ...added];
     });
   });
 
-  return slots;
+  return mounted;
 }
 
 export function MobileSplitContainer(props: MobileSplitContainerProps) {
@@ -64,11 +70,11 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
   );
 
   const motion = createMobileSplitMotion({ stack });
-  const slots = createPaneSlots(stack);
+  const mounted = createMountedPanes(stack, props.parkedPanes);
 
   const paneFor = (id: SplitId) =>
     createMemo(() => {
-      const split = props.splits().find((s) => s.id === id);
+      const split = splitManager.splitState(id);
       const rawHandle = splitManager.getSplit(id);
       if (!split || !rawHandle) return undefined;
       const handle: SplitHandle = {
@@ -87,45 +93,51 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
       on:touchend={motion.handleTouchEnd}
       on:touchcancel={motion.handleTouchCancel}
     >
-      <Index each={slots()}>
-        {(slotId, index) => (
-          <Show when={slotId()} keyed>
-            {(id) => {
-              const pane = paneFor(id);
-              const isFront = () => stack.front() === id;
-              const isPresented = () => motion.presentedFront() === id;
+      <For each={mounted()}>
+        {(id, index) => {
+          const pane = paneFor(id);
+          const isFront = () => stack.front() === id;
+          const isPresented = () => motion.presentedFront() === id;
+          const isParked = () => props.parkedPanes().includes(paneOf(id));
+          const suspended = () => isParked() && props.suspendsParked();
 
-              return (
-                <Show when={pane()}>
-                  {(current) => (
-                    <div
-                      class={motion.classFor(isFront())}
-                      style={motion.styleFor(isFront())}
-                      // Only the presented pane is interactive, so focus (including
-                      // programmatic autofocus in late-mounting content) can never
-                      // land elsewhere. Demoting a pane also blurs any focused child.
-                      inert={!isPresented()}
-                      onTransitionEnd={(e) =>
-                        motion.handleTransitionEnd(e, isFront())
-                      }
-                    >
-                      <Suspense>
-                        <SplitPanel
-                          split={current().split}
-                          handle={current().handle}
-                          active={isPresented()}
-                          setPanelRef={(ref) => props.panelRefs.set(id, ref)}
-                          index={index}
-                        />
-                      </Suspense>
-                    </div>
-                  )}
-                </Show>
-              );
-            }}
-          </Show>
-        )}
-      </Index>
+          return (
+            <Show when={pane()}>
+              {(current) => (
+                <div
+                  // A parked pane stays mounted but skips rendering.
+                  class={
+                    isParked()
+                      ? 'absolute inset-0 z-0 pointer-events-none invisible [content-visibility:hidden]'
+                      : motion.classFor(isFront())
+                  }
+                  style={isParked() ? undefined : motion.styleFor(isFront())}
+                  data-parked-pane={isParked() ? '' : undefined}
+                  // Only the presented pane is interactive, so focus (including
+                  // programmatic autofocus in late-mounting content) can never
+                  // land elsewhere. Demoting a pane also blurs any focused child.
+                  inert={!isPresented()}
+                  onTransitionEnd={(e) =>
+                    motion.handleTransitionEnd(e, isFront())
+                  }
+                >
+                  <PaneSuspensionContext.Provider value={suspended}>
+                    <Suspense>
+                      <SplitPanel
+                        split={current().split}
+                        handle={current().handle}
+                        active={isPresented()}
+                        setPanelRef={(ref) => props.panelRefs.set(id, ref)}
+                        index={index()}
+                      />
+                    </Suspense>
+                  </PaneSuspensionContext.Provider>
+                </div>
+              )}
+            </Show>
+          );
+        }}
+      </For>
     </div>
   );
 }

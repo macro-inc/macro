@@ -342,12 +342,15 @@ export function createPanes<E extends PaneEntry, D>(
       setLayout(resetShares(untrack(layout)));
     },
 
-    /** How `incoming` lines up with the open panes. */
+    /** How `incoming` lines up with the open panes, leaving `park` out. */
     diff(
       incoming: readonly IncomingPane<E>[],
-      diffOptions: Omit<DiffOptions<E>, 'createPaneId'>
+      diffOptions: Omit<DiffOptions<E>, 'createPaneId'>,
+      park: readonly PaneId[] = []
     ): PanesDiff<E> {
-      const open = untrack(ids);
+      // Panes to park count as parked already, so the diff neither reuses
+      // nor removes them; applying it leaves them retained and unshown.
+      const open = untrack(ids).filter((pane) => !park.includes(pane));
       const live: LivePanes<E> = {
         panes: open,
         parked: untrack(retained).filter((pane) => !open.includes(pane)),

@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { type Accessor, untrack } from 'solid-js';
+import { type Accessor, createComputed, on, untrack } from 'solid-js';
 
 const REFRESH_INTERVAL_MS = 250;
 /** For refreshes that rebuild account-wide state, such as the channel index. */
@@ -130,23 +130,32 @@ export function createVisibleRefresh(
 /**
  * Runs immediately while visible, with no throttle. A hidden tab keeps one dirty
  * bit and runs once when it becomes visible, for a source whose own reads
- * already coalesce.
+ * already coalesce. `suspended` hides it the same way inside a visible tab (a
+ * parked pane); it needs a reactive owner.
  *
  * The caller must dispose it.
  */
-export function createHiddenDeferral(run: () => void): {
+export function createHiddenDeferral(
+  run: () => void,
+  suspended?: Accessor<boolean>
+): {
   request: () => void;
   dispose: () => void;
 } {
   let deferred = false;
-  const dispose = makeEventListener(document, 'visibilitychange', () => {
-    if (!deferred || document.visibilityState === 'hidden') return;
+  const isHidden = () =>
+    document.visibilityState === 'hidden' ||
+    (suspended !== undefined && untrack(suspended));
+  const runDeferred = () => {
+    if (!deferred || isHidden()) return;
     deferred = false;
     run();
-  });
+  };
+  const dispose = makeEventListener(document, 'visibilitychange', runDeferred);
+  if (suspended) createComputed(on(suspended, runDeferred, { defer: true }));
   return {
     request: () => {
-      deferred = document.visibilityState === 'hidden';
+      deferred = isHidden();
       if (!deferred) run();
     },
     dispose,

@@ -15,7 +15,7 @@ vi.mock(import('@core/util/platform'), async (importOriginal) => {
 vi.mock('../components/SplitPanel', () => ({ SplitPanel: () => null }));
 
 import { useSplitBackInterceptor } from '../back-interceptor';
-import type { SplitId, SplitState } from '../layoutManager';
+import type { SplitId } from '../layoutManager';
 import type { MobilePaneStack } from '../mobile/createMobilePaneStack';
 import { MobileSplitContainer } from '../mobile/MobileSplitContainer';
 
@@ -37,9 +37,13 @@ function stubPaneStack(
 function mountContainer(stack: MobilePaneStack) {
   return render(() => (
     <MobileSplitContainer
-      splitManager={{ getSplit: () => undefined }}
+      splitManager={{
+        getSplit: () => undefined,
+        splitState: () => undefined,
+      }}
       stack={stack}
-      splits={() => [] as ReadonlyArray<SplitState>}
+      parkedPanes={() => []}
+      suspendsParked={() => false}
       panelRefs={new Map<SplitId, HTMLDivElement>()}
     />
   ));
@@ -72,9 +76,13 @@ describe('Android system Back in the mobile split container', () => {
       useSplitBackInterceptor(confirmDraft);
       return (
         <MobileSplitContainer
-          splitManager={{ getSplit: () => undefined }}
+          splitManager={{
+            getSplit: () => undefined,
+            splitState: () => undefined,
+          }}
           stack={stubPaneStack({ goBack })}
-          splits={() => [] as ReadonlyArray<SplitState>}
+          parkedPanes={() => []}
+          suspendsParked={() => false}
           panelRefs={new Map<SplitId, HTMLDivElement>()}
         />
       );
@@ -92,9 +100,13 @@ describe('Android system Back in the mobile split container', () => {
       useSplitBackInterceptor(() => false);
       return (
         <MobileSplitContainer
-          splitManager={{ getSplit: () => undefined }}
+          splitManager={{
+            getSplit: () => undefined,
+            splitState: () => undefined,
+          }}
           stack={stubPaneStack({ goBack })}
-          splits={() => [] as ReadonlyArray<SplitState>}
+          parkedPanes={() => []}
+          suspendsParked={() => false}
           panelRefs={new Map<SplitId, HTMLDivElement>()}
         />
       );
@@ -111,9 +123,13 @@ describe('Android system Back in the mobile split container', () => {
       useSplitBackInterceptor(interceptor);
       return (
         <MobileSplitContainer
-          splitManager={{ getSplit: () => undefined }}
+          splitManager={{
+            getSplit: () => undefined,
+            splitState: () => undefined,
+          }}
           stack={stubPaneStack({ canGoBack: () => false })}
-          splits={() => [] as ReadonlyArray<SplitState>}
+          parkedPanes={() => []}
+          suspendsParked={() => false}
           panelRefs={new Map<SplitId, HTMLDivElement>()}
         />
       );

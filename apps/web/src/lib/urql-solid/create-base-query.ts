@@ -1,4 +1,5 @@
 import { useFlowTrace } from '@app/observability/flow';
+import { usePaneSuspended } from '@core/context/pane-suspension';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -6,6 +7,7 @@ import {
   createComputed,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   untrack,
 } from 'solid-js';
@@ -111,10 +113,34 @@ export function createBaseQuery<
     );
   };
 
+  // A suspended view (a hidden parked pane) keeps only the latest result and
+  // applies it once shown, so nothing it renders changes while hidden.
+  const suspended = usePaneSuspended();
+  let held: Result | undefined;
+  const deliver = (next: Result): void => {
+    if (untrack(suspended)) {
+      held = next;
+      return;
+    }
+    update(next);
+  };
+  createComputed(
+    on(
+      suspended,
+      (hidden) => {
+        if (hidden || !held) return;
+        const next = held;
+        held = undefined;
+        update(next);
+      },
+      { defer: true }
+    )
+  );
+
   createComputed(() => {
     const current = observer();
-    update(untrack(() => current.getCurrentResult()));
-    const unsubscribe = current.subscribe(update);
+    deliver(untrack(() => current.getCurrentResult()));
+    const unsubscribe = current.subscribe(deliver);
     onCleanup(unsubscribe);
   });
 

@@ -606,6 +606,17 @@ export function isCalendarSearchUiEnabled(): boolean {
   return isFeatureEnabled(enableCalendarSearchUi);
 }
 
+// Phones keep recently used dock views mounted, hidden and inert, so going
+// back to one shows it instead of rendering it again. Off by default
+// everywhere, including dev, until the memory and background-work
+// measurements are settled. The payload tunes it: `maxParked` (views kept
+// besides the shown one) and `hiddenViews` (`live` keeps updating hidden
+// views; `suspended` holds their query results until they are shown).
+export const enableMobileParkedDockViews = defineFlag({
+  key: 'enable-mobile-parked-dock-views',
+  env: 'ENABLE_MOBILE_PARKED_DOCK_VIEWS',
+});
+
 // Team out of office: the calendar side panel's "Team out of office" section
 // and the read-only teammate absence chips on the grid. Purely additive: when
 // off, the section never mounts and no team out-of-office query is issued.
