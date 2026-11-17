@@ -38,7 +38,6 @@ fn topic_events() -> Vec<(TeamTopicEvent, Value)> {
                 owner: user_id("macro|owner@acme.com"),
                 enterprise: true,
                 paid: true,
-                auto_join_domain: Some("acme.com".to_string()),
             }),
             json!({
                 "event_type": "team.created",
@@ -48,8 +47,7 @@ fn topic_events() -> Vec<(TeamTopicEvent, Value)> {
                     "slug": "acme",
                     "owner": "macro|owner@acme.com",
                     "enterprise": true,
-                    "paid": true,
-                    "auto_join_domain": "acme.com"
+                    "paid": true
                 }
             }),
         ),

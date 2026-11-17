@@ -14,14 +14,6 @@ use super::TeamRouterState;
 pub struct CreateTeamRequest {
     /// The name of the team
     pub name: String,
-    /// Whether colleagues who sign up with the owner's work email domain join
-    /// the team automatically. Ignored for generic email providers.
-    #[serde(default = "default_allow_domain_join")]
-    pub allow_domain_join: bool,
-}
-
-fn default_allow_domain_join() -> bool {
-    true
 }
 
 /// Creates a new team.
@@ -54,12 +46,7 @@ pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthor
 
     let team = state
         .service
-        .create_team(
-            &user.macro_user_id,
-            &req.name,
-            subscription_id.as_ref(),
-            req.allow_domain_join,
-        )
+        .create_team(&user.macro_user_id, &req.name, subscription_id.as_ref())
         .await?;
 
     Ok(Json(team))

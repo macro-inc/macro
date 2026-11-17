@@ -32,8 +32,6 @@ pub struct TeamCreatedMetadata {
     pub enterprise: bool,
     /// Whether the team has a paid subscription, without exposing billing identifiers.
     pub paid: bool,
-    /// Corporate domain enabled for automatic joining, if any.
-    pub auto_join_domain: Option<String>,
 }
 
 /// Metadata for [`TeamTopicEvent::Updated`].

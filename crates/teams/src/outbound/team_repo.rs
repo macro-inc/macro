@@ -80,7 +80,6 @@ impl TeamRepositoryImpl {
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
         owner_plan: SeatPlan,
-        auto_join_domain: Option<&str>,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
 
@@ -89,9 +88,9 @@ impl TeamRepositoryImpl {
         let team = sqlx::query!(
             r#"
             INSERT INTO team (
-                id, name, slug, owner_id, seat_count, subscription_id, paying, auto_join_domain
+                id, name, slug, owner_id, seat_count, subscription_id, paying
             )
-            VALUES ($1, $2, $3, $4, 1, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, 1, $5, $6)
             RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites,
                 auto_join_domain,
                 default_link_share as "default_link_share: LinkShare",
@@ -103,7 +102,6 @@ impl TeamRepositoryImpl {
             user_id.as_ref(),
             subscription_id.map(|s| s.to_string()),
             subscription_id.is_some(),
-            auto_join_domain,
         )
         .try_map(|row| {
             Ok(Team {
@@ -380,22 +378,14 @@ impl TeamRepository for TeamRepositoryImpl {
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
         owner_plan: SeatPlan,
-        auto_join_domain: Option<&str>,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
             return Err(CreateTeamError::InvalidTeamName(team_name.to_string()));
         }
 
-        self.create_team_inner(
-            user_id,
-            team_name,
-            team_slug,
-            subscription_id,
-            owner_plan,
-            auto_join_domain,
-        )
-        .await
-        .map_err(|e| e.into())
+        self.create_team_inner(user_id, team_name, team_slug, subscription_id, owner_plan)
+            .await
+            .map_err(|e| e.into())
     }
 
     #[tracing::instrument(skip(self), err)]

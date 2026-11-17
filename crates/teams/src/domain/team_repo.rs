@@ -69,7 +69,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
 
     /// Creates a new team with the provided normalized slug. `subscription_id` is `None` for
     /// free teams. Membership is not capped by team size. `owner_plan` is the plan the owner's
-    /// own seat is already billed at. `auto_join_domain` is stored as the team's auto-join domain.
+    /// own seat is already billed at.
     fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -77,7 +77,6 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
         owner_plan: SeatPlan,
-        auto_join_domain: Option<&str>,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
     /// Moves any user-owned GitHub App installation rows to the given team.
@@ -413,15 +412,12 @@ pub trait TeamMembersService: Clone + Send + Sync + 'static {
 /// The TeamService defines a set of actions to perform on the teams
 pub trait TeamService: Clone + Send + Sync + 'static {
     /// Creates a new team. `subscription_id` is `None` for free teams.
-    /// Membership is not capped by team size. With `allow_domain_join`, a team
-    /// whose owner has a work email starts with the owner's domain as its
-    /// auto-join domain.
+    /// Membership is not capped by team size.
     fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
-        allow_domain_join: bool,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
     /// Returns the user's active or trialing Stripe subscription id, if any.
