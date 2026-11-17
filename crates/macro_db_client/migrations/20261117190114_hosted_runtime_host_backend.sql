@@ -4,6 +4,9 @@
 -- hosts until other backends are wired up; a control plane drives only the
 -- hosts it registered.
 
+-- Purchases and effect leases lock host rows; never queue behind one of them.
+SET LOCAL lock_timeout = '3s';
+
 CREATE TYPE hosted_runtime_backend AS ENUM ('incus', 'firecracker', 'docker');
 
 ALTER TABLE hosted_runtime_host
