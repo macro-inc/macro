@@ -291,7 +291,9 @@ each run.
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,
   `scheduled_action_code_upgrade`); a
-  failed rewrite pauses the routine. `sweep` does the same for every
+  failed rewrite pauses the routine. A routine whose code writes as its
+  owner (`dangerously_operate_as_user`) is never rewritten: it is paused for
+  the owner with its code as it was. `sweep` does the same for every
   enabled routine when the harness starts after a release.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
   `github` selector and the exact payload `match` GitHub filters take.
