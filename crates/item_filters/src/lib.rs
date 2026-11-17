@@ -216,6 +216,17 @@ impl SharedEmailFilter {
     }
 }
 
+/// A mailbox view the Email list scopes a search to, as its tabs do.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub enum EmailSearchView {
+    /// Threads with a message the mailbox sent, as the Sent view lists.
+    Sent,
+    /// Threads with a draft, as the Drafts view lists.
+    Drafts,
+}
+
 /// The email filters used to filter down what emails you search over.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -242,7 +253,14 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub link_ids: Vec<String>,
 
-    /// A list of project ids to search within. Empty to ignore project filtering.
+    /// Drive folder (project) ids to search within: threads filed in any of
+    /// these folders. Besides the caller's own threads, it reaches every
+    /// thread in a folder shared with the caller, whoever's inbox holds it,
+    /// as the folder's list does. Search takes at most 50 folders and
+    /// rejects more with a 400, and matches the query against at most 10,000
+    /// of their threads in all; threads past that are not searched, unless
+    /// `email_thread_ids` names them, and at most 10,000 named threads are
+    /// searched in all. Empty to ignore project filtering.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_ids: Vec<String>,
 
@@ -286,7 +304,8 @@ pub struct EmailFilters {
     /// domains (in any of sender/cc/bcc/recipient). Each domain is authorized
     /// against `crm_domains` + `crm_companies` (must exist for the caller's
     /// team, company must not be hidden, `email_sync` must be true).
-    /// Mutually exclusive with `crm_addresses`.
+    /// Mutually exclusive with `crm_addresses`. Listing email only: search
+    /// rejects a request that sets it with a 400.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub crm_domains: Vec<String>,
 
@@ -295,7 +314,8 @@ pub struct EmailFilters {
     /// fully-qualified addresses. Each address is authorized against
     /// `crm_contacts` + `crm_companies` (contact must not be hidden, company
     /// must not be hidden, `email_sync` must be true).
-    /// Mutually exclusive with `crm_domains`.
+    /// Mutually exclusive with `crm_domains`. Listing email only: search
+    /// rejects a request that sets it with a 400.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub crm_addresses: Vec<String>,
 
@@ -304,6 +324,17 @@ pub struct EmailFilters {
     /// type). `Some(false)` and `None` apply no constraint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub calendar_only: Option<bool>,
+
+    /// Only threads with at least one attachment of one of these kinds, by
+    /// MIME type, on any of their messages. Empty applies no constraint.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<crate::ast::email::AttachmentKind>,
+
+    /// Only threads in this mailbox view. Search only: listing email takes
+    /// its view as a parameter of its own, so expanding this into a list
+    /// filter is an error.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<EmailSearchView>,
 }
 
 impl IsEmpty for EmailFilters {
@@ -326,6 +357,8 @@ impl IsEmpty for EmailFilters {
             crm_domains,
             crm_addresses,
             calendar_only,
+            attachments,
+            view,
         } = self;
         senders.is_empty()
             && cc.is_empty()
@@ -344,6 +377,8 @@ impl IsEmpty for EmailFilters {
             && crm_domains.is_empty()
             && crm_addresses.is_empty()
             && !calendar_only.unwrap_or(false)
+            && attachments.is_empty()
+            && view.is_none()
     }
 }
 

@@ -206,12 +206,6 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         target.push('?');
         target.push_str(query);
     }
-    // Parsing normalizes the path (`..`, `%2e`), as the host will read it.
-    let (Ok(url), Ok(base_url)) = (url::Url::parse(&target), url::Url::parse(base)) else {
-        span.record("outcome", "bad_url");
-        span.record("status", StatusCode::BAD_REQUEST.as_u16());
-        return (StatusCode::BAD_REQUEST, "not a URL the SDK hosts serve").into_response();
-    };
     // Services under one base take each other's requests.
     let sharing: Vec<&str> = routes
         .upstreams
@@ -219,15 +213,25 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         .filter(|(_, other)| *other == base)
         .map(|(name, _)| name.as_str())
         .collect();
-    let decided = decision::decide_across(
-        &CATALOG,
-        &sharing,
-        base_url.path(),
-        request.method().as_str(),
-        url.path(),
-        routes.policy,
-        credentialed(request.headers(), &url),
-    );
+    // Parsing normalizes the path (`..`, `%2e`), as the host will read it. A
+    // URL that won't parse is recorded and sent as it is, failing as it would
+    // without the decision.
+    let decided = match (url::Url::parse(&target), url::Url::parse(base)) {
+        (Ok(url), Ok(base_url)) => decision::decide_across(
+            &CATALOG,
+            &sharing,
+            base_url.path(),
+            request.method().as_str(),
+            url.path(),
+            routes.policy,
+            credentialed(request.headers(), &url),
+        ),
+        _ => decision::Decision {
+            operation: None,
+            refusal: Some(decision::Refusal::UnparseableUrl),
+            uncatalogued: false,
+        },
+    };
     if let Some(operation) = decided.operation {
         span.record("operation", operation);
         // Services under one base share a forwarder segment: the operation
@@ -246,7 +250,10 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
             span.record("outcome", "refused");
             span.record("status", StatusCode::FORBIDDEN.as_u16());
             // The path the host would have seen, not the forwarder's.
-            let message = refusal.message(request.method().as_str(), url.path());
+            let path = url::Url::parse(&target)
+                .map(|url| url.path().to_owned())
+                .unwrap_or_else(|_| request.uri().path().to_owned());
+            let message = refusal.message(request.method().as_str(), &path);
             return (StatusCode::FORBIDDEN, message).into_response();
         }
     }
@@ -259,7 +266,7 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         let started = Instant::now();
         let answer = routes
             .client
-            .request(method, url)
+            .request(method, target)
             .headers(headers)
             .body(body)
             .send()

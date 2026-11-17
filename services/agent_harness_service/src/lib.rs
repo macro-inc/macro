@@ -746,7 +746,7 @@ pub async fn run() -> anyhow::Result<()> {
         .transpose()?;
     // Code runs reach the SDK hosts through the host's forwarder where the
     // egress flag is on for the user they act as.
-    let code_egress = code_mode::EgressRollout(feature_flags.clone());
+    let code_egress = code_mode::EgressRollout::new(feature_flags.clone());
     // Routine code steps run as their owner on the routines' executor.
     let routine_code = match &code_runner {
         Some((_, _, routines, checker)) => Some(

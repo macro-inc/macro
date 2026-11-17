@@ -27,3 +27,7 @@ pub fn is_agent_run(attribution: CredentialAttribution, headers: &HeaderMap) -> 
 pub fn is_program_run(attribution: CredentialAttribution, headers: &HeaderMap) -> bool {
     attribution != CredentialAttribution::Person || headers.contains_key(CODE_EXECUTION_HEADER)
 }
+
+/// The refusal a sign-in route gives a program: one that reads the code from
+/// the user's inbox would hold the account.
+pub const PROGRAM_SIGN_IN_REFUSAL: &str = "An agent's program cannot sign in to Macro: the sign-in code would give it the account. Tell the user to sign in themselves.";

@@ -11,6 +11,7 @@ use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::{collections::BTreeMap, sync::Arc};
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 
 /// The flag that sends a user's runs through the host's forwarder.
 pub const EGRESS_PROXY_FLAG: &str = "enable-code-execution-egress-proxy";
@@ -24,33 +25,84 @@ pub const EGRESS_ENFORCE_FLAG: &str = "enable-code-execution-egress-enforce";
 /// flag client, or when their flags can't be read, runs go directly, as
 /// before.
 #[derive(Clone)]
-pub struct EgressRollout<Flags = feature_flags::outbound::posthog::PostHogFeatureFlags>(
-    pub Option<Flags>,
-);
+pub struct EgressRollout<Flags = feature_flags::outbound::posthog::PostHogFeatureFlags> {
+    flags: Option<Flags>,
+    /// Each user's answer for a while, so a run doesn't wait on PostHog: a
+    /// read for [`EGRESS_FLAG_TTL`], a failed one (direct) for
+    /// [`EGRESS_FLAG_FAILURE_TTL`].
+    cached:
+        Arc<std::sync::Mutex<std::collections::HashMap<String, (tokio::time::Instant, Egress)>>>,
+}
+
+/// How long a user's egress flags are reused.
+const EGRESS_FLAG_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+/// How long a failed read sends the user's runs direct before asking again.
+const EGRESS_FLAG_FAILURE_TTL: std::time::Duration = std::time::Duration::from_secs(10);
+/// Users whose answers are kept at once; past it, expired ones are dropped,
+/// then all of them.
+const EGRESS_FLAG_USERS: usize = 10_000;
+
+impl<Flags> EgressRollout<Flags> {
+    /// Read the flags from `flags`; with none, every run goes direct.
+    pub fn new(flags: Option<Flags>) -> Self {
+        Self {
+            flags,
+            cached: Arc::default(),
+        }
+    }
+}
 
 impl<Flags: FeatureFlags> EgressRollout<Flags> {
     /// The egress for runs acting as `user`.
     pub async fn egress(&self, user: &MacroUserIdStr<'_>) -> Egress {
-        let Some(flags) = &self.0 else {
+        let Some(flags) = &self.flags else {
             return Egress::Direct;
         };
-        match flags.load(user).await {
+        let span = tracing::info_span!(
+            "code_execution.egress_flag",
+            cache = tracing::field::Empty,
+            egress = tracing::field::Empty,
+        );
+        let now = tokio::time::Instant::now();
+        let key = user.as_ref().to_owned();
+        let hit = self
+            .cached
+            .lock()
+            .ok()
+            .and_then(|cached| cached.get(&key).copied())
+            .filter(|(until, _)| *until > now)
+            .map(|(_, egress)| egress);
+        if let Some(egress) = hit {
+            span.record("cache", "hit");
+            span.record("egress", tracing::field::debug(egress));
+            return egress;
+        }
+        span.record("cache", "miss");
+        let (egress, ttl) = match flags.load(user).instrument(span.clone()).await {
             Ok(snapshot) if snapshot.is_enabled(EGRESS_PROXY_FLAG) => {
                 if snapshot.is_enabled(EGRESS_ENFORCE_FLAG) {
-                    Egress::Enforced
+                    (Egress::Enforced, EGRESS_FLAG_TTL)
                 } else {
-                    Egress::Proxied
+                    (Egress::Proxied, EGRESS_FLAG_TTL)
                 }
             }
-            Ok(_) => Egress::Direct,
+            Ok(_) => (Egress::Direct, EGRESS_FLAG_TTL),
             Err(error) => {
-                tracing::warn!(
-                    ?error,
-                    "could not read the egress flag; the run goes direct"
-                );
-                Egress::Direct
+                tracing::warn!(parent: &span, ?error, "could not read the egress flag; the run goes direct");
+                (Egress::Direct, EGRESS_FLAG_FAILURE_TTL)
             }
+        };
+        span.record("egress", tracing::field::debug(egress));
+        if let Ok(mut cached) = self.cached.lock() {
+            if cached.len() >= EGRESS_FLAG_USERS {
+                cached.retain(|_, (until, _)| *until > now);
+                if cached.len() >= EGRESS_FLAG_USERS {
+                    cached.clear();
+                }
+            }
+            cached.insert(key, (now + ttl, egress));
         }
+        egress
     }
 }
 
@@ -110,7 +162,7 @@ async fn scope_of(
 /// through its scoped credential, and finding and reading tools.
 fn native_tool_allowed(scope: SessionScope, tool: &str) -> bool {
     match scope {
-        SessionScope::Generation | SessionScope::NoSend => matches!(
+        SessionScope::Generation | SessionScope::NoSend | SessionScope::DryRun => matches!(
             tool,
             "ExecuteCode"
                 | "DescribeCodeTools"
@@ -144,15 +196,39 @@ impl NativeToolGate for ScopedToolGate {
                 Ok(_) => self.inner.check(session, tool, arguments).await,
                 Err(error) => {
                     tracing::error!(?error, "could not read a session's scope");
-                    NativeToolVerdict::Refuse(
-                        "Whether this tool may run could not be checked; nothing was done."
-                            .to_owned(),
-                    )
+                    NativeToolVerdict::Refuse(SCOPE_UNREAD.to_owned())
+                }
+            }
+        })
+    }
+
+    /// A scoped session calls no remote MCP server's tool directly
+    /// (connected apps, custom servers, previews): the egress proxy that
+    /// carries the call knows nothing of the scope, and a tool's read-only
+    /// hint is its server's own claim. Its code's route to connected apps is
+    /// refused by the scope too.
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        session: agent_session::domain::model::AgentSessionId,
+        tool: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async move {
+            match self.scopes.scope(session.as_uuid()).await {
+                Ok(Some(_)) => Some(format!(
+                    "This session can't use {tool}; it reaches no app outside Macro."
+                )),
+                Ok(None) => self.inner.refuse_remote_mcp(session, tool).await,
+                Err(error) => {
+                    tracing::error!(?error, "could not read a session's scope");
+                    Some(SCOPE_UNREAD.to_owned())
                 }
             }
         })
     }
 }
+
+/// What the model hears when a session's scope can't be read.
+const SCOPE_UNREAD: &str = "Whether this tool may run could not be checked; nothing was done.";
 
 #[async_trait]
 impl ExecutionCredentials for RunCredentials {

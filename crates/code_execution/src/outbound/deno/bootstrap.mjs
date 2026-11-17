@@ -130,7 +130,13 @@ try {
   }
   const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
-  const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
+  // `--allow-net` lets `host.` through as `host`, but the URL keeps the dot.
+  const originOf = (url) => {
+    const parsed = new URL(url);
+    parsed.hostname = parsed.hostname.replace(/\.$/, "");
+    return parsed.origin;
+  };
+  const origins = new Set(Object.values(context.hosts).map(originOf));
   // A proxied run reaches only its forwarder: a request to a host's base is
   // sent to that service under the forwarder, longest base first. The
   // forwarder, not this, marks it.
@@ -140,7 +146,7 @@ try {
   globalThis.fetch = (input, init) => {
     const request = new Request(input, init);
     // Every request to an SDK origin, whatever credential it carries.
-    if (origins.has(new URL(request.url).origin)) {
+    if (origins.has(originOf(request.url))) {
       for (const [name, value] of Object.entries(context.traceHeaders ?? {})) {
         if (name === "traceparent" || name === "tracestate") request.headers.set(name, value);
       }

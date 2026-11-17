@@ -19,6 +19,8 @@ pub(crate) enum Refusal {
     UnknownOperation,
     /// A write during a dry run.
     DryRunWrite,
+    /// Its URL doesn't parse, so nothing about it can be checked.
+    UnparseableUrl,
     /// It carries no credential: it reaches a route anyone may call, which
     /// no scope signed into the run's credential can hold.
     NoCredential,
@@ -41,6 +43,9 @@ impl Refusal {
                 "{method} {path} isn't an operation of Macro's SDK, so this run can't send it. Use the macro SDK's methods instead of building requests by hand; DescribeCodeTools and ReadCodeDocs list them."
             ),
             Self::DryRunWrite => "A dry run doesn't send changes. Return what the program would change instead of changing it.".to_owned(),
+            Self::UnparseableUrl => format!(
+                "{method} {path} isn't a URL this run can send. Call the macro SDK instead of building the URL by hand."
+            ),
             Self::NoCredential => format!(
                 "{method} {path} was sent without the run's credential, so this run can't send it. Call the macro SDK, which adds it."
             ),

@@ -58,8 +58,11 @@ A host can run a program with nobody watching (a routine step) by setting
   requests at `fetch` unless a read matches;
 - it has no workers: `Worker` is undefined and worker modules throw.
 
-A dry run is held back inside the process, not by the APIs: code written to
-get around it can still write with the owner's permissions.
+A dry run is held back inside the process; the APIs don't know about it. A
+host that must not write in a dry run also gives it a token that can't: the
+agent harness signs a routine dry run's token with the `dry_run` scope
+(`agent_correlation::scope`), so code written to get around the process's
+dry run is refused by every SDK host.
 
 `DenoChecker` (`src/outbound/deno/check.rs`) type-checks a TypeScript program
 against the SDK's generated declarations (`sdk-types.json` from `crates/code_mode_assets`)

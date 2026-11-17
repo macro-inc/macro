@@ -20,11 +20,9 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
-import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import ListIcon from '@icon/system/regular/list.svg';
-import PlusIcon from '@icon/system/regular/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, ButtonGroup, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -102,7 +100,6 @@ export function Header(props: {
     () => ({
       fullHeader: { min: hasDockedSidebar() ? 580 : 600 },
       inlineSearch: { min: 1040 },
-      labeledNew: { min: 360 },
       labeledToday: { min: 304 },
     })
   );
@@ -169,25 +166,7 @@ export function Header(props: {
     </>
   );
   const headerCreateMenu = () => (
-    <CalendarCreateMenu
-      presentation={!isTouchDevice() ? 'toolbar' : undefined}
-      size={breakpoints.labeledNew() ? 'md' : 'icon-md'}
-      label="New"
-      class={cn(
-        'shrink-0 rounded-full touch:h-11',
-        breakpoints.labeledNew() &&
-          'h-(--sidebar-row-height) gap-(--sidebar-label-gap) px-(--sidebar-item-inset)'
-      )}
-      trigger={
-        <>
-          <PlusIcon class="size-3.5" />
-          <Show when={breakpoints.labeledNew()}>
-            <span>New</span>
-            <CaretDownIcon class="size-3.5 shrink-0" />
-          </Show>
-        </>
-      }
-    >
+    <CalendarCreateMenu presentation="toolbar">
       {createItems()}
     </CalendarCreateMenu>
   );
@@ -286,7 +265,7 @@ export function Header(props: {
               </Button>
             </Show>
             <MonthDrawer month={currentDate()} />
-            {todayButton(isTouchDevice())}
+            {todayButton(true)}
           </HeaderIsland>
         </SplitHeaderLeft>
 
