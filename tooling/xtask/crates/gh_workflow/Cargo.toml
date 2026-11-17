@@ -12,10 +12,10 @@ indexmap = { workspace = true, features = ["serde"] }
 merge = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_yml = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+serde_yaml = { workspace = true }
 
 [[test]]
 name = "test-workflow"

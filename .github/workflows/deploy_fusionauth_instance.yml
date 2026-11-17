@@ -1,7 +1,7 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_fusionauth_instance.rs
 name: Deploy FusionAuth Instance
-'on':
+on:
   workflow_dispatch:
     inputs:
       environment:
@@ -9,13 +9,13 @@ name: Deploy FusionAuth Instance
         required: true
         type: choice
         options:
-        - dev
-        - prod
+          - dev
+          - prod
         default: dev
 jobs:
   deploy:
     name: Deploy fusionauth-instance
-    uses: './.github/workflows/reusable_deploy_service.yml'
+    uses: ./.github/workflows/reusable_deploy_service.yml
     with:
       environment: ${{ inputs.environment }}
       service-name: fusionauth-instance

@@ -1,13 +1,29 @@
-//! The crate's error type: serializing a workflow to YAML failed.
+//! The crate's error type: a workflow could not be rendered as YAML.
+
+use std::fmt;
 
 #[derive(Debug)]
 pub enum Error {
-    Yaml(serde_yml::Error),
+    /// A value YAML workflows have no form for, such as raw bytes.
+    Unsupported(&'static str),
+    /// A `Serialize` impl reported an error.
+    Custom(String),
 }
 
-impl From<serde_yml::Error> for Error {
-    fn from(error: serde_yml::Error) -> Self {
-        Self::Yaml(error)
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unsupported(what) => write!(f, "cannot render {what} as workflow YAML"),
+            Self::Custom(message) => f.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl serde::ser::Error for Error {
+    fn custom<T: fmt::Display>(message: T) -> Self {
+        Self::Custom(message.to_string())
     }
 }
 

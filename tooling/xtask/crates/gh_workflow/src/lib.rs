@@ -12,6 +12,7 @@ mod step;
 mod strategy;
 
 pub(crate) mod workflow;
+mod yaml;
 
 pub use concurrency::*;
 pub use container::*;

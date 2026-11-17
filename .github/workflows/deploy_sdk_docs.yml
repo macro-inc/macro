@@ -1,16 +1,16 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_sdk_docs.rs
 name: Deploy SDK Docs
-'on':
+on:
   push:
     branches:
-    - main
+      - main
     paths:
-    - '.github/workflows/deploy_sdk_docs.yml'
-    - packages/sdk/**
-    - packages/sdk-docs/**
-    - bun.lock
-    - package.json
+      - .github/workflows/deploy_sdk_docs.yml
+      - packages/sdk/**
+      - packages/sdk-docs/**
+      - bun.lock
+      - package.json
   workflow_dispatch: {}
 jobs:
   deploy:
@@ -20,28 +20,28 @@ jobs:
     permissions:
       contents: read
     steps:
-    - name: Checkout
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      with:
-        clean: 'false'
-        persist-credentials: 'false'
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-    - name: Setup Node
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-      with:
-        node-version: '22'
-    - name: Install dependencies
-      run: bun install --frozen-lockfile
-    - name: Verify documentation
-      run: bun run type-check && bun run test
-      working-directory: packages/sdk-docs
-    - name: Deploy with wrangler
-      run: bun run docs:deploy
-      env:
-        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-      working-directory: packages/sdk-docs
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          clean: 'false'
+          persist-credentials: 'false'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Verify documentation
+        run: bun run type-check && bun run test
+        working-directory: packages/sdk-docs
+      - name: Deploy with wrangler
+        run: bun run docs:deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: packages/sdk-docs
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false

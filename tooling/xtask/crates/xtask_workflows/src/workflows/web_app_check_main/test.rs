@@ -322,7 +322,7 @@ fn generated_code_builds_without_debug_info_for_every_step() {
         "the job env turns debug info off: {header}"
     );
     assert!(
-        header.contains("RUSTFLAGS: '-C link-arg=-fuse-ld=mold'"),
+        header.contains("RUSTFLAGS: -C link-arg=-fuse-ld=mold"),
         "the job links with mold like the Rust jobs: {header}"
     );
     for flag in ["CARGO_PROFILE_DEV_DEBUG", "RUSTFLAGS", "--config"] {
@@ -972,7 +972,7 @@ fn path_check_fetches_no_blobs_up_front() {
     let path_check = job(&yaml, "path-check", "android-native-check");
     assert!(path_check.contains("filter: blob:none"), "{path_check}");
     assert!(
-        path_check.contains("sparse-checkout: '.github'"),
+        path_check.contains("sparse-checkout: .github"),
         "{path_check}"
     );
 }
