@@ -6,13 +6,7 @@ import {
 } from '@tanstack/solid-query';
 import type { Client } from '@urql/core';
 import { err, ok } from 'neverthrow';
-import {
-  type Accessor,
-  createMemo,
-  createSignal,
-  type JSX,
-  type Setter,
-} from 'solid-js';
+import { type Accessor, createMemo, createSignal, type JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject, onEnd, pipe } from 'wonka';
@@ -23,7 +17,6 @@ import {
 import { createUrqlQuery } from '../../urql-solid';
 import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
 
-const useFeatureFlagMock = vi.hoisted(() => vi.fn());
 const graphqlEntityPropertyMutationMock = vi.hoisted(() => vi.fn());
 const createGraphqlAddEntityPropertyMutationMock = vi.hoisted(() => vi.fn());
 const createGraphqlBulkSaveEntityPropertiesMutationMock = vi.hoisted(() =>
@@ -58,9 +51,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 const getRestEntityPropertiesMock = vi.hoisted(() => vi.fn());
 const deleteEntityPropertyMock = vi.hoisted(() => vi.fn());
-const bulkUpdateEntityPropertyOptionsMock = vi.hoisted(() => vi.fn());
 const updateGraphqlEntityPropertyOptionsMock = vi.hoisted(() => vi.fn());
-const setRestEntityPropertyMock = vi.hoisted(() => vi.fn());
 const isInstantiatedPropertyMock = vi.hoisted(() => vi.fn());
 const entityPropertyFromApiMock = vi.hoisted(() => vi.fn());
 const soupPropertyToPropertyMock = vi.hoisted(() => vi.fn());
@@ -71,7 +62,6 @@ const refreshPropertyQueriesMock = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock('../soup/property-queries', () => ({
   refreshPropertyQueries: refreshPropertyQueriesMock,
 }));
-const graphqlSoupEnabledMock = vi.hoisted(() => vi.fn(() => true));
 const toastFailureMock = vi.hoisted(() => vi.fn());
 const trackMock = vi.hoisted(() => vi.fn());
 
@@ -79,17 +69,8 @@ vi.mock('@app/lib/analytics', () => ({
   analytics: { track: trackMock },
 }));
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: useFeatureFlagMock,
-}));
-
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: toastFailureMock },
-}));
-
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: graphqlSoupEnabledMock,
 }));
 
 vi.mock('@entity/extractors-property/property-helpers', () => ({
@@ -98,7 +79,6 @@ vi.mock('@entity/extractors-property/property-helpers', () => ({
 
 vi.mock('@property/api/converters', () => ({
   entityPropertyFromApi: entityPropertyFromApiMock,
-  propertyValueToApi: vi.fn(() => ({ type: 'string', value: 'doing' })),
 }));
 
 vi.mock('@property/utils', () => ({
@@ -108,9 +88,7 @@ vi.mock('@property/utils', () => ({
 vi.mock('../../service-clients/service-properties/client', () => ({
   propertiesServiceClient: {
     getEntityProperties: getRestEntityPropertiesMock,
-    setEntityProperty: setRestEntityPropertyMock,
     deleteEntityProperty: deleteEntityPropertyMock,
-    bulkUpdateEntityPropertyOptions: bulkUpdateEntityPropertyOptionsMock,
   },
 }));
 
@@ -177,7 +155,6 @@ let bulkOptionsMutation: ReturnType<
 >;
 let entityQuery: ReturnType<typeof useEntityPropertiesQuery>;
 let dispose: (() => void) | undefined;
-let setGraphqlFlagEnabled: Setter<boolean>;
 let graphqlExecutions: Array<{
   variables: unknown;
   context: unknown;
@@ -245,13 +222,6 @@ function renderEntityQuery(
 describe('useEntityPropertiesQuery transport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    graphqlSoupEnabledMock.mockReturnValue(true);
-    const [graphqlFlagEnabled, setEnabled] = createSignal(true);
-    setGraphqlFlagEnabled = setEnabled;
-    useFeatureFlagMock.mockReturnValue(() => ({
-      enabled: graphqlFlagEnabled(),
-      payload: undefined,
-    }));
     graphqlExecutions = [];
     graphqlQueryMock.mockImplementation(
       (request: { variables: unknown }, context: unknown) => {
@@ -392,25 +362,6 @@ describe('useEntityPropertiesQuery transport', () => {
     expect(graphqlExecutions).toHaveLength(1);
   });
 
-  it('reactively switches transports in both directions', async () => {
-    getRestEntityPropertiesMock.mockResolvedValue(ok({ properties: [] }));
-    renderEntityQuery(false);
-    expect(graphqlExecutions).toHaveLength(1);
-    expect(useFeatureFlagMock).toHaveBeenCalledWith({
-      key: 'enable-graphql-soup',
-    });
-
-    setGraphqlFlagEnabled(false);
-    await vi.waitFor(() => expect(graphqlExecutions[0]?.ended).toBe(true));
-    await vi.waitFor(() =>
-      expect(getRestEntityPropertiesMock).toHaveBeenCalled()
-    );
-
-    setGraphqlFlagEnabled(true);
-    await vi.waitFor(() => expect(graphqlExecutions).toHaveLength(2));
-    expect(graphqlExecutions[1]?.ended).toBe(false);
-  });
-
   it('clears the prior entity and resubscribes when the id changes', async () => {
     const [entityId, setEntityId] = createSignal('document-1');
     renderEntityQuery(false, 'DOCUMENT', entityId);
@@ -479,21 +430,6 @@ describe('useEntityPropertiesQuery transport', () => {
     renderEntityQuery(true);
 
     await vi.waitFor(() => expect(entityQuery.data).toEqual([property]));
-    expect(graphqlExecutions).toHaveLength(0);
-    expect(getRestEntityPropertiesMock).toHaveBeenCalledWith({
-      entity_type: 'DOCUMENT',
-      entity_id: 'document-1',
-      query: { include_metadata: true },
-    });
-  });
-
-  it('uses REST when the GraphQL feature is disabled', async () => {
-    setGraphqlFlagEnabled(false);
-    getRestEntityPropertiesMock.mockResolvedValue(ok({ properties: [] }));
-
-    renderEntityQuery(false);
-
-    await vi.waitFor(() => expect(entityQuery.data).toEqual([]));
     expect(graphqlExecutions).toHaveLength(0);
     expect(getRestEntityPropertiesMock).toHaveBeenCalledWith({
       entity_type: 'DOCUMENT',
@@ -652,12 +588,7 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
         };
       }
     );
-    setRestEntityPropertyMock.mockResolvedValue(ok({ success: true }));
-    graphqlSoupEnabledMock.mockReturnValue(true);
     deleteEntityPropertyMock.mockResolvedValue(ok(undefined));
-    bulkUpdateEntityPropertyOptionsMock.mockResolvedValue(
-      ok({ properties: [{ property_id: 'status-def', option_ids: ['doing'] }] })
-    );
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     testQueryClient = new QueryClient({
       defaultOptions: {
@@ -798,8 +729,7 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(toastFailureMock).not.toHaveBeenCalled();
   });
 
-  it('removes a native project property through GraphQL even when the Soup flag is off', async () => {
-    graphqlSoupEnabledMock.mockReturnValue(false);
+  it('removes a native project property through GraphQL', async () => {
     await deleteMutation.mutateAsync({
       entityPropertyId: 'assignment-1',
       entityType: 'INITIATIVE',
@@ -851,56 +781,20 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
   });
 
-  it('invalidates REST after failed REST-backed writes', async () => {
-    // Option selections have their own GraphQL transport, so this REST-only
-    // assertion needs the flag off for the bulk-options write below.
-    graphqlSoupEnabledMock.mockReturnValue(false);
+  it('invalidates REST after a failed REST-backed delete', async () => {
     deleteEntityPropertyMock.mockResolvedValue(
       err([{ code: 'SERVER_ERROR', message: 'delete failed' }])
     );
     await expect(
       deleteMutation.mutateAsync({
         entityPropertyId: 'assignment-1',
-        entityType: 'TASK',
-        entityId: 'task-1',
+        entityType: 'USER',
+        entityId: 'user-1',
       })
     ).rejects.toThrow('delete failed');
 
-    bulkUpdateEntityPropertyOptionsMock.mockResolvedValue(
-      err([{ code: 'SERVER_ERROR', message: 'bulk failed' }])
-    );
-    await expect(
-      bulkOptionsMutation.mutateAsync({
-        entityId: 'task-1',
-        entityType: 'TASK',
-        properties: [
-          {
-            property,
-            currentOptionIds: [],
-            nextOptionIds: ['doing'],
-          },
-        ],
-      })
-    ).rejects.toThrow('bulk failed');
-
-    expect(testQueryClient.invalidateQueries).toHaveBeenCalledTimes(2);
-  });
-
-  it('keeps the existing TanStack lifecycle when GraphQL Soup is disabled', async () => {
-    graphqlSoupEnabledMock.mockReturnValue(false);
-    setRestEntityPropertyMock.mockResolvedValue(
-      err([{ code: 'SERVER_ERROR', message: 'invalid property' }])
-    );
-
-    await expect(mutation.mutateAsync(variables)).rejects.toThrow(
-      'One or more properties permanently failed to save'
-    );
-
-    expect(optimisticUpdateSoupEntityMock).toHaveBeenCalledOnce();
-    expect(rollbackMock).toHaveBeenCalledOnce();
-    expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
-    expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
-    expect(toastFailureMock).toHaveBeenCalledOnce();
+    expect(initiativePropertyDeleteMock).not.toHaveBeenCalled();
+    expect(testQueryClient.invalidateQueries).toHaveBeenCalledTimes(1);
   });
 
   const optionSelection = {
@@ -911,34 +805,28 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     ],
   };
 
-  it.each([true, false])(
-    'keeps GraphQL refresh scope when the flag settles to %s',
-    async (enabled) => {
-      updateGraphqlEntityPropertyOptionsMock.mockImplementation(async () => {
-        graphqlSoupEnabledMock.mockReturnValue(enabled);
-        return [{ propertyDefinitionId: 'status-def', optionIds: ['doing'] }];
-      });
+  it('refreshes only unmaintained property queries after a GraphQL option selection', async () => {
+    updateGraphqlEntityPropertyOptionsMock.mockResolvedValue([
+      { propertyDefinitionId: 'status-def', optionIds: ['doing'] },
+    ]);
 
-      await expect(
-        bulkOptionsMutation.mutateAsync(optionSelection)
-      ).resolves.toEqual({
-        selections: [
-          { propertyDefinitionId: 'status-def', optionIds: ['doing'] },
-        ],
-        transport: 'graphql',
-      });
+    await expect(
+      bulkOptionsMutation.mutateAsync(optionSelection)
+    ).resolves.toEqual({
+      selections: [
+        { propertyDefinitionId: 'status-def', optionIds: ['doing'] },
+      ],
+    });
 
-      expect(updateGraphqlEntityPropertyOptionsMock).toHaveBeenCalledWith(
-        optionSelection
-      );
-      expect(bulkUpdateEntityPropertyOptionsMock).not.toHaveBeenCalled();
-      expect(refreshPropertyQueriesMock).toHaveBeenCalledWith('status-def', {
-        includeOptionFilters: true,
-        unmaintainedOnly: true,
-      });
-      expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
-    }
-  );
+    expect(updateGraphqlEntityPropertyOptionsMock).toHaveBeenCalledWith(
+      optionSelection
+    );
+    expect(refreshPropertyQueriesMock).toHaveBeenCalledWith('status-def', {
+      includeOptionFilters: true,
+      unmaintainedOnly: true,
+    });
+    expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
+  });
 
   it('rolls back and reports a failed GraphQL option selection', async () => {
     updateGraphqlEntityPropertyOptionsMock.mockRejectedValue(
@@ -949,40 +837,9 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
       bulkOptionsMutation.mutateAsync(optionSelection)
     ).rejects.toThrow('options failed');
 
-    expect(bulkUpdateEntityPropertyOptionsMock).not.toHaveBeenCalled();
     expect(rollbackMock).toHaveBeenCalledOnce();
     expect(refreshPropertyQueriesMock).not.toHaveBeenCalled();
     expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
     expect(toastFailureMock).toHaveBeenCalledOnce();
   });
-
-  it.each([false, true])(
-    'keeps REST refresh scope when the flag settles to %s',
-    async (enabled) => {
-      graphqlSoupEnabledMock.mockReturnValue(false);
-      bulkUpdateEntityPropertyOptionsMock.mockImplementationOnce(async () => {
-        graphqlSoupEnabledMock.mockReturnValue(enabled);
-        return ok({
-          properties: [{ property_id: 'status-def', option_ids: ['doing'] }],
-        });
-      });
-
-      await expect(
-        bulkOptionsMutation.mutateAsync(optionSelection)
-      ).resolves.toEqual({
-        selections: [
-          { propertyDefinitionId: 'status-def', optionIds: ['doing'] },
-        ],
-        transport: 'rest',
-      });
-
-      expect(bulkUpdateEntityPropertyOptionsMock).toHaveBeenCalledOnce();
-      expect(updateGraphqlEntityPropertyOptionsMock).not.toHaveBeenCalled();
-      expect(refreshPropertyQueriesMock).toHaveBeenCalledWith('status-def', {
-        includeOptionFilters: true,
-        unmaintainedOnly: false,
-      });
-      expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
-    }
-  );
 });

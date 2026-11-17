@@ -36,6 +36,7 @@ impl JwtValidator for Credentials {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: OWNER.into(),
                 fusion_user_id: "fusion-owner".into(),
                 organization_id: None,
@@ -78,6 +79,7 @@ impl HarnessAuthorizer for Credentials {
                 origin: macro_authorization::CredentialOrigin::Harness,
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 macro_user_id: MacroUserIdStr::try_from(OWNER).unwrap(),
                 user_context: model_user::UserContext {
                     user_id: OWNER.into(),

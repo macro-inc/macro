@@ -7603,6 +7603,15 @@ export type DocumentTopicEvent = {
      * A peer joined, left, or a periodic save occurred.
      */
     metadata: DocumentInteractionMetadata;
+} | {
+    event_type: 'document.email_attachments_released';
+    /**
+     * Documents whose mail is gone stopped being email attachments, in one
+     * batch: the system moved some to the Trash and left the rest. Like the
+     * documents in a trashed folder, the trashed ones are removed from open
+     * lists and trigger nothing per document.
+     */
+    metadata: EmailAttachmentsReleasedMetadata;
 };
 
 /**
@@ -9266,6 +9275,22 @@ export type EffectSpecSoftEdgeOptions = string | {
      * 5; 0 removes it).
      */
     sizePt?: number | null;
+};
+
+/**
+ * Metadata for [`DocumentTopicEvent::EmailAttachmentsReleased`]: the
+ * documents of one queue batch that lost their last email link.
+ */
+export type EmailAttachmentsReleasedMetadata = {
+    /**
+     * Documents left as they were: kept by their owner, or already in the
+     * Trash. They are no longer email attachments either.
+     */
+    kept_document_ids: Array<string>;
+    /**
+     * Documents the batch moved to the Trash.
+     */
+    trashed_document_ids: Array<string>;
 };
 
 /**
@@ -17806,9 +17831,13 @@ export type ReadSpreadsheetRequest = {
 
 export type RecentlyDeletedResponseData = {
     /**
-     * The items returned from the call
+     * The items returned from the call, most recently trashed first
      */
     items: Array<Item>;
+    /**
+     * Pass as `cursor` to get the next page; absent on the last page
+     */
+    next_cursor?: string | null;
 };
 
 /**
@@ -22890,9 +22919,13 @@ export type TypedSuccessResponse = {
      */
     data: {
         /**
-         * The items returned from the call
+         * The items returned from the call, most recently trashed first
          */
         items: Array<Item>;
+        /**
+         * Pass as `cursor` to get the next page; absent on the last page
+         */
+        next_cursor?: string | null;
     };
     /**
      * Indicates if an error occurred
@@ -36172,7 +36205,16 @@ export type RevertDeleteProjectResponse = RevertDeleteProjectResponses[keyof Rev
 export type RecentlyDeletedData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Page size (1-500, default 100)
+         */
+        limit?: number;
+        /**
+         * The previous page's next_cursor
+         */
+        cursor?: string;
+    };
     url: '/recents/deleted';
 };
 
