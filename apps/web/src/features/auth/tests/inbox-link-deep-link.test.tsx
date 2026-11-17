@@ -79,6 +79,7 @@ import {
 } from '@app/lib/split-router';
 import { createTestPolicy } from '@app/lib/split-router/tests/fixtures';
 import { useTauriNavigationEffect } from '@app/lib/tauri/navigation';
+import { paneRoute } from '@app/routes/app-route';
 import {
   appRoute,
   authRoute,
@@ -109,9 +110,7 @@ function SplitRoutes(props: { base: string; mode: 'hash' | 'path' }) {
       }
       paneStore={createMemoryPaneStore()}
       policy={createTestPolicy().policy}
-      defaultRoute={() => ({
-        matches: [{ id: homeSplitRoute.id, params: {} }],
-      })}
+      defaultRoute={() => paneRoute({ id: homeSplitRoute.id, params: {} })}
     >
       <SplitRouter.Route definition={authRoute}>
         <SplitRouter.Route
