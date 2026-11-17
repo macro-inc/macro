@@ -31,7 +31,7 @@ use std::{sync::Arc, time::Duration};
 use calendar_events::outbound::pg::PgCalendarRepository;
 use connection_gateway_client::ConnectionGatewayClient;
 use email::{domain::focus::FocusService, outbound::FocusPgRepository};
-use feature_flags::outbound::posthog::PostHogFeatureFlags;
+use feature_flags::outbound::posthog_local::PostHogLocalFeatureFlags;
 use jev::{domain::JevClassifier, outbound::SystemOneJev};
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_service_urls::{AgentHarnessServiceUrl, ConnectionGatewayUrl};
@@ -44,7 +44,7 @@ use crate::{
     config::Config,
     inbound::{backfill::run_backfills, kafka_consumer::run_focus_consumer, sweep::run_sweeps},
     outbound::{
-        flag_enrollment::FlagEnrollment,
+        flag_enrollment::{EMAIL_FOCUS_FLAG, FlagEnrollment},
         gateway_notifier::{CoalescingNotifier, GatewayDelivery},
         harness_due_dates::HarnessDueDates,
         jev_classifier::JevFocusClassifier,
@@ -54,7 +54,8 @@ use crate::{
 
 /// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
-/// Longest a flag read holds up a classification or the sweep.
+/// Longest a poll of the flag's definition holds up a classification or the
+/// sweep; checks between polls make no request.
 const FLAG_TIMEOUT: Duration = Duration::from_secs(3);
 /// The longest window of mail the worker classifies, as the Focus list reads.
 const MAX_WINDOW_DAYS: u16 = 90;
@@ -65,9 +66,16 @@ async fn main() -> Result<(), Report> {
     MacroEntrypoint::new(config.environment).init();
     let enforcement = ai_usage::config::load_ai_usage_enforcement()?;
 
-    let flags = PostHogFeatureFlags::new(
+    // Evaluated locally: PostHog bills each remote flag read, and the worker
+    // checks an owner for every email event and each backfill look.
+    let flags = PostHogLocalFeatureFlags::new(
         config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
-        config.posthog_api_key.as_ref().to_owned(),
+        config.posthog_api_key.as_ref(),
+        config
+            .posthog_feature_flags_secure_api_key
+            .as_ref()
+            .to_owned(),
+        &[EMAIL_FOCUS_FLAG],
         FLAG_TIMEOUT,
         config.environment,
     )?;

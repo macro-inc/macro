@@ -37,8 +37,8 @@ use uuid::Uuid;
 mod test;
 
 /// How often every connected inbox's place in the rollout is looked at. An
-/// owner who joins is found within this plus the flag cache's lifetime for an
-/// owner outside the rollout.
+/// owner who joins is found within this plus the flag definitions' poll
+/// interval.
 const LOOK_INTERVAL: Duration = Duration::from_secs(60);
 /// Owners' places read at once during a look.
 const FLAG_CHECKS_AT_ONCE: usize = 16;

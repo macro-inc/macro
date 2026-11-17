@@ -2,7 +2,7 @@
 //!
 //! Every email event on the platform passes through here, so the consumer
 //! hands each thread to the Focus service, which drops inboxes whose owner is
-//! outside the Focus rollout after a single-row read and a cached flag check.
+//! outside the Focus rollout after a single-row read and a flag check evaluated in memory.
 //! Up to [`MAX_CONCURRENT_CLASSIFICATIONS`] threads run side by side, so a slow
 //! classifier call delays only its own thread; with every slot taken the
 //! consumer stops reading until one frees.
