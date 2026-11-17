@@ -91,9 +91,9 @@ export function createPersonList(options: {
         })
     );
   }, []);
-  // A failed page keeps the rows listed, but ends paging until a contact
-  // change restarts the list, so a scrolled menu cannot retry it in a loop.
-  const hasNextPage = () => !!window.data()?.nextCursor && !window.error();
+  // A failed or pending read offers no continuation; a failed page waits for
+  // an explicit retry, so a scrolled menu cannot retry it in a loop.
+  const hasNextPage = () => !!window.data()?.nextCursor;
   return {
     items,
     // Appended pages are one growing window; only a new list is a new window.
@@ -103,6 +103,9 @@ export function createPersonList(options: {
     isLoading: () => options.enabled() && window.loading(),
     isLoadingMore: loadingMore,
     error: window.error,
+    retry: async () => {
+      await window.retry();
+    },
     loadMore: async () => {
       if (loadingMore() || !hasNextPage()) return;
       setLoadingMore(true);

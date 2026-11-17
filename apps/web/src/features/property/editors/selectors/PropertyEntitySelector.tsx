@@ -551,6 +551,13 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     })
   );
   const loadNext = () => fireAndForget(loadNextPages(), 'property-picker');
+  // A failed contact page is read again; a failed email page is the next
+  // page still to fetch.
+  const retryPages = () =>
+    fireAndForget(
+      quickAccess.error() ? quickAccess.retry() : loadNextPages(),
+      'property-picker'
+    );
   // Further pages load as the end of the list scrolls into view. With no rows
   // listed, the sentinel sits below the empty list and keeps reading pages
   // until one matches or the sources end. A failed page waits for Retry. The
@@ -851,13 +858,13 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           {t('common.loadingOptions')}
         </div>
       </Show>
-      <Show when={paginationError() && hasMore()}>
+      <Show when={paginationError()}>
         <Button
           variant="ghost"
           class="w-full"
           disabled={isLoadingMore()}
           onPointerDown={(event) => event.preventDefault()}
-          onClick={loadNext}
+          onClick={retryPages}
         >
           {t('viewMenus.retryOptions')}
         </Button>

@@ -158,3 +158,47 @@ it('keeps listed rows through a failed page and starts again at page one for a n
   expect(ids(list())).toHaveLength(5);
   client.clear();
 });
+
+it('keeps listed rows without a continuation while a contact change re-reads page one', async () => {
+  vi.useFakeTimers();
+  let release: (() => void) | undefined;
+  let holdFirstPage = false;
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) => {
+      if (!request.cursor && holdFirstPage) {
+        const { promise, resolve } = Promise.withResolvers<void>();
+        release = resolve;
+        await promise;
+      }
+      return overlappingPage(request);
+    });
+  const { client, list } = mountList(reader);
+  await vi.advanceTimersByTimeAsync(0);
+  await list().loadNext();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ids(list())).toHaveLength(5);
+
+  holdFirstPage = true;
+  list().restart();
+  await vi.advanceTimersByTimeAsync(0);
+  // The rows stay on screen, but nothing can be continued until page one
+  // lands: a request now would have no page to advance from.
+  expect(ids(list())).toHaveLength(5);
+  expect(list().data()?.nextCursor).toBeNull();
+  const reads = reader.mock.calls.length;
+  await list().loadNext();
+  expect(reader).toHaveBeenCalledTimes(reads);
+
+  release?.();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ids(list())).toEqual([
+    person(0).id,
+    person(1).id,
+    person(2).id,
+    person(3).id,
+    person(4).id,
+  ]);
+  expect(list().data()?.nextCursor).not.toBeNull();
+  client.clear();
+});

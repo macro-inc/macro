@@ -38,11 +38,14 @@ export function createContactDirectoryList(
     if (!page) {
       // The window drops its page while it reads the next one, re-reads the
       // first after a contact change, or fails. Keep the rows already listed
-      // for this input; closing or a new input starts again at page one.
+      // for this input; closing or a new input starts again at page one. The
+      // kept rows offer no continuation: the window has no page to advance
+      // from, so a request for the next one would do nothing.
       if (!enabled()) listed = undefined;
       const kept =
         listed?.key === key && (window.loading() || !!window.error());
-      return kept ? shown : undefined;
+      if (!kept || !shown) return undefined;
+      return shown.nextCursor ? { ...shown, nextCursor: null } : shown;
     }
 
     if (listed?.key !== key) {
