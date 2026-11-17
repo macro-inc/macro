@@ -109,6 +109,7 @@ export function TaskList(props: TaskListProps) {
     openTask,
     scopeKey,
     filterByTag,
+    filterByAssignee,
   } = useTasksView();
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
@@ -626,6 +627,7 @@ export function TaskList(props: TaskListProps) {
                                   entityRow().id
                                 )}
                                 onFilterByTag={filterByTag}
+                                onFilterByAssignee={filterByAssignee}
                                 onMouseMove={() =>
                                   list.focus.set(entityRow().id, {
                                     reason: 'hover',

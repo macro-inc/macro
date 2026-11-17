@@ -121,7 +121,13 @@ New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced tas
 The Project column shows the linked project's name when one project is assigned,
 and `Project` when empty. Multiple linked projects show an item count.
 Long assignee and project names truncate within their columns; hover the cell
-to read the full value.
+to read the full value. On desktop, an assignee's hover card in a list row or a
+board card offers **Filter by <name>** for each assignee, as a tag chip's card
+does for its tag: it replaces the current filters, the default status filter
+included, with that one assignee and keeps the tab, so on **My tasks** it lists
+the tasks you share with them and on **All tasks** all of theirs, completed ones
+too. A filtered assignee outside the team keeps their
+name in the Assignee filter.
 Editable property controls use ghost-button hover styling. Empty values are
 dimmed, without adding opacity to the already-muted No priority icon. Folder
 and assigned Project hover cards put their heading above the value; empty

@@ -66,6 +66,11 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  EmailThreadMention: Component<{
+    threadId: string;
+    subject: string;
+    onOpened?: () => void;
+  }>;
   createEmailPrivacy(): {
     createExcludedThreads(
       after: Accessor<string | undefined>
@@ -99,7 +104,7 @@ export type CrmContext = {
   createNavigation(): {
     splitId: string | undefined;
     openWithSplit(
-      target: { type: 'company' | 'contact'; id: string },
+      target: { type: 'company' | 'contact' | 'email'; id: string },
       options?: { activate?: boolean; preferNewSplit?: boolean }
     ): void;
     showCompanies(): void;

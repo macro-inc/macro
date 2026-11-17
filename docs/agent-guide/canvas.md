@@ -2,6 +2,16 @@
 
 An editable canvas with nothing on it shows the Canvas `TutorialPill` (from `features/video-tutorials`) in the middle of the board, once that video is in its catalog. It goes away when the first item is added or a drawing tool is picked, and read-only and embedded canvases never show it.
 
+## Touch navigation
+
+On a phone or tablet, two fingers pan and pinch-zoom the canvas in every tool,
+and a two-finger flick glides. Check each tool: start a marquee, a shape, a
+pencil stroke, an arrow, an erase or a text box with one finger, then land a
+second. The canvas must zoom around the fingers, and nothing the first finger
+started may remain: no new item, no changed selection, no undo step, no text
+box. Lift one finger and move the other: nothing happens until both are up.
+One-finger behavior is unchanged.
+
 ## Canvas colors
 
 To check the default canvas color, create a rectangle and a text box without

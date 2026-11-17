@@ -129,7 +129,10 @@ export type SplitFileMenuViews = {
 };
 
 function SplitMenuItemContent(
-  props: Pick<SplitFileMenuAction, 'hotkeyToken' | 'icon' | 'label'> & {
+  props: Pick<
+    SplitFileMenuAction,
+    'hotkeyToken' | 'icon' | 'label' | 'disabledReason'
+  > & {
     showHotkey?: boolean;
   }
 ) {
@@ -143,7 +146,12 @@ function SplitMenuItemContent(
           />
         )}
       </Show>
-      <div class="flex-1 truncate">{props.label}</div>
+      <div class="min-w-0 flex-1">
+        <div class="truncate">{props.label}</div>
+        <Show when={props.disabledReason}>
+          <div class="text-xs text-ink-muted">{props.disabledReason}</div>
+        </Show>
+      </div>
       <Show when={props.showHotkey !== false && props.hotkeyToken}>
         <Hotkey
           token={props.hotkeyToken}
@@ -221,6 +229,7 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
         </Match>
         <Match when={true}>
           <Dropdown.Item
+            disabledReason={action().disabledReason}
             onSelect={() => {
               fireAndForget(action().action?.(), 'split-file-menu');
               props.onOpenChange(false);
@@ -327,6 +336,7 @@ function MobileRender(
         fallback={
           <MobileDrawer.Item
             type="button"
+            disabled={!!action().disabledReason}
             class={cn(nested ? 'pl-9 pr-4' : 'px-4')}
             onClick={(e) => {
               fireAndForget(action().action?.(e), 'split-file-menu');
@@ -338,6 +348,7 @@ function MobileRender(
               icon={action().icon}
               hotkeyToken={action().hotkeyToken}
               showHotkey={false}
+              disabledReason={action().disabledReason}
             />
           </MobileDrawer.Item>
         }
@@ -901,6 +912,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     filteredTools().map((tool) => ({
       id: `tool-${props.tools?.indexOf(tool)}`,
       label: typeof tool.label === 'function' ? tool.label() : tool.label,
+      disabledReason: tool.disabledReason,
       icon: tool.icon,
       children: tool.children,
       hotkeyToken: tool.hotkeyToken,

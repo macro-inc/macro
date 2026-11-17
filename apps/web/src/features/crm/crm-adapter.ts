@@ -48,6 +48,7 @@ import {
 } from './creation-adapter';
 import { createAppCrmDisplayOptions } from './display-adapter';
 import { downloadCrmCsv } from './download-adapter';
+import { EmailThreadMention } from './email-thread-mention';
 import {
   copyCrmPipelineLink,
   copyCrmRecordLink,
@@ -245,6 +246,7 @@ export function createAppCrmContext(): CrmContext {
     contactInitials: getInitialsFromName,
     userEmail: idToEmail,
     createNavigation: createAppCrmNavigation,
+    EmailThreadMention,
     copyRecordLink: copyCrmRecordLink,
     copyViewLink: copyCrmViewLink,
     copyPipelineLink: copyCrmPipelineLink,

@@ -53,6 +53,8 @@ type TaskListEntityProps = Omit<BaseListEntityProps, 'entity'> & {
   referencePropertyIds?: readonly string[];
   /** Called when "filter by tag" is clicked on an entity row tag. */
   onFilterByTag?: (optionId: string) => void;
+  /** Called when "Filter by" is clicked in an assignee's hover card. */
+  onFilterByAssignee?: (userId: string) => void;
 };
 
 function MaybeEntityRow(props: {
@@ -129,6 +131,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
     showProject: props.showProject,
     referencePropertyIds: props.referencePropertyIds,
     onFilterByTag: props.onFilterByTag,
+    onFilterByAssignee: props.onFilterByAssignee,
   });
 
   const draggable = createEntityDraggable({

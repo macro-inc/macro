@@ -848,8 +848,16 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
   `browser-test/archive/selector-pagination.browser.e2e.ts` covers shared
   task/contact/mixed/thread/generic source pagination on desktop and touch.
-- Keep the owner-only **Keep this thread out of CRM** action in both thread
-  menus, and removal/pagination in the existing CRM Email settings surface.
+- Keep **Exclude thread from CRM** beside sharing in both thread menus and
+  immediately before the reminder bell in desktop thread headers. Disable it
+  with the same reason unless the member contributes that exact mailbox; show
+  excluded state and allow removal even after consent is withdrawn.
+  Render **Excluded threads** with the existing email mention component,
+  including its preview and split navigation, and dismiss the phone Settings
+  sheet after opening; keep **Remove** independent of the mention. Supply the
+  owner-authorized row title inline and load full previews only on interaction.
+  Read only the consent projection and exact thread lookup for thread controls;
+  keep their owner/session CRM cache keys synchronized by the privacy mutation.
   Use the shared privacy mutation so contact/company contribution email readers
   and owner exception pages refresh even when another reader fails; report
   refresh failures separately from a successfully saved change;
@@ -936,7 +944,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   platform, and keep the desktop and Android Enable actions on the native
   notification provider.
 - Share one notification mute menu across entity rows, detail headers, conversations, and sections; offer permanent mute, timed presets, and the existing custom-time picker, with icon-free mute and unmute actions, matching mobile drill-in choices, and no separate Snooze notifications row. Channels other than one-to-one DMs also get **Only @mentions** at the top of that menu (`mentionsOnly` on the menu props, from `makeMuteAction`); a mentions-only item is not muted (`isMutedItem` is false, `isMentionsOnlyItem` true), so give it the `@` indicator, never the muted bell.
-- Keep toast behavior in `@core/component/Toast/Toast`: desktop notices stack, mobile transients replace, and persistent notices use their own regions. Mobile notices omit the close icon and support swiping left or right. Follow the [toast presentation contract](../../.agents/rules/web/design-system.md) for shared surfaces, compact mobile notices, aligned content, and optional close controls.
+- Keep toast behavior in `@core/component/Toast/Toast`: desktop notices stack, mobile transients replace, and persistent notices use their own regions. A process that moves through states (an email send) shows one toast and passes its id as `replace` to change it in place, never dismissing and reopening it. Mobile notices omit the close icon and support swiping left or right. Follow the [toast presentation contract](../../.agents/rules/web/design-system.md) for shared surfaces, compact mobile notices, aligned content, and optional close controls.
   Review current toast specimens under **Current app toasts** at `/app/component/ui?ui=toast`; keep the gallery's actions inert, regions isolated, and account details synthetic.
 - Keep signed-out Drive document routes on the shared detail viewer without
   mounting private list/sidebar sources; let document access checks decide visibility.
