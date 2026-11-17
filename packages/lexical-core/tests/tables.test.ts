@@ -771,6 +771,22 @@ describe('pipe characters inside pipe-table cells', () => {
     });
   });
 
+  it('exports cell chips the way a paragraph exports them', async () => {
+    const editor = createTestEditor();
+    await importWith(editor, `${GAB_MENTION} $$ 26.8\\% $$`, ALL_TRANSFORMERS);
+    const paragraph = exportMarkdown(editor, EXTERNAL_TRANSFORMERS).trim();
+
+    await importWith(
+      editor,
+      ['| Person |', '| --- |', `| ${GAB_MENTION} $$ 26.8\\% $$ |`].join('\n'),
+      ALL_TRANSFORMERS
+    );
+    const table = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+
+    expect(paragraph).not.toContain('<m-');
+    expect(table.split('\n')).toContain(`| ${paragraph} |`);
+  });
+
   it('imports a header row with alignment markers and an empty first cell', async () => {
     const editor = createTestEditor();
     await importWith(
@@ -861,8 +877,8 @@ describe('pipe characters inside pipe-table cells', () => {
     editor.getEditorState().read(() => {
       const grid = $cellGrid();
       expect(grid.map((row) => row.length)).toEqual([3, 3]);
-      const [mention] = $inlineNodes(grid[1][0]).filter($isUserMentionNode);
-      expect(mention?.getUserId()).toBe('macro|gab@macro.com');
+      // External Markdown writes a mention as its label, as in a paragraph.
+      expect(grid[1][0].getTextContent().trim()).toBe('@gab');
       expect(grid[1][1].getTextContent()).toBe('a|b');
       expect(grid[1][2].getTextContent().trim()).toBe('x | y');
     });

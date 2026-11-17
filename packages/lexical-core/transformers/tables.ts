@@ -22,14 +22,22 @@ import { $isParagraphNode, $isTextNode, type LexicalNode } from 'lexical';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { HTML_TEXT_FORMAT_TRANSFORMERS } from './htmlTextFormats';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
-import { E_BLOCK_EQUATION_NODE, I_EQUATION_NODE } from './katex';
+import {
+  E_BLOCK_EQUATION_NODE,
+  E_INLINE_EQUATION_NODE,
+  I_EQUATION_NODE,
+} from './katex';
 import {
   E_CONTACT_MENTION,
   E_DOCUMENT_MENTION,
   E_USER_MENTION,
+  I_AGENT_SESSION_MENTION,
+  I_BOOKING_LINK_MENTION,
   I_CONTACT_MENTION,
   I_DATE_MENTION,
   I_DOCUMENT_MENTION,
+  I_GROUP_MENTION,
+  I_PR_MENTION,
   I_USER_MENTION,
 } from './mentions';
 import { BR_TAG_TO_LINE_BREAK, HTML_ENTITY_TRANSFORMERS } from './transformers';
@@ -258,11 +266,25 @@ const externalTransformersWithinTables: Transformer[] = [
   E_CONTACT_MENTION,
   I_DATE_MENTION,
   E_BLOCK_EQUATION_NODE,
+  E_INLINE_EQUATION_NODE,
   IMAGE,
   I_VIDEO,
   ...HTML_ENTITY_TRANSFORMERS,
   ...HTML_TEXT_FORMAT_TRANSFORMERS,
   ...TRANSFORMERS,
+];
+
+// Agents write the in-app chip tags inside cells, as they do in prose. These
+// only import: a cell exports its chips as plain text, like a paragraph does.
+const importTransformersWithinTables: Transformer[] = [
+  I_USER_MENTION,
+  I_GROUP_MENTION,
+  I_CONTACT_MENTION,
+  I_PR_MENTION,
+  I_BOOKING_LINK_MENTION,
+  I_AGENT_SESSION_MENTION,
+  I_EQUATION_NODE,
+  ...externalTransformersWithinTables,
 ];
 
 function getTableColumnsSize(table: TableNode): number {
@@ -276,11 +298,84 @@ function createTableCell(cellContent: string): TableCellNode {
   // them so multi-line content (lists, multiple blocks) survives the trip.
   $convertFromMarkdownString(
     cellContent.replace(/\\n/g, '\n').trim(),
-    externalTransformersWithinTables,
+    importTransformersWithinTables,
     cellNode,
     true
   );
   return cellNode;
+}
+
+// An inline `<m-…>` tag at the start of `text`, up to its closing tag.
+const REG_EXP_LEADING_XML_TAG = /^<(m-[\w-]+)(?:\s[^>]*)?>.*?<\/\1>/s;
+
+/**
+ * Splits the inside of a pipe-table row into raw cell strings. A pipe does
+ * not separate cells when escaped (`\|`, unescaped here as in GFM), inside an
+ * inline code span, or inside an `<m-…>` tag, whose JSON carries `macro|`
+ * user ids.
+ */
+export function splitTableRow(row: string): string[] {
+  const cells: string[] = [];
+  let cell = '';
+  let index = 0;
+  while (index < row.length) {
+    const rest = row.slice(index);
+    if (rest.startsWith('\\|')) {
+      cell += '|';
+      index += 2;
+      continue;
+    }
+    if (rest.startsWith('\\')) {
+      cell += rest.slice(0, 2);
+      index += 2;
+      continue;
+    }
+    const tag = REG_EXP_LEADING_XML_TAG.exec(rest);
+    if (tag) {
+      cell += tag[0];
+      index += tag[0].length;
+      continue;
+    }
+    const code = rest.match(/^(`+)(.*?[^`])\1(?!`)/s);
+    if (code) {
+      cell += code[0].replaceAll('\\|', '|');
+      index += code[0].length;
+      continue;
+    }
+    if (rest.startsWith('`')) {
+      const fence = rest.match(/^`+/)![0];
+      cell += fence;
+      index += fence.length;
+      continue;
+    }
+    if (rest.startsWith('|')) {
+      cells.push(cell);
+      cell = '';
+    } else {
+      cell += rest[0];
+    }
+    index += 1;
+  }
+  cells.push(cell);
+  return cells;
+}
+
+/** Escapes cell pipes outside `<m-…>` tags so the cell stays one cell. */
+function escapeCellPipes(markdown: string): string {
+  let escaped = '';
+  let index = 0;
+  while (index < markdown.length) {
+    const rest = markdown.slice(index);
+    const tag = REG_EXP_LEADING_XML_TAG.exec(rest);
+    if (tag) {
+      escaped += tag[0];
+      index += tag[0].length;
+      continue;
+    }
+    escaped += rest[0] === '|' ? '\\|' : rest[0];
+    index += 1;
+  }
+  return escaped;
 }
 
 function mapToTableCells(textContent: string): Array<TableCellNode> | null {
@@ -289,7 +384,7 @@ function mapToTableCells(textContent: string): Array<TableCellNode> | null {
     return null;
   }
 
-  return match[1].split('|').map((text) => createTableCell(text));
+  return splitTableRow(match[1]).map((text) => createTableCell(text));
 }
 
 export const E_TABLE_NODE: ElementTransformer = {
@@ -325,7 +420,7 @@ export const E_TABLE_NODE: ElementTransformer = {
           )
             .replace(/\n/g, '\\n')
             .trim();
-          rowOutput.push(cellContent);
+          rowOutput.push(escapeCellPipes(cellContent));
         } else {
           rowOutput.push('');
         }
