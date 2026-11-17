@@ -320,17 +320,31 @@ pub trait MailboxIngest: Send + Sync + 'static {
 pub struct MailboxSyncService<R, P, I> {
     repo: R,
     provider: P,
+    /// Reads an import: a folder's first delta round and the messages it
+    /// queues. The host gives it a provider that leaves room under the
+    /// mailbox's provider limits for the live work `provider` reads, and that
+    /// waits briefly for that room instead of parking the work.
+    import_provider: P,
     ingest: I,
     imports: ImportTally,
 }
 
 impl<R, P, I> MailboxSyncService<R, P, I> {
-    pub fn new(repo: R, provider: P, ingest: I) -> Self {
+    pub fn new(repo: R, provider: P, import_provider: P, ingest: I) -> Self {
         Self {
             repo,
             provider,
+            import_provider,
             ingest,
             imports: ImportTally::default(),
+        }
+    }
+
+    fn provider_for(&self, is_import: bool) -> &P {
+        if is_import {
+            &self.import_provider
+        } else {
+            &self.provider
         }
     }
 
@@ -456,7 +470,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let outcome = maintain_lease(
             async {
                 Ok(self
-                    .provider
+                    .provider_for(!lease.initial_complete)
                     .changes(lease.mailbox, &lease.folder, lease.position.as_ref())
                     .await?)
             },
@@ -549,8 +563,11 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let operation = async {
             let folders = self.repo.folders(lease.mailbox).await?;
             let (snapshot, graph_calls) = email_api_client::domain::request_count::counted(
-                self.provider
-                    .message(lease.mailbox, &lease.provider_id, &folders),
+                self.provider_for(lease.is_import).message(
+                    lease.mailbox,
+                    &lease.provider_id,
+                    &folders,
+                ),
             )
             .await;
             span.record("outlook.graph_calls", i64::from(graph_calls));
