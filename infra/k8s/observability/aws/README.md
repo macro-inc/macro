@@ -94,7 +94,7 @@ nix fmt -- $(git ls-files '*.nix')
 into `.tofu/<config>/` (gitignored) and runs the flake's OpenTofu there, with the
 AWS provider pinned by the flake. `tofu plan` needs credentials that can read
 the Pulumi stack's resources in us-east-2 (EC2, ELB, Route 53, SNS, Secrets
-Manager describe) and the state bucket.
+Manager describe, EKS add-on versions) and the state bucket.
 
 ## First apply
 
@@ -139,7 +139,10 @@ Multi-AZ database up to 20.
    `grafana-next` and `otlp-next` answer 503 until the cluster layer's edge
    nginx registers targets, and their alarms sit in `ALARM` without notifying.
 
-Later applies are steps 3 to 5.
+Later applies are steps 3 to 5. To upgrade Kubernetes, raise
+`settings.cluster.version` by one minor version: one apply upgrades the
+control plane, then the add-ons to that version's defaults and the nodes, one
+at a time.
 
 ## Removing it
 

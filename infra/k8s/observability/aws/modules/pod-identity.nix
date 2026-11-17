@@ -121,7 +121,8 @@ let
           # Pod Identity's session tags: only this cluster's one service
           # account can take the role, even if another association named it.
           Condition.StringEquals = {
-            "aws:RequestTag/eks-cluster-name" = settings.cluster.name;
+            "aws:RequestTag/eks-cluster-arn" =
+              "arn:aws:eks:${settings.region}:${settings.accountId}:cluster/${settings.cluster.name}";
             "aws:RequestTag/kubernetes-namespace" = sa.${key}.namespace;
             "aws:RequestTag/kubernetes-service-account" = sa.${key}.name;
           };

@@ -10,13 +10,22 @@ let
     policy_arn = iam.managed policy;
   };
 
+  addonNames = {
+    vpc_cni = "vpc-cni";
+    kube_proxy = "kube-proxy";
+    pod_identity_agent = "eks-pod-identity-agent";
+    coredns = "coredns";
+    ebs_csi = "aws-ebs-csi-driver";
+  };
+
   addon =
-    name: extra:
+    key: extra:
     {
       cluster_name = ref "aws_eks_cluster.observability.name";
-      addon_name = name;
-      # No version: EKS installs the default for the cluster's Kubernetes
-      # version. Bump the cluster, then the add-ons follow on the next apply.
+      addon_name = addonNames.${key};
+      # The default version for settings.cluster.version, so bumping the
+      # cluster also upgrades the add-ons, after the control plane.
+      addon_version = ref "data.aws_eks_addon_version.${key}.version";
       resolve_conflicts_on_create = "OVERWRITE";
       resolve_conflicts_on_update = "OVERWRITE";
     }
@@ -30,6 +39,12 @@ let
   ];
 in
 {
+  data.aws_eks_addon_version = lib.mapAttrs (_: name: {
+    addon_name = name;
+    kubernetes_version = cluster.version;
+    most_recent = false;
+  }) addonNames;
+
   variable = {
     admin_principal_arns = {
       type = "list(string)";
@@ -131,13 +146,13 @@ in
     };
 
     aws_eks_addon = {
-      vpc_cni = addon "vpc-cni" {
+      vpc_cni = addon "vpc_cni" {
         configuration_values = builtins.toJSON { enableNetworkPolicy = "true"; };
       };
-      kube_proxy = addon "kube-proxy" { };
-      pod_identity_agent = addon "eks-pod-identity-agent" { };
+      kube_proxy = addon "kube_proxy" { };
+      pod_identity_agent = addon "pod_identity_agent" { };
       coredns = addon "coredns" { depends_on = [ "aws_eks_node_group.observability" ]; };
-      ebs_csi = addon "aws-ebs-csi-driver" {
+      ebs_csi = addon "ebs_csi" {
         pod_identity_association = {
           service_account = settings.serviceAccounts.ebsCsi.name;
           role_arn = ref "aws_iam_role.pod_ebsCsi.arn";
@@ -190,6 +205,8 @@ in
       cluster_name = ref "aws_eks_cluster.observability.name";
       node_group_name = "observability";
       node_role_arn = ref "aws_iam_role.node.arn";
+      # Nodes follow the control plane in the same apply, one at a time.
+      version = ref "aws_eks_cluster.observability.version";
       subnet_ids = ref "local.private_subnet_ids";
       ami_type = cluster.nodes.amiType;
       capacity_type = "ON_DEMAND";

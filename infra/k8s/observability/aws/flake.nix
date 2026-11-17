@@ -96,10 +96,28 @@
             text = ''
               bucket=${settings.state.bucket}
               key=${settings.state.bootstrapKey}
-              if aws s3api head-object --region ${settings.region} --bucket "$bucket" --key "$key" >/dev/null 2>&1; then
+              # Go on only when the bootstrap state is known to be absent: a 404
+              # (no object or no bucket), or a 403 while the bucket itself is
+              # missing. Anything else stops here, so the migration below can't
+              # overwrite a state it failed to see.
+              if err="$(aws s3api head-object --region ${settings.region} --bucket "$bucket" --key "$key" 2>&1 >/dev/null)"; then
                 echo "The state bucket is already bootstrapped; use: nix run .#tofu -- bootstrap plan" >&2
                 exit 1
               fi
+              case "$err" in
+                *"(404)"*) ;;
+                *"(403)"*)
+                  if bucket_err="$(aws s3api head-bucket --region ${settings.region} --bucket "$bucket" 2>&1 >/dev/null)" \
+                    || [[ "$bucket_err" != *"(404)"* ]]; then
+                    echo "Can't tell whether s3://$bucket/$key exists; use credentials with s3:ListBucket on it. head-object: $err" >&2
+                    exit 1
+                  fi
+                  ;;
+                *)
+                  echo "Can't check s3://$bucket/$key: $err" >&2
+                  exit 1
+                  ;;
+              esac
               work="$(git rev-parse --show-toplevel)/infra/k8s/observability/aws/.tofu/bootstrap"
               mkdir -p "$work"
               cd "$work"
@@ -136,7 +154,10 @@
                     [ (.resource // {} | keys[]) as $type
                       | select($type | test("^(aws_secretsmanager_secret_version|aws_ssm_parameter|random_password|tls_private_key|aws_iam_access_key)$"))
                       | $type ]
-                    + [ .. | objects | to_entries[]
+                    + [ (.data // {} | keys[]) as $type
+                        | select($type | test("^(aws_secretsmanager_secret_versions?|aws_secretsmanager_random_password|aws_ssm_parameters?|aws_ssm_parameters_by_path|aws_kms_secrets?|aws_iam_access_keys)$"))
+                        | "data.\($type)" ]
+                    + [ ..| objects | to_entries[]
                         | select(.key | test("^(password|master_password|secret_string|secret_binary|value_wo)$")) | .key ]
                     | if length == 0 then true else error("secret-bearing config: \(.)") end
                   ' ${configs.${name}} >/dev/null
