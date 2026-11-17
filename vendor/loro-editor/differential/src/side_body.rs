@@ -123,7 +123,7 @@ pub struct World {
     clock: i64,
     suppressed: Vec<bool>,
     next_renewed_peer: u64,
-    adopted: Vec<Option<Vec<u8>>>,
+    adopted: Vec<Option<crate::Adoption>>,
 }
 
 fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
@@ -650,6 +650,7 @@ impl World {
         let source = &self.peers[usize::from(from)].doc;
         source.commit_then_renew();
         self.doc(peer).commit_then_renew();
+        let source_eligible = cached_prefix_eligible(source, frontiers);
         let bytes = match source.export(ExportMode::shallow_snapshot(frontiers)) {
             Ok(b) => b,
             Err(e) => return format!("export err {e}"),
@@ -659,7 +660,11 @@ impl World {
             Ok(fresh) => {
                 self.peers[usize::from(peer)] = fresh;
                 let decoded = decoded_fingerprint(&bytes);
-                self.adopted[usize::from(peer)] = Some(bytes);
+                self.adopted[usize::from(peer)] = Some(crate::Adoption {
+                    from: usize::from(from),
+                    source_eligible,
+                    bytes,
+                });
                 format!("replaced; decodes to {decoded}")
             }
             Err(e) => format!("import err {e}"),
@@ -737,22 +742,11 @@ impl World {
                     targets.push((format!("h{at}"), p.history[at].clone()));
                 }
             }
-            let latest_vv = doc.oplog_vv();
-            let attached = doc.state_frontiers() == doc.oplog_frontiers();
             for (name, f) in targets {
                 self.stats.shallow_exports += 1;
-                let mut eligible = false;
-                if attached && doc.is_shallow() && f != shallow_root {
-                    if let Ok(vv) = doc.frontiers_to_vv(&f).ok_or(()) {
-                        let tail: usize = latest_vv
-                            .sub_iter(&vv)
-                            .map(|s| (s.counter.end - s.counter.start).unsigned_abs() as usize)
-                            .sum();
-                        if tail >= MIN_RETAINED_OPS_FOR_FORWARD_ROOT_STATE {
-                            self.stats.cached_prefix_eligible += 1;
-                            eligible = true;
-                        }
-                    }
+                let eligible = cached_prefix_eligible(doc, &f);
+                if eligible {
+                    self.stats.cached_prefix_eligible += 1;
                 }
                 let bytes = doc.export(ExportMode::shallow_snapshot(&f));
                 let decoded = match &bytes {
@@ -803,6 +797,27 @@ impl World {
             suppressed: self.suppressed[i],
         }
     }
+}
+
+/// Whether a shallow export at `f` meets every condition of the cached-prefix
+/// path in a non-test build: attached, shallow, past the cached root, and a
+/// retained tail at or above the forward-replay gate.
+fn cached_prefix_eligible(doc: &LoroDoc, f: &Frontiers) -> bool {
+    if doc.state_frontiers() != doc.oplog_frontiers()
+        || !doc.is_shallow()
+        || *f == doc.shallow_since_frontiers()
+    {
+        return false;
+    }
+    let Some(vv) = doc.frontiers_to_vv(f) else {
+        return false;
+    };
+    let tail: usize = doc
+        .oplog_vv()
+        .sub_iter(&vv)
+        .map(|s| (s.counter.end - s.counter.start).unsigned_abs() as usize)
+        .sum();
+    tail >= MIN_RETAINED_OPS_FOR_FORWARD_ROOT_STATE
 }
 
 /// Everything a shallow snapshot decodes to: latest state with ids, shallow

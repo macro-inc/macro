@@ -9,6 +9,8 @@
 use std::fmt;
 
 mod side;
+#[cfg(test)]
+mod test;
 
 /// Number of peers in every case.
 pub const PEERS: usize = 3;
@@ -249,10 +251,22 @@ pub struct Observation {
     pub exports: Vec<(String, Result<Vec<u8>, String>)>,
     /// Snapshot-type exports: name, cached-prefix eligibility, decoded fingerprint.
     pub shallow: Vec<(String, bool, String)>,
-    /// Bytes a shallow reload adopted on this peer during the step, if any.
-    pub adopted: Option<Vec<u8>>,
+    /// The shallow reload this peer adopted during the step, if any.
+    pub adopted: Option<Adoption>,
     /// Whether the patched side took the suppressed path (patched side only).
     pub suppressed: bool,
+}
+
+/// A shallow reload: the peer's document was replaced by a fresh one
+/// importing a shallow export of `from` (itself, for a reshallow).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Adoption {
+    /// Peer whose export was adopted.
+    pub from: usize,
+    /// Whether that export met the cached-prefix conditions.
+    pub source_eligible: bool,
+    /// Adopted bytes.
+    pub bytes: Vec<u8>,
 }
 
 /// One step's difference between the sides.
@@ -594,8 +608,9 @@ pub fn generate(seed: u64, len: usize, bulk: bool) -> Case {
 pub fn run(config: &Config, ops: &[Op], stats: &mut Stats) -> Option<Divergence> {
     let mut patched = side::patched::World::new(config);
     let mut upstream = side::upstream::World::new(config);
-    // Set once an accepted cached-prefix byte difference enters the case.
-    let mut fragmented = false;
+    // Peers whose live document descends from an adopted snapshot that encoded
+    // the same state with different text fragmentation.
+    let mut fragmented = [false; PEERS];
     for (step, op) in ops.iter().enumerate() {
         let p = patched.step(op);
         let u = upstream.step(op);
@@ -649,12 +664,12 @@ fn fnv(bytes: &[u8]) -> u64 {
     })
 }
 
-fn compare(
+pub(crate) fn compare(
     step: usize,
     p: &Observation,
     u: &Observation,
     stats: &mut Stats,
-    fragmented: &mut bool,
+    fragmented: &mut [bool; PEERS],
 ) -> Option<Divergence> {
     macro_rules! field {
         ($name:ident) => {
@@ -709,26 +724,41 @@ fn compare(
         });
     }
     field!(shallow);
-    // A shallow reload that adopted differently fragmented bytes: the outcome
-    // (decoded fingerprint) already matched; the case now carries the difference.
-    if p.adopted != u.adopted {
-        *fragmented = true;
-        stats.inherited_byte_diffs += 1;
+    // A shallow reload replaces the peer's lineage. Its decoded fingerprint
+    // (the outcome) already matched. Differing bytes are accepted only from a
+    // cached-prefix export or from an already fragmented source lineage.
+    match (&p.adopted, &u.adopted) {
+        (Some(pa), Some(ua)) if pa.from == ua.from => {
+            let differs = pa.bytes != ua.bytes;
+            if differs && !(pa.source_eligible || fragmented[pa.from]) {
+                return Some(Divergence {
+                    step,
+                    field: format!("peer{}.adopted bytes from peer{}", p.peer, pa.from),
+                    patched: format!("{} bytes, {:016x}", pa.bytes.len(), fnv(&pa.bytes)),
+                    upstream: format!("{} bytes, {:016x}", ua.bytes.len(), fnv(&ua.bytes)),
+                });
+            }
+            if differs {
+                stats.inherited_byte_diffs += 1;
+            }
+            fragmented[p.peer] = differs;
+        }
+        (None, None) => {}
+        _ => field!(adopted),
     }
     for ((pm, pr), (um, ur)) in p.exports.iter().zip(u.exports.iter()) {
-        // An eligible cached-prefix export may encode the same decoded state
-        // with different text fragmentation; `shallow` already matched. Once a
-        // case carries such a state, every snapshot-type export may differ in
-        // bytes too. Update exports never may.
+        // A cached-prefix export may encode the same decoded state with
+        // different text fragmentation (`shallow` already matched). Exporting
+        // leaves the peer's own state untouched; only a fragmented lineage
+        // may differ in later snapshot-type bytes. Update exports never may.
         let entry = p.shallow.iter().find(|(name, _, _)| name == pm);
         if pm == um && pr.is_ok() && ur.is_ok() && pr != ur {
             match entry {
                 Some((_, true, _)) => {
-                    *fragmented = true;
                     stats.cached_prefix_byte_diffs += 1;
                     continue;
                 }
-                Some((_, false, _)) if *fragmented => {
+                Some((_, false, _)) if fragmented[p.peer] => {
                     stats.inherited_byte_diffs += 1;
                     continue;
                 }
