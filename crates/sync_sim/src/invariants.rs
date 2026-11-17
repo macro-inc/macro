@@ -95,8 +95,11 @@ pub fn editor_states_equal(outcome: &Outcome) -> Result<(), Failure> {
         if durability::readonly_private_history_retained(outcome, client) {
             continue;
         }
-        if let Some((other, state)) = states.insert(client.doc, (name, &editor.synced_json))
-            && state != &editor.synced_json
+        // Compare as an importer of the document holds each model (comparable): a
+        // creator omits a storage-null key that an importer holds as null, in Source too.
+        let synced = comparable(&editor.synced_json, "editor_states_equal")?;
+        if let Some((other, state)) = states.insert(client.doc, (name, synced.clone()))
+            && state != synced
         {
             return Err(Failure::new(
                 "editor_states_equal",
@@ -183,7 +186,7 @@ pub fn projection_consistent(outcome: &Outcome) -> Result<(), Failure> {
             ));
         }
         if let Some(editor) = &client.editor
-            && !projection_matches(editor)
+            && !projection_matches(editor)?
         {
             return Err(Failure::new(
                 "projection_consistent",
@@ -296,11 +299,27 @@ pub(crate) fn ranges_cover(ranges: &[IdSpan], target: &IdSpan) -> bool {
 /// write of a retained root slot (the root id, document metadata) reaches the persisted
 /// document while the live model keeps its own until its next local write. Every other
 /// field is compared exactly.
-pub(crate) fn projection_matches(editor: &EditorFinal) -> bool {
+pub(crate) fn projection_matches(editor: &EditorFinal) -> Result<bool, Failure> {
     projection_json_matches(&editor.synced_json, &editor.reconstructed)
 }
-fn projection_json_matches(live: &serde_json::Value, persisted: &serde_json::Value) -> bool {
-    without_retained_root_state(live) == without_retained_root_state(persisted)
+fn projection_json_matches(
+    live: &serde_json::Value,
+    persisted: &serde_json::Value,
+) -> Result<bool, Failure> {
+    Ok(comparable(live, "projection_consistent")?
+        == comparable(persisted, "projection_consistent")?)
+}
+/// Editor JSON as an importer of the document holds it (as_importer_reads), without the
+/// retained live root state: the form live models and persisted reconstructions are
+/// compared in. A creator omits a storage-null key an importer holds as null, and a
+/// remote root id or metadata write waits for the next local write, both as in Source;
+/// present values are compared exactly.
+fn comparable(
+    json: &serde_json::Value,
+    invariant: &'static str,
+) -> Result<serde_json::Value, Failure> {
+    let read = as_importer_reads(json).map_err(|error| Failure::new(invariant, error))?;
+    Ok(without_retained_root_state(&read))
 }
 /// A creating peer's editor JSON as an importer of the same document holds it: the
 /// editor sync policy's storage-null keys the creator's export left absent read back as

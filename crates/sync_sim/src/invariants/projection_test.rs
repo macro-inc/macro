@@ -9,7 +9,7 @@ fn a_foreign_root_id_in_the_persisted_document_still_matches_the_live_model() {
         "$": {"id": "Ysu3mkwl"},
         "children": [{"type": "paragraph", "text": "a"}],
     }});
-    assert!(projection_json_matches(&live, &persisted));
+    assert!(projection_json_matches(&live, &persisted).unwrap());
 }
 
 #[test]
@@ -24,7 +24,7 @@ fn different_retained_root_ids_and_metadata_still_match() {
         "$": {"id": "Ysu3mkwl", "documentMetadata": {"version": 10}},
         "children": [],
     }});
-    assert!(projection_json_matches(&live, &persisted));
+    assert!(projection_json_matches(&live, &persisted).unwrap());
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn any_other_root_state_key_still_has_to_match() {
         json!({"root": {"type": "root", "$": {"id": "a", "searchText": "x"}, "children": []}});
     let persisted =
         json!({"root": {"type": "root", "$": {"id": "a", "searchText": "y"}, "children": []}});
-    assert!(!projection_json_matches(&live, &persisted));
+    assert!(!projection_json_matches(&live, &persisted).unwrap());
 }
 
 #[test]
@@ -44,7 +44,7 @@ fn a_child_difference_still_fails() {
         "$": {"id": "Ysu3mkwl"},
         "children": [{"type": "paragraph", "text": "b"}],
     }});
-    assert!(!projection_json_matches(&live, &persisted));
+    assert!(!projection_json_matches(&live, &persisted).unwrap());
 }
 
 #[test]
@@ -53,5 +53,25 @@ fn a_child_node_id_is_not_exempt() {
         json!({"root": {"type": "root", "children": [{"type": "paragraph", "$": {"id": "one"}}]}});
     let persisted =
         json!({"root": {"type": "root", "children": [{"type": "paragraph", "$": {"id": "two"}}]}});
-    assert!(!projection_json_matches(&live, &persisted));
+    assert!(!projection_json_matches(&live, &persisted).unwrap());
+}
+
+#[test]
+fn a_creator_without_a_storage_null_key_matches_its_stored_null() {
+    let live = json!({"root": {"type": "root", "children": [{"type": "table", "children": []}]}});
+    let persisted = json!({"root": {
+        "type": "root",
+        "children": [{"type": "table", "colWidths": null, "children": []}],
+    }});
+    assert!(projection_json_matches(&live, &persisted).unwrap());
+}
+
+#[test]
+fn a_present_storage_null_value_still_has_to_match() {
+    let live = json!({"root": {"type": "root", "children": [{"type": "table", "colWidths": [100], "children": []}]}});
+    let persisted = json!({"root": {
+        "type": "root",
+        "children": [{"type": "table", "colWidths": null, "children": []}],
+    }});
+    assert!(!projection_json_matches(&live, &persisted).unwrap());
 }

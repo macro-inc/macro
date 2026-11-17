@@ -62,11 +62,15 @@ impl Sim {
                     client.spec.doc,
                 );
             match client.core.editor_final() {
-                Ok(Some(editor)) if !faulted && !crate::invariants::projection_matches(&editor) => {
-                    failures.push(Failure::new(
-                        "projection_consistent",
-                        format!("{name:?}: live model differs from persisted reconstruction"),
-                    ))
+                Ok(Some(editor)) if !faulted => {
+                    match crate::invariants::projection_matches(&editor) {
+                        Ok(true) => {}
+                        Ok(false) => failures.push(Failure::new(
+                            "projection_consistent",
+                            format!("{name:?}: live model differs from persisted reconstruction"),
+                        )),
+                        Err(error) => failures.push(error),
+                    }
                 }
                 Err(error) if !faulted || error.invariant != "projection_consistent" => {
                     failures.push(error)
