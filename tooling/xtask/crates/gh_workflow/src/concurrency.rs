@@ -14,10 +14,6 @@ pub struct Concurrency {
     /// Whether to cancel in-progress jobs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cancel_in_progress: Option<bool>,
-
-    /// The limit on concurrent jobs.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub limit: Option<u32>,
 }
 
 impl Concurrency {

@@ -8,9 +8,7 @@ use serde_json::Value;
 
 use crate::concurrency::Concurrency;
 use crate::step::{Step, StepType, StepValue};
-use crate::{
-    Artifacts, Container, Defaults, Env, Expression, Permissions, RetryStrategy, Secret, Strategy,
-};
+use crate::{Container, Defaults, Env, Expression, Permissions, Secret, Strategy};
 
 /// Represents the environment in which a job runs.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
@@ -69,10 +67,6 @@ pub struct Job {
     pub uses: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secrets: Option<IndexMap<String, Secret>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub retry: Option<RetryStrategy>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub artifacts: Option<Artifacts>,
 }
 
 impl Default for Job {
@@ -97,8 +91,6 @@ impl Default for Job {
             steps: None,
             uses: None,
             secrets: None,
-            retry: None,
-            artifacts: None,
         }
     }
 }

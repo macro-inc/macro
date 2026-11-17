@@ -7,9 +7,7 @@ publish = false
 version = "0.8.1"
 
 [dependencies]
-derive_more = { workspace = true }
 derive_setters = { workspace = true }
-gh_workflow_macros = { path = "../gh_workflow_macros" }
 indexmap = { workspace = true, features = ["serde"] }
 merge = { workspace = true }
 serde = { workspace = true }

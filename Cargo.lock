@@ -9051,24 +9051,13 @@ dependencies = [
 name = "gh_workflow"
 version = "0.8.1"
 dependencies = [
- "derive_more 2.1.1",
  "derive_setters",
- "gh_workflow_macros",
  "indexmap 2.14.0",
  "merge",
  "pretty_assertions",
  "serde",
  "serde_json",
  "serde_yml",
-]
-
-[[package]]
-name = "gh_workflow_macros"
-version = "0.8.1"
-dependencies = [
- "heck 0.5.0",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]

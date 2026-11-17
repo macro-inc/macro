@@ -7775,11 +7775,7 @@
       "crates/workspace-hack"
     ],
     "gh_workflow": [
-      "tooling/xtask/crates/gh_workflow",
-      "tooling/xtask/crates/gh_workflow_macros"
-    ],
-    "gh_workflow_macros": [
-      "tooling/xtask/crates/gh_workflow_macros"
+      "tooling/xtask/crates/gh_workflow"
     ],
     "git_patch": [
       "crates/git_patch",
@@ -17285,7 +17281,6 @@
     ],
     "xtask_workflows": [
       "tooling/xtask/crates/gh_workflow",
-      "tooling/xtask/crates/gh_workflow_macros",
       "tooling/xtask/crates/xtask_paths",
       "tooling/xtask/crates/xtask_workflows"
     ]

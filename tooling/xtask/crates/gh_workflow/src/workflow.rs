@@ -13,7 +13,6 @@ use crate::env::Env;
 use crate::error::Result;
 use crate::job::Job;
 use crate::permissions::Permissions;
-use crate::secret::Secret;
 use crate::Event;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
@@ -84,27 +83,6 @@ pub struct Workflow {
     /// Default settings for jobs in the workflow.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub defaults: Option<Defaults>,
-
-    /// Secrets that can be used in the workflow, such as tokens or passwords.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub secrets: Option<IndexMap<String, Secret>>,
-
-    /// The maximum number of minutes a job can run before it is canceled.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub timeout_minutes: Option<u32>,
-}
-
-/// Represents an action that can be triggered by an event in the workflow.
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub struct EventAction {
-    /// A list of branches that trigger the action.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    branches: Vec<String>,
-
-    /// A list of branches that are ignored for the action.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    branches_ignore: Vec<String>,
 }
 
 impl Workflow {

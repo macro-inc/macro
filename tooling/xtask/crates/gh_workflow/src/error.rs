@@ -1,15 +1,14 @@
-//! This module defines the `Error` enum and the `Result` type alias used
-//! throughout the crate.
+//! The crate's error type: serializing a workflow to YAML failed.
 
-#[derive(Debug, derive_more::From)]
+#[derive(Debug)]
 pub enum Error {
-    IO(std::io::Error),
     Yaml(serde_yml::Error),
-    GitHubWorkflowMismatch,
-    JobIdAlreadyExists(String),
-    UTF8(std::string::FromUtf8Error),
-    OutdatedWorkflow,
-    MissingWorkflowFile(std::path::PathBuf),
+}
+
+impl From<serde_yml::Error> for Error {
+    fn from(error: serde_yml::Error) -> Self {
+        Self::Yaml(error)
+    }
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -5,9 +5,9 @@
 The typed model of a GitHub Actions workflow that `xtask_workflows` builds and
 serializes into `.github/workflows`. Vendored from
 [tailcallhq/gh-workflow](https://github.com/tailcallhq/gh-workflow) 0.8.1
-(commit `ef51106c4c4152f595dc6d18295d78a5ca3c54f9`, Apache-2.0, see `NOTICE`),
-with its derive macro in `../gh_workflow_macros`. We own it now: change it here
-instead of patching rendered YAML in `xtask_workflows`.
+(commit `ef51106c4c4152f595dc6d18295d78a5ca3c54f9`, Apache-2.0, see `NOTICE`).
+We own it now: change it here instead of patching rendered YAML in
+`xtask_workflows`.
 
 ## Start here
 

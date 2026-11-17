@@ -150,7 +150,6 @@ describe('ciSourceChanges', () => {
     '.github': 'aaa',
     'tooling/xtask/crates/xtask_workflows': 'bbb',
     'tooling/xtask/crates/gh_workflow': 'ccc',
-    'tooling/xtask/crates/gh_workflow_macros': 'ddd',
   };
 
   test('a fork that left the CI sources alone changes nothing', () => {

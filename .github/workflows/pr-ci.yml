@@ -67,7 +67,6 @@ jobs:
           '.github',
           'tooling/xtask/crates/xtask_workflows',
           'tooling/xtask/crates/gh_workflow',
-          'tooling/xtask/crates/gh_workflow_macros',
         ] as const;
         export const STALE_MERGE =
           "PR CI can't start: this PR's merge commit predates PR CI. Merge main in, push, and add the run-ci label again.";
@@ -684,7 +683,6 @@ jobs:
           '.github',
           'tooling/xtask/crates/xtask_workflows',
           'tooling/xtask/crates/gh_workflow',
-          'tooling/xtask/crates/gh_workflow_macros',
         ] as const;
         export const STALE_MERGE =
           "PR CI can't start: this PR's merge commit predates PR CI. Merge main in, push, and add the run-ci label again.";

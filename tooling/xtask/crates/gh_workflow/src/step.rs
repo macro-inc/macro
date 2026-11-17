@@ -7,8 +7,7 @@ use merge::Merge;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::toolchain::{Abi, Arch, Component, System, Target, Toolchain, Vendor, Version};
-use crate::{private, Artifacts, Env, Expression, RetryStrategy};
+use crate::{private, Env, Expression};
 
 /// Represents a step in the workflow.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -164,16 +163,6 @@ pub struct StepValue {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge::option::overwrite_none)]
     pub working_directory: Option<String>,
-
-    /// The retry strategy for the step.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::overwrite_none)]
-    pub retry: Option<RetryStrategy>,
-
-    /// Artifacts produced by the step.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::overwrite_none)]
-    pub artifacts: Option<Artifacts>,
 }
 
 impl StepValue {
@@ -247,11 +236,6 @@ impl Step<()> {
 
 /// Represents a step that uses an action.
 impl Step<Use> {
-    /// Creates a step pointing to the default GitHub's Checkout Action.
-    pub fn checkout() -> Self {
-        Step::new("Checkout Code").uses("actions", "checkout", "v5")
-    }
-
     /// Adds a new input to the step.
     pub fn add_with<I: Into<Input>>(mut self, new_with: I) -> Self {
         let mut with = self.value.with.take().unwrap_or_default();
@@ -273,61 +257,5 @@ impl<S1: ToString, S2: ToString> From<(S1, S2)> for Input {
         let mut index_map: IndexMap<String, Value> = IndexMap::new();
         index_map.insert(value.0.to_string(), Value::String(value.1.to_string()));
         Self(index_map)
-    }
-}
-
-impl Step<Toolchain> {
-    pub fn toolchain() -> Self {
-        Self {
-            value: Default::default(),
-            marker: Toolchain::default(),
-        }
-    }
-
-    pub fn add_version(mut self, version: Version) -> Self {
-        self.marker.version.push(version);
-        self
-    }
-
-    pub fn add_component(mut self, component: Component) -> Self {
-        self.marker.components.push(component);
-        self
-    }
-
-    pub fn add_stable(mut self) -> Self {
-        self.marker.version.push(Version::Stable);
-        self
-    }
-
-    pub fn add_nightly(mut self) -> Self {
-        self.marker.version.push(Version::Nightly);
-        self
-    }
-
-    pub fn add_clippy(mut self) -> Self {
-        self.marker.components.push(Component::Clippy);
-        self
-    }
-
-    pub fn add_fmt(mut self) -> Self {
-        self.marker.components.push(Component::Rustfmt);
-        self
-    }
-
-    pub fn target(mut self, arch: Arch, vendor: Vendor, system: System, abi: Option<Abi>) -> Self {
-        self.marker.target = Some(Target {
-            arch,
-            vendor,
-            system,
-            abi,
-        });
-        self
-    }
-}
-
-impl StepType for Toolchain {
-    fn to_value(s: Step<Self>) -> StepValue {
-        let step: Step<Use> = s.marker.into();
-        StepValue::from(step)
     }
 }

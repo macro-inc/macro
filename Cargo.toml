@@ -309,7 +309,6 @@ cron = "0.16.0"
 csv = "1"
 csv-core = "0.1.13"
 dashmap = "6.1.0"
-derive_more = { version = "2.0.1", features = ["deref", "deref_mut", "from"] }
 derive_setters = "0.1.8"
 dateparser = "0.2.1"
 determinator = "0.12.0"
@@ -330,7 +329,6 @@ glob = "0.3.3"
 # hakari release is built against.
 guppy = "0.17.24"
 h2 = "0.4"
-heck = "0.5"
 hex = "0.4.3"
 hkdf = "0.12.4"
 hmac = "0.12.1"
@@ -482,7 +480,6 @@ symphonia = { version = "0.6.1", default-features = false, features = [
   "ogg",
   "wav",
 ] }
-syn = "2"
 tar = "0.4.46"
 tempfile = "3"
 thiserror = "2.0.0"
