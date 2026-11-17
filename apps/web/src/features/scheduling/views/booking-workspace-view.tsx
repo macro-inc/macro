@@ -272,8 +272,8 @@ export function BookingWorkspaceView(props: {
   return (
     <ViewShell.Root
       asidePreferenceKey="booking-links"
-      aside={isTouchDevice() ? false : undefined}
-      resizable={!isTouchDevice()}
+      aside={{ preserveDuringResize: false }}
+      resizable
       main={{ preferredWidth: 720 }}
     >
       <BookingPageLeaveDialog
@@ -352,7 +352,7 @@ export function BookingWorkspaceView(props: {
           </ViewSidebar.Content>
         </ViewSidebar.Root>
       </ViewShell.Aside>
-      <ViewShell.Main class="touch:pt-[calc(var(--safe-top,0px)+3.75rem)] touch:pb-(--mobile-content-inset-bottom)">
+      <ViewShell.Main class="relative touch:pt-[calc(var(--safe-top,0px)+3.75rem)] touch:pb-(--mobile-content-inset-bottom)">
         <Show when={isTouchDevice()}>
           <SchedulingMobileHeader
             tabs={TABS}

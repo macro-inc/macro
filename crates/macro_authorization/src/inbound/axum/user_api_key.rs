@@ -14,7 +14,7 @@ use super::{
 };
 
 /// Header carrying a user API key.
-pub const USER_API_KEY_HEADER: &str = "x-macro-user-api-key";
+pub use macro_auth::credential::USER_API_KEY_HEADER;
 
 pub(super) async fn authorize_user_api_key_request<S, Svc>(
     parts: &Parts,

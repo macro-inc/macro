@@ -18,6 +18,7 @@ import {
   enqueuePreviewWakeup,
   type ItemEntity,
   isAccessiblePreviewItem,
+  type PreviewItem,
   useItemPreview,
 } from '@queries/preview';
 import type { ItemType } from '@service-storage/client';
@@ -41,8 +42,14 @@ import {
 import { HoverCard } from './HoverCard';
 import { TaskStatusIcon } from './TaskStatusIcon';
 
-export function useItemPreviewData(entity: Accessor<ItemEntity>) {
-  const [item, { documentProperties }] = useItemPreview(entity);
+export function useItemPreviewData(
+  entity: Accessor<ItemEntity>,
+  suppliedPreview?: Accessor<PreviewItem>
+) {
+  // A host may already have authorized display data; do not fetch it again.
+  const [item, { documentProperties }] = suppliedPreview
+    ? ([suppliedPreview, { documentProperties: () => undefined }] as const)
+    : useItemPreview(entity);
   const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
 
   createEffect(() => {

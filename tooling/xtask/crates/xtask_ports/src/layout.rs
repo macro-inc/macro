@@ -123,6 +123,9 @@ pub enum Port {
     /// The Outlook emulator: Microsoft's sign-in page for the browser, and
     /// its control API.
     OutlookEmulator = 8481,
+    /// The model emulator's control API, where a test scripts the assistant's
+    /// model.
+    ModelEmulator = 8482,
 }
 
 impl Port {
