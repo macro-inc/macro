@@ -1663,6 +1663,12 @@ person has no interaction history and other recently contacted participants matc
 only scattered letters: the named person must lead and be selected by Enter or tap.
 The controlled composer regression is `people-ranking.browser.e2e.ts` in
 `apps/web/src/features/channel/Input/browser-test/`.
+People rows follow the assignee menus' rule (`@core/user/people-before-agents`):
+browsing lists you, then other people, then agents with Macro first; while
+searching, an agent is listed only when its name or handle holds the typed words,
+not just their letters scattered, and never above a person whose name matches as
+well; bots get no score boost. Phone rows keep that People order in the slots the
+blended ranking gives people.
 
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue

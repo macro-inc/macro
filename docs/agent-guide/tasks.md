@@ -1268,7 +1268,13 @@ GitHub instead.
 
 Assignees lists and searches current team members and available agents, keeping
 each surface's existing search placeholder, styling, and selected-first ordering
-when opening the picker. Rows stay in place while selecting or deselecting.
+when opening the picker. Unsearched, it lists you, then team members, then agents
+with Macro first; the Tasks filter keeps the saved-view **Me** above you, and the
+other Assignee filters put **Unassigned** right after you. A search ranks names
+as the @ menu does, lists an agent only when its name or handle holds the typed
+words (not just their letters scattered), and never above a person whose name
+matches as well. Team-member limits on the list never hide agents. The rule lives
+in `@core/user/people-before-agents`. Rows stay in place while selecting or deselecting.
 Initially selected outsiders remain visible and removable, including references
 absent from contacts. They stay searchable for re-adding while the record stays
 mounted, even after the picker closes. Unrelated non-team contacts stay excluded.
