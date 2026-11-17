@@ -4,8 +4,9 @@ Measures how long the native Android app takes to start, switch views, open a
 channel, open documents and go back, on an emulator or device with the app
 signed in. The numbers are the app's own perf spans (the ones Datadog shows for
 `@app.platform:android`), read live from the WebView over DevTools, so lab and
-field numbers compare. It navigates and reads only: it never types, sends,
-edits or changes settings.
+field numbers compare. It only taps through views and opens items: it never
+types, sends, edits or changes settings. Opening an item still records it as
+viewed, as any reader does (see [Targets](#targets)).
 
 ```sh
 cd apps/web
@@ -32,8 +33,9 @@ reported ready. The root is:
 | `channel.back`, `document.back` | `navigation` | The list is back. |
 
 `spanMs` in the results is the root's own `ui.elapsed_ms` (from the handler,
-not the touch). The difference between `readyMs` and `spanMs` is the input
-dispatch delay.
+not the touch), which is what Datadog reports. For views, channels and back
+navigations `readyMs − spanMs` is the time from the touch to the handler; for
+documents `readyMs` runs on to the end of `doc.editor`.
 
 Every iteration force-stops the app and launches it again, so each step runs
 first **cold** (the first visit in a fresh process; app storage, the native
@@ -44,8 +46,9 @@ there is no cold-storage run.
 Each sample also records, from the same traces: HTTP and GraphQL client spans,
 native GraphQL cache IPC requests, Soup reads answered locally (`soup.local`)
 or from the network (`soup.network`), which phases were already loaded
-(`<phase>.waited=false`), and native HTTP requests made over Tauri IPC while
-the step ran. `spans` lists the flow's spans relative to the touch (frequent tiny
+(`<phase>.waited=false`), and requests the WebView itself sent while the step
+ran (analytics excluded; Tauri IPC on Android is not an HTTP request, so native
+HTTP shows up only as `http …` spans). `spans` lists the flow's spans relative to the touch (frequent tiny
 cache and reconcile spans are counted, not listed), for finding where the time went, and
 `hostLoad` is the host's load average at the time.
 
@@ -107,8 +110,10 @@ outside the repository because they name account content:
 
 Pick a channel with no unread messages (the harness refuses a row that shows
 unread items, because opening it would mark them read) and documents without
-unread comments. Opening still records the items as viewed, which reorders
-Recent lists; the harness finds rows by title, so that does not matter.
+unread comments (the guard sees only unread markers on list rows, which
+document rows do not show). Opening still records the items as viewed, which
+reorders Recent lists and can move the channel's read position; the harness
+finds rows by title, so the order does not matter.
 
 ## Options
 

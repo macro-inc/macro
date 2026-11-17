@@ -26,7 +26,10 @@ export async function measureStep(
   holdMs?: number
 ): Promise<Sample> {
   const point = await session.waitFor(step.target(targets));
-  const before = await session.cdp.evaluate<number>('Date.now()');
+  // The same clock as the page's event and span times.
+  const before = await session.cdp.evaluate<number>(
+    'performance.timeOrigin + performance.now()'
+  );
   await session.device.tap(point.x, point.y, holdMs);
   const start = await waitForTap(session, before);
   const root = await session.waitForSpan(
@@ -48,6 +51,7 @@ export async function measureStep(
     throw new Error(
       `${step.id}: landed on ${route}, not ${step.route(targets)}`
     );
+  await session.captured();
   return sampleFrom(session, step.id, variant, iteration, start, root, extra);
 }
 

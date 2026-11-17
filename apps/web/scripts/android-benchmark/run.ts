@@ -1,8 +1,8 @@
 /**
  * Android performance benchmark. Drives the benchmark build on one emulator
  * or device through DevTools and adb, reads the app's own perf spans, writes
- * JSON results and prints a summary. Navigation and reads only: it never
- * types, sends, edits or changes settings.
+ * JSON results and prints a summary. It only taps through views and opens
+ * items: it never types, sends, edits or changes settings.
  *
  *   bun scripts/android-benchmark/run.ts --serial emulator-5580 \
  *     --targets ~/.config/macro-android-benchmark/targets.json
@@ -148,7 +148,7 @@ function table(results: Sample[]) {
       variant,
       ...ready,
       spanMedian: spans.length ? summarize(spans).median : undefined,
-      httpMedian: median(group.map((sample) => sample.requests.http + sample.requests.nativeHttp)),
+      httpMedian: median(group.map((sample) => sample.requests.http)),
       graphqlMedian: median(group.map((sample) => sample.requests.graphql)),
       warmPhaseShare: median(
         group.map((sample) =>

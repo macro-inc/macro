@@ -15,8 +15,6 @@ export type PageRequest = {
   time: number;
   method: string;
   url: string;
-  /** For native HTTP over Tauri IPC, the URL the plugin fetched. */
-  nativeUrl?: string;
 };
 
 /** Records the time of each touch the page receives, without handling it. */
@@ -30,17 +28,6 @@ const TAP_RECORDER = `(() => {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function nativeFetchUrl(url: string, body: string | undefined) {
-  if (!url.includes('ipc.localhost') || !decodeURIComponent(url).includes('plugin:http|fetch'))
-    return undefined;
-  try {
-    const parsed = JSON.parse(body ?? '') as { clientConfig?: { url?: string } };
-    return parsed.clientConfig?.url;
-  } catch {
-    return undefined;
-  }
-}
-
 /** A DevTools connection to the app's WebView that captures its spans. */
 export class Session {
   readonly spans: CapturedSpan[] = [];
@@ -48,8 +35,8 @@ export class Session {
   /** OTLP exports captured; a cold start that exported before attaching loses those spans. */
   exports = 0;
   #listeners: (() => void)[] = [];
-  /** Export bodies still being read; detaching waits for them. */
-  #captures: Promise<void>[] = [];
+  /** Export bodies are read in request order, so a root never lands before its children. */
+  #captures: Promise<void> = Promise.resolve();
 
   private constructor(
     readonly cdp: Cdp,
@@ -111,8 +98,10 @@ export class Session {
         };
         if (request.url.includes('/__benchmark/otlp/')) {
           if (request.url.endsWith(OTLP_PATH))
-            this.#captures.push(
-              this.#capture(String(params.requestId), request.postData)
+            this.#captures = this.#after(
+              this.#captures,
+              String(params.requestId),
+              request.postData
             );
           return;
         }
@@ -120,7 +109,6 @@ export class Session {
           time: Number(params.wallTime) * 1000,
           method: request.method,
           url: request.url,
-          nativeUrl: nativeFetchUrl(request.url, request.postData),
         });
       })
     );
@@ -129,6 +117,15 @@ export class Session {
       source: TAP_RECORDER,
     });
     await this.cdp.evaluate(TAP_RECORDER);
+  }
+
+  async #after(
+    previous: Promise<void>,
+    requestId: string,
+    inline: string | undefined
+  ) {
+    await previous;
+    await this.#capture(requestId, inline);
   }
 
   async #capture(requestId: string, inline: string | undefined) {
@@ -166,6 +163,11 @@ export class Session {
       await sleep(100);
     }
     return undefined;
+  }
+
+  /** Waits until every export seen so far has been read. */
+  async captured(): Promise<void> {
+    await this.#captures;
   }
 
   /** Every captured span in a trace. */
@@ -241,7 +243,7 @@ export class Session {
 
   async detach() {
     for (const unlisten of this.#listeners) unlisten();
-    await Promise.all(this.#captures);
+    await this.#captures;
     this.cdp.close();
     await this.device.removeForward(this.port);
   }

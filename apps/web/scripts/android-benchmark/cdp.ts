@@ -58,15 +58,29 @@ export class Cdp {
     });
   }
 
+  /** Sends a command; rejects when the page is gone or does not answer. */
   send<T = unknown>(
     method: string,
-    params: Record<string, unknown> = {}
+    params: Record<string, unknown> = {},
+    timeoutMs = 30_000
   ): Promise<T> {
+    if (this.#socket.readyState !== WebSocket.OPEN)
+      return Promise.reject(new Error('DevTools connection closed'));
     const id = this.#next++;
     return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#pending.delete(id);
+        reject(new Error(`DevTools ${method} timed out`));
+      }, timeoutMs);
       this.#pending.set(id, {
-        resolve: (value) => resolve(value as T),
-        reject,
+        resolve: (value) => {
+          clearTimeout(timer);
+          resolve(value as T);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
       });
       this.#socket.send(JSON.stringify({ id, method, params }));
     });

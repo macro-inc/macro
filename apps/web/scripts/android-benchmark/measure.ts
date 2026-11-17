@@ -26,8 +26,6 @@ export type Sample = {
     graphql: number;
     /** Native GraphQL cache IPC requests in the flow's traces. */
     cacheIpc: number;
-    /** Native HTTP requests made over Tauri IPC while it ran. */
-    nativeHttp: number;
     /** Network requests the WebView made itself (analytics excluded). */
     webview: number;
   };
@@ -69,7 +67,6 @@ function count(spans: CapturedSpan[], match: (name: string) => boolean) {
 function countRequests(requests: PageRequest[], from: number, to: number) {
   const window = requests.filter((request) => request.time >= from && request.time <= to);
   return {
-    nativeHttp: window.filter((request) => request.nativeUrl).length,
     webview: window.filter(
       (request) =>
         !request.url.includes('ipc.localhost') &&

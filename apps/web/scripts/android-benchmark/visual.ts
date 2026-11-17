@@ -10,7 +10,7 @@
  * Needs ffmpeg on PATH (or FFMPEG=/path/to/ffmpeg).
  */
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -56,6 +56,9 @@ if (!scenarioId) throw new Error(`No scenario has a step ${options.step}`);
 const scenario = SCENARIOS[scenarioId];
 const steps = scenario.steps ?? [];
 const stepIndex = steps.findIndex((step) => step.id === options.step);
+// Each open step is followed by its back step, which needs the open first.
+if (options.step.endsWith('.back'))
+  throw new Error('Check an open step; a back step depends on the one before it');
 
 type Frame = { time: number; pixels: Uint8Array };
 
@@ -63,6 +66,8 @@ async function frames(video: string, width: number, height: number) {
   const child = spawn(FFMPEG, [
     '-loglevel', 'info', '-i', video,
     '-vf', `scale=${width}:${height},format=gray,showinfo`,
+    // Keep screenrecord's variable frame times: one output frame per input.
+    '-fps_mode', 'passthrough',
     '-f', 'rawvideo', '-pix_fmt', 'gray', 'pipe:1',
   ]);
   const chunks: Buffer[] = [];
@@ -112,20 +117,31 @@ function analyse(list: Frame[]) {
 
 async function record(work: () => Promise<{ x: number; y: number; spanMs: number }>) {
   const recorder = spawn('adb', ['-s', device.serial, 'shell', 'screenrecord', '--bit-rate', '16000000', REMOTE]);
-  await sleep(1500);
-  const result = await work();
-  await sleep(2000);
-  await device.shell('pkill -INT screenrecord');
-  await new Promise((done) => recorder.on('close', done));
-  await sleep(500);
-  const directory = await mkdtemp(join(tmpdir(), 'macro-benchmark-'));
-  const local = join(directory, 'step.mp4');
-  await device.adb('pull', REMOTE, local);
-  await device.shell(`rm -f ${REMOTE}`);
-  return { ...result, video: local, directory };
+  const stopped = new Promise((done) => recorder.on('close', done));
+  try {
+    await sleep(1500);
+    const result = await work();
+    await sleep(2000);
+    await device.shell('pkill -INT screenrecord');
+    await stopped;
+    await sleep(500);
+    const directory = await mkdtemp(join(tmpdir(), 'macro-benchmark-'));
+    const local = join(directory, 'step.mp4');
+    await device.adb('pull', REMOTE, local);
+    return { ...result, video: local, directory };
+  } finally {
+    await device.shell('pkill -INT screenrecord || true');
+    await device.shell(`rm -f ${REMOTE}`);
+  }
 }
 
 const touches = (await device.shell('settings get system show_touches')).trim();
+const restoreTouches = () =>
+  device.shell(`settings put system show_touches ${touches === '1' ? 1 : 0}`);
+process.on('SIGINT', async () => {
+  await restoreTouches();
+  process.exit(130);
+});
 await device.shell('settings put system show_touches 1');
 const size = (await device.shell('wm size')).match(/(\d+)x(\d+)/);
 const width = Math.round(Number(size?.[1] ?? 1080) / SCALE);
@@ -137,20 +153,15 @@ try {
     try {
       await sleep(5000);
       await prepare(session, scenario, targets, 3000);
-      // A warm step first runs the scenario once, untimed, up to its return.
-      if (options.variant === 'warm')
-        for (const step of steps.slice(0, stepIndex + 2)) {
-          await measureStep(session, step, targets, 'warm', iteration);
-          await sleep(1500);
-        }
-      for (const step of steps.slice(0, stepIndex)) {
-        if (options.variant === 'warm') break;
+      // Cold: the steps before this one. Warm: this one and its return too.
+      const before = steps.slice(0, options.variant === 'warm' ? stepIndex + 2 : stepIndex);
+      for (const step of before) {
         await measureStep(session, step, targets, 'cold', iteration);
         await sleep(1500);
       }
       const step = steps[stepIndex];
       // Scroll the target into place before recording, so the first change
-      // in the recording near it is the touch.
+      // in the recording is the touch.
       const point = await session.waitFor(step.target(targets));
       await sleep(500);
       const recorded = await record(async () => {
@@ -165,12 +176,14 @@ try {
       console.log(
         `  ${iteration} span ${Math.round(recorded.spanMs)} ms, screen ${visual ? Math.round(visual.settledMs) : '-'} ms`
       );
+    } catch (error) {
+      console.warn(`  ${iteration} failed: ${(error as Error).message}`);
     } finally {
       await session.detach();
     }
   }
 } finally {
-  await device.shell(`settings put system show_touches ${touches === '1' ? 1 : 0}`);
+  await restoreTouches();
 }
 
 const paired = rows.filter((row) => row.visualMs !== undefined);
@@ -180,6 +193,7 @@ const gap = summarize(paired.map((row) => (row.visualMs ?? 0) - row.spanMs));
 console.log(
   `${options.step} (${options.variant}), n=${paired.length}: span median ${Math.round(span.median)} ms, screen median ${Math.round(screen.median)} ms, screen − span median ${Math.round(gap.median)} ms (min ${Math.round(gap.min)}, max ${Math.round(gap.max)})`
 );
+await mkdir(resolve(options.out), { recursive: true });
 const file = resolve(options.out, `visual-${options.step}-${Date.now()}.json`);
 await writeFile(file, `${JSON.stringify({ step: options.step, variant: options.variant, rows }, null, 2)}\n`);
 console.log(`Results: ${file}`);

@@ -53,7 +53,9 @@ export class Device {
   async devtoolsSocket(pid: number): Promise<string | undefined> {
     const sockets = await this.shell('cat /proc/net/unix');
     const name = `webview_devtools_remote_${pid}`;
-    return sockets.includes(`@${name}`) ? name : undefined;
+    return sockets.split('\n').some((line) => line.trim().endsWith(`@${name}`))
+      ? name
+      : undefined;
   }
 
   async forward(port: number, socket: string): Promise<void> {
