@@ -88,6 +88,8 @@ export const authExcluded = [
   'getSystemStatus',
   // Introductory offers belong to the app's subscription checkout flow.
   'getTrialEligibility',
+  // The web app's own fallback for PostHog flags.
+  'getUserFeatureFlags',
   'getUserInvites',
   // The interface language is an app setting, not SDK surface.
   'getUserLanguage',

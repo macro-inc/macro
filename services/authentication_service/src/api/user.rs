@@ -9,6 +9,7 @@ use crate::api::{ApiContext, context::EntityAccessServiceType};
 // needs to be public in api crate for swagger
 pub(in crate::api) mod agent_setup;
 pub(in crate::api) mod delete_user;
+pub(in crate::api) mod get_feature_flags;
 pub(in crate::api) mod get_legacy_user_permissions;
 pub(in crate::api) mod get_name;
 pub(in crate::api) mod get_user_info;
@@ -36,6 +37,7 @@ fn router_with_auth() -> Router<ApiContext> {
     Router::new()
         .route("/me", get(get_user_info::handler))
         .route("/me", delete(delete_user::handler))
+        .route("/feature_flags", get(get_feature_flags::handler))
         .route("/profile_pictures", post(post_profile_pictures::handler))
         .route("/profile_picture", put(put_profile_picture::handler))
         .route(

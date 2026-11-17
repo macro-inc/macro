@@ -138,6 +138,7 @@ import type {
   UserOrganizationResponse,
   UserQuota,
   UserTokensResponse,
+  WebFeatureFlags,
 } from './schemas';
 
 /**
@@ -6951,6 +6952,66 @@ export const agentSetup = async (
     status: res.status,
     headers: res.headers,
   } as agentSetupResponse;
+};
+
+/**
+ * A fallback for the web client: it reads PostHog's own answer first. Returns
+503 when flags can't be evaluated, so the client falls back further
+instead of reading every flag as off.
+ * @summary Evaluates the caller's web feature flags.
+ */
+export type getUserFeatureFlagsResponse200 = {
+  data: WebFeatureFlags;
+  status: 200;
+};
+
+export type getUserFeatureFlagsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getUserFeatureFlagsResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type getUserFeatureFlagsResponseSuccess =
+  getUserFeatureFlagsResponse200 & {
+    headers: Headers;
+  };
+export type getUserFeatureFlagsResponseError = (
+  | getUserFeatureFlagsResponse401
+  | getUserFeatureFlagsResponse503
+) & {
+  headers: Headers;
+};
+
+export type getUserFeatureFlagsResponse =
+  | getUserFeatureFlagsResponseSuccess
+  | getUserFeatureFlagsResponseError;
+
+export const getGetUserFeatureFlagsUrl = () => {
+  return `/user/feature_flags`;
+};
+
+export const getUserFeatureFlags = async (
+  options?: RequestInit
+): Promise<getUserFeatureFlagsResponse> => {
+  const res = await fetch(getGetUserFeatureFlagsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getUserFeatureFlagsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserFeatureFlagsResponse;
 };
 
 /**

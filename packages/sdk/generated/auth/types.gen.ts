@@ -2823,6 +2823,24 @@ export type UserTokensResponse = {
     refresh_token: string;
 };
 
+/**
+ * The caller's web feature flags, evaluated here so the web client still has
+ * them when its own PostHog request times out or is blocked.
+ */
+export type WebFeatureFlags = {
+    /**
+     * Every client-runtime flag PostHog evaluated for the caller, by key.
+     */
+    flags: {
+        [key: string]: WebFlagValue;
+    };
+};
+
+/**
+ * A boolean flag, or the variant assigned by an enabled multivariate flag.
+ */
+export type WebFlagValue = boolean | string;
+
 export type DeleteAgentApiKeyData = {
     body?: never;
     path: {
@@ -5295,6 +5313,26 @@ export type AgentSetupResponses = {
 };
 
 export type AgentSetupResponse2 = AgentSetupResponses[keyof AgentSetupResponses];
+
+export type GetUserFeatureFlagsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/feature_flags';
+};
+
+export type GetUserFeatureFlagsErrors = {
+    401: string;
+    503: ErrorResponse;
+};
+
+export type GetUserFeatureFlagsError = GetUserFeatureFlagsErrors[keyof GetUserFeatureFlagsErrors];
+
+export type GetUserFeatureFlagsResponses = {
+    200: WebFeatureFlags;
+};
+
+export type GetUserFeatureFlagsResponse = GetUserFeatureFlagsResponses[keyof GetUserFeatureFlagsResponses];
 
 export type GetUserNamesData = {
     body: PostGetNamesRequestBody;

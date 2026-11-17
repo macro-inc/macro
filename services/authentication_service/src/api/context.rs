@@ -333,6 +333,9 @@ pub(crate) struct ApiContext {
     pub google_authorization_url: url::Url,
     /// Signs and verifies the `state` on account-link OAuth round trips.
     pub account_link_state_key: AccountLinkStateKey,
+    /// Evaluates client-runtime flags for the web client's bootstrap
+    /// (`/user/feature_flags`); absent without a PostHog key.
+    pub web_feature_flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
 }
 
 env_var! {

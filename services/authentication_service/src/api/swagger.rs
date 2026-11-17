@@ -144,6 +144,7 @@ use model::user::{
 
                 /// /user
                 user::get_user_info::handler,
+                user::get_feature_flags::handler,
                 user::delete_user::handler,
                 user::post_profile_pictures::handler,
                 user::put_profile_picture::handler,
@@ -260,6 +261,8 @@ use model::user::{
                         EmptyResponse,
                         ErrorResponse,
                         GetUserInfo,
+                        user::get_feature_flags::WebFeatureFlags,
+                        user::get_feature_flags::WebFlagValue,
                         ProfilePictures,
                         UserProfilePicture,
                         AppleLoginRequest,

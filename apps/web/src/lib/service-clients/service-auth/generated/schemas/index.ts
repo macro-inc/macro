@@ -333,3 +333,6 @@ export * from './userProfilePicture';
 export * from './userProfilePictureChecksum';
 export * from './userQuota';
 export * from './userTokensResponse';
+export * from './webFeatureFlags';
+export * from './webFeatureFlagsFlags';
+export * from './webFlagValue';

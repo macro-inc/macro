@@ -950,6 +950,11 @@ async fn run_server() -> anyhow::Result<()> {
             calendar_scope_enabled: config.calendar_scope_enabled,
             google_authorization_url,
             account_link_state_key,
+            web_feature_flags: feature_flags.clone().map(|flags| {
+                flags.with_evaluation_runtime(
+                    feature_flags::outbound::posthog::EvaluationRuntime::Client,
+                )
+            }),
             jwt_args,
             authorization_state,
             token_context: MacroApiTokenContext {
