@@ -116,6 +116,8 @@ impl<P: ChatProvider> ExternalChatService<P> {
         authority: SendAuthority,
     ) -> ExternalChatResult<SendProgress> {
         sender(authority)?;
+        let intent = send_intent(request);
+        let request = &intent;
         let (user, chat_id) = receipt_scope(access)?;
         tracing::Span::current().record("chat_id", tracing::field::display(chat_id));
         validate_request(request, |text, mentions| {
@@ -296,6 +298,13 @@ impl<P: ChatProvider> ExternalChatService<P> {
         }
         self.provider.sends_for(chat_id, user, ids).await
     }
+}
+
+/// What a send asks for, without the user's quoted approval: the approval
+/// gates the request at the route, and is neither stored nor part of the
+/// idempotency digest a retry is compared by.
+pub(crate) fn send_intent(request: &SendReply) -> SendReply {
+    request.clone()
 }
 
 fn human(authority: SendAuthority) -> ExternalChatResult<()> {
