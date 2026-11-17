@@ -168,30 +168,66 @@ export async function getProfilePictureUrl(
   return item.url;
 }
 
+/** Most user ids sent in one refresh request. */
+const REFRESH_BATCH_SIZE = 100;
+
+/**
+ * Refetches the given users' pictures, batched. The old URL stays visible until
+ * the new one arrives, and a failed batch keeps its URLs.
+ */
+async function refreshPictures(ids: string[]): Promise<void> {
+  for (let start = 0; start < ids.length; start += REFRESH_BATCH_SIZE) {
+    const batch = ids.slice(start, start + REFRESH_BATCH_SIZE);
+    const result = await authServiceClient.postProfilePictures({
+      user_id_list: batch,
+    });
+    if (result.isErr()) {
+      console.error('Failed to refresh user profile pictures');
+      continue;
+    }
+
+    const urls = new Map(result.value.pictures.map(({ id, url }) => [id, url]));
+    const fetchedAt = new Date();
+    for (const id of batch) {
+      setUserProfilePictures(id, {
+        _createdAt: fetchedAt,
+        id,
+        url: urls.get(id),
+        loading: false,
+      });
+    }
+  }
+}
+
 /**
  * Refetches a user's picture only when it is already cached, so pictures
  * nobody is showing are never fetched. The old URL stays visible until the new
  * one arrives, and a failed refetch keeps it.
  */
 export async function refreshProfilePicture(userId: string): Promise<void> {
-  const cached = userProfilePictures[userId];
-  if (!cached) return;
+  if (!userProfilePictures[userId]) return;
+  await refreshPictures([userId]);
+}
 
-  const result = await authServiceClient.postProfilePictures({
-    user_id_list: [userId],
-  });
-  if (result.isErr()) {
-    console.error('Failed to refresh user profile picture');
-    return;
-  }
+/**
+ * Refetches every cached picture that isn't already loading. Run when the
+ * connection gateway (re)connects: `user_picture_changed` frames sent while the
+ * socket was down are never replayed, and mounted avatars don't re-check the
+ * cache TTL, so a missed frame would otherwise stay stale until a reload.
+ */
+export async function refreshCachedProfilePictures(): Promise<void> {
+  const ids = Object.values(userProfilePictures)
+    .filter((item) => !item.loading)
+    .map((item) => item.id);
+  await refreshPictures(ids);
+}
 
-  const picture = result.value.pictures.find(({ id }) => id === userId);
-  setUserProfilePictures(userId, {
-    _createdAt: new Date(),
-    id: userId,
-    url: picture?.url,
-    loading: false,
-  });
+/** Connection-gateway open listener for {@link refreshCachedProfilePictures}. */
+export function refreshCachedProfilePicturesOnOpen(): void {
+  fireAndForget(
+    refreshCachedProfilePictures(),
+    'profile-pictures-resync-on-open'
+  );
 }
 
 const userPictureChangedSchema = z.object({ user_id: z.string().min(1) });

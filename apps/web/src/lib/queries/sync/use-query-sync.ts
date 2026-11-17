@@ -59,7 +59,10 @@ import { handleRefreshCalendar } from '../calendar/sync';
 // provider is guaranteed to mount alongside the other sync handlers.
 import '@app/features/routines/queries/draft-jobs-sync';
 import '@app/features/routines/queries/sync';
-import { handleUserPictureChanged } from '@core/signal/profilePicture';
+import {
+  handleUserPictureChanged,
+  refreshCachedProfilePicturesOnOpen,
+} from '@core/signal/profilePicture';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createConnectionWebsocketEffect,
@@ -85,6 +88,14 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
   ws.addEventListener(WebsocketEvent.Open, invalidateChannelPictures);
   onCleanup(() =>
     ws.removeEventListener(WebsocketEvent.Open, invalidateChannelPictures)
+  );
+  // `user_picture_changed` frames missed while disconnected are not replayed.
+  ws.addEventListener(WebsocketEvent.Open, refreshCachedProfilePicturesOnOpen);
+  onCleanup(() =>
+    ws.removeEventListener(
+      WebsocketEvent.Open,
+      refreshCachedProfilePicturesOnOpen
+    )
   );
   ws.addEventListener(WebsocketEvent.Open, invalidateBotProfiles);
   onCleanup(() =>
