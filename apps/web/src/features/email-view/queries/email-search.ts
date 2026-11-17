@@ -10,6 +10,7 @@ import type {
 } from '@service-search/generated/models';
 import { match } from 'ts-pattern';
 import { isExcludedEmailFolder } from '../constants';
+import { EMAIL_ATTACHMENT_KINDS } from '../filters/email-facets';
 import type { EmailTab } from '../types';
 import type { EmailQueryContext } from './email-query';
 
@@ -25,8 +26,8 @@ const nonEmailFilters: EntityFilters = {
   project_filters: { project_ids: [NIL_UUID] },
 };
 
-// Search has no draft/sent scoping, so those tabs (like All) search the
-// user's own threads — the same reach the legacy mail search had.
+// Each tab searches the threads its list shows. Favorites narrows by thread id
+// in `buildEmailSearchRequest`; Scheduled and Reminders have no search.
 function tabFilters(tab: EmailTab): EmailFilters {
   // Focus filters its own list on the client; this search stays dormant there.
   return (
@@ -44,15 +45,9 @@ function tabFilters(tab: EmailTab): EmailFilters {
       // These views disable service search; fail closed if called independently.
       .with('spam', 'trash', () => ({ email_thread_ids: [NIL_UUID] }))
       .with('archived', () => ({ shared: 'exclude' as const, done: true }))
-      .with(
-        'favorites',
-        'drafts',
-        'scheduled',
-        'reminders',
-        'sent',
-        'all',
-        () => ({})
-      )
+      .with('sent', () => ({ view: 'sent' as const }))
+      .with('drafts', () => ({ view: 'drafts' as const }))
+      .with('favorites', 'scheduled', 'reminders', 'all', () => ({}))
       .exhaustive(() => ({}))
   );
 }
@@ -60,11 +55,15 @@ function tabFilters(tab: EmailTab): EmailFilters {
 const soleSelection = (selection: string[] | undefined) =>
   selection?.length === 1 ? selection[0] : undefined;
 
+const isAttachmentOption = (
+  id: string
+): id is keyof typeof EMAIL_ATTACHMENT_KINDS => id in EMAIL_ATTACHMENT_KINDS;
+
 /**
  * The read and done facets are single-select, so at most one option of each
  * reaches the service. Done is the thread being out of the inbox, as in the
- * list, not its notification state. Attachment facets have no service
- * counterpart; those refine the results client-side like the list page.
+ * list, not its notification state. Attachment options match a thread with
+ * any of the selected kinds, as the list's attachment facet does.
  */
 function facetFilters(facets: FacetSelection): Partial<EmailFilters> {
   const filters: Partial<EmailFilters> = {};
@@ -79,6 +78,15 @@ function facetFilters(facets: FacetSelection): Partial<EmailFilters> {
   if ((facets.calendar ?? []).includes('has-calendar-invite')) {
     filters.calendar_only = true;
   }
+
+  const attachments = [
+    ...new Set(
+      (facets.attachments ?? [])
+        .filter(isAttachmentOption)
+        .map((id) => EMAIL_ATTACHMENT_KINDS[id])
+    ),
+  ];
+  if (attachments.length > 0) filters.attachments = attachments;
 
   return filters;
 }

@@ -678,6 +678,16 @@ describe('Email list query transitions', () => {
     expect(source.isLoading()).toBe(false);
   });
 
+  it('keeps Drafts search hits whose latest message is not the draft', () => {
+    const { source, setState, setSearchEntities } = mount('invoice');
+    const replyDraft = { ...email('reply-draft'), isDraft: false };
+    batch(() => {
+      setState('tab', 'drafts');
+      setSearchEntities([replyDraft]);
+    });
+    expect(ids(source)).toEqual(['reply-draft']);
+  });
+
   it('keeps archived hits when searching Signal and Noise', () => {
     const { source, setState, setSearchEntities } = mount('invoice');
     const archived = { ...email('archived'), done: true };
