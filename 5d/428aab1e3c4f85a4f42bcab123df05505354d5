@@ -1,0 +1,19 @@
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_web_app/test.rs
+  s_358a0656ff17a9::t_751ba3d13d4ef0 37-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5d428aab1e3c4f85a4f42bcab123df05505354d5",
+  "prompts": {},
+  "sessions": {
+    "s_358a0656ff17a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "da35317f-151d-4c83-904b-8e1e317fd21e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
