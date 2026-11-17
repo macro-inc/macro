@@ -11,8 +11,8 @@ us-east-1. `README.md` is the full operations guide.
 - `nixos/host.nix`: boot order, retained volume, stable uids, service hardening.
 - `nixos/services.nix`, `nixos/goalert.nix`: the systemd services and credentials.
 - `nixos/grafana-provisioning/`: every dashboard, alert rule, contact point and
-  datasource as plain Nix data (`default.nix`), which the host and the cluster
-  Grafana in `infra/k8s/observability/cluster/` both import.
+  datasource as plain Nix data (`default.nix`), imported by the host and, once
+  it exists, the cluster Grafana in `infra/k8s/observability/cluster/`.
 - `index.ts`: VPC, ALB, certificate, DNS, alarms and EC2 user data.
 - `deploy/`: the Deploy Observability workflow's steps (`release.ts`), the image
   source key, AMI publishing, the smoke boot and the plan check. README

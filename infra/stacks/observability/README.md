@@ -700,15 +700,23 @@ Its parameters are `goalertUrl` (GoAlert's base URL) and `datasourceUrls` (the
 `prometheus`, `loki` and `tempo` query endpoints). `nixos/services.nix` passes
 the host's: GoAlert over loopback, so paging does not depend on the ALB, and the
 query-only gateway on port 8081. The cluster's Grafana
-(`infra/k8s/observability/cluster/`) imports the same file with its own:
+(`infra/k8s/observability/cluster/`, not built yet) is to import the same file
+with its own values:
 
 ```nix
 import ../../../stacks/observability/nixos/grafana-provisioning {
   inherit lib;
-  goalertUrl = "https://oncall.macro-internal.com";
+  goalertUrl = "https://goalert.example"; # see below
   datasourceUrls = { prometheus = "..."; loki = "..."; tempo = "..."; };
 }
 ```
+
+Wherever it runs, Grafana also needs `GRAFANA_ALERT_TOPIC_ARN`,
+`GOALERT_GRAFANA_KEY` and `GOALERT_GRAFANA_NOTIFY_KEY` in its environment (the
+contact points expand them), and AWS credentials that can read CloudWatch in
+us-east-1 and publish to that topic. `oncall.macro-internal.com` answers 404 on
+`/api/v2/grafana/` (`nixos/proxy.nix`), so a Grafana off the host can page
+through it only after the host's on-call vhost allows that path.
 
 So a dashboard or rule changes in one place for both. Keep host-only values out
 of the data: add a parameter instead. On the host, each provider becomes a

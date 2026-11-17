@@ -1,11 +1,18 @@
 # Everything Grafana provisions, as plain data: datasources, dashboards, alert
 # rules, contact points and the notification policy. The NixOS host
-# (`../services.nix`) and the cluster's Grafana both import it, so the two
-# show the same dashboards and evaluate the same rules.
+# (`../services.nix`) imports it, and the cluster's Grafana is to import it
+# too, so the two show the same dashboards and evaluate the same rules.
 #
 # Only what differs between them is a parameter:
 # - `goalertUrl`: GoAlert's base URL, without a trailing slash.
 # - `datasourceUrls`: the `prometheus`, `loki` and `tempo` query endpoints.
+#
+# Grafana itself must also have, wherever it runs:
+# - `GRAFANA_ALERT_TOPIC_ARN`, `GOALERT_GRAFANA_KEY` and
+#   `GOALERT_GRAFANA_NOTIFY_KEY` in its environment; the contact points expand
+#   them;
+# - AWS credentials from the default chain that can read CloudWatch in
+#   us-east-1 and publish to that SNS topic in us-east-2.
 {
   lib,
   goalertUrl,
