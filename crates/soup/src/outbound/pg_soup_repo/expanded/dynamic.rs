@@ -300,20 +300,24 @@ enum AccessGate {
 /// between 1k and 5k sources; 15 hold more.
 const MANY_SOURCES: usize = 1_000;
 
-/// Above this many grants, hashing them against one scan of the item table is
-/// cheaper than one item lookup per grant. Measured on 5M documents: probing
-/// 24k grants took 0.28 s against 1.34 s hashed, and 469k grants 2.9 s
-/// against 0.8 s.
+/// Above this many grants, hashing them against one scan of the item table may
+/// be cheaper than one item lookup per grant. Measured warm on 5M documents,
+/// probing took 0.28 s for 24k grants (1.34 s hashed), 0.33 s for 47k
+/// (0.91 s), 0.93 s for 153k (1.06 s), and 2.9 s for 469k (0.8 s). The cutoff
+/// stays well below the crossover because a cold cache pays a random read
+/// per probe.
 const MAX_PROBED_GRANTS: i64 = 50_000;
 
 /// Chooses the caller's [`AccessGate`]. Only callers with more than
-/// [`MANY_SOURCES`] sources pay for the count; it reads one index range per
-/// source and stops past [`MAX_PROBED_GRANTS`].
+/// [`MANY_SOURCES`] sources pay for the count, and only when an arm reads the
+/// gate; it reads one index range per source and stops past
+/// [`MAX_PROBED_GRANTS`].
 async fn access_gate(
     connection: &mut PgConnection,
+    filter_ast: &EntityFilterAst,
     source_ids: &[String],
 ) -> Result<AccessGate, sqlx::Error> {
-    if source_ids.len() <= MANY_SOURCES {
+    if source_ids.len() <= MANY_SOURCES || !DynamicArms::use_bound_access(filter_ast) {
         return Ok(AccessGate::Planned);
     }
 
@@ -1827,6 +1831,18 @@ impl DynamicArms {
         }
     }
 
+    /// Whether an arm gates on the caller's source ids through
+    /// [`bound_access_semi_join`]: a chat or project arm, or a document arm
+    /// that is not bounded by named ids ([`DocumentArmAccess::Joined`]).
+    fn use_bound_access(filter_ast: &EntityFilterAst) -> bool {
+        let arms = Self::new(filter_ast);
+        let joined_documents = matches!(
+            DocumentArmAccess::new(filter_ast.document_filter.as_deref()),
+            DocumentArmAccess::Joined
+        );
+        arms.chats || arms.projects || (arms.documents && joined_documents)
+    }
+
     /// Whether the query can return a row. With no arm, it is a `WHERE false`
     /// placeholder; with only a project arm under the nil parent, it reads no
     /// row either. Callers skip both, and their transaction.
@@ -2790,7 +2806,7 @@ async fn expanded_dynamic_cursor_soup_hydrated(
 
     let mut transaction = begin_dynamic_query(db).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
-    let gate = access_gate(&mut transaction, &source_ids).await?;
+    let gate = access_gate(&mut transaction, cursor.filter(), &source_ids).await?;
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), false));
     let mut builder = build_query(
@@ -3321,7 +3337,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
 
     let mut transaction = begin_dynamic_query(db).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
-    let gate = access_gate(&mut transaction, &source_ids).await?;
+    let gate = access_gate(&mut transaction, cursor.filter(), &source_ids).await?;
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), true));
     let (mut query_builder, entity_type_bind) = build_grouped_query(
