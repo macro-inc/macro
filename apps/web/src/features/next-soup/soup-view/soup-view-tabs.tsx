@@ -305,7 +305,9 @@ export const MobileSoupViewTabs = () => {
         {/* The search view has no tab pills — its header hosts only the
             facet-filter drawer button (the desktop SearchFiltersRow's
             mobile counterpart). */}
-        <MobileSearchFilterDrawer />
+        <div class="flex w-full justify-end px-(--mobile-chrome-gutter)">
+          <MobileSearchFilterDrawer />
+        </div>
       </Match>
       <For
         each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
@@ -327,20 +329,20 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
   const activeValue = () => activeTab() ?? VIEW_TAB_PRESETS[props.view].default;
 
   return (
-    <PillTabs
-      scrollable
-      class="w-full"
-      contentClass="px-(--mobile-chrome-gutter)"
-      leading={
-        <>
-          <ViewSidebar.Toggle action="expand" presentation="pill" />
-          <MobileFilterDrawer />
-        </>
-      }
-      items={visibleViewTabs(props.view)}
-      value={activeValue()}
-      onChange={(value) => applyTabPreset(props.view, value)}
-    />
+    <div class="flex w-full min-w-0 items-center gap-2">
+      <PillTabs
+        scrollable
+        class="min-w-0 flex-1"
+        contentClass="px-(--mobile-chrome-gutter)"
+        leading={<ViewSidebar.Toggle action="expand" presentation="pill" />}
+        items={visibleViewTabs(props.view)}
+        value={activeValue()}
+        onChange={(value) => applyTabPreset(props.view, value)}
+      />
+      <div class="pointer-events-auto shrink-0 pr-(--mobile-chrome-gutter)">
+        <MobileFilterDrawer />
+      </div>
+    </div>
   );
 };
 

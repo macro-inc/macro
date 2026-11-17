@@ -33,7 +33,7 @@ export function CrmMobileTabs(props: {
     <nav aria-label={t('crm.viewsNavigation')} class="flex h-10 min-w-0 flex-1">
       <PillTabs
         scrollable
-        class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
+        class="-ml-(--mobile-chrome-gutter) min-w-0 flex-1"
         contentClass="px-(--mobile-chrome-gutter)"
         leading={props.leading}
         items={items()}

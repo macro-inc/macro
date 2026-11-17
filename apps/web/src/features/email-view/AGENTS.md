@@ -15,7 +15,9 @@ the Soup-backed thread list, and saved email views.
   (`EmailMobileSearchField`) and recent searches
   (`EmailMobileRecentSearches`); the mobile layout in `email-view.tsx` opens
   it from the search pill, puts the field in place of the list pane's pill
-  row, and keeps the list mounted below it. `primitives/create-email-mobile-search.ts` owns whether the page is
+  row, and keeps the list mounted below it. The search pill and filter drawer
+  stay to the right of the scrolling tabs while the sidebar toggle stays on
+  the left. `primitives/create-email-mobile-search.ts` owns whether the page is
   open, and ends its search whenever it closes.
 - `components/EmailDetailView.tsx` and `components/EmailComposeRouteView.tsx`:
   entries for a thread and a new email inside Mail. They hold the state and

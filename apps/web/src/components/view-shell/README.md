@@ -20,6 +20,7 @@ align trailing controls by their outer edges or offset an individual icon.
 - `ViewSidebar.Primary` gives create actions and toolbars the same 8px top inset.
 - `ListHeader` reserves the title's natural width and scrolls right-aligned controls
   in the remaining space; keep switcher triggers inside the title's clip boundary.
+- Keep collection navigation on the left and search/filter actions on the right; on touch, keep trailing actions outside scrollable view tabs.
 - `ViewSidebar.CloseButton` closes the owning split in both docked navigation and
   narrow navigation overlays. Its visibility follows the split controller, not
   the sidebar breakpoint; the last remaining list split still has no close action.
