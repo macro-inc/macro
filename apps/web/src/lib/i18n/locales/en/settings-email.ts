@@ -4,6 +4,9 @@ export default {
   rowStyle: 'Row style',
   minimalist: 'Minimalist',
   classic: 'Classic',
+  // Read to screen readers in place of the sample, which they skip.
+  rowStyleDescription:
+    'Classic separates rows with lines, raises unread email with bolder text, and always shows the selection checkbox.',
   // A made-up sample of the list, drawn in the chosen row style.
   previewUnreadSender: 'Avery Stone',
   previewUnreadSubject: 'Contract redlines for Friday',

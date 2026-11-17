@@ -62,7 +62,8 @@ function sampleEntity(thread: SampleThread, now: number): EmailEntity {
 /**
  * A few made-up Mail rows in the given row style, drawn by the real
  * `ListEntity` so the sample matches the list. It is a picture: inert, with
- * no selection or opening.
+ * no selection or opening, and out of the accessibility tree, so the setting
+ * describes the styles to screen readers itself.
  */
 export function EmailRowStylePreview(props: {
   rowStyle: EmailRowStyle;
@@ -77,13 +78,12 @@ export function EmailRowStylePreview(props: {
     <div
       ref={setFrame}
       inert
-      aria-hidden="true"
       data-email-row-style-preview={props.rowStyle}
       class={cn(
         'soup-list overflow-hidden rounded-lg bg-panel text-ink select-none',
         // The settings card restyles these for its own controls and rows;
-        // the sample takes Mail's list values back, as `index.css` sets them.
-        '[--color-control:var(--color-surface-2)] [--color-edge-divider:color-mix(in_oklch,var(--color-content-0)_4%,transparent)]',
+        // the sample takes Mail's list values back.
+        '[--color-control:var(--color-list-control)] [--color-edge-divider:var(--color-list-divider)]',
         props.class
       )}
     >

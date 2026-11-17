@@ -160,6 +160,7 @@ export function EmailDisplayOptions() {
           rowStyle={chosenEmailRowStyle()}
           class="mx-4 mb-4"
         />
+        <p class="sr-only">{t('settingsEmail.rowStyleDescription')}</p>
       </div>
     </SettingsCard>
   );

@@ -321,7 +321,10 @@ for (const size of SIZES) {
         expect(
           await sample.evaluate((node) => (node as HTMLElement).inert)
         ).toBe(true);
-        await expect(sample).toHaveAttribute('aria-hidden', 'true');
+        // Screen readers skip it and get the styles described instead.
+        await expect(
+          page.getByText(/^Classic separates rows with lines/)
+        ).toHaveClass(/sr-only/);
         await expect(unread.locator('.bg-accent.rounded-full')).toBeVisible();
         expect(await showsCheckbox(unread)).toBe(false);
 
