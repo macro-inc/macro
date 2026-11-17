@@ -1,5 +1,6 @@
 //! AI tools for bot management.
 
+mod agent_memory;
 mod configure_agent;
 mod configure_bot;
 mod create_bot;
@@ -32,6 +33,10 @@ use manage_bot_channel_access::ManageBotChannelAccess;
 use std::sync::Arc;
 use uuid::Uuid;
 
+pub use agent_memory::{
+    AgentMemoryToolContext, OwnAgentMemory, ReadAgentMemory, UpdateAgentMemory,
+    agent_memory_toolset,
+};
 pub use configure_agent::{AgentHarnessOption, ConfigureAgentResponse};
 pub use list_agents::ListAgentsResponse;
 pub use types::{
@@ -128,7 +133,8 @@ fn bot_tool_error(action: &'static str, error: BotError) -> ToolCallError {
     let description = match &error {
         BotError::BadRequest(message)
         | BotError::NotFound(message)
-        | BotError::Unavailable(message) => message.clone(),
+        | BotError::Unavailable(message)
+        | BotError::Conflict(message) => message.clone(),
         BotError::Unauthorized => {
             "you do not have permission to manage this bot or its owning team".to_string()
         }

@@ -21,6 +21,7 @@ use std::sync::{Arc, Mutex};
 
 mod agent_dm;
 mod agent_enabled;
+mod agent_memory;
 mod profile_fanout;
 
 const USER_OWNER: &str = "macro|bot-owner@example.com";

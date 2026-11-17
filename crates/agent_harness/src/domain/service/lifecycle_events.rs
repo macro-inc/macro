@@ -83,7 +83,7 @@ where
         let (bot, choice) = tokio::try_join!(
             async { Ok::<_, HarnessError>(self.sessions.session_bot(session.bot_id).await?) },
             async {
-                self.coding_agents
+                self.personas
                     .coding_agent_choice(session.bot_id)
                     .await
                     .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))

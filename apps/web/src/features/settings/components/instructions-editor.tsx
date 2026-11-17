@@ -7,6 +7,8 @@ import { createEffect, on, untrack } from 'solid-js';
 export function AgentInstructionsEditor(props: {
   markdown: string;
   onChange: (markdown: string) => void;
+  /** The editor's accessible name. */
+  label: string;
   disabled?: boolean;
   placeholder?: string;
   class?: string;
@@ -67,7 +69,7 @@ export function AgentInstructionsEditor(props: {
         refFn={(element) => {
           editable = element;
           element.setAttribute('role', 'textbox');
-          element.setAttribute('aria-label', 'Instructions');
+          element.setAttribute('aria-label', props.label);
           element.setAttribute('aria-multiline', 'true');
           element.setAttribute('aria-disabled', String(!!props.disabled));
         }}

@@ -1,6 +1,7 @@
 import { match } from 'ts-pattern';
 import type {
   AgentMcpServers,
+  AgentMemory as AgentMemoryRecord,
   Agent as AgentRecord,
   CreateAgentRequest,
   PatchAgentRequest,
@@ -65,6 +66,16 @@ export type AgentOptions = Omit<
   defaultModel: string;
   /** Whether this is a coding agent. */
   isCoding: boolean;
+};
+
+/** What an agent remembers across its sessions, whoever starts them. */
+export type AgentMemory = {
+  /** The remembered markdown; empty before anything is remembered. */
+  content: string;
+  /** The revision to pass to the next {@link Agent.updateMemory}; 0 before the first write. */
+  revision: number;
+  /** When the memory last changed; undefined before the first write. */
+  updatedAt: string | undefined;
 };
 
 /** The connected apps an agent's sessions are handed. */
@@ -171,6 +182,40 @@ export class Agent extends MacroEntity<AgentRecord> {
   );
 
   /**
+   * What the agent remembers across its sessions, and its revision.
+   *
+   * @readonly
+   * @idempotent
+   */
+  async memory(): Promise<AgentMemory> {
+    return agentMemory(
+      unwrap(
+        await this.client.storage.getAgentMemory({
+          path: { agent_id: this.id },
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Replace what the agent remembers, whole. Fails without changing anything
+   * when the memory is no longer at `revision`, as when the agent remembered
+   * something since it was read: read it again and reconcile.
+   *
+   * @destructive
+   */
+  async updateMemory(content: string, revision: number): Promise<AgentMemory> {
+    return agentMemory(
+      unwrap(
+        await this.client.storage.updateAgentMemory({
+          path: { agent_id: this.id },
+          body: { content, revision },
+        }),
+      ),
+    );
+  }
+
+  /**
    * Change only the settings in `patch`; every setting left out keeps its
    * current value. Instructions, channel and app lists are replaced whole:
    * to edit one, apply your change to the current value and pass the result.
@@ -205,6 +250,14 @@ export class Agent extends MacroEntity<AgentRecord> {
       }),
     );
   }
+}
+
+function agentMemory(record: AgentMemoryRecord): AgentMemory {
+  return {
+    content: record.content,
+    revision: record.revision,
+    updatedAt: record.updated_at ?? undefined,
+  };
 }
 
 function agentPatchBody(patch: AgentPatch): PatchAgentRequest {

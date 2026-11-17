@@ -5,4 +5,5 @@ export const agentKeys = createQueryKeys('agents', {
   codingPreferences: null,
   autoArchivePreferences: null,
   apiKey: (agentId: string) => [agentId],
+  memory: (agentId: string) => [agentId],
 });

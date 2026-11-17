@@ -330,7 +330,7 @@ where
         instructions: Option<String>,
     ) -> agent_session::domain::error::Result<Option<String>> {
         let choice = self
-            .coding_agents
+            .personas
             .coding_agent_choice(bot_id)
             .await
             .map_err(AgentSessionError::Unknown)?;

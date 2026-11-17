@@ -445,6 +445,7 @@ fn a_run_that_sends_nothing_starts_no_work_with_the_persons_access() {
         "cognition.callTool",
         "storage.createAgent",
         "storage.updateAgent",
+        "storage.updateAgentMemory",
         "storage.patchAgent",
         "storage.createBot",
         "storage.patchBot",
