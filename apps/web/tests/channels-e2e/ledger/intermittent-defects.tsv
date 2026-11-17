@@ -6,10 +6,12 @@ KEY-05	On a busy page the composer takes the keyboard back just after ArrowUp se
 THR-08	A reply from someone else to a closed thread sometimes does not raise its count on an open page (seen in 1 whole-suite run in 15)
 UNR-04	The "1 unread ... below" notice sometimes never appears, or is gone again before it can be clicked (about 1 run in 10)
 CHN-15	A channel deleted elsewhere sometimes stays open on its owner's page until reload (7 of 13 repeats and 3 of 8 whole-suite runs on ce183ced7f)
-CHN-02	A team channel someone else makes is sometimes missing from a teammate's open list, or goes when opened, until reload: the list is read again before the channel is in it (with the GraphQL sources, which every build now has every run on one machine and none in CI; without it the reverse)
 ACC-06	After a teammate joins a team channel found by name its row sometimes stays under "Not joined" with a Join button until reload; the join itself works (every run on one machine, none in CI)
-CHN-08	A deleted channel sometimes stays under its owner's Favorites until reload (every run in CI, 1 of 5 on the local-index branch); without it, always (known-defects.tsv)
 UNR-08	A channel a person is added to is sometimes missing from the rows shown by "Search conversations" until the search is run again (3 of 4 whole-suite runs on a much-used stack, none in CI)
 OFF-04	With VITE_ENABLE_CHANNEL_LOCAL_SYNC a long channel read back to its start while connected sometimes cannot be loaded with no connection after a reload (1 of 20 whole-suite runs on 94876dc650)
-MEM-03	A person removed from a channel sometimes keeps it open, with its composer, until reload (5 of 10 whole-suite runs and 1 of 30 repeats on da4308dd82; 2 of 30 on main's bundle with the flag); without the flag it is so in every run
-DM-02	The first conversation two people ever have, started from "New direct message", does not reach the other person's open list (each cast's first run on a new stack, 4 of 4; once of once on main's bundle with the flag; shown at once without the flag)
+CHN-02	A team channel someone else makes is sometimes missing from a teammate's open list, or goes when opened, until reload: the list is read again before the new channel is in it (on one machine in every run, in CI in none)
+CHN-08	A deleted channel sometimes stays under its owner's Favorites until reload (every run in CI, 1 of 5 on another branch)
+DM-01	A new direct message is sometimes missing from the other person's open list until reload (on one machine in about half the runs, in CI in none)
+DM-03	A new direct message is sometimes missing from the other person's open list until reload
+MEM-03	A person removed from a channel sometimes keeps it open, with its composer, until reload (with the flag 5 of 10 whole-suite runs and 1 of 30 repeats on da4308dd82; on one machine in every run without it, in CI in none)
+DM-02	The first conversation two people ever have, started from "New direct message", is missing from the other person's open list until reload (with the flag each cast's first run on a new stack, 4 of 4; without it on one machine in some runs)

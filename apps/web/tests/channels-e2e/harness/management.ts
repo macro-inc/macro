@@ -18,14 +18,15 @@ export async function chooseChannelAction(
   page: Page,
   name: string
 ): Promise<void> {
-  // The menu can still be open, or closing, from the choice before: its
-  // button would then close it under the click.
-  const menu = page.getByRole('menu', { name: 'Channel actions' });
+  // The menu closes by itself when the bar above the channel is drawn again,
+  // as it is just after a favorite or a rename: open it again until the
+  // entry takes the click.
+  const entry = channelAction(page, name);
   await expect(async () => {
-    if (!(await menu.isVisible())) {
+    if (!(await entry.isVisible())) {
       await page.getByRole('button', { name: 'Channel actions' }).click();
     }
-    await channelAction(page, name).click({ timeout: 3_000 });
+    await entry.click({ timeout: 3_000 });
   }).toPass({ timeout: 30_000 });
 }
 
