@@ -49,8 +49,10 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
 - Literal prompt parts: add `--reconstruct` to a `--datadog` render (or to
   `--from-json` of an export with spans). It needs `gh`, AWS read access for
   `ecs describe-task-definition`, and a Rust build: the first run at a commit
-  checks it out under `~/.cache/agent-session-view/src/<sha>` and builds
-  `ai_tools`, which takes long; later runs read
+  checks it out under `~/.cache/agent-session-view/src/<sha>`, builds that
+  commit's `code-mode-assets` Nix package (the generated SDK docs; a
+  checkout without a bun install can't make them) and then `ai_tools`,
+  which takes long; later runs read
   `~/.cache/agent-session-view/reconstruct/<sha>/`. Set `ASV_BUILD_WRAPPER`
   to prefix the build (a build-slot queue, `nice`).
 
