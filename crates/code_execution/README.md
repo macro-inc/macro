@@ -121,7 +121,7 @@ and progress are program-authored and may be incomplete. W3C trace context and
 origin, whatever credential the request carries. That header is how an API tells a program's
 request from the person's, so in every run `fetch` is the only way out. Raw
 sockets, listeners and servers (`Deno.connect`, `listen`, `serve` and the like),
-WebSocket and EventSource, `Deno[Deno.internal]` and `process`'s
+`Deno.createHttpClient`, WebSocket and EventSource, `Deno[Deno.internal]` and `process`'s
 `getBuiltinModule` and `binding` are removed. The import map sends every Node
 built-in to a module that throws, except a short list that neither connects,
 starts processes nor loads other built-ins (`NODE_ALLOWED` in

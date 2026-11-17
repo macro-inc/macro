@@ -1410,21 +1410,25 @@ export async function main({token, hosts}) {
     assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
 }
 
-/// Tries unfurl under every spelling of its URL, then makes the one request
-/// that may reach the server.
-const UNFURL_SPELLINGS: &str = r#"
+/// Tries unfurl under every spelling of its URL and other places a scoped
+/// run may not reach, then the requests it may make.
+const SCOPED_FETCHES: &str = r#"
 export async function main() {
   const attempts = {
     "proxy": "UNFURL/proxy?url=https%3A%2F%2Fexample.test%2F%3Fd%3Dsecret",
     "unfurl": "UNFURL/unfurl?url=https%3A%2F%2Fexample.test",
     "bulk": "UNFURL/unfurl/bulk",
     "upper case": "UPPER/PROXY?url=x",
-    "encoded": "PORTHOST/%75nfurl/%70roxy?url=x",
-    "double encoded": "PORTHOST/%2575nfurl/proxy?url=x",
-    "dot segments": "PORTHOST/other/%2e%2e/unfurl/proxy?url=x",
-    "doubled slashes": "PORTHOST//unfurl//proxy?url=x",
+    "encoded": "LOCAL/%75nfurl/%70roxy?url=x",
+    "double encoded": "LOCAL/%2575nfurl/proxy?url=x",
+    "encoded dot segments": "LOCAL/other/%2e%2e/unfurl/proxy?url=x",
+    "doubled slashes": "LOCAL//unfurl//proxy?url=x",
     "trailing dot": "DOTTED/proxy?url=x",
     "request object": new Request("UNFURL/proxy?url=x"),
+    "another prefix": "SERVER/image-proxy/proxy?url=x",
+    "encoded base": "SERVER/%63ognition/marked",
+    "lookalike base": "SERVER/cognitionx/marked",
+    "encoded slash": "COGNITION/a%2F..%2F..%2Fimage-proxy",
   };
   const results = {};
   for (const [name, input] of Object.entries(attempts)) {
@@ -1435,28 +1439,48 @@ export async function main() {
       results[name] = String(error.message).includes("macro.unfurls") ? "refused" : String(error.message);
     }
   }
+  const redirect = await fetch("COGNITION/redirect");
   const marked = await fetch("COGNITION/marked");
-  return {results, status: marked.status};
+  return {results, redirect: redirect.status, status: marked.status};
 }
 "#;
 
-/// A scoped run reaches no unfurl route, however its URL is spelled; the
-/// rest of its fetches go through.
+/// A scoped run reaches only the SDK's own bases, never unfurl however its
+/// URL is spelled, and follows no redirect; its other fetches go through.
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
-async fn a_scoped_program_never_reaches_unfurl() {
+async fn a_scoped_program_reaches_only_the_sdk_and_never_unfurl() {
     let (_root, service) = setup(Limits::default()).await;
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
-    let server = tokio::spawn(expect_only_the_marked_fetch(listener));
     let unfurl = format!("http://localhost:{port}/unfurl");
-    let cognition = format!("http://127.0.0.1:{port}");
-    let source = UNFURL_SPELLINGS
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("GET /cognition/redirect "), "{request}");
+        let response = format!(
+            "HTTP/1.1 302 Found\r\nLocation: http://localhost:{port}/unfurl/proxy?url=x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        stream.write_all(response.as_bytes()).await.unwrap();
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("GET /cognition/marked "), "{request}");
+        respond(&mut stream, "{}").await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), listener.accept())
+                .await
+                .is_err()
+        );
+    });
+    let server_origin = format!("http://127.0.0.1:{port}");
+    let cognition = format!("{server_origin}/cognition");
+    let source = SCOPED_FETCHES
         .replace("UNFURL", &unfurl)
         .replace("UPPER", &format!("http://LOCALHOST:{port}/UNFURL"))
-        .replace("PORTHOST", &format!("http://localhost:{port}"))
+        .replace("LOCAL", &format!("http://localhost:{port}"))
         .replace("DOTTED", &format!("http://localhost.:{port}/unfurl"))
-        .replace("COGNITION", &cognition);
+        .replace("COGNITION", &cognition)
+        .replace("SERVER", &server_origin);
     let environment = RunEnvironment {
         token: "fixture-run-token".into(),
         endpoints: SdkEndpoints {
@@ -1491,10 +1515,13 @@ async fn a_scoped_program_never_reaches_unfurl() {
             "results": {
                 "proxy": refused, "unfurl": refused, "bulk": refused,
                 "upper case": refused, "encoded": refused,
-                "double encoded": refused, "dot segments": refused,
+                "double encoded": refused, "encoded dot segments": refused,
                 "doubled slashes": refused, "trailing dot": refused,
-                "request object": refused,
+                "request object": refused, "another prefix": refused,
+                "encoded base": refused, "lookalike base": refused,
+                "encoded slash": refused,
             },
+            "redirect": 302,
             "status": 200,
         })
     );

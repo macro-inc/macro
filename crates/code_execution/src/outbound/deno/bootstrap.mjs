@@ -23,6 +23,7 @@ const urlPathname = getter(URL.prototype, "pathname");
 const requestUrl = getter(Request.prototype, "url");
 const lowerCase = uncurry(String.prototype.toLowerCase);
 const endsWith = uncurry(String.prototype.endsWith);
+const includes = uncurry(String.prototype.includes);
 const slice = uncurry(String.prototype.slice);
 const decodeComponent = decodeURIComponent;
 const rejection = Promise.reject.bind(Promise);
@@ -147,58 +148,96 @@ try {
   const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
-  // A scoped run's credential reaches only services that hold it to its
-  // scope. Unfurl takes no credential and fetches any URL it is given, so a
-  // scoped run never reaches it, however the URL is spelled: any case, a
-  // trailing dot on the host, or percent-encoded, dot or doubled segments.
-  const place = (url) => {
-    const parsed = new URLConstructor(url);
-    let path = urlPathname(parsed);
-    for (let round = 0; round < 4; round++) {
-      let decoded;
+  // A scoped run (a suggestion generation, or a run that sends nothing) may
+  // reach only the SDK's own services, under their own bases, and never
+  // unfurl, which takes no credential and fetches any URL it is given.
+  // Anything else on an allowed host (another gateway prefix, such as the
+  // image proxy) is refused, as is a path that reads two ways (an encoded
+  // dot segment or slash), so what is checked is what is routed. This raises
+  // the bar; it is not a boundary: the services' own scope checks are.
+  const DEFAULT_PORTS = {__proto__: null, "https:": "443", "http:": "80"};
+  const MAX_DECODES = 4;
+  const decodeSegment = (segment) => {
+    let decoded = segment;
+    for (let round = 0; round < MAX_DECODES; round++) {
+      let next;
       try {
-        decoded = decodeComponent(path);
+        next = decodeComponent(decoded);
       } catch {
-        break;
+        return decoded;
       }
-      if (decoded === path) break;
-      path = decoded;
+      if (next === decoded) return decoded;
+      decoded = next;
     }
-    // No prototype, so the program can't intercept its indexes.
-    const segments = {__proto__: null, length: 0};
+    return decoded;
+  };
+  // A URL's host, port and path segments, raw and decoded; `undefined` for a
+  // path that reads two ways. No prototypes, so the program can't intercept
+  // their indexes.
+  const placeOf = (url) => {
+    const parsed = new URLConstructor(url);
+    const path = urlPathname(parsed);
+    const raw = {__proto__: null, length: 0};
+    const decoded = {__proto__: null, length: 0};
     let start = 0;
     for (let index = 0; index <= path.length; index++) {
       if (index < path.length && path[index] !== "/") continue;
-      const segment = lowerCase(slice(path, start, index));
+      const segment = slice(path, start, index);
       start = index + 1;
-      if (segment === "" || segment === ".") continue;
-      if (segment === "..") {
-        if (segments.length > 0) segments.length -= 1;
-        continue;
-      }
-      segments[segments.length] = segment;
-      segments.length += 1;
+      if (segment === "") continue;
+      const plain = lowerCase(decodeSegment(segment));
+      if (plain === "." || plain === ".." || includes(plain, "/") || includes(plain, "\\")) return undefined;
+      raw[raw.length] = segment;
+      raw.length += 1;
+      decoded[decoded.length] = plain;
+      decoded.length += 1;
     }
     let host = lowerCase(urlHostname(parsed));
     while (endsWith(host, ".")) host = slice(host, 0, -1);
-    const protocol = urlProtocol(parsed);
-    const port = urlPort(parsed) || (protocol === "https:" ? "443" : protocol === "http:" ? "80" : "");
-    return {host, port, segments};
+    const port = urlPort(parsed) || DEFAULT_PORTS[urlProtocol(parsed)] || "";
+    return {host, port, raw, decoded};
   };
-  const withheld = context.scoped && context.hosts.unfurl ? place(context.hosts.unfurl) : undefined;
-  const reachesWithheld = (url) => {
-    const target = place(url);
-    if (target.host !== withheld.host || target.port !== withheld.port) return false;
-    if (target.segments.length < withheld.segments.length) return false;
-    for (let index = 0; index < withheld.segments.length; index++) {
-      if (target.segments[index] !== withheld.segments[index]) return false;
+  const under = (target, base, segments) => {
+    if (target.host !== base.host || target.port !== base.port) return false;
+    if (target[segments].length < base[segments].length) return false;
+    for (let index = 0; index < base[segments].length; index++) {
+      if (target[segments][index] !== base[segments][index]) return false;
     }
     return true;
   };
+  let scopedBases;
+  let unfurlBase;
+  if (context.scoped) {
+    scopedBases = {__proto__: null, length: 0};
+    for (const [name, url] of entries(context.hosts)) {
+      const base = placeOf(url);
+      if (name === "unfurl") {
+        unfurlBase = base;
+        continue;
+      }
+      scopedBases[scopedBases.length] = base;
+      scopedBases.length += 1;
+    }
+  }
+  // Whether a scoped run may send `url`: under an SDK base, exactly as
+  // spelled there, and not under unfurl however it is spelled.
+  const scopedMaySend = (url) => {
+    const target = placeOf(url);
+    if (target === undefined) return false;
+    if (unfurlBase && under(target, unfurlBase, "decoded")) return false;
+    for (let index = 0; index < scopedBases.length; index++) {
+      if (under(target, scopedBases[index], "raw")) return true;
+    }
+    return false;
+  };
   globalThis.fetch = (input, init) => {
-    const request = new RequestConstructor(input, init);
-    if (withheld && reachesWithheld(requestUrl(request))) {
-      return rejection(new Error("A scoped run can't use link previews (macro.unfurls): they fetch any URL they're given."));
+    let request = new RequestConstructor(input, init);
+    if (scopedBases) {
+      if (!scopedMaySend(requestUrl(request))) {
+        return rejection(new Error("A scoped run reaches only Macro's own services, and not link previews (macro.unfurls), which fetch any URL they're given."));
+      }
+      // A redirect isn't checked again, so a scoped run follows none.
+      request = new RequestConstructor(request, {redirect: "manual"});
     }
     // Every request to an SDK origin, whatever credential it carries.
     if (origins.has(new URL(request.url).origin)) {
@@ -238,7 +277,7 @@ try {
   const program = new URL(unattended ? "./main.ts" : "./main.mjs", import.meta.url).href;
   // Every request must go through the fetch above, which marks it as the
   // program's and holds back a dry run's writes. Nothing else may reach the
-  // network (raw sockets, listeners, websockets), start a realm with its own
+  // network (raw sockets, listeners, websockets, custom HTTP clients), start a realm with its own
   // fetch (workers), or reach Node's or Deno's internals past the import map.
   for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket", "createHttpClient"]) {
     Object.defineProperty(Deno, name, {value: undefined});
