@@ -1,6 +1,7 @@
 // What the tests of the other ways into the mail list's functions share
 // (`ways-list1-*.spec.ts`): the list's rows, its header controls, the filter
-// menu and the phone's filter drawer.
+// menu, the phone's filter drawer, and on touch the Email sidebar's sheet and
+// the header's name for the open tab.
 
 import {
   devices,
@@ -9,6 +10,7 @@ import {
   type Page,
   type Request,
 } from '@playwright/test';
+import { did } from '../ledger/record';
 import type { Mailbox } from './fixtures';
 import { rowIds } from './list';
 
@@ -16,6 +18,45 @@ const { defaultBrowserType: _browser, ...iPhone } = devices['iPhone 13'];
 
 /** The phone the suite's phone tests run on. */
 export const PHONE = iPhone;
+
+/** The Email sidebar as a touch device shows it: a sheet. */
+export function sidebarSheet(page: Page): Locator {
+  return page.getByRole('dialog', { name: 'Sidebar' });
+}
+
+/** Opens the Email sidebar's sheet with the touch header's pill. */
+export async function openSidebarSheet(page: Page): Promise<Locator> {
+  await page.getByRole('button', { name: 'Show sidebar' }).tap();
+  did('AL-911');
+  const sheet = sidebarSheet(page);
+  await expect(
+    sheet.getByRole('navigation', { name: 'Email tabs' })
+  ).toBeVisible();
+  return sheet;
+}
+
+/**
+ * Opens a tab on a touch device. Its header has pills for the Inbox tabs
+ * only; every tab is in the sidebar's sheet, which closes on the choice.
+ */
+export async function openTouchTab(page: Page, name: string): Promise<void> {
+  const sheet = await openSidebarSheet(page);
+  await sheet
+    .getByRole('navigation', { name: 'Email tabs' })
+    .getByRole('button', { name, exact: true })
+    .tap();
+  await expect(sheet).toHaveCount(0);
+}
+
+/**
+ * The name the touch list header shows in place of the Inbox pills: the
+ * tab's, outside the Inbox.
+ */
+export function touchHeaderName(page: Page, name: string): Locator {
+  return page
+    .locator('[data-mobile-list-header]')
+    .getByText(name, { exact: true });
+}
 
 export const GRACE = 'Grace <grace@example.com>';
 export const HUGO = 'Hugo <hugo@example.com>';

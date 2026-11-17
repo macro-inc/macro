@@ -431,7 +431,7 @@ export async function main() {
     } catch (error) {
       const message = String(error?.message ?? error);
       results[name] = message.includes("Make requests with fetch") ? "unavailable"
-        : message.includes("do not sleep") ? "refused as a sleep"
+        : message.includes("Promise.race deadline guards") ? "refused as a sleep"
         : error instanceof TypeError ? "removed" : message;
     }
   }
@@ -576,7 +576,7 @@ export async function main() {{
       results[name] = "loaded";
     }} catch (error) {{
       results[name] = error.message.includes("Make requests with fetch") ? "unavailable"
-        : error.message.includes("do not sleep") ? "refused as a sleep" : error.message;
+        : error.message.includes("Promise.race deadline guards") ? "refused as a sleep" : error.message;
     }}
   }}
   return results;
@@ -615,6 +615,42 @@ export async function main() {{
         error.message,
         "Error: node:net is unavailable in ExecuteCode. Make requests with fetch or the macro SDK."
     );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn timer_deadline_guards_explain_supported_parallel_calls() {
+    let (_root, service) = setup(Limits::default()).await;
+    for source in [
+        "export async function main() { return Promise.race([new Promise(() => {}), new Promise((_, reject) => setTimeout(() => reject(new Error('deadline')), 1000))]); }",
+        "export function main() { setInterval(() => {}, 1000); }",
+        "export async function main() { await import('node:timers/promises'); }",
+    ] {
+        let (_, outcome) = run(&service, source, 5000).await;
+        let Outcome::Failed { error } = outcome else {
+            panic!("{source}: {outcome:?}");
+        };
+        assert_eq!(error.code, FailureCode::Runtime);
+        assert!(
+            error
+                .message
+                .contains("including Promise.race deadline guards"),
+            "{}",
+            error.message
+        );
+        assert!(error.message.contains("30 s"), "{}", error.message);
+        assert!(
+            error.message.contains("Promise.allSettled"),
+            "{}",
+            error.message
+        );
+        assert!(
+            error.message.contains("return successful results"),
+            "{}",
+            error.message
+        );
+    }
     service.shutdown().await;
 }
 
