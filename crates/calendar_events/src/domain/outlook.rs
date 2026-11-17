@@ -333,6 +333,7 @@ impl<
             calendar_id = lease.target.as_ref().map(|target| tracing::field::display(target.calendar_id)),
             step = tracing::field::Empty,
             near_window = tracing::field::Empty,
+            untimed_members = tracing::field::Empty,
             milestone = tracing::field::Empty,
             provider_event_id = tracing::field::Empty,
             outcome = tracing::field::Empty,
@@ -441,7 +442,19 @@ impl<
                         .calendar_page(&token, listed, delta, lease.page_cursor.as_deref())
                         .await
                     {
-                        Ok(page) => OutlookCalendarProgress::Page(page),
+                        Ok(page) => {
+                            if lease.near_window {
+                                // Members without a time Macro can read are
+                                // read last, so a rising count means the
+                                // near window lost its order.
+                                span.record(
+                                    "untimed_members",
+                                    page.members.iter().filter(|m| m.occurs.is_none()).count()
+                                        as i64,
+                                );
+                            }
+                            OutlookCalendarProgress::Page(page)
+                        }
                         Err(error)
                             if error.kind() == CalendarProviderErrorKind::SyncTokenExpired =>
                         {
