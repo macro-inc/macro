@@ -135,7 +135,8 @@ pub struct EditorSurface {
     pub(crate) fail_next_remote: bool,
     #[cfg(test)]
     pub(crate) fail_after_next_local_commit: bool,
-    #[cfg(feature = "test-faults")]
+    // Only the application load refresh reads it.
+    #[cfg(all(feature = "test-faults", feature = "application"))]
     pub(crate) fail_load_refresh_after_writes: Option<usize>,
 }
 impl EditorSurface {
@@ -187,7 +188,7 @@ impl EditorSurface {
             fail_next_remote: false,
             #[cfg(test)]
             fail_after_next_local_commit: false,
-            #[cfg(feature = "test-faults")]
+            #[cfg(all(feature = "test-faults", feature = "application"))]
             fail_load_refresh_after_writes: None,
         })
     }
