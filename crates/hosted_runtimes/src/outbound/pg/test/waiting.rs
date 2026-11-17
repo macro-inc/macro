@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::ports::HostScope;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn releasing_awake_units_notifies_waiters_in_the_same_transaction(pool: PgPool) {
@@ -40,7 +41,7 @@ async fn releasing_awake_units_notifies_waiters_in_the_same_transaction(pool: Pg
             .await
             .unwrap();
         let timers = repo
-            .due_timers(now() + Duration::seconds(21), 100)
+            .due_timers(HostScope::Every, now() + Duration::seconds(21), 100)
             .await
             .unwrap();
         let timer = timers

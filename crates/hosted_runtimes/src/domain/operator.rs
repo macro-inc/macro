@@ -16,7 +16,7 @@ use crate::domain::lifecycle::{
 use crate::domain::models::{Computer, ComputerRecord};
 use crate::domain::ports::{
     ComputerRepo, DefaultAgent, Fleet, FleetEnrollment, FleetError, FleetInstance, Harnesses,
-    InstanceStatus, PendingEffect, SetupNotice, SetupNotices,
+    HostScope, InstanceStatus, PendingEffect, SetupNotice, SetupNotices,
 };
 use crate::domain::service::{Clock, ComputerError};
 
@@ -182,11 +182,11 @@ where
         shutdown: impl Future<Output = ()> + Send,
     ) -> Result<usize, ComputerError> {
         let mut shutdown = std::pin::pin!(shutdown);
-        tokio::select! {
+        let host = tokio::select! {
             biased;
             () = &mut shutdown => return Ok(0),
-            result = self.host_id() => { result?; }
-        }
+            result = self.host_id() => result?,
+        };
         let deadline = tokio::time::Instant::now() + EFFECT_DEADLINE;
         let now = self.clock.now();
         let lease_until = now + EFFECT_LEASE;
@@ -194,7 +194,13 @@ where
         // future is dropped, leaving an untracked lease until expiry.
         let effects = self
             .repo
-            .lease_effects(EffectWorker::Fleet, EFFECT_BATCH, now, lease_until)
+            .lease_effects(
+                EffectWorker::Fleet,
+                HostScope::Only(vec![host]),
+                EFFECT_BATCH,
+                now,
+                lease_until,
+            )
             .await
             .map_err(internal)?;
         let ids: Vec<i64> = effects.iter().map(|effect| effect.id).collect();
@@ -459,11 +465,11 @@ where
 
     /// Fire due timers; returns how many fired.
     pub async fn fire_timers(&self) -> Result<usize, ComputerError> {
-        self.host_id().await?;
+        let host = self.host_id().await?;
         let now = self.clock.now();
         let due = self
             .repo
-            .due_timers(now, TIMER_BATCH)
+            .due_timers(HostScope::Only(vec![host]), now, TIMER_BATCH)
             .await
             .map_err(internal)?;
         let count = due.len();

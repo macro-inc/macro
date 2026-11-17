@@ -1,5 +1,6 @@
 //! Postgres adapter for [`ComputerRepo`].
 
+use crate::domain::ports::HostScope;
 use bot_id::BotId;
 use harness_id::HarnessId;
 
@@ -78,6 +79,13 @@ impl From<serde_json::Error> for PgComputerError {
     fn from(error: serde_json::Error) -> Self {
         Self::Corrupt(error.to_string())
     }
+}
+
+/// A scope's hosts as storage ids; `None` for every host.
+fn host_uuids(scope: &HostScope) -> Option<Vec<Uuid>> {
+    scope
+        .hosts()
+        .map(|hosts| hosts.iter().map(|host| host.into_inner()).collect())
 }
 
 /// The outbox's `computer_effect_worker`: the workers that lease effects.
@@ -617,24 +625,36 @@ impl ComputerRepo for PgComputerRepo {
     async fn lease_effects(
         &self,
         worker: EffectWorker,
+        scope: HostScope,
         limit: u32,
         now: DateTime<Utc>,
         lease_until: DateTime<Utc>,
     ) -> Result<Vec<PendingEffect>, PgComputerError> {
         let worker = OutboxWorker::try_from(worker)?;
+        let hosts = host_uuids(&scope);
         // Quarantine stops fleet work, but a billing item removal still runs:
         // it only ever stops a charge, and its item is in the effect.
         let healthy_ids = match worker {
             OutboxWorker::Billing => {
                 sqlx::query_scalar!(
-                    "SELECT DISTINCT computer_id FROM hosted_runtime_effect WHERE worker = $1 AND run_after <= $2",
+                    r#"
+                    SELECT DISTINCT effect.computer_id AS "computer_id!"
+                    FROM hosted_runtime_effect effect
+                    LEFT JOIN hosted_runtime computer ON computer.id = effect.computer_id
+                    WHERE effect.worker = $1 AND effect.run_after <= $2
+                      AND ($3::UUID[] IS NULL OR computer.host_id = ANY($3))
+                    "#,
                     worker as OutboxWorker,
                     now,
+                    hosts.as_deref(),
                 )
                 .fetch_all(&self.pool)
                 .await?
             }
-            OutboxWorker::Fleet => self.healthy_effect_owners(worker, now).await?,
+            OutboxWorker::Fleet => {
+                self.healthy_effect_owners(worker, hosts.as_deref(), now)
+                    .await?
+            }
         };
         // Only each computer's oldest pending effect is due: a computer's
         // effects run in the order its transitions produced them.
@@ -753,10 +773,13 @@ impl ComputerRepo for PgComputerRepo {
 
     async fn due_timers(
         &self,
+        scope: HostScope,
         now: DateTime<Utc>,
         limit: u32,
     ) -> Result<Vec<DueTimer>, PgComputerError> {
-        let healthy_ids = self.healthy_timer_owners(now).await?;
+        let healthy_ids = self
+            .healthy_timer_owners(host_uuids(&scope).as_deref(), now)
+            .await?;
         let rows = sqlx::query!(
             r#"
             SELECT computer_id, kind AS "kind: TimerKind", fire_at FROM hosted_runtime_timer
@@ -909,6 +932,8 @@ impl ComputerRepo for PgComputerRepo {
                 COALESCE(SUM(held.disk_gib), 0)::BIGINT AS "disk_gib!"
             FROM hosted_runtime_host host
             LEFT JOIN held ON held.host_id = host.id
+            -- The hosts purchases are placed on; see `reserve`.
+            WHERE host.admitting
             GROUP BY host.id
             ORDER BY host.id
             "#,

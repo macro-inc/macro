@@ -1,3 +1,4 @@
+use crate::domain::ports::HostScope;
 use std::str::FromStr;
 mod quarantine;
 mod redeploy;
@@ -5,6 +6,7 @@ mod redeploy;
 mod agents;
 mod billing_races;
 mod boot;
+mod host_scope;
 
 use chrono::{Duration, TimeZone};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -265,7 +267,13 @@ async fn converting_a_reservation_inserts_the_computer_and_its_creation_once(poo
         .unwrap();
     assert_eq!(stored, computer);
     let effects = repo
-        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .lease_effects(
+            EffectWorker::Fleet,
+            HostScope::Every,
+            10,
+            now(),
+            now() + Duration::minutes(1),
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -324,7 +332,13 @@ async fn apply_stores_state_effects_and_timers_and_wakes_only_with_room(pool: Pg
     assert_eq!(first.state.phase, Phase::Provisioning { start: true });
     assert_eq!(second.state.phase, Phase::Provisioning { start: false });
     let mut leased = repo
-        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .lease_effects(
+            EffectWorker::Fleet,
+            HostScope::Every,
+            10,
+            now(),
+            now() + Duration::minutes(1),
+        )
         .await
         .unwrap();
     leased.sort_by_key(|pending| pending.computer_id.as_uuid());
@@ -354,9 +368,15 @@ async fn apply_stores_state_effects_and_timers_and_wakes_only_with_room(pool: Pg
     );
     // Leased effects stay hidden until their lease runs out.
     assert_eq!(
-        repo.lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
-            .await
-            .unwrap(),
+        repo.lease_effects(
+            EffectWorker::Fleet,
+            HostScope::Every,
+            10,
+            now(),
+            now() + Duration::minutes(1)
+        )
+        .await
+        .unwrap(),
         vec![]
     );
 }
@@ -373,7 +393,13 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
     changed(&repo, id, Event::PowerOn, now()).await;
 
     let first = repo
-        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .lease_effects(
+            EffectWorker::Fleet,
+            HostScope::Every,
+            10,
+            now(),
+            now() + Duration::minutes(1),
+        )
         .await
         .unwrap();
     assert_eq!(first.len(), 1);
@@ -381,7 +407,13 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
     repo.complete_effect(first[0].id).await.unwrap();
 
     let second = repo
-        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .lease_effects(
+            EffectWorker::Fleet,
+            HostScope::Every,
+            10,
+            now(),
+            now() + Duration::minutes(1),
+        )
         .await
         .unwrap();
     assert_eq!(second.len(), 1);
@@ -395,7 +427,13 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
     repo.complete_effect(second[0].id).await.unwrap();
 
     let third = repo
-        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .lease_effects(
+            EffectWorker::Fleet,
+            HostScope::Every,
+            10,
+            now(),
+            now() + Duration::minutes(1),
+        )
         .await
         .unwrap();
     assert_eq!(third.len(), 1);
@@ -410,7 +448,7 @@ async fn a_replaced_timer_does_not_fire(pool: PgPool) {
     let id = bought(&repo, 1).await.id;
     changed(&repo, id, Event::InstanceStarted, now()).await;
     let due = repo
-        .due_timers(now() + Duration::hours(1), 10)
+        .due_timers(HostScope::Every, now() + Duration::hours(1), 10)
         .await
         .unwrap();
     assert_eq!(due.len(), 1);
@@ -452,6 +490,7 @@ async fn a_released_computer_frees_its_units_and_leaves_the_team_list(pool: PgPo
     let billing = repo
         .lease_effects(
             EffectWorker::Billing,
+            HostScope::Every,
             10,
             now(),
             now() + Duration::minutes(1),
@@ -580,6 +619,7 @@ async fn a_comped_reservation_converts_with_its_reason(pool: PgPool) {
     assert!(
         repo.lease_effects(
             EffectWorker::Billing,
+            HostScope::Every,
             10,
             now() + Duration::days(1),
             now() + Duration::days(2),

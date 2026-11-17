@@ -77,6 +77,9 @@ read it before changing behaviour.
   attempt notifies again). It never fails the computer when it cannot be sent.
   `SetupNotice.agent` names the agent teammate an agent computer runs
   (`ComputerAgents::agent_of`), so the adapter can tell its inviter by name.
+- The operator leases fleet effects and timers only for its own host
+  (`ports::HostScope::Only`); billing passes `HostScope::Every`. Purchases
+  land only on admitting hosts (`hosted_runtime_host.admitting`).
 - Keep `#![deny(missing_docs)]` and document every public item tersely (CS-54).
 
 ## Related

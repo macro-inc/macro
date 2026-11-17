@@ -105,6 +105,34 @@ pub enum ReserveError<Err> {
     Storage(Err),
 }
 
+/// Whose computers a worker serves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HostScope {
+    /// Every host's: billing runs where Stripe lives, for every computer.
+    Every,
+    /// Only these hosts': a control plane drives only the hosts it registered,
+    /// never another control plane's.
+    Only(Vec<HostId>),
+}
+
+impl HostScope {
+    /// Whether a computer on `host` is in scope.
+    pub fn includes(&self, host: HostId) -> bool {
+        match self {
+            Self::Every => true,
+            Self::Only(hosts) => hosts.contains(&host),
+        }
+    }
+
+    /// The hosts, `None` for every host: for storage queries.
+    pub fn hosts(&self) -> Option<&[HostId]> {
+        match self {
+            Self::Every => None,
+            Self::Only(hosts) => Some(hosts),
+        }
+    }
+}
+
 /// What applying an event to a stored computer did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Applied {
@@ -274,11 +302,13 @@ pub trait ComputerRepo: Send + Sync + 'static {
         host: HostId,
     ) -> impl Future<Output = Result<Vec<ComputerRecord>, Self::Err>> + Send;
 
-    /// Lease up to `limit` due effects for `worker`; a leased effect is
-    /// hidden from other workers until `lease_until`. Exclude quarantined owners before the limit.
+    /// Lease up to `limit` due effects for `worker` of computers in `scope`;
+    /// a leased effect is hidden from other workers until `lease_until`.
+    /// Exclude quarantined owners before the limit.
     fn lease_effects(
         &self,
         worker: EffectWorker,
+        scope: HostScope,
         limit: u32,
         now: DateTime<Utc>,
         lease_until: DateTime<Utc>,
@@ -313,9 +343,11 @@ pub trait ComputerRepo: Send + Sync + 'static {
         retry_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Timers due at `now`, oldest first; exclude quarantined owners before the limit.
+    /// Timers of computers in `scope` due at `now`, oldest first; exclude
+    /// quarantined owners before the limit.
     fn due_timers(
         &self,
+        scope: HostScope,
         now: DateTime<Utc>,
         limit: u32,
     ) -> impl Future<Output = Result<Vec<DueTimer>, Self::Err>> + Send;
@@ -349,7 +381,8 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Every host with what its computers and reservations hold, by host id.
+    /// Every host purchases may be placed on (admitting hosts), with
+    /// what its computers and reservations hold, by host id.
     fn allocation(&self) -> impl Future<Output = Result<Vec<HostAllocation>, Self::Err>> + Send;
 }
 

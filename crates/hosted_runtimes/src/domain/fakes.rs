@@ -1,6 +1,7 @@
 //! In-memory fakes of the ports, for domain tests.
 
 use crate::domain::ids::ComputerId;
+use crate::domain::ports::HostScope;
 use bot_id::BotId;
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -600,6 +601,7 @@ impl ComputerRepo for FakeRepo {
     async fn lease_effects(
         &self,
         worker: EffectWorker,
+        scope: HostScope,
         limit: u32,
         now: DateTime<Utc>,
         lease_until: DateTime<Utc>,
@@ -607,9 +609,16 @@ impl ComputerRepo for FakeRepo {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let effects = self.effects.lock().unwrap();
         let mut due = self.effect_run_after.lock().unwrap();
+        let computers = self.computers.lock().unwrap();
+        let in_scope = |computer_id: &ComputerId| {
+            computers
+                .get(computer_id)
+                .is_none_or(|computer| scope.includes(computer.host))
+        };
         let selected: Vec<PendingEffect> = effects
             .iter()
             .filter(|pending| pending.effect.worker() == worker)
+            .filter(|pending| in_scope(&pending.computer_id))
             .filter(|pending| due.get(&pending.id).is_none_or(|at| *at <= now))
             .filter(|pending| {
                 !effects.iter().any(|earlier| {
@@ -696,14 +705,25 @@ impl ComputerRepo for FakeRepo {
         Ok(())
     }
 
-    async fn due_timers(&self, now: DateTime<Utc>, limit: u32) -> Result<Vec<DueTimer>, FakeError> {
+    async fn due_timers(
+        &self,
+        scope: HostScope,
+        now: DateTime<Utc>,
+        limit: u32,
+    ) -> Result<Vec<DueTimer>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        let computers = self.computers.lock().unwrap();
         Ok(self
             .timers
             .lock()
             .unwrap()
             .iter()
             .filter(|timer| timer.fire_at <= now)
+            .filter(|timer| {
+                computers
+                    .get(&timer.computer_id)
+                    .is_none_or(|computer| scope.includes(computer.host))
+            })
             .take(limit as usize)
             .cloned()
             .collect())

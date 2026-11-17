@@ -436,7 +436,12 @@ runtime lists read `useRunnableHarnessesQuery` /
   Size, effect worker, timer kind, notice stage and provider are Postgres
   enums mapped with `sqlx::Type` (`ComputerSize`, the adapter's
   `OutboxWorker`, `TimerKind`, `ClaudeSignInStage`, `AgentProvider`).
-- V1 runs one fleet (one host) per control plane; an effect for another host fails.
+- V1 runs one fleet (one host) per control plane. The operator leases fleet
+  effects and fires timers only for computers on the host it registered
+  (`ports::HostScope::Only`); billing serves every host (`HostScope::Every`).
+- `hosted_runtime_host.admitting` (default true): purchases are placed only on
+  admitting hosts, and `allocation` (offers, capacity gauges) counts only
+  those, so turning it off drains a host of new purchases.
 - Shared hosts require distinct `COMPUTERS_CONTROL_PLANE_ID` per control plane;
   only owned instances are reconciled. Local stacks use `local-<instance>`.
 - Scope Docker fleet listing to both its configured network and control-plane

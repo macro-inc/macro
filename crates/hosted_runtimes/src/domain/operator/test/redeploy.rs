@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::ports::HostScope;
 use std::sync::Arc;
 use tokio::sync::{Notify, oneshot};
 
@@ -68,7 +69,13 @@ async fn shutdown_drains_active_effect_and_returns_queued_leases() {
         assert!(
             operator
                 .repo
-                .lease_effects(EffectWorker::Fleet, 16, now(), now() + EFFECT_LEASE)
+                .lease_effects(
+                    EffectWorker::Fleet,
+                    HostScope::Every,
+                    16,
+                    now(),
+                    now() + EFFECT_LEASE
+                )
                 .await
                 .unwrap()
                 .is_empty()
@@ -82,7 +89,13 @@ async fn shutdown_drains_active_effect_and_returns_queued_leases() {
         assert_eq!(operator.fleet.calls.lock().unwrap().len(), 1);
         let available = operator
             .repo
-            .lease_effects(EffectWorker::Fleet, 16, now(), now() + EFFECT_LEASE)
+            .lease_effects(
+                EffectWorker::Fleet,
+                HostScope::Every,
+                16,
+                now(),
+                now() + EFFECT_LEASE,
+            )
             .await
             .unwrap();
         let ids: Vec<i64> = available.iter().map(|effect| effect.id).collect();
@@ -131,6 +144,7 @@ async fn fleet_call_timeout_ends_before_lease_expiry_and_records_retry() {
             .repo
             .lease_effects(
                 EffectWorker::Fleet,
+                HostScope::Every,
                 16,
                 now() + Duration::seconds(10),
                 now() + EFFECT_LEASE

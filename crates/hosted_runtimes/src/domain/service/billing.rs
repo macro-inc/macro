@@ -2,6 +2,7 @@
 //! subscription change means for each computer. The lifecycle decides; this
 //! module only talks to the billing provider and feeds it events.
 
+use crate::domain::ports::HostScope;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -542,6 +543,7 @@ impl<
             .repo
             .lease_effects(
                 EffectWorker::Billing,
+                HostScope::Every,
                 BILLING_BATCH,
                 now,
                 now + BILLING_LEASE,
