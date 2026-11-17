@@ -13,7 +13,6 @@ import { chatAttachmentMentionToMarkdown } from '@core/component/AI/util/chatAtt
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableEntityAppearance,
-  enableRoutineConditions,
   enableRoutineSharing,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
@@ -69,7 +68,6 @@ export function RoutineDetail(props: {
   const hasPaidAccess = useHasPaidAccess();
   const sharing = useFeatureFlag(enableRoutineSharing);
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
-  const decisions = useFeatureFlag(enableRoutineConditions);
   const back = () =>
     props.onBack ? props.onBack() : openAgentsPage(layout, 'routines');
   const open = (id: string) =>
@@ -178,7 +176,7 @@ export function RoutineDetail(props: {
           </Show>
         }
         defaultModel={defaultModelForPlan(hasPaidAccess())}
-        decisionsEnabled={decisions().enabled}
+        decisionsEnabled
         initialTab={props.initialTab}
         onBack={back}
         onDelete={remove}

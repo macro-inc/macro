@@ -38,7 +38,6 @@ vi.mock('../context/crm-context', () => ({
     canAccess: () => taskContext.canAccess(),
     createNavigation: () => ({ openWithSplit: vi.fn() }),
     listsEnabled: () => () => false,
-    pipelinesEnabled: () => () => false,
     isTeamAdmin: () => () => false,
     openCreateContact: vi.fn(),
     registerTaskComposerRecord: (source: () => CrmTaskRecord) => {

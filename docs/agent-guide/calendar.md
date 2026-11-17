@@ -83,7 +83,14 @@ changing the user or date range must not retain the old events. Verify both hand
 directions with delayed responses and delay calendar metadata past occurrences.
 If metadata fails, events remain usable with the default calendar presentation.
 Provider backfill shows a persistent `Syncing your calendar…` banner above the
-grid, explaining that events will appear automatically and Macro remains usable.
+grid, on desktop and phone: `Events are being imported. This may take a while.
+You can keep using Macro as normal.` It names no provider and shows no
+progress: the server reports one sync status across all of the viewer's
+calendar accounts, with no per-account or per-calendar import state. An Outlook
+import reads a window from a year back to two years ahead one event at a time,
+so the current month can stay empty while events on other dates have already
+arrived. The banner never suggests turning the calendar off, which deletes
+Macro's copy and starts the import again.
 The banner stays visible as partial results arrive and disappears when sync finishes.
 A routine sync of an already imported account never shows it.
 Errors retain the separate retry state. Verify delayed occurrence
@@ -134,12 +141,6 @@ accumulate against the requested date and interrupt unfinished slides, without
 waiting for event responses or hidden-page redraws. Verify repeated forward clicks
 and mixed directions reach the cumulative date while events are still loading.
 Touch swipes retain their page-readiness gates.
-
-Quick-call creation, incoming invitations, Live lists, Macro meeting links, and
-the `/app/meet/*` routes require the PostHog flag `enable-quick-calls`. While the
-flag loads or is off, those controls stay hidden and meeting routes do not mount
-call setup. Existing channel calls and the upcoming-events list remain available.
-For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
 
 During a quick or scheduled call, signed-in participants can open **Call chat**
 with **Open chat** at the bottom-right. On desktop, **Copy Meeting Url** sits at
@@ -194,15 +195,6 @@ While an event response saves, a small spinner appears beside `Going?` within
 the RSVP footer on desktop and mobile; the row and buttons stay in place.
 Failures appear below the buttons inside the padded footer and allow retrying.
 
-Calendar scheduling is on by default in dev. Production uses the PostHog flag
-`enable-calendar-scheduling` and stays off unless enabled remotely. Set
-`VITE_ENABLE_CALENDAR_SCHEDULING=false` to test the disabled state locally.
-While off, the Scheduling workspace and calendar booking shortcuts are hidden;
-public booking and receipt links show an unavailable page without fetching
-scheduling data. When enabling a production rollout, include anonymous visitors
-so invitees can open those links. A public booking link stays available when
-the flag request gets no answer, for example when a browser blocks it.
-
 Calendar connections live in **Settings → Calendar** (`/app/settings/calendar`).
 Connected calendars offers Connect account (pick Gmail or Outlook / Microsoft 365,
 then consent; Outlook is offered only to accounts with the `enable-outlook` flag,
@@ -213,7 +205,7 @@ the only linked account lacks calendar permission, the Calendar accounts row
 shows just a filled Connect button for it, with no account list or
 visibility note. Disconnect removes calendar access/data, not the Gmail connection.
 Settings → Calendar lists only the viewer's own inboxes. The **Enable calendar**
-toast (behind `enable-calendar-prompt-web` and `enable-calendar-prompt-mobile`)
+toast
 follows the same rule: it asks once per own inbox missing calendar permission,
 never for an inbox another Macro user delegated to the viewer (a **Shared** row
 in Settings → Email, whose per-inbox Enable calendar button stays available).
@@ -527,7 +519,7 @@ Selecting `Macro call` on an owned editable event without one adds a call on sav
 choosing another option removes its generated Macro link from the invitation.
 Removing the link or deleting the calendar event does not revoke the reusable call.
 The AI's `CreateCalendarEvent` composer (chat, agent sessions, channel review cards)
-offers the same selector under the same quick-calls flag; `Macro call` there maps to
+offers the same selector; `Macro call` there maps to
 the tool's `addMacroCall`, and the call is created when the tool executes, before the
 event is written, so the single invitation already carries the link. The MCP server
 and channel bot accept `addMacroCall` directly. `addMacroCall` and `addGoogleMeet`

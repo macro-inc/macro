@@ -9,14 +9,7 @@ import {
 import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { scheduleToEntity } from '@app/features/routines/queries/entities';
 import { useSchedulesQuery } from '@app/features/routines/queries/schedules';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
-import {
-  enableCrm,
-  enableDatabases,
-  enableForms,
-  enableProjects,
-} from '@core/constant/featureFlags';
 import {
   useChannelsContext,
   useDmActivityByUserId,
@@ -393,8 +386,6 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
-  const crmFlag = useFeatureFlag(enableCrm);
-  const projectsFlag = useFeatureFlag(enableProjects);
   // queries
   const historyQuery = useHistoryQuery();
   const { channels, isLoading: channelsLoading } = useChannelsContext();
@@ -441,9 +432,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const { query: agentSessionsQuery, sessions: agentSessionsAccessor } =
     useQuickAccessAgentSessionsQuery();
   const databasesQuery = useDatabasesQuery();
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const formsQuery = useFormsQuery();
-  const formsFlag = useFeatureFlag(enableForms);
   const schedulesQuery = useSchedulesQuery(() => true);
   const { query: initiativesQuery, initiatives: initiativesAccessor } =
     useQuickAccessInitiativesQuery();
@@ -831,7 +820,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // Databases are not Soup entities and have no view history, so creation
   // time is the only timestamp to sort on.
   const databaseEntries = createLazyMemo(() => {
-    if (!databasesFlag().enabled) return [];
     const entries: IndexEntry[] = [];
     const listed = databasesQuery.isSuccess ? databasesQuery.data : [];
     for (const { database, grant } of listed) {
@@ -869,7 +857,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   // Forms, like databases, have only a creation time to sort on.
   const formEntries = createLazyMemo(() => {
-    if (!formsFlag().enabled) return [];
     const entries: IndexEntry[] = [];
     const listed = formsQuery.isSuccess ? formsQuery.data : [];
     for (const { form, access } of listed) {
@@ -1082,9 +1069,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const projectedBuckets = createMemo(() =>
       (buckets.length ? buckets : BUCKET_COMBINATIONS.all).filter(
         (bucket) =>
-          ((bucket !== 'crm_company' && bucket !== 'crm_contact') ||
-            (crmFlag().enabled && crmAccessAllowed())) &&
-          (bucket !== 'initiative' || projectsFlag().enabled)
+          (bucket !== 'crm_company' && bucket !== 'crm_contact') ||
+          crmAccessAllowed()
       )
     );
     const personExclusions = createContactExclusions(
@@ -1447,10 +1433,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     fireAndForget(snippetsQuery.refetch(), 'quick-access');
     fireAndForget(skillsQuery.refetch(), 'quick-access');
     fireAndForget(agentSessionsQuery.refetch(), 'quick-access');
-    if (databasesFlag().enabled)
-      fireAndForget(databasesQuery.refetch(), 'quick-access');
-    if (formsFlag().enabled)
-      fireAndForget(formsQuery.refetch(), 'quick-access');
+    fireAndForget(databasesQuery.refetch(), 'quick-access');
+    fireAndForget(formsQuery.refetch(), 'quick-access');
     fireAndForget(schedulesQuery.refetch(), 'quick-access');
     fireAndForget(initiativesQuery.refetch(), 'quick-access');
   };

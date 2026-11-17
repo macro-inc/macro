@@ -26,18 +26,13 @@ dot, including desktop preview activation, keyboard opening, and phone navigatio
 The read is saved in the background; a failed request restores the dot so opening
 it again can retry. Marking read does not mark the notification done.
 
-**Rollout:** Sales Tasks, Sales Email, Sales Notes and Sales Calls require PostHog `enable-crm-activity`
-(off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
-this flag to decide whether to supply its task-composer preset, and with
-`enable-crm` to show the Customer / Contact pill when creating any task. With it off, only Companies and People
-appear in Records, activity queries do not run, and activity deep links return to
-Companies after flags finish loading. Global task creation uses the standard
+Records lists Sales Tasks, Sales Email, Sales Notes and Sales Calls beside Companies
+and People. Members with CRM access receive its task-composer preset and the
+Customer / Contact pill when creating tasks. Global task creation uses the standard
 composer; record-level New task still associates the new task with that record.
-With it on, the activity and contextual composer behavior below applies.
 Task creation opens immediately from the focused pane's registered preset,
 without fetching record details. Contact company prefills use already-loaded
-details. If CRM's flag is still loading, CRM supplies no preset. Later flag,
-focus or record changes do not reset an open composer; reopen to use the new
+details. Focus or record changes do not reset an open composer; reopen to use the new
 context. If an embedded record shows a loading error, global task creation still
 targets the selected record until you close its details.
 
@@ -766,15 +761,19 @@ existing interaction dates remain; later population recomputes dates from
 eligible history. Labels and folders are not supported yet.
 
 Members denied CRM viewing can still manage their own mailbox consent and
-thread exceptions. Viewing access does not authorize changes to another
-member's contribution.
+exclude or restore their own threads from the email header. The excluded-thread
+list in CRM settings remains hidden until CRM access is restored. Viewing access
+does not authorize changes to another member's contribution.
 
 ## Member access
 
 Existing and new members start with CRM access. An admin or owner can patch a
 team with `member_crm_access: { user_id, enabled }`; ordinary members cannot
 change this setting, and admins and owners cannot be denied. Mailbox contribution
-consent stays unchanged. Preference mutations return 503 while the deployment
+consent stays unchanged. Denied members have no Customers entry in desktop navigation,
+Go To hotkeys, or the mobile dock. Company/contact search, Quick Access, user-card
+actions, and the Customer / Contact picker retire immediately when access is revoked.
+Preference mutations return 503 while the deployment
 rollout is disabled; existing access checks continue to enforce stored denials.
 In team settings, admins and owners see a CRM access switch for each member.
 Owners and admins show the reason they always retain access instead of a disabled switch.

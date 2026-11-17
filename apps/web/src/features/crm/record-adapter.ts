@@ -1,8 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  disableCrmContactSearch,
-  enableCrm,
-} from '@core/constant/featureFlags';
+import { disableCrmContactSearch } from '@core/constant/featureFlags';
 import { useDmActivityByUserId } from '@core/context/channels';
 import type { EntityItem } from '@core/context/quickAccess';
 import { useQuickAccess } from '@core/context/quickAccess/context';
@@ -41,16 +38,15 @@ export function useCrmContactByEmailQuery(
     { storage: storageServiceClient, client: useQueryClient() },
     teamId,
     email,
-    enabled
+    () => enabled() && crmAccessAllowed()
   );
 }
 
 /** Quick Access feed of visible contacts across the viewer's CRM-enabled teams. */
 export function useQuickAccessCrmContactsQuery() {
-  const flag = useFeatureFlag(enableCrm);
   return createContactSuggestions(
     { storage: storageServiceClient, client: useQueryClient() },
-    () => flag().enabled && crmAccessAllowed()
+    crmAccessAllowed
   );
 }
 
@@ -115,11 +111,9 @@ export function useCrmContactDiscovery(
   search: Accessor<string>,
   active: Accessor<boolean>
 ) {
-  const flag = useFeatureFlag(enableCrm);
   const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
   const query = () => search().trim();
   const enabled = () =>
-    flag().enabled &&
     crmAccessAllowed() &&
     !contactSearchDisabled().enabled &&
     active() &&

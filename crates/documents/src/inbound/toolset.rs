@@ -102,11 +102,6 @@ pub struct DocumentToolContext<
     /// Editing worker service for the EditDocument tool.
     pub editing: Arc<EDSvc>,
 
-    /// Whether a user has Canvas artifacts. Hosts without a flag provider keep
-    /// the default, which is off for everyone; wire one with
-    /// [`Self::with_canvas_artifacts`].
-    pub canvas_artifacts: crate::domain::canvas::CanvasArtifactsRollout,
-
     /// A document's comment threads, read by the ReadContent tool.
     pub comments: Arc<dyn DocumentComments>,
 
@@ -183,7 +178,6 @@ impl<
             sync_service_client: self.sync_service_client.clone(),
             creator: self.creator.clone(),
             editing: self.editing.clone(),
-            canvas_artifacts: self.canvas_artifacts.clone(),
             comments: self.comments.clone(),
             messages: self.messages.clone(),
             spreadsheet: self.spreadsheet.clone(),
@@ -255,7 +249,6 @@ impl<
             sync_service_client,
             creator,
             editing,
-            canvas_artifacts: Arc::new(|_| Box::pin(async { false })),
             comments,
             messages,
             spreadsheet,
@@ -333,15 +326,6 @@ impl<
     /// Set the usage recorder the EditDocument tool logs worker token usage to.
     pub fn with_recorder(mut self, recorder: Arc<dyn ai_usage::UsageRecorder>) -> Self {
         self.recorder = recorder;
-        self
-    }
-
-    /// Read each user's Canvas artifacts rollout from this provider.
-    pub fn with_canvas_artifacts(
-        mut self,
-        rollout: crate::domain::canvas::CanvasArtifactsRollout,
-    ) -> Self {
-        self.canvas_artifacts = rollout;
         self
     }
 

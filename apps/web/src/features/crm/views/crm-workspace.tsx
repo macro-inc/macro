@@ -23,9 +23,7 @@ import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-
 import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
-import { enableCrmActivity } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -43,7 +41,6 @@ import {
   createEffect,
   createSignal,
   type JSX,
-  on,
   onCleanup,
   onMount,
   Show,
@@ -198,7 +195,6 @@ export function CrmWorkspaceView(props: {
 }) {
   // Before the shell below reads the preference.
   adoptLegacyCollapsedPreference();
-  const activityFlag = useFeatureFlag(enableCrmActivity);
   const {
     openCreateCompany: openCreateCompanyModal,
     openCreateContact: openCreateContactModal,
@@ -267,18 +263,11 @@ export function CrmWorkspaceView(props: {
   const teamQuery = useCurrentTeamQuery();
   const teamId = () =>
     teamQuery.isSuccess ? teamQuery.data?.team.id : undefined;
-  const pipelinesEnabled = useCrmContext().pipelinesEnabled();
   const canCreatePipeline = () =>
-    canAccess() &&
-    pipelinesEnabled() &&
-    teamQuery.isSuccess &&
-    !!teamQuery.data;
-  const pipelines = useCrmContext().createPipelines(() =>
-    pipelinesEnabled() ? teamId() : undefined
-  );
+    canAccess() && teamQuery.isSuccess && !!teamQuery.data;
+  const pipelines = useCrmContext().createPipelines(teamId);
   const [creatingPipeline, setCreatingPipeline] = createSignal(false);
-  const pipelineId = () =>
-    pipelinesEnabled() ? pipelineIdOfTab(view.activeTab()) : undefined;
+  const pipelineId = () => pipelineIdOfTab(view.activeTab());
   const activePipeline = () =>
     pipelines.pipelines().find((pipeline) => pipeline.id === pipelineId());
   // Another tab's list replaces an open record; the same tab returns to its list.
@@ -300,10 +289,8 @@ export function CrmWorkspaceView(props: {
   const peopleActive = () => active() === 'people';
   const activityTab = () => {
     const tab = active();
-    return activityFlag().enabled && isCrmActivityTab(tab) ? tab : undefined;
+    return isCrmActivityTab(tab) ? tab : undefined;
   };
-  const activityPending = () =>
-    isCrmActivityTab(active()) && activityFlag().loading;
   const [exporting, setExporting] = createSignal(false);
   createEffect(() => {
     if (canAccess()) return;
@@ -362,7 +349,6 @@ export function CrmWorkspaceView(props: {
   const navigate = (id: string) => {
     settings.close();
     if (!listsFlag() && id.startsWith('list:')) id = 'active';
-    if (!activityFlag().enabled && isCrmActivityTab(id)) id = 'active';
     if (id !== 'people' && !id.startsWith('list:') && !isCrmActivityTab(id))
       id = 'active';
     if (id === active()) view.host.record.close();
@@ -410,32 +396,18 @@ export function CrmWorkspaceView(props: {
       presentation="toolbar"
       onCreateCompany={openCreateCompanyModal}
       onCreateContact={() => openCreateContactModal()}
-      pipeline={
-        pipelinesEnabled()
-          ? {
-              disabled: !canCreatePipeline(),
-              onCreate: () => setCreatingPipeline(true),
-            }
-          : undefined
-      }
+      pipeline={{
+        disabled: !canCreatePipeline(),
+        onCreate: () => setCreatingPipeline(true),
+      }}
     />
-  );
-  // Keep cold activity links intact until PostHog resolves; off falls back to Companies.
-  createEffect(
-    on(
-      () => [activityPending(), activityFlag().enabled, active()] as const,
-      ([loading, activityEnabled, tab]) => {
-        if (!loading && isCrmActivityTab(tab) && !activityEnabled)
-          navigate('active');
-      }
-    )
   );
   const mobileHeader = () => (
     <div class="flex min-w-0 flex-col gap-2">
       <CrmMobileTabs
         canAccess={canAccess()}
         active={activeRecord()}
-        pipelines={pipelinesEnabled() ? pipelines.pipelines() : []}
+        pipelines={pipelines.pipelines()}
         lists={listsEnabled() ? lists.lists() : []}
         onNavigate={(id) => {
           const pipeline = pipelineIdOfTab(id);
@@ -468,11 +440,7 @@ export function CrmWorkspaceView(props: {
           <SoupFiltersBar />
         </Suspense>
       </Show>
-      <Show
-        when={
-          canAccess() && !pipelineId() && !activityTab() && !activityPending()
-        }
-      >
+      <Show when={canAccess() && !pipelineId() && !activityTab()}>
         <div class="flex min-w-0 items-center justify-between gap-3">
           <Show when={peopleActive()}>
             <PeopleSearchBar
@@ -523,18 +491,16 @@ export function CrmWorkspaceView(props: {
               />
             }
             pipelines={
-              <Show when={pipelinesEnabled()}>
-                <PipelineSidebar
-                  pipelines={pipelines.pipelines()}
-                  activeId={settings.isOpen() ? undefined : pipelineId()}
-                  loading={pipelines.loading()}
-                  error={pipelines.error()}
-                  canCreate={canCreatePipeline()}
-                  onCreate={() => setCreatingPipeline(true)}
-                  onSelect={selectPipeline}
-                  onRetry={() => fireAndForget(pipelines.refresh(), 'crm')}
-                />
-              </Show>
+              <PipelineSidebar
+                pipelines={pipelines.pipelines()}
+                activeId={settings.isOpen() ? undefined : pipelineId()}
+                loading={pipelines.loading()}
+                error={pipelines.error()}
+                canCreate={canCreatePipeline()}
+                onCreate={() => setCreatingPipeline(true)}
+                onSelect={selectPipeline}
+                onRetry={() => fireAndForget(pipelines.refresh(), 'crm')}
+              />
             }
             active={settings.isOpen() ? 'settings' : activeRecord()}
             lists={lists.lists().map((list) => ({
@@ -549,14 +515,10 @@ export function CrmWorkspaceView(props: {
             onNavigate={navigate}
             onCreateCompany={openCreateCompanyModal}
             onCreateContact={() => openCreateContactModal()}
-            pipeline={
-              pipelinesEnabled()
-                ? {
-                    disabled: !canCreatePipeline(),
-                    onCreate: () => setCreatingPipeline(true),
-                  }
-                : undefined
-            }
+            pipeline={{
+              disabled: !canCreatePipeline(),
+              onCreate: () => setCreatingPipeline(true),
+            }}
             onNewList={() => setEditing({ name: '', companyIds: [] })}
             onImport={() => setImporting(true)}
             onExport={() => setExporting(true)}
@@ -629,9 +591,6 @@ export function CrmWorkspaceView(props: {
                     </Button>
                   </Show>
                 </Show>
-                <Show when={!pipelineId() && activityPending()}>
-                  <CrmListSkeleton label="Loading CRM activity" />
-                </Show>
                 <Show when={!pipelineId() && activityTab()} keyed>
                   {(tab) => (
                     <Suspense
@@ -650,9 +609,7 @@ export function CrmWorkspaceView(props: {
                     </Suspense>
                   )}
                 </Show>
-                <Show
-                  when={!pipelineId() && !activityTab() && !activityPending()}
-                >
+                <Show when={!pipelineId() && !activityTab()}>
                   <Show when={!isTouchDevice()}>
                     <ListHeader
                       title={

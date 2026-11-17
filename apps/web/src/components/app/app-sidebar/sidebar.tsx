@@ -5,7 +5,6 @@ import {
   type ListView,
 } from '@app/constants/list-views';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
@@ -35,7 +34,6 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_CALLS,
-  enableCrm,
   enableTasksReviews,
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
@@ -53,6 +51,7 @@ import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import ActivityIcon from '@icon/system/regular/pulse.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { cn } from '@ui';
 import {
   type Component,
@@ -240,22 +239,19 @@ export const GoToHotkeys = () => {
     },
   });
 
-  const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
   const reviews = useFeatureFlag(enableTasksReviews);
   const notificationsEnabled = useUnifiedNotificationsFlag();
   const external = useFeatureFlag(enableWhatsappLinked);
-  const crm = useFeatureFlag(enableCrm);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
-      calendarUiEnabled(),
       activityFeedEnabled(),
       recentViewEnabled(),
       reviews().enabled,
       notificationsEnabled(),
       external().enabled,
-      crm().enabled
+      crmAccessAllowed()
     )
   );
 
@@ -413,23 +409,20 @@ const EXTERNAL_LINK: SidebarItem = {
 
 /**
  * Assemble the ordered sidebar link list: the static links plus the
- * flag-gated Notifications, Recent, Activity, Calendar, Calls, Reviews, CRM,
+ * flag-gated Notifications, Recent, Activity, Calls, Reviews,
  * and External entries in their correct positions. Callers subscribe to the
  * flags and pass them in, so a flag that resolves after mount still rebuilds
  * the list.
  */
 export const buildSidebarLinks = (
-  showCalendar: boolean,
   showActivity: boolean,
   showRecent: boolean,
   showReviews: boolean,
   showNotifications: boolean,
   showExternal: boolean,
-  showCustomers: boolean
+  canAccessCrm: boolean
 ): SidebarItem[] => {
-  let links: SidebarItem[] = SIDEBAR_LINKS.filter(
-    (link) => showCalendar || link.id !== 'calendar'
-  );
+  let links: SidebarItem[] = SIDEBAR_LINKS;
 
   const insertAfter = (anchorId: string, link: SidebarItem) => {
     const idx = links.findIndex((l) => l.id === anchorId);
@@ -454,14 +447,14 @@ export const buildSidebarLinks = (
     links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
   }
 
-  if (showCustomers) {
+  if (canAccessCrm) {
     // Customers sits just after Channels (and Calls when present).
-    const anchorId = ENABLE_CALLS ? 'calls' : 'channels';
-    const idx = links.findIndex((l) => l.id === anchorId);
+    const customersAnchorId = ENABLE_CALLS ? 'calls' : 'channels';
+    const customersIdx = links.findIndex((l) => l.id === customersAnchorId);
     links = [
-      ...links.slice(0, idx + 1),
+      ...links.slice(0, customersIdx + 1),
       COMPANIES_LINK,
-      ...links.slice(idx + 1),
+      ...links.slice(customersIdx + 1),
     ];
   }
 

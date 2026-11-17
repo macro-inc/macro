@@ -4,6 +4,9 @@ CRM company and contact screens, settings, filters, saved views, lists, import,
 export, and company actions belong here. The dependency rules are enforced by
 `architecture.test.ts` and the feature rules in `rules/ast-grep`.
 
+Read `crmAccessAllowed` for app-wide navigation, search, Quick Access, and actions;
+pass the same authority through `CrmContext.canAccess` for CRM-owned views.
+The retired CRM/activity/pipeline rollout flags never replace this access gate.
 Keep excluded-thread list queries and mentions inside the current CRM access gate.
 Email contribution controls remain available after access is revoked; the thread
 header uses only owner-scoped consent and exclusion reads.
@@ -173,13 +176,9 @@ The selected-record fallback survives detail query errors until the record close
 Global task creation snapshots the focused pane's getter before opening, without
 fetching details or capturing navigation history. Record contexts isolate drafts.
 
-`enable-crm-activity` gates workspace activity tabs (labelled Sales Tasks, Sales Email,
-Sales Notes and Sales Calls), whether CRM supplies its
-composer context, and, with `enable-crm`, the Customer / Contact pill in the task
-composer and Universal Input's task mode. Those two read both flags through
-`customerContactEnabled`. It defaults off everywhere and can be overridden locally with
-`VITE_ENABLE_CRM_ACTIVITY=true`. Off hides activity navigation and skips activity
-queries; saved activity links wait for flag loading, then fall back to Companies.
+The workspace activity tabs are labelled Sales Tasks, Sales Email, Sales Notes and
+Sales Calls. CRM supplies its composer context, and the task composer and Universal
+Input's task mode show the Customer / Contact pill.
 The standard record task action still associates the task with its record.
 The registry and launcher never read this flag. With no supplied context, the
 standard composer opens immediately. Each opening snapshots its

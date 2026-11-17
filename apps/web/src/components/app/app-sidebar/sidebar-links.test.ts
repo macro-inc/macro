@@ -9,29 +9,21 @@ const linksOnKey = (links: SidebarItem[], key: ValidHotkey) =>
 
 describe('buildSidebarLinks', () => {
   it('sends g i to Notifications when it is on the rail', () => {
-    const links = buildSidebarLinks(
-      false,
-      false,
-      false,
-      false,
-      true,
-      false,
-      false
-    );
+    const links = buildSidebarLinks(false, false, false, true, false, true);
     expect(linksOnKey(links, 'i')).toEqual(['notifications']);
     expect(linksOnKey(links, 'h')).toEqual(['home']);
   });
 
   it('keeps g i on Home without Notifications', () => {
-    const links = buildSidebarLinks(
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false
-    );
+    const links = buildSidebarLinks(false, false, false, false, false, true);
     expect(linksOnKey(links, 'i')).toEqual(['home']);
   });
+});
+
+it('omits CRM navigation and its hotkey for a denied member', () => {
+  const denied = buildSidebarLinks(false, false, false, true, false, false);
+  expect(denied.some((link) => link.id === 'companies')).toBe(false);
+  expect(linksOnKey(denied, 'o')).toEqual([]);
+  const allowed = buildSidebarLinks(false, false, false, true, false, true);
+  expect(linksOnKey(allowed, 'o')).toEqual(['companies']);
 });

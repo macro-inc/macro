@@ -700,6 +700,15 @@ test('denied members keep consent controls without reading excluded-thread lists
     .getByRole('button', { name: 'Email settings', exact: true })
     .click();
   const dialog = page.getByRole('dialog');
+  const closeDialog = async () => {
+    const close = dialog.getByRole('button', { name: 'Dismiss', exact: true });
+    if (await close.isVisible()) await close.click();
+    else
+      await page
+        .locator('[data-corvu-drawer-overlay]')
+        .click({ position: { x: 8, y: 8 } });
+    await expect(dialog).toBeHidden();
+  };
   await expect(
     dialog.getByRole('button', { name: 'Stop sharing my emails', exact: true })
   ).toBeVisible();
@@ -707,7 +716,7 @@ test('denied members keep consent controls without reading excluded-thread lists
     dialog.getByText('Excluded threads', { exact: true })
   ).toHaveCount(0);
   await expect(page.getByTestId('excluded-list-reads')).toHaveText('0');
-  await page.keyboard.press('Escape');
+  await closeDialog();
   await page
     .getByRole('button', { name: 'Toggle CRM access', exact: true })
     .click();
@@ -721,7 +730,7 @@ test('denied members keep consent controls without reading excluded-thread lists
     dialog.getByText('Private conversation', { exact: true })
   ).toBeVisible();
   await expect(page.getByTestId('excluded-list-reads')).not.toHaveText('0');
-  await page.keyboard.press('Escape');
+  await closeDialog();
   await page
     .getByRole('button', { name: 'Toggle CRM access', exact: true })
     .click();

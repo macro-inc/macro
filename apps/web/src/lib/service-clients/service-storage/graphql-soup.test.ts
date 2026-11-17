@@ -381,6 +381,11 @@ const mocks = vi.hoisted(() => {
     toastFailure,
     telemetryError: vi.fn(),
     telemetryWarn: vi.fn(),
+    spans: [] as Array<{
+      name: string;
+      attrs: Record<string, unknown>;
+      end: ReturnType<typeof vi.fn>;
+    }>,
     traceparent: '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01',
     normalizedCacheExchange: vi.fn(
       (host: unknown, _options?: NormalizedCacheExchangeOptions) => ({
@@ -477,21 +482,29 @@ vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
 vi.mock('@macro-inc/observability', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@macro-inc/observability')>();
-  const span = Object.assign(Object.create(actual.NOOP_SPAN), {
-    injectTraceHeaders: (headers: Record<string, string>) => {
-      headers.traceparent = mocks.traceparent;
-    },
-  });
   return {
     ...actual,
     Telemetry: Object.assign(Object.create(actual.Telemetry), {
       error: mocks.telemetryError,
       warn: mocks.telemetryWarn,
+      captureContext: () => ({ run: <T>(work: () => T) => work() }),
       span: (
-        _name: string,
+        name: string,
         optionsOrWork?: unknown,
         work?: (span: typeof actual.NOOP_SPAN) => Promise<unknown>
       ) => {
+        const attrs: Record<string, unknown> = {};
+        const end = vi.fn();
+        mocks.spans.push({ name, attrs, end });
+        const span = Object.assign(Object.create(actual.NOOP_SPAN), {
+          setAttr: (key: string, value: unknown) => {
+            attrs[key] = value;
+          },
+          end,
+          injectTraceHeaders: (headers: Record<string, string>) => {
+            headers.traceparent = mocks.traceparent;
+          },
+        });
         const operation =
           typeof optionsOrWork === 'function'
             ? (optionsOrWork as typeof work)
@@ -983,6 +996,112 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(response.status).toBe(200);
     expect(mocks.platformFetch).toHaveBeenCalledOnce();
     expect(soup.graphqlSoupProjectionSupported()).toBe(true);
+  });
+
+  it('ends the transport span at the headers once urql has read the body', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: { user: { id: 'user-1' } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    const soup = await import('./graphql-soup');
+    mocks.spans.length = 0;
+    const response = await soup.dssGraphqlFetch('http://dss.test/graphql', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'query User { user { id } }' }),
+    });
+    const transport = mocks.spans.find(
+      (span) => span.name === 'graphql.transport'
+    );
+    const returnedBy = performance.now();
+
+    expect(transport?.end).not.toHaveBeenCalled();
+    expect(transport?.attrs['graphql.body_outcome']).toBeUndefined();
+    expect(await response.json()).toEqual({ data: { user: { id: 'user-1' } } });
+    expect(transport?.attrs['graphql.body_outcome']).toBe('complete');
+    expect(transport?.attrs['graphql.body_ms']).toEqual(expect.any(Number));
+    expect(transport?.end).toHaveBeenCalledOnce();
+    expect(transport?.end.mock.calls[0]?.[0]).toBeLessThanOrEqual(returnedBy);
+  });
+
+  it('times a projection response from the read urql makes after the inspection', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ data: { user: { soup: { items: [] } } } }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      )
+    );
+    const soup = await import('./graphql-soup');
+    mocks.spans.length = 0;
+    const response = await soup.dssGraphqlFetch('http://dss.test/graphql', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'query Soup { user { soup { items { cacheProjection } } } }',
+      }),
+    });
+    const transport = mocks.spans.find(
+      (span) => span.name === 'graphql.transport'
+    );
+
+    expect(transport?.attrs['graphql.legacy_retry']).toBe(false);
+    expect(transport?.end).not.toHaveBeenCalled();
+    await response.text();
+    expect(transport?.attrs['graphql.body_outcome']).toBe('complete');
+    expect(transport?.end).toHaveBeenCalledOnce();
+  });
+
+  it('ends the transport span as unread when nothing reads the body within a minute', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response('{}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    const soup = await import('./graphql-soup');
+    mocks.spans.length = 0;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await soup.dssGraphqlFetch('http://dss.test/graphql', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'query User { user { id } }' }),
+      });
+      const transport = mocks.spans.find(
+        (span) => span.name === 'graphql.transport'
+      );
+      expect(transport?.end).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(60_000);
+      expect(transport?.attrs['graphql.body_outcome']).toBe('unread');
+      expect(transport?.end).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never holds the transport span open for a streamed response', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response('event: next\ndata: {}\n\n', {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      })
+    );
+    const soup = await import('./graphql-soup');
+    mocks.spans.length = 0;
+    await soup.dssGraphqlFetch('http://dss.test/graphql', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'query User { user { id } }' }),
+    });
+    const transport = mocks.spans.find(
+      (span) => span.name === 'graphql.transport'
+    );
+
+    expect(transport?.attrs['graphql.body_outcome']).toBe('stream');
+    expect(transport?.attrs['graphql.body_ms']).toBeUndefined();
+    expect(transport?.end).toHaveBeenCalledOnce();
   });
 
   it('strips client-only directives from GraphQL transport documents', async () => {

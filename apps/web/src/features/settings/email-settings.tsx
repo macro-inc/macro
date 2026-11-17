@@ -1,9 +1,4 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableEmailReadReceipts,
-  enableEmailSignatures,
-} from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
@@ -23,8 +18,6 @@ import {
 import { SignatureSection } from './SignatureSection';
 
 export function EmailSettings() {
-  const signatures = useFeatureFlag(enableEmailSignatures);
-  const readReceipts = useFeatureFlag(enableEmailReadReceipts);
   const { openSettings } = useSettingsState();
   const isAvailable = useSettingsTabAvailable();
   return (
@@ -46,38 +39,34 @@ export function EmailSettings() {
           <EmailCard />
         </Suspense>
       </SettingsSection>
-      <Show when={signatures().enabled}>
-        <SettingsSection
-          title="Signatures"
-          description="Create a signature for each email account and preview it before sending."
+      <SettingsSection
+        title="Signatures"
+        description="Create a signature for each email account and preview it before sending."
+      >
+        <Suspense
+          fallback={
+            <p role="status" class="text-sm text-ink-muted">
+              Loading signatures…
+            </p>
+          }
         >
-          <Suspense
-            fallback={
-              <p role="status" class="text-sm text-ink-muted">
-                Loading signatures…
-              </p>
-            }
-          >
-            <EmailSignatures />
-          </Suspense>
-        </SettingsSection>
-      </Show>
-      <Show when={readReceipts().enabled}>
-        <SettingsSection
-          title="Read receipts"
-          description="See when recipients open messages you send."
+          <EmailSignatures />
+        </Suspense>
+      </SettingsSection>
+      <SettingsSection
+        title="Read receipts"
+        description="See when recipients open messages you send."
+      >
+        <Suspense
+          fallback={
+            <p role="status" class="text-sm text-ink-muted">
+              Loading accounts…
+            </p>
+          }
         >
-          <Suspense
-            fallback={
-              <p role="status" class="text-sm text-ink-muted">
-                Loading accounts…
-              </p>
-            }
-          >
-            <EmailReadReceipts />
-          </Suspense>
-        </SettingsSection>
-      </Show>
+          <EmailReadReceipts />
+        </Suspense>
+      </SettingsSection>
       <Show when={isAvailable('Notifications') || isAvailable('Calendar')}>
         <SettingsSection title="Related settings">
           <SettingsCard>

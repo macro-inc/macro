@@ -549,7 +549,6 @@ export const organise = {
         'src/features/block-email/EmailThreadHostView.tsx',
         'src/features/email-compose/email-event.ts',
       ],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'AL-155',

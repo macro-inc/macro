@@ -56,7 +56,6 @@ export function Contact(props: ContactProps) {
 
 function ContactContent(props: ContactProps) {
   const context = useCrmContext();
-  const pipelinesEnabled = context.pipelinesEnabled();
   const contactQuery = useContactQuery(() => props.contactId);
   usePending('crm.record', () => contactQuery.isLoading);
   const contact = () => contactQuery.data;
@@ -98,12 +97,10 @@ function ContactContent(props: ContactProps) {
                   contact={contact()}
                   onOpenCompany={props.onOpenCompany}
                 />
-                <Show when={pipelinesEnabled()}>
-                  <context.PipelineEntries
-                    record={{ type: 'contact', id: props.contactId }}
-                    onOpenPipeline={props.onOpenPipeline}
-                  />
-                </Show>
+                <context.PipelineEntries
+                  record={{ type: 'contact', id: props.contactId }}
+                  onOpenPipeline={props.onOpenPipeline}
+                />
                 <ContactDiscussionSection contactId={props.contactId} />
               </RecordOverview>
             </Match>

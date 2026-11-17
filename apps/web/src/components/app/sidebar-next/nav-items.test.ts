@@ -16,11 +16,9 @@ const defaultPrefs = (overrides: Partial<SidebarPrefs> = {}): SidebarPrefs => ({
 });
 
 const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
+  showCustomers: true,
   showNotifications: true,
   showForYou: false,
-  showCalendar: true,
-  showScheduling: true,
-  showCustomers: true,
   showCalls: true,
   showReviews: true,
   showActivity: true,
@@ -141,22 +139,6 @@ describe('sidebar visibility preferences', () => {
       moreMenuItems(gates).some((item) => item.id === 'booking-links')
     ).toBe(false);
   });
-
-  it('keeps Scheduling absent everywhere when its feature flag is off', () => {
-    for (const hidden of [new Set<string>(), new Set(DEFAULT_HIDDEN_IDS)]) {
-      const gates = defaultGates({
-        showScheduling: false,
-        prefs: defaultPrefs({ hidden }),
-      });
-      for (const items of [
-        customizableNavItems(gates),
-        visibleNavItems(gates),
-        moreMenuItems(gates),
-      ]) {
-        expect(items.some((item) => item.id === 'booking-links')).toBe(false);
-      }
-    }
-  });
 });
 
 describe('External', () => {
@@ -260,4 +242,23 @@ describe('Passwords on the rail', () => {
     );
     expect(ids.filter((id) => id !== 'for-you').slice(0, 5)).toEqual(order);
   });
+});
+
+it('omits CRM from the rail, More, and customization for a denied member', () => {
+  for (const hidden of [new Set<string>(), new Set(['companies'])]) {
+    const gates = defaultGates({
+      showCustomers: false,
+      prefs: defaultPrefs({ hidden }),
+    });
+    for (const items of [
+      visibleNavItems(gates),
+      moreMenuItems(gates),
+      customizableNavItems(gates),
+    ]) {
+      expect(items.some((item) => item.id === 'companies')).toBe(false);
+    }
+  }
+  expect(
+    customizableNavItems(defaultGates()).some((item) => item.id === 'companies')
+  ).toBe(true);
 });

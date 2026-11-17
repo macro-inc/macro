@@ -13,7 +13,6 @@ import { CrmWorkspaceView } from './crm-workspace';
 const fixture = vi.hoisted(() => ({
   workspace: undefined as unknown,
   canAccess: (): boolean => true,
-  pipelinesEnabled: true,
   listsEnabled: true,
   touch: true,
   width: 600,
@@ -231,7 +230,6 @@ vi.mock('../context/workspace-context', () => ({
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
     canAccess: () => fixture.canAccess(),
-    pipelinesEnabled: () => () => fixture.pipelinesEnabled,
     listsEnabled: () => () => fixture.listsEnabled,
     createNavigation: () => ({ openWithSplit: fixture.openWithSplit }),
     createPipelines: () => ({
@@ -269,7 +267,6 @@ vi.mock('./apply-view', () => ({
 afterEach(() => {
   fixture.canAccess = () => true;
   cleanup();
-  fixture.pipelinesEnabled = true;
   fixture.listsEnabled = true;
   fixture.touch = true;
   fixture.width = 600;
@@ -375,8 +372,7 @@ it('keeps sidebar destinations in the mobile header when switching records, pipe
   ).toBeTruthy();
 });
 
-it('omits pipelines and lists when those features are disabled', () => {
-  fixture.pipelinesEnabled = false;
+it('omits lists when that feature is disabled', () => {
   fixture.listsEnabled = false;
   setup();
   const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
@@ -392,6 +388,7 @@ it('omits pipelines and lists when those features are disabled', () => {
     'Sales Email',
     'Sales Notes',
     'Sales Calls',
+    'Sales',
   ]);
 });
 
@@ -412,50 +409,6 @@ it('opens each CRM activity feed instead of the company list', () => {
   fireEvent.click(tabs.getByRole('button', { name: 'Companies' }));
   expect(screen.getByText('Record list')).toBeTruthy();
 });
-
-it('waits for the rollout before resolving a cold activity link', () => {
-  const { activeTab, setActivityFlag } = setup('tasks', {
-    enabled: false,
-    loading: true,
-  });
-  expect(activeTab()).toBe('tasks');
-  expect(
-    screen.getByRole('status', { name: 'Loading CRM activity' })
-  ).toBeTruthy();
-  expect(screen.queryByText('tasks feed')).toBeNull();
-  expect(screen.queryByText('Record list')).toBeNull();
-  setActivityFlag({ enabled: true, loading: false });
-  expect(activeTab()).toBe('tasks');
-  expect(screen.getByText('tasks feed')).toBeTruthy();
-});
-
-it('hides activity navigation and leaves its feed when the rollout turns off', () => {
-  const { activeTab, setActivityFlag } = setup('email');
-  expect(screen.getByText('email feed')).toBeTruthy();
-  setActivityFlag({ enabled: false, loading: false });
-  expect(activeTab()).toBe('active');
-  expect(screen.queryByText('email feed')).toBeNull();
-  expect(screen.getByText('Record list')).toBeTruthy();
-  const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
-  for (const name of [
-    'Sales Tasks',
-    'Sales Email',
-    'Sales Notes',
-    'Sales Calls',
-  ]) {
-    expect(tabs.queryByRole('button', { name })).toBeNull();
-  }
-});
-
-it.each(['tasks', 'email', 'notes', 'calls'])(
-  'returns an unavailable %s deep link to Companies without mounting activity',
-  (tab) => {
-    const { activeTab } = setup(tab, { enabled: false, loading: false });
-    expect(activeTab()).toBe('active');
-    expect(screen.queryByText(`${tab} feed`)).toBeNull();
-    expect(screen.getByText('Record list')).toBeTruthy();
-  }
-);
 
 it('opens the company of a pipeline row through the route on desktop', () => {
   fixture.touch = false;

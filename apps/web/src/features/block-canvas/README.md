@@ -58,7 +58,7 @@ for the remaining editor and collaboration work.
 
 ## Artifacts
 
-Behind `enable-canvas-artifacts`, an `artifact` node runs a self-contained HTML
+An `artifact` node runs a self-contained HTML
 document in `views/artifact-frame.tsx`. The frame's sandbox is `allow-scripts`
 only, so the document has an opaque origin with no access to Macro's cookies,
 storage or DOM. Never add `allow-same-origin`. `core/artifact-document.ts` writes
