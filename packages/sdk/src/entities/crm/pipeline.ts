@@ -534,8 +534,10 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
   }
 
   /**
-   * Add a CSV's rows as entries: CSV text, or a CSV document. Columns match
-   * fields by name; Company and Domain (or Contact and Email) name each row's
+   * Import CSV entries into a company or contact pipeline; generic pipelines are refused.
+   *
+   * Accepts CSV text or a CSV document. Columns match fields by name;
+   * Company and Domain (or Contact and Email) name each row's
    * record, created when the team lacks it. Records already here are not
    * added again, and select options the CSV needs are added.
    *
@@ -555,11 +557,12 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
   }
 
   /**
-   * Export every entry as CSV text.
+   * Export up to 5000 entries as CSV; check `complete` before treating it as a full export.
    *
-   * Columns are Company and Domain (or Contact and Email), then one per
-   * field, with people as emails; {@link CrmPipeline.importCsv} reads the
-   * same layout. `complete` is false past 5000 entries.
+   * Company and contact pipelines export Company and Domain (or Contact and
+   * Email), then one column per field, with people as emails. Generic
+   * pipelines export only their fields. {@link CrmPipeline.importCsv} accepts
+   * the company or contact layout; generic pipelines refuse CSV imports.
    *
    * @readonly
    */
@@ -574,7 +577,10 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
     );
   }
 
-  /** Save every entry as a CSV file in the caller's Macro files, laid out as {@link CrmPipeline.exportCsv} returns it.
+  /**
+   * Save up to 5000 entries as a CSV file; check `complete` before treating it as a full export.
+   *
+   * Saved in the caller's Macro files, laid out as {@link CrmPipeline.exportCsv} returns it.
    *
    * @write
    */

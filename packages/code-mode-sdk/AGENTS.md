@@ -13,8 +13,9 @@ HTML worker belong to `packages/sdk-docs`.
 - `scripts/typedoc.ts`: index each entity and split linked Markdown into
   per-symbol references (classes, methods, types). Index fields retain lazy
   accessor call signatures and return types (`content(): Promise<string>`).
-  Keep each index under 16 KiB by shortening long source TSDoc first sentences;
-  retain details in following paragraphs. A discriminated union over
+  Keep each index under 16 KiB using concise source TSDoc first sentences;
+  preserve the [SDK's operating constraints](../sdk/AGENTS.md#gotchas) there and
+  retain other details in following paragraphs. A discriminated union over
   the 16 KiB reference size, such as `EditOp`, lists its members, each read as
   `EditOp.<discriminator>`.
 - `scripts/catalog.ts`: the entity directories agents discover, one entity
