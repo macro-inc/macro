@@ -61,6 +61,53 @@ fn a_template_matches_the_whole_path_under_at_most_one_service_prefix() {
     assert!(!matches("/scheduled-actionx/suggestions", "/suggestions"));
 }
 
+/// Document storage, cognition and notification serve every route under an
+/// API version too, so a template matches its versioned path, under a
+/// service prefix or alone.
+#[test]
+fn a_template_matches_its_path_under_an_api_version() {
+    assert!(matches(
+        "/cognition/v1/email/send-confirmed",
+        "/email/send-confirmed"
+    ));
+    assert!(matches(
+        "/dss/v1/documents/1/comments/text",
+        "/documents/{id}/comments/text"
+    ));
+    assert!(matches("/v2/web/fetch", "/web/fetch"));
+    assert!(!matches("/cognition/v1/v1/web/fetch", "/web/fetch"));
+    assert!(!matches("/cognition/vx/web/fetch", "/web/fetch"));
+    assert!(!matches("/v1/cognition/web/fetch", "/web/fetch"));
+}
+
+/// Every request a run that sends nothing is refused is refused under every
+/// service prefix and API version it can be sent with.
+#[test]
+fn a_run_that_sends_nothing_is_refused_every_send_under_any_version() {
+    for (method, template) in SessionScope::sends() {
+        let path: String = template
+            .split('/')
+            .map(|segment| {
+                if segment.starts_with('{') {
+                    "x"
+                } else {
+                    segment
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("/");
+        for prefix in ["", "/cognition", "/dss", "/notification"] {
+            for version in ["", "/v1", "/v2"] {
+                let sent = format!("{prefix}{version}{path}");
+                assert!(
+                    !SessionScope::NoSend.allows(method, &sent),
+                    "{method} {sent}"
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn a_scope_is_stored_by_name() {
     assert_eq!(
@@ -190,14 +237,16 @@ fn no_scope_reaches_graphql() {
         SignedScope::Unknown,
     ] {
         for (method, path) in [
-            ("POST", "/soup/graphql"),
-            ("POST", "/dss/soup/graphql"),
-            ("GET", "/soup/graphql/ws"),
-            ("GET", "/dss/soup/graphql/ws"),
+            ("POST", "/items/soup/graphql"),
+            ("POST", "/dss/items/soup/graphql"),
+            ("POST", "/dss/v1/items/soup/graphql"),
+            ("GET", "/items/soup/graphql/ws"),
+            ("GET", "/dss/items/soup/graphql/ws"),
+            ("GET", "/dss/v1/items/soup/graphql/ws"),
         ] {
             assert!(!scope.allows(method, path), "{scope:?} {method} {path}");
         }
         assert!(scope.allows("GET", "/dss/documents/01a1"), "{scope:?}");
     }
-    assert!(SignedScope::Unscoped.allows("POST", "/dss/soup/graphql"));
+    assert!(SignedScope::Unscoped.allows("POST", "/dss/items/soup/graphql"));
 }

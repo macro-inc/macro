@@ -187,8 +187,13 @@ const SENDS: &[(&str, &str)] = &[
 
 /// Requests that run any of a service's writes behind one path, outside
 /// every scope whatever their method: GraphQL runs mutations sent by POST or
-/// over its WebSocket, which opens with a GET. The SDK sends neither.
-const ANY_WRITE: &[(&str, &str)] = &[("POST", "/soup/graphql"), ("GET", "/soup/graphql/ws")];
+/// over its WebSocket, which opens with a GET. The SDK sends neither. Paths
+/// as document storage mounts them (its `items` router); its tests hold
+/// them to the mount.
+const ANY_WRITE: &[(&str, &str)] = &[
+    ("POST", "/items/soup/graphql"),
+    ("GET", "/items/soup/graphql/ws"),
+];
 
 /// Requests a generation session may make besides reads by method: its own
 /// tools and drafting email. Paths as the SDK sends them, `{…}` one segment.
@@ -364,7 +369,9 @@ const SERVICE_PREFIXES: &[&str] = &[
 ];
 
 /// Whether `path` is `template`'s SDK path, alone or under one service
-/// prefix, a `{…}` segment standing for any one segment.
+/// prefix, then alone or under one API version (`/v1`: document storage,
+/// cognition and notification also serve every route under
+/// `/{version}`), a `{…}` segment standing for any one segment.
 pub fn matches(path: &str, template: &str) -> bool {
     let path = path.trim_end_matches('/');
     let exact = |path: &str| {
@@ -376,9 +383,14 @@ pub fn matches(path: &str, template: &str) -> bool {
                     || segment == wanted
             })
     };
-    exact(path)
+    let unversioned = |path: &str| {
+        exact(path)
+            || lazy_regex::regex_captures!(r"^/v[0-9]+(/.*)$", path)
+                .is_some_and(|(_, rest)| exact(rest))
+    };
+    unversioned(path)
         || SERVICE_PREFIXES.iter().any(|prefix| {
             path.strip_prefix(prefix)
-                .is_some_and(|rest| rest.starts_with('/') && exact(rest))
+                .is_some_and(|rest| rest.starts_with('/') && unversioned(rest))
         })
 }

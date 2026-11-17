@@ -11,6 +11,7 @@ postgres = ["dep:sqlx"]
 
 [dependencies]
 async-trait = { workspace = true }
+lazy-regex = { workspace = true }
 axum = { workspace = true, optional = true }
 macro_auth = { path = "../macro_auth", optional = true }
 rootcause = { workspace = true }
