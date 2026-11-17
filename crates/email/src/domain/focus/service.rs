@@ -100,15 +100,26 @@ pub struct EnrolledInboxes {
     pub unknown: usize,
 }
 
-/// Whether newly classified mail gets its due date read.
+/// Which newly classified mail gets its due date read, for a thread that can be
+/// in Focus for a reason other than a calendar hold.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DueDates {
-    /// Read it, for a thread that can be in Focus for a reason other than a
-    /// calendar hold.
+    /// Every thread's.
     Read,
-    /// Store no date: for the old mail a backfill reaches past the top of the
-    /// tab, where a date costs more than it shows. The thread's next mail reads one.
-    Skip,
+    /// Only a thread's whose latest mail is from this time on; older ones store
+    /// no date. For the old mail a backfill reaches past the top of the tab,
+    /// where a date costs more than it shows; the thread's next mail reads one.
+    ReadSince(DateTime<Utc>),
+}
+
+impl DueDates {
+    /// Whether a thread last active at `latest_at` gets its due date read.
+    fn reads(self, latest_at: DateTime<Utc>) -> bool {
+        match self {
+            Self::Read => true,
+            Self::ReadSince(since) => latest_at >= since,
+        }
+    }
 }
 
 /// Stale threads one backfill read asks for at a time.
@@ -241,11 +252,11 @@ where
     /// alone, and one classified under an older rule is decided again from its
     /// stored answers without calling the classifier.
     pub async fn classify_thread(&self, thread_id: Uuid) -> Result<ClassifyOutcome, Report> {
-        self.classify(thread_id, DueDates::Read).await
+        self.classify(thread_id, true).await
     }
 
     /// [`Self::classify_thread`], reading the due date of newly classified mail
-    /// only with [`DueDates::Read`].
+    /// only when `read_due_date`.
     #[tracing::instrument(
         name = "classify_thread",
         skip(self),
@@ -264,7 +275,7 @@ where
     async fn classify(
         &self,
         thread_id: Uuid,
-        due_dates: DueDates,
+        read_due_date: bool,
     ) -> Result<ClassifyOutcome, Report> {
         let Some(inbox) = self.store.thread_inbox(thread_id).await? else {
             return Ok(ClassifyOutcome::Missing);
@@ -342,9 +353,10 @@ where
         };
         let verdict = decide(&answers, &signals);
         let model = self.classifier.model().to_owned();
-        let due_on = match due_dates {
-            DueDates::Read => self.due_on(&thread, &verdict).await,
-            DueDates::Skip => None,
+        let due_on = if read_due_date {
+            self.due_on(&thread, &verdict).await
+        } else {
+            None
         };
         let saved = self
             .save_verdict(&thread, latest, verdict, answers, model, due_on)
@@ -650,7 +662,10 @@ where
                         (
                             thread_id,
                             latest_at,
-                            Some(self.classify(thread_id, walk.due_dates).await),
+                            Some(
+                                self.classify(thread_id, walk.due_dates.reads(latest_at))
+                                    .await,
+                            ),
                         )
                     }
                 })

@@ -4,9 +4,10 @@
 //! in the rollout, through the flag cache, so most looks ask PostHog nothing.
 //! An enrolled inbox this process hasn't filled yet is backfilled in two
 //! passes: first its last [`FIRST_FILL_DAYS`] days, the top of the Focus tab,
-//! then the rest of the window, with no due dates. Every first pass waiting goes before any second
-//! one, so a rollout step that enrolls many inboxes at once shows each of them
-//! a filled tab before any is filled to the bottom. Each pass classifies the
+//! then the rest of the window, reading due dates only for threads with mail
+//! in those last days. Every first pass waiting goes before any second one,
+//! so a rollout step that enrolls many inboxes at once shows each of them a
+//! filled tab before any is filled to the bottom. Each pass classifies the
 //! inbox's stale threads newest first, [`THREADS_AT_ONCE`] at a time, with
 //! [`INBOXES_AT_ONCE`] passes running, the earliest found first.
 //!
@@ -59,12 +60,14 @@ enum Pass {
 }
 
 impl Pass {
-    /// The first pass reads due dates for the top of the tab; the rest skips
-    /// them, which keeps a rollout step's cost to the extractor bounded.
-    fn due_dates(self) -> DueDates {
+    /// Due dates for the top of the tab only: the rest of the window reads none
+    /// for threads last active before `first_since`, which keeps a rollout
+    /// step's cost to the extractor bounded. A thread with newer mail gets
+    /// its date in either pass, so mail racing a pass is never left without one.
+    fn due_dates(self, first_since: chrono::DateTime<chrono::Utc>) -> DueDates {
         match self {
             Self::First => DueDates::Read,
-            Self::Rest => DueDates::Skip,
+            Self::Rest => DueDates::ReadSince(first_since),
         }
     }
 
@@ -217,7 +220,12 @@ where
             running.push(Box::pin(async move {
                 let started = Instant::now();
                 let report = service
-                    .backfill(&waiting.inbox, window, THREADS_AT_ONCE, pass.due_dates())
+                    .backfill(
+                        &waiting.inbox,
+                        window,
+                        THREADS_AT_ONCE,
+                        pass.due_dates(chrono::Utc::now() - first_window),
+                    )
                     .await;
                 Finished {
                     waiting,

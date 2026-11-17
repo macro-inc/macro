@@ -225,8 +225,9 @@ tools — hexagonal, heavily feature-gated.
   `OFFSET 0` fence, or the per-thread calendar and contact checks run on every
   thread in the window.
 - A Focus thread's `due_on` is read when new mail is classified, only for a thread
-  with `is_focus` or `awaiting_reply`, never on the backfill's pass past the
-  last 3 days (`DueDates::Skip`, which bounds a rollout step's extractor cost),
+  with `is_focus` or `awaiting_reply`, never for a thread the backfill's second pass
+  finds last active before its last 3 days (`DueDates::ReadSince`, which bounds a
+  rollout step's extractor cost),
   and never on the re-decide path: that path
   keeps the stored date and calls no model, so `save` writes back what
   `StoredClassification` read. A failed or timed-out read stores no date and never

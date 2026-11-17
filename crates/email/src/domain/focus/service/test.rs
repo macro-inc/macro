@@ -1546,12 +1546,24 @@ async fn the_sweep_leaves_an_inbox_being_backfilled_to_the_backfill() {
 }
 
 #[tokio::test]
-async fn a_backfill_that_skips_due_dates_stores_none_and_asks_for_none() {
+async fn a_backfill_reads_due_dates_only_for_threads_active_since_its_cutoff() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
     let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
-    let ids: Vec<_> = (0..3).map(|_| insert(&store, thread(OWNER))).collect();
-    set_stale(&store, &ids, noon());
+    let old: Vec<_> = (0..3).map(|_| insert(&store, thread(OWNER))).collect();
+    set_stale(&store, &old, noon() - Duration::days(10));
+    // Mail arriving while the pass runs is newer than the cutoff.
+    let recent = insert(&store, thread(OWNER));
+    store.stale.lock().unwrap().insert(
+        0,
+        (
+            INBOX,
+            StaleThread {
+                thread_id: recent,
+                latest_at: noon(),
+            },
+        ),
+    );
     let service = due_date_service(&store, &classifier, &due_dates, None);
     let inbox = FocusInboxOwner {
         link_id: INBOX,
@@ -1559,26 +1571,19 @@ async fn a_backfill_that_skips_due_dates_stores_none_and_asks_for_none() {
     };
 
     let report = service
-        .backfill(&inbox, Duration::days(30), 3, DueDates::Skip)
+        .backfill(
+            &inbox,
+            Duration::days(30),
+            3,
+            DueDates::ReadSince(noon() - Duration::days(3)),
+        )
         .await
         .unwrap();
-    assert_eq!(report.classified, 3);
-    assert!(due_dates.inputs.lock().unwrap().is_empty());
-    assert!(
-        store
-            .saved
-            .lock()
-            .unwrap()
-            .iter()
-            .all(|record| record.due_on.is_none())
-    );
-
-    // Reading them is the default everywhere else.
-    let more = insert(&store, thread(OWNER));
-    set_stale(&store, &[more], noon());
-    service
-        .backfill(&inbox, Duration::days(30), 3, DueDates::Read)
-        .await
-        .unwrap();
+    assert_eq!(report.classified, 4);
     assert_eq!(due_dates.inputs.lock().unwrap().len(), 1);
+    let saved = store.saved.lock().unwrap();
+    for record in saved.iter() {
+        let expected = (record.thread_id == recent).then(friday);
+        assert_eq!(record.due_on, expected, "{}", record.thread_id);
+    }
 }
