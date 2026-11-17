@@ -128,10 +128,13 @@ fn verified_api_tokens(
     Ok(verified)
 }
 
-/// The narrower of two scopes: a generation session's is narrower than a
-/// run's that sends nothing.
+/// The narrower of two scopes: a routine dry run's (reads only) is
+/// narrowest, then a generation session's, then a run's that sends nothing.
 fn narrowest(first: Option<SessionScope>, second: Option<SessionScope>) -> Option<SessionScope> {
     match (first, second) {
+        (Some(SessionScope::DryRun), _) | (_, Some(SessionScope::DryRun)) => {
+            Some(SessionScope::DryRun)
+        }
         (Some(SessionScope::Generation), _) | (_, Some(SessionScope::Generation)) => {
             Some(SessionScope::Generation)
         }
