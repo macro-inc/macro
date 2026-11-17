@@ -268,7 +268,6 @@ vi.mock('@core/context/channels', () => ({
 }));
 
 const pipedreamMocks = vi.hoisted(() => ({
-  enabled: true,
   connected: [] as string[],
   connect: vi.fn(),
   catalog: [
@@ -285,10 +284,6 @@ const pipedreamMocks = vi.hoisted(() => ({
       icon_url: null,
     },
   ],
-}));
-
-vi.mock('@core/pipedream/flag', () => ({
-  usePipedreamMcpFlag: () => () => pipedreamMocks.enabled,
 }));
 
 vi.mock('@queries/pipedream-connectors', () => ({
@@ -352,7 +347,6 @@ beforeEach(() => {
   agentMocks.isTeamOwner = false;
   agentMocks.isTeamAdmin = false;
   harnessMocks.query.data = [];
-  pipedreamMocks.enabled = true;
   pipedreamMocks.connected = [];
   pipedreamMocks.connect.mockReset();
   pipedreamMocks.connect.mockImplementation(
@@ -1963,31 +1957,6 @@ describe('Agents', () => {
       ],
     },
   };
-
-  it('hides the Connections section when the Pipedream stack is off but keeps the selection', async () => {
-    pipedreamMocks.enabled = false;
-    agentMocks.query.data = [linearAgent];
-    render(() => <Agents {...agentsPageProps} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Triage bot' }));
-
-    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Show' }));
-    expect(
-      within(dialog).getByRole('group', { name: 'Channels' })
-    ).toBeTruthy();
-    expect(within(dialog).queryByText('Connections')).toBeNull();
-    fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Save changes' })
-    );
-
-    await waitFor(() => {
-      expect(agentMocks.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          mcp: { scope: 'selected', servers: linearAgent.mcp.servers },
-        })
-      );
-    });
-  });
 
   it('defaults new agents to the owner connections policy', () => {
     render(() => <Agents {...agentsPageProps} />);

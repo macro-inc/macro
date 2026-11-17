@@ -10,9 +10,7 @@ use axum_extra::{
 use cookie::Cookie;
 use macro_env::Environment;
 
-use crate::constant::{
-    MACRO_ACCESS_TOKEN_COOKIE, MACRO_REFRESH_TOKEN_COOKIE, MACRO_REFRESH_TOKEN_HEADER,
-};
+use crate::constant::{MACRO_REFRESH_TOKEN_COOKIE, MACRO_REFRESH_TOKEN_HEADER};
 
 /// Extracts the access token from a cookie. Returns `UNAUTHORIZED` if the cookie is missing.
 pub struct AccessTokenCookieExtractor(pub Cookie<'static>);
@@ -28,14 +26,7 @@ where
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
         let jar: CookieJar = parts.extract().await.expect("This extractor is infallible");
-        static ACCESS_COOKIE_NAME: LazyLock<String> =
-            LazyLock::new(|| match Environment::new_or_prod() {
-                Environment::Production => MACRO_ACCESS_TOKEN_COOKIE.to_string(),
-                Environment::Develop => format!("dev-{MACRO_ACCESS_TOKEN_COOKIE}"),
-                Environment::Local => format!("local-{MACRO_ACCESS_TOKEN_COOKIE}"),
-            });
-
-        match jar.get(&ACCESS_COOKIE_NAME) {
+        match jar.get(crate::credential::access_token_cookie_name()) {
             Some(c) => Ok(Self(c.clone())),
             None => Err(StatusCode::UNAUTHORIZED),
         }
@@ -69,8 +60,13 @@ where
     }
 }
 
-/// Extracts the access token from either the `Authorization: Bearer` header or a cookie.
-/// Returns `UNAUTHORIZED` if neither source provides a token.
+/// The request's bearer, else its access-token cookie (the last one, as
+/// cookie jars keep it), read from the shared parse
+/// ([`crate::credential::access_token_sources`]) so every reader decodes them
+/// alike. Like it always has, it reads neither the query nor any other
+/// credential header: the agent scope check reads every token the request
+/// carries, so reading one here gives nothing away. Returns `UNAUTHORIZED`
+/// if neither is present.
 pub enum AccessTokenExtractor {
     Header(TypedHeader<Authorization<Bearer>>),
     Cookie(AccessTokenCookieExtractor),
@@ -97,12 +93,17 @@ where
         parts: &mut axum::http::request::Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let either: Either<TypedHeader<Authorization<Bearer>>, AccessTokenCookieExtractor> =
-            parts.extract().await?;
-        Ok(match either {
-            Either::E1(l) => Self::Header(l),
-            Either::E2(r) => Self::Cookie(r),
-        })
+        let sources = crate::credential::access_token_sources(parts);
+        if let Some(token) = sources.bearer {
+            return Ok(Self::Header(TypedHeader(
+                Authorization::bearer(&token).map_err(|_| StatusCode::UNAUTHORIZED)?,
+            )));
+        }
+        let token = sources.cookie.ok_or(StatusCode::UNAUTHORIZED)?;
+        Ok(Self::Cookie(AccessTokenCookieExtractor(Cookie::new(
+            crate::credential::access_token_cookie_name(),
+            token,
+        ))))
     }
 }
 

@@ -1,5 +1,4 @@
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { useNavigate } from '@app/lib/split-router';
@@ -19,7 +18,6 @@ const MINUTE_MS = 60_000;
 
 /** Today's timed events, when the person has the calendar. */
 function useToday() {
-  const calendar = useCalendarUiFlag();
   // Home can stay open for hours: the strip's "now" moves each minute, and
   // the day it shows changes at midnight.
   const [now, setNow] = createSignal(new Date());
@@ -39,11 +37,10 @@ function useToday() {
     range,
     isSourceVisible: (sourceId) =>
       !preferences.hiddenSourceIds.includes(sourceId),
-    queryOptions: () => ({ enabled: calendar() }),
   });
 
   const today = createMemo(() => {
-    if (!calendar() || data.isLoading()) return undefined;
+    if (data.isLoading()) return undefined;
 
     const events = data
       .visibleEvents()

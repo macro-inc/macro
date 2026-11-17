@@ -1,14 +1,21 @@
 """Tests for the viewer's exporters: python3 -m unittest discover tooling/agent-session-view"""
+import http.server
 import importlib.machinery
 import importlib.util
 import json
 import pathlib
+import subprocess
+import tempfile
+import threading
 import unittest
 import urllib.error
+import urllib.request
 from unittest import mock
 
 import datadog_spans
 import markdown_export
+import reconstruct
+import turn_context
 
 HERE = pathlib.Path(__file__).resolve().parent
 _loader = importlib.machinery.SourceFileLoader("agent_session_view", str(HERE / "agent-session-view"))
@@ -80,6 +87,23 @@ class Exporter(unittest.TestCase):
         )
         self.assertEqual([step.duration for step in turns[0].steps], [1, 3])
 
+    def test_code_sent_after_the_call_starts_is_kept(self):
+        turns = markdown_export.parse([
+            prompt(0),
+            call(1, "a", "mcp__macro_internal__ExecuteCode"),
+            update(1.2, sessionUpdate="tool_call_update", toolCallId="a", status="in_progress",
+                   rawInput={"source": "export async function main() {}", "acting_as": "requester"}),
+            done(2, "a", {"status": "succeeded"}),
+            call(3, "b", "BashCodeExecution"),
+            update(3.1, sessionUpdate="tool_call_update", toolCallId="b", rawInput={"input": "ls -la"}),
+            done(4, "b", {}),
+            end(5),
+        ])
+        first, second = turns[0].steps
+        self.assertEqual(first.code, "export async function main() {}")
+        self.assertEqual(first.arguments, {"acting_as": "requester"})
+        self.assertEqual(second.code, "ls -la")
+
     def test_a_fence_outlasts_backticks_in_its_content(self):
         self.assertEqual(markdown_export.fence("a\n```\nb"), "````\na\n```\nb\n````")
 
@@ -112,6 +136,246 @@ class Spans(unittest.TestCase):
                 datadog_spans.send(mock.Mock())
 
 
+class DocumentationAndTools(unittest.TestCase):
+    def test_a_documentation_selection_reads_its_entities_and_bytes(self):
+        span = {"trace_id": "t1", "start_timestamp": "2026-11-09T10:00:00Z",
+                "tags": ["region:us-east-1", "task_family:agent-harness-service-1a2b3c4d", "task_version:3"],
+                "custom": {"selection_status": "selected", "selected": "2", "selected_entities": "channels,users",
+                           "bytes": "20111", "guidance": "Inline", "batches": "2"}}
+        self.assertEqual(datadog_spans.documentation(span), {
+            "trace_id": "t1", "start_ms": 1794218400000.0, "status": "selected", "selected": 2,
+            "entities": ["channels", "users"], "bytes": 20111, "guidance": "Inline", "batches": 2,
+            "task_definition": "agent-harness-service-1a2b3c4d:3",
+        })
+
+    def test_a_cut_tool_listing_keeps_every_whole_name_and_no_descriptions(self):
+        definitions = ('[{"type":"function","name":"ExecuteCode","description":"Run \\"name\\":\\"x\\""},'
+                       '{"type":"function","name":"mcp__GitHub__get_me","description":"Who'
+                       '{"type":"function","name":"ExecuteCode","descr')
+        span = {"start_timestamp": "2026-11-09T10:00:00Z", "end_timestamp": "2026-11-09T10:00:09Z",
+                "custom": {"gen_ai": {"tool": {"definitions": definitions}},
+                           "macro": {"genai": {"content_truncated": "true"}}}}
+        offer = datadog_spans.tool_offer(span)
+        self.assertEqual(offer["names"], ["ExecuteCode", "mcp__GitHub__get_me"])
+        self.assertTrue(offer["cut"])
+
+    def test_a_whole_tool_listing_is_not_cut_whatever_the_span_says(self):
+        span = {"start_timestamp": "2026-11-09T10:00:00Z", "end_timestamp": "2026-11-09T10:00:09Z",
+                "custom": {"gen_ai": {"tool": {"definitions": '[{"type":"function","name":"ExecuteCode"}]'}},
+                           "macro": {"genai": {"content_truncated": "true"}}}}
+        self.assertFalse(datadog_spans.tool_offer(span)["cut"])
+
+    def test_the_eager_lists_are_read_from_the_source(self):
+        names = turn_context.eager_names_from_source()
+        self.assertIn("SearchTools", names)
+        self.assertIn("DescribeCodeTools", names)
+
+    def test_an_unreadable_eager_list_is_unknown_not_guessed(self):
+        self.assertIsNone(turn_context.eager_names_from_source(pathlib.Path("/nonexistent")))
+
+
+def tool_result(t, call_id, name, raw):
+    return [call(t, call_id, name), done(t + 0.5, call_id, raw)]
+
+
+def code_failure(t, call_id, message):
+    return [call(t, call_id, "mcp__macro_internal__ExecuteCode"),
+            done(t + 0.5, call_id, {"status": "failed", "error": message})]
+
+
+def spans_for_turn(selected):
+    return {
+        "tools": {},
+        "model_calls": [
+            {"start_ms": seconds(0.5) * 1000, "end_ms": seconds(1) * 1000, "eager_tools": 0, "prompt_bytes": {}},
+            {"start_ms": seconds(1) * 1000, "end_ms": seconds(2) * 1000, "eager_tools": 4, "loaded_tools": 1,
+             "input_tokens": 900, "prompt_bytes": {"sdk_docs": 8068, "tools.eager": 7000, "history": 300}},
+        ],
+        "documentation": [{"start_ms": seconds(0.2) * 1000, "status": "selected", "selected": selected,
+                           "entities": [], "bytes": 8055, "guidance": "Inline", "batches": 2}],
+        "tool_offers": [{"start_ms": seconds(0) * 1000, "end_ms": seconds(30) * 1000, "cut": False,
+                         "names": ["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs", "mcp__GitHub__get_me",
+                                   "mcp__GitHub__search_code"]}],
+    }
+
+
+class TurnContext(unittest.TestCase):
+    def test_the_acceptance_shape_raises_both_flags(self):
+        export = {"session": {"id": "s"}, "spans": spans_for_turn(0), "frames": [
+            prompt(0),
+            *tool_result(1, "s1", "SearchTools", {"results": [{"name": "mcp__GitHub__search_code"}],
+                                                  "additional_matches": [{"name": "mcp__GitHub__get_me"}]}),
+            *code_failure(2, "c1", "TypeError: msg.sender is not a function"),
+            *code_failure(3, "c2", "TypeError: macro.users.byEmail is not a function"),
+            *code_failure(4, "c3", "TypeError: channel.members(...) is not a function or its return value "
+                                   "is not async iterable"),
+            end(5),
+        ]}
+        source = ["SearchTools", "LoadTools", "ExecuteCode", "DescribeCodeTools", "ReadCodeDocs", "PresentReview"]
+        context = turn_context.for_session(export, source)[0]
+        self.assertEqual(context["tools"]["eager"]["names"],
+                         ["SearchTools", "ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"])
+        self.assertEqual(context["tools"]["loaded"],
+                         [{"name": "mcp__GitHub__search_code", "step": 1, "tool": 1, "via": "SearchTools"}])
+        self.assertEqual(context["tools"]["deferred"], ["mcp__GitHub__get_me"])
+        self.assertEqual([found["id"] for found in context["flags"]],
+                         ["no-sdk-index", "guessed-sdk-methods", "failing-code"])
+        self.assertEqual(context["flags"][1]["tools"], [2, 3, 4])
+
+    def test_describing_the_sdk_clears_the_guessed_methods_flag(self):
+        export = {"session": {"id": "s"}, "spans": spans_for_turn(2), "frames": [
+            prompt(0),
+            *tool_result(1, "d1", "mcp__macro_internal__DescribeCodeTools", {"index": "…"}),
+            *code_failure(2, "c1", "TypeError: msg.sender is not a function"),
+            end(3),
+        ]}
+        source = ["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs", "SearchTools"]
+        flags = [found["id"] for found in turn_context.for_session(export, source)[0]["flags"]]
+        self.assertEqual(flags, [])
+
+    def test_more_eager_names_than_the_span_counts_is_flagged(self):
+        export = {"session": {"id": "s"}, "spans": spans_for_turn(2), "frames": [
+            prompt(0), *tool_result(1, "s1", "SearchTools", {"results": [], "already_available": ["NameSearch"]}),
+            end(2),
+        ]}
+        source = ["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs", "SearchTools", "NameSearch"]
+        flags = [found["id"] for found in turn_context.for_session(export, source)[0]["flags"]]
+        self.assertEqual(flags, ["eager-names-exceed-span"])
+
+    def test_unknown_eager_names_are_a_loud_flag(self):
+        export = {"session": {"id": "s"}, "spans": spans_for_turn(2), "frames": [prompt(0), end(1)]}
+        context = turn_context.for_session(export, None)[0]
+        self.assertIsNone(context["tools"]["eager"]["names"])
+        self.assertEqual(context["flags"][0]["id"], "eager-names-unknown")
+        self.assertEqual(context["flags"][0]["level"], "warn")
+
+    def test_the_same_failure_three_times_is_flagged(self):
+        frames = [prompt(0)]
+        for number in range(3):
+            frames += [call(1 + number, f"b{number}", "BashCodeExecution"),
+                       done(1.5 + number, f"b{number}", "No bash code execution result returned", "failed")]
+        export = {"session": {"id": "s"}, "spans": spans_for_turn(2), "frames": [*frames, end(5)]}
+        flags = turn_context.for_session(export, ["BashCodeExecution"])[0]["flags"]
+        self.assertEqual(flags[0]["id"], "repeated-failure")
+        self.assertIn("3 times", flags[0]["text"])
+
+    def test_an_export_from_before_docs_selection_was_fetched_has_no_missing_span_flag(self):
+        spans = {"tools": {}, "model_calls": []}
+        export = {"session": {"id": "s"}, "spans": spans, "frames": [
+            prompt(0), *code_failure(1, "c1", "boom"), end(2),
+        ]}
+        self.assertEqual(turn_context.for_session(export, ["ExecuteCode"])[0]["flags"], [])
+
+    def test_a_short_turn_does_not_lend_its_spans_to_the_next(self):
+        spans = spans_for_turn(0)
+        export = {"session": {"id": "s"}, "spans": spans, "frames": [prompt(0), end(2), prompt(3), end(4)]}
+        contexts = turn_context.for_session(export, ["ExecuteCode"])
+        self.assertIsNotNone(contexts[0]["documentation"])
+        self.assertIsNone(contexts[1]["documentation"])
+        self.assertEqual(contexts[1]["tools"]["offered"], 0)
+
+    def test_unknown_eager_names_leave_deferred_unknown(self):
+        export = {"session": {"id": "s"}, "spans": spans_for_turn(2), "frames": [prompt(0), end(1)]}
+        self.assertIsNone(turn_context.for_session(export, None)[0]["tools"]["deferred"])
+
+    def test_without_spans_there_is_no_context(self):
+        self.assertEqual(turn_context.for_session({"session": {"id": "s"}, "frames": [prompt(0)]}, []), [])
+
+
+RELEASE_RUNS = {"workflow_runs": [
+    {"name": "Deploy Production Release", "conclusion": "success", "head_sha": "aaa111", "head_branch": "v2026.11.16.0",
+     "created_at": "2026-11-16T14:09:45Z", "updated_at": "2026-11-16T14:41:20Z"},
+    {"name": "Deploy Production Release", "conclusion": "success", "head_sha": "bbb222", "head_branch": "v2026.11.16.1",
+     "created_at": "2026-11-16T23:15:25Z", "updated_at": "2026-11-16T23:35:38Z"},
+    {"name": "Android APK on Release", "conclusion": "success", "head_sha": "ccc333", "head_branch": "v2026.11.16.1",
+     "created_at": "2026-11-16T23:15:25Z", "updated_at": "2026-11-16T23:51:09Z"},
+]}
+
+
+def completed(stdout):
+    return mock.Mock(returncode=0, stdout=stdout, stderr="")
+
+
+class Reconstruct(unittest.TestCase):
+    def test_a_part_is_verified_by_the_harness_hash(self):
+        text = "\n<macro_sdk>\ncatalog</macro_sdk>\n"
+        self.assertEqual(reconstruct.short_hash(text), __import__("hashlib").sha256(text.encode()).hexdigest()[:16])
+        self.assertEqual(reconstruct.check("sdk_docs", text, len(text), reconstruct.short_hash(text))["status"],
+                         "verified")
+        self.assertEqual(reconstruct.check("sdk_docs", text, len(text), "0000000000000000")["status"], "mismatch")
+        self.assertEqual(reconstruct.check("sdk_docs", text, None, None)["status"], "unverified")
+
+    def test_the_commit_is_the_deploy_that_registered_the_task(self):
+        asked = []
+
+        def run(args, **_):
+            asked.append(args)
+            if args[0] == "gh":
+                return completed(json.dumps(RELEASE_RUNS))
+            return completed('"2026-11-16T23:31:34.381000+00:00"')
+        with mock.patch("subprocess.run", side_effect=run):
+            commit = reconstruct.deploy_commit("agent-harness-service-52dc1429:1",
+                                               reconstruct.iso("2026-11-17T16:00:42Z"), "prod",
+                                               reconstruct.production_deploys())
+        self.assertIn("agent-harness-service-52dc1429:1", asked[1])
+        self.assertEqual(commit["sha"], "bbb222")
+        self.assertTrue(commit["exact"])
+
+    def test_an_unreadable_task_falls_back_to_the_last_deploy_with_its_reason(self):
+        def run(args, **_):
+            if args[0] == "gh":
+                return completed(json.dumps(RELEASE_RUNS))
+            raise subprocess.CalledProcessError(255, args)
+        with mock.patch("subprocess.run", side_effect=run):
+            commit = reconstruct.deploy_commit("agent-harness-service-52dc1429:1",
+                                               reconstruct.iso("2026-11-16T20:00:00Z"), "prod",
+                                               reconstruct.production_deploys())
+        self.assertEqual(commit["sha"], "aaa111")
+        self.assertFalse(commit["exact"])
+        self.assertIn("not readable", commit["reason"])
+        self.assertIn("last production deploy before the turn", commit["reason"])
+
+    def test_an_unseen_turn_checks_neither_the_session_preamble_nor_a_macro_prompt(self):
+        output = {"preamble": "P", "macro_prompt": "inline", "routed_macro_prompt": "routed",
+                  "identities": [], "integrations": [], "docs": []}
+        call_row = {"start_ms": seconds(1) * 1000, "eager_tools": 4,
+                    "prompt_bytes": {"preamble": 40}, "prompt_hashes": {"preamble": "0123456789abcdef"}}
+        turn = markdown_export.parse([prompt(0), end(5)])[0]
+        found = reconstruct.parts({"documentation": None}, turn, [call_row], output, iter([]))
+        self.assertEqual([(part["name"], part["status"]) for part in found], [("preamble", "not reconstructed")])
+
+    def test_candidates_of_one_size_without_a_hash_stay_unverified(self):
+        sizes = {"identity": 3}
+        part = reconstruct.inferred("identity", ["Ada", "ada"], sizes, {}, "inferred")
+        self.assertEqual(part["status"], "unverified")
+        self.assertEqual(reconstruct.inferred("identity", ["Ada", "Bo"], sizes, {}, "inferred")["status"], "verified")
+
+    def test_parts_pick_the_routed_prompt_by_guidance_and_flag_a_docs_byte_mismatch(self):
+        docs = "\n<macro_sdk>\ncatalog</macro_sdk>\n"
+        output = {"preamble": "P", "macro_prompt": "inline guides", "routed_macro_prompt": "routed",
+                  "identities": [], "integrations": [], "docs": [docs]}
+        call_row = {"start_ms": seconds(1) * 1000, "eager_tools": 4,
+                    "prompt_bytes": {"preamble": 1, "macro_prompt": 6, "memory": 900, "sdk_docs": len(docs)},
+                    "prompt_hashes": {"preamble": reconstruct.short_hash("P"),
+                                      "macro_prompt": reconstruct.short_hash("routed"),
+                                      "sdk_docs": reconstruct.short_hash(docs)}}
+        turn = markdown_export.parse([prompt(0), end(5)])[0]
+        context = {"documentation": {"entities": [], "guidance": "Selected", "bytes": 999}}
+        found = {part["name"]: part for part in reconstruct.parts(context, turn, [call_row], output, iter(output["docs"]))}
+        self.assertEqual(found["preamble"]["status"], "verified")
+        self.assertEqual(found["macro_prompt"]["text"], "routed")
+        self.assertEqual(found["memory"]["status"], "not reconstructed")
+        self.assertIsNone(found["memory"]["text"])
+        self.assertEqual(found["sdk_docs"]["status"], "mismatch")
+        self.assertIn("999", found["sdk_docs"]["note"])
+
+    def test_a_turn_texts_move_out_once_by_hash(self):
+        contexts = [{"literal": {"parts": [{"hash": "h1", "text": "same"}]}},
+                    {"literal": {"parts": [{"hash": "h1", "text": "same"}, {"hash": None, "text": None}]}}]
+        self.assertEqual(reconstruct.texts(contexts), {"h1": "same"})
+        self.assertNotIn("text", contexts[0]["literal"]["parts"][0])
+
+
 class Cli(unittest.TestCase):
     def test_the_password_leaves_the_url(self):
         url, password = cli.without_password("postgresql://reader:p%40ss@db:5432/macro?sslmode=require")
@@ -121,6 +385,25 @@ class Cli(unittest.TestCase):
     def test_postgres_times_with_trimmed_fractions_parse(self):
         self.assertEqual(cli.postgres_time("2026-11-09T10:00:00.12+00:00").microsecond, 120000)
         self.assertEqual(cli.postgres_time("2026-11-09T10:00:00.1+00").microsecond, 100000)
+
+    def test_serve_answers_only_its_own_page(self):
+        with tempfile.TemporaryDirectory() as directory:
+            page = pathlib.Path(directory) / "s.html"
+            page.write_text("<p>page</p>")
+            (pathlib.Path(directory) / "other.html").write_text("private")
+            handler = type("Handler", (cli.OneFile,), {"path_served": page, "log_message": lambda *args: None})
+            server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            base = f"http://127.0.0.1:{server.server_address[1]}"
+            try:
+                with urllib.request.urlopen(base + "/s.html") as response:
+                    self.assertEqual(response.read(), b"<p>page</p>")
+                with self.assertRaises(urllib.error.HTTPError) as missing:
+                    urllib.request.urlopen(base + "/other.html")
+                self.assertEqual(missing.exception.code, 404)
+            finally:
+                server.shutdown()
+                server.server_close()
 
     def test_session_text_cannot_end_or_change_its_script_element(self):
         text = "</script><!--<script>"

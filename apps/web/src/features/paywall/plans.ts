@@ -81,7 +81,7 @@ export function billingMessage(message: string): string {
 interface PlanFeature {
   label: string;
   values: Record<PlanTier, string>;
-  /** Shown only while the `enable-ai-usage-billing` flag is on. */
+  /** Shown only where AI usage billing applies. */
   aiUsageBilling?: boolean;
 }
 

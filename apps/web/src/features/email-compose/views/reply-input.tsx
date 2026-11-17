@@ -222,10 +222,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     state.replyType() === 'forward' ? 'forwarded message' : 'quoted text';
   const quoteToggleLabel = () =>
     `${form.replyAppended() ? 'Hide' : 'Show'} ${quotedContent()}`;
-  const signatureHtml = () =>
-    composeContext.presentation.signaturesEnabled()
-      ? state.signatureHtml()
-      : undefined;
+  const signatureHtml = () => state.signatureHtml();
   const writtenText = createWrittenText(editor);
   const createEvent = () => {
     const recipients = form.recipients();
@@ -822,7 +819,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <AttachButton />
-                <Show when={composeContext.calendarEvents?.enabled()}>
+                <Show when={composeContext.calendarEvents}>
                   <CreateEventButton
                     suggested={proposesMeeting(writtenText())}
                     shortcut="b"
