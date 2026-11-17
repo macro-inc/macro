@@ -1,4 +1,4 @@
-import { screenToWorld } from '../core/camera';
+import { screenToWorld, worldToScreen } from '../core/camera';
 import type { DrawingKind } from '../core/drawing';
 import type { GraphicsEditor } from '../core/editor';
 import type { Appearance, Point } from '../core/model';
@@ -8,17 +8,29 @@ import {
   type ResizeHandle,
   resizeHandles,
 } from '../core/resize';
+import { PICK_TOLERANCE, roots } from '../core/scene';
 import {
   type SelectionFrame,
   selectionContainsPoint,
   selectionFrame,
 } from '../core/selection-frame';
-import { isShapeKind } from '../core/shapes/registry';
+import {
+  rotationKnobOffset,
+  rotationKnobPoint,
+  touchHandleAt,
+} from '../core/selection-handles';
+import { isShape, isShapeKind } from '../core/shapes/registry';
 import { selectionTarget } from './selection-target';
+import { attachTouchNavigation } from './touch-navigation';
 
 // Matches the Figma viewer: pinch tracks finger speed, wheel notches stay bounded.
 const WHEEL_ZOOM_RATE = 0.01;
 const MAX_WHEEL_ZOOM_EXPONENT = 0.6;
+/**
+ * How near a stroke a finger still picks its shape, in screen pixels, when it
+ * lands on nothing. A cursor gets `PICK_TOLERANCE`.
+ */
+const TOUCH_PICK_REACH = 10;
 
 export function resizeCursor(handle: ResizeHandle, frame?: SelectionFrame) {
   if (handle === 'n' || handle === 's') return 'ns-resize';
@@ -52,6 +64,19 @@ export type GraphicsInputOptions = {
   appearance?: () => Appearance;
   /** Local viewport position and picking modifiers; never document/awareness state. */
   onHover?: (hover: GraphicsHover | undefined) => void;
+  /**
+   * What a finger held still on the surface does, given where it is in client
+   * coordinates. Return nothing while a long press has no meaning (a drawing
+   * tool, say) and the press stays with the tool. The finger's lift clicks
+   * nothing, so a menu may open under it.
+   */
+  longPress?: () => ((point: Point) => void) | undefined;
+  /**
+   * Lay the selection's handles out for fingers: the rotation knob stands
+   * further off the frame, and corner-radius handles are left to the host's
+   * inspector. Fingers get larger handle targets whether or not this is set.
+   */
+  touchHandles?: boolean;
 };
 
 /** Attach camera controls to a focusable viewport. No document-global keyboard shortcuts. */
@@ -70,15 +95,29 @@ export function attachCameraControls(
         cursor?: string;
       }
     | undefined;
+  // A press that becomes a transform only once it moves.
   let pendingSelection:
     | {
         id: string;
         point: Point;
+        /** Released without moving, it toggles `id` in the selection. */
         toggle: boolean;
         duplicate?: () => string;
+        /** The handle the movement drags, for a finger near one. */
+        handle?: ResizeHandle | 'rotate';
+        /**
+         * What a finger that only tapped near a handle selects instead: an
+         * item, or nothing (`null`). Absent, the selection stays.
+         */
+        tap?: string | null;
       }
     | undefined;
   const originalCursor = element.style.cursor;
+  const touchNavigation = attachTouchNavigation(element, editor, {
+    ignoreTarget: options.ignoreTarget,
+    navigation: options.navigation,
+    longPress: options.longPress,
+  });
   let hoverPointer: PointerEvent | undefined;
   const clearHover = () => {
     hoverPointer = undefined;
@@ -186,6 +225,54 @@ export function attachCameraControls(
       editor.updateDrawing([], { proportional: event.shiftKey });
     }
   };
+  /**
+   * Whether a press outside the selection's frame lands on the paint of an
+   * item that is not selected. Such a press is for that item, however near
+   * the selection's handles it is.
+   */
+  const pressesAnotherItem = (
+    frame: SelectionFrame | undefined,
+    point: Point
+  ) => {
+    if (!frame || selectionContainsPoint(frame, point)) return false;
+    const hit = editor.hitTest(point, true);
+    if (!hit) return false;
+    const selected = editor.getSession().selectedIds;
+    // A hit on anything inside a selected group is a hit on the selection.
+    return (
+      !selected.includes(hit) &&
+      roots(editor.document, [...selected, hit]).includes(hit)
+    );
+  };
+  /**
+   * The handle a finger takes when it lands near the selection's frame. The
+   * handles are drawn for a cursor; a finger takes them from further away.
+   */
+  const touchHandle = (
+    frame: SelectionFrame | undefined,
+    event: Pick<PointerEvent, 'clientX' | 'clientY'>
+  ) => {
+    const selected = roots(editor.document, editor.getSession().selectedIds);
+    const first = selected[0] ? editor.document.items[selected[0]] : undefined;
+    // Read-only surfaces and a lone connector show no handles to reach for.
+    if (!frame || options.editing === false) return undefined;
+    if (selected.length === 1 && first?.type === 'connector') return undefined;
+
+    const camera = editor.getCamera();
+    const rect = element.getBoundingClientRect();
+    const corners = frame.corners.map((corner) =>
+      worldToScreen(camera, corner)
+    );
+    const knob = rotationKnobPoint(
+      corners,
+      selected.length === 1 && isShape(first),
+      rotationKnobOffset(options.touchHandles)
+    );
+    return touchHandleAt(corners, knob, {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
+  };
   const pointerDown = (event: PointerEvent) => {
     if (
       options.suspended?.() ||
@@ -229,10 +316,6 @@ export function attachCameraControls(
       const handle = target
         ?.closest('[data-graphics-handle]')
         ?.getAttribute('data-graphics-handle');
-      const transformHandle =
-        isResizeHandle(handle) || isRadiusHandle(handle) || handle === 'rotate'
-          ? handle
-          : undefined;
       const point = worldPoint(event);
       const deep = options.duplicateOnAltDrag
         ? event.metaKey || event.ctrlKey
@@ -241,17 +324,34 @@ export function attachCameraControls(
         editor.document,
         editor.getSession().selectedIds
       );
-      const id = selectionTarget(
-        editor.document,
-        editor.getSession().selectedIds,
-        point,
-        {
-          deep,
-          additive: event.shiftKey,
-          handle: !!transformHandle,
-          tolerance: 3 / editor.getCamera().scale,
-        }
-      );
+      const touch = event.pointerType === 'touch';
+      const drawn =
+        isResizeHandle(handle) || isRadiusHandle(handle) || handle === 'rotate'
+          ? handle
+          : undefined;
+      // A finger near the frame takes the handle it is nearest, which can be a
+      // corner while it covers the strip drawn along an edge. Only paint that
+      // belongs to something else ends that reach. Where the reach finds no
+      // handle there is none for a finger, whatever is drawn under it: the
+      // strips along a thin shape's edges cover its middle, which moves it.
+      const reaches =
+        touch && !isRadiusHandle(drawn) && !pressesAnotherItem(frame, point);
+      const transformHandle = reaches ? touchHandle(frame, event) : drawn;
+      const { scale } = editor.getCamera();
+      const pick = (handle: boolean) =>
+        selectionTarget(
+          editor.document,
+          editor.getSession().selectedIds,
+          point,
+          {
+            deep,
+            additive: event.shiftKey,
+            handle,
+            tolerance: PICK_TOLERANCE / scale,
+            reach: touch ? TOUCH_PICK_REACH / scale : undefined,
+          }
+        );
+      const id = pick(!!transformHandle);
       cursor =
         transformHandle === 'rotate' || isRadiusHandle(transformHandle)
           ? 'grabbing'
@@ -281,6 +381,23 @@ export function attachCameraControls(
             options.duplicateOnAltDrag && event.altKey
               ? (options.createId ?? (() => crypto.randomUUID()))
               : undefined,
+        };
+      } else if (
+        id &&
+        touch &&
+        (isResizeHandle(transformHandle) || transformHandle === 'rotate')
+      ) {
+        // A finger resizes or rotates once it moves. One that only taps near a
+        // handle must not resize by nothing (which still fixes the width of
+        // auto-width text): outside the frame it is a tap on whatever is there.
+        const outside =
+          !drawn && !!frame && !selectionContainsPoint(frame, point);
+        pendingSelection = {
+          id,
+          point,
+          toggle: false,
+          handle: transformHandle,
+          tap: outside ? (pick(false) ?? null) : undefined,
         };
       } else if (id)
         transforming = editor.beginTransform(
@@ -336,7 +453,7 @@ export function attachCameraControls(
         !editor.beginTransform(
           pending.id,
           pending.point,
-          undefined,
+          pending.handle,
           pending.duplicate
         )
       ) {
@@ -363,6 +480,10 @@ export function attachCameraControls(
     if (!drag) return;
     if (drag.mode === 'select' && pendingSelection?.toggle)
       editor.toggleSelection(pendingSelection.id);
+    if (drag.mode === 'select' && pendingSelection?.tap !== undefined) {
+      if (pendingSelection.tap) editor.select(pendingSelection.tap);
+      else editor.selectMany([]);
+    }
     if (drag.mode === 'box') {
       editor.updateBoxSelection(worldPoint(event));
       editor.commitBoxSelection();
@@ -453,7 +574,8 @@ export function attachCameraControls(
     }
   };
   // WebKit (Safari, the desktop app) reports trackpad pinches as gesture events
-  // with a running scale instead of ctrl+wheel.
+  // with a running scale instead of ctrl+wheel. It also sends them for fingers
+  // on a touchscreen, which touch navigation already follows.
   let gestureScale = 1;
   const gestureStart = (event: Event) => {
     event.preventDefault();
@@ -468,7 +590,7 @@ export function attachCameraControls(
     };
     const factor = gesture.scale / gestureScale;
     gestureScale = gesture.scale;
-    if (options.suspended?.() || drag) return;
+    if (options.suspended?.() || drag || touchNavigation.tracking()) return;
     const camera = editor.getCamera();
     if (options.navigation === 'centered-image') {
       editor.centerImage(
@@ -498,6 +620,7 @@ export function attachCameraControls(
   window.addEventListener('keyup', updateHover);
   return () => {
     cancel();
+    touchNavigation.detach();
     element.removeEventListener('pointerdown', pointerDown);
     element.removeEventListener('pointermove', pointerHover);
     element.removeEventListener('pointerup', pointerHover);

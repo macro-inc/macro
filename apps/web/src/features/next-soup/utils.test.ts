@@ -140,11 +140,9 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
     await importOriginal<typeof import('@core/constant/featureFlags')>();
   return {
     ...actual,
-    enableCalendarUi: { key: 'enable-calendar-ui' },
     enableReminders: { key: 'enable-reminders' },
     isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
-      'key' in flag &&
-      (flag.key === 'enable-calendar-ui' || flag.key === 'enable-reminders')
+      'key' in flag && flag.key === 'enable-reminders'
         ? true
         : actual.isFeatureEnabled(flag),
   };

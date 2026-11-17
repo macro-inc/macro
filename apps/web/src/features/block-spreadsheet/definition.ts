@@ -3,7 +3,6 @@ import { fetchSyncDocumentOpenContext } from '@queries/storage/documentLoad/sync
 import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
 import { lazy } from 'solid-js';
-import { isSpreadsheetEnabledForCurrentUser } from './queries/spreadsheet-access';
 
 export const definition = defineBlock({
   name: 'spreadsheet',
@@ -15,7 +14,6 @@ export const definition = defineBlock({
   syncServiceEnabled: true,
   editPermissionEnabled: true,
   async load(source, intent) {
-    if (!isSpreadsheetEnabledForCurrentUser()) return LoadErrors.UNAUTHORIZED;
     if (source.type !== 'sync-service') return LoadErrors.INVALID;
     if (intent === 'preload') return ok({ type: 'preload', origin: source });
     const context = await fetchSyncDocumentOpenContext(source.id);

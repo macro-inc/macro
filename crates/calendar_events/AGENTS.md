@@ -313,13 +313,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   word, until `inbox` names the addressed copy's inbox. The route cannot tell
   an inbox the user chose from one the agent picked, so the wording is the
   only guard against a guess. UpdateCalendarEvent and DeleteCalendarEvent check
-  every call; the update, invite-guests and delete routes check agent runs and
-  any request naming `inbox` through `CalendarCopyConfirmation`, answering 409
-  `copy_choice_required`. An agent run (`macro_authorization::is_agent_run`)
-  is a token with `agent_id` (in-app code mode) or a request carrying
-  `x-macro-code-execution`, which
-  `code_execution`'s bootstrap sets on every code-mode program's SDK requests,
-  public MCP clients' included. Code-mode agents never see the calendar tools
+  every call; the update, invite-guests and delete routes check every program
+  run (`macro_authorization::is_program_run`: a token signed for an agent or a
+  routine, owner routine steps included, or a request carrying
+  `x-macro-code-execution`, which `code_execution`'s bootstrap sets on every
+  code-mode program's SDK requests) and any request naming `inbox` through
+  `CalendarCopyConfirmation`, answering 409 `copy_choice_required`. The create
+  route refuses only agent runs (`is_agent_run`), so an owner routine step
+  creates events. Code-mode agents never see the calendar tools
   (`agent_code_mode::covered_by_code_sdk`), so the routes and the SDK docs are
   what reach them; the web, which opens one copy, sends no `inbox` and is not
   checked.
@@ -412,7 +413,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `OutlookCalendarLease::near_window` set), then the whole window in a scan of
   its own (`calendar_outlook_work.whole_window_scan_id`), so what the user
   looks at first arrives first, and an event deleted between the two is still
-  retired. The near window's events are read twice. Nothing marks the
+  retired. The near window reads its events closest to now first
+  (`nearest_first`, from the start and end each `OutlookPageMember` carries
+  from the listing), so this week comes before the rest of the two months;
+  every other page reads in ID order. A near-window page's span records
+  `untimed_members`, which read last. Each listing page is ordered on its
+  own, so a near window longer than a page (the listing asks for 1,000
+  occurrences a page) is ordered page by page. The near
+  window's events are read twice. Nothing marks the
   calendar synced or materialized, or its account ready, before the whole
   window finishes, so every coverage reader (sync health and booking, team
   availability, the syncing banner) still sees a first import in progress.

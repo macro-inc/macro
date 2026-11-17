@@ -1,7 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   enableEventRoutines,
-  enableRoutineConditions,
   enableRoutineWebhooks,
 } from '@core/constant/featureFlags';
 import { Show, Suspense } from 'solid-js';
@@ -54,7 +53,6 @@ export function RoutineTriggers(props: {
   /** The saved routine's id; its webhook URL is made once a webhook trigger is saved. */
   routineId?: string;
 }) {
-  const conditions = useFeatureFlag(enableRoutineConditions);
   const eventRoutines = useFeatureFlag(enableEventRoutines);
   const webhooks = useFeatureFlag(enableRoutineWebhooks);
   const github = createGithubConnection();
@@ -104,16 +102,9 @@ export function RoutineTriggers(props: {
             {options()}
           </Show>
         )}
-        renderEventCondition={
-          conditions().enabled
-            ? (trigger, onChange) => (
-                <RoutineEventCondition
-                  trigger={trigger()}
-                  onChange={onChange}
-                />
-              )
-            : undefined
-        }
+        renderEventCondition={(trigger, onChange) => (
+          <RoutineEventCondition trigger={trigger()} onChange={onChange} />
+        )}
         renderEventSettings={(trigger, onChange) => (
           <>
             <Show when={taskTriggerProperty(trigger())}>

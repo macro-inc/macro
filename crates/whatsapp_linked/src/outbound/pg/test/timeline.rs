@@ -102,6 +102,7 @@ async fn shared_viewer_without_whatsapp_reads_history_and_unread_but_cannot_send
             mentions: vec![],
         },
         reply_to: None,
+        user_confirmation: None,
     };
     assert_eq!(
         *linked
@@ -461,6 +462,7 @@ async fn shared_sender_uses_own_roster_without_adopting_again(pool: PgPool) {
                     mentions: vec![],
                 },
                 reply_to: None,
+                user_confirmation: None,
             },
             SendAuthority::UserApiToken,
         )

@@ -28,6 +28,43 @@ const longAddressGuests: CalendarEvent['attendees'] =
         responseStatus: 'accepted',
       }))
     : [];
+const GUEST_CAPABILITIES: CalendarEvent['viewerCan'] = {
+  editDetails: false,
+  inviteGuests: false,
+  removeGuests: false,
+  setGuestPolicy: false,
+  rsvp: true,
+  organize: false,
+};
+// `?viewer=` shows the event as someone other than its organizer sees it:
+// `snapshot` is the copy of a shared meeting kept for a channel, and
+// `hidden-guests` a guest whose organizer hides the guest list.
+function asViewer(event: CalendarEvent): CalendarEvent {
+  const viewer = params.get('viewer');
+  if (viewer === 'snapshot')
+    return { ...event, isSnapshot: true, viewerCan: GUEST_CAPABILITIES };
+  if (viewer === 'hidden-guests')
+    return {
+      ...event,
+      viewerCan: GUEST_CAPABILITIES,
+      organizerEmail: 'alex@example.com',
+      guestPolicy: {
+        canModify: false,
+        canInviteOthers: false,
+        canSeeOtherGuests: false,
+      },
+      attendees: event.attendees.slice(0, 2).map((attendee) => ({
+        ...attendee,
+        isOrganizer: !attendee.isSelf,
+      })),
+    };
+  return event;
+}
+// `?description=address` describes the event with a bare web address.
+const description =
+  params.get('description') === 'address'
+    ? 'Read the agenda at https://example.com/agenda before we meet.'
+    : 'Walk through the roadmap and agree on owners.';
 const calendar = { id: 'calendar-1', name: 'Calendar', color: '#609fe2' };
 const sampleEvent: CalendarEvent = {
   id: 'planning-review',
@@ -39,7 +76,7 @@ const sampleEvent: CalendarEvent = {
   allDay: false,
   isCancelled: false,
   isReadOnly: false,
-  description: 'Walk through the roadmap and agree on owners.',
+  description,
   recurrenceLines: [],
   guestPolicy: {
     canModify: false,
@@ -84,6 +121,8 @@ const sampleEvent: CalendarEvent = {
   calendar,
   visibleCalendars: [calendar],
 };
+
+const shownEvent = asViewer(sampleEvent);
 
 /** An event the viewer organizes, its chip placed `?top=` px down the page. */
 function Fixture() {
@@ -132,7 +171,7 @@ function Fixture() {
           <SelectedEventDetails
             boundary={element()}
             anchor={anchor}
-            event={() => (selected() ? sampleEvent : undefined)}
+            event={() => (selected() ? shownEvent : undefined)}
             timeFormat={() => '12-hour'}
             onClose={() => setSelected(false)}
           />

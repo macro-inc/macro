@@ -76,6 +76,11 @@ export {
   selectionContainsPoint,
   selectionFrame,
 } from './selection-frame';
+export {
+  rotationKnobOffset,
+  rotationKnobPoint,
+  touchHandleAt,
+} from './selection-handles';
 export * from './shapes/artifact';
 export {
   type ConnectorAnchor,
