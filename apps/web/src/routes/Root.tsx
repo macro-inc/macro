@@ -41,7 +41,10 @@ import { TauriRouteListener } from '@macro/tauri/TauriProvider';
 import { Telemetry } from '@macro-inc/observability';
 import { BrowserNotificationModal } from '@notifications';
 import { invalidateUserInfo, prefetchUserInfo } from '@queries/auth/user-info';
-import { fetchWebFeatureFlags } from '@queries/auth/web-feature-flags';
+import {
+  cancelWebFeatureFlags,
+  fetchWebFeatureFlags,
+} from '@queries/auth/web-feature-flags';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -138,12 +141,14 @@ function useUserInfoSideEffects() {
         const user = userInfo();
         return user?.authenticated ? user.id : undefined;
       },
-      (userId) =>
+      (userId) => {
+        cancelWebFeatureFlags();
         flagStore.setAccount(
           userId
             ? { userId, fetchFlags: () => fetchWebFeatureFlags(userId) }
             : undefined
-        )
+        );
+      }
     )
   );
 

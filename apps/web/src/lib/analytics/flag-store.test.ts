@@ -290,6 +290,56 @@ describe('flag store', () => {
     expect(localStorage.length).toBe(0);
   });
 
+  it("treats PostHog's answer for another identity as a cache", async () => {
+    const store = createFlagStore();
+    const { client } = postHog({ cached: ['enable-crm'] });
+    let distinctId = 'anonymous-device';
+    const posthog = { ...client, get_distinct_id: () => distinctId };
+    store.connect(posthog);
+    store.receiveRemote(false);
+    const fetchFlags = vi.fn(async () => ({ 'enable-crm': true }));
+
+    store.setAccount({ userId: USER, fetchFlags });
+    expect(store.resolve('enable-crm', () => false)?.source).toBe('cache');
+    expect(store.settled()).toBe(true);
+
+    // The identify reload fails: the backend answers for this account.
+    store.receiveRemote(true);
+    expect(fetchFlags).toHaveBeenCalledOnce();
+    await settle();
+    expect(store.resolve('enable-crm', () => false)).toEqual({
+      enabled: true,
+      source: 'bootstrap',
+    });
+
+    // Then PostHog answers for this account.
+    distinctId = USER;
+    store.receiveRemote(false);
+    expect(store.resolve('enable-crm', () => false)?.source).toBe('remote');
+  });
+
+  it('keeps an answer PostHog gave for the same account', () => {
+    const store = createFlagStore();
+    const { client } = postHog({ cached: ['enable-crm'] });
+    store.connect({ ...client, get_distinct_id: () => USER });
+    store.receiveRemote(false);
+    store.setAccount({ userId: USER, fetchFlags: vi.fn() });
+    expect(store.resolve('enable-crm', () => true)?.source).toBe('remote');
+  });
+
+  it('drops a backend answer when the account signs out before it applies', async () => {
+    const store = createFlagStore();
+    store.connect(postHog().client);
+    const backend = deferred<FlagValues>();
+    store.setAccount({ userId: USER, fetchFlags: () => backend.promise });
+    backend.resolve({ 'enable-crm': true });
+    await Promise.resolve();
+    await Promise.resolve();
+    store.setAccount(undefined);
+    await settle();
+    expect(store.resolve('enable-crm', () => undefined)).toBeUndefined();
+  });
+
   it('applies a late PostHog answer to readers without a reload', () => {
     const store = createFlagStore();
     store.connect(postHog({ cached: [] }).client);

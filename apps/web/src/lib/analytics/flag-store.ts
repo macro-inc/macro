@@ -42,7 +42,12 @@ export type FlagSource =
 /** How one PostHog `/flags` request ended. */
 export type FlagLoadOutcome = 'ok' | 'timeout' | 'blocked' | 'error';
 
-type RemoteStatus = 'pending' | 'ok' | 'unreachable';
+/**
+ * `stale`: PostHog answered for another identity (before sign-in, or for the
+ * account that signed out). Its values still serve as a cache until it
+ * answers for this account.
+ */
+type RemoteStatus = 'pending' | 'ok' | 'stale' | 'unreachable';
 type BootstrapStatus = 'idle' | 'pending' | 'ok' | 'failed';
 type BootstrapTrigger = 'cold' | 'fallback';
 
@@ -56,6 +61,7 @@ export type FlagClient = {
     ) => void
   ) => () => void;
   reloadFeatureFlags: () => void;
+  get_distinct_id?: () => string;
   get_property?: (name: string) => unknown;
   featureFlags?: { getFlags: () => string[] };
 };
@@ -162,7 +168,7 @@ export function createFlagStore() {
 
   /** Whether any source can answer a read now. */
   const settled = () => {
-    if (remote() === 'ok') return true;
+    if (remote() === 'ok' || remote() === 'stale') return true;
     if (bootstrapStatus() === 'ok') return true;
     if (persisted() !== undefined || hadCache()) return true;
     // PostHog failed: settle once no backend read is still on its way.
@@ -174,7 +180,7 @@ export function createFlagStore() {
     if (remote() === 'ok') return 'remote';
     if (bootstrapStatus() === 'ok') return 'bootstrap';
     if (persisted() !== undefined) return 'persisted_bootstrap';
-    if (hadCache()) return 'cache';
+    if (hadCache() || remote() === 'stale') return 'cache';
     return undefined;
   };
 
@@ -251,6 +257,8 @@ export function createFlagStore() {
     // Like PostHog's answer, these swap flagged subtrees; a transition keeps
     // the painted UI until the new one is ready.
     await startTransition(() => {
+      // The transition runs later; the account may have changed meanwhile.
+      if (generation !== accountGeneration) return;
       setBootstrap(values);
       setBootstrapStatus('ok');
     });
@@ -373,6 +381,15 @@ export function createFlagStore() {
       if (account && !next) persistedBootstrap.remove(account.userId);
       accountGeneration += 1;
       account = next;
+      // PostHog's answer belongs to whoever it identified then. A different
+      // identity (sign-out, a sign-in after an anonymous answer) waits for
+      // its own answer, reading the earlier one as a cache meanwhile.
+      if (
+        remote() === 'ok' &&
+        (!next || client?.get_distinct_id?.() !== next.userId)
+      ) {
+        setRemote('stale');
+      }
       const answered = remote() === 'ok';
       if (next && answered) persistedBootstrap.remove(next.userId);
       batch(() => {

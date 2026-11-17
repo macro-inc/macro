@@ -17,8 +17,15 @@ export function webFeatureFlagsQueryOptions(userId: string) {
       (await throwOnErr(() => authServiceClient.getWebFeatureFlags())).flags,
     staleTime: 0,
     gcTime: 0,
-    retry: 1,
+    // A retry would send whichever session is current by then, possibly
+    // another account's; the flag store falls back further instead.
+    retry: false,
   });
+}
+
+/** Drops a read still in flight when the signed-in account changes. */
+export function cancelWebFeatureFlags(): void {
+  queryClient.cancelQueries({ queryKey: authKeys.webFeatureFlags._def });
 }
 
 /** Reads the account's web feature flags from the backend. */
