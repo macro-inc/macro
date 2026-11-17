@@ -1,4 +1,4 @@
-import { PaneSuspensionContext } from '@core/context/pane-suspension';
+import { PaneVisibilityContext } from '@core/context/pane-visibility';
 import {
   type AnyVariables,
   type Client,
@@ -267,8 +267,8 @@ describe('createUrqlQuery reactive state', () => {
     let query!: UrqlQueryResult<Data, Variables>;
     disposals.push(
       createRoot((dispose) => {
-        createComponent(PaneSuspensionContext.Provider, {
-          value: suspended,
+        createComponent(PaneVisibilityContext.Provider, {
+          value: { hidden: suspended, suspended },
           get children() {
             query = createUrqlQuery(() => activeOptions(fake.client));
             return undefined;

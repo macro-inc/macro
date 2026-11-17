@@ -1,3 +1,4 @@
+import { usePaneHidden } from '@core/context/pane-visibility';
 import { isPlatform } from '@core/util/platform';
 import { onCleanup, onMount } from 'solid-js';
 
@@ -66,9 +67,12 @@ export function useAndroidBack() {
 
 export function useAndroidBackNavigation(navigateBack: () => boolean) {
   if (!isPlatform('android')) return;
+  // A view kept mounted while hidden (a parked pane) leaves Back alone.
+  const hidden = usePaneHidden();
   onMount(() => {
     const onBack = (event: Event) => {
-      if (!event.defaultPrevented && navigateBack()) event.preventDefault();
+      if (event.defaultPrevented || hidden()) return;
+      if (navigateBack()) event.preventDefault();
     };
     window.addEventListener('android-navigate-back', onBack);
     onCleanup(() =>

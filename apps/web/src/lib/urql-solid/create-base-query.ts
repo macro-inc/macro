@@ -1,5 +1,5 @@
 import { useFlowTrace } from '@app/observability/flow';
-import { usePaneSuspended } from '@core/context/pane-suspension';
+import { usePaneSuspended } from '@core/context/pane-visibility';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,

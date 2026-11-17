@@ -1,5 +1,5 @@
 import { usePending } from '@app/observability/flow';
-import { usePaneSuspended } from '@core/context/pane-suspension';
+import { usePaneSuspended } from '@core/context/pane-visibility';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,

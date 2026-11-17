@@ -1,6 +1,6 @@
 import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import { usePending } from '@app/observability/flow';
-import { usePaneSuspended } from '@core/context/pane-suspension';
+import { usePaneSuspended } from '@core/context/pane-visibility';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { until } from '@solid-primitives/promise';
