@@ -23,7 +23,7 @@ main Tasks screen.
 | Contents | Filters, selected layout, grouping, and ordered sorting, including implicit person conditions. No search text or scroll state. |
 | Editing | Explicit Save changes, Reset, and Duplicate. |
 | Navigation | Leaving discards temporary edits without a confirmation prompt. |
-| Creation | Desktop sidebar `+` or the shared empty-state Create view action starts an unsaved view; mobile also captures changed filters, layout, grouping, or sort in the filter drawer. |
+| Creation | The final Create view row below built-in and saved views starts an unsaved view; mobile also captures changed filters, layout, grouping, or sort in the filter drawer. |
 | Capture | Save view appears left of Filters on desktop and in the mobile overlay banner when filters, layout, grouping, or sort differ from built-in tab defaults. |
 | Mobile | Shared Tasks sidebar opened by the hamburger; the filter drawer owns save/create/reset actions. |
 | Initial surfaces | Main Tasks only; not project or CRM embedded task lists. |
@@ -102,19 +102,14 @@ The Tasks host owns navigation and account/task lifecycle. Task actions capture 
 writing or reloading, reject stale completions, and explicitly select created
 views. Mutation dialogs receive a refresh callback, not both query sources.
 Compose the list through compound components and reuse styled menu items across
-its context and overflow menus. Tasks and Projects use sidebar rows on desktop
-and touch. The compact sidebar empty
-state shows the heading “Your go-to views”, the muted description “Save your setup
-for next time.” and a `secondary`, `sm` Create view button with a leading plus icon, without
-a separate illustration. A subtly bordered, rounded container uses 12px padding,
-inherits the surrounding background, and has no shadow. The sidebar header's
-icon-only plus remains available in every section state, including when the
-empty-state button is visible. The empty-state button starts the existing draft
-flow. Changes from the
-built-in settings expose creation in the filter drawer's overlay banner above the
-footer and existing-view save/reset actions at its footer's right.
-Starting a new view from the sidebar expands the section and shows one
-local, selected New view row labeled Draft on desktop and touch.
+desktop menus and touch sheets. Tasks and Projects append saved-view rows directly
+below their built-in views, with a final Create view row even when no saved views
+exist or reads are loading or failed. No separate saved-view heading or empty-state
+card interrupts either list. Isolate the Create view keyboard scope from list
+shortcuts. Changes from the built-in settings expose creation in the filter
+drawer's overlay banner above the footer and existing-view save/reset actions at
+its footer's right. Starting a new view shows one local, selected New view row
+labeled Draft on desktop and touch.
 Confirmed creation replaces the draft with the named record, including while the
 list refresh is pending. Canceling the draft or leaving its view removes the row;
 closing only the naming dialog retains it. Draft rows never enter the query cache.
@@ -158,10 +153,10 @@ existing GraphQL saved-view API accepts this consumer kind without backend or
 schema changes. Project views reuse shared queries, dialogs, menu/list components,
 and draft reconciliation rather than creating another persistence API.
 
-Project views appear in a dedicated Saved project views section beneath the
-built-in Projects section in the Tasks sidebar. The same sidebar opens from the
-touch hamburger button; Projects has no separate dock destination, header
-PillTabs, or saved-view selector. The shared section-header plus starts a draft.
+Project views appear directly below the built-in project scopes in the Tasks
+sidebar's Projects section, ending with Create view. The same sidebar opens from
+the touch hamburger button; Projects has no separate dock destination, header
+PillTabs, or saved-view selector.
 Search and filter actions sit on the right of the header. Search and scroll stay local, temporary
 settings stay out of entry snapshots, and phone List fallback preserves stored
 Gantt layout. Unsupported project definitions display an error instead of quietly
@@ -432,8 +427,8 @@ not mistaken for the visible search results.
 ### Mobile
 
 Tasks and Projects share the sidebar opened by the hamburger button on touch.
-Choose built-in scopes and named saved views there; section-header plus buttons
-start drafts. Neither collection adds a saved-view picker or project tabs to the
+Saved views follow their consumer's built-in views, with Create view last.
+Neither collection adds a saved-view picker or project tabs to the
 header. Search and filters stay on the right, and mobile retains its list fallback.
 
 Show a filled Save view button with a leading bookmark icon in a borderless,
@@ -448,10 +443,11 @@ at the footer's right, opposite Clear all, while settings are dirty. Keep these
 actions available when all filters are cleared or only sorting changes. Preserve
 the stored desktop layout.
 
-Provide management through each saved-view row's visible overflow button in the
-sidebar. Use existing dialog/drawer conventions for naming, sharing, conflicts,
-and delete confirmation. Keep row menus in their sidebar portal scope for keyboard
-access and discard queued actions when the account changes. Saving
+Provide management through long-press options sheets on touch and hover/focus
+overflow buttons or context menus on desktop. Reuse the same permission-aware
+actions and existing dialogs for naming, sharing, conflicts, and deletion.
+Finish sheet closure before opening dialogs, retain focus return, and discard
+queued actions when the account changes. Saving
 from the filter drawer closes it before opening the name dialog. Cancel or Escape
 reopens the current filters only if the navigation scope is unchanged; a confirmed
 creation selects the new view without reopening the drawer. No hover-only controls

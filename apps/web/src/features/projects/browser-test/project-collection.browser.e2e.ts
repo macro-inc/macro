@@ -136,10 +136,8 @@ test('phone project sidebar creates and reopens a saved view', async ({
   await open(page);
   await page.getByRole('button', { name: 'Show sidebar' }).click();
   const views = page.getByTestId('saved-view-sidebar');
-  await views
-    .getByRole('button', { name: 'New saved view', exact: true })
-    .click();
-  await page.getByRole('button', { name: 'Hide sidebar' }).click();
+  await views.getByRole('button', { name: 'Create view', exact: true }).click();
+  await expect(views).toBeHidden();
   await page.getByRole('button', { name: 'Save view', exact: true }).click();
   const save = page.getByRole('dialog', { name: 'Save view' });
   await save.getByRole('textbox', { name: 'Name' }).fill('Phone projects');

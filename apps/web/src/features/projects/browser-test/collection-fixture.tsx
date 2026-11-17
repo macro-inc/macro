@@ -265,7 +265,7 @@ export function CollectionFixture() {
                       )}
                     </For>
                   </ViewSidebar.Nav>
-                  <ProjectSavedViewsList open onOpenChange={() => {}} />
+                  <ProjectSavedViewsList />
                 </ViewSidebar.Content>
               </ViewSidebar.Root>
             </ViewShell.Aside>

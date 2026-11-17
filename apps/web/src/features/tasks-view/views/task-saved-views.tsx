@@ -4,10 +4,10 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContactFilterLabels } from '@core/user/use-contact-filter-options';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PlusIcon from '@icon/system/regular/plus.svg';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import InfoIcon from '@phosphor/info.svg';
@@ -22,6 +22,7 @@ import {
 import { ok } from 'neverthrow';
 import { batch, For, getOwner, type Owner, onCleanup, Show } from 'solid-js';
 import { v4 as uuid } from 'uuid';
+import { SavedViewCreateButton } from '../../saved-views/components/saved-view-create-button';
 import {
   SavedViewList,
   SavedViewListRow,
@@ -270,6 +271,7 @@ function TaskSavedViewMenuItems(props: {
   record: SavedView;
   owner: Owner | null;
   defer: (action: () => void) => void;
+  mobile?: boolean;
 }) {
   const {
     savedViews,
@@ -328,6 +330,7 @@ function TaskSavedViewMenuItems(props: {
   };
   return (
     <SavedViewMenuItems
+      mobile={props.mobile}
       editLabel="Rename"
       deleteLabel="Delete"
       owned={props.record.ownerId === viewerId()}
@@ -361,46 +364,10 @@ function useTaskSavedViewListState() {
   return {
     creating,
     items,
-    empty: () =>
-      !creating() && !savedViewsList?.loading() && items()?.length === 0,
   };
 }
 
 export function TaskSavedViewsList() {
-  const {
-    savedViews,
-    savedViewsList,
-    startSavedView,
-    isSidebarSectionOpen,
-    setSidebarSectionOpen,
-  } = useTasksView();
-  const [attachCreateHotkeys] = useHotkeyDOMScope('create-saved-view', true);
-  const create = () => {
-    setSidebarSectionOpen('saved-views', true);
-    startSavedView();
-  };
-  return (
-    <Show when={savedViews && savedViewsList}>
-      <SavedViewList.Root
-        open={isSidebarSectionOpen('saved-views')}
-        onOpenChange={(open) => setSidebarSectionOpen('saved-views', open)}
-      >
-        <SavedViewList.Header
-          onCreate={create}
-          createButtonRef={attachCreateHotkeys}
-        />
-        <SavedViewList.Content>
-          <TaskSavedViewRows />
-        </SavedViewList.Content>
-      </SavedViewList.Root>
-    </Show>
-  );
-}
-
-function TaskSavedViewRows(props: {
-  onAction?: (action: () => void) => void;
-  dialogOwner?: Owner | null;
-}) {
   const {
     savedViews,
     savedViewsList,
@@ -410,34 +377,34 @@ function TaskSavedViewRows(props: {
   } = useTasksView();
   const [attachCreateHotkeys] = useHotkeyDOMScope('create-saved-view', true);
   const viewerId = useUserId();
-  const owner = props.dialogOwner ?? getOwner();
+  const owner = getOwner();
   const selectedId = () => {
     const view = savedViews?.view();
     return view?.kind === 'saved' ? view.record.id : undefined;
   };
-  const { creating, items, empty } = useTaskSavedViewListState();
-  const run = (action: () => void) =>
-    props.onAction ? props.onAction(action) : action();
+  const { creating, items } = useTaskSavedViewListState();
   return (
     <Show when={savedViews && savedViewsList}>
       {(views) => (
         <>
           <SavedViewList.Items label={t('viewMenus.savedTaskViews')}>
             <Show when={creating()}>
-              <SavedViewList.Draft onSelect={() => run(closeTask)} />
+              <SavedViewList.Draft onSelect={closeTask} />
             </Show>
             <For each={items()}>
               {(record) => (
                 <SavedViewListRow
                   view={record}
+                  touchActions={isTouchDevice()}
                   selected={selectedId() === record.id}
                   scopeKey={viewerId()}
-                  onSelect={() => run(() => selectSavedView(record.id))}
+                  onSelect={() => selectSavedView(record.id)}
                   menu={(defer) => (
                     <TaskSavedViewMenuItems
                       record={record}
+                      mobile={isTouchDevice()}
                       owner={owner}
-                      defer={(action) => defer(() => run(action))}
+                      defer={defer}
                     />
                   )}
                 />
@@ -448,27 +415,6 @@ function TaskSavedViewRows(props: {
             <p class="px-3 py-2 text-xs text-ink-muted" role="status">
               Loading views…
             </p>
-          </Show>
-          <Show when={empty()}>
-            <div class="mx-2 my-1 flex flex-col items-start gap-2 rounded-lg border border-edge-muted p-3 group-data-closed/sidebar-section:invisible">
-              <div class="space-y-1">
-                <p class="text-xs font-medium text-ink">
-                  {t('viewMenus.savedViewsEmptyTitle')}
-                </p>
-                <p class="text-xs text-ink-muted">
-                  {t('viewMenus.savedViewsEmptyDescription')}
-                </p>
-              </div>
-              <Button
-                ref={attachCreateHotkeys}
-                size="sm"
-                variant="secondary"
-                onClick={() => run(startSavedView)}
-              >
-                <PlusIcon class="size-3.5" />
-                {t('viewMenus.createSavedView')}
-              </Button>
-            </div>
           </Show>
           <Show when={views().error()}>
             <Button
@@ -489,6 +435,10 @@ function TaskSavedViewRows(props: {
               Load more views
             </Button>
           </Show>
+          <SavedViewCreateButton
+            ref={attachCreateHotkeys}
+            onCreate={startSavedView}
+          />
         </>
       )}
     </Show>

@@ -55,10 +55,10 @@ Projects is enabled), and `Tag`. Task and Project open their existing composers;
 Tag opens the tag editor, with personal scope selected and team sharing available
 when the user has a team. The Projects list uses the same menu. The collapsible
 **Projects** section contains **My projects** (assigned to the viewer), **All
-projects**, and **Created by me**. Its plus opens the project composer. The
-**Saved project views** section below uses the same header plus, draft row, and
-empty-state creation action as task saved views. Both sections appear in the
-shared sidebar on desktop and in the **Show sidebar** hamburger drawer on touch.
+projects**, and **Created by me**. Its plus opens the project composer.
+Saved project views follow those built-in views inside the same section, with
+**Create view** last. Saved task views likewise follow the built-in task views.
+Both lists appear in the shared desktop sidebar and **Show sidebar** touch drawer.
 Projects has no separate dock/More destination, PillTabs, or saved-view selector.
 The Tasks dock button stays selected while browsing projects. The project list's
 floating **Project** action opens the initiative composer, not the Drive folder
@@ -387,14 +387,13 @@ automatically retried.
 
 Saved views are available on main Tasks, not inside Project or CRM task lists.
 
-- Desktop: use the **Saved views** sidebar section. Its icon-only **+** remains available when the section is empty, populated, collapsed, loading, or in an error state. Enter on the focused **+** starts a draft instead of opening the selected task.
-- Touch: the **Saved views** section is in the sidebar sheet opened by **Show sidebar**. Create views from changed filters, layout, grouping, or sort in the filter drawer.
-- The empty sidebar section shows **Your go-to views**, the muted description **Save your setup for next time.**, and a secondary **Create view** button with a leading plus icon in a rounded container with a subtle border, 12px padding, the surrounding background, and no shadow or illustration. It starts the same unsaved draft as desktop **+**; Configure the draft in Filters, then choose **Save view**.
-- Desktop **+** starts an unsaved view without person restrictions and with explicit open-status filters. It expands the section and adds a selected, italic **New view** row labeled **Draft** in the sidebar. Configure filters, then choose **Save view**; the name defaults to **New view** and can be edited before saving. A confirmed save replaces the draft with the named view; **Cancel** in the desktop toolbar or mobile filter drawer, another selection, or leaving Tasks removes the unsaved row. Canceling only the name dialog keeps the draft for later.
+- Desktop and touch: saved task views appear directly below the built-in task views, with **Create view** as the final item. Saved project views follow the built-in project views inside **Projects**, also ending with **Create view**. There are no separate saved-view section headings or empty-state cards.
+- **Create view** stays available while the list is empty, loading, or showing an error. Enter on the focused button starts a draft rather than opening a task.
+- **Create view** starts an unsaved task view without person restrictions and with explicit open-status filters. It adds a selected, italic **New view** row labeled **Draft**. Configure filters, then choose **Save view**; the name defaults to **New view** and can be edited before saving. A confirmed save replaces the draft with the named view; **Cancel** in the desktop toolbar or touch filter drawer, another selection, or leaving Tasks removes the unsaved row. Canceling only the name dialog keeps the draft for later.
 - Desktop **Save view** and draft **Cancel** are separate standalone buttons with a gap, not segments of a button group.
 - When filters, due date, layout, grouping, or sort differ from the built-in tab defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, relative due-date presets or custom calendar bounds, layout, grouping, and ordered sort directions, but excludes text search and scroll state. My Tasks adds **Me** to Assignee; Created by me adds it to Created by. Additional people in the same filter use OR matching.
 - Saved views use the normal Assignee and Created by filters, not a separate Scope control. **Me** stays relative; its tooltip says “Matches whoever opens this saved view.” A named person stays fixed. Removing Me removes that restriction.
-- Temporary filter, due-date, layout, grouping, or sort edits show a filled **Save changes** button and **Reset**. Opening or resetting a saved view restores all five, including due-date grouping and property sorts. Older definitions without a due-date filter remain unrestricted. Mobile still displays a list without replacing the stored desktop layout. Right-click a sidebar view or use its **…** button for **Edit**, **Duplicate**, **Copy link**, and confirmed **Delete view**. On desktop, the selected view's topbar shows a bookmark icon before its name and an unframed ghost overflow button immediately after it. On touch, the sidebar sheet's rows carry those menus; creation and draft cancellation appear in the filter drawer's overlay banner above the footer; Save changes and Reset sit on the footer's right, opposite Clear all, not below the tabs. Non-owners cannot rename, share, overwrite, or delete a shared view.
+- Temporary filter, due-date, layout, grouping, or sort edits show a filled **Save changes** button and **Reset**. Opening or resetting a saved view restores all five, including due-date grouping and property sorts. Older definitions without a due-date filter remain unrestricted. Mobile still displays a list without replacing the stored desktop layout. On desktop, right-click a sidebar view or use its hover/focus **…** button for **Rename**, **Duplicate**, **Copy link**, and confirmed **Delete**. On touch, long-press the saved-view row to open these options in a sheet without selecting the view. On desktop, the selected view's topbar shows a bookmark icon before its name and an unframed ghost overflow button immediately after it. On touch, the sidebar sheet's rows carry those menus; creation and draft cancellation appear in the filter drawer's overlay banner above the footer; Save changes and Reset sit on the footer's right, opposite Clear all, not below the tabs. Non-owners cannot rename, share, overwrite, or delete a shared view.
 - **Edit** opens the shared create/edit dialog with the saved name and team-sharing checkbox prefilled, without saving temporary filter, layout, grouping, or sort changes. Edit and delete dialog titles identify the saved view by name and wrap long names. Both create and edit modes use a 600px-wide dialog that stays within narrow viewports. **Duplicate** opens a private copy with a prefilled “(copy)” name; duplicating the selected view includes its temporary settings. If the original has unsupported or invalid settings, the dialog warns that the copy omits them and leaves the original unchanged. Sidebar actions on another view do not change the current selection unless a duplicate is saved.
 - The optional **Share with team** checkbox shares only the view definition. Its adjacent info icon shows the explanation on hover; click, tap, or keyboard activation opens it without changing the checkbox. Each teammate still sees only permitted items. Both the owner and viewer must currently belong to that team; leaving disables access and rejoining restores it.
 - Leaving the view or opening task detail discards temporary edits. The return breadcrumb retains the saved-view identity and reloads its saved filters, layout, grouping, and sort.
@@ -402,8 +401,6 @@ Saved views are available on main Tasks, not inside Project or CRM task lists.
 - Owners can choose **Remove & save** at the right edge of that banner. It removes only skipped settings from the stored definition, preserves supported filters, due date, layout, grouping, sort, and sharing, and leaves temporary edits unsaved. The banner disappears only after a confirmed save; failures retain it for retry, and revision conflicts offer **Reload saved view**.
 - A conflicting save retains the draft and offers **Reload saved view** or **Duplicate**. A network failure also retains the name and sharing inputs.
 - Copy links use the existing split search codec, for example `/app/component/tasks?s0.tasks.savedView=<uuid>`.
-
-![Saved views section with a header plus and labeled empty-state action](images/saved-view-create-controls.png)
 
 Verify creation without early persistence, explicit save/reset, copy versus owner-only editing, desktop/mobile metadata dialogs, and returning from task detail. Repeat with another teammate, a removed/rejoined owner, an unavailable tag, and a stale revision.
 
@@ -1253,14 +1250,16 @@ message instead; no project-empty illustration is shown.
 
 ### Saved project views
 
-Use the **+** in **Saved project views** or its empty-state **Create view** action
-to start a draft, configure project filters, sort, grouping, or layout, then choose
-**Save view**. Name the view and optionally share it with the current team. Views
-appear in that sidebar section on desktop and in the shared hamburger drawer on
-touch; there is no project header picker or built-in tab strip.
+Use **Create view**, after the built-in project views and any saved views in
+**Projects**, to start a draft. Configure project filters, sort, grouping, or
+layout, then choose **Save view**. Name the view and optionally share it with
+the current team. The same list appears in the desktop sidebar and shared
+hamburger drawer on touch, without a project header picker or built-in tab strip.
 Opening it reapplies its settings; search text and scroll are not saved. Assigned
 to me and Created by me remain relative to whoever opens the definition.
-Use a row's menu to Edit its name/sharing, Duplicate a private copy, or Delete.
+On touch, hold a saved row for its options sheet; desktop keeps the hover More
+menu. Rename changes its name/sharing, Duplicate creates a private copy, and
+Delete requires confirmation.
 Owners use Save changes for temporary setting edits; Reset restores the confirmed
 settings. Leaving the collection discards temporary edits without changing the
 saved definition. On phones Gantt definitions render as List without rewriting

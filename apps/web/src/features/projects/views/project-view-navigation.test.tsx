@@ -105,11 +105,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('selects project views and starts creation from the shared sidebar section', async () => {
-  const [open, setOpen] = createSignal(false);
-  render(() => <ProjectSavedViewsList open={open()} onOpenChange={setOpen} />);
-  fireEvent.click(screen.getByRole('button', { name: 'New saved view' }));
-  expect(open()).toBe(true);
+it('selects project views and starts creation from the final sidebar row', async () => {
+  render(() => <ProjectSavedViewsList />);
+  const create = screen.getByRole('button', { name: 'Create view' });
+  expect(screen.getAllByRole('button').at(-1)).toBe(create);
+  fireEvent.click(create);
   expect(views.start).toHaveBeenCalledOnce();
   expect(views.creating()).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'New view, draft' }));

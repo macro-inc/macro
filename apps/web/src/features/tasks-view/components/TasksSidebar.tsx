@@ -201,11 +201,14 @@ export function TasksSidebar() {
 
       <ViewSidebar.Content>
         <SidebarRoutineSuggestions surface="tasks" />
-        <TasksNavigation
-          items={BUILT_IN_TASK_TABS}
-          label={t('viewMenus.taskViews')}
-          onSelect={selectTab}
-        />
+        <div class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
+          <TasksNavigation
+            items={BUILT_IN_TASK_TABS}
+            label={t('viewMenus.taskViews')}
+            onSelect={selectTab}
+          />
+          <TaskSavedViewsList />
+        </div>
         <CollapsibleSection.Root
           open={isSidebarSectionOpen('projects')}
           onOpenChange={(open) => setSidebarSectionOpen('projects', open)}
@@ -228,20 +231,16 @@ export function TasksSidebar() {
             </CollapsibleSection.Action>
           </CollapsibleSection.Header>
           <CollapsibleSection.Content>
-            <TasksNavigation
-              items={PROJECT_TABS}
-              label={t('viewMenus.projectViews')}
-              onSelect={selectTab}
-            />
+            <div class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
+              <TasksNavigation
+                items={PROJECT_TABS}
+                label={t('viewMenus.projectViews')}
+                onSelect={selectTab}
+              />
+              <ProjectSavedViewsList />
+            </div>
           </CollapsibleSection.Content>
         </CollapsibleSection.Root>
-        <ProjectSavedViewsList
-          open={isSidebarSectionOpen('saved-project-views')}
-          onOpenChange={(open) =>
-            setSidebarSectionOpen('saved-project-views', open)
-          }
-        />
-        <TaskSavedViewsList />
 
         <TaskFavorites
           open={isSidebarSectionOpen('favorites')}

@@ -405,9 +405,9 @@ Projects are available without a feature flag.
 Projects live within Tasks. Open **Show sidebar** on touch to choose a built-in
 project view or a saved project view. The Tasks dock button remains selected;
 Projects has no separate dock/More entry, header tabs, or saved-view picker.
-Create saved project views with the shared sidebar section's **+** or empty-state
-action. Collection headers keep navigation on the left and search/filter actions
-on the right.
+Saved project views follow the built-in project views; **Create view** is the
+last item. Hold a saved-view row on touch for its options sheet; desktop keeps
+the hover More menu. Collection headers keep navigation left and search/filters right.
 Project definitions use the `sN.projects.savedView` search parameter; opening a
 project pushes detail and Back returns to that collection.
 Existing Files folders stay separate from task projects.

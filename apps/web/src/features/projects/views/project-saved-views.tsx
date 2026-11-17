@@ -1,12 +1,13 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, openDialog } from '@ui';
 import { ok } from 'neverthrow';
-import { For, getOwner, type Owner, Show } from 'solid-js';
+import { For, getOwner, Show } from 'solid-js';
 import { v4 as uuid } from 'uuid';
+import { SavedViewCreateButton } from '../../saved-views/components/saved-view-create-button';
 import {
   SavedViewList,
   SavedViewListRow,
@@ -176,20 +177,11 @@ function createProjectViewDialogs(views: ProjectViews, owner = getOwner()) {
   return { create, edit, remove };
 }
 
-export function ProjectSavedViewRows(props: {
-  onAction?: (action: () => void) => void;
-  dialogOwner?: Owner | null;
-  mobile?: boolean;
-}) {
+export function ProjectSavedViewsList() {
   const views = useProjectSavedViews();
   if (!views) return null;
-  const dialogs = createProjectViewDialogs(
-    views,
-    props.dialogOwner ?? getOwner()
-  );
+  const dialogs = createProjectViewDialogs(views);
   const [attachCreateHotkeys] = useHotkeyDOMScope('create-project-view', true);
-  const run = (action: () => void) =>
-    props.onAction ? props.onAction(action) : action();
   const items = () => {
     const records = views.list.items();
     const selected = views.draft.view();
@@ -204,13 +196,9 @@ export function ProjectSavedViewRows(props: {
   };
   return (
     <>
-      <SavedViewList.Items
-        label={t('viewMenus.savedProjectViews')}
-        mobile={props.mobile}
-      >
+      <SavedViewList.Items label={t('viewMenus.savedProjectViews')}>
         <Show when={views.creating()}>
           <SavedViewList.Draft
-            mobile={props.mobile}
             onSelect={() => {
               // The draft is already active; let the sidebar close without cancelling it.
             }}
@@ -220,36 +208,19 @@ export function ProjectSavedViewRows(props: {
           {(record) => (
             <SavedViewListRow
               view={record}
-              mobile={props.mobile}
+              touchActions={isTouchDevice()}
               selected={views.active() && views.selectedId() === record.id}
               scopeKey={views.viewerId()}
-              onSelect={() => run(() => views.select(record.id))}
+              onSelect={() => views.select(record.id)}
               menu={(defer) => (
                 <SavedViewMenuItems
+                  mobile={isTouchDevice()}
                   editLabel={t('common.rename')}
                   deleteLabel={t('common.delete')}
                   owned={record.ownerId === views.viewerId()}
-                  onEdit={() =>
-                    defer(() =>
-                      run(() => {
-                        dialogs.edit(record);
-                      })
-                    )
-                  }
-                  onDuplicate={() =>
-                    defer(() =>
-                      run(() => {
-                        dialogs.create(record);
-                      })
-                    )
-                  }
-                  onDelete={() =>
-                    defer(() =>
-                      run(() => {
-                        dialogs.remove(record);
-                      })
-                    )
-                  }
+                  onEdit={() => defer(() => dialogs.edit(record))}
+                  onDuplicate={() => defer(() => dialogs.create(record))}
+                  onDelete={() => defer(() => dialogs.remove(record))}
                 />
               )}
             />
@@ -260,34 +231,6 @@ export function ProjectSavedViewRows(props: {
         <p role="status" class="px-3 py-2 text-xs text-ink-muted">
           {t('viewMenus.loadingViews')}
         </p>
-      </Show>
-      <Show
-        when={
-          !props.mobile &&
-          !views.list.loading() &&
-          items()?.length === 0 &&
-          !views.creating()
-        }
-      >
-        <div class="mx-2 my-1 flex flex-col items-start gap-2 rounded-lg border border-edge-muted p-3">
-          <div class="space-y-1">
-            <p class="text-xs font-medium text-ink">
-              {t('viewMenus.savedViewsEmptyTitle')}
-            </p>
-            <p class="text-xs text-ink-muted">
-              {t('viewMenus.savedViewsEmptyDescription')}
-            </p>
-          </div>
-          <Button
-            ref={attachCreateHotkeys}
-            variant="secondary"
-            size="sm"
-            onClick={() => run(views.start)}
-          >
-            <PlusIcon class="size-3.5" />
-            {t('viewMenus.createSavedView')}
-          </Button>
-        </div>
       </Show>
       <Show when={views.list.error()}>
         <Button
@@ -308,34 +251,8 @@ export function ProjectSavedViewRows(props: {
           {t('viewMenus.loadMoreViews')}
         </Button>
       </Show>
+      <SavedViewCreateButton ref={attachCreateHotkeys} onCreate={views.start} />
     </>
-  );
-}
-
-/** Project views use the same sidebar creation flow as task views. */
-export function ProjectSavedViewsList(props: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const views = useProjectSavedViews();
-  const [attachCreateHotkeys] = useHotkeyDOMScope('create-project-view', true);
-  const create = () => {
-    props.onOpenChange(true);
-    views?.start();
-  };
-  return (
-    <Show when={views}>
-      <SavedViewList.Root open={props.open} onOpenChange={props.onOpenChange}>
-        <SavedViewList.Header
-          label={t('viewMenus.savedProjectViews')}
-          onCreate={create}
-          createButtonRef={attachCreateHotkeys}
-        />
-        <SavedViewList.Content>
-          <ProjectSavedViewRows />
-        </SavedViewList.Content>
-      </SavedViewList.Root>
-    </Show>
   );
 }
 
