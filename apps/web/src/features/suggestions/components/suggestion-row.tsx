@@ -41,7 +41,45 @@ export type ToDoRowProps = RowState & {
   onMarkDone(): void;
 };
 
-/** The row's text as one press target: its title over one quiet line. */
+/**
+ * One line of text, cut where the row ends; pointing at a cut line shows all
+ * of it. The child is the line itself and does the cutting (`truncate`).
+ */
+function Cut(props: {
+  /** The whole line, for when it is cut. */
+  text: string;
+  children: JSX.Element;
+}) {
+  const [cut, setCut] = createSignal(false);
+
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger
+        as="span"
+        class="flex min-w-0"
+        onPointerEnter={(event: PointerEvent & { currentTarget: Element }) => {
+          const line = event.currentTarget.firstElementChild;
+          setCut(!!line && line.scrollWidth > line.clientWidth);
+        }}
+      >
+        {props.children}
+      </Tooltip.Trigger>
+      {/* Measured as the pointer arrives, before the tooltip's delay ends. */}
+      <Show when={cut()}>
+        <Tooltip.Portal>
+          <Tooltip.Content>
+            <span class="block max-w-80 text-left">{props.text}</span>
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Show>
+    </Tooltip.Root>
+  );
+}
+
+/**
+ * The row's text as one press target: its title over one quiet line, each
+ * kept to one line.
+ */
 function RowText(props: {
   titleId: string;
   title: string;
@@ -52,16 +90,18 @@ function RowText(props: {
 }) {
   const text = () => (
     <>
-      <Item.Title
-        id={props.titleId}
-        class={cn(
-          'font-medium',
-          props.tone === 'done' && 'text-ink-muted',
-          props.tone === 'dismissed' && 'text-ink-placeholder'
-        )}
-      >
-        {props.title}
-      </Item.Title>
+      <Cut text={props.title}>
+        <Item.Title
+          id={props.titleId}
+          class={cn(
+            'truncate font-medium',
+            props.tone === 'done' && 'text-ink-muted',
+            props.tone === 'dismissed' && 'text-ink-placeholder'
+          )}
+        >
+          {props.title}
+        </Item.Title>
+      </Cut>
       {props.children}
     </>
   );
@@ -159,44 +199,24 @@ function sendsText(suggestion: Suggestion): string | undefined {
   return suggestion.sends;
 }
 
-/**
- * One line of a row that is cut where the row ends; pointing at a cut line
- * shows all of it.
- */
+/** A row's second line: smaller and dimmer than its title, on one line. */
 function RowLine(props: {
   /** The whole line, for when it is cut. */
   text: string;
   class?: string;
   children: JSX.Element;
 }) {
-  const [cut, setCut] = createSignal(false);
-
   return (
-    <Tooltip.Root>
-      <Tooltip.Trigger as="span" class="flex min-w-0">
-        <Item.Description
-          class={cn(
-            'truncate text-[13px] leading-[18px] text-ink-extra-muted',
-            props.class
-          )}
-          onPointerEnter={(event) =>
-            setCut(
-              event.currentTarget.scrollWidth > event.currentTarget.clientWidth
-            )
-          }
-        >
-          {props.children}
-        </Item.Description>
-      </Tooltip.Trigger>
-      {/* Measured as the pointer arrives, before the tooltip's delay ends. */}
-      <Show when={cut()}>
-        <Tooltip.Portal>
-          <Tooltip.Content>
-            <span class="block max-w-80 text-left">{props.text}</span>
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Show>
-    </Tooltip.Root>
+    <Cut text={props.text}>
+      <Item.Description
+        class={cn(
+          'truncate text-[13px] leading-[18px] text-ink-extra-muted',
+          props.class
+        )}
+      >
+        {props.children}
+      </Item.Description>
+    </Cut>
   );
 }
 

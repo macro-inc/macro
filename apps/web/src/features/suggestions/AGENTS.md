@@ -99,9 +99,9 @@ only, behind `enable-suggestions`.
   (`ForYouRefresh`).
 - The cards are `Card variant="filled" depth={3}` and the rows `Item
   size="sm"` with `border-0`, a medium `text-sm` title and one dimmer 13px line
-  (`text-ink-extra-muted`),
-  cut where the row ends so every row is the same height; pointing at a cut
-  line shows all of it (`RowLine`).
+  (`text-ink-extra-muted`). Both stay on one line, cut where the row ends,
+  so every row is the same height; pointing at a cut line shows all of it
+  (`Cut`).
   Don't give them local surfaces, borders, counts or descriptions beside
   the card's title. `for-you.browser.e2e.ts` holds the row's height and type
   sizes.

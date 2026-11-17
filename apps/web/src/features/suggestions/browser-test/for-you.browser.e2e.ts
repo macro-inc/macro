@@ -95,6 +95,9 @@ test('a row is two lines: a medium title over a smaller line', async ({
     'Posts the weekly status summary in #ops · The team posts one every Friday; this week has none.'
   );
   const title = reply.locator('[data-slot="item-title"]');
+  // A title never takes a second line.
+  await expect(title).toHaveCSS('white-space', 'nowrap');
+  await expect(title).toHaveCSS('text-overflow', 'ellipsis');
   await expect(title).toHaveCSS('font-size', '14px');
   await expect(title).toHaveCSS('font-weight', '500');
   await expect(reply.locator('[data-slot="item-description"]')).toHaveCSS(
