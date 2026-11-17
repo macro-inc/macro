@@ -191,6 +191,25 @@ the service supervisor restarts it and Kafka redelivers the event. Invalid
 entity IDs, invalid broker contracts, empty Kafka payloads, and undecodable
 Kafka messages are traced and skipped so they do not block a partition.
 
+## Live event stream and resuming
+
+`GET /webhook/events/stream` is ephemeral: each process consumes every event
+from the moment it starts and fans it out to its open streams. Each SSE event's
+`id` is the broker event id (a UUIDv7). The process also keeps the last two
+minutes of events, up to 4,096 (`StreamFeed`). A client that opens the stream
+with the standard SSE `Last-Event-ID` header first receives the retained events
+after it, through the same filters and access checks, then live events, with no
+event twice and none skipped. An id this process retains resumes exactly after
+that event; any other UUIDv7 (an event another replica delivered, or one minted
+from a timestamp) resumes at the time it encodes. Events older than the
+retention, or published while the process was not consuming, are still missed.
+macrod sends its last seen id on every reconnect, and a floor minted when it
+started on its first open, so a session requested before its stream covered a
+newly bound agent still reaches it. That floor uses macrod's clock against the
+service's, so it assumes the two agree to within the seconds between macrod
+starting and the first request. The header is the standard SSE one and is not
+listed in the OpenAPI spec.
+
 ## Queue contract, deduplication, and ordering
 
 The versioned SQS message contains a webhook ID and a normalized event. The

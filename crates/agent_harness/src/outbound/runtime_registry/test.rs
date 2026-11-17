@@ -371,6 +371,34 @@ async fn a_close_waits_for_its_own_connected_write() {
     );
 }
 
+/// Recording a connection can bind agents to it, so the runtime is told to
+/// re-read them once presence has the dial.
+#[tokio::test]
+async fn a_recorded_dial_tells_its_runtime_that_its_agents_changed() {
+    let presence = Arc::new(RecordingPresence::default());
+    let runtime = ContainerMock::default();
+    let listed = ListedConnection {
+        id: RuntimeConnectionId::generate(),
+        connection: RuntimeConnection::connect(runtime.clone()),
+    };
+
+    record_connected(
+        Arc::clone(&presence) as Arc<dyn HarnessPresence>,
+        HarnessId::TEST_A,
+        listed.clone(),
+    )
+    .await;
+
+    assert_eq!(
+        *presence.events.lock().unwrap(),
+        [PresenceEvent::Connected(listed.id)]
+    );
+    assert!(matches!(
+        runtime.sent().as_slice(),
+        [ToRuntimeMessage::AgentsChanged]
+    ));
+}
+
 #[tokio::test]
 async fn renewal_lists_the_connections_this_process_holds() {
     let presence = Arc::new(RecordingPresence::default());

@@ -3,9 +3,10 @@
 //!
 //! The body is Server-Sent Events, decoded by `eventsource-stream`. Each
 //! event's `data` is the same broker envelope persisted webhooks deliver,
-//! decoded straight into the caller's envelope type. Delivery is
-//! best-effort: a dropped connection misses events published while it was
-//! down.
+//! decoded straight into the caller's envelope type, and its `id` is the
+//! cursor: opening with the last id seen (`Last-Event-ID`) first replays the
+//! events the service still retains after it, so a reconnect loses nothing
+//! published in between.
 
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
@@ -132,25 +133,29 @@ impl EventStreamClient {
     }
 
     /// Open `GET /webhook/events/stream` and start reading envelopes of
-    /// type `E`.
+    /// type `E`, resuming after the event id `after` when there is one.
     #[tracing::instrument(skip(self, filters), err)]
     pub async fn connect<E: DeserializeOwned>(
         &self,
         filters: &[WebhookFilter],
+        after: Option<&str>,
     ) -> rootcause::Result<EventStream<E>> {
         let filters =
             serde_json::to_string(filters).context("could not encode the stream filters")?;
         let scope = self.scope().await?;
+        let mut request = self
+            .http
+            .get(format!("{}/webhook/events/stream", self.base))
+            .header(reqwest::header::ACCEPT, "text/event-stream")
+            .query(&[
+                ("scope", scope.to_string().as_str()),
+                ("filters", filters.as_str()),
+            ]);
+        if let Some(after) = after {
+            request = request.header(LAST_EVENT_ID_HEADER, after);
+        }
         let response = self
-            .credentialed(
-                self.http
-                    .get(format!("{}/webhook/events/stream", self.base))
-                    .header(reqwest::header::ACCEPT, "text/event-stream")
-                    .query(&[
-                        ("scope", scope.to_string().as_str()),
-                        ("filters", filters.as_str()),
-                    ]),
-            )
+            .credentialed(request)
             .send()
             .await
             .context("could not reach the service to open the event stream")?;
@@ -161,9 +166,26 @@ impl EventStreamClient {
         }
         Ok(EventStream {
             events: Box::pin(response.bytes_stream().eventsource()),
+            last_event_id: None,
             _envelope: PhantomData,
         })
     }
+}
+
+/// The SSE header a stream resumes after.
+const LAST_EVENT_ID_HEADER: &str = "Last-Event-ID";
+
+/// A cursor at `time`: the first UUIDv7 of that millisecond, so a stream
+/// resumed with it replays every retained event from then on.
+pub fn cursor_at(time: std::time::SystemTime) -> String {
+    let millis = time
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| {
+            u64::try_from(since.as_millis()).unwrap_or(u64::MAX)
+        });
+    uuid::Builder::from_unix_timestamp_millis(millis, &[0; 10])
+        .into_uuid()
+        .to_string()
 }
 
 type SseEvents =
@@ -172,10 +194,17 @@ type SseEvents =
 /// An open SSE response, yielding one decoded envelope at a time.
 pub struct EventStream<E> {
     events: SseEvents,
+    last_event_id: Option<String>,
     _envelope: PhantomData<E>,
 }
 
 impl<E: DeserializeOwned> EventStream<E> {
+    /// The id of the last event this stream delivered or skipped: where the
+    /// next stream resumes.
+    pub fn last_event_id(&self) -> Option<&str> {
+        self.last_event_id.as_deref()
+    }
+
     /// The next envelope, or `None` when the server closes.
     ///
     /// Keep-alive comments never surface as events; a `data` payload that
@@ -186,6 +215,9 @@ impl<E: DeserializeOwned> EventStream<E> {
                 return Ok(None);
             };
             let event = event.context("could not read the event stream")?;
+            if !event.id.is_empty() {
+                self.last_event_id = Some(event.id.clone());
+            }
             match serde_json::from_str(&event.data) {
                 Ok(value) => return Ok(Some(value)),
                 Err(error) => {

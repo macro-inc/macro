@@ -4,15 +4,17 @@
 //! delivers every broker event that matches the caller's filters and passes
 //! the caller's entity access. Each SSE event's `id` is the UUIDv7 broker
 //! event id and its `event` is the event name; the `data` is the same broker
-//! envelope persisted webhooks deliver. Delivery is best-effort: disconnected
-//! or slow clients can miss events and must resync out of band when needed.
+//! envelope persisted webhooks deliver. A client that reconnects with the
+//! standard SSE `Last-Event-ID` header first receives the events this process
+//! still retains after that id (see [`StreamCursor`]); events older than the
+//! retention are missed and must be resynced out of band when needed.
 
 use crate::domain::models::{WebhookFilters, WebhookScope};
-use crate::domain::stream::{WebhookEventStreamService, WebhookStreamError};
+use crate::domain::stream::{StreamCursor, WebhookEventStreamService, WebhookStreamError};
 use axum::{
     Json, Router,
     extract::{FromRef, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{
         IntoResponse, Response,
         sse::{Event, KeepAlive, Sse},
@@ -98,6 +100,22 @@ fn parse_filters(filters: Option<String>) -> Result<WebhookFilters, WebhookStrea
         .map_err(|error| bad_request(format!("invalid `filters` JSON: {error}")))
 }
 
+/// The cursor a reconnecting client resumes from, sent the standard SSE way.
+fn resume_cursor(headers: &HeaderMap) -> Result<Option<StreamCursor>, WebhookStreamHandlerError> {
+    let Some(value) = headers.get(LAST_EVENT_ID_HEADER) else {
+        return Ok(None);
+    };
+    let value = value.to_str().map_err(|_| {
+        WebhookStreamHandlerError(WebhookStreamError::BadRequest(
+            "`Last-Event-ID` must be an event id".to_string(),
+        ))
+    })?;
+    Ok(Some(StreamCursor::parse(value)?))
+}
+
+/// The SSE header a reconnecting client names its last seen event with.
+const LAST_EVENT_ID_HEADER: &str = "last-event-id";
+
 /// Stream matching broker events to the caller over Server-Sent Events.
 #[utoipa::path(
     get,
@@ -114,12 +132,14 @@ fn parse_filters(filters: Option<String>) -> Result<WebhookFilters, WebhookStrea
 pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizationService>(
     State(state): State<WebhookStreamRouterState<St, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
+    headers: HeaderMap,
     Query(query): Query<StreamEventsQuery>,
 ) -> Result<
     Sse<impl Stream<Item = Result<Event, Infallible>> + Send + 'static>,
     WebhookStreamHandlerError,
 > {
     let filters = parse_filters(query.filters)?;
+    let after = resume_cursor(&headers)?;
 
     let events = state
         .stream_service
@@ -127,6 +147,7 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
             authorization.authorization.user.macro_user_id,
             query.scope,
             filters,
+            after,
         )
         .await?;
 

@@ -7,7 +7,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use tokio::sync::watch;
+use tokio::sync::{Notify, watch};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 
@@ -16,7 +16,7 @@ use crate::dispatch::Dispatcher;
 use crate::harness::{HandoffSender, Handoffs};
 use crate::outbound::acp_process::RunningAgent;
 use crate::outbound::agent_session::HarnessApi;
-use crate::outbound::stream::EventStreamClient;
+use crate::outbound::stream::{EventStreamClient, cursor_at};
 use crate::runtime::Runtime;
 use crate::trigger::{TriggerEvent, handle_event, trigger_filters};
 use crate::turns::ActiveTurns;
@@ -24,10 +24,12 @@ use crate::turns::ActiveTurns;
 #[cfg(test)]
 mod test;
 
-/// How often the bound-agent set is re-read so a newly bound agent starts
-/// triggering without a restart. Short on purpose: a mention sent before the
-/// stream covers the new agent is dropped for good, so this interval is the
-/// worst-case window where a brand-new agent is deaf.
+/// How often the bound-agent set is re-read without being told it changed.
+/// The service says when it binds an agent on connect
+/// (`ToRuntimeMessage::AgentsChanged`); this catches every other binding and
+/// services too old to say. A trigger sent before the stream covers a new
+/// agent is replayed from the cursor once it does, so this bounds how long
+/// such a trigger waits, not whether it arrives.
 const BOUND_AGENT_REFRESH: Duration = Duration::from_secs(10);
 
 /// How often a held runtime connection is compared with what the service says.
@@ -105,6 +107,10 @@ impl Daemon {
                 &config.workspace.path,
             ))
         });
+        // Taken before the runtime dials: connecting can bind an agent and
+        // let someone ask it for a session, and the stream must replay that
+        // request however late it opens.
+        let mut cursor = cursor_at(std::time::SystemTime::now());
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
@@ -117,6 +123,7 @@ impl Daemon {
             computer,
         );
         let runtime_connected = runtime.connection_state();
+        let agents_changed = runtime.agents_changed();
         let presence_watch = AbortOnDropHandle::new(tokio::spawn(watch_presence(
             EventStreamClient::new(&config.macro_api, &credentials),
             runtime_connected.clone(),
@@ -146,7 +153,8 @@ impl Daemon {
                 if shutdown.is_cancelled() {
                     return Ok(());
                 }
-                match serve_once(&client, &executor, &shutdown).await {
+                match serve_once(&client, &executor, &shutdown, &agents_changed, &mut cursor).await
+                {
                     ServeOutcome::Stopped => return Ok(()),
                     ServeOutcome::Idle => {
                         failures = 0;
@@ -322,25 +330,35 @@ enum ServeOutcome {
 }
 
 /// Open the stream (or wait for bound agents) until it ends or is cancelled.
+///
+/// The stream resumes after `cursor`, which advances past every event it
+/// delivers, so reopening it for a changed agent set or after an error
+/// replays what was published in between.
 async fn serve_once<Executor: crate::trigger::WorkExecutor>(
     client: &EventStreamClient,
     executor: &Executor,
     cancel: &CancellationToken,
+    agents_changed: &Notify,
+    cursor: &mut String,
 ) -> ServeOutcome {
     let bots = match client.bound_bot_ids().await {
         Ok(bots) => bots,
         Err(error) => return ServeOutcome::Ended(error),
     };
     if bots.is_empty() {
-        tracing::info!("no agents are bound; waiting before opening the event stream");
+        tracing::info!("no agents are bound; waiting for one before opening the event stream");
         tokio::select! {
             () = cancel.cancelled() => return ServeOutcome::Stopped,
+            () = agents_changed.notified() => return ServeOutcome::Idle,
             () = tokio::time::sleep(BOUND_AGENT_REFRESH) => return ServeOutcome::Idle,
         }
     }
 
     let filters = trigger_filters(bots.iter());
-    let mut stream = match client.connect::<TriggerEvent>(&filters).await {
+    let mut stream = match client
+        .connect::<TriggerEvent>(&filters, Some(cursor.as_str()))
+        .await
+    {
         Ok(stream) => stream,
         Err(error) => return ServeOutcome::Ended(error),
     };
@@ -352,17 +370,20 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
     loop {
         tokio::select! {
             () = cancel.cancelled() => return ServeOutcome::Stopped,
+            () = agents_changed.notified() => {
+                if let Some(outcome) = bound_agents_changed(client, &bots).await {
+                    return outcome;
+                }
+            }
             () = tokio::time::sleep(BOUND_AGENT_REFRESH) => {
-                match client.bound_bot_ids().await {
-                    Ok(latest) if latest == bots => {}
-                    Ok(_) => {
-                        tracing::info!("bound-agent set changed; reconnecting the event stream");
-                        return ServeOutcome::Idle;
-                    }
-                    Err(error) => return ServeOutcome::Ended(error),
+                if let Some(outcome) = bound_agents_changed(client, &bots).await {
+                    return outcome;
                 }
             }
             next = stream.next_event() => {
+                if let Some(id) = stream.last_event_id() {
+                    id.clone_into(cursor);
+                }
                 match next {
                     Ok(Some(event)) => {
                         let _ = handle_event(event, executor).await;
@@ -376,5 +397,18 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
                 }
             }
         }
+    }
+}
+
+/// Re-read the bound agents: `Some` ends the stream when they are no longer
+/// `bots` (or cannot be read), `None` keeps it.
+async fn bound_agents_changed(client: &EventStreamClient, bots: &[String]) -> Option<ServeOutcome> {
+    match client.bound_bot_ids().await {
+        Ok(latest) if latest == bots => None,
+        Ok(_) => {
+            tracing::info!("bound-agent set changed; reconnecting the event stream");
+            Some(ServeOutcome::Idle)
+        }
+        Err(error) => Some(ServeOutcome::Ended(error)),
     }
 }

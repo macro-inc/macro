@@ -174,10 +174,13 @@ where
                 "a redialed runtime replaced this harness's connection"
             );
         }
-        let connected_write = self
-            .presence
-            .as_ref()
-            .map(|presence| tokio::spawn(Arc::clone(presence).connected(harness, listed.id)));
+        let connected_write = self.presence.as_ref().map(|presence| {
+            tokio::spawn(record_connected(
+                Arc::clone(presence),
+                harness,
+                listed.clone(),
+            ))
+        });
         if let Some(live_sessions) = &self.live_sessions {
             tokio::spawn(report_live_sessions(
                 harness,
@@ -253,6 +256,25 @@ where
                 "dropped this harness's closed runtime connection"
             );
         }
+    }
+}
+
+/// Record a dial with presence, then tell the runtime to re-read its agents.
+///
+/// Recording a connection can bind agents to it: a Macro computer gets its
+/// first agent on its first connect. Told now rather than at its next poll,
+/// the runtime covers that agent at once, so a session requested the moment
+/// the computer is ready reaches it.
+async fn record_connected<Sender>(
+    presence: Arc<dyn HarnessPresence>,
+    harness: HarnessId,
+    listed: ListedConnection<Sender>,
+) where
+    Sender: TransportSender<ToRuntimeMessage>,
+{
+    presence.connected(harness, listed.id).await;
+    if let Err(error) = listed.connection.agents_changed().await {
+        tracing::debug!(%harness, error = %error, "could not tell the runtime its agents changed");
     }
 }
 

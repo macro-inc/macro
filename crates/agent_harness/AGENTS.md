@@ -187,6 +187,10 @@ the lease. To debug a harness in Datadog, search `@harness:<id>` for
 `@telemetry_event:(harness_runtime_connected OR harness_runtime_disconnected OR
 harness_runtime_lease_restored)`: each carries `connection` and `replica`, and a
 disconnect's `other_live_connections` above 0 is a stale close that changed nothing.
+Once presence has recorded a dial, the registry sends the runtime
+`ToRuntimeMessage::AgentsChanged`: recording can bind agents (a Macro computer
+gets its first agent on its first connect), and macrod re-reads its agents and
+reopens its trigger stream at once instead of at its next poll.
 
 Only directly authenticated users with edit access may answer ACP permissions or
 elicitations (`agent_session::ControlEvent::authorized`). Agent runs may deny or

@@ -209,9 +209,7 @@ async fn serve_gateway(listener: TcpListener, plane: Arc<ControlPlane>, ready: A
             // agents, found none, and only then does its runtime connect.
             plane.agents_read.notified().await;
             let mut runtime = tokio_tungstenite::accept_async(socket).await.unwrap();
-            plane
-                .bound
-                .store(true, std::sync::atomic::Ordering::SeqCst);
+            plane.bound.store(true, std::sync::atomic::Ordering::SeqCst);
             use futures::SinkExt as _;
             // Raw on the wire, so it reaches a macrod of any version.
             runtime
@@ -229,8 +227,12 @@ async fn serve_gateway(listener: TcpListener, plane: Arc<ControlPlane>, ready: A
                 if request.line.starts_with("POST /agent-sessions ") {
                     let _ = plane.creates.send(request.body);
                 }
-                answer_json(&mut socket, "503 Service Unavailable", "{\"message\":\"test\"}")
-                    .await;
+                answer_json(
+                    &mut socket,
+                    "503 Service Unavailable",
+                    "{\"message\":\"test\"}",
+                )
+                .await;
             });
         }
     }
@@ -263,7 +265,11 @@ async fn a_session_requested_the_instant_the_computer_is_ready_reaches_macrod() 
     });
     let ready = Arc::new(Notify::new());
     tokio::spawn(serve_storage(storage, Arc::clone(&plane)));
-    tokio::spawn(serve_gateway(gateway, Arc::clone(&plane), Arc::clone(&ready)));
+    tokio::spawn(serve_gateway(
+        gateway,
+        Arc::clone(&plane),
+        Arc::clone(&ready),
+    ));
 
     let daemon = Daemon::start(config, credentials, Path::new("macrod.toml"), None)
         .await
@@ -273,17 +279,19 @@ async fn a_session_requested_the_instant_the_computer_is_ready_reaches_macrod() 
         .await
         .expect("the runtime connects");
     let session = AgentSessionId::new_from_uuid(Uuid::now_v7());
-    plane.publish(&macro_event_broker::Event::new(AgentTriggerTopicEvent::New(
-        NewAgentSessionEvent::Requested(AgentSessionRequestedEvent {
-            repo_url: None,
-            bot_id: AGENT,
-            session_id: session,
-            owner: REQUESTER.to_owned(),
-            origin: trigger_context::TriggerOrigin::Unknown,
-            context: None,
-            runtime_user: Some("macro|buyer@example.com".to_owned()),
-        }),
-    )));
+    plane.publish(&macro_event_broker::Event::new(
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::Requested(
+            AgentSessionRequestedEvent {
+                repo_url: None,
+                bot_id: AGENT,
+                session_id: session,
+                owner: REQUESTER.to_owned(),
+                origin: trigger_context::TriggerOrigin::Unknown,
+                context: None,
+                runtime_user: Some("macro|buyer@example.com".to_owned()),
+            },
+        )),
+    ));
 
     // Well inside the 10 s bound-agent poll: the requester is watching.
     let body = tokio::time::timeout(Duration::from_secs(5), created.recv())
@@ -292,7 +300,7 @@ async fn a_session_requested_the_instant_the_computer_is_ready_reaches_macrod() 
         .unwrap();
     let create: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(create["id"], session.to_string());
-    assert_eq!(create["bot_id"], AGENT.to_string());
+    assert_eq!(create["botId"], AGENT.as_uuid().to_string());
 
     daemon.stop().await;
 }
