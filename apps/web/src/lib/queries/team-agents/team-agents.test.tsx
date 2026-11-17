@@ -85,6 +85,12 @@ describe('teamAgentsPollInterval', () => {
     expect(teamAgentsPollInterval([grace])).toBe(false);
     expect(teamAgentsPollInterval(undefined)).toBe(false);
   });
+
+  it('keeps polling until a starting agent reports itself online', () => {
+    expect(
+      teamAgentsPollInterval([grace, { ...ada, status: 'starting' }])
+    ).toBe(3000);
+  });
 });
 
 describe('team agent mutations', () => {

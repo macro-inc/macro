@@ -2399,7 +2399,7 @@ export type TeamAgent = {
 /**
  * Where an agent teammate is, from its computer.
  */
-export type TeamAgentStatus = 'provisioning' | 'running' | 'paused' | 'failed' | 'released';
+export type TeamAgentStatus = 'provisioning' | 'starting' | 'running' | 'paused' | 'failed' | 'released';
 
 /**
  * A team's agents.
@@ -5180,6 +5180,28 @@ export type CreateTeamAgentResponses = {
 };
 
 export type CreateTeamAgentResponse = CreateTeamAgentResponses[keyof CreateTeamAgentResponses];
+
+export type ReportTeamAgentOnlineData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team_agents/me/online';
+};
+
+export type ReportTeamAgentOnlineErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ReportTeamAgentOnlineError = ReportTeamAgentOnlineErrors[keyof ReportTeamAgentOnlineErrors];
+
+export type ReportTeamAgentOnlineResponses = {
+    204: void;
+};
+
+export type ReportTeamAgentOnlineResponse = ReportTeamAgentOnlineResponses[keyof ReportTeamAgentOnlineResponses];
 
 export type DeleteTeamAgentData = {
     body?: never;
