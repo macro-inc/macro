@@ -215,4 +215,52 @@ describe('profile picture refresh', () => {
     await live;
     expect(await getProfilePictureUrl(id)).toBe('https://x/file/new');
   });
+
+  it('keeps a live update when an older first-load fetch answers in between', async () => {
+    const id = 'macro|race-queue@example.com';
+    let releaseQueue!: () => void;
+    const queueGate = new Promise<void>((resolve) => (releaseQueue = resolve));
+    let queueSent!: () => void;
+    const queueWasSent = new Promise<void>((resolve) => (queueSent = resolve));
+    let releaseLive!: () => void;
+    const liveGate = new Promise<void>((resolve) => (releaseLive = resolve));
+    let liveSent!: () => void;
+    const liveWasSent = new Promise<void>((resolve) => (liveSent = resolve));
+    let calls = 0;
+    postProfilePictures.mockImplementation(
+      async (args: { user_id_list: string[] }) => {
+        calls += 1;
+        if (calls === 1) {
+          queueSent();
+          await queueGate;
+          return picturesFor('https://x/file/stale')(args);
+        }
+        liveSent();
+        await liveGate;
+        return picturesFor('https://x/file/new')(args);
+      }
+    );
+
+    // First mount queues a fetch; the live refetch is sent while it's in
+    // flight, and the first-load response answers before the live one.
+    const loaded = getProfilePictureUrl(id);
+    await queueWasSent;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const live = refreshProfilePicture(id);
+    await liveWasSent;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    releaseQueue();
+    await loaded;
+    releaseLive();
+    await live;
+    expect(await getProfilePictureUrl(id)).toBe('https://x/file/new');
+  });
+
+  it('retries a first load that failed instead of waiting forever', async () => {
+    const id = 'macro|first-load-fails@example.com';
+    postProfilePictures.mockImplementation(() =>
+      Promise.resolve(err(new Error('down')))
+    );
+    expect(await getProfilePictureUrl(id)).toBeUndefined();
+  });
 });
