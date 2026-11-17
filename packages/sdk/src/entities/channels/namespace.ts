@@ -102,8 +102,8 @@ export class ChannelNamespace {
     return iterate('channels.list', opts, {}, () => this.listed());
   }
 
-  private async *listed(): AsyncGenerator<Channel> {
-    for await (const record of this.records()) {
+  private async *listed(pageSize = CHANNEL_PAGE_SIZE): AsyncGenerator<Channel> {
+    for await (const record of this.records(pageSize)) {
       yield Channel.fromListing(this.client, record);
     }
   }
@@ -124,7 +124,7 @@ export class ChannelNamespace {
         'channels.search',
         opts,
         { searchOn: true, pageSize: true },
-        () => this.listed(),
+        () => this.listed(opts?.pageSize),
       );
     return Channel.search(this.client, query, {
       ...opts,
@@ -132,11 +132,11 @@ export class ChannelNamespace {
     });
   }
 
-  private records(): AsyncGenerator<ApiChannelWithLatest> {
+  private records(pageSize: number): AsyncGenerator<ApiChannelWithLatest> {
     return paginate(async (cursor) => {
       const page = unwrap(
         await this.client.storage.getChannels({
-          query: { limit: CHANNEL_PAGE_SIZE, ...(cursor ? { cursor } : {}) },
+          query: { limit: pageSize, ...(cursor ? { cursor } : {}) },
         }),
       );
       return { items: page.items, nextCursor: page.next_cursor };
