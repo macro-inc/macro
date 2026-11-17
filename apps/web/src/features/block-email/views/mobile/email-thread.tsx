@@ -13,7 +13,7 @@ import {
  * What a view that lists the thread adds: where its title menu's actions go
  * once they take the thread out of the list.
  */
-type MobileEmailThreadList = Pick<
+export type MobileEmailThreadList = Pick<
   EmailThreadToolsOptions,
   'onMarkedUnread' | 'onDeleted' | 'listNavigation'
 > & { onEmailReminderSaved?: () => void | Promise<void> };
