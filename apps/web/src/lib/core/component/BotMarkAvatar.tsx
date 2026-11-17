@@ -5,10 +5,10 @@ import {
   firstPartyBotMarkTone,
 } from './firstPartyBotMark';
 
-/** A brand mark drawn as an avatar, for bots and clients the client ships a mark for. */
+/** An agent's avatar drawn as a product's brand mark. */
 export function BotMarkAvatar(props: {
   mark: FirstPartyBotMark;
-  size: AvatarSize;
+  size?: AvatarSize;
   class?: string;
 }) {
   return (

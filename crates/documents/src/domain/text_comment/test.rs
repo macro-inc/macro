@@ -5,7 +5,10 @@ use channel_sender::ChannelSender;
 use chrono::{TimeZone, Utc};
 use entity_access::domain::models::{Entity, EntityPermission};
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::{api::MockMessageCommands, models::MessageParent};
+use messages::domain::{
+    api::MockMessageCommands,
+    models::{McpClientLabel, MessageParent},
+};
 use model_owner::Owner;
 
 const DOCUMENT: &str = "019fd3b9-3c6c-7c05-89c2-a27f0121813b";
@@ -55,6 +58,7 @@ fn posted(input: &PostMessage) -> Message {
         bot_profile: None,
         mentions: vec![],
         triggered_via: None,
+        triggered_via_kind: None,
         triggered_by: None,
         content: input.content.clone(),
         created_at: at,
@@ -116,7 +120,10 @@ async fn a_user_comment_places_the_mark_with_the_users_token_and_posts_the_threa
             assert_eq!(
                 input.attribution,
                 MessageAttribution::ActingUserVia {
-                    client: "Claude Code".to_owned()
+                    client: McpClientLabel {
+                        name: "Claude Code".to_owned(),
+                        kind: None,
+                    }
                 }
             );
             let Some(NewThreadAnchor::Markdown {
@@ -138,7 +145,10 @@ async fn a_user_comment_places_the_mark_with_the_users_token_and_posts_the_threa
         user_receipt(DOCUMENT),
         &document("md"),
         MessageAttribution::ActingUserVia {
-            client: "Claude Code".to_owned(),
+            client: McpClientLabel {
+                name: "Claude Code".to_owned(),
+                kind: None,
+            },
         },
         request(Some(2)),
     )

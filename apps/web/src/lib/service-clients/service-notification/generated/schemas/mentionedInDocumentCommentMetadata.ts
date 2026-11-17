@@ -6,6 +6,7 @@
  */
 import type { CommentRef } from './commentRef';
 import type { MentionedInDocumentCommentMetadataFileType } from './mentionedInDocumentCommentMetadataFileType';
+import type { MentionedInDocumentCommentMetadataSenderClientKind } from './mentionedInDocumentCommentMetadataSenderClientKind';
 import type { MentionedInDocumentCommentMetadataSenderDisplayName } from './mentionedInDocumentCommentMetadataSenderDisplayName';
 import type { MentionedInDocumentCommentMetadataSenderProfilePictureUrl } from './mentionedInDocumentCommentMetadataSenderProfilePictureUrl';
 import type { MentionedInDocumentCommentMetadataSubType } from './mentionedInDocumentCommentMetadataSubType';
@@ -24,6 +25,7 @@ export interface MentionedInDocumentCommentMetadata {
   mentionId: string;
   /** The owner of the document. */
   owner: string;
+  senderClientKind?: MentionedInDocumentCommentMetadataSenderClientKind;
   /** Public bot name when the author is an agent rather than a Macro user. */
   senderDisplayName?: MentionedInDocumentCommentMetadataSenderDisplayName;
   senderProfilePictureUrl?: MentionedInDocumentCommentMetadataSenderProfilePictureUrl;

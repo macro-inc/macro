@@ -1,5 +1,6 @@
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
+pub use mcp_client_label::{McpClientKind, McpClientLabel};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -483,6 +484,10 @@ pub struct Message {
     /// as "Claude Code"; a display label only.
     #[serde(default)]
     pub triggered_via: Option<String>,
+    /// The product the client in `triggered_via` was verified as, whose mark
+    /// clients show; absent for an unrecognized client.
+    #[serde(default)]
+    pub triggered_via_kind: Option<McpClientKind>,
     /// Macro Markdown body.
     pub content: String,
     /// Creation time.
@@ -554,8 +559,8 @@ pub enum MessageAttribution {
     /// A user invoked the agent through a named client, such as an MCP client;
     /// the post records the acting user and the client's label.
     ActingUserVia {
-        /// The client's self-reported name, for display only.
-        client: String,
+        /// The client's label, for display only.
+        client: McpClientLabel,
     },
     /// An account manager posted with its credential for the sender's account;
     /// the post records the manager's account.

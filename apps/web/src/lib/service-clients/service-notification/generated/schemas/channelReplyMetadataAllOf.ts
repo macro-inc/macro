@@ -4,6 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelReplyMetadataAllOfSenderClientKind } from './channelReplyMetadataAllOfSenderClientKind';
 import type { ChannelReplyMetadataAllOfSenderDisplayName } from './channelReplyMetadataAllOfSenderDisplayName';
 import type { ChannelReplyMetadataAllOfSenderProfilePictureUrl } from './channelReplyMetadataAllOfSenderProfilePictureUrl';
 import type { ChannelReplyMetadataAllOfThreadParentSenderId } from './channelReplyMetadataAllOfThreadParentSenderId';
@@ -14,6 +15,7 @@ export type ChannelReplyMetadataAllOf = {
   messageContent: string;
   /** The id of the new message */
   messageId: string;
+  senderClientKind?: ChannelReplyMetadataAllOfSenderClientKind;
   /** Display name for non-user senders such as bots */
   senderDisplayName?: ChannelReplyMetadataAllOfSenderDisplayName;
   senderProfilePictureUrl?: ChannelReplyMetadataAllOfSenderProfilePictureUrl;

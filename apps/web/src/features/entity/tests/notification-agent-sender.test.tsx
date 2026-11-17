@@ -1,3 +1,4 @@
+import type { FirstPartyBotMark } from '@core/component/firstPartyBotMark';
 import type { NotificationStack } from '@notifications';
 import {
   getNotificationAgentSender,
@@ -22,8 +23,16 @@ vi.mock('@core/component/UserIcon', () => ({
   ),
 }));
 vi.mock('@channel/Message/BotIcon', () => ({
-  BotIcon: (props: { name?: string; avatarUrl?: string }) => (
-    <span data-testid="bot-icon" data-avatar={props.avatarUrl ?? ''}>
+  BotIcon: (props: {
+    name?: string;
+    avatarUrl?: string;
+    mark?: FirstPartyBotMark;
+  }) => (
+    <span
+      data-testid="bot-icon"
+      data-avatar={props.avatarUrl ?? ''}
+      data-mark={props.mark ? 'mark' : ''}
+    >
       {props.name}
     </span>
   ),
@@ -36,6 +45,7 @@ const commentNotification = (
     senderId?: string | null;
     senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
+    senderClientKind?: string | null;
     tag?: string;
   } = {}
 ): Notification =>
@@ -49,6 +59,7 @@ const commentNotification = (
         documentName: 'Plan',
         senderDisplayName: overrides.senderDisplayName ?? null,
         senderProfilePictureUrl: overrides.senderProfilePictureUrl ?? null,
+        senderClientKind: overrides.senderClientKind ?? null,
       },
     },
   }) as unknown as Notification;
@@ -71,6 +82,17 @@ describe('getNotificationAgentSender', () => {
     ).toEqual({ name: 'Macro', avatarUrl: 'https://cdn/macro.png' });
   });
 
+  it('carries the verified product of an MCP client author', () => {
+    expect(
+      getNotificationAgentSender(
+        commentNotification({
+          senderDisplayName: 'Claude Code (macro)',
+          senderClientKind: 'claude_code',
+        })
+      )
+    ).toEqual({ name: 'Claude Code (macro)', clientKind: 'claude_code' });
+  });
+
   it('ignores human senders and notifications without an agent name', () => {
     expect(
       getNotificationAgentSender(
@@ -83,11 +105,29 @@ describe('getNotificationAgentSender', () => {
     expect(getNotificationAgentSender(commentNotification())).toBeUndefined();
   });
 
-  it('only treats comment notifications as agent-authored', () => {
+  it('treats a bot post in a channel as agent-authored', () => {
+    for (const tag of [
+      'channel_mention',
+      'channel_message_send',
+      'channel_message_reply',
+    ]) {
+      expect(
+        getNotificationAgentSender(
+          commentNotification({
+            tag,
+            senderDisplayName: 'ChatGPT',
+            senderClientKind: 'chatgpt',
+          })
+        )
+      ).toEqual({ name: 'ChatGPT', clientKind: 'chatgpt' });
+    }
+  });
+
+  it('leaves notifications that carry no sender name to their kind', () => {
     expect(
       getNotificationAgentSender(
         commentNotification({
-          tag: 'channel_mention',
+          tag: 'item_shared',
           senderDisplayName: 'Macro',
         })
       )
@@ -127,6 +167,18 @@ describe('agent-authored comment notifications', () => {
     const icon = getByTestId('bot-icon');
     expect(icon.textContent).toBe('Macro');
     expect(icon.dataset.avatar).toBe('https://cdn/macro.png');
+  });
+
+  it('shows a verified MCP client with its product mark', () => {
+    const { getByTestId } = render(() => (
+      <NotificationSenderIcon
+        notification={commentNotification({
+          senderDisplayName: 'Claude',
+          senderClientKind: 'claude',
+        })}
+      />
+    ));
+    expect(getByTestId('bot-icon').dataset.mark).toBe('mark');
   });
 
   it('counts the agent as a sender in a stack', () => {

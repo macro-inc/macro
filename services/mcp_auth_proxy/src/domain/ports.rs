@@ -1,5 +1,6 @@
 //! Domain ports for upstream OAuth providers.
 
+use mcp_client_label::McpClientLabel;
 use std::{future::Future, pin::Pin, time::Duration};
 
 use super::models::{
@@ -143,12 +144,12 @@ pub struct MintedAccessToken {
 pub trait MacroApiTokenMinter: Send + Sync {
     /// A Macro API token for the user `upstream` names, valid for at most
     /// `lifetime`,
-    /// acting as the Macro bot via the client named `client_name` (`None` when
-    /// its registration has lapsed).
+    /// acting as the Macro bot via `client` (`None` when its registration has
+    /// lapsed).
     fn mint<'a>(
         &'a self,
         upstream: &'a AccessToken,
-        client_name: Option<&'a str>,
+        client: Option<&'a McpClientLabel>,
         lifetime: Duration,
     ) -> MintedAccessTokenFuture<'a>;
 }

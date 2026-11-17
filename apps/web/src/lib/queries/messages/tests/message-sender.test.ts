@@ -13,6 +13,7 @@ import {
   type ChannelMessageWithMaybeSender,
   firstPartyBotName,
   getBotDisplayName,
+  isUnverifiedClientSender,
   normalizeChannelMessageSender,
   normalizeMessageThreadSenders,
   normalizeThreadReplySender,
@@ -142,6 +143,7 @@ describe('message sender normalization', () => {
       bot_profile: { name: 'Macro' },
       triggered_by: 'macro|alice@example.com',
       triggered_via: 'Claude Code',
+      triggered_via_kind: 'claude_code',
       content: 'posted from Claude Code',
       created_at: '2026-11-02T10:00:00.000Z',
       updated_at: '2026-11-02T10:00:00.000Z',
@@ -208,5 +210,45 @@ describe('message sender normalization', () => {
       expect.objectContaining({ type: 'bot', name: 'Deploy Bot' }),
       expect.objectContaining({ type: 'user', id: 'macro|reply@example.com' }),
     ]);
+  });
+
+  it('marks a client the server did not verify as unverified', () => {
+    const unverified = {
+      type: 'bot' as const,
+      id: '00000000-0000-0000-0000-00000000a1a1',
+      name: 'Macro',
+      triggered_by: 'macro|alice@example.com',
+      triggered_via: 'Claude',
+      triggered_via_kind: null,
+    };
+    expect(isUnverifiedClientSender(unverified)).toBe(true);
+    expect(getBotDisplayName(MACRO_AGENT_PRINCIPAL_ID, unverified)).toBe(
+      'Claude (unverified app)'
+    );
+  });
+
+  it('names a verified client bare', () => {
+    const verified = {
+      type: 'bot' as const,
+      id: '00000000-0000-0000-0000-00000000a1a1',
+      name: 'Macro',
+      triggered_by: 'macro|alice@example.com',
+      triggered_via: 'Claude Code',
+      triggered_via_kind: 'claude_code' as const,
+    };
+    expect(isUnverifiedClientSender(verified)).toBe(false);
+    expect(getBotDisplayName(MACRO_AGENT_PRINCIPAL_ID, verified)).toBe(
+      'Claude Code'
+    );
+  });
+
+  it('never treats a bot without a client as an unverified client', () => {
+    expect(
+      isUnverifiedClientSender({
+        type: 'bot',
+        id: '00000000-0000-0000-0000-000000000001',
+        name: 'Deploy Bot',
+      })
+    ).toBe(false);
   });
 });

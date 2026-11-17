@@ -1,8 +1,9 @@
+import type { FirstPartyBotMark } from '@core/component/firstPartyBotMark';
+import { UNVERIFIED_CLIENT_MARK } from '@core/component/mcpClientMark';
 import { CURSOR_BOT_PRINCIPAL_ID } from '@core/constant/cursorAgent';
 import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import type { MessageData } from '@core/messages/types';
-import ClaudeIcon from '@icon/wide-claude.svg';
 import { cleanup, render } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import type { JSX } from 'solid-js';
@@ -31,8 +32,22 @@ vi.mock('@core/component/UserIcon', () => ({
   ),
 }));
 vi.mock('./BotIcon', () => ({
-  BotIcon: (props: { name?: string | null; avatarUrl?: string | null }) => (
-    <span data-testid="bot-icon" data-avatar={props.avatarUrl ?? ''}>
+  BotIcon: (props: {
+    name?: string | null;
+    avatarUrl?: string | null;
+    mark?: FirstPartyBotMark;
+  }) => (
+    <span
+      data-testid="bot-icon"
+      data-avatar={props.avatarUrl ?? ''}
+      data-mark={
+        props.mark === UNVERIFIED_CLIENT_MARK
+          ? 'unverified'
+          : props.mark
+            ? 'mark'
+            : ''
+      }
+    >
       {props.name}
     </span>
   ),
@@ -73,41 +88,53 @@ describe('SenderIcon', () => {
     }
   });
 
-  it('draws a post made through a known MCP client with its mark', () => {
-    for (const client of ['Claude', 'Claude Code']) {
-      const { container, getByTestId, queryByTestId } = renderSender(
-        message(MACRO_AGENT_PRINCIPAL_ID, {
-          type: 'bot',
-          id: '00000000-0000-0000-0000-00000000a1a1',
-          name: 'Macro',
-          triggered_by: 'macro|alice@example.com',
-          triggered_via: client,
-        })
-      );
-      const { container: reference } = render(() => <ClaudeIcon />);
-      expect(container.querySelector('svg')?.innerHTML).toBe(
-        reference.querySelector('svg')?.innerHTML
-      );
-      expect(getByTestId('user-card').dataset.name).toBe(client);
-      expect(queryByTestId('bot-icon')).toBeNull();
-      expect(queryByTestId('user-icon')).toBeNull();
-      cleanup();
-    }
-  });
-
-  it('draws a post made through an unknown MCP client with its initial', () => {
+  it('draws a post made through an MCP client as that client', () => {
     const { getByTestId, queryByTestId } = renderSender(
       message(MACRO_AGENT_PRINCIPAL_ID, {
         type: 'bot',
         id: '00000000-0000-0000-0000-00000000a1a1',
         name: 'Macro',
         triggered_by: 'macro|alice@example.com',
-        triggered_via: 'Zed',
+        triggered_via: 'Claude Code',
+        triggered_via_kind: 'claude_code',
       })
     );
-    expect(getByTestId('bot-icon').textContent).toBe('Zed');
-    expect(getByTestId('user-card').dataset.name).toBe('Zed');
+    expect(getByTestId('bot-icon').textContent).toBe('Claude Code');
+    expect(getByTestId('user-card').dataset.name).toBe('Claude Code');
     expect(queryByTestId('user-icon')).toBeNull();
+  });
+
+  it('draws a verified MCP client with its product mark', () => {
+    const { getByTestId } = renderSender(
+      message(MACRO_AGENT_PRINCIPAL_ID, {
+        type: 'bot',
+        id: '00000000-0000-0000-0000-00000000a1a1',
+        name: 'Macro',
+        triggered_by: 'macro|alice@example.com',
+        triggered_via: 'Claude Code (macro)',
+        triggered_via_kind: 'claude_code',
+      })
+    );
+    const icon = getByTestId('bot-icon');
+    expect(icon.textContent).toBe('Claude Code (macro)');
+    expect(icon.dataset.mark).toBe('mark');
+  });
+
+  it('draws an unverified MCP client with the neutral app mark, never its initial', () => {
+    const { getByTestId } = renderSender(
+      message(MACRO_AGENT_PRINCIPAL_ID, {
+        type: 'bot',
+        id: '00000000-0000-0000-0000-00000000a1a1',
+        name: 'Macro',
+        triggered_by: 'macro|alice@example.com',
+        triggered_via: 'Claude',
+        triggered_via_kind: null,
+      })
+    );
+    expect(getByTestId('bot-icon').dataset.mark).toBe('unverified');
+    expect(getByTestId('user-card').dataset.name).toBe(
+      'Claude (unverified app)'
+    );
   });
 
   it('draws a team bot with its own uploaded avatar', () => {

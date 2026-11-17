@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 notification_state = { path = "../notification_state", features = ["graphql"] }
 async-graphql = { workspace = true, features = ["dataloader"] }
+mcp_client_label = { path = "../mcp_client_label" }
 async-stream = { workspace = true }
 graphql_common = { path = "../graphql_common" }
 macro_user_id = { path = "../macro_user_id" }

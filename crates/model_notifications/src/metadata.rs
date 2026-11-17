@@ -18,6 +18,7 @@ pub use invite_email::{
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
+use mcp_client_label::McpClientKind;
 use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
@@ -542,6 +543,10 @@ pub struct ChannelMessageSendMetadata {
     /// Display name for non-user senders such as bots
     #[serde(default)]
     pub sender_display_name: Option<String>,
+    /// Verified product of the MCP client a bot author posted through, whose
+    /// mark clients show.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_client_kind: Option<McpClientKind>,
     /// The content of the message
     #[serde(default)]
     #[serde(alias = "message_content")]
@@ -624,6 +629,10 @@ pub struct ChannelMentionMetadata {
     /// Display name for non-user senders such as bots
     #[serde(default)]
     pub sender_display_name: Option<String>,
+    /// Verified product of the MCP client a bot author posted through, whose
+    /// mark clients show.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_client_kind: Option<McpClientKind>,
     #[serde(flatten)]
     pub common: CommonChannelMetadata,
     #[serde(default)]
@@ -647,6 +656,10 @@ pub struct ChannelReplyMetadata {
     /// Display name for non-user senders such as bots
     #[serde(default)]
     pub sender_display_name: Option<String>,
+    /// Verified product of the MCP client a bot author posted through, whose
+    /// mark clients show.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_client_kind: Option<McpClientKind>,
     /// The message content
     #[serde(alias = "message_content")]
     pub message_content: String,
@@ -1330,6 +1343,10 @@ pub struct MentionedInDocumentCommentMetadata {
     /// Public bot name when the author is an agent rather than a Macro user.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sender_display_name: Option<String>,
+    /// Verified product of the MCP client a bot author posted through, whose
+    /// mark clients show.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_client_kind: Option<McpClientKind>,
     /// The name of the document.
     pub document_name: String,
     /// The owner of the document.
@@ -1383,6 +1400,10 @@ pub struct RepliedToDocumentCommentThreadMetadata {
     /// Public bot name when the author is an agent rather than a Macro user.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sender_display_name: Option<String>,
+    /// Verified product of the MCP client a bot author posted through, whose
+    /// mark clients show.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_client_kind: Option<McpClientKind>,
     /// The name of the document.
     pub document_name: String,
     /// The owner of the document.
@@ -1455,6 +1476,10 @@ pub struct CommentedOnDocumentMetadata {
     /// Public bot name when the author is an agent rather than a Macro user.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sender_display_name: Option<String>,
+    /// Verified product of the MCP client a bot author posted through, whose
+    /// mark clients show.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_client_kind: Option<McpClientKind>,
     /// The name of the document.
     pub document_name: String,
     /// The owner of the document.

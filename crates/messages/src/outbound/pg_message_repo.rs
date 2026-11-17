@@ -32,6 +32,7 @@ struct StoredMessage {
     imported_author: Option<String>,
     triggered_by_user_id: Option<String>,
     triggered_via: Option<String>,
+    triggered_via_kind: Option<McpClientKind>,
     content: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -265,6 +266,7 @@ impl PgMessageRepository {
                     guest_name: r.guest_name,
                     triggered_by: r.triggered_by_user_id,
                     triggered_via: r.triggered_via,
+                    triggered_via_kind: r.triggered_via_kind,
                     content: if deleted { String::new() } else { r.content },
                     created_at: r.created_at,
                     updated_at: r.updated_at,
@@ -826,16 +828,24 @@ impl MessageRepository for PgMessageRepository {
         }
         sqlx::query!(
             r#"INSERT INTO comms_messages(id, parent_entity_type, parent_entity_id, thread_id,
-                    sender_id, triggered_by_user_id, triggered_via, content, client_message_id,
-                    guest_name, kind)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"#,
+                    sender_id, triggered_by_user_id, triggered_via, triggered_via_kind, content,
+                    client_message_id, guest_name, kind)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"#,
             id,
             command.parent.entity_type(),
             command.parent.entity_id(),
             command.input.thread_id,
             command.actor.as_ref(),
             command.triggered_by,
-            command.triggered_via,
+            command
+                .triggered_via
+                .as_ref()
+                .map(|client| client.name.as_str()),
+            command
+                .triggered_via
+                .as_ref()
+                .and_then(|client| client.kind)
+                .map(<&'static str>::from),
             command.input.content,
             command.canonical_root_id.and(command.input.id),
             command.guest_name,

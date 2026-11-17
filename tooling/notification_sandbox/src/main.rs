@@ -304,6 +304,7 @@ async fn run_notification_cycle<I: NotificationIngress>(
         notification: ChannelMessageSendMetadata {
             sender: Some(MacroUserIdStr::try_from_email("fake-user@example.com").unwrap()),
             sender_display_name: None,
+            sender_client_kind: None,
             message_content: "This is a message".to_string(),
             message_id: uuid::Uuid::now_v7().to_string(),
             has_attachments: false,

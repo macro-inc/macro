@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import type {
   Message as EntityMessage,
@@ -17,6 +18,7 @@ type WithMaybeSender<
     bot_profile?: { name: string; avatar_url?: string | null } | null;
     triggered_by?: string | null;
     triggered_via?: string | null;
+    triggered_via_kind?: MessageSender['triggered_via_kind'];
   },
 > = Omit<T, 'sender'> & { sender?: MessageSender };
 
@@ -56,12 +58,30 @@ export function getBotDisplayName(
 
   if (parsed.type !== 'bot' && !systemName) return undefined;
 
+  if (parsed.triggered_via) {
+    return isUnverifiedClientSender(parsed)
+      ? t('mcpClients.unverifiedName', { name: parsed.triggered_via })
+      : parsed.triggered_via;
+  }
+
   return (
-    parsed.triggered_via ??
     parsed.name ??
     systemName ??
     bots.find((bot) => bot.id === parsed.id)?.name ??
     'Bot'
+  );
+}
+
+/**
+ * Whether a bot post came through an MCP client the server did not verify.
+ * Such a client chose its own name, so it is never shown bare: an unverified
+ * "Claude" must not read as Anthropic's.
+ */
+export function isUnverifiedClientSender(sender: MessageSender): boolean {
+  return (
+    sender.type === 'bot' &&
+    Boolean(sender.triggered_via) &&
+    !sender.triggered_via_kind
   );
 }
 
@@ -76,6 +96,7 @@ export function normalizeMessageSender<
     bot_profile?: { name: string; avatar_url?: string | null } | null;
     triggered_by?: string | null;
     triggered_via?: string | null;
+    triggered_via_kind?: MessageSender['triggered_via_kind'];
   },
 >(message: T): T & { sender: MessageSender } {
   return message.sender
@@ -87,6 +108,7 @@ export function normalizeMessageSender<
           ...message.bot_profile,
           triggered_by: message.triggered_by,
           triggered_via: message.triggered_via,
+          triggered_via_kind: message.triggered_via_kind,
         },
       };
 }

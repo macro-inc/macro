@@ -4,6 +4,8 @@
 pub mod access_token_clients;
 /// The secret tying an OAuth handshake to the browser that started it.
 pub mod browser_binding;
+/// Which known product a registered client is.
+pub mod client_kind;
 /// The bounded name an MCP client registers under.
 pub mod client_name;
 /// Domain models for broker-managed OAuth state and request payloads.

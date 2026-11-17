@@ -10,11 +10,12 @@ use mcp_auth_proxy::domain::{
     models::AccessToken,
     ports::{MacroApiTokenMinter, MintedAccessToken, MintedAccessTokenFuture},
 };
+use mcp_client_label::McpClientLabel;
 use std::time::Duration;
 
 /// Signs, for the user a FusionAuth access token names, the attribution the
 /// public MCP gives an OAuth client: the Macro bot, labelled with the client's
-/// name, as public `ExecuteCode` signs into its SDK token.
+/// name and product, as public `ExecuteCode` signs into its SDK token.
 pub struct SignedMacroApiTokens {
     pub signer: MacroApiTokenSigner,
     pub jwt_args: JwtValidationArgs,
@@ -24,7 +25,7 @@ impl MacroApiTokenMinter for SignedMacroApiTokens {
     fn mint<'a>(
         &'a self,
         upstream: &'a AccessToken,
-        client_name: Option<&'a str>,
+        client: Option<&'a McpClientLabel>,
         lifetime: Duration,
     ) -> MintedAccessTokenFuture<'a> {
         Box::pin(async move {
@@ -41,7 +42,7 @@ impl MacroApiTokenMinter for SignedMacroApiTokens {
                 .as_secs()
                 .clamp(1, u64::try_from(MINTED_TOKEN_LIFETIME_SECONDS)?);
             let caller = ToolCaller::McpClient {
-                name: client_name.map(str::to_owned),
+                client: client.cloned(),
             };
 
             let token = self
@@ -50,7 +51,7 @@ impl MacroApiTokenMinter for SignedMacroApiTokens {
                     &user,
                     usize::try_from(seconds)?,
                     Some(bot_id::MACRO_AI_BOT_ID.as_uuid()),
-                    caller.via().map(str::to_owned),
+                    caller.via(),
                     None,
                     None,
                 )

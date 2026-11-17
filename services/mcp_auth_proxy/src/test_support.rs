@@ -8,6 +8,7 @@ use std::{
 };
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use mcp_client_label::McpClientLabel;
 use sha2::{Digest, Sha256};
 
 use crate::domain::{
@@ -75,7 +76,7 @@ impl MacroApiTokenMinter for FakeMacroApiTokens {
     fn mint<'a>(
         &'a self,
         upstream: &'a AccessToken,
-        client_name: Option<&'a str>,
+        client: Option<&'a McpClientLabel>,
         lifetime: Duration,
     ) -> MintedAccessTokenFuture<'a> {
         Box::pin(async move {
@@ -84,7 +85,7 @@ impl MacroApiTokenMinter for FakeMacroApiTokens {
                 token: AccessToken::from(format!(
                     "macro-api-token for {} via {} for {seconds}s",
                     upstream.as_str(),
-                    client_name.unwrap_or("no client"),
+                    client.map_or("no client", |client| client.name.as_str()),
                 )),
                 lifetime: Duration::from_secs(seconds),
             })

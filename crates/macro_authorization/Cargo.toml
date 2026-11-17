@@ -25,6 +25,7 @@ harness_id = { path = "../harness_id" }
 harness_token = { path = "../harness_token" }
 macro_auth = { path = "../macro_auth", optional = true }
 macro_env_var = { path = "../macro_env_var", optional = true }
+mcp_client_label = { path = "../mcp_client_label" }
 macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user" }

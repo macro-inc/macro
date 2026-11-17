@@ -1,4 +1,5 @@
 import { BotIcon } from '@channel/Message/BotIcon';
+import { mcpClientMark } from '@core/component/mcpClientMark';
 import { UserIcon } from '@core/component/UserIcon';
 import type { NotificationStack } from '@notifications';
 import {
@@ -94,7 +95,12 @@ export function NotificationSenderIcon(props: NotificationSenderIconProps) {
         />
       ))
       .with({ kind: 'agent' }, ({ agent }) => (
-        <BotIcon name={agent.name} avatarUrl={agent.avatarUrl} size={size()} />
+        <BotIcon
+          name={agent.name}
+          avatarUrl={agent.avatarUrl}
+          mark={mcpClientMark(agent.clientKind)}
+          size={size()}
+        />
       ))
       .exhaustive();
 

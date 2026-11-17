@@ -97,6 +97,35 @@ describe('message grouping meta', () => {
     }
   );
 
+  it.each([
+    ['Claude Code', 'Claude Code', true],
+    ['Claude Code', 'ChatGPT', false],
+    ['Claude Code', null, false],
+  ] as const)(
+    'groups posts from MCP clients %s then %s: %s',
+    (previousVia, currentVia, expected) => {
+      const senderId = 'bot|00000000-0000-0000-0000-00000000a1a1';
+      const previous = createMessage(
+        'm1',
+        '2026-02-20T09:00:00.000Z',
+        senderId
+      );
+      const current = createMessage('m2', '2026-02-20T09:01:00.000Z', senderId);
+      previous.sender = {
+        ...senderFromStorageId(senderId),
+        triggered_by: 'user-1',
+        triggered_via: previousVia,
+      };
+      current.sender = {
+        ...senderFromStorageId(senderId),
+        triggered_by: 'user-1',
+        triggered_via: currentVia,
+      };
+
+      expect(shouldGroupWithPreviousMessage(current, previous)).toBe(expected);
+    }
+  );
+
   it('does not group when author changes', () => {
     const previous = createMessage('m1', '2026-02-20T09:00:00.000Z');
     const current = createMessage('m2', '2026-02-20T09:01:00.000Z', 'user-2');

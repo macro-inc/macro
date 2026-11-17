@@ -29,10 +29,10 @@ inbound = [
   "ports",
   "schema",
 ]
-json-schema = ["dep:schemars"]
+json-schema = ["dep:schemars", "mcp_client_label/json-schema"]
 outbound = ["dep:initiative", "dep:macro_uuid", "dep:sqlx", "ports"]
 ports = ["dep:async-trait", "dep:entity_access", "dep:futures", "dep:rootcause", "entity_access/ports"]
-schema = ["channel_sender/schema", "dep:utoipa", "activity/schema"]
+schema = ["channel_sender/schema", "dep:utoipa", "activity/schema", "mcp_client_label/schema"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]
@@ -67,6 +67,7 @@ models_properties = { path = "../models_properties", optional = true }
 properties = { path = "../properties", default-features = false, features = ["ports"], optional = true }
 notification = { path = "../notification", optional = true }
 rootcause = { workspace = true, optional = true }
+mcp_client_label = { path = "../mcp_client_label" }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

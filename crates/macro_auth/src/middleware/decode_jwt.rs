@@ -447,6 +447,7 @@ CwIDAQAB
             agent_session_id: None,
             agent_id: None,
             agent_via: None,
+            agent_via_kind: None,
             routine_id: None,
             agent_scope: None,
             exp: now + 3600, // Token expires in 1 hour

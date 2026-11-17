@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { InitiativeDiscussionMetadataSenderClientKind } from './initiativeDiscussionMetadataSenderClientKind';
 import type { InitiativeDiscussionMetadataSenderDisplayName } from './initiativeDiscussionMetadataSenderDisplayName';
 import type { InitiativeDiscussionMetadataSenderProfilePictureUrl } from './initiativeDiscussionMetadataSenderProfilePictureUrl';
 import type { InitiativeDiscussionReason } from './initiativeDiscussionReason';
@@ -22,6 +23,7 @@ export interface InitiativeDiscussionMetadata {
   projectName: string;
   /** Semantic reason selected by the message delivery domain. */
   reason: InitiativeDiscussionReason;
+  senderClientKind?: InitiativeDiscussionMetadataSenderClientKind;
   /** Public display name for a bot author. */
   senderDisplayName?: InitiativeDiscussionMetadataSenderDisplayName;
   /** Optional avatar for push notification attachments. */

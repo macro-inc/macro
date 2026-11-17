@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { CrmDiscussionMetadataSenderClientKind } from './crmDiscussionMetadataSenderClientKind';
 import type { CrmDiscussionMetadataSenderDisplayName } from './crmDiscussionMetadataSenderDisplayName';
 import type { CrmDiscussionMetadataSenderProfilePictureUrl } from './crmDiscussionMetadataSenderProfilePictureUrl';
 import type { CrmDiscussionReason } from './crmDiscussionReason';
@@ -20,6 +21,7 @@ export interface CrmDiscussionMetadata {
   reason: CrmDiscussionReason;
   /** Company or contact display name. */
   recordName: string;
+  senderClientKind?: CrmDiscussionMetadataSenderClientKind;
   /** Public display name for a bot author. */
   senderDisplayName?: CrmDiscussionMetadataSenderDisplayName;
   /** Optional avatar for push notification attachments. */

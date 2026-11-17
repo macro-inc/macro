@@ -264,6 +264,7 @@ fn to_channel_mention_metadata(mention: ChannelMentionNotification) -> ChannelMe
         has_attachments: mention.has_attachments,
         thread_id: mention.thread_id.map(|thread_id| thread_id.to_string()),
         sender_display_name: mention.sender.display_name().map(ToOwned::to_owned),
+        sender_client_kind: mention.sender.client_kind(),
         common: to_common_metadata(mention.metadata),
         sender_profile_picture_url: mention.sender_profile_picture_url,
     }
@@ -382,6 +383,7 @@ where
                                 message_id: message_id.to_string(),
                                 user_id: sender.as_user().cloned(),
                                 sender_display_name: sender.display_name().map(ToOwned::to_owned),
+                                sender_client_kind: sender.client_kind(),
                                 message_content,
                                 has_attachments,
                                 thread_parent_sender_id,
@@ -418,6 +420,7 @@ where
                                 message_id: message_id.to_string(),
                                 sender: sender.as_user().cloned(),
                                 sender_display_name: sender.display_name().map(ToOwned::to_owned),
+                                sender_client_kind: sender.client_kind(),
                                 message_content,
                                 has_attachments,
                                 common: to_common_metadata(metadata),

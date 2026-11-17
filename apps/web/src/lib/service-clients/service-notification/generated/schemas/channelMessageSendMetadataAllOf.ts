@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChannelMessageSendMetadataAllOfSender } from './channelMessageSendMetadataAllOfSender';
+import type { ChannelMessageSendMetadataAllOfSenderClientKind } from './channelMessageSendMetadataAllOfSenderClientKind';
 import type { ChannelMessageSendMetadataAllOfSenderDisplayName } from './channelMessageSendMetadataAllOfSenderDisplayName';
 import type { ChannelMessageSendMetadataAllOfSenderProfilePictureUrl } from './channelMessageSendMetadataAllOfSenderProfilePictureUrl';
 
@@ -15,6 +16,7 @@ export type ChannelMessageSendMetadataAllOf = {
   messageId: string;
   /** The user who sent the message, when sent by a user */
   sender?: ChannelMessageSendMetadataAllOfSender;
+  senderClientKind?: ChannelMessageSendMetadataAllOfSenderClientKind;
   /** Display name for non-user senders such as bots */
   senderDisplayName?: ChannelMessageSendMetadataAllOfSenderDisplayName;
   senderProfilePictureUrl?: ChannelMessageSendMetadataAllOfSenderProfilePictureUrl;

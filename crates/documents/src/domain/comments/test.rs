@@ -54,6 +54,7 @@ fn message(n: u128, root: Option<u128>, content: &str) -> Message {
         bot_profile: None,
         mentions: vec![],
         triggered_via: None,
+        triggered_via_kind: None,
         triggered_by: None,
         content: content.to_owned(),
         created_at: at(n as u32),

@@ -20,7 +20,9 @@ use crate::domain::{
 use bot_id::BotIdStr;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use messages::domain::models::{PostMessageNotificationPolicy, SimpleMention};
+use messages::domain::models::{
+    McpClientKind, McpClientLabel, PostMessageNotificationPolicy, SimpleMention,
+};
 use std::collections::HashSet;
 use tracing::Instrument as _;
 use uuid::Uuid;
@@ -73,6 +75,9 @@ pub enum NotificationSender {
     Bot {
         /// Bot display name.
         name: String,
+        /// The verified product of the MCP client a user posted through, if
+        /// any, whose mark clients show.
+        client_kind: Option<McpClientKind>,
     },
 }
 
@@ -89,7 +94,15 @@ impl NotificationSender {
     pub fn display_name(&self) -> Option<&str> {
         match self {
             NotificationSender::User(_) => None,
-            NotificationSender::Bot { name } => Some(name),
+            NotificationSender::Bot { name, .. } => Some(name),
+        }
+    }
+
+    /// The verified product of the MCP client a bot sender posted through.
+    pub fn client_kind(&self) -> Option<McpClientKind> {
+        match self {
+            NotificationSender::User(_) => None,
+            NotificationSender::Bot { client_kind, .. } => *client_kind,
         }
     }
 }
@@ -529,8 +542,12 @@ where
     async fn bot_profile_for_message(&self, message: &MutatedMessage) -> Option<BotSenderProfile> {
         let bot_id = message.sender_id.as_bot()?.bot_id();
         if let Some(client) = &message.triggered_via {
-            return Some(BotSenderProfile {
+            let label = McpClientLabel {
                 name: client.clone(),
+                kind: message.triggered_via_kind,
+            };
+            return Some(BotSenderProfile {
+                name: label.display_name(),
                 avatar_url: None,
             });
         }
@@ -595,7 +612,10 @@ where
         } else if let Some(bot_id) = message.sender_id.as_bot().map(|id| id.bot_id()) {
             match bot_profile {
                 Some(profile) => ResolvedNotificationSender {
-                    sender: NotificationSender::Bot { name: profile.name },
+                    sender: NotificationSender::Bot {
+                        name: profile.name,
+                        client_kind: message.triggered_via_kind,
+                    },
                     profile_picture_url: profile.avatar_url,
                 },
                 None => {

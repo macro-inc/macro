@@ -1,8 +1,8 @@
-import { BotMarkAvatar } from '@core/component/BotMarkAvatar';
+import { firstPartyBotMark } from '@core/component/firstPartyBotMark';
 import {
-  firstPartyBotMark,
   mcpClientMark,
-} from '@core/component/firstPartyBotMark';
+  UNVERIFIED_CLIENT_MARK,
+} from '@core/component/mcpClientMark';
 import { UserCardTrigger } from '@core/component/UserCardTrigger';
 import { UserIcon } from '@core/component/UserIcon';
 import type { UserCardTarget } from '@core/component/userCardActions';
@@ -10,11 +10,12 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useLiveBotSender } from '@queries/bots/profiles';
 import {
   getBotDisplayName,
+  isUnverifiedClientSender,
   senderFromStorageId,
 } from '@queries/messages/message-sender';
 import type { MessageSender } from '@service-storage/messages';
 import { cn } from '@ui';
-import { Match, Show, Switch } from 'solid-js';
+import { Show } from 'solid-js';
 import { BotIcon } from './BotIcon';
 import { useMessage } from './context';
 
@@ -32,18 +33,11 @@ export function SenderIcon(props: SenderIconProps) {
       message().sender ?? senderFromStorageId(message().sender_id)
   );
 
-  // A post a user made through a client is that client's, so it shows the
-  // client's mark (or initial, for clients without one) rather than the mark
-  // of the bot that carried it.
-  const clientMark = () => {
-    const current = sender();
-    if (current.type !== 'bot' || !current.triggered_via) return undefined;
-    return mcpClientMark(current.triggered_via);
-  };
-
   // Team bots render their uploaded avatar; first-party bots have none and
   // keep their brand mark, which UserIcon draws the same way the mention menu
-  // does.
+  // does. A post a user made through a client is that client's, so it shows
+  // the client's product mark when the server verified it, else its initial,
+  // rather than the mark of the bot that carried it.
   const botSender = (): MessageSender | undefined => {
     const current = sender();
     if (current.type !== 'bot') return undefined;
@@ -82,8 +76,23 @@ export function SenderIcon(props: SenderIconProps) {
     };
   };
 
+  // Guests and external authors take the avatar slot before a bot does. A
+  // client the server didn't verify gets a neutral robot rather than its
+  // initial.
+  const clientMark = () => {
+    if (message().guest_name || externalAuthor()) return undefined;
+    const bot = botSender();
+    if (bot && isUnverifiedClientSender(bot)) return UNVERIFIED_CLIENT_MARK;
+    return mcpClientMark(bot?.triggered_via_kind);
+  };
+
   const avatar = () => (
-    <Switch
+    <Show
+      when={
+        message().guest_name
+          ? { name: message().guest_name, avatar_url: null }
+          : (externalAuthor() ?? botSender())
+      }
       fallback={
         <UserIcon
           id={message().sender_id}
@@ -93,21 +102,15 @@ export function SenderIcon(props: SenderIconProps) {
         />
       }
     >
-      <Match when={!message().guest_name && clientMark()} keyed>
-        {(mark) => <BotMarkAvatar mark={mark} size="fill" />}
-      </Match>
-      <Match
-        when={
-          message().guest_name
-            ? { name: message().guest_name, avatar_url: null }
-            : (externalAuthor() ?? botSender())
-        }
-      >
-        {(bot) => (
-          <BotIcon name={bot().name} avatarUrl={bot().avatar_url} size="fill" />
-        )}
-      </Match>
-    </Switch>
+      {(bot) => (
+        <BotIcon
+          name={bot().name}
+          avatarUrl={bot().avatar_url}
+          mark={clientMark()}
+          size="fill"
+        />
+      )}
+    </Show>
   );
 
   return (

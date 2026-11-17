@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_messages(id, parent_entity_type, parent_entity_id, thread_id,\n                    sender_id, triggered_by_user_id, triggered_via, triggered_via_kind, content,\n                    client_message_id, guest_name, kind)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dca7393fd61aed35f0a0bad84e6f96870278c1ae98f7d0b632ee3e57dab84523"
+}

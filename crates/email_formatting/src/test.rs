@@ -47,6 +47,7 @@ fn digest_escapes_nameless_mention_placeholders() {
     let event = NotifEvent::ChannelMessageSend(ChannelMessageSendMetadata {
         sender: None,
         sender_display_name: Some("Helper Bot".to_string()),
+        sender_client_kind: None,
         message_content: r#"Filed <m-document-mention>{"documentId":"t1","documentName":"","blockName":"task","blockParams":{}}</m-document-mention>"#.to_string(),
         message_id: "m1".to_string(),
         has_attachments: false,

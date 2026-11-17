@@ -47,7 +47,7 @@ pub struct MessageToolContext<ESvc: EntityAccessService> {
     /// [`Self::with_actor`].
     pub actor: BotId,
     /// The client the requesting user works through, labelled on posts.
-    pub via: Option<String>,
+    pub via: Option<mcp_client_label::McpClientLabel>,
 }
 
 impl<ESvc: EntityAccessService> Clone for MessageToolContext<ESvc> {
@@ -80,7 +80,7 @@ impl<ESvc: EntityAccessService> MessageToolContext<ESvc> {
 
     /// Label the posts these tools make with the client the requesting user
     /// works through, such as an MCP client.
-    pub fn with_via(mut self, client: String) -> Self {
+    pub fn with_via(mut self, client: mcp_client_label::McpClientLabel) -> Self {
         self.via = Some(client);
         self
     }

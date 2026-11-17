@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 /// Hosts accepted for `http` redirect URIs, per RFC 8252 section 7.3. A code
 /// sent to one of these is delivered to a listener on the resource owner's own
 /// machine, so it never leaves the user who authorized it.
-const LOOPBACK_HOSTS: [&str; 3] = ["localhost", "127.0.0.1", "[::1]"];
+pub(crate) const LOOPBACK_HOSTS: [&str; 3] = ["localhost", "127.0.0.1", "[::1]"];
 
 /// Punctuation a redirect URI may hold for its callback URL to be shown to the
 /// user. None of it means anything inside a single-quoted shell string, or

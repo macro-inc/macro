@@ -30,6 +30,7 @@ fn project_notifications_keep_canonical_message_targets_and_project_wording() {
             thread_id,
             text: "Ready for review".into(),
             sender_display_name: Some("Planner".into()),
+            sender_client_kind: None,
             sender_profile_picture_url: None,
         };
         assert_eq!(metadata.format_title(None).unwrap(), title);

@@ -65,9 +65,11 @@ post; streaming updates and ordinary edits never do.
 
 A bot post made for a user through a named client (an MCP client on the public
 MCP) uses `MessageAttribution::ActingUserVia`; the client's self-reported name is
-stored in `comms_messages.triggered_via` beside `triggered_by`, and clients show
+stored in `comms_messages.triggered_via` beside `triggered_by`, the product the
+OAuth broker verified it as in `triggered_via_kind`, and clients show
 the post as that client's ("Claude Code · Agent · from <user>"). It is a display
-label only. Over HTTP the label comes only from the signed `agent_via` claim of
+label, and the kind picks the avatar mark. Over HTTP the label comes only from
+the signed `agent_via` / `agent_via_kind` claims of
 a code-mode token, never from the request body.
 
 New posts use the message sender receipt to retain signed code-mode agent

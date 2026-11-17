@@ -16,6 +16,7 @@ fn crm_notifications_keep_canonical_message_targets_and_record_wording() {
             thread_id,
             text: "Renewal is on track".into(),
             sender_display_name: Some("Seller".into()),
+            sender_client_kind: None,
             sender_profile_picture_url: None,
         };
         assert_eq!(metadata.format_title(None).unwrap(), title);
@@ -43,6 +44,7 @@ fn each_discussion_on_a_record_collapses_separately() {
             thread_id,
             text: "Renewal is on track".into(),
             sender_display_name: None,
+            sender_client_kind: None,
             sender_profile_picture_url: None,
         }
         .collapse_key(&company)

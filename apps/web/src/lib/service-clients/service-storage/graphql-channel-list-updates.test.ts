@@ -93,6 +93,7 @@ const newNotification: GraphqlNotificationPatch = {
       channelMessageSendMessageContent: 'Hello',
       channelMessageSendHasAttachments: false,
       channelMessageSendSenderDisplayName: null,
+      channelMessageSendSenderClientKind: null,
       channelMessageSendChannelName: 'Channel',
       channelMessageSendSenderProfilePictureUrl: null,
     },

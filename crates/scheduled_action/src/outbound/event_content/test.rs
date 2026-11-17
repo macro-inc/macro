@@ -124,6 +124,7 @@ fn message(content: &str) -> Message {
         bot_profile: None,
         mentions: Vec::new(),
         triggered_via: None,
+        triggered_via_kind: None,
         triggered_by: None,
         content: content.into(),
         created_at: at,

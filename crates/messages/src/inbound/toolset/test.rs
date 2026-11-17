@@ -1,3 +1,4 @@
+use mcp_client_label::{McpClientKind, McpClientLabel};
 use std::sync::{Arc, Mutex};
 
 use ai_toolset::schema::generate_validated_input_schema;
@@ -69,6 +70,7 @@ fn message(id: Uuid, thread_id: Option<Uuid>, sender: ChannelSender<'static>) ->
         bot_profile: None,
         mentions: vec![],
         triggered_via: None,
+        triggered_via_kind: None,
         triggered_by: None,
         content: format!("comment {id}"),
         created_at: at(),
@@ -599,7 +601,10 @@ async fn a_comment_through_an_mcp_client_names_the_client() {
     let ServiceContext(tool_context) = context(AccessLevel::Comment, messages.clone());
     comment_on_initiative("Looks good.")
         .call(
-            ServiceContext(tool_context.clone().with_via("Claude Code".to_owned())),
+            ServiceContext(tool_context.clone().with_via(McpClientLabel {
+                name: "Claude Code".to_owned(),
+                kind: Some(McpClientKind::ClaudeCode),
+            })),
             request(),
         )
         .await
@@ -622,7 +627,10 @@ async fn a_comment_through_an_mcp_client_names_the_client() {
     assert_eq!(
         via_post.attribution,
         MessageAttribution::ActingUserVia {
-            client: "Claude Code".to_owned()
+            client: McpClientLabel {
+                name: "Claude Code".to_owned(),
+                kind: Some(McpClientKind::ClaudeCode),
+            }
         }
     );
     assert_eq!(key_post.attribution, MessageAttribution::ActingUser);

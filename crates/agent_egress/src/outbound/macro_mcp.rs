@@ -280,7 +280,7 @@ impl MacroApiTokenSigner {
         owner: &MacroUserIdStr<'static>,
         lifetime_seconds: usize,
         agent_id: Option<macro_uuid::Uuid>,
-        agent_via: Option<String>,
+        agent_via: Option<mcp_client_label::McpClientLabel>,
         agent_session_id: Option<uuid::Uuid>,
         correlation: Option<SignedCorrelation>,
     ) -> Result<String, EgressError> {
@@ -398,7 +398,7 @@ pub struct SignedCorrelation {
 /// The optional claims a minted token signs besides the owner.
 struct SignedClaims {
     agent_id: Option<macro_uuid::Uuid>,
-    agent_via: Option<String>,
+    agent_via: Option<mcp_client_label::McpClientLabel>,
     agent_session_id: Option<uuid::Uuid>,
     agent_correlation_id: Option<uuid::Uuid>,
     agent_scope: Option<agent_correlation::scope::SessionScope>,

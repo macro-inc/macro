@@ -276,6 +276,7 @@ async fn macro_ai_bot_profile_is_builtin_without_context_lookup() {
         sender_id: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
         triggered_by: None,
         triggered_via: None,
+        triggered_via_kind: None,
         content: "hello".to_string(),
         created_at: now,
         updated_at: now,
@@ -313,6 +314,7 @@ async fn mcp_client_post_is_named_after_the_client() {
         sender_id: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
         triggered_by: Some("macro|alice@example.com".to_string()),
         triggered_via: Some("Claude Code".to_string()),
+        triggered_via_kind: Some(McpClientKind::ClaudeCode),
         content: "hello".to_string(),
         created_at: now,
         updated_at: now,
@@ -328,6 +330,74 @@ async fn mcp_client_post_is_named_after_the_client() {
     assert_eq!(profile.name, "Claude Code");
     assert_eq!(profile.avatar_url, None);
     assert_eq!(*lookup_count.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn unverified_client_post_is_named_as_unverified() {
+    let service = ChannelSideEffectService::new(
+        FakeContext::default(),
+        FakeRealtime::default(),
+        FakeNotifications::default(),
+        FakeContacts::default(),
+    );
+    let now = Utc::now();
+    let message = MutatedMessage {
+        id: Uuid::new_v4(),
+        channel_id: Uuid::new_v4(),
+        thread_id: None,
+        sender_id: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
+        triggered_by: Some("macro|alice@example.com".to_string()),
+        triggered_via: Some("Claude".to_string()),
+        triggered_via_kind: None,
+        content: "hello".to_string(),
+        created_at: now,
+        updated_at: now,
+        edited_at: None,
+        deleted_at: None,
+    };
+
+    let profile = service
+        .bot_profile_for_message(&message)
+        .await
+        .expect("a client post should have a profile");
+
+    assert_eq!(profile.name, "Claude (unverified app)");
+}
+
+#[tokio::test]
+async fn mcp_client_post_notifies_with_the_client_kind() {
+    let channel_id = Uuid::new_v4();
+    let recipient = user("recipient@example.com");
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext::default(),
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+    let mut event =
+        bot_message_posted_event(channel_id, Uuid::new_v4(), None, &[recipient.as_ref()]);
+    let ChannelEvent::MessagePosted { message, .. } = &mut event else {
+        panic!("expected a posted message event");
+    };
+    message.sender_id = Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+    message.triggered_by = Some("macro|alice@example.com".to_string());
+    message.triggered_via = Some("Claude Code (macro)".to_string());
+    message.triggered_via_kind = Some(McpClientKind::ClaudeCode);
+
+    service.handle(event).await;
+
+    let notification_effects = notifications.effects.lock().unwrap();
+    let ChannelNotificationEffect::ChannelMessage { sender, .. } = &notification_effects[0] else {
+        panic!("expected channel message notification effect");
+    };
+    assert_eq!(
+        *sender,
+        NotificationSender::Bot {
+            name: "Claude Code (macro)".to_string(),
+            client_kind: Some(McpClientKind::ClaudeCode),
+        }
+    );
 }
 
 #[tokio::test]
@@ -350,6 +420,7 @@ async fn non_macro_bot_profile_uses_context_lookup() {
         sender_id: Sender::new_from_bot(BotId::new_from_uuid(Uuid::new_v4())),
         triggered_by: None,
         triggered_via: None,
+        triggered_via_kind: None,
         content: "hello".to_string(),
         created_at: now,
         updated_at: now,
@@ -413,6 +484,7 @@ async fn message_posted_derives_notification_effects_without_legacy_realtime() {
                 sender_id: Sender::new_from_user(sender.clone()),
                 triggered_by: None,
                 triggered_via: None,
+                triggered_via_kind: None,
                 content: "hello".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -479,6 +551,7 @@ fn bot_message_posted_event(
             sender_id: Sender::new_from_bot(BotId::new_from_uuid(Uuid::new_v4())),
             triggered_by: None,
             triggered_via: None,
+            triggered_via_kind: None,
             content: "hello".to_string(),
             created_at: now,
             updated_at: now,
@@ -537,6 +610,7 @@ async fn silent_message_posted_skips_notifications_only() {
                 sender_id: Sender::new_from_user(sender),
                 triggered_by: None,
                 triggered_via: None,
+                triggered_via_kind: None,
                 content: "transient".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -599,6 +673,7 @@ async fn mentions_only_skips_failing_invite_lookup_and_sends_mention() {
                 sender_id: Sender::new_from_user(sender),
                 triggered_by: None,
                 triggered_via: None,
+                triggered_via_kind: None,
                 content: "welcome".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -658,7 +733,8 @@ async fn bot_message_posted_sends_channel_message_notification() {
     assert_eq!(
         *sender,
         NotificationSender::Bot {
-            name: "Test Bot".to_string()
+            name: "Test Bot".to_string(),
+            client_kind: None,
         }
     );
     assert_eq!(
@@ -774,7 +850,8 @@ async fn bot_thread_reply_sends_reply_notification() {
     assert_eq!(
         *sender,
         NotificationSender::Bot {
-            name: "Test Bot".to_string()
+            name: "Test Bot".to_string(),
+            client_kind: None,
         }
     );
     assert_eq!(*thread_parent_sender_id, Some(parent_sender.clone()));
@@ -856,6 +933,7 @@ async fn a_mention_of_someone_connected_to_the_threads_call_is_delivered() {
                 sender_id: Sender::new_from_user(sender),
                 triggered_by: None,
                 triggered_via: None,
+                triggered_via_kind: None,
                 content: "look at this".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -971,6 +1049,7 @@ async fn document_mentions_notify_participants_except_sender() {
                 sender_id: Sender::new_from_user(sender.clone()),
                 triggered_by: None,
                 triggered_via: None,
+                triggered_via_kind: None,
                 content: "hello".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -1059,6 +1138,7 @@ async fn document_mentions_in_a_reply_notify_only_thread_participants() {
                 sender_id: Sender::new_from_user(sender.clone()),
                 triggered_by: None,
                 triggered_via: None,
+                triggered_via_kind: None,
                 content: "see this".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -1480,6 +1560,7 @@ fn mention_broker_events_map_message_posted_mentions() {
             sender_id: Sender::new_from_user(user("alice@example.com")),
             triggered_by: None,
             triggered_via: None,
+            triggered_via_kind: None,
             content: "@bot @doc-1".to_string(),
             created_at: now,
             updated_at: now,
