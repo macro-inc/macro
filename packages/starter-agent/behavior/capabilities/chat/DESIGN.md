@@ -45,5 +45,5 @@ owner, and it needs nothing but `MACRO_API_KEY`: sending, reading, the relevance
 - Typing stops when the agent answers, once, and never runs past ten minutes.
 - Presence is a websocket to Macro's gateway kept alive by a ping every 25 s (the gateway drops
   a quiet connection after 60 s), reconnecting with a doubling wait capped at a minute.
-- When presence first opens, the agent reports itself online, retrying until the server answers.
+- When presence first opens, the agent reports itself online, retrying (a 404 too) until the server takes it.
   Until then its row reads Starting and its inviter hasn't been told it is ready.
