@@ -24,10 +24,12 @@ pub fn to_string<T: Serialize + ?Sized>(value: &T) -> Result<String> {
 }
 
 /// Render a workflow: like [`to_string`], after checking every expression
-/// against the contexts its key allows and spelling it canonically.
+/// against the contexts its key allows, spelling it canonically, and checking
+/// the references between its jobs and steps ([`crate::references`]).
 pub fn workflow_to_string<T: Serialize + ?Sized>(workflow: &T) -> Result<String> {
     let mut node = workflow.serialize(NodeSerializer)?;
     canonicalize_expressions(&mut node, &mut Vec::new())?;
+    crate::references::check(&node)?;
     Ok(emit(&node))
 }
 
@@ -86,7 +88,7 @@ fn emit(node: &Node) -> String {
 
 /// The serialized value: what YAML can represent, with mapping order kept.
 #[derive(Debug, Clone, PartialEq)]
-enum Node {
+pub(crate) enum Node {
     Null,
     Bool(bool),
     Int(i128),
@@ -94,6 +96,37 @@ enum Node {
     Str(String),
     Seq(Vec<Node>),
     Map(Vec<(String, Node)>),
+}
+
+impl Node {
+    /// The value under `key` of a mapping.
+    pub(crate) fn get(&self, key: &str) -> Option<&Node> {
+        self.as_map()?
+            .iter()
+            .find(|(entry, _)| entry == key)
+            .map(|(_, value)| value)
+    }
+
+    pub(crate) fn as_map(&self) -> Option<&[(String, Node)]> {
+        match self {
+            Self::Map(entries) => Some(entries),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_seq(&self) -> Option<&[Node]> {
+        match self {
+            Self::Seq(items) => Some(items),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::Str(text) => Some(text),
+            _ => None,
+        }
+    }
 }
 
 fn emit_entries(out: &mut String, entries: &[(String, Node)], indent: usize, first_inline: bool) {

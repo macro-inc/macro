@@ -11,6 +11,8 @@ pub enum Error {
     /// An expression that doesn't parse, or reads something GitHub doesn't
     /// offer at `path`.
     Expression { path: String, message: String },
+    /// A reference to a job, step or output that doesn't exist at `path`.
+    Reference { path: String, message: String },
 }
 
 impl fmt::Display for Error {
@@ -19,6 +21,7 @@ impl fmt::Display for Error {
             Self::Unsupported(what) => write!(f, "cannot render {what} as workflow YAML"),
             Self::Custom(message) => f.write_str(message),
             Self::Expression { path, message } => write!(f, "expression at `{path}`: {message}"),
+            Self::Reference { path, message } => write!(f, "reference at `{path}`: {message}"),
         }
     }
 }

@@ -21,6 +21,9 @@ pub enum Num {}
 /// A value of any shape, such as `fromJSON` output or an event payload
 /// field, typed by the caller where it is used.
 pub enum Json {}
+/// A step or job output that holds `'true'` or `'false'`. Outputs are always
+/// strings, so a flag is tested with [`Expr::is_set`], never as a boolean.
+pub enum Flag {}
 
 /// An expression of runtime type `T`.
 pub struct Expr<T> {
@@ -514,6 +517,95 @@ impl Needs {
     /// `success`, `failure`, `cancelled` or `skipped`.
     pub fn result(&self) -> Expr<Str> {
         path("needs", &[&self.0, "result"])
+    }
+}
+
+impl Expr<Flag> {
+    /// `flag == 'true'`
+    pub fn is_set(self) -> Expr<Bool> {
+        Expr::from_ast(Ast::Binary(
+            Op::Eq,
+            Box::new(self.ast),
+            Box::new(Ast::Str("true".to_string())),
+        ))
+    }
+
+    /// `flag != 'true'`
+    pub fn is_unset(self) -> Expr<Bool> {
+        Expr::from_ast(Ast::Binary(
+            Op::Ne,
+            Box::new(self.ast),
+            Box::new(Ast::Str("true".to_string())),
+        ))
+    }
+}
+
+/// An output a job declares, by job id and output name, with the type its
+/// readers get. The same const declares it (`job.add_output(OUTPUT.name(),
+/// ...)`) and reads it (`OUTPUT.read()`), so the two can't drift; rendering
+/// checks every reader lists the job in `needs`.
+pub struct JobOutput<T> {
+    job: &'static str,
+    name: &'static str,
+    value_type: PhantomData<fn() -> T>,
+}
+
+impl<T> JobOutput<T> {
+    pub const fn new(job: &'static str, name: &'static str) -> Self {
+        Self {
+            job,
+            name,
+            value_type: PhantomData,
+        }
+    }
+
+    /// The job's id, for `needs`.
+    pub const fn job(&self) -> &'static str {
+        self.job
+    }
+
+    /// The output's name, for declaring it on the job.
+    pub const fn name(&self) -> &'static str {
+        self.name
+    }
+
+    /// `needs.<job>.outputs.<name>`
+    pub fn read(&self) -> Expr<T> {
+        path("needs", &[self.job, "outputs", self.name])
+    }
+}
+
+/// An output a step writes to `$GITHUB_OUTPUT`, by step id and output name.
+/// The same const sets the step's id (`step.id(OUTPUT.step())`) and reads
+/// the output; rendering checks readers come after the step in its job.
+pub struct StepOutput<T> {
+    step: &'static str,
+    name: &'static str,
+    value_type: PhantomData<fn() -> T>,
+}
+
+impl<T> StepOutput<T> {
+    pub const fn new(step: &'static str, name: &'static str) -> Self {
+        Self {
+            step,
+            name,
+            value_type: PhantomData,
+        }
+    }
+
+    /// The step's id.
+    pub const fn step(&self) -> &'static str {
+        self.step
+    }
+
+    /// The output's name, as the step's script writes it.
+    pub const fn name(&self) -> &'static str {
+        self.name
+    }
+
+    /// `steps.<step>.outputs.<name>`
+    pub fn read(&self) -> Expr<T> {
+        path("steps", &[self.step, "outputs", self.name])
     }
 }
 

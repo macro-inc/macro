@@ -20,6 +20,10 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
 - Build expressions with `gh_workflow::expr::typed` (`github()`, `needs()`,
   `steps()`, `input()`, ...). Rendering rejects any expression, raw or typed,
   that reads a context its key doesn't offer (e.g. `secrets` in a step `if:`).
+- Name a job or step output once, as a `JobOutput<T>` / `StepOutput<T>` const
+  (`Flag` for `'true'`/`'false'` outputs), and use that const both to declare
+  and to read it. Rendering fails when a job reads `needs.X` without listing X,
+  reads an output X doesn't declare, or reads a step that hasn't run yet.
 - Change a generated workflow (header `DO NOT EDIT`) by editing its source module,
   then run `cargo x workflows` and commit the regenerated YAML with it.
 - `cargo x workflows` also writes `tooling/xtask/crates/xtask_workflows/checks.lock`:

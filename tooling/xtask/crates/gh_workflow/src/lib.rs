@@ -9,6 +9,7 @@ pub mod expr;
 mod expression;
 mod job;
 mod permissions;
+mod references;
 mod step;
 mod strategy;
 

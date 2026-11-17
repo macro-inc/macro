@@ -190,3 +190,22 @@ fn a_star_segment_reads_every_item() {
         &parse("github.event.pull_request.labels.*.name").unwrap()
     );
 }
+
+#[test]
+fn output_handles_read_and_name_the_same_output() {
+    use super::typed::{Flag, JobOutput, StepOutput};
+
+    const SHOULD_RUN: JobOutput<Flag> = JobOutput::new("path-check", "should_run");
+    const CHANGED: StepOutput<Flag> = StepOutput::new("filter", "changed");
+
+    assert_eq!(SHOULD_RUN.job(), "path-check");
+    assert_eq!(SHOULD_RUN.name(), "should_run");
+    assert_eq!(
+        SHOULD_RUN.read().is_set().condition().0,
+        "needs.path-check.outputs.should_run == 'true'"
+    );
+    assert_eq!(
+        CHANGED.read().is_unset().to_string(),
+        "${{ steps.filter.outputs.changed != 'true' }}"
+    );
+}
