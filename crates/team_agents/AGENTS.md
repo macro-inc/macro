@@ -63,6 +63,7 @@ An agent's status comes from its computer (`provisioning`, `running`,
 
 ## Gotchas
 
+- `POST /team_agents` refuses an agent's program (`macro_authorization::is_program_run`, 403): creating one adds a team member, mints its key and buys a computer. A person adds one in Settings, Agents.
 - The flag is a rollout gate, never authorization; team roles come from the
   receipt. Admin requests check the acting admin; enrollment checks the
   agent's creator (`agent_credentials::agent_teammates_enabled`), because

@@ -132,6 +132,10 @@ export const entityResolverSchema = {
       ],
       argumentPaths: [['input', 'entityId']],
     },
+    visibleInitiative: {
+      targets: ['GraphqlSoupInitiative'],
+      argumentPaths: [['initiativeId']],
+    },
   },
 } as const;
 

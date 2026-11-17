@@ -1165,6 +1165,22 @@ impl OccurrenceRange {
         }
     }
 
+    /// Construct this month and next, the part of the window a user looks at
+    /// first, which an Outlook calendar's first import lists before the rest.
+    ///
+    /// Months are UTC, as every sync window is, padded by a day on each side
+    /// so the user's own month is inside it in any time zone.
+    pub fn near_window(now: DateTime<Utc>) -> Self {
+        let starts_at = month_floor(now) - chrono::Duration::days(1);
+        let ends_at = month_ceil(month_ceil(now)) + chrono::Duration::days(1);
+        Self {
+            starts_at,
+            ends_at,
+            start_date: starts_at.date_naive(),
+            end_date: ends_at.date_naive(),
+        }
+    }
+
     /// Return whether this viewport is covered by the occurrence window
     /// materialized by the ingestion pipelines.
     pub fn is_materialized_at(&self, now: DateTime<Utc>) -> bool {
@@ -1203,6 +1219,18 @@ fn month_ceil(instant: DateTime<Utc>) -> DateTime<Utc> {
         (date.year(), date.month() + 1)
     };
     NaiveDate::from_ymd_opt(year, month, 1)
+        .expect("first day of a month is valid")
+        .and_hms_opt(0, 0, 0)
+        .expect("midnight is a valid time")
+        .and_utc()
+}
+
+fn month_floor(instant: DateTime<Utc>) -> DateTime<Utc> {
+    use chrono::Datelike;
+
+    instant
+        .date_naive()
+        .with_day(1)
         .expect("first day of a month is valid")
         .and_hms_opt(0, 0, 0)
         .expect("midnight is a valid time")

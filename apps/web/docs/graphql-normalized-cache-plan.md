@@ -878,11 +878,14 @@ unrelated fields.
 
 Mounted project details, project identity chips, and agent-session mentions use
 this live path as well. Project identity reads are cache-first; the shared
-`GraphqlUser.initiative` entity resolver lets them reuse complete authorized
+`GraphqlUser.visibleInitiative` entity resolver lets them reuse complete authorized
 project records loaded by Soup or detail queries, without fetching on row remount.
 Missing fields still require an authorized network read. Detail reads retain
 cache-and-network behavior, and identity reads retain explicit permission
-revalidation. Mention lookups share stable batches: adding another visible item
+revalidation. A missing or hidden project reads as `null`, and a stored null
+outranks the project's record when it arrives later (a project shared with
+the viewer again), so project reads show a cached null only after the server
+has confirmed it during that read. Mention lookups share stable batches: adding another visible item
 does not clear an existing item's data or restart its request.
 Project creation links the complete server-normalized record to its detail query,
 including when the user root is not cached yet. Async creation stops publishing

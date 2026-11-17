@@ -15,6 +15,7 @@ import {
 } from '../core/selection-frame';
 import { isShapeKind } from '../core/shapes/registry';
 import { selectionTarget } from './selection-target';
+import { attachTouchNavigation } from './touch-navigation';
 
 // Matches the Figma viewer: pinch tracks finger speed, wheel notches stay bounded.
 const WHEEL_ZOOM_RATE = 0.01;
@@ -79,6 +80,10 @@ export function attachCameraControls(
       }
     | undefined;
   const originalCursor = element.style.cursor;
+  const touchNavigation = attachTouchNavigation(element, editor, {
+    ignoreTarget: options.ignoreTarget,
+    navigation: options.navigation,
+  });
   let hoverPointer: PointerEvent | undefined;
   const clearHover = () => {
     hoverPointer = undefined;
@@ -453,7 +458,8 @@ export function attachCameraControls(
     }
   };
   // WebKit (Safari, the desktop app) reports trackpad pinches as gesture events
-  // with a running scale instead of ctrl+wheel.
+  // with a running scale instead of ctrl+wheel. It also sends them for fingers
+  // on a touchscreen, which touch navigation already follows.
   let gestureScale = 1;
   const gestureStart = (event: Event) => {
     event.preventDefault();
@@ -468,7 +474,7 @@ export function attachCameraControls(
     };
     const factor = gesture.scale / gestureScale;
     gestureScale = gesture.scale;
-    if (options.suspended?.() || drag) return;
+    if (options.suspended?.() || drag || touchNavigation.tracking()) return;
     const camera = editor.getCamera();
     if (options.navigation === 'centered-image') {
       editor.centerImage(
@@ -498,6 +504,7 @@ export function attachCameraControls(
   window.addEventListener('keyup', updateHover);
   return () => {
     cancel();
+    touchNavigation.detach();
     element.removeEventListener('pointerdown', pointerDown);
     element.removeEventListener('pointermove', pointerHover);
     element.removeEventListener('pointerup', pointerHover);

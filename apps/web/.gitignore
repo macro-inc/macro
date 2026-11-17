@@ -93,3 +93,6 @@ packages/pdfium-worker/**/*
 
 storybook-static
 bunfig.toml
+
+# Android benchmark output (scripts/android-benchmark)
+android-benchmark-results/
