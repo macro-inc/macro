@@ -555,6 +555,8 @@ People preview/pinning. Group company and contact records under
 Contacts & Companies, separate from People; keep contact selection as a CRM link
 even for a matching Macro user.
 Only Macro users and groups participate in mobile People pinning.
+Rank scoped mention people by exact full or first name, prefix, literal match,
+then subsequence before recency and mobile pinning; preserve native directory order.
 The channel browser suite below also checks project
 ranking and insertion on desktop and phone.
 
