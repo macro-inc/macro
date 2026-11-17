@@ -25,6 +25,27 @@ pub(crate) fn my_photo(ctx: &mut Ctx<'_>) -> Handled {
     }
 }
 
+/// A contact's photo, when it has one. Graph answers a contact without a
+/// photo, and a contact or folder the mailbox does not hold, with 404.
+pub(crate) fn contact_photo(ctx: &mut Ctx<'_>, folder: &str, contact: &str) -> Handled {
+    let mailbox = ctx.mailbox()?;
+    if folder != mailbox.contact_folder_id {
+        return Err(GraphError::item_not_found());
+    }
+    let contact = mailbox
+        .contacts
+        .get(contact)
+        .ok_or_else(GraphError::item_not_found)?;
+    match contact.photo.clone() {
+        Some((content_type, bytes)) => Ok(Reply::Bytes(content_type, bytes)),
+        None => Err(GraphError::server(
+            404,
+            "ErrorItemNotFound",
+            "The specified object was not found in the store., The contact has no photo.",
+        )),
+    }
+}
+
 /// The contact folders under the default one, of which a mailbox here has
 /// none: every contact is in the default folder.
 pub(crate) fn contact_folders(ctx: &mut Ctx<'_>) -> Handled {
