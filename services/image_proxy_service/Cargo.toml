@@ -38,6 +38,7 @@ bytes = { workspace = true }
 futures = { workspace = true }
 lazy-regex = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
+safe_fetch = { path = "../../crates/safe_fetch" }
 url = { workspace = true }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }

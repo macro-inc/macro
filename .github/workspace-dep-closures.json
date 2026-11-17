@@ -10544,6 +10544,7 @@
       "crates/properties",
       "crates/rate_limit",
       "crates/remote_env_var",
+      "crates/safe_fetch",
       "crates/secretsmanager_client",
       "crates/share_permission_db_utils",
       "crates/single_flight",
@@ -13662,6 +13663,10 @@
       "crates/macro_user_id",
       "crates/model_owner",
       "crates/s3_key",
+      "crates/workspace-hack"
+    ],
+    "safe_fetch": [
+      "crates/safe_fetch",
       "crates/workspace-hack"
     ],
     "saved_views": [

@@ -39,7 +39,7 @@ fn test_context() -> ApiContext {
         )),
         authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service)),
         environment: Environment::Production,
-        http_client: proxy::build_http_client().expect("test HTTP client should build"),
+        fetcher: proxy::build_fetcher().expect("test fetcher should build"),
     }
 }
 
@@ -329,14 +329,27 @@ async fn generic_proxy_preserves_authenticated_error_contract_at_both_mounts() {
     }
 }
 
+/// Resolves every host to loopback, for driving the real fetcher at a local
+/// upstream.
+struct LoopbackLookup;
+
+impl safe_fetch::HostLookup for LoopbackLookup {
+    fn lookup(
+        &self,
+        _host: &str,
+    ) -> futures::future::BoxFuture<'static, std::io::Result<Vec<std::net::IpAddr>>> {
+        Box::pin(async { Ok(vec![std::net::Ipv4Addr::LOCALHOST.into()]) })
+    }
+}
+
 #[tokio::test]
 async fn generic_proxy_http_success_and_ua_retries_preserve_deployed_contract() {
     use axum::http::header::USER_AGENT;
     use axum::response::Response;
 
-    // An explicit local HTTP proxy keeps all traffic on loopback while the
-    // real generic handler still preflights the public upstream IP. The
-    // production client and both DNS guards remain untouched.
+    // A stub lookup sends a test host name to a loopback upstream, and the
+    // production policy is widened to that one address; everything else is
+    // the real handler and fetcher.
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let (captured_tx, mut captured_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -386,18 +399,16 @@ async fn generic_proxy_http_success_and_ua_retries_preserve_deployed_contract() 
             .await
             .unwrap();
     });
+    let mut policy = proxy::fetch_policy();
+    policy.addresses.private_networks_allowed = vec!["127.0.0.1/32".parse().unwrap()];
     let mut context = test_context();
-    context.http_client = reqwest::Client::builder()
-        .proxy(reqwest::Proxy::http(format!("http://{address}")).unwrap())
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .unwrap();
+    context.fetcher = safe_fetch::SafeFetcher::with_lookup(policy, LoopbackLookup).unwrap();
     let token = access_token(valid_expiration());
     for prefix in ["", "/image-proxy"] {
         for path in ["image", "status-retry", "mime-retry"] {
             let request = proxy_request(&format!(
-                "{prefix}/proxy?url=http%3A%2F%2F8.8.8.8%2F{path}%3Fsignature%3Da%252Bb"
+                "{prefix}/proxy?url=http%3A%2F%2Fimages.test%3A{port}%2F{path}%3Fsignature%3Da%252Bb",
+                port = address.port()
             ))
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .header(COOKIE, "browser-only=fixture")
@@ -426,10 +437,7 @@ async fn generic_proxy_http_success_and_ua_retries_preserve_deployed_contract() 
             let attempts = if path == "image" { 1 } else { 2 };
             for attempt in 0..attempts {
                 let (uri, headers) = captured_rx.try_recv().unwrap();
-                assert_eq!(
-                    uri.to_string(),
-                    format!("http://8.8.8.8/{path}?signature=a%2Bb")
-                );
+                assert_eq!(uri.to_string(), format!("/{path}?signature=a%2Bb"));
                 assert!(!headers.contains_key(AUTHORIZATION));
                 assert!(!headers.contains_key(COOKIE));
                 if attempt == 0 {

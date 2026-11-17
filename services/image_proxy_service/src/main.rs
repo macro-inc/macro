@@ -41,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
 
-    let http_client = api::proxy::build_http_client().context("failed to build http client")?;
+    let fetcher = api::proxy::build_fetcher().context("failed to build the image fetcher")?;
 
     let state = api::context::ApiContext {
         authorization_state,
@@ -50,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
             outbound::remote_image::build_http_client()
                 .context("failed to build favicon client")?,
         )),
-        http_client,
+        fetcher,
     };
 
     api::setup_and_serve(state, config.port).await?;
