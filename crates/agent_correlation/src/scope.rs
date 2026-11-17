@@ -25,8 +25,8 @@ pub enum SessionScope {
 /// agent session, a session's control, queued prompts and app connections
 /// (which resume it), its tool approvals and review decisions, running or
 /// rewriting a chat's tool call (a chat message's tools are refused by its
-/// route), agents, bots and the computers they run on, which act later, and
-/// their credentials. A run that sends nothing makes none of them.
+/// route), agents (and an agent's memory), bots and the computers they run on,
+/// which act later, and their credentials. A run that sends nothing makes none of them.
 const SENDS: &[(&str, &str)] = &[
     ("POST", "/email/messages"),
     ("POST", "/email/send-confirmed"),
@@ -84,6 +84,7 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/agents"),
     ("PUT", "/agents/{id}"),
     ("PATCH", "/agents/{id}"),
+    ("PUT", "/agents/{id}/memory"),
     ("PUT", "/agents/{id}/api-key"),
     ("DELETE", "/agents/{id}/api-key"),
     ("POST", "/bots"),
