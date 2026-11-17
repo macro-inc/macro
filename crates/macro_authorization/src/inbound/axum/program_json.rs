@@ -8,49 +8,72 @@ use ::axum::{
     response::Response,
 };
 
-use super::{AnyPrincipal, MacroAuthorizationState, OptionalMacroAuthorizationExtractor};
-use crate::{
-    MacroAuthorization, MacroAuthorizationService, domain::models::CredentialAttribution,
-    is_program_run,
-};
+use super::MacroAuthorizationState;
+
+#[cfg(test)]
+mod test;
+use crate::MacroAuthorizationService;
+#[cfg(doc)]
+use crate::is_program_run;
 
 /// Whether a request is a program's ([`is_program_run`]): the code-mode
-/// runtime's header, or a JWT signed for an agent or a routine run. Only a
-/// Macro API JWT can carry those claims, so a request carrying no JWT (a
-/// cookie, a bearer, or the `macro-api-token` query) is a person's without a
-/// second credential lookup. A JWT that does not verify counts as none; the
+/// runtime's header, or a Macro API JWT signed for an agent or a routine
+/// run.
+///
+/// Only a Macro API JWT carries those signed claims, so this reads the one
+/// JWT a request sends (the `macro-api-token` query, a bearer or the access
+/// cookie) and checks its signature, with no database lookup and no second
+/// run of the route's credential extraction. A request carrying a user API
+/// key, bot, harness or internal credential carries no program claims and
+/// is not checked further. A JWT that does not verify counts as none; the
 /// route rejects it.
 pub async fn request_is_program<Svc: MacroAuthorizationService>(
     request: Request,
     authorization: &MacroAuthorizationState<Svc>,
 ) -> (Request, bool) {
-    if request.headers().contains_key(super::CODE_EXECUTION_HEADER) {
+    let headers = request.headers();
+    if headers.contains_key(super::CODE_EXECUTION_HEADER) {
         return (request, true);
     }
-    let may_carry_claims = request.headers().contains_key(header::AUTHORIZATION)
-        || request.headers().contains_key(header::COOKIE)
-        || request
-            .uri()
-            .query()
-            .is_some_and(|query| query.contains("macro-api-token="));
-    if !may_carry_claims {
+    // The legacy header still authenticates internal callers.
+    #[allow(deprecated)]
+    let other_credential = [
+        super::USER_API_KEY_HEADER,
+        super::BOT_TOKEN_HEADER,
+        super::HARNESS_TOKEN_HEADER,
+        super::INTERNAL_API_KEY_HEADER,
+        super::LEGACY_DSS_INTERNAL_API_KEY_HEADER,
+    ]
+    .into_iter()
+    .any(|name| headers.contains_key(name));
+    if other_credential {
         return (request, false);
     }
     let (mut parts, body) = request.into_parts();
-    let attribution =
-        match OptionalMacroAuthorizationExtractor::<Svc, AnyPrincipal>::from_request_parts(
-            &mut parts,
-            authorization,
-        )
-        .await
-        {
-            Ok(OptionalMacroAuthorizationExtractor {
-                authorization: Some(MacroAuthorization::User(user)),
-                ..
-            }) => user.attribution(),
-            _ => CredentialAttribution::Person,
-        };
-    let program = is_program_run(attribution, &parts.headers);
+    let query_token = parts.uri.query().and_then(|query| {
+        query.split('&').find_map(|parameter| {
+            parameter
+                .strip_prefix("macro-api-token=")
+                .map(str::to_owned)
+        })
+    });
+    let token = match query_token {
+        Some(token) => Some(token),
+        None => macro_auth::headers::AccessTokenExtractor::from_request_parts(&mut parts, &())
+            .await
+            .ok()
+            .map(|token| token.as_ref().to_owned()),
+    };
+    let program = match token {
+        Some(token) => authorization
+            .service
+            .authorize_identity(&token)
+            .await
+            .is_ok_and(|credential| {
+                credential.identity.agent_id.is_some() || credential.identity.routine_id.is_some()
+            }),
+        None => false,
+    };
     (Request::from_parts(parts, body), program)
 }
 
