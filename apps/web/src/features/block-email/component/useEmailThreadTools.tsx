@@ -2,7 +2,10 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
-import { useThreadExclusionAction } from '@app/features/crm/thread-exclusion-adapter';
+import {
+  ThreadExclusionButton,
+  useThreadExclusionAction,
+} from '@app/features/crm/thread-exclusion-adapter';
 import { downloadEmailMessageEml } from '@app/features/email-message/eml-download-adapter';
 import type { EmailThreadListNavigation } from '@app/features/email-thread/context/email-thread-context';
 import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
@@ -39,6 +42,7 @@ import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import EnvelopeOpenIcon from '@icon/system/regular/envelope-open.svg';
+import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
 import ProhibitIcon from '@icon/system/regular/prohibit.svg';
@@ -63,6 +67,7 @@ export type EmailThreadToolsOptions = {
 
 /** Read and done state for a thread header's toggles, with its reminder. */
 export type EmailThreadControlState = {
+  crmExclusion?: JSX.Element;
   reminder?: JSX.Element;
   isOwnThread: boolean;
   isDone: boolean;
@@ -107,7 +112,11 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     if (!thread || !queryReadyGate(linksQuery)) return false;
     return linksQuery.data.links.some((link) => link.id === thread.link_id);
   };
-  const crmPrivacy = useThreadExclusionAction(() => props.id, isOwnThread);
+  const crmPrivacy = useThreadExclusionAction(
+    () => props.id,
+    isOwnThread,
+    () => emailCtx.thread()?.link_id
+  );
 
   const isDone = () => emailCtx.isThreadDone();
 
@@ -360,13 +369,16 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
         senderBucket() !== 'noise',
     },
     excludeFromCrm: {
-      group: 'file',
+      group: 'sharing',
       get label() {
-        return t('crm.privacyExcludeThread');
+        return crmPrivacy.label();
       },
-      icon: ProhibitIcon,
-      action: crmPrivacy.exclude,
-      condition: crmPrivacy.available,
+      get disabledReason() {
+        return crmPrivacy.disabledReason();
+      },
+      icon: EyeSlashIcon,
+      action: crmPrivacy.toggle,
+      condition: crmPrivacy.visible,
     },
     blockSender: {
       group: 'sender',
@@ -384,6 +396,17 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     permissions: () => getPermissions(emailCtx.thread()?.access_level),
     actions,
     controls: {
+      get crmExclusion() {
+        return (
+          <ThreadExclusionButton
+            visible={crmPrivacy.visible()}
+            excluded={crmPrivacy.excluded()}
+            label={crmPrivacy.label()}
+            disabledReason={crmPrivacy.disabledReason()}
+            onClick={crmPrivacy.toggle}
+          />
+        );
+      },
       get reminder() {
         const entity = emailEntity();
         return entity && isOwnThread() ? (

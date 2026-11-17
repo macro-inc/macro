@@ -15,7 +15,7 @@ use super::{
 };
 
 /// Header carrying the shared key for standard internal service authorization.
-pub const INTERNAL_API_KEY_HEADER: &str = "x-internal-auth-key";
+pub use macro_auth::credential::INTERNAL_API_KEY_HEADER;
 /// Header carrying the acting Macro user ID for standard internal authorization.
 pub const INTERNAL_MACRO_USER_ID_HEADER: &str = "x-internal-macro-user-id";
 /// Header carrying the acting organization ID for standard internal authorization.
@@ -25,7 +25,8 @@ pub const INTERNAL_FUSIONAUTH_USER_ID_HEADER: &str = "x-internal-fusionauth-user
 
 /// Legacy DSS header carrying the internal service authorization key.
 #[deprecated(note = "migrate callers to INTERNAL_API_KEY_HEADER")]
-pub const LEGACY_DSS_INTERNAL_API_KEY_HEADER: &str = "x-document-storage-service-auth-key";
+pub const LEGACY_DSS_INTERNAL_API_KEY_HEADER: &str =
+    macro_auth::credential::LEGACY_DSS_INTERNAL_API_KEY_HEADER;
 /// Legacy DSS header carrying the acting Macro user ID.
 #[deprecated(note = "migrate callers to INTERNAL_MACRO_USER_ID_HEADER")]
 pub const LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER: &str = "x-document-storage-service-user-id";

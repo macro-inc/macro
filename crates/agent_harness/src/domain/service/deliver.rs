@@ -341,6 +341,7 @@ where
                 announced: None,
                 created_at: chrono::Utc::now(),
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             };
             self.notification_batches.insert(session_id, batch);
             self.queues.requeue_front(session_id, entry);
@@ -412,6 +413,7 @@ where
             announce: _,
             context: _,
             client: _,
+            prompter: _,
         } = command;
 
         if !matches!(action, AgentAction::Stop)

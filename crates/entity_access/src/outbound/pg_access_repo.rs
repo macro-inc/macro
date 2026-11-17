@@ -3,7 +3,9 @@
 pub(crate) mod queries;
 
 pub use queries::agent_session_access::accessible_session_ids;
-pub use queries::email_thread_shares::{SharedEmailThread, shared_email_threads};
+pub use queries::email_thread_shares::{
+    SharedEmailThread, project_email_threads, project_shared_email_threads, shared_email_threads,
+};
 pub use queries::{SourceIds, get_team_scope_source_ids, get_user_source_ids};
 
 #[cfg(test)]

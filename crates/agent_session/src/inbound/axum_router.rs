@@ -1225,6 +1225,7 @@ pub async fn edit_queued_action_handler<
     _access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
+    headers: axum::http::HeaderMap,
     Path((session_id, action_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<EditQueuedActionRequest>,
 ) -> Result<StatusCode, AgentSessionApiError> {
@@ -1246,6 +1247,7 @@ pub async fn edit_queued_action_handler<
             AgentActionId::from_uuid(action_id),
             request.prompt,
             actor,
+            control_principal(&caller.authorization, &headers).prompter(),
         )
         .await?;
     Ok(StatusCode::NO_CONTENT)
@@ -2374,7 +2376,8 @@ pub async fn create_agent_session_handler<
         Some(prompt) => {
             // The same rule as a control prompt's tab, so creating with a
             // prompt grants nothing prompting afterwards would not.
-            let client = control_principal(&caller.authorization, &headers)
+            let principal = control_principal(&caller.authorization, &headers);
+            let client = principal
                 .admit_client(
                     request
                         .prompt_client_id
@@ -2389,6 +2392,7 @@ pub async fn create_agent_session_handler<
                 prompt,
                 attachments: request.prompt_attachments,
                 client,
+                prompter: principal.prompter(),
             })
         }
         None if request.prompt_action_id.is_some()
@@ -2482,6 +2486,7 @@ pub async fn create_agent_session_handler<
                     }
                     if let Some(first_prompt) = first_prompt {
                         let client = first_prompt.client;
+                        let prompter = first_prompt.prompter;
                         let (action_id, action) = first_prompt.into_action();
                         state
                             .controls
@@ -2493,6 +2498,7 @@ pub async fn create_agent_session_handler<
                                     actor: Some(owner),
                                     context: None,
                                     client,
+                                    prompter,
                                 },
                             )
                             .await

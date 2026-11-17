@@ -311,9 +311,12 @@ impl<'a> OwnedRead<'a> {
             .copied()
             .filter(|inbox| owners.iter().all(|owner| owner == inbox))
             .collect();
-        let Some(superset) =
-            build_address_superset(email_filter, &params.resolved, &params.link_ids)
-        else {
+        let Some(superset) = build_address_superset(
+            email_filter,
+            &params.resolved,
+            &params.link_ids,
+            tuning.superset_limit,
+        ) else {
             return Err(Box::new(params));
         };
         let contact_scope = build_contact_scope(email_filter, &params.resolved, &params.link_ids);
@@ -516,20 +519,20 @@ impl<'a> OwnedRead<'a> {
         &self,
         connection: &mut PgConnection,
         cap: i64,
-        indexed_recipients: bool,
+        indexed: bool,
     ) -> Result<i64, sqlx::Error> {
-        self.probe(cap, indexed_recipients)
+        self.probe(cap, indexed)
             .build_query_scalar()
             .persistent(false)
             .fetch_one(&mut *connection)
             .await
     }
 
-    fn probe(&self, cap: i64, indexed_recipients: bool) -> QueryBuilder<'static, Postgres> {
+    fn probe(&self, cap: i64, indexed: bool) -> QueryBuilder<'static, Postgres> {
         let mut builder = QueryBuilder::new("");
         self.push_contact_ctes(&mut builder, "WITH ");
         builder.push("\n        SELECT count(*) FROM (SELECT 1 FROM (\n            ");
-        let branches = if indexed_recipients {
+        let branches = if indexed {
             &self.superset.indexed_branches
         } else {
             &self.superset.branches

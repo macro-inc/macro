@@ -313,13 +313,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   word, until `inbox` names the addressed copy's inbox. The route cannot tell
   an inbox the user chose from one the agent picked, so the wording is the
   only guard against a guess. UpdateCalendarEvent and DeleteCalendarEvent check
-  every call; the update, invite-guests and delete routes check agent runs and
-  any request naming `inbox` through `CalendarCopyConfirmation`, answering 409
-  `copy_choice_required`. An agent run (`macro_authorization::is_agent_run`)
-  is a token with `agent_id` (in-app code mode) or a request carrying
-  `x-macro-code-execution`, which
-  `code_execution`'s bootstrap sets on every code-mode program's SDK requests,
-  public MCP clients' included. Code-mode agents never see the calendar tools
+  every call; the update, invite-guests and delete routes check every program
+  run (`macro_authorization::is_program_run`: a token signed for an agent or a
+  routine, owner routine steps included, or a request carrying
+  `x-macro-code-execution`, which `code_execution`'s bootstrap sets on every
+  code-mode program's SDK requests) and any request naming `inbox` through
+  `CalendarCopyConfirmation`, answering 409 `copy_choice_required`. The create
+  route refuses only agent runs (`is_agent_run`), so an owner routine step
+  creates events. Code-mode agents never see the calendar tools
   (`agent_code_mode::covered_by_code_sdk`), so the routes and the SDK docs are
   what reach them; the web, which opens one copy, sends no `inbox` and is not
   checked.
@@ -406,8 +407,24 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `skipped`), warning `skipping an Outlook occurrence Macro cannot read` with
   its `occurrence_id`, and the span adds `skipped_occurrences`. A secondary
   calendar has no v1.0 delta, so each of its rounds lists and reads every
-  event again. A delta round lists only changes, so it also reads again the
-  members with no stored copy that an older `READER_REVISION` read (stamped
+  event again. A first import (a calendar never synced, in a scan from
+  scratch) lists this month and next first (`OccurrenceRange::near_window`,
+  a `calendarView` snapshot on any calendar, with
+  `OutlookCalendarLease::near_window` set), then the whole window in a scan of
+  its own (`calendar_outlook_work.whole_window_scan_id`), so what the user
+  looks at first arrives first, and an event deleted between the two is still
+  retired. The near window's events are read twice. Nothing marks the
+  calendar synced or materialized, or its account ready, before the whole
+  window finishes, so every coverage reader (sync health and booking, team
+  availability, the syncing banner) still sees a first import in progress.
+  `checkpoint_outlook_calendar` reports both milestones (`OutlookCheckpoint`):
+  the span records `milestone` (`near_window_imported`,
+  `first_sync_finished`), and the log `an Outlook calendar's first import
+  reached a milestone` carries `since_discovery_s`, the only measure of time
+  to the current month, since spans are sampled.
+  Google needs no such order: its first import writes each calendar's whole
+  window from one snapshot within seconds. A delta round lists only changes,
+  so it also reads again the members with no stored copy that an older `READER_REVISION` read (stamped
   in `calendar_outlook_members.reader_revision`, NULL from builds before
   it; a member found with a stored copy is stamped instead): a parser fix brings skipped events back without anyone touching
   them, and a skip costs no read until the event changes or the revision
