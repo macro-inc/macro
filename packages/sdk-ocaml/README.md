@@ -259,13 +259,20 @@ Code mode (`crates/code_execution`) runs the same commands, with
 `bin/code_mode_policy main.cmt`: a policy check on the typed tree
 (`code_mode/policy/`) that refuses `external` declarations and uses of
 `Obj`, `Marshal`, `Sys.command`, `input_value`/`output_value`,
-`Camlinternal*`, `Unix` and the JavaScript interop, by path and by the unit
-that declared the value (so aliases and opens still name them). `Sys` and
-`Stdlib`, which declare forbidden values, may be used as a path prefix,
-opened, or renamed (`module S = Sys`), but not otherwise as a module (a
-signature constraint, functor argument, first-class module or `include`,
-any of which could rename the value behind a signature), and binding
-`Stdlib` itself to a module is refused (opening it is fine). It prints `<file>:<line>:<column>: <message>` per finding and exits
+`Camlinternal*`, `Unix` and the JavaScript interop. It guarantees that no
+value the program names is one of those, by path or by the unit that
+declared it (so aliases and opens still name them). Since only a coercion
+to a signature the program writes (constraint, functor argument,
+first-class module, `include`) changes a value's declaring unit, it
+refuses every coercion whose source module's type, expanded in the
+program's own environment through aliases, named module types, submodules
+and functor results, holds a forbidden value or `Sys`/`Stdlib` as a
+submodule, and every one it cannot expand. `Sys` and `Stdlib` may be used
+as a path prefix, opened, or renamed (`module S = Sys`), but not otherwise
+as a module, and binding `Stdlib` itself to a module is refused (opening it
+is fine). It does not look inside the bundle's libraries, and it refuses
+some safe programs (a coerced module holding `Sys` that the signature
+hides). It prints `<file>:<line>:<column>: <message>` per finding and exits
 1 when there is any. It is defense in depth; Deno's permissions are the
 boundary. `dune test` runs its tests (`code_mode/policy/test/`).
 
