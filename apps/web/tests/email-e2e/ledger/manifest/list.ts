@@ -698,7 +698,6 @@ export const list = {
       trigger:
         '"Connect another account" in the sidebar Accounts dropdown, header inbox menu or touch Inboxes list',
       source: ['src/features/email-view/components/EmailInboxSelector.tsx'],
-      flag: 'enable-multi-inbox',
     },
     {
       id: 'AL-045',
@@ -1238,7 +1237,6 @@ export const list = {
       action: 'Save view from current filters',
       trigger: 'header "Save view"',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-108',
@@ -1247,7 +1245,6 @@ export const list = {
       action: "Revert filters to tab's own",
       trigger: 'header "Revert"',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-406',

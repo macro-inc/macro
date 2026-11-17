@@ -1,4 +1,3 @@
-import { enableDictation, isFeatureEnabled } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 /**
@@ -7,5 +6,5 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
  * controller reports `unavailable`, so nothing can start a session either.
  */
 export function isDictationAvailable(): boolean {
-  return isFeatureEnabled(enableDictation) && !isTouchDevice();
+  return !isTouchDevice();
 }

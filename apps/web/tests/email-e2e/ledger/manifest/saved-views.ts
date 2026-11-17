@@ -16,7 +16,7 @@ export const savedViews = {
       id: 'SL-46',
       name: 'Saved views sidebar section',
       opened:
-        'Sidebar below Library; on touch the sidebar sheet (AL-911), below the tabs; flag',
+        'Sidebar below Library; on touch the sidebar sheet (AL-911), below the tabs',
       viewports: BOTH_VIEWPORTS,
     },
     {
@@ -51,7 +51,6 @@ export const savedViews = {
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/components/saved-view-list.tsx',
       ],
-      flag: 'enable-email-saved-views',
       note: "on touch it replaced the removed phone picker's rows (AL-702)",
     },
     {
@@ -65,7 +64,6 @@ export const savedViews = {
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/components/saved-view-list.tsx',
       ],
-      flag: 'enable-email-saved-views',
       note: "on touch it replaced the removed phone picker's Create view (AL-703)",
     },
     {
@@ -75,7 +73,6 @@ export const savedViews = {
       action: 'reorder saved views',
       trigger: 'drag a row past another (4px threshold, two or more views)',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
       viewports: ['desktop'],
       note: 'touch reorders with Move up / Move down instead (AL-115)',
     },
@@ -86,7 +83,6 @@ export const savedViews = {
       action: 'retry loading saved views',
       trigger: '"Retry loading views" button',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-700',
@@ -95,7 +91,6 @@ export const savedViews = {
       action: 'load more saved views',
       trigger: '"Load more views" button',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-701',
@@ -107,7 +102,6 @@ export const savedViews = {
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/components/saved-view-list.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-115',
@@ -119,7 +113,6 @@ export const savedViews = {
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/components/saved-view-menu.tsx',
       ],
-      flag: 'enable-email-saved-views',
       viewports: ['phone'],
     },
 
@@ -135,7 +128,6 @@ export const savedViews = {
         'src/features/saved-views/components/saved-view-dialog.tsx',
         'src/features/email-view/components/EmailSavedViewFields.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-704',
@@ -144,7 +136,6 @@ export const savedViews = {
       action: 'add / remove Tags in the builder',
       trigger: 'Tags chip picker "Add tags" (shown when tags exist)',
       source: ['src/features/email-view/components/EmailSavedViewFields.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-705',
@@ -157,7 +148,6 @@ export const savedViews = {
         'src/features/email-view/components/EmailSavedViewFields.tsx',
         'src/features/email-view/components/EmailFilterFields.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-110',
@@ -169,7 +159,6 @@ export const savedViews = {
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/views/saved-view-dialogs.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-706',
@@ -178,7 +167,6 @@ export const savedViews = {
       action: 'close builder without saving',
       trigger: 'dialog "Cancel"',
       source: ['src/features/saved-views/components/saved-view-dialog.tsx'],
-      flag: 'enable-email-saved-views',
     },
 
     // SL-49 view menu
@@ -193,7 +181,6 @@ export const savedViews = {
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/components/saved-view-list.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-111',
@@ -205,7 +192,6 @@ export const savedViews = {
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/components/saved-view-menu.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-112',
@@ -217,7 +203,6 @@ export const savedViews = {
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/components/saved-view-menu.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-113',
@@ -229,7 +214,6 @@ export const savedViews = {
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/views/saved-view-dialogs.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
 
     // SL-16 open view
@@ -245,7 +229,6 @@ export const savedViews = {
         'src/features/email-view/components/EmailHeader.tsx',
         'src/features/email-view/components/EmailFilterDrawer.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-117',
@@ -254,7 +237,6 @@ export const savedViews = {
       action: "Reset open view's edits",
       trigger: '"Reset" beside Save changes',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-118',
@@ -263,7 +245,6 @@ export const savedViews = {
       action: 'reload the view after a save conflict',
       trigger: '"Reload saved view" in the save-error group',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'AL-708',
@@ -272,7 +253,6 @@ export const savedViews = {
       action: 'duplicate the edited view after a failed save',
       trigger: '"Duplicate" in the save-error group',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
 
     // SL-50 unavailable
@@ -283,7 +263,6 @@ export const savedViews = {
       action: 'Return to Email from unavailable view',
       trigger: '"Return to Email" button',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
   ],
   states: [
@@ -295,7 +274,6 @@ export const savedViews = {
       state: 'status "Loading views…"',
       trigger: 'views query pending with nothing loaded',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-056',
@@ -305,7 +283,6 @@ export const savedViews = {
         'empty state "Your go-to views", "Save a set of senders, subjects, or filters to triage first." + "Create view"',
       trigger: 'no saved views',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-057',
@@ -314,7 +291,6 @@ export const savedViews = {
       state: '"Retry loading views" button (no error text)',
       trigger: 'SavedViews query fails',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-058',
@@ -326,7 +302,6 @@ export const savedViews = {
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/email-view/queries/use-email-saved-view-unread.ts',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-701',
@@ -335,7 +310,6 @@ export const savedViews = {
       state: 'the open view’s row is selected',
       trigger: 'open a saved view',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-702',
@@ -344,7 +318,6 @@ export const savedViews = {
       state: 'rows show the new order at once',
       trigger: 'drop a dragged row (or Move up / Move down)',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-059',
@@ -357,7 +330,6 @@ export const savedViews = {
       toasts: [
         'src/features/email-view/views/email-saved-views.tsx#emailViews.reorderFailed',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-703',
@@ -366,7 +338,6 @@ export const savedViews = {
       state: '"Load more views" button, disabled while loading more',
       trigger: 'more saved views than one page',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
 
     // SL-48 builder dialog
@@ -382,7 +353,6 @@ export const savedViews = {
         'src/features/saved-views/views/saved-view-dialogs.tsx',
         'src/features/email-view/components/EmailSavedViewFields.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-706',
@@ -395,7 +365,6 @@ export const savedViews = {
         'src/features/saved-views/components/saved-view-dialog.tsx',
         'src/features/email-view/views/email-saved-views.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-707',
@@ -407,7 +376,6 @@ export const savedViews = {
         'src/features/saved-views/views/saved-view-dialogs.tsx',
         'src/features/saved-views/components/saved-view-dialog.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-708',
@@ -417,7 +385,6 @@ export const savedViews = {
         'Advanced settings start open when the view sets one; Inboxes shown with two or more inboxes; Tags shown when tags exist',
       trigger: 'open the builder',
       source: ['src/features/email-view/components/EmailSavedViewFields.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-060',
@@ -430,7 +397,6 @@ export const savedViews = {
       toasts: [
         'src/features/email-view/views/email-saved-views.tsx#captured.error',
       ],
-      flag: 'enable-email-saved-views',
     },
 
     // SL-49 view menu
@@ -445,7 +411,6 @@ export const savedViews = {
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/components/saved-view-dialog.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-709',
@@ -457,7 +422,6 @@ export const savedViews = {
         'src/features/saved-views/views/saved-view-dialogs.tsx',
         'src/features/saved-views/components/saved-view-dialog.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-710',
@@ -466,7 +430,6 @@ export const savedViews = {
       state: 'the list returns to the tab it was opened from',
       trigger: 'delete the view that is open',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-711',
@@ -479,7 +442,6 @@ export const savedViews = {
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/components/saved-view-menu.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
 
     // SL-16 open view
@@ -491,7 +453,6 @@ export const savedViews = {
         'list placeholder while the view loads, then its mail; unavailable state instead when it cannot be opened',
       trigger: 'open saved view',
       source: ['src/features/email-view/email-view.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-704',
@@ -504,7 +465,6 @@ export const savedViews = {
         'src/features/email-view/email-view.tsx',
         'src/features/email-view/views/email-saved-views.tsx',
       ],
-      flag: 'enable-email-saved-views',
       viewports: ['phone'],
     },
     {
@@ -517,7 +477,6 @@ export const savedViews = {
         'src/features/email-view/components/EmailHeader.tsx',
         'src/features/email-view/views/email-saved-views.tsx',
       ],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-061',
@@ -526,7 +485,6 @@ export const savedViews = {
       state: '"Save changes" and "Reset" shown while the view has edits',
       trigger: 'edit filters in open view',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-713',
@@ -536,7 +494,6 @@ export const savedViews = {
         '"Save changes" disabled while saving or when the view has skipped settings',
       trigger: 'click Save changes / edit a view with skipped settings',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-062',
@@ -546,7 +503,6 @@ export const savedViews = {
         'save-error alert with "Duplicate"; "Reload saved view" too on a conflict',
       trigger: 'UpdateSavedView conflict or failure',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-700',
@@ -558,7 +514,6 @@ export const savedViews = {
       toasts: [
         'src/features/email-view/views/email-saved-views.tsx#config.error',
       ],
-      flag: 'enable-email-saved-views',
     },
 
     // SL-50 unavailable / warning
@@ -570,7 +525,6 @@ export const savedViews = {
         'alert "This saved view is unavailable or you no longer have access." + "Return to Email"',
       trigger: 'open deleted or inaccessible view',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
     {
       id: 'STL-064',
@@ -580,7 +534,6 @@ export const savedViews = {
         'alert "Some saved settings were skipped." with "Skipped settings: <names>"',
       trigger: 'view has settings this client cannot apply',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
-      flag: 'enable-email-saved-views',
     },
   ],
 } as const satisfies Group;

@@ -7,6 +7,9 @@ use automatic_decline::{AutomaticDeclineProvider, AutomaticDeclineRepository};
 use rootcause::Report;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// One lease on an account discovery or calendar synchronization job.
 #[derive(Clone)]
 pub struct OutlookCalendarLease {
@@ -63,10 +66,52 @@ pub struct OutlookDiscovery {
     pub unmapped_time_zone: Option<String>,
 }
 
+/// One occurrence or single event a page lists.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OutlookPageMember {
+    /// Provider occurrence/single ID.
+    pub provider_id: String,
+    /// Normalized master/single ID.
+    pub master_id: String,
+    /// Its start and end, when the listing carries a time Macro can read.
+    pub occurs: Option<(chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)>,
+}
+
+/// The master/single IDs a first import's near-window page lists, each once,
+/// in the order it reads them: the event closest to `now` first, so this week
+/// arrives before the rest of the two months. A series counts by its nearest
+/// listed occurrence and an event under way is at distance zero. Members
+/// without a readable time come last, by ID, the order every other page reads.
+pub fn nearest_first(
+    members: &[OutlookPageMember],
+    now: chrono::DateTime<chrono::Utc>,
+) -> Vec<String> {
+    let mut nearest = std::collections::BTreeMap::<&str, Option<chrono::TimeDelta>>::new();
+    for member in members {
+        let distance = member.occurs.map(|(starts_at, ends_at)| {
+            if now < starts_at {
+                starts_at - now
+            } else if now < ends_at {
+                chrono::TimeDelta::zero()
+            } else {
+                now - ends_at
+            }
+        });
+        let entry = nearest.entry(&member.master_id).or_insert(distance);
+        *entry = match (*entry, distance) {
+            (Some(known), Some(distance)) => Some(known.min(distance)),
+            (known, distance) => known.or(distance),
+        };
+    }
+    let mut order: Vec<_> = nearest.into_iter().collect();
+    order.sort_by_key(|(_, distance)| (distance.is_none(), *distance));
+    order.into_iter().map(|(id, _)| id.to_owned()).collect()
+}
+
 /// One page of event identities. Its cursor is staged with its child work.
 pub struct OutlookCalendarPage {
-    /// (Provider occurrence/single ID, normalized master/single ID).
-    pub members: Vec<(String, String)>,
+    /// The occurrences and single events listed.
+    pub members: Vec<OutlookPageMember>,
     /// Tombstoned provider occurrence/single IDs.
     pub removed: Vec<String>,
     /// Next page URL, when this round is not complete.
@@ -288,6 +333,7 @@ impl<
             calendar_id = lease.target.as_ref().map(|target| tracing::field::display(target.calendar_id)),
             step = tracing::field::Empty,
             near_window = tracing::field::Empty,
+            untimed_members = tracing::field::Empty,
             milestone = tracing::field::Empty,
             provider_event_id = tracing::field::Empty,
             outcome = tracing::field::Empty,
@@ -396,7 +442,19 @@ impl<
                         .calendar_page(&token, listed, delta, lease.page_cursor.as_deref())
                         .await
                     {
-                        Ok(page) => OutlookCalendarProgress::Page(page),
+                        Ok(page) => {
+                            if lease.near_window {
+                                // Members without a time Macro can read are
+                                // read last, so a rising count means the
+                                // near window lost its order.
+                                span.record(
+                                    "untimed_members",
+                                    page.members.iter().filter(|m| m.occurs.is_none()).count()
+                                        as i64,
+                                );
+                            }
+                            OutlookCalendarProgress::Page(page)
+                        }
                         Err(error)
                             if error.kind() == CalendarProviderErrorKind::SyncTokenExpired =>
                         {
