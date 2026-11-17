@@ -13,6 +13,8 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
+pub(super) mod selected;
+
 const TEAM: Uuid = Uuid::from_u128(0xf1);
 const OWN: Uuid = Uuid::from_u128(1);
 const TEAMMATE: Uuid = Uuid::from_u128(2);
@@ -354,7 +356,7 @@ async fn verdicts(pool: &sqlx::PgPool, team: Uuid) -> anyhow::Result<(i64, i64, 
     );
     builder.push_bind(team);
     builder.push(", t.id) AS allowed, (TRUE");
-    builder.push(ALLOWED);
+    read.push_allowed(&mut builder);
     // The page runs the rule over a thread's id and inbox alone.
     builder.push(") AS inline FROM (SELECT id, link_id FROM email_threads) AS t) AS verdict");
     Ok(builder.build_query_as().fetch_one(pool).await?)

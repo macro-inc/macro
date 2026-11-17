@@ -99,6 +99,9 @@ data checks and explicit vault purge. It does not depend on a successful item.
 - `crm_email_rule_*` and `crm_email_policy_audit` hold private member/mailbox
   policy history. Selected consent uses its own grant bit and exact revision FK;
   legacy-write/version triggers and mailbox revocation must survive rollbacks.
+  The eligibility function migration rejects preexisting selected rows because
+  old inline readers remain during deployment. Keep selected activation absent
+  until the scalar function, ingestion and Team reader are compatible.
   Keep applied migration files immutable and add forward corrections instead.
 
 - `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
@@ -200,4 +203,5 @@ invalid index before retrying.
 `crm_email_thread_exclusions` stores one contributor's private thread exceptions;
 its membership, mailbox and thread foreign keys cascade deletion. The CRM domain
 owns writes and owner-only listing; `crm_email_thread_excluded` is the independent
-veto used by the shared eligibility function and mirrored in set-based ingestion.
+veto used by the shared eligibility function and mirrored in set-based ingestion
+and the inline Team reader, including selected contribution.
