@@ -39,8 +39,7 @@ use entity_access::{
 use macro_authorization::{
     AnyPrincipal, CODE_EXECUTION_HEADER, CredentialAttribution, CredentialOrigin,
     MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, OptionalMacroAuthorizationExtractor, UserOrInternal,
-    is_program_run,
+    MacroAuthorizationState, OptionalMacroAuthorizationExtractor, UserOrInternal, is_program_run,
 };
 use model_error_response::ErrorResponse;
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
