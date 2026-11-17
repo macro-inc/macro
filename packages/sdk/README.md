@@ -88,7 +88,9 @@ const grant = await macro.accountManagers.askToManage(person);
 const token = await grant.claimToken();
 ```
 
-A person can ask instead, with `macro.accountManagers.askToBeManagedBy(agent)`. Only the
+An agent's program (ExecuteCode, a routine) can't ask, approve or claim: those return 403,
+so an agent account uses its own API key. A person can ask instead, with
+`macro.accountManagers.askToBeManagedBy(agent)`. Only the
 manager can claim, so the agent approves and claims with its own client, using the grant id
 from the card in the DM: `macro.accountManagers.byId(id)`.
 

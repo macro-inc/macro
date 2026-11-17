@@ -97,15 +97,17 @@ where
 fn refuse_program(
     user: &MacroUserAuthentication,
     headers: &HeaderMap,
+    grant: Option<Uuid>,
 ) -> Result<(), AccountManagerError> {
     let attribution = user.attribution();
     if is_program_run(attribution, headers) {
         tracing::warn!(
             ?attribution,
+            ?grant,
             "refused an account manager change to a program"
         );
         return Err(AccountManagerError::Forbidden(
-            "An agent's program cannot ask for, approve or claim an account manager. Tell the user to do it from the card in their DM or in Settings, Account Managers.",
+            "An agent's program cannot ask for, approve or claim an account manager. A person approves from the card in their DM or in Settings, Account Managers; an agent account asks and claims with its own API key.",
         ));
     }
     Ok(())
@@ -182,7 +184,7 @@ where
     S: AccountManagerService,
     Auth: MacroAuthorizationService,
 {
-    refuse_program(&user.authorization.user, &headers)?;
+    refuse_program(&user.authorization.user, &headers, None)?;
     let grant = state
         .service
         .request(
@@ -284,7 +286,10 @@ where
     S: AccountManagerService,
     Auth: MacroAuthorizationService,
 {
-    refuse_program(&user.authorization.user, &headers)?;
+    // Declining only takes access away, so a program may still decline.
+    if body.decision == AccountManagerDecision::Approve {
+        refuse_program(&user.authorization.user, &headers, Some(params.id))?;
+    }
     let grant = state
         .service
         .respond(
@@ -324,7 +329,7 @@ where
     S: AccountManagerService,
     Auth: MacroAuthorizationService,
 {
-    refuse_program(&user.authorization.user, &headers)?;
+    refuse_program(&user.authorization.user, &headers, Some(params.id))?;
     let claimed = state
         .service
         .claim(&user.authorization.user.macro_user_id, params.id)

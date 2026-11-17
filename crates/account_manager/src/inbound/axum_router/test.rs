@@ -170,6 +170,13 @@ async fn a_program_cannot_request_approve_or_claim_a_manager() {
                 "{program} {route}"
             );
             assert_eq!(service.0.load(Ordering::SeqCst), 0, "{program} {route}");
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            assert!(
+                String::from_utf8_lossy(&body).contains("cannot ask for, approve or claim"),
+                "{program} {route}"
+            );
         }
     }
 }
@@ -177,6 +184,41 @@ async fn a_program_cannot_request_approve_or_claim_a_manager() {
 #[tokio::test]
 async fn a_person_reaches_the_service() {
     for (route, request) in requests(PERSON, false) {
+        let service = Arc::new(Reached::default());
+
+        let response = router(service.clone()).oneshot(request).await.unwrap();
+
+        assert_eq!(
+            response.status(),
+            axum::http::StatusCode::CONFLICT,
+            "{route}"
+        );
+        assert_eq!(service.0.load(Ordering::SeqCst), 1, "{route}");
+    }
+}
+
+/// Declining and revoking only take access away, so a program may do both.
+#[tokio::test]
+async fn a_program_may_still_decline_or_revoke() {
+    let grant = Uuid::now_v7();
+    let bearer = format!("agent:{PERSON}");
+    for (route, request) in [
+        (
+            "decline",
+            Request::post(format!("/{grant}/response"))
+                .header("authorization", format!("Bearer {bearer}"))
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"decision": "decline"}"#))
+                .unwrap(),
+        ),
+        (
+            "revoke",
+            Request::delete(format!("/{grant}"))
+                .header("authorization", format!("Bearer {bearer}"))
+                .body(Body::empty())
+                .unwrap(),
+        ),
+    ] {
         let service = Arc::new(Reached::default());
 
         let response = router(service.clone()).oneshot(request).await.unwrap();
