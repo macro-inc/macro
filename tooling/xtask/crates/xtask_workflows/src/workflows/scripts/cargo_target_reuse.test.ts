@@ -130,6 +130,23 @@ describe("plan", () => {
 		assert.equal(modified.record.get("a.rs")?.time, 200);
 	});
 
+	test("a job's reason dates every path now", () => {
+		const first = run(undefined, { "a.rs": blob("a") }, 100);
+		const tree = new Map([["a.rs", blob("a")]]);
+		const forced = plan(
+			first.record,
+			tree,
+			new Map(),
+			200,
+			"the pull request changes migrations",
+		);
+		assert.equal(forced.rebuildAll, "the pull request changes migrations");
+		assert.equal(forced.record.get("a.rs")?.time, 200);
+		const unset = plan(first.record, tree, new Map(), 200, "");
+		assert.equal(unset.rebuildAll, undefined);
+		assert.equal(unset.record.get("a.rs")?.time, 100);
+	});
+
 	test("a symlink that changes, appears or goes away dates what it pointed to, before and after", () => {
 		const base = {
 			"a/data.txt": link("l1"),

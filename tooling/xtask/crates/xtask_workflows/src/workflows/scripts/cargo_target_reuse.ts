@@ -1,5 +1,5 @@
-// Lets cargo reuse the `target` directory the Generated Code Check keeps on its
-// cache volume. Cargo counts a workspace crate as built when none of its
+// Lets cargo reuse the `target` directory a CI job keeps on its cache
+// volume. Cargo counts a workspace crate as built when none of its
 // sources is newer than its last build, and a checkout stamps every file with
 // the current time, so without this every workspace crate rebuilds.
 //
@@ -14,17 +14,31 @@
 // Some changes cargo can't see:
 // - sqlx reads `.sqlx` query data without telling rustc. A new query's data
 //   comes with the query's new source, so only changed data dates every path
-//   now and rebuilds every workspace crate. Removed data that a query still
-//   needs fails Rust CI's fresh build.
+//   now and rebuilds every workspace crate. Removed data is not: another
+//   pull request's query, missing from this tree, is the common case. A job
+//   rebuilds everything when its own pull request changes data (see
+//   `CARGO_TARGET_REBUILD_ALL` below); data that the base branch removed while
+//   an unchanged query still needs it fails only a full build.
 // - rustc lists the file a symlink pointed to when it built, so a symlink that
 //   changed, appeared or went away dates the files it pointed to, before and
 //   after, now. A link is resolved by its text alone: one through another
 //   symlinked directory, or out of the repository, dates nothing.
-// Migrations need nothing: `sqlx::migrate!` includes each file and
-// `macro_db_migrator`'s build script watches the directory.
+// Migrations need nothing here: `sqlx::migrate!` includes each file and
+// `macro_db_migrator`'s build script watches the directory. A build that checks
+// queries against a live database depends on the schema too; Cloud Storage's
+// test job dates those crates itself.
+//
+// A job sets `CARGO_TARGET_REBUILD_ALL` to a reason to rebuild every workspace
+// crate anyway: Cloud Storage's jobs do when the pull request changes query
+// data.
 //
 // Units dated after now (another clock, or anything else writing `target`)
 // would look fresh against every change, so `target` starts over then.
+//
+// A job that builds into `target` without dating its checkout first (one whose
+// workflow predates this step, or a re-run of one) leaves units the record
+// doesn't describe. So the last step of a job that did date it writes `SEAL`,
+// and a unit newer than the seal rebuilds every workspace crate.
 //
 // It runs on a fresh checkout: it dates the index, not the work tree.
 
@@ -45,10 +59,16 @@ import { dirname, join, posix } from "node:path";
 
 export const TARGET = "target";
 export const RECORD = `${TARGET}/.macro-source-times`;
-// Dependency upgrades leave old artifacts in `target`; start over before the
-// volume runs short.
+// Written by the last step of a job that dated its checkout; a unit newer than
+// it was built by a job that did not.
+export const SEAL = `${TARGET}/.macro-sealed`;
+// Dependency upgrades leave old artifacts in `target`; start over if the volume
+// is nearly full. Namespace grows a volume as it fills (about 97 GB free at any
+// use, up to 100 GB used), so this guards a full disk, not the volume's size.
 const MIN_FREE_BYTES = 20 * 1024 ** 3;
 const SYMLINK = "120000 ";
+// Directories under a profile that hold build outputs, not more profiles.
+const UNIT_OUTPUTS = new Set(["deps", "incremental", "examples", "doc"]);
 
 /** Path to `<mode> <type> <object>`. */
 export type Tree = Map<string, string>;
@@ -117,6 +137,7 @@ export function plan(
 	tree: Tree,
 	links: Map<string, string>,
 	now: number,
+	forced?: string,
 ): Plan {
 	const record: SourceTimes = new Map();
 	const linkedTo = new Set<string>();
@@ -125,7 +146,8 @@ export function plan(
 		if (target !== undefined) linkedTo.add(target);
 	};
 	let changed = 0;
-	let rebuildAll = previous ? undefined : "no record of earlier builds";
+	let rebuildAll =
+		forced || (previous ? undefined : "no record of earlier builds");
 	for (const [path, mode] of tree) {
 		const signature = signatureOf(mode, links.get(path));
 		const before = previous?.get(path);
@@ -164,7 +186,9 @@ function git(...args: string[]): string {
 
 /**
  * The newest time cargo compares sources against: a unit's fingerprint files
- * and, for a build script's `rerun-if-changed`, its `output`.
+ * and, for a build script's `rerun-if-changed`, its `output`. Profiles sit in
+ * `target/<profile>`, and deeper under another `CARGO_TARGET_DIR` inside it or
+ * a `--target` triple (`target/cache-wasm/wasm32-unknown-unknown/release`).
  */
 function newestUnit(): number {
 	let newest = 0;
@@ -174,17 +198,29 @@ function newestUnit(): number {
 		}
 	};
 	const children = (dir: string) => (existsSync(dir) ? readdirSync(dir) : []);
-	for (const profile of readdirSync(TARGET, { withFileTypes: true })) {
-		if (!profile.isDirectory()) continue;
-		const fingerprints = join(TARGET, profile.name, ".fingerprint");
-		for (const unit of children(fingerprints)) {
-			for (const file of children(join(fingerprints, unit))) {
-				consider(join(fingerprints, unit, file));
+	const subdirectories = (dir: string) =>
+		existsSync(dir)
+			? readdirSync(dir, { withFileTypes: true })
+					.filter((entry) => entry.isDirectory())
+					.map((entry) => entry.name)
+			: [];
+	const walk = (dir: string, depth: number) => {
+		for (const name of subdirectories(dir)) {
+			const path = join(dir, name);
+			if (name === ".fingerprint") {
+				for (const unit of children(path)) {
+					for (const file of children(join(path, unit))) {
+						consider(join(path, unit, file));
+					}
+				}
+			} else if (name === "build") {
+				for (const unit of children(path)) consider(join(path, unit, "output"));
+			} else if (depth > 0 && !UNIT_OUTPUTS.has(name)) {
+				walk(path, depth - 1);
 			}
 		}
-		const builds = join(TARGET, profile.name, "build");
-		for (const unit of children(builds)) consider(join(builds, unit, "output"));
-	}
+	};
+	walk(TARGET, 3);
 	return newest;
 }
 
@@ -197,13 +233,16 @@ function emptyTarget(why: string) {
 export async function main() {
 	const now = Date.now() / 1000;
 	mkdirSync(TARGET, { recursive: true });
+	const sealed = existsSync(SEAL) ? Number(readFileSync(SEAL, "utf8")) : 0;
+	rmSync(SEAL, { force: true });
 	const { bavail, bsize } = statfsSync(TARGET);
 	console.log(
 		`${Math.round((bavail * bsize) / 1024 ** 3)} GB free on the cache volume`,
 	);
+	const newest = newestUnit();
 	if (bavail * bsize < MIN_FREE_BYTES) {
 		emptyTarget("the cache volume is running out of space");
-	} else if (newestUnit() > now) {
+	} else if (newest > now) {
 		emptyTarget("a unit in it is dated after now");
 	}
 
@@ -219,7 +258,16 @@ export async function main() {
 	const previous = existsSync(RECORD)
 		? parseRecord(readFileSync(RECORD, "utf8"))
 		: undefined;
-	const { record, changed, rebuildAll } = plan(previous, tree, links, now);
+	const { record, changed, rebuildAll } = plan(
+		previous,
+		tree,
+		links,
+		now,
+		process.env.CARGO_TARGET_REBUILD_ALL ||
+			(previous && !(newest <= sealed)
+				? "a job built into it without dating its checkout"
+				: undefined),
+	);
 	for (const [path, { time }] of record) {
 		try {
 			lutimesSync(path, time, time);
@@ -234,4 +282,10 @@ export async function main() {
 			? `Every workspace crate rebuilds: ${rebuildAll}`
 			: `Reusing ${TARGET}: ${changed} paths differ from the last run`,
 	);
+}
+
+/** The last step of a job that ran `main`: every unit it built is older than this. */
+export async function seal() {
+	writeFileSync(SEAL, String(Date.now() / 1000));
+	console.log(`Sealed ${TARGET} for the next run`);
 }

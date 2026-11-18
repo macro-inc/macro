@@ -214,6 +214,7 @@ fn job(name: &str) -> Job {
 /// database, and the services' binaries.
 fn prepare(job: Job) -> Job {
     job.add_step(steps::mount_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -229,6 +230,7 @@ fn finish(job: Job, logs: &str) -> Job {
     job.add_step(upload_logs(logs))
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// The scenarios that need no search cluster, divided over [`PARTITIONS`]
@@ -286,6 +288,7 @@ fn known_bug_scenarios() -> Job {
         .map(|job| keep_known_bug_results(job, "email-e2e-known-bugs-rest"))
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// Reports what the gating scenarios cover, from the records the jobs kept,
