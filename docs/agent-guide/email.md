@@ -600,7 +600,8 @@ storage failures still follow the existing cache fallback behavior.
 Hold or fail `/crm/member-access` during sign-in, then save an inbox signature,
 mark a thread read and unread, toggle its star, move it to a folder, and move
 another thread to Trash. Open Spam and Trash and verify their message rows,
-then restore a message. Notices, row state, folder contents, and provider labels
+then restore a message. Open a thread's reminder menu, wait for its choices to
+be enabled, schedule a reminder, and remove it again. Notices, row state, folder contents, and provider labels
 must update, and cached personal thread messages must remain readable. These
 inbox-authorized operations do not depend on CRM access; CRM-shared thread and
 attachment reads still require their access proof.

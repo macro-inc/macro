@@ -18,6 +18,7 @@ import {
 } from '@graphql-cache/response-authority';
 import { emailKeys } from '@queries/email/keys';
 import { setupQueryPersistence } from '@queries/persistence';
+import { reminderKeys } from '@queries/reminders/keys';
 import { soupKeys } from '@queries/soup/keys';
 import { QueryObserver } from '@tanstack/query-core';
 import { onlineManager, QueryClient } from '@tanstack/solid-query';
@@ -57,6 +58,8 @@ const personalFolder = {
   ccf: { l: { id: '00000000-0000-0000-0000-000000000000' } },
   emailView: 'spam',
 };
+const emailReminder =
+  'http://localhost/dss/reminders/email/00000000-0000-4000-8000-000000000001';
 const proof = (allowed: boolean) => ok({ team_id: TEAM, allowed });
 const responseWithHint = (allowed: boolean) =>
   Response.json(
@@ -144,6 +147,10 @@ describe('CRM HTTP response admission', () => {
     [true, 'email'],
     [false, 'soup'],
     [true, 'soup'],
+    [false, 'reminder'],
+    [true, 'reminder'],
+    [false, 'reminderCollection'],
+    [true, 'reminderCollection'],
   ] as const)(
     'restarts mounted independent snapshots after sign-in without proof, logout=%s kind=%s',
     async (logout, kind) => {
@@ -160,15 +167,18 @@ describe('CRM HTTP response admission', () => {
       );
       const fetchInbox = vi.fn(async () => 'current-inbox');
       const fetchCrm = vi.fn(async () => 'protected-data');
+      const keys = {
+        email: emailKeys.messageInbox('message').queryKey,
+        soup: soupKeys.astItems({
+          params: {},
+          body: personalFolder,
+          transport: 'rest',
+        }).queryKey,
+        reminder: reminderKeys.email('thread').queryKey,
+        reminderCollection: reminderKeys.emailCollection('viewer', {}).queryKey,
+      };
       const inbox = new QueryObserver(queryClient, {
-        queryKey:
-          kind === 'email'
-            ? emailKeys.messageInbox('message').queryKey
-            : soupKeys.astItems({
-                params: {},
-                body: personalFolder,
-                transport: 'rest',
-              }).queryKey,
+        queryKey: keys[kind],
         queryFn: fetchInbox,
         initialData: 'previous-inbox',
         staleTime: Infinity,
@@ -215,6 +225,8 @@ describe('CRM HTTP response admission', () => {
       emailKeys.threadReadReceipts('thread').queryKey,
       emailKeys.messageInbox('message').queryKey,
       soupKeys.astItems({ params: {}, body: personalFolder }).queryKey,
+      reminderKeys.email('thread').queryKey,
+      reminderKeys.emailCollection('viewer', {}).queryKey,
     ];
     const crmKey = ['crm', 'companies'];
     const visible = new Map<readonly unknown[], string>(
@@ -260,6 +272,9 @@ describe('CRM HTTP response admission', () => {
           { method: 'POST', body: '{"ids":["message"]}' },
         ],
         ['http://localhost/email/email/threads/thread/messages', {}],
+        [emailReminder, {}],
+        [emailReminder, { method: 'PUT' }],
+        ['http://localhost/dss/reminders/email/collection', {}],
         [
           'http://localhost/dss/items/soup/ast',
           { method: 'POST', body: JSON.stringify(personalFolder) },
@@ -295,6 +310,9 @@ describe('CRM HTTP response admission', () => {
         ['http://localhost/email/email/settings', { method: 'PATCH' }],
         ['http://localhost/email/email/threads/thread/read-receipts', {}],
         ['http://localhost/email/email/threads/session-thread', {}],
+        [emailReminder, {}],
+        [emailReminder, { method: 'PUT' }],
+        ['http://localhost/dss/reminders/email/collection', {}],
         [
           'http://localhost/dss/items/soup/ast',
           { method: 'POST', body: JSON.stringify(personalFolder) },

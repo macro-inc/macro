@@ -86,12 +86,16 @@ legacy offline snapshots when it is allowed or team-less; regrants also preserve
 content already admitted after denial. Inbox-authorized settings, labels, message
 batches, thread messages, drafts and mailbox mutation results never wait for CRM
 proof or lose their successful outcomes when that endpoint is unavailable.
+Email-reminder detail GET/PUT and collection GET have the same independent
+scope: their server contracts require an owned or delegated mailbox and return
+only caller-private reminder state. Other reminder endpoints remain protected.
 They retain a synchronous login fence at response arrival and body completion.
 Successful queued responses remain decodable for identity settlement, but a
 replaced login supplies an explicitly rejected content generation before cache
-commit or publication. Independent mailbox and flat Soup query metadata is retired on login
+commit or publication. Independent mailbox, email-reminder detail/collection and flat Soup query metadata is retired on login
 replacement, including same-account sign-in, rather than on CRM proof changes.
-After that cleanup and sign-in, active independent mailbox and flat Soup observers restart
+Both reminder prefixes retire together because detail reads can seed from collection snapshots.
+After that cleanup and sign-in, active independent mailbox, email-reminder and flat Soup observers restart
 without waiting for CRM proof; protected observers still require verification.
 Personal Spam and Trash lists use flat REST Soup. Their raw AST must explicitly exclude
 companies, omit or exclude contacts, and omit CRM association and email-grant expansion;

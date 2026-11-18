@@ -3,10 +3,17 @@ import {
   queryNeedsCrmProof,
   queryOperationKind,
 } from '@graphql-cache/authority-scope';
+import { validate as isUuid } from 'uuid';
 import { restSoupNeedsCrmProof } from './crm-soup-scope';
 
 type ResponseScope = { protected: boolean; write: boolean };
 const read: ResponseScope = { protected: true, write: false };
+
+/** These handlers return caller-private, owned/delegated mailbox reminders. */
+export function isEmailReminderPath(path: string): boolean {
+  const match = /^\/reminders\/email\/([^/]+)$/.exec(path);
+  return !!match && (match[1] === 'collection' || isUuid(match[1]));
+}
 
 // These resources have their own grants and do not return CRM record content.
 const independentResources = new Set([
@@ -106,6 +113,13 @@ export function crmResponseScope(
     init.method ?? (input instanceof Request ? input.method : 'GET')
   ).toUpperCase();
   if (service === 'agent') return read;
+  if (
+    service === 'storage' &&
+    isEmailReminderPath(path) &&
+    (method === 'GET' ||
+      (method === 'PUT' && path !== '/reminders/email/collection'))
+  )
+    return { protected: false, write: method === 'PUT' };
   if (
     service === 'storage' &&
     path === '/items/soup/ast' &&

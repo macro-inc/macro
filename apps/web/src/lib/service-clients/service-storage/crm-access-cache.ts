@@ -27,7 +27,7 @@ import {
   crmAccessAuthority,
   isCrmPolicy,
 } from './crm-access-authority';
-import { crmResponseScope } from './crm-response-scope';
+import { crmResponseScope, isEmailReminderPath } from './crm-response-scope';
 import type { CrmMemberAccessResponse } from './generated/schemas/crmMemberAccessResponse';
 
 let host: CacheHost | undefined;
@@ -63,6 +63,18 @@ async function fetchProof(timeoutMs: number): Promise<string> {
 let resumeVisibleSnapshots: (() => void) | undefined;
 let independentSessionRetirement: Promise<void> | undefined;
 
+function sessionSnapshotKey(key: readonly unknown[]): boolean {
+  const [kind, scope] = key;
+  // Reminder details can be seeded from collections belonging to any account.
+  // Retire both prefixes before replacement-login readers resume.
+  return (
+    kind === 'email' ||
+    kind === 'soup' ||
+    (kind === 'reminders' &&
+      ['email', 'emailCollection'].includes(String(scope)))
+  );
+}
+
 async function refetchIndependentSessionSnapshots() {
   const retirement = independentSessionRetirement;
   if (!retirement || !crmAccessAuthority.account()) return;
@@ -76,7 +88,7 @@ async function refetchIndependentSessionSnapshots() {
   await queryClient.refetchQueries({
     type: 'active',
     predicate: (query) =>
-      ['email', 'soup'].includes(String(query.queryKey[0])) &&
+      sessionSnapshotKey(query.queryKey) &&
       !crmProtectedQueryKey(query.queryKey),
   });
 }
@@ -93,7 +105,7 @@ async function retireVisibleSnapshots(scope: CrmRetirementScope) {
     ]);
   const retirement = queryPersistence.retire(
     (key) =>
-      (scope === 'session' && ['email', 'soup'].includes(String(key[0]))) ||
+      (scope === 'session' && sessionSnapshotKey(key)) ||
       crmProtectedQueryKey(key)
   );
   if (scope === 'session') independentSessionRetirement = retirement;
@@ -227,7 +239,8 @@ function install() {
           !email &&
           !queuedMutation &&
           !path.endsWith('/graphql') &&
-          path !== '/items/soup/ast'
+          path !== '/items/soup/ast' &&
+          !isEmailReminderPath(path)
         )
           return;
         assertSession();
