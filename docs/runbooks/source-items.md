@@ -96,8 +96,10 @@ Undo: `SELECT source_items_remove_triggers();` under `SET LOCAL lock_timeout = '
 It disables the triggers, with the same SHARE ROW EXCLUSIVE locks as install, so
 readers keep going. Writes return to their old cost at once. Reads stop trusting
 the table in the same commit (`source_items_exact()` turns false), so even with
-the read flag on soup goes back to the item tables; re-enabling means repeating
-steps 2–4.
+the read flag on soup goes back to the item tables. To re-enable, first set
+`SOUP_SOURCE_ITEMS_ENABLED=false` and restart, then repeat steps 2–4, and turn
+reads back on (step 5) only after the audits pass: the backfill alone makes
+`source_items_exact()` true again, before any audit has run.
 
 Writers that change many items in one transaction (migrations, scripts,
 `UPDATE "Document" ...` over many rows, a large team share) now rewrite those
