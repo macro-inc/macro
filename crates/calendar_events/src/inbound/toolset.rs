@@ -94,8 +94,10 @@ pub trait ProgramForwarding {
 #[cfg(feature = "mutation-client")]
 impl ProgramForwarding for crate::outbound::calendar_service_mutations::CalendarServiceMutations {
     fn for_program(self: &Arc<Self>, program: &ForwardedProgram, inbox: Option<&str>) -> Arc<Self> {
-        let _ = inbox;
-        Arc::new(self.forwarding(program.headers()))
+        Arc::new(
+            self.forwarding(program.headers())
+                .addressing(inbox.map(str::to_owned)),
+        )
     }
 }
 
@@ -167,8 +169,7 @@ where
             }
             Some(ApprovalKind::Quoted) => self.program.clone().approved(ProgramApproval::Quoted),
         };
-        let _ = inbox;
-        self.mutations.for_program(&program, None)
+        self.mutations.for_program(&program, inbox)
     }
 }
 

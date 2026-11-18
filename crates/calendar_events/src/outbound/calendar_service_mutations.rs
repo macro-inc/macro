@@ -46,6 +46,9 @@ pub struct CalendarServiceMutations {
     /// The caller's program, set on every request so the calendar service's
     /// program guards see it (see [`Self::forwarding`]).
     forwarded: reqwest::header::HeaderMap,
+    /// The inbox of the copy this client's update or delete addresses (see
+    /// [`Self::addressing`]).
+    inbox: Option<String>,
 }
 
 impl CalendarServiceMutations {
@@ -59,7 +62,16 @@ impl CalendarServiceMutations {
                 .build()
                 .expect("static reqwest client configuration is valid"),
             forwarded: reqwest::header::HeaderMap::new(),
+            inbox: None,
         }
+    }
+
+    /// This client for a call addressing the copy held through `inbox`: its
+    /// update or delete names it, so the calendar service's copy check, which
+    /// reruns for a forwarded program, sees the copy the caller confirmed.
+    #[must_use]
+    pub fn addressing(self, inbox: Option<String>) -> Self {
+        Self { inbox, ..self }
     }
 
     /// This client for one caller's mutations: `forwarded` (the caller's
@@ -257,7 +269,6 @@ fn update_body(
     macro_call: bool,
     inbox: Option<&str>,
 ) -> serde_json::Value {
-    let _ = inbox;
     let (scope_name, recurrence_id) = match scope {
         CalendarUpdateScope::All => ("all", None),
         CalendarUpdateScope::ThisEvent { recurrence_id } => {
@@ -284,6 +295,7 @@ fn update_body(
         "guestPolicy": patch.guest_policy,
         "scope": scope_name,
         "recurrenceId": recurrence_id,
+        "inbox": inbox,
     })
 }
 
@@ -305,7 +317,6 @@ fn delete_query(
     scope: &CalendarDeletionScope,
     inbox: Option<&str>,
 ) -> Vec<(&'static str, String)> {
-    let _ = inbox;
     let mut query = match scope {
         CalendarDeletionScope::All => vec![("scope", "all".to_string())],
         CalendarDeletionScope::ThisEvent { recurrence_id } => vec![
@@ -319,6 +330,9 @@ fn delete_query(
     };
     if let Some(calendar_id) = calendar_id {
         query.push(("calendarId", calendar_id.to_string()));
+    }
+    if let Some(inbox) = inbox {
+        query.push(("inbox", inbox.to_owned()));
     }
     query
 }
@@ -418,7 +432,13 @@ impl CalendarMacroCallService for CalendarServiceMutations {
                     &format!("/events/{event_id}"),
                     requester_id,
                 )
-                .json(&update_body(calendar_id, &patch, &scope, true, None)),
+                .json(&update_body(
+                    calendar_id,
+                    &patch,
+                    &scope,
+                    true,
+                    self.inbox.as_deref(),
+                )),
             )
             .await
             .map_err(|failure| match failure {
@@ -481,7 +501,13 @@ impl CalendarMutationService for CalendarServiceMutations {
                 &format!("/events/{event_id}"),
                 requester_id,
             )
-            .json(&update_body(calendar_id, &patch, &scope, false, None)),
+            .json(&update_body(
+                calendar_id,
+                &patch,
+                &scope,
+                false,
+                self.inbox.as_deref(),
+            )),
         )
         .await
     }
@@ -500,7 +526,7 @@ impl CalendarMutationService for CalendarServiceMutations {
                 &format!("/events/{event_id}"),
                 requester_id,
             )
-            .query(&delete_query(calendar_id, &scope, None)),
+            .query(&delete_query(calendar_id, &scope, self.inbox.as_deref())),
         )
         .await
         .map(|_| ())
