@@ -40,6 +40,7 @@ it('keeps off-page selections and self without reordering clicked or listed rows
         inputKey: query,
         windowKey,
         generation: () => 0,
+        readNow: () => true,
         continued: () => false,
         data: page,
         search: query,
