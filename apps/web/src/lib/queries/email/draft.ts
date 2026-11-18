@@ -204,8 +204,10 @@ export function transferEmailDraft(input: TransferEmailDraftInput) {
  * written to the provider. An Outlook draft is written after the save
  * returns, and the composer saves just before it asks for the move, so the
  * move often arrives during that write. A refusal then waits for the write
- * and asks again with the same operation ID: a refused move commits nothing,
- * and the service treats a repeated ID as the same move.
+ * and asks again with the same operation ID: a refused move is not
+ * committed, and the service treats a repeated ID as the same move. Each
+ * request runs in the move's span: after an await the browser has no
+ * active trace context to carry.
  */
 async function requestDraftTransfer(
   input: TransferEmailDraftInput,
@@ -214,14 +216,16 @@ async function requestDraftTransfer(
   const deadline = Date.now() + TRANSFER_SYNC_WAIT_MS;
   for (let attempt = 1; ; attempt += 1) {
     span.setAttr('email.draft_transfer.attempts', attempt);
-    const result = await emailClient.transferDraft(
-      input.draftId,
-      {
-        operation_id: input.operationId,
-        draft_generation: input.draftGeneration ?? 0,
-        destination_link_id: input.destinationInboxId,
-      },
-      input.sourceInboxId
+    const result = await span.run(() =>
+      emailClient.transferDraft(
+        input.draftId,
+        {
+          operation_id: input.operationId,
+          draft_generation: input.draftGeneration ?? 0,
+          destination_link_id: input.destinationInboxId,
+        },
+        input.sourceInboxId
+      )
     );
     if (result.isOk()) return result.value;
     const refused = result.error.some((error) => error.code === 'CONFLICT');
@@ -229,27 +233,32 @@ async function requestDraftTransfer(
       refused &&
       attempt < TRANSFER_ATTEMPTS &&
       (await span.span('email.draft_transfer.await_sync', (wait) =>
-        awaitDraftSynchronized(input.draftId, deadline, wait)
+        awaitProviderWrite(input.draftId, deadline, attempt, wait)
       ));
     if (!retry) throw new ThrownResultError(result.error);
   }
 }
 
 /**
- * True once the provider holds the draft's last save. False when the draft
- * has no provider write (a Gmail draft), the write ended in some other state,
- * or it is still running at `deadline`: the refusal was not the write's.
+ * True when the refusal can be put down to the draft's provider write and
+ * that write has ended: the draft's operation left PENDING while this waited
+ * (for SYNCHRONIZED, or for none once an earlier move's cleanup ends). A
+ * first refusal that finds the write already done asks once more, since the
+ * write may have ended just after the refusal. False for a draft with no
+ * write in flight (a Gmail draft), a write that ended in another state, a
+ * failed read, or a write still running at `deadline`.
  */
-async function awaitDraftSynchronized(
+async function awaitProviderWrite(
   draftId: string,
   deadline: number,
+  attempt: number,
   span: Span
 ): Promise<boolean> {
   let polls = 0;
   let outcome: string;
   while (true) {
     polls += 1;
-    const read = await emailClient.messageOperation(draftId);
+    const read = await span.run(() => emailClient.messageOperation(draftId));
     if (read.isErr()) {
       outcome = 'read_failed';
       break;
@@ -267,9 +276,14 @@ async function awaitDraftSynchronized(
     }
     await sleep(delay);
   }
+  const waited = polls > 1;
+  const retry = waited
+    ? outcome === 'SYNCHRONIZED' || outcome === 'none'
+    : outcome === 'SYNCHRONIZED' && attempt === 1;
   span.setAttr('email.draft_transfer.sync_polls', polls);
   span.setAttr('email.draft_transfer.sync_outcome', outcome);
-  return outcome === 'SYNCHRONIZED';
+  span.setAttr('email.draft_transfer.retry', retry);
+  return retry;
 }
 
 async function refreshTransferredThreads(

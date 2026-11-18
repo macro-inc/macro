@@ -157,6 +157,12 @@ function requestsTo(pathSuffix: string) {
   );
 }
 
+function traceIdsOf(pathSuffix: string) {
+  return requestsTo(pathSuffix).map(
+    ([, init]) => new Headers(init?.headers).get('traceparent')?.split('-')[1]
+  );
+}
+
 const refused = () => Response.json({ message: REFUSED }, { status: 409 });
 const operation = (state: string | null) => () =>
   Response.json({
@@ -208,6 +214,15 @@ it('moves the draft once Outlook holds the save the move was refused for', async
   );
   expect(operationIds[1]).toBe(operationIds[0]);
   expect(requestsTo('/recover')).toHaveLength(0);
+  // Every request after a wait stays in the move's trace.
+  const [traceId] = traceIdsOf('/drafts/draft-1/transfer');
+  expect(traceId).toMatch(/^[\da-f]{32}$/);
+  expect(
+    new Set([
+      ...traceIdsOf('/drafts/draft-1/transfer'),
+      ...traceIdsOf('/drafts/draft-1/operation'),
+    ])
+  ).toEqual(new Set([traceId]));
 });
 
 it('still aborts a refused move of a draft that has no provider write', async () => {
@@ -223,9 +238,9 @@ it('still aborts a refused move of a draft that has no provider write', async ()
   expect(requestsTo('/drafts/draft-1/transfer')).toHaveLength(1);
 });
 
-it('stops asking after three refusals of a synchronized draft', async () => {
+it('asks once more, then aborts, when a refused draft is already synchronized', async () => {
   routeFetch({
-    '/drafts/draft-1/transfer': [refused, refused, refused],
+    '/drafts/draft-1/transfer': [refused, refused],
     '/drafts/draft-1/operation': [
       operation('SYNCHRONIZED'),
       operation('SYNCHRONIZED'),
@@ -236,6 +251,45 @@ it('stops asking after three refusals of a synchronized draft', async () => {
   await expect(
     outlookDraftTransfer().move(outlook, 'outlook-source')
   ).rejects.toBeInstanceOf(DraftTransferAborted);
-  expect(requestsTo('/drafts/draft-1/transfer')).toHaveLength(3);
+  expect(requestsTo('/drafts/draft-1/transfer')).toHaveLength(2);
   expect(requestsTo('/recover')).toHaveLength(1);
+});
+
+it('aborts a refused move whose draft is in conflict without asking again', async () => {
+  routeFetch({
+    '/drafts/draft-1/transfer': [refused],
+    '/drafts/draft-1/operation': [operation('CONFLICT')],
+    '/recover': [() => Response.json({ committed: null })],
+  });
+
+  await expect(
+    outlookDraftTransfer().move(outlook, 'outlook-source')
+  ).rejects.toBeInstanceOf(DraftTransferAborted);
+  expect(requestsTo('/drafts/draft-1/transfer')).toHaveLength(1);
+});
+
+it('aborts a refused move when the write is still running after the wait', async () => {
+  vi.useFakeTimers();
+  try {
+    routeFetch({
+      '/drafts/draft-1/transfer': [refused],
+      '/drafts/draft-1/operation': Array.from({ length: 40 }, () =>
+        operation('PENDING')
+      ),
+      '/recover': [() => Response.json({ committed: null })],
+    });
+
+    const moving = outlookDraftTransfer().move(outlook, 'outlook-source');
+    const aborted = expect(moving).rejects.toBeInstanceOf(
+      DraftTransferAborted
+    );
+    await vi.advanceTimersByTimeAsync(31_000);
+    await aborted;
+    expect(requestsTo('/drafts/draft-1/transfer')).toHaveLength(1);
+    expect(requestsTo('/drafts/draft-1/operation').length).toBeGreaterThan(
+      20
+    );
+  } finally {
+    vi.useRealTimers();
+  }
 });

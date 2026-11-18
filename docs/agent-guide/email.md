@@ -1289,8 +1289,10 @@ sends remain owned by its provider coordinator; ambiguity is reconciled there.
 Choosing another inbox saves the draft first. The service refuses to move an
 Outlook draft while that save is still being written to Outlook, so the move
 waits for the write (up to 30 seconds) and asks again with the same operation:
-From keeps the chosen inbox. Only a refusal for another reason, or a write still
-running after that wait, cancels the move with **Retry inbox change**.
+From keeps the chosen inbox. A refusal with no write in flight (a Gmail draft),
+a write that ends in a conflict, or a write still running after the wait cancels
+the move with **Retry inbox change**; a refusal of a draft whose write has just
+finished is asked once more first.
 
 Verify: queue a new message and a reply offline, close and reopen the app, and
 check their persistent status and read-only content. Cancel one before reconnect
