@@ -1,9 +1,6 @@
+import { COLLABORATION_TAG, LOCAL_STATUS_TAG } from '@macro-inc/lexical-core';
 import {
-  COLLAB_SELECTION_TAG,
-  COLLABORATION_TAG,
-  LOCAL_STATUS_TAG,
-} from '@macro-inc/lexical-core';
-import {
+  $addUpdateTag,
   $getRoot,
   $getState,
   $hasUpdateTag,
@@ -26,17 +23,21 @@ const DEFAULT_METADATA: DocumentMetadata = {
   version: -1,
 };
 
-/** Marks the updates that load a stored document into the editor. */
+/**
+ * Marks the updates that load a stored document into the editor. Add it only
+ * to an update that changes the document: Lexical carries the tags of an
+ * update that changes nothing over to the next update, so the next edit would
+ * skip its stamp.
+ */
 export const LOAD_STATE_TAG = 'load-state';
 
-// Updates that load or receive the stored state, or only record ids and
-// per-peer bookkeeping for it. Stamping the version in one of them writes the
-// stamp back as this viewer's edit, which moves the document's Updated time
-// when it was only opened.
+// Updates that load or receive the stored state, or record per-peer status for
+// it. None of them is written to the shared document on its own, so a stamp
+// set in one would be written later as this viewer's edit, moving the
+// document's Updated time when it was only opened.
 const NOT_LOCAL_EDIT_TAGS = [
   LOAD_STATE_TAG,
   COLLABORATION_TAG,
-  COLLAB_SELECTION_TAG,
   LOCAL_STATUS_TAG,
 ];
 
@@ -122,6 +123,7 @@ export function $applyDocumentMetadataFromSerialized(
     typeof serialized === 'object' &&
     Object.getOwnPropertyNames(serialized).length > 0
   ) {
+    $addUpdateTag(LOAD_STATE_TAG);
     $setDocumentMetadata(serialized);
   }
 }

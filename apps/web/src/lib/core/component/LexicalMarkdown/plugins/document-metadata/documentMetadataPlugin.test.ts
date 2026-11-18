@@ -1,4 +1,5 @@
 import {
+  $updateAllNodeIds,
   COLLAB_SELECTION_TAG,
   COLLABORATION_TAG,
   LOCAL_STATUS_TAG,
@@ -38,13 +39,16 @@ function newEditor() {
   });
 }
 
+function newMappings() {
+  return { idToNodeKeyMap: new Map(), nodeKeyToIdMap: new Map() };
+}
+
 beforeEach(() => {
   editor = newEditor();
   cleanups = [
-    nodeIdPlugin({
-      nodes: [ParagraphNode, TextNode],
-      mappings: { idToNodeKeyMap: new Map(), nodeKeyToIdMap: new Map() },
-    })(editor),
+    nodeIdPlugin({ nodes: [ParagraphNode, TextNode], mappings: newMappings() })(
+      editor
+    ),
     documentMetadataPlugin({})(editor),
   ];
 });
@@ -53,35 +57,39 @@ afterEach(() => {
   for (const cleanup of cleanups) cleanup();
 });
 
-/** A stored body without node ids, so opening it assigns them. */
-function storedDocument(version: number): SerializedEditorState {
+/** A body saved by this editor, with node ids, at the given version if any. */
+function storedDocument(version?: number): SerializedEditorState {
   const source = newEditor();
   source.update(
     () => {
-      $applyDocumentMetadataFromSerialized({
-        root: { $: { documentMetadata: { version } } },
-      } as never);
+      if (version !== undefined) {
+        $applyDocumentMetadataFromSerialized({
+          root: { $: { documentMetadata: { version } } },
+        } as never);
+      }
       $getRoot().append(
         $createParagraphNode().append($createTextNode('Stored text'))
       );
+      $updateAllNodeIds(newMappings());
     },
     { discrete: true }
   );
   return source.getEditorState().toJSON();
 }
 
-async function openStoredDocument(version: number) {
+async function openStoredDocument(version?: number) {
   initializeEditorWithVersionedState(
     editor,
     storedDocument(version),
     () => 'viewer-peer'
   );
-  await settle();
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+  editor.update(() => {}, { discrete: true });
 }
 
 /**
  * Applies a collaborator's change the way the collaboration binding does:
- * the shared state, then a pass that re-syncs node ids and the local cursor.
+ * the shared state, then a pass that only puts this peer's caret back.
  */
 function receiveSharedChange() {
   editor.update(
@@ -96,16 +104,37 @@ function receiveSharedChange() {
   editor.update(
     () => {
       $addUpdateTag(COLLAB_SELECTION_TAG);
-      $getRoot().getLastChildOrThrow().markDirty();
+      $getRoot().getFirstChildOrThrow().selectEnd();
     },
     { discrete: true }
   );
 }
 
-/** Lets the editor commit updates that loading left pending. */
-async function settle() {
-  await new Promise<void>((resolve) => queueMicrotask(resolve));
-  editor.update(() => {}, { discrete: true });
+/** The version in the first committed state that contains `text`. */
+function versionCommittedWith(text: string, edit: () => void) {
+  let version: number | undefined;
+  const stop = editor.registerUpdateListener(({ editorState }) => {
+    if (version !== undefined) return;
+    editorState.read(() => {
+      if ($getRoot().getTextContent().includes(text)) {
+        version = $getDocumentMetadata().version;
+      }
+    });
+  });
+  edit();
+  stop();
+  return version;
+}
+
+function typeParagraph() {
+  editor.update(
+    () => {
+      $getRoot().append(
+        $createParagraphNode().append($createTextNode('Typed text'))
+      );
+    },
+    { discrete: true }
+  );
 }
 
 function storedVersion() {
@@ -124,6 +153,9 @@ describe('documentMetadataPlugin', () => {
     receiveSharedChange();
 
     expect(storedVersion()).toBe(OLDER_VERSION);
+    expect(versionCommittedWith('Typed text', typeParagraph)).toBe(
+      MARKDOWN_VERSION_COUNTER
+    );
   });
 
   it('leaves an older version alone after per-peer bookkeeping', async () => {
@@ -139,36 +171,36 @@ describe('documentMetadataPlugin', () => {
     expect(storedVersion()).toBe(OLDER_VERSION);
   });
 
-  it('stamps the current version in the same update as a local edit', async () => {
+  it('stamps the current version in the same commit as the first local edit', async () => {
     await openStoredDocument(OLDER_VERSION);
 
-    editor.update(
-      () => {
-        $getRoot().append(
-          $createParagraphNode().append($createTextNode('Typed text'))
-        );
-      },
-      { discrete: true }
+    expect(versionCommittedWith('Typed text', typeParagraph)).toBe(
+      MARKDOWN_VERSION_COUNTER
     );
-
-    expect(storedVersion()).toBe(MARKDOWN_VERSION_COUNTER);
   });
 
-  it('stamps the current version with a rewrite of the loaded content', async () => {
+  it('stamps the first local edit to a document stored without a version', async () => {
+    await openStoredDocument();
+
+    expect(versionCommittedWith('Typed text', typeParagraph)).toBe(
+      MARKDOWN_VERSION_COUNTER
+    );
+  });
+
+  it('stamps the current version in the same commit as a rewrite of the loaded content', async () => {
     await openStoredDocument(OLDER_VERSION);
 
-    editor.update(
-      () => {
-        const stored = $getRoot().getFirstChildOrThrow();
-        if (!$isParagraphNode(stored)) throw new Error('expected paragraph');
-        stored.clear().append($createTextNode('Migrated text'));
-      },
-      { discrete: true }
-    );
+    const version = versionCommittedWith('Migrated text', () => {
+      editor.update(
+        () => {
+          const stored = $getRoot().getFirstChildOrThrow();
+          if (!$isParagraphNode(stored)) throw new Error('expected paragraph');
+          stored.clear().append($createTextNode('Migrated text'));
+        },
+        { discrete: true }
+      );
+    });
 
-    expect(storedVersion()).toBe(MARKDOWN_VERSION_COUNTER);
-    expect(editor.read(() => $getRoot().getTextContent())).toBe(
-      'Migrated text'
-    );
+    expect(version).toBe(MARKDOWN_VERSION_COUNTER);
   });
 });
