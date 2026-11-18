@@ -15,6 +15,10 @@ edge.
 - `src/definitions.rs`: `GraphqlPropertyDefinition`, option values — the schema
   side (what properties exist), as opposed to `objects.rs` (values set on an
   entity).
+- `src/tags.rs`: `GraphqlTagSet` and `load_tag_sets` — the viewer's personal
+  and team tag sets (TAG-typed definitions whose options are labels); the team
+  set is listed whenever the viewer is on a team, with a null definition until
+  it is provisioned.
 - `src/mutations.rs`: `PropertiesMutationRoot` — setting/clearing a property
   value on an entity.
 - `src/loaders.rs`: `EntityPropertiesLoader` batching.
@@ -27,7 +31,8 @@ edge.
 
 ## Boundaries
 
-- Depends on: `properties` (ports only), `models_properties`, `entity_access`,
+- Depends on: `properties` (its service trait and domain models, never its
+  adapters), `models_properties`, `entity_access`,
   `graphql_common` (re-exports its filter-expr types).
 - Used by: `complete_graph`, `graphql_initiative`, `graphql_crm`.
 
@@ -42,6 +47,7 @@ edge.
 ## Checks
 
 - `cargo test -p graphql_properties` (`SQLX_OFFLINE` unset).
+- `cargo test -p complete_graph` for the SDL contract after a schema change.
 
 ## Related
 
