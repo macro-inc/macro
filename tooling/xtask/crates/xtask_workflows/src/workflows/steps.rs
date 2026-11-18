@@ -159,6 +159,22 @@ pub fn logged_run(name: &str, script: impl AsRef<str>) -> Step<Run> {
         .add_env(("LOGGED_STEP", name))
 }
 
+/// The Xcode every iOS build compiles with: the layout plugin uses iOS 27.1
+/// SDK APIs. Raising it needs a [`runners::Runner::MacOsTahoeArm`] image that
+/// installs the new version (Namespace's image feed lists them).
+pub const IOS_XCODE_VERSION: &str = "27.1";
+
+/// Select [`IOS_XCODE_VERSION`] with `xcode-select`, failing with the
+/// installed list when the runner lacks it. Runs before Nix is installed, so a
+/// wrong image fails in seconds.
+pub fn select_ios_xcode() -> Step<Run> {
+    logged_run(
+        &format!("Select Xcode {IOS_XCODE_VERSION}"),
+        include_str!("scripts/select_xcode.sh"),
+    )
+    .add_env(("XCODE_VERSION", IOS_XCODE_VERSION))
+}
+
 /// Install Nix on a macOS runner. The Linux [`setup_nix`] action doesn't apply
 /// there, so Apple jobs (DMG signing, the iOS simulator preview) install it
 /// with the same script instead.

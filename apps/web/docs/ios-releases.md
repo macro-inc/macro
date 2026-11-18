@@ -82,7 +82,8 @@ icon and app-name branding are Android-only.
    PRs with failing checks (pending ones are waited on, up to 30 minutes; the
    native checks and either platform's release checks don't count, so a failed
    or in-flight Android release never holds this one back), then builds the app from
-   the PR head on the Namespace macOS runner inside the Nix dev shell (like
+   the PR head on the Namespace macOS runner with Xcode 27.1 (see
+   [Xcode version](#xcode-version)) inside the Nix dev shell (like
    the `ios-preview` label), uploads it to TestFlight, waits for App Store
    Connect processing + export compliance, and submits it for App Review
    (release type: manual, so Apple's approval holds it as "Pending
@@ -323,6 +324,23 @@ released from App Store Connect.
 production OTLP proxy
 (`ios_production_telemetry` in `scripts/ios-native-env.sh`); set
 `VITE_OTEL_EXPORTER_URL` and `VITE_OTEL_ENV` to send them elsewhere.
+
+## Xcode version
+
+Every iOS build compiles with Xcode 27.1 and the iOS 27.1 SDK: the layout
+plugin calls iOS 27.1 UIKit APIs, which older SDKs reject at compile time.
+Build releases by hand with Xcode 27.1 too (select it with `xcode-select` or
+`DEVELOPER_DIR`; `scripts/ios-native-env.sh` honors either).
+
+CI pins it in `IOS_XCODE_VERSION` (`xtask_workflows/src/workflows/steps.rs`).
+The `ios-update` release and the `ios-preview` build run on Namespace's macOS
+Tahoe slim image (`Runner::MacOsTahoeArm`), which installs several Xcodes
+side by side; their first step, **Select Xcode 27.1**, selects that version
+system-wide and fails with the installed list if the image lacks it. Inside
+`nix develop`, `DEVELOPER_DIR` points at Nix's macOS SDK, so the iOS toolchain
+split reads the `xcode-select` choice instead. To move to a newer Xcode,
+check Namespace's image feed for an image that ships it, then change the
+constant (and the runner, if needed) and run `cargo x workflows`.
 
 ## One-time repository setup
 

@@ -68,7 +68,7 @@ fn labelled_and_open() -> String {
 fn preview() -> Job {
     Job::default()
         .name("Build iOS simulator app and publish to Appetize")
-        .runs_on(runners::Runner::MacOsArm.to_string())
+        .runs_on(runners::Runner::MacOsTahoeArm.to_string())
         .cond(Expression::new(labelled_and_open()))
         // A cold run — fresh nix store, no cached aarch64-apple-ios-sim
         // artifacts — measured 11m15s. This leaves room for a slower runner
@@ -80,6 +80,7 @@ fn preview() -> Job {
                 .pull_requests(Level::Write),
         )
         .add_step(steps::checkout(false, false))
+        .add_step(steps::select_ios_xcode())
         .add_step(steps::install_nix_macos())
         .add_step(build_simulator_app())
         .add_step(upload_app_artifact().if_condition(Expression::new("always()")))
