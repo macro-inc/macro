@@ -11,15 +11,11 @@ export function MentionRetryRow(props: {
     <div
       role="alert"
       class="mx-1.5 flex items-center justify-between gap-2 p-1.5 text-xs text-ink-muted"
+      onPointerDown={keepEditorFocus}
+      onMouseDown={keepEditorFocus}
     >
       <span>{props.message}</span>
-      <Button
-        variant="ghost"
-        size="sm"
-        onPointerDown={keepEditorFocus}
-        onMouseDown={keepEditorFocus}
-        onClick={props.onRetry}
-      >
+      <Button variant="ghost" size="sm" onClick={props.onRetry}>
         {t('common.retry')}
       </Button>
     </div>

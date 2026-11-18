@@ -669,6 +669,13 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     // Set the index itself: the list is often still empty at this moment.
     on(activeSearchTerm, () => controller.setSelectedIndex(0), { defer: true })
   );
+  // While People keeps rows for people still loading, the highlighted row is
+  // held by identity, so the people landing above it don't change what Enter
+  // picks.
+  createEffect(() => {
+    if (controller.loadingRows('users') > 0 && controller.selectedItem())
+      selectionAnchor.hold();
+  });
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
     'start' | 'single' | null

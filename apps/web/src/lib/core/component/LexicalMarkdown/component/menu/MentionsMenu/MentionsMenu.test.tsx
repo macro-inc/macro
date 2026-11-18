@@ -1,7 +1,7 @@
 import type { IUser } from '@core/user';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createEditor, type LexicalEditor } from 'lexical';
-import { createSignal, type ParentProps } from 'solid-js';
+import { batch, createSignal, type ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createMenuOperations } from '../../../shared/inlineMenu';
 import type { MentionItem } from '../../../utils/mentionsUtils';
@@ -856,6 +856,7 @@ const directoryPeople: import('@core/context/quickAccess').UserItem[] = [
 function openWhilePeopleLoad(options: {
   agents: IUser[];
   phone?: boolean;
+  term?: string;
   onPick?: (item: MentionItem) => void;
 }) {
   mocks.crmEnabled = true;
@@ -871,6 +872,7 @@ function openWhilePeopleLoad(options: {
   mocks.people = people;
   mocks.contacts = acmeContacts;
   const menu = createMenuOperations();
+  menu.setSearchTerm(options.term ?? '');
   menu.openMenu();
   const transformUsers = (users: readonly IUser[]) => [
     ...users,
@@ -900,12 +902,19 @@ function openWhilePeopleLoad(options: {
       setError(undefined);
       setLoading(false);
     },
-    fail: () => {
-      setError(new Error('cache worker timeout: read'));
-      setLoading(false);
-    },
-    // A refetch keeps the failed read's error until it answers.
-    read: () => setLoading(true),
+    // The person list drops its rows when a read fails.
+    fail: () =>
+      batch(() => {
+        setPeople([]);
+        setError(new Error('cache worker timeout: read'));
+        setLoading(false);
+      }),
+    // A refetch with no data clears the failed read's error as it starts.
+    read: () =>
+      batch(() => {
+        setLoading(true);
+        setError(undefined);
+      }),
   };
 }
 const placeholderRows = (label: string) =>
@@ -979,6 +988,45 @@ it('lists nothing below Macro on phones until the people it pins arrive, at the 
   expect(screen.getByText('Ana Lima')).toBeTruthy();
   expect(contactRows()).toBeGreaterThan(0);
   expect(listed()).toBeGreaterThanOrEqual(256);
+});
+
+it('keeps the highlighted row while people land above it', () => {
+  const onPick = vi.fn();
+  // Macro holds the letter but not at the start: it waits with Codex, so
+  // People lists nobody yet and the first contact is highlighted.
+  const people = openWhilePeopleLoad({
+    agents: [codex, macroAgent],
+    term: 'c',
+    onPick,
+  });
+  expect(screen.queryByText('Macro')).toBeNull();
+  expect(placeholderRows('Loading people')).toBe(3);
+
+  people.land();
+  expect(screen.getByText('Ana Lima')).toBeTruthy();
+  fireEvent.keyDown(document, { key: 'Enter' });
+  expect(onPick).toHaveBeenCalledWith(
+    expect.objectContaining({ id: 'contact-1' })
+  );
+});
+
+it('waits for the re-read when a later read fails, instead of moving the rows below up', () => {
+  const people = openWhilePeopleLoad({ agents: [codex, macroAgent] });
+  people.land();
+  expect(screen.getByText('Ana Lima')).toBeTruthy();
+
+  // The directory reads again (a contact changed) and the cache times it out.
+  people.read();
+  people.fail();
+  expect(mocks.retryPeople).toHaveBeenCalledOnce();
+  expect(screen.queryByText('Review Desk Codex')).toBeNull();
+  expect(placeholderRows('Loading people')).toBe(2);
+  expect(contactRows()).toBe(5);
+
+  people.read();
+  people.land();
+  expect(screen.getByText('Ana Lima')).toBeTruthy();
+  expect(screen.queryByRole('alert')).toBeNull();
 });
 
 it('reads a failed people window again by itself, holding the People rows meanwhile', () => {

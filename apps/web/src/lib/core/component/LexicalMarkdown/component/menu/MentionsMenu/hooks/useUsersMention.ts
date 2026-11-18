@@ -176,9 +176,18 @@ export function useUsersMention(
   const rereadSpent = () => rereadDone() === readKey();
   const rereadOnce = async (key: string) => {
     setRereadFor(key);
-    await workspace.retry?.();
-    setRereadDone(key);
+    try {
+      await workspace.retry?.();
+    } finally {
+      setRereadDone(key);
+    }
   };
+  // A failed read drops the people it listed, so the menu waits for the
+  // re-read of it as it does for the first answer.
+  const awaitingReread = () =>
+    !listsPeople() &&
+    rereadDone() !== readKey() &&
+    (rereadFor() === readKey() || failedRead());
   createEffect(
     on(failedRead, (failed) => {
       const key = untrack(readKey);
@@ -205,7 +214,9 @@ export function useUsersMention(
     { attempt: 0, state: 'unread' }
   );
   const awaitingDirectory = createMemo(
-    () => usesDirectory() && firstAnswer().state !== 'answered'
+    () =>
+      usesDirectory() &&
+      (firstAnswer().state !== 'answered' || awaitingReread())
   );
   const waitedTooLong = deferredGate(
     awaitingDirectory,
