@@ -319,6 +319,13 @@
         package = "firecracker_host";
       };
 
+      # The vsock agent the Firecracker host runs programs through, baked into
+      # the Firecracker computer image (nix/macro-box/_firecracker.nix).
+      firecrackerGuestAgentBinary = workspaceBinary {
+        pname = "firecracker-guest-agent";
+        package = "firecracker_guest_agent";
+      };
+
       # Tauri sidecar sources carry the target triple in the file name; the
       # bundler strips it when placing the binary next to the app executable.
       rustHostTriple = pkgs.stdenv.hostPlatform.rust.rustcTarget;
@@ -1516,6 +1523,7 @@
         macrod = macrodBinary;
         harnessd = harnessdBinary;
         firecracker-host = firecrackerHostBinary;
+        firecracker-guest-agent = firecrackerGuestAgentBinary;
       }
       // lib.optionalAttrs isLinux {
         tauri-frontend = frontend;

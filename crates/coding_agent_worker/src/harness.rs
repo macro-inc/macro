@@ -88,8 +88,7 @@ pub async fn bridge(
     let probes = HarnessModelProbes {
         process: probe_process(harness, cwd),
     };
-    let agent_process =
-        AcpProcess::new(&harness.command, harness.args.clone(), cwd).envs(harness.env.clone());
+    let agent_process = agent_process(harness, cwd);
 
     let RuntimeChannel {
         tx: to_service,
@@ -428,6 +427,11 @@ fn teach(
             .map_err(|error| BridgeError::Harness(format!("{error}")))?;
     }
     serde_json::from_value(value).map_err(|error| BridgeError::Harness(error.to_string()))
+}
+
+/// The harness's ACP agent, launched in `cwd`.
+pub(crate) fn agent_process(harness: &Harness, cwd: &Path) -> AcpProcess {
+    AcpProcess::new(&harness.command, harness.args.clone(), cwd).envs(harness.env.clone())
 }
 
 fn probe_process(harness: &Harness, cwd: &Path) -> ProbeSubprocess {

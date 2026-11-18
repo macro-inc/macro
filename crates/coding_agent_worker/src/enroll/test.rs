@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 
 use uuid::Uuid;
+use wiremock::matchers::{header, method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
 
@@ -23,6 +25,20 @@ fn enrollment() -> Enrollment {
     serde_json::from_str(ENROLLMENT_JSON).expect("the literal is a valid enrollment")
 }
 
+#[test]
+fn the_claim_retries_about_every_250_ms_with_jitter() {
+    let mut delays = claim_retry_delays();
+    let drawn: Vec<Duration> = (0..50).map(|_| delays.next_delay()).collect();
+    assert!(
+        drawn.iter().all(|delay| {
+            (Duration::from_micros(187_500)..=Duration::from_micros(312_500)).contains(delay)
+        }),
+        "{drawn:?}"
+    );
+    // Jittered, so computers booting together do not claim in lockstep.
+    assert!(drawn.iter().any(|delay| *delay != drawn[0]), "{drawn:?}");
+}
+
 #[derive(Default)]
 struct FakeHost {
     calls: RefCell<Vec<String>>,
@@ -42,6 +58,7 @@ impl Host for FakeHost {
 
 #[test]
 fn enrollment_sources_parse() {
+    assert_eq!("mmds".parse(), Ok(EnrollmentSource::Mmds));
     assert_eq!(
         "file:/run/macro/enrollment.json".parse(),
         Ok(EnrollmentSource::File(PathBuf::from(
@@ -76,18 +93,118 @@ fn deployment_urls_come_from_the_typed_deployment() {
     );
 }
 
-#[test]
-fn enrollment_reads_from_a_file() {
+#[tokio::test]
+async fn enrollment_reads_from_a_file() {
     let directory = tempfile::tempdir().expect("temp dir");
+    let paths = SystemPaths {
+        root: directory.path().to_owned(),
+        mmds: firecracker_host_api::mmds::ADDRESS.to_owned(),
+    };
     let file = directory.path().join("enrollment.json");
     assert_eq!(
-        read_enrollment(&EnrollmentSource::File(file.clone())).unwrap(),
+        read_enrollment(&EnrollmentSource::File(file.clone()), &paths)
+            .await
+            .unwrap(),
         None
     );
     std::fs::write(&file, ENROLLMENT_JSON).unwrap();
     assert_eq!(
-        read_enrollment(&EnrollmentSource::File(file)).unwrap(),
+        read_enrollment(&EnrollmentSource::File(file), &paths)
+            .await
+            .unwrap(),
         Some(enrollment())
+    );
+}
+
+#[tokio::test]
+async fn enrollment_reads_from_mmds_with_a_session_token() {
+    let mmds = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/latest/api/token"))
+        .and(header("X-metadata-token-ttl-seconds", "60"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("session-token"))
+        .expect(2)
+        .mount(&mmds)
+        .await;
+    // Without the token or `Accept: application/json`, MMDS refuses or
+    // answers IMDS text; neither matches here, so the read finds nothing.
+    Mock::given(method("GET"))
+        .and(path("/macro/enrollment"))
+        .and(header("X-metadata-token", "session-token"))
+        .and(header("Accept", "application/json"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(ENROLLMENT_JSON))
+        .up_to_n_times(1)
+        .mount(&mmds)
+        .await;
+    let directory = tempfile::tempdir().expect("temp dir");
+    let paths = SystemPaths {
+        root: directory.path().to_owned(),
+        mmds: mmds.uri(),
+    };
+
+    assert_eq!(
+        read_enrollment(&EnrollmentSource::Mmds, &paths)
+            .await
+            .unwrap(),
+        Some(enrollment())
+    );
+    // The control plane removed it once macrod connected: MMDS answers 404.
+    assert_eq!(
+        read_enrollment(&EnrollmentSource::Mmds, &paths)
+            .await
+            .unwrap(),
+        None
+    );
+}
+
+#[tokio::test]
+async fn an_mmds_error_is_not_a_missing_enrollment() {
+    let mmds = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/latest/api/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("session-token"))
+        .mount(&mmds)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/macro/enrollment"))
+        .respond_with(ResponseTemplate::new(503))
+        .mount(&mmds)
+        .await;
+    let directory = tempfile::tempdir().expect("temp dir");
+    let paths = SystemPaths {
+        root: directory.path().to_owned(),
+        mmds: mmds.uri(),
+    };
+
+    let error = read_enrollment(&EnrollmentSource::Mmds, &paths)
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{error:?}").contains("MMDS answered 503"),
+        "{error:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_refused_mmds_token_is_an_error() {
+    let mmds = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/latest/api/token"))
+        .respond_with(ResponseTemplate::new(400))
+        .mount(&mmds)
+        .await;
+    let directory = tempfile::tempdir().expect("temp dir");
+    let paths = SystemPaths {
+        root: directory.path().to_owned(),
+        mmds: mmds.uri(),
+    };
+
+    let error = read_enrollment(&EnrollmentSource::Mmds, &paths)
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{error:?}").contains("MMDS refused a session token"),
+        "{error:?}"
     );
 }
 
@@ -192,10 +309,6 @@ async fn an_enrolled_computer_is_left_alone() {
 
 #[tokio::test]
 async fn the_claim_joins_the_setup_trace() {
-    use wiremock::{
-        Mock, MockServer, ResponseTemplate,
-        matchers::{header, method, path},
-    };
     let parent = "00-11111111111111111111111111111111-2222222222222222-01";
     let server = MockServer::start().await;
     Mock::given(method("POST"))
@@ -269,10 +382,6 @@ async fn a_marker_as_new_as_the_enrollment_is_left_alone() {
 /// from generation 1, the enrollment is generation 2 with a new pairing.
 #[tokio::test]
 async fn a_newer_generation_enrolls_again_and_claims_its_pairing() {
-    use wiremock::{
-        Mock, MockServer, ResponseTemplate,
-        matchers::{method, path},
-    };
     let server = MockServer::start().await;
     // Gone ends the claim at once; reaching it shows the new pairing was claimed.
     Mock::given(method("POST"))

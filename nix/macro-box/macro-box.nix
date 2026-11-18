@@ -41,11 +41,18 @@ let
     macro.box.agentMode = true;
   };
   container = guest ./_container.nix;
+  firecracker = guest {
+    imports = [ ./_firecracker.nix ];
+    macro.box.firecracker.guestAgent = withSystem system (
+      { self', ... }: self'.packages.firecracker-guest-agent
+    );
+  };
   agentContainer = guest (agentMode ./_container.nix);
   box = container.config.macro.box;
 in
 {
   flake.nixosConfigurations.macro-box = container;
+  flake.nixosConfigurations.macro-box-firecracker = firecracker;
 
   perSystem =
     {
@@ -74,6 +81,27 @@ in
             StopSignal = "SIGRTMIN+3";
           };
         };
+      # What the Firecracker host boots: `vmlinux`, `rootfs.ext4` (the first
+      # drive) and `boot_args`.
+      firecrackerImage =
+        name: nixos:
+        let
+          rootfs = import "${inputs.nixpkgs}/nixos/lib/make-disk-image.nix" {
+            inherit pkgs lib;
+            inherit (nixos) config;
+            partitionTableType = "none";
+            installBootLoader = false;
+            format = "raw";
+            additionalSpace = "2G";
+            baseName = "rootfs";
+          };
+        in
+        pkgs.runCommand name { } ''
+          mkdir $out
+          ln -s ${nixos.config.boot.kernelPackages.kernel.dev}/vmlinux $out/vmlinux
+          ln -s ${rootfs}/rootfs.img $out/rootfs.ext4
+          echo ${lib.escapeShellArg (lib.concatStringsSep " " nixos.config.macro.box.firecracker.kernelParams)} > $out/boot_args
+        '';
     in
     {
       packages = lib.optionalAttrs (system == "x86_64-linux") {
@@ -82,6 +110,7 @@ in
         macro-agent-runtime = box.agent.runtime;
         macro-box-computer-use-linux = box.agent.computerUse.package;
         macro-box-docker = dockerImage "macro-box" container;
+        macro-box-firecracker = firecrackerImage "macro-box-firecracker" firecracker;
         macro-box-agent-docker = dockerImage "macro-box-agent" agentContainer;
       };
       checks = lib.optionalAttrs (system == "x86_64-linux") {
@@ -120,27 +149,34 @@ in
               herdr
             ];
             # Never written, so enrollment fails with its reason.
-            macro.box.enrollFrom = "file:/run/macro/enrollment.json";
+            macro.box.enrollFrom = lib.mkDefault "file:/run/macro/enrollment.json";
+          };
+          inherit (self'.packages) macrod harnessd;
+        };
+        macro-box-firecracker-restore = import ./_firecracker-test.nix {
+          inherit pkgs;
+          guest = {
+            imports = [
+              ./_guest.nix
+              herdr
+            ];
           };
           inherit (self'.packages) macrod harnessd;
         };
         macro-box-claude-wrapper = import ./_claude-wrapper-test.nix { inherit pkgs; };
         # start-agent's boot (lock adoption, rollback) and agent-stopped's
         # failure count, against local git repositories.
-        macro-box-boot =
-          pkgs.runCommand "macro-box-boot"
-            {
-              nativeBuildInputs = [
-                pkgs.bash
-                pkgs.bun
-                pkgs.git
-                pkgs.diffutils
-                pkgs.gnused
-                pkgs.coreutils
-                pkgs.gnugrep
-              ];
-            }
-            "bash ${./files}/test-start-agent.sh && touch $out";
+        macro-box-boot = pkgs.runCommand "macro-box-boot" {
+          nativeBuildInputs = [
+            pkgs.bash
+            pkgs.bun
+            pkgs.git
+            pkgs.diffutils
+            pkgs.gnused
+            pkgs.coreutils
+            pkgs.gnugrep
+          ];
+        } "bash ${./files}/test-start-agent.sh && touch $out";
       };
     };
 }

@@ -3,7 +3,8 @@
 ## What it is
 
 The Macro computer guest: a NixOS configuration with macrod, harnessd, Claude Code,
-herdr, Chromium on Xvnc + Openbox, Docker and nix-ld. It ships as a Docker
+herdr, Chromium on Xvnc + Openbox, Docker and nix-ld. It ships as a
+Firecracker microVM image (restored from a golden snapshot) and a Docker
 image with systemd as PID 1 (for the dev-only DockerFleet).
 
 ## How it works
@@ -17,6 +18,14 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   from `file:/run/macro/enrollment.json`, and no networkd or resolved (Docker
   owns the network); `dockerTools.buildLayeredImage` packs it with the system's
   `init` as the entrypoint.
+- `_firecracker.nix` is the guest as a Firecracker microVM: a kernel with
+  everything built in and no modules (`kernel/firecracker-x86_64.config`:
+  Firecracker's CI microVM config plus `kernel/macro-box.fragment` for
+  Docker, the nix sandbox, envfs and the firewall), booted as `vmlinux` with
+  no initrd (stage 2 remounts `/dev/vda`
+  read-write), and `make-disk-image` with no partition table for the root.
+  `_firecracker-restore.nix` is its restore contract, below; it is separate
+  so the NixOS test runs it in QEMU.
 - `macro-box.nix` is the flake-parts module: `nixosConfigurations.macro-box`
   (the container guest), the packages below, and the checks.
 - `_claude-agent-acp.nix` builds the Claude Code ACP adapter from
@@ -50,6 +59,12 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   teammate's computer, the same guest with `macro.box.agentMode = true`
   (macro has no sudo and no docker). The fleet picks it for a computer with
   an agent.
+- `nix build .#macro-box-firecracker` → `result/{vmlinux,rootfs.ext4,boot_args}`
+  (`nixosConfigurations.macro-box-firecracker`). `boot_args` has no `root=`:
+  the rootfs is the read-write root drive (`is_root_device`), copied per VM.
+  `boot_args` turns the serial port off (`8250.nr_uarts=0`: a guest could
+  flood the host's log); `macro.box.firecracker.serialConsole = true` gives a
+  console on ttyS0 for debugging an image by hand.
 - `nix build .#macro-box-claude-code` → the pinned model-compatible Claude Code.
 - `nix build .#harnessd` → the harnessd binary.
 - `nix build .#macro-box-claude-agent-acp` → the ACP adapter npm prefix.
@@ -64,7 +79,7 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
 - `macrod-enroll.service` (oneshot, root, `Before=macrod.service`) runs on
   every boot: `macrod enroll --from $MACRO_ENROLL_FROM --config
   /home/macro/.macrod/macrod.toml`. `macro.box.enrollFrom` sets the source
-  (`file:<path>`; no default). The marker `/var/lib/macrod/enrolled` holds
+  (`mmds` or `file:<path>`; no default). The marker `/var/lib/macrod/enrolled` holds
   `<computer id>\n<generation>`; a newer generation re-enrolls, and no source
   with a marker means already enrolled. `check-enrollment-source` runs first:
   it fails with a reason when there is no source and no marker, and passes
@@ -163,10 +178,115 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   find the same tools as a login shell.
 - New users get `/etc/skel`: the default skills and the chrome-devtools MCP
   entry in `~/.claude.json`, as real files; macro's home is seeded from it.
+  `~/.claude.json` also carries the settings Claude Code's first start writes
+  (`_claude-first-run.nix` runs the pinned Claude Code once at build time
+  against the stand-in model in `files/warmup-turn.mjs`), only booleans and
+  `migrationVersion`, never a per-install id: without them a computer's
+  first session spends 0.3-1.3 s more in `session/new`.
 - User services for `macro` (lingering, `ConditionUser=macro`):
   `macro-display` (Xvnc `:0`, VNC 127.0.0.1:5900, no auth, no
   readiness-probe blacklist), `macro-openbox`, `macro-chromium` (profile
-  `~/.config/chromium`, CDP 127.0.0.1:9222).
+  `~/.config/chromium`, CDP 127.0.0.1:9222), and
+  `macro-chrome-devtools-mcp.socket` (`files/mcp-spare.mjs`): socket
+  activation on `~/.cache/macro-mcp/chrome-devtools.sock`, so nothing runs
+  until a computer's first session connects; that session's chrome-devtools
+  MCP server starts then, and after it answers one more is started and kept
+  loaded for the next session. skel's MCP entry is `socat` to that socket,
+  so every session after the first gets a server that answers in
+  milliseconds instead of loading for ~0.6 s before the first turn (Claude
+  Code waits for it). Each session still gets its own server process. The
+  socket is in macro's home, out of the agent sandbox's reach.
+  chrome-devtools-mcp preloads `files/cdp-wait.mjs`: its lookup of
+  Chromium's DevTools endpoint retries a refused connection for up to 10 s,
+  so a browser call made right after a restore, before Chromium listens on
+  9222, waits instead of failing.
+
+## Firecracker computers
+
+The host boots `macro-box-firecracker` once with no identity, snapshots it,
+and restores every computer from that snapshot. Contract with the host:
+
+- Drives: the rootfs first (`/dev/vda`), the computer's volume second
+  (`/dev/vdb`). The golden boot has a placeholder under 64 MiB there and never
+  mounts it; the host points the drive at the computer's volume, an ext4
+  filesystem, before resuming.
+- MMDS v2 on the one NIC (`eth0`, static `169.254.0.2/16` from the image).
+  The golden VM has MMDS but no `macro.identity` (404 → nothing happens; an
+  unreachable MMDS fails `macro-restore`). Before resuming a restore, or
+  starting a computer from its own disk, the host puts
+  `{"macro": {"identity": {"id", "time_unix_ms", "network": {"address",
+  "gateway", "dns" (at least one resolver), "mac"?}}, "enrollment":
+  <Enrollment>}}` and removes
+  `macro.enrollment` once macrod connects.
+- `macro-restore.service` (oneshot; restarts after 50 ms on failure, a
+  safety net: the failing command is in the journal) runs at every boot, and the
+  host starts it after every restore and wake through its guest agent
+  (`systemctl start macro-restore.service`; its exit status is the result,
+  and it logs each step's milliseconds and writes them to
+  `/run/macro-restore/timings.json`). The guest cannot see a restore itself: the
+  6.18 vmgenid driver reseeds the kernel RNG and sends no uevent. It steps the
+  clock forward to `time_unix_ms` when the guest is behind (never back).
+  A wake (same `id` as last applied, `/home` mounted) stops there. Otherwise,
+  for a new `id` it writes a new `/etc/machine-id` (boot_id stays the
+  golden's: set once per boot, nothing keys on it); it sets the address,
+  default route and DNS with `ip`/`resolvectl` (the guest keeps the golden's
+  MAC: each computer has its own netns, and changing it takes eth0 down) and writes the same in
+  the drop-in `/run/systemd/network/10-eth0.network.d/identity.conf` (a
+  `/run` file named like the image's `/etc` one would lose to it; static, no
+  DHCP or router advertisements, so no DUID); waits for the volume's new
+  size, drops the placeholder's block cache, requires an ext4 filesystem
+  (the host attaches the volume formatted: no mkfs or resize on this path)
+  and lets systemd mount `/home` on the way to macrod (`home.mount`, no fsck,
+  asserts `/run/macro/home-ready`, so nothing mounts the placeholder). It
+  starts, without waiting,
+  `macro-home.target` (`macro-home-setup`: macro's home, tmpfiles for
+  `/home` and lingering for the desktop; then macrod-enroll, macrod,
+  harnessd) and `macro-restore-settle` (networkd reads the drop-in;
+  journald and systemd-random-seed restart for a new identity; timesyncd
+  restarts).
+- The host sizes the rootfs before the golden boot (systemd-growfs grows it
+  then). It may grow either drive later (patch it to a larger file); the
+  kernel's `RESIZE=1` uevent starts the `macro-grow@` instance for it, which
+  runs `systemd-growfs` on the drive's mount point (`resize2fs /dev/vda`
+  fails: /proc/mounts names the kernel-mounted root `/dev/root`).
+- No systemd unit has a watchdog (`WatchdogSec=0` drop-ins for every
+  systemd daemon that ships one): a resume advances the clocks by the
+  golden's age or the hibernation's length (kvm-clock with the host's
+  `clock_realtime`), which would fire every watchdog at once and kill
+  networkd, resolved and journald. macro-restore also retries `resolvectl`
+  for a second while resolved starts.
+- Until then nothing that needs `/home` runs: those units are wanted by
+  `macro-home.target`, Docker starts only from its socket and requires
+  `home.mount`, and macro does not linger. `macro-prewarm` reads their
+  programs into the page cache so the snapshot holds them.
+- `firecracker-guest-agent.service` (root, from boot, also in the golden
+  boot) runs the host's programs over vsock port 1024
+  (`services/firecracker_guest_agent`). The host snapshots the golden boot once
+  `systemctl is-system-running --wait` answers through it: `macro-prewarm`
+  is a oneshot of `multi-user.target`, so that waits for it too.
+- Only root reaches MMDS, which holds the enrollment until it is claimed:
+  the firewall rejects other users' packets to 169.254.169.254 and drops
+  forwarded ones (Docker containers).
+- Nothing that makes a long-lived secret runs before a restore: every
+  computer can read the golden snapshot's memory.
+- Enrollment reads `macro.enrollment` from MMDS (`macro.box.enrollFrom =
+  "mmds"`); no credential is in the image or the snapshot.
+- One image and one golden for a person's computer and an agent teammate's.
+  The Firecracker image is built with `agentMode` (macro has no sudo rule or
+  docker group in /etc; the agent's units exist). `macro-restore` reads
+  `macro.identity.role` (required: the host always sends it) once per identity, before
+  anything of macro's runs, and writes it to `/run/macro/role`: `person` →
+  `/run/sudoers.d/macro` (NOPASSWD, sudo's `@includedir /run/sudoers.d`) and
+  an ACL `user:macro:rw` on `/run/docker.sock`; `agent` → no sudo or Docker,
+  `/run/macro-agent-inbox` (macro, 0700) and `macro-agent.target`, which
+  alone wants the agent, its path unit and its desktop units. macrod stages
+  an `ApplyAgent` environment at `/run/macro-agent-inbox/agent.env` (it
+  refuses without the directory); `macro-agent-apply.path` starts a root unit
+  that refuses unless `/run/macro/role` is `agent`, reads and empties the
+  inbox only as macro (`setpriv`; a symlink macro plants can't make root
+  read or write through it), caps it at 64 KiB, installs it as
+  `/var/lib/macrod/agent.env` (0600, macro) and empties the inbox; the
+  agent's own path unit then starts it.
 
 ## Running the Docker image
 
@@ -202,7 +322,10 @@ existing credentials: no new pairing and no Claude login.
   late enrollment still starts macrod,
   `macrod detect-agents` reports Claude Code with nothing to install, the
   tools are on macro's PATH, a downloaded glibc binary runs through nix-ld,
-  and Xvnc and Chromium's CDP port come up. A second image then boots from
+  and Xvnc and Chromium's CDP port come up, and the chrome-devtools MCP
+  connector in `~/.claude.json` reaches a server that answers `initialize`
+  (socket-activated: nothing runs before the first connection), and a
+  browser call made while Chromium is still starting succeeds. A second image then boots from
   the first one's data disk and keeps the home files, Claude credentials and
   enrollment marker; enrollment runs and its check passes without a source.
   A third VM boots the guest in agent mode: macro has no sudo or docker
@@ -222,11 +345,28 @@ existing credentials: no new pairing and no Claude login.
   cannot write;
   three failed boots of a broken commit roll the workspace back to last-good;
   the restart marker restarts it; removing the file stops it.
+  A fourth VM enrolls from a file against `files/test-fake-macro.py` on
+  loopback while `network-online.target` never comes: the claim and macrod's
+  runtime connection still go through, and neither unit is ordered after it.
 - After `packages/starter-agent/bun.lock` changes, update `outputHash` in
   `_agent-runtime.nix` from the fetch derivation's reported `got:` hash.
 - To upgrade computer-use-linux, change `version` in
   `_computer-use-linux.nix` and take `hash`, then `cargoHash`, from the
   build's `got:` lines.
+- `nix build .#checks.x86_64-linux.macro-box-firecracker-restore` boots the
+  guest with `_firecracker-restore.nix` in QEMU (stock kernel and disks),
+  a stand-in MMDS (`files/test-mmds.py`): the
+  golden boot leaves `/home`, macrod, harnessd, Docker and macro's session
+  down; the host's `systemctl start macro-restore` after writing an identity
+  steps the clock, sets a
+  new machine id, the address and MAC, mounts the (host-formatted) `/home` and starts
+  harnessd and macro's session, and enrollment fails with the MMDS reason;
+  `block_resize` of the volume grows the mounted `/home`; a
+  repeat with the same id is a wake and keeps the machine id and files, another id changes
+  it, and a cold boot mounts `/home` at boot. The first identity is a
+  person's (macro has sudo and the Docker socket, no agent units); the second
+  an agent's (no sudo; the agent's desktop runs; an environment macro puts
+  in the inbox is installed as `/var/lib/macrod/agent.env`, 0600 macro).
 - `nix build .#checks.x86_64-linux.macro-box-claude-wrapper` runs
   `files/claude-wrapper` against a fake claude: no credential, a credential,
   an unreadable one and one without a token.
@@ -243,6 +383,12 @@ existing credentials: no new pairing and no Claude login.
   upstream `https://downloads.claude.ai/claude-code-releases/<version>/manifest.json`
   (`platforms.linux-x64.checksum`) when upgrading.
 - `nix build .#macro-box-docker` and the Docker smoke test above.
+
+- `nix/macro-box/kernel/update.sh` regenerates the Firecracker kernel config
+  after a change to the fragment, the pinned Firecracker revision or nixpkgs'
+  6.18 kernel; it fails when a fragment line does not survive
+  `olddefconfig` (an unmet dependency). A module the guest needs must go in
+  the fragment: the kernel loads none.
 
 ## Gotchas
 

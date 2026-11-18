@@ -14,11 +14,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ComputerId, ComputerRole, EnrollmentDocument};
 
+/// MMDS as the guest reaches it.
+pub const ADDRESS: &str = "http://169.254.169.254";
+
+/// MMDS v2: `PUT` here, with [`TOKEN_TTL_HEADER`], for a session token.
+pub const TOKEN_PATH: &str = "/latest/api/token";
+
+/// The session token's lifetime in seconds, on the token request.
+pub const TOKEN_TTL_HEADER: &str = "X-metadata-token-ttl-seconds";
+
+/// The session token, on every read.
+pub const TOKEN_HEADER: &str = "X-metadata-token";
+
 /// MMDS path of [`Identity`].
 pub const IDENTITY_POINTER: &str = "/macro/identity";
 
-/// MMDS path of the enrollment, as `hosted_runtimes` names it
-/// (`MMDS_ENROLLMENT_PATH`).
+/// MMDS path of the enrollment.
 pub const ENROLLMENT_POINTER: &str = "/macro/enrollment";
 
 /// The whole document.

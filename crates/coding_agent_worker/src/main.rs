@@ -35,6 +35,7 @@ mod herdr;
 mod outbound;
 mod profiles;
 mod repository;
+mod retry_delay;
 mod runtime;
 mod self_knowledge;
 mod service;
@@ -153,6 +154,7 @@ enum Command {
     /// and claim the pre-approved pairing.
     #[cfg(unix)]
     Enroll {
+        /// `mmds` (a Firecracker microVM's `macro.enrollment` metadata) or
         /// `file:<path>`.
         #[arg(long)]
         from: enroll::EnrollmentSource,

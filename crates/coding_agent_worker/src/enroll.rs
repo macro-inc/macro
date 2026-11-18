@@ -24,6 +24,7 @@ use rootcause::prelude::ResultExt as _;
 use crate::computer::ENROLLED_MARKER;
 use crate::config::{Config, HarnessCredentials};
 use crate::outbound::pairing::{ClaimStatus, PairingClient};
+use crate::retry_delay::RetryDelays;
 use crate::service::ServiceOptions;
 use crate::tui::config_form::ConfigForm;
 
@@ -36,17 +37,29 @@ const CLAIM_DEADLINE: Duration = Duration::from_secs(300);
 /// service to come up: retry quickly.
 const CLAIM_RETRY: Duration = Duration::from_millis(250);
 
+/// The claim's retry delays: every [`CLAIM_RETRY`], jittered.
+fn claim_retry_delays() -> RetryDelays {
+    RetryDelays::every(CLAIM_RETRY)
+}
+/// MMDS answers from the VMM itself; anything slower is not coming.
+const MMDS_TIMEOUT: Duration = Duration::from_secs(2);
+/// How long the MMDS session token lives; one enrollment read needs seconds.
+const MMDS_TOKEN_TTL_SECONDS: &str = "60";
+
 /// Where the enrollment JSON comes from. Firecracker computers add their
 /// metadata service as a second source.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EnrollmentSource {
     /// A file holding the JSON, for Docker computers.
     File(PathBuf),
+    /// The `macro.enrollment` object of a Firecracker microVM's MMDS
+    /// document, through MMDS v2 (session token).
+    Mmds,
 }
 
 /// An `--from` value that names no enrollment source.
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
-#[error("expected `file:<path>`, not `{0}`")]
+#[error("expected `mmds` or `file:<path>`, not `{0}`")]
 pub struct UnknownEnrollmentSource(String);
 
 impl FromStr for EnrollmentSource {
@@ -55,6 +68,7 @@ impl FromStr for EnrollmentSource {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.strip_prefix("file:") {
             Some(path) if !path.is_empty() => Ok(Self::File(PathBuf::from(path))),
+            None if value == "mmds" => Ok(Self::Mmds),
             _ => Err(UnknownEnrollmentSource(value.to_owned())),
         }
     }
@@ -74,9 +88,11 @@ pub struct EnrollOptions {
     pub root: PathBuf,
 }
 
-/// System paths, under a root prefix so tests can redirect them.
+/// System paths, under a root prefix, and the MMDS address, so tests can
+/// redirect them.
 struct SystemPaths {
     root: PathBuf,
+    mmds: String,
 }
 
 impl SystemPaths {
@@ -119,10 +135,11 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
     use tracing::Instrument as _;
     let paths = SystemPaths {
         root: options.root.clone(),
+        mmds: firecracker_host_api::mmds::ADDRESS.to_owned(),
     };
     let marker = paths.at(ENROLLED_MARKER);
     let enrolled = read_marker(&marker)?;
-    let enrollment = match (read_enrollment(&options.from)?, enrolled) {
+    let enrollment = match (read_enrollment(&options.from, &paths).await?, enrolled) {
         (None, Some(_)) => {
             tracing::info!(marker = %marker.display(), "already enrolled");
             return Ok(());
@@ -137,6 +154,10 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
             match &options.from {
                 EnrollmentSource::File(path) =>
                     format!("write the Enrollment JSON to {}", path.display()),
+                EnrollmentSource::Mmds => format!(
+                    "put the Enrollment JSON at {} in MMDS",
+                    firecracker_host_api::mmds::ENROLLMENT_POINTER
+                ),
             }
         ),
     };
@@ -209,7 +230,10 @@ fn read_marker(marker: &Path) -> rootcause::Result<Option<EnrollmentGeneration>>
 }
 
 /// The enrollment, or `None` when its source holds none.
-fn read_enrollment(source: &EnrollmentSource) -> rootcause::Result<Option<Enrollment>> {
+async fn read_enrollment(
+    source: &EnrollmentSource,
+    paths: &SystemPaths,
+) -> rootcause::Result<Option<Enrollment>> {
     let raw = match source {
         EnrollmentSource::File(path) => match std::fs::read_to_string(path) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -219,10 +243,68 @@ fn read_enrollment(source: &EnrollmentSource) -> rootcause::Result<Option<Enroll
                 path.display()
             ))?),
         },
+        EnrollmentSource::Mmds => match read_mmds_enrollment(&paths.mmds).await? {
+            Some(raw) => raw,
+            None => return Ok(None),
+        },
     };
     Ok(Some(
         serde_json::from_str(&raw).context("the enrollment is not valid Enrollment JSON")?,
     ))
+}
+
+/// MMDS v2: a session token, then the object at the enrollment pointer as
+/// JSON (MMDS answers IMDS text without `Accept`), or `None` for a 404 (the
+/// control plane removed it once macrod connected). Never through a proxy:
+/// MMDS is only reachable from the microVM itself. The body is the
+/// enrollment, so it is never recorded.
+#[tracing::instrument(name = "macrod.enroll.read_mmds", skip_all, fields(found = tracing::field::Empty), err)]
+async fn read_mmds_enrollment(
+    address: &str,
+) -> rootcause::Result<Option<zeroize::Zeroizing<String>>> {
+    use firecracker_host_api::mmds;
+
+    let http = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(MMDS_TIMEOUT)
+        .build()
+        .context("could not build the MMDS client")?;
+    let token = http
+        .put(format!("{address}{}", mmds::TOKEN_PATH))
+        .header(mmds::TOKEN_TTL_HEADER, MMDS_TOKEN_TTL_SECONDS)
+        .send()
+        .await
+        .context(format!("could not reach MMDS at {address}"))?
+        .error_for_status()
+        .context("MMDS refused a session token")?
+        .text()
+        .await
+        .context("could not read the MMDS session token")?;
+    let token = zeroize::Zeroizing::new(token);
+
+    let response = http
+        .get(format!("{address}{}", mmds::ENROLLMENT_POINTER))
+        .header(mmds::TOKEN_HEADER, token.as_str())
+        .header(reqwest::header::ACCEPT, "application/json")
+        .send()
+        .await
+        .context(format!("could not reach MMDS at {address}"))?;
+    let status = response.status();
+    if status == reqwest::StatusCode::NOT_FOUND {
+        tracing::Span::current().record("found", false);
+        return Ok(None);
+    }
+    let body = zeroize::Zeroizing::new(
+        response
+            .text()
+            .await
+            .context("could not read the MMDS answer")?,
+    );
+    if !status.is_success() {
+        rootcause::bail!("MMDS answered {status} for {}", mmds::ENROLLMENT_POINTER);
+    }
+    tracing::Span::current().record("found", true);
+    Ok(Some(body))
 }
 
 /// The deployment URLs `macrod.toml` stores, from the enrollment's typed
@@ -285,6 +367,7 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
     }
     let client = PairingClient::new(&config).with_trace_parent(enrollment.traceparent.clone());
     let started = Instant::now();
+    let mut delays = claim_retry_delays();
     let mut attempts: i64 = 0;
     loop {
         attempts += 1;
@@ -316,7 +399,7 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
         if started.elapsed() >= CLAIM_DEADLINE {
             rootcause::bail!("the enrollment's pairing was not claimable in time");
         }
-        tokio::time::sleep(CLAIM_RETRY).await;
+        tokio::time::sleep(delays.next_delay()).await;
     }
 }
 
@@ -336,4 +419,3 @@ fn own_like_parent(path: &Path, host: &impl Host) -> rootcause::Result<()> {
         },
     )
 }
-
