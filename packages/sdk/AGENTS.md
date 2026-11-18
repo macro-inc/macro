@@ -288,6 +288,12 @@ the existing gateway prefixes.
   with `system_properties`' `StatusOption` and `PriorityOption`. Task create
   `propertyValues` replace the service defaults (creator assigned, Not
   started), so `Task.create` spells them out when it sends any.
+- `tasks.list` posts the Tasks view's My tasks Soup query
+  (`apps/web/src/features/tasks-view/queries/task-query.ts`): Assignees, the
+  Status options OR'd, a `dr` due range with `et: 'TASK'`, sorted by the due
+  date property. Keep its Status ids in step with `system_properties`'
+  `StatusOption`. Per-type `search` refuses a query with no word before any
+  request, as the server does, and names the listing to use instead.
 - `crm.emailPrivacy` (`src/entities/crm-email-privacy/`, the `crmEmailPrivacy` code-mode category) wraps own-member policy and existing privacy endpoints; preserve exact observed tokens, caller-supplied idempotency keys, preview slot identities and explicit partial counts. Never refresh a token or retry a sharing decision after a conflict. Rule target handles do not fetch content on inspection. Validation and replacement share server admission limits; preserve their named errors and never treat validation as reserved capacity. Live growth may later fail a Team read; withdrawal stays available.
 - CRM records and initiatives share `messages/discussion.ts`: their comments are
   messages under a `crm_company`, `crm_contact` or `initiative` parent.
