@@ -135,14 +135,15 @@ impl EmailMessageRemoved {
 }
 
 /// Deletes every document of one deleted message, whatever thread it was
-/// indexed under, without forcing a refresh: search stops finding it at the
-/// index's next scheduled refresh. The document under the event's thread is
-/// deleted by id, which finds it even before a refresh has made it
-/// searchable. A delete-by-query then removes copies under other threads; it
-/// leaves that id out, because its search still sees the document just
-/// deleted until the next refresh and would count it as a conflict. Deleting
-/// cannot go stale, so a copy another write changed mid-query is deleted on
-/// one more pass, after a refresh lets that pass see the change.
+/// indexed under, and forces a refresh only to recheck a copy that conflicted:
+/// search stops finding the message at the index's next scheduled refresh.
+/// The document under the event's thread is deleted by id, which finds it
+/// even before a refresh has made it searchable. A delete-by-query then
+/// removes copies under other threads; it leaves that id out, because its
+/// search still sees the document just deleted until the next refresh and
+/// would count it as a conflict. Deleting cannot go stale, so a copy another
+/// write changed mid-query, or deleted within one refresh interval, is
+/// deleted on one more pass, after a refresh lets that pass see the change.
 pub async fn delete_email_message(
     client: &opensearch::OpenSearch,
     message_id: &str,
@@ -204,7 +205,7 @@ async fn delete_document_by_id(
 
 /// A delete-by-id 404 for a document that does not exist, not for a missing
 /// index, which is an outage.
-pub(crate) fn is_missing_document(status_code: u16, body: &str) -> bool {
+fn is_missing_document(status_code: u16, body: &str) -> bool {
     status_code == 404
         && serde_json::from_str::<serde_json::Value>(body)
             .is_ok_and(|value| value["result"] == "not_found")
@@ -238,7 +239,16 @@ where
     })
 }
 
-async fn refresh_index(client: &opensearch::OpenSearch, index: &str) -> Result<()> {
+/// Refreshes the email index a delete targets, so the next search or
+/// delete-by-query on it sees every write so far.
+pub(crate) async fn refresh_destination(
+    client: &opensearch::OpenSearch,
+    index_override: Option<&str>,
+) -> Result<()> {
+    refresh_index(client, resolve_destination(index_override)).await
+}
+
+pub(crate) async fn refresh_index(client: &opensearch::OpenSearch, index: &str) -> Result<()> {
     const OPERATION: OpensearchOperation = OpensearchOperation::RefreshEmailIndex;
     let response = client
         .indices()

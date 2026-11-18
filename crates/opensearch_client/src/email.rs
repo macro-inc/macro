@@ -43,7 +43,8 @@ impl OpensearchClient {
 
     /// Deletes every document of a thread page's spam and trash messages in
     /// one delete-by-query, visible to search when this returns. Fails when a
-    /// document changed after the page was read, so the caller rereads it.
+    /// document changed after the page was read, so the caller rereads it,
+    /// after refreshing the index so the reread sees the change.
     #[tracing::instrument(
         skip(self, message_ids),
         fields(
@@ -68,12 +69,24 @@ impl OpensearchClient {
         let span = tracing::Span::current();
         span.record("deleted", deleted.deleted);
         span.record("version_conflicts", deleted.version_conflicts);
+        // A delete-by-query that deleted nothing forces no refresh, so the
+        // reread would meet the same conflict, as with a document a
+        // single-message delete removed by id moments before.
+        if deleted.version_conflicts > 0
+            && let Err(error) = resend_on_lost_connection(|| {
+                delete::email::refresh_destination(&self.inner, index_override)
+            })
+            .await
+        {
+            tracing::warn!(error = ?error, "could not refresh the email index after a conflicted delete");
+        }
         delete::email::fail_on_conflict(deleted).map(|_| ())
     }
 
     /// Deletes every document of one deleted email message, whatever thread
-    /// it was indexed under, without forcing a refresh: search stops finding
-    /// it at the index's next scheduled refresh.
+    /// it was indexed under. It forces a refresh only to recheck a copy that
+    /// conflicted; search stops finding the message at the index's next
+    /// scheduled refresh.
     #[tracing::instrument(
         skip(self),
         fields(

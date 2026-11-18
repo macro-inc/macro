@@ -300,6 +300,33 @@ async fn a_message_never_indexed_under_its_thread_is_still_swept_elsewhere() {
     assert_eq!(server.join().unwrap().len(), 2);
 }
 
+#[tokio::test]
+async fn a_conflicted_page_delete_refreshes_before_it_fails() {
+    let (url, server) = crate::test_support::serve_in_order(vec![
+        (
+            "200 OK",
+            r#"{"deleted":0,"version_conflicts":1,"failures":[]}"#,
+        ),
+        (
+            "200 OK",
+            r#"{"_shards":{"total":1,"successful":1,"failed":0}}"#,
+        ),
+    ]);
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    let result = client
+        .delete_email_messages(&["message-1".to_owned()], None)
+        .await;
+    let requests = server.join().unwrap();
+
+    assert!(result.is_err(), "the caller rereads the thread");
+    assert!(
+        requests[1].0.ends_with("/emails/_refresh HTTP/1.1\r\n"),
+        "{}",
+        requests[1].0
+    );
+}
+
 #[test]
 fn only_a_missing_document_is_a_harmless_404() {
     assert!(is_missing_document(404, r#"{"result":"not_found"}"#));
@@ -371,12 +398,15 @@ async fn message_documents(
     Ok(body["count"].as_u64().unwrap_or_default())
 }
 
-/// The message's document under its own thread was indexed a moment ago and
-/// no refresh has made it searchable; a copy under another thread is
-/// searchable. Both go, and the delete forces no refresh.
+/// The event thread's document is searchable and has a copy under another
+/// thread; another message was indexed a moment ago and no refresh has made it
+/// searchable. Each delete removes every copy without forcing a refresh, a
+/// repeat within the refresh interval forces none either, and a thread
+/// reindex that deletes the same message before the next refresh fails once,
+/// refreshed, so its retry goes through.
 #[tokio::test]
 #[ignore = "requires local OpenSearch at http://localhost:9200"]
-async fn a_deleted_message_leaves_every_thread_without_a_forced_refresh() {
+async fn deleted_messages_leave_every_thread_without_a_forced_refresh() {
     let client =
         crate::OpensearchClient::new("http://localhost:9200".into(), "".into(), "".into()).unwrap();
     let index = format!("email-message-delete-test-{}", uuid::Uuid::now_v7());
@@ -396,29 +426,48 @@ async fn a_deleted_message_leaves_every_thread_without_a_forced_refresh() {
     let os = &client.inner;
 
     let result: anyhow::Result<()> = async {
+        index_email_document(os, &index, "thread-1", "message-1").await?;
         index_email_document(os, &index, "old-thread", "message-1").await?;
         index_email_document(os, &index, "old-thread", "message-2").await?;
         refresh_email_index(os, &index).await?;
-        index_email_document(os, &index, "thread-1", "message-1").await?;
+        index_email_document(os, &index, "thread-3", "message-3").await?;
         let refreshes = refresh_count(os, &index).await?;
 
-        let removed = delete_email_message(os, "message-1", "thread-1", Some(&index)).await?;
+        let first = delete_email_message(os, "message-1", "thread-1", Some(&index)).await?;
+        let unrefreshed = delete_email_message(os, "message-3", "thread-3", Some(&index)).await?;
+        let repeat = delete_email_message(os, "message-3", "thread-3", Some(&index)).await?;
 
         assert_eq!(
             refresh_count(os, &index).await?,
             refreshes,
-            "the delete forced a refresh"
+            "a delete forced a refresh"
         );
-        assert!(removed.by_id);
+        assert!(first.by_id);
         assert_eq!(
-            removed.other_threads,
+            first.other_threads,
             EmailMessageDeleted {
                 deleted: 1,
                 passes: 1
             }
         );
+        assert!(unrefreshed.by_id, "found before any refresh");
+        assert_eq!(unrefreshed.other_threads.passes, 1);
+        assert!(!repeat.by_id);
+        assert_eq!(repeat.other_threads.passes, 1);
+
+        let page = ["message-1".to_owned()];
+        assert!(
+            client
+                .delete_email_messages(&page, Some(&index))
+                .await
+                .is_err(),
+            "the page delete meets the message's unrefreshed deletions"
+        );
+        client.delete_email_messages(&page, Some(&index)).await?;
+
         refresh_email_index(os, &index).await?;
         assert_eq!(message_documents(os, &index, "message-1").await?, 0);
+        assert_eq!(message_documents(os, &index, "message-3").await?, 0);
         assert_eq!(
             message_documents(os, &index, "message-2").await?,
             1,
