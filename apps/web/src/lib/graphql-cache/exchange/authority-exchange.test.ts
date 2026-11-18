@@ -71,6 +71,7 @@ describe('final cache authority admission', () => {
                 return {
                   operation,
                   data: {
+                    setEntityProperty: { id: 'crm-property' },
                     saveEmailDraft: {
                       thread: {
                         __typename: 'GraphqlSoupEmailThread',
@@ -116,7 +117,10 @@ describe('final cache authority admission', () => {
       await vi.waitFor(() => expect(reads).toBe(1));
       const pending = client
         .mutation(
-          gql`mutation Save { saveEmailDraft { thread { ... on GraphqlSoupEmailThread { id name } } } }`,
+          gql`mutation Save {
+            saveEmailDraft { thread { ... on GraphqlSoupEmailThread { id name } } }
+            setEntityProperty(input: {entityType: CRM_COMPANY}) { id }
+          }`,
           {}
         )
         .toPromise();

@@ -209,6 +209,27 @@ describe('CRM authority across cache clients', () => {
     expect(retire).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps a failed login cleanup broad when the next permission proof retries it', async () => {
+    const retire = vi.fn(async () => {});
+    const { authority } = client(
+      sharedOwner().port(),
+      vi.fn(async () => `${team}:allowed`),
+      retire
+    );
+    await authority.refresh();
+    retire.mockClear();
+    retire.mockRejectedValueOnce(new Error('retirement failed'));
+    authority.setSession('viewer', 1);
+    await expect(authority.ensureCurrent()).rejects.toThrow(
+      'retirement failed'
+    );
+    expect(retire).toHaveBeenLastCalledWith('session');
+    await authority.refresh();
+    expect(retire).toHaveBeenCalledTimes(2);
+    expect(retire).toHaveBeenLastCalledWith('session');
+    expect(authority.allowed()).toBe(true);
+  });
+
   it('does not retire a verified replacement owner when an old transition returns', async () => {
     const oldOwner = sharedOwner().port();
     const { authority, retire } = client(oldOwner);

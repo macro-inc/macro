@@ -12,6 +12,7 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import {
   isQueuedSettlementRequest,
   rememberResponseAuthority,
+  rememberResponseSession,
   rememberWriteResponse,
 } from '@graphql-cache/response-authority';
 import { Telemetry } from '@macro-inc/observability';
@@ -21,6 +22,7 @@ import { authServiceClient } from '@service-auth/client';
 import { onlineManager } from '@tanstack/solid-query';
 import { dssFetch } from './client';
 import {
+  type CrmRetirementScope,
   configureCrmAccessAuthority,
   crmAccessAuthority,
   isCrmPolicy,
@@ -59,7 +61,7 @@ async function fetchProof(timeoutMs: number): Promise<string> {
 }
 
 let resumeVisibleSnapshots: (() => void) | undefined;
-async function retireVisibleSnapshots() {
+async function retireVisibleSnapshots(scope: CrmRetirementScope) {
   resumeVisibleSnapshots = beginQueryAuthorizationReset();
   if (host)
     recordExternalWrite(host, [
@@ -69,7 +71,10 @@ async function retireVisibleSnapshots() {
       'GraphqlSoupEmailThread',
       'GraphqlCrmPipeline',
     ]);
-  await queryPersistence.retire(crmProtectedQueryKey);
+  await queryPersistence.retire(
+    (key) =>
+      (scope === 'session' && key[0] === 'email') || crmProtectedQueryKey(key)
+  );
 }
 
 function verifiedVisibleSnapshots() {
@@ -156,11 +161,11 @@ function install() {
       );
     };
     const storage = matches(SERVER_HOSTS['document-storage-service']);
+    const email = matches(SERVER_HOSTS['email-service']);
     const agentActivity =
       matches(SERVER_HOSTS['agent-harness']) &&
       /\/agent-sessions\/[^/]+\/activity$/.test(url.pathname);
-    if (!storage && !matches(SERVER_HOSTS['email-service']) && !agentActivity)
-      return;
+    if (!storage && !email && !agentActivity) return;
     if (storage && url.pathname.endsWith('/crm/member-access')) return;
     const base = storage
       ? SERVER_HOSTS['document-storage-service']
@@ -181,7 +186,20 @@ function install() {
       scope: Awaited<ReturnType<typeof crmResponseScope>>
     ): ResponseGuard | undefined | Promise<ResponseGuard> => {
       const queuedMutation = isQueuedSettlementRequest(init);
-      if (!scope.protected) return;
+      if (!scope.protected) {
+        if (!email && !queuedMutation && !path.endsWith('/graphql')) return;
+        assertSession();
+        return (response) => {
+          // Mailbox/GraphQL replies retain the login fence without waiting for
+          // CRM proof or rejecting a same-login permission generation change.
+          rememberResponseSession(response, assertSession);
+          // Durable commands must settle returned IDs even after login changes;
+          // the publication check still rejects their copied content.
+          if (queuedMutation && response.ok) return response;
+          assertSession();
+          return guardResponseBody(response, assertSession);
+        };
+      }
       assertSession();
       return (async () => {
         if (storage) {

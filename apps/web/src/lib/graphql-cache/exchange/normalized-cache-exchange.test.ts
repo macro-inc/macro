@@ -543,7 +543,7 @@ function installAuthority(
 
 function personalMailOp(
   key: number,
-  requestPolicy: 'cache-only' | 'network-only'
+  requestPolicy: 'cache-only' | 'cache-first' | 'network-only'
 ) {
   const op = makeOp(key, requestPolicy);
   return makeOperation(
@@ -1532,6 +1532,90 @@ describe('normalizedCacheExchange', () => {
     }
   );
 
+  it.each(['cache-only', 'cache-first'] as const)(
+    'rereads an independent %s snapshot rejected across a same-account authority change',
+    async (policy) => {
+      const { change } = installAuthority(host);
+      const old = deferred<ReadResult>();
+      const fresh = {
+        user: { soup: { items: [{ id: 'thread', isRead: true }] } },
+      };
+      const read = vi
+        .spyOn(host, 'readQuery')
+        .mockImplementationOnce(() => old.promise)
+        .mockResolvedValue({ kind: 'hit', data: fresh });
+      const { ops, results, forwarded } = controlledQueryHarness(host);
+      ops.next(personalMailOp(47, policy));
+      await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
+      change(false);
+      old.reject(new StaleCacheAuthorityError());
+      await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+      await vi.waitFor(() => expect(results.at(-1)?.data).toEqual(fresh));
+      expect(forwarded).toHaveLength(0);
+    }
+  );
+
+  it('bounds an independent stale cache-only reread without using the network', async () => {
+    const { change } = installAuthority(host);
+    const old = deferred<ReadResult>();
+    const read = vi
+      .spyOn(host, 'readQuery')
+      .mockImplementationOnce(() => old.promise)
+      .mockRejectedValue(new StaleCacheAuthorityError());
+    const { ops, results, forwarded } = controlledQueryHarness(host);
+    ops.next(personalMailOp(47, 'cache-only'));
+    await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
+    change(false);
+    old.reject(new StaleCacheAuthorityError());
+    await vi.waitFor(() => expect(results).toHaveLength(1));
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(results[0]?.data).toBeUndefined();
+    expect(forwarded).toHaveLength(0);
+  });
+
+  it.each(['cache-only', 'cache-first'] as const)(
+    'settles an independent %s miss when local authority recovery is unavailable',
+    async (policy) => {
+      const { authority } = installAuthority(host, { account: 'test-viewer' });
+      vi.spyOn(authority, 'current').mockRejectedValue(
+        new Error('Owner unavailable')
+      );
+      const read = vi
+        .spyOn(host, 'readQuery')
+        .mockRejectedValue(new StaleCacheAuthorityError());
+      const { ops, results, forwarded } = controlledQueryHarness(host);
+      ops.next(personalMailOp(47, policy));
+      if (policy === 'cache-only') {
+        await vi.waitFor(() => expect(results).toHaveLength(1));
+        expect(results[0]?.data).toBeUndefined();
+        expect(forwarded).toHaveLength(0);
+      } else await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+      expect(read).toHaveBeenCalledOnce();
+      expect(authority.current).toHaveBeenCalledOnce();
+    }
+  );
+
+  it.each([false, true])(
+    'does not recover an independent cached read across account replacement, returning to prior account=%s',
+    async (returning) => {
+      const { change } = installAuthority(host, { account: 'test-viewer' });
+      const old = deferred<ReadResult>();
+      const read = vi
+        .spyOn(host, 'readQuery')
+        .mockImplementationOnce(() => old.promise);
+      const { ops, results, forwarded } = controlledQueryHarness(host);
+      ops.next(personalMailOp(47, 'cache-only'));
+      await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
+      change(false, { account: 'replacement' });
+      if (returning) change(false, { account: 'test-viewer' });
+      old.reject(new StaleCacheAuthorityError());
+      await vi.waitFor(() => expect(results).toHaveLength(1));
+      expect(read).toHaveBeenCalledOnce();
+      expect(results[0]?.data).toBeUndefined();
+      expect(forwarded).toHaveLength(0);
+    }
+  );
+
   it('reissues a protected in-flight network read after the first ready proof changes its generation', async () => {
     const { change, authority } = installAuthority(host);
     const write = vi.spyOn(host, 'writeQuery');
@@ -1606,6 +1690,54 @@ describe('normalizedCacheExchange', () => {
     );
     expect(forwarded).toHaveLength(0);
   });
+
+  it.each([false, true])(
+    'rereads a rejected independent watched snapshot once, second read rejected=%s',
+    async (rejectAgain) => {
+      const { change } = installAuthority(host);
+      const old = deferred<QueryUpdate>();
+      const watch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          kind: 'hit',
+          revision: parseCacheRevision('1'),
+          data: {
+            user: { soup: { items: [{ id: 'thread', isRead: false }] } },
+          },
+        })
+        .mockImplementationOnce(() => old.promise);
+      if (rejectAgain) watch.mockRejectedValue(new StaleCacheAuthorityError());
+      else
+        watch.mockResolvedValue({
+          kind: 'hit',
+          revision: parseCacheRevision('2'),
+          data: { user: { soup: { items: [{ id: 'thread', isRead: true }] } } },
+        });
+      host.watchQuery = watch;
+      const { ops, results, forwarded, client } = controlledQueryHarness(host);
+      ops.next(personalMailOp(47, 'cache-only'));
+      await vi.waitFor(() => expect(results).toHaveLength(1));
+      host.pushAffected([47]);
+      await vi.waitFor(() => expect(watch).toHaveBeenCalledTimes(2));
+      change(false);
+      old.reject(new StaleCacheAuthorityError());
+      await vi.waitFor(() => expect(watch).toHaveBeenCalledTimes(3));
+      expect(watch).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          since: undefined,
+        })
+      );
+      if (!rejectAgain)
+        await vi.waitFor(() =>
+          expect(results.at(-1)?.data).toEqual({
+            user: { soup: { items: [{ id: 'thread', isRead: true }] } },
+          })
+        );
+      else await tick();
+      expect(client.reexecuteOperation).not.toHaveBeenCalled();
+      expect(forwarded).toHaveLength(0);
+    }
+  );
 
   it.each([false, true])(
     'recovers an independent write rejected across first identity binding, with second write rejected=%s',

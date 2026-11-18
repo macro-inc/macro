@@ -604,6 +604,7 @@ export function normalizedCacheExchange(
       const state = queryState(key);
       const version = ++state.cacheReadVersion;
       const generation = cacheGeneration;
+      const identity = identityVersion;
       const isLatest = () =>
         activeOps.has(key) &&
         queryStates.get(key) === state &&
@@ -611,6 +612,17 @@ export function normalizedCacheExchange(
       return {
         isCurrent: () => generation === cacheGeneration && isLatest(),
         isLatest,
+        canRetryAuthority: (operation: Operation) =>
+          isLatest() &&
+          (identity === identityVersion ||
+            (firstIdentityBinding?.requestVersion === identity &&
+              host.authority?.snapshot()?.account ===
+                firstIdentityBinding.account)) &&
+          !queryNeedsCrmProof(
+            queryText(operation),
+            operation.variables as Record<string, unknown>,
+            operationName(operation)
+          ),
       };
     };
 
@@ -802,6 +814,7 @@ export function normalizedCacheExchange(
       if (!operation) return;
       const readVersion = beginCacheRead(key);
       let read: ReadResult | undefined;
+      let authorityReadRejected = false;
       try {
         read = await documentReader.read({
           opKey: key,
@@ -813,8 +826,11 @@ export function normalizedCacheExchange(
         });
       } catch (error) {
         reportReadError(error, operation);
+        authorityReadRejected =
+          error instanceof StaleCacheAuthorityError &&
+          readVersion.canRetryAuthority(operation);
       }
-      if (!readVersion.isCurrent()) {
+      if (!readVersion.isCurrent() || authorityReadRejected) {
         if (!readVersion.isLatest()) return;
         if (!retrying) {
           await Telemetry.anonymousSpan(
@@ -823,11 +839,25 @@ export function normalizedCacheExchange(
               span.setAttr('cache.retry.reason', 'generation-change');
               span.setAttr('cache.retry.count', 1);
               span.setAttr('cache.retry.read_type', 'affected');
+              if (authorityReadRejected) {
+                // The local rejection can precede its authority notification.
+                // Refresh owner metadata once, without a network proof.
+                try {
+                  await host.authority?.current();
+                } catch (error) {
+                  reportReadError(error, operation);
+                  return;
+                }
+                if (!readVersion.canRetryAuthority(operation)) return;
+              }
               await emitWatchedQuery(key, true);
             }
           );
           return;
         }
+        // Keep the mounted independent view on repeated admission failure;
+        // reexecuting through urql would start another local retry chain.
+        if (authorityReadRejected) return;
       } else if (read?.kind === 'hit') {
         emitAffectedResult(
           cacheResult(operation, read.data, false, 'affected-cache-reread')
@@ -1129,6 +1159,7 @@ export function normalizedCacheExchange(
           op.context[REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY] === true;
         let networkForwarded = previousAttempt?.networkForwarded ?? false;
         let read: ReadResult | undefined;
+        let authorityReadRejected = false;
         try {
           const pendingRead = documentReader.read({
             opKey: op.key,
@@ -1158,6 +1189,9 @@ export function normalizedCacheExchange(
           read = await pendingRead;
         } catch (error) {
           reportReadError(error, op);
+          authorityReadRejected =
+            error instanceof StaleCacheAuthorityError &&
+            readVersion.canRetryAuthority(op);
           if (
             isOwnerEpochLostError(error) &&
             queryStates.get(op.key) === readState &&
@@ -1166,7 +1200,7 @@ export function normalizedCacheExchange(
             readState.replacementFallback = true;
           }
         }
-        if (!readVersion.isCurrent()) {
+        if (!readVersion.isCurrent() || authorityReadRejected) {
           // Teardown, remount, or a newer result still fences this attempt.
           if (!readVersion.isLatest()) return undefined;
           if (!previousAttempt) {
@@ -1180,7 +1214,29 @@ export function normalizedCacheExchange(
                 span.setAttr('cache.retry.count', 1);
                 span.setAttr('cache.retry.read_type', 'operation');
                 span.setAttr('cache.request_policy', policy);
-                const result = await readThenRoute(op, { networkForwarded });
+                let retryOperation = op;
+                if (authorityReadRejected) {
+                  try {
+                    await host.authority?.current();
+                  } catch (error) {
+                    reportReadError(error, op);
+                    if (!readVersion.canRetryAuthority(op)) return undefined;
+                    if (policy === 'cache-only')
+                      return cacheResult(op, undefined, false);
+                    if (!networkForwarded && !registrationOnly)
+                      enqueueQueryForward(op);
+                    return undefined;
+                  }
+                  if (!readVersion.canRetryAuthority(op)) return undefined;
+                  retryOperation = makeOperation('query', op, {
+                    ...op.context,
+                    cacheAuthorityGeneration:
+                      host.authority?.snapshot()?.generation,
+                  });
+                }
+                const result = await readThenRoute(retryOperation, {
+                  networkForwarded,
+                });
                 span.setAttr('cache.retry.cache_result', result !== undefined);
                 span.setAttr(
                   'cache.retry.has_data',

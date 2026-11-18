@@ -9,6 +9,7 @@ import { Telemetry } from '@macro-inc/observability';
 import { createSignal } from 'solid-js';
 
 export type CrmAccessState = 'pending' | 'allowed' | 'denied' | 'error';
+export type CrmRetirementScope = 'permission' | 'session';
 
 export type CrmRequestAuthority = Readonly<{
   owner: CacheAuthorityHost;
@@ -68,7 +69,7 @@ function memoryAuthority(account?: string): CacheAuthorityHost {
 /** Fresh primary proofs are ordered by the shared cache owner's generation. */
 export function createCrmAccessAuthority(options: {
   fetchProof: (timeoutMs: number) => Promise<string>;
-  retire: () => Promise<void>;
+  retire: (scope: CrmRetirementScope) => Promise<void>;
   verified?: () => void;
   bindAccount?: (
     owner: CacheAuthorityHost,
@@ -92,6 +93,7 @@ export function createCrmAccessAuthority(options: {
   let retiredGeneration: string | undefined;
   let retiring = Promise.resolve();
   let retirementFailed = false;
+  let sessionRetirementPending = false;
   const sessionListeners = new Set<() => void>();
   const verifiedListeners = new Set<() => void>();
   let pending:
@@ -102,18 +104,33 @@ export function createCrmAccessAuthority(options: {
       }
     | undefined;
 
-  const retire = (generation: string) => {
-    if (retiredGeneration === generation && !retirementFailed) return;
+  const retire = (
+    generation: string,
+    scope: CrmRetirementScope = 'permission'
+  ) => {
+    const replacingSession = scope === 'session' && !sessionRetirementPending;
+    if (scope === 'session') sessionRetirementPending = true;
+    if (
+      retiredGeneration === generation &&
+      !retirementFailed &&
+      !replacingSession
+    )
+      return;
     retiredGeneration = generation;
     retirementFailed = false;
+    // A failed or overlapping login cleanup must not be narrowed to CRM-only
+    // retirement by a later permission event.
+    const retirementScope = sessionRetirementPending ? 'session' : 'permission';
     // The callback fences visible observers synchronously, before its disk work.
     const previous = retiring.catch(() => {});
     const work = Telemetry.span('crm.access.visible_retirement', async () =>
-      options.retire()
+      options.retire(retirementScope)
     );
     retiring = Promise.allSettled([previous, work])
       .then(([, result]) => {
         if (result.status === 'rejected') throw result.reason;
+        if (retirementScope === 'session' && retiredGeneration === generation)
+          sessionRetirementPending = false;
       })
       .catch((error: unknown) => {
         retirementFailed = true;
@@ -144,7 +161,8 @@ export function createCrmAccessAuthority(options: {
     observedAccount = next.account;
     if (denied || next.policy === 'none') setState('denied');
     else if (accountChanged) setState('pending');
-    if (mustRetire) retire(next.generation);
+    if (mustRetire)
+      retire(next.generation, accountChanged ? 'session' : 'permission');
   };
   const observe = () => {
     stopObserving?.();
@@ -166,7 +184,7 @@ export function createCrmAccessAuthority(options: {
     const bindAccount = options.bindAccount;
     const expectedAccount = account;
     if (state.account && state.account !== expectedAccount)
-      retire(state.generation);
+      retire(state.generation, 'session');
     if (state.account !== expectedAccount && bindAccount) {
       await context.run(() =>
         bindAccount(capturedOwner, state.generation, expectedAccount)
@@ -379,7 +397,7 @@ export function createCrmAccessAuthority(options: {
       observedGeneration = undefined;
       observedPolicy = undefined;
       observedAccount = undefined;
-      if (replacingSession) retire(`session:${session}`);
+      if (replacingSession) retire(`session:${session}`, 'session');
       if (!shared) {
         owner = memoryAuthority(account);
         observe();
@@ -392,7 +410,7 @@ export function createCrmAccessAuthority(options: {
 let fetchProof: (timeoutMs: number) => Promise<string> = async () => {
   throw new Error('CRM permission proof is unavailable');
 };
-let retire = async () => {};
+let retire: (scope: CrmRetirementScope) => Promise<void> = async () => {};
 let verified = () => {};
 let bindAccount: (
   owner: CacheAuthorityHost,
@@ -401,7 +419,7 @@ let bindAccount: (
 ) => Promise<void> = async () => {};
 export const crmAccessAuthority = createCrmAccessAuthority({
   fetchProof: (timeoutMs) => fetchProof(timeoutMs),
-  retire: () => retire(),
+  retire: (scope) => retire(scope),
   verified: () => verified(),
   bindAccount: (...args) => bindAccount(...args),
 });
@@ -409,7 +427,7 @@ export const crmAccessAllowed = crmAccessAuthority.allowed;
 export const crmAccessState = crmAccessAuthority.state;
 export function configureCrmAccessAuthority(options: {
   fetchProof: (timeoutMs: number) => Promise<string>;
-  retire: () => Promise<void>;
+  retire: (scope: CrmRetirementScope) => Promise<void>;
   verified?: () => void;
   bindAccount?: (
     owner: CacheAuthorityHost,

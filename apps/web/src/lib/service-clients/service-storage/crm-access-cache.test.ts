@@ -7,13 +7,16 @@ import {
   type CacheAuthorityHost,
   StaleCacheAuthorityError,
 } from '@graphql-cache/authority';
+import { rememberOwnedEmail } from '@graphql-cache/authority-scope';
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import {
   assertResponseAuthority,
   hasResponseAuthority,
+  isQueuedSettlementRequest,
   queuedSettlementRequest,
   responseAuthorityGeneration,
 } from '@graphql-cache/response-authority';
+import { emailKeys } from '@queries/email/keys';
 import { onlineManager } from '@tanstack/solid-query';
 import { createClient, gql } from '@urql/core';
 import type { Client as GraphqlWsClient } from 'graphql-ws';
@@ -129,6 +132,31 @@ afterEach(() => {
 });
 
 describe('CRM HTTP response admission', () => {
+  it('keeps mailbox metadata on denial but retires it when the login is replaced', async () => {
+    const mailKeys = [
+      emailKeys.threadOperations('thread').queryKey,
+      emailKeys.messageOperation('message').queryKey,
+      emailKeys.threadReadReceipts('thread').queryKey,
+      emailKeys.messageInbox('message').queryKey,
+    ];
+    const crmKey = ['crm', 'companies'];
+    const visible = new Map<readonly unknown[], string>(
+      [...mailKeys, crmKey].map((key) => [key, 'previous login content'])
+    );
+    mocks.retire.mockImplementation(
+      async (matches: (key: readonly unknown[]) => boolean) => {
+        for (const key of visible.keys()) if (matches(key)) visible.delete(key);
+      }
+    );
+    await verifiedViewer();
+    mocks.proof.mockResolvedValue(proof(false));
+    await crmAccessAuthority.refresh();
+    expect(visible.has(crmKey)).toBe(false);
+    for (const key of mailKeys) expect(visible.has(key)).toBe(true);
+    crmAccessAuthority.setSession('replacement');
+    expect(visible.size).toBe(0);
+  });
+
   it.each(['pending', 'unavailable', 'denied'] as const)(
     'keeps personal mailbox reads and writes independent while CRM proof is %s',
     async (state) => {
@@ -167,17 +195,91 @@ describe('CRM HTTP response admission', () => {
         ],
       ] satisfies [string, RequestInit][]) {
         const observe = prepareResponseObservers(url, init);
-        expect(observe).toBe(passResponse);
+        expect(observe).not.toBeInstanceOf(Promise);
         const response = Response.json({ saved: true });
         expect(await (await (await observe)(response)).json()).toEqual({
           saved: true,
         });
+        expect(hasResponseAuthority(response)).toBe(false);
       }
       expect(readAuthority).not.toHaveBeenCalled();
       expect(mocks.proof).not.toHaveBeenCalled();
       readAuthority.mockRestore();
     }
   );
+
+  for (const phase of ['headers', 'body'] as const) {
+    for (const nextAccount of ['viewer', 'replacement']) {
+      it.each([
+        ['http://localhost/email/email/settings', { method: 'PATCH' }],
+        ['http://localhost/email/email/threads/thread/read-receipts', {}],
+        ['http://localhost/email/email/threads/session-thread', {}],
+        [
+          'http://localhost/dss/graphql',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              query:
+                'mutation { markEmailThreadSeen(input:{threadId:"thread"}) { id isRead } }',
+            }),
+          },
+        ],
+        [
+          'http://localhost/dss/graphql',
+          queuedSettlementRequest({
+            method: 'POST',
+            body: JSON.stringify({
+              query:
+                'mutation { markEmailThreadSeen(input:{threadId:"thread"}) { id isRead } }',
+            }),
+          }),
+        ],
+      ] satisfies [string, RequestInit][])(
+        `keeps the login fence when %s ${phase} finish after signing in as ${nextAccount}`,
+        async (url, init) => {
+          const current = owner('viewer');
+          crmAccessAuthority.setSession('viewer');
+          let ownershipCurrent = true;
+          rememberOwnedEmail('session-thread', () => ownershipCurrent);
+          const lookup = vi.spyOn(current.authority, 'current');
+          const observe = await prepareResponseObservers(url, init);
+          const response = Response.json({ body: 'previous login content' });
+          const decoding = Promise.withResolvers<unknown>();
+          response.json = () => decoding.promise;
+          const body =
+            phase === 'body' ? (await observe(response)).json() : undefined;
+          ownershipCurrent = false;
+          crmAccessAuthority.setSession(nextAccount, 1);
+          if (isQueuedSettlementRequest(init)) {
+            // A successful durable command must still settle its returned IDs,
+            // while its old-login content cannot be published.
+            decoding.resolve({ body: 'previous login content' });
+            await expect(
+              body ?? (await observe(response)).json()
+            ).resolves.toEqual({
+              body: 'previous login content',
+            });
+            await expect(
+              assertResponseAuthority(response)
+            ).rejects.toBeInstanceOf(StaleCacheAuthorityError);
+            expect(responseAuthorityGeneration(response)).toBe(
+              '00000000-0000-0000-0000-000000000000'
+            );
+          } else if (phase === 'headers')
+            await expect(
+              Promise.resolve().then(() => observe(response))
+            ).rejects.toBeInstanceOf(StaleCacheAuthorityError);
+          else {
+            decoding.resolve({ body: 'previous login content' });
+            await expect(body).rejects.toBeInstanceOf(StaleCacheAuthorityError);
+          }
+          expect(lookup).not.toHaveBeenCalled();
+          expect(mocks.proof).not.toHaveBeenCalled();
+          lookup.mockRestore();
+        }
+      );
+    }
+  }
 
   it('rejects a null proof as a terminal error without a network retry', async () => {
     owner('viewer');

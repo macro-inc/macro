@@ -86,10 +86,19 @@ legacy offline snapshots when it is allowed or team-less; regrants also preserve
 content already admitted after denial. Inbox-authorized settings, labels, message
 batches, thread messages, drafts and mailbox mutation results never wait for CRM
 proof or lose their successful outcomes when that endpoint is unavailable.
+They retain a synchronous login fence at response arrival and body completion.
+Successful queued responses remain decodable for identity settlement, but a
+replaced login supplies an explicitly rejected content generation before cache
+commit or publication. Independent mailbox query metadata is retired on login
+replacement, including same-account sign-in, rather than on CRM proof changes.
 Folder moves are independent for supported non-CRM entity kinds: their effects
 contain only the moved entity and its folders, and the email domain requires
 Owner access before moving a thread or returning its updated snapshot.
 Arbitrary thread, attachment and EML reads can use CRM grants and retain proof checks.
+An independent cached read rejected across an authority change gets one fresh
+local read after confirming the current owner. Account replacement fences that
+recovery; cache-only reads never reach the network, and repeated rejection does
+not restart the mounted query through an unbounded refetch loop.
 Personal Soup mail, Work Feed, bookmark metadata
 and independently scoped database views retain their cached offline reads when
 the permission endpoint is unavailable. Thread-by-ID reads first select only

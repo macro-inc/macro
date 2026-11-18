@@ -10,6 +10,7 @@ import {
 import { getOperationAST, parse } from 'graphql';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { filter, makeSubject, mergeMap, pipe } from 'wonka';
+import { StaleCacheAuthorityError } from '../authority';
 import type { CacheHost } from '../host/types';
 import {
   type ClaimedMutation,
@@ -18,6 +19,7 @@ import {
   INITIAL_CACHE_REVISION,
   parseCacheRevision,
 } from '../protocol';
+import { rememberResponseSession } from '../response-authority';
 import {
   createMutationQueueRunner,
   type MutationQueueRunner,
@@ -135,6 +137,50 @@ function fixture(options: MutationQueueRunnerDeps['options'] = {}) {
   });
   return { runner, forwarded, commit, host };
 }
+
+it('settles a successful personal draft with rejected content after its login changes', async () => {
+  let current = true;
+  const data = {
+    saveEmailDraft: { draftId: 'canonical-draft', subject: 'Draft' },
+  };
+  const response = Response.json({ data });
+  rememberResponseSession(response, () => {
+    if (!current) throw new StaleCacheAuthorityError();
+  });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => response)
+  );
+  const { runner, forwarded, commit } = fixture();
+  const op = operation();
+  await runner.admit(op, enqueue(op, '1'), runner.epoch());
+  const request = withQueueRequestTimeout(forwarded[0]);
+  await request.context.fetch!('http://test');
+  current = false;
+  const settled = await runner.settle(
+    {
+      operation: forwarded[0],
+      data,
+      stale: false,
+      hasNext: false,
+    },
+    queueAttemptOf(forwarded[0])!
+  );
+  expect(commit).toHaveBeenCalledOnce();
+  expect(commit).toHaveBeenCalledWith(
+    '1',
+    { owner: 'owner', generation: '1' },
+    expect.objectContaining({
+      authorityGeneration: '00000000-0000-0000-0000-000000000000',
+      data,
+    })
+  );
+  expect(settled.data).toBeUndefined();
+  expect(settled.extensions?.normalizedCacheMutationDisposition).toMatchObject({
+    kind: 'committed',
+  });
+});
+
 it.each([false, true])(
   'ignores an older lease arriving after a newer draft claim, already settled: %s',
   async (settled) => {
