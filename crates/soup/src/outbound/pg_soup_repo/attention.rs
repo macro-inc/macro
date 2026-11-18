@@ -22,6 +22,8 @@
 //!
 //! Done notifications never place an item, so the query reads only the
 //! viewer's pending ones, once, and both streams look attention up there.
+//! A read restricted to known items reads only those items' pending
+//! notifications when the keying allows it (see [`pending`]).
 //! It also reads them only back to a floor: a full page of own work holds
 //! `limit` items placed at or after its oldest touch, so nothing placed
 //! earlier can reach the page. Reading every notification instead made a
@@ -194,11 +196,32 @@ fn thread_keyed(keying: AttentionKeying) -> &'static str {
     }
 }
 
+/// The viewer's pending notifications as `(entity_type, entity_id,
+/// attention_at)` rows, one per candidate.
+///
+/// A whole feed reads every pending notification of the viewer's. A read of
+/// known items under `FiledEntity` keying reads only those items'
+/// notifications instead: recomputes run on every realtime change, and a
+/// viewer with a long pending history would otherwise pay for all of it each
+/// time. Thread-scoped keying needs each notification's secondary item, which
+/// only the `notification` row carries, so it keeps the whole read.
+fn pending(req: &AttentionCandidateRequest<'_>) -> String {
+    match (req.only, req.keying) {
+        (Some(_), AttentionKeying::FiledEntity) => {
+            include_str!("attention/pending_only.sql").to_string()
+        }
+        _ => format!(
+            include_str!("attention/pending.sql"),
+            thread_keyed = thread_keyed(req.keying),
+        ),
+    }
+}
+
 fn build_query(req: &AttentionCandidateRequest<'_>) -> String {
     let filter = req.filter;
     format!(
         include_str!("attention/query.sql"),
-        thread_keyed = thread_keyed(req.keying),
+        pending = pending(req),
         own_work_ae = own_work("ae"),
         own_work_newer = own_work("newer"),
         email_inbox_gate = email_inbox_gate(),
