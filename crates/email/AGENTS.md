@@ -460,6 +460,14 @@ tools — hexagonal, heavily feature-gated.
   import reconciliation rows, `provider` for everything else. email-service
   gives them the Microsoft gate's `Import` and `Live` budgets, so an import
   cannot take the slot live mail and calendar need.
+- An import round's folder stream reads its next page only while its mailbox
+  has fewer than 200 import rows queued (`IMPORT_QUEUED_AHEAD`, checked by
+  `pace_import` with a count capped there); otherwise it is put back for 10 s
+  unread and its enumerate span reads `outlook.outcome=paced`. Message claims
+  are first in, first out across mailboxes, so a walk that ran ahead would put
+  every other mailbox's import, and any message that waited for room, behind
+  its whole backlog. Gmail's backfill lists its next page behind the threads
+  it queued for the same reason. Live folder streams are never paced.
 - "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
   under the link lock, once per import run: the folder-catalog stream's
   `import_completed_at` is stamped when every folder is enumerated and no

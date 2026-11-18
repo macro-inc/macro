@@ -282,6 +282,28 @@ impl MailboxSyncRepository for PgMailboxSync {
         Ok(())
     }
 
+    async fn pace_import(
+        &self,
+        lease: &StreamLease,
+        queued: u32,
+        delay: u32,
+    ) -> Result<bool, MailboxError> {
+        // The count stops at `queued` rows of the mailbox's primary-key range.
+        let paced = sqlx::query!(r#"
+            WITH queued AS (
+                SELECT count(*) AS rows FROM (
+                    SELECT 1 FROM email_message_reconciliation
+                    WHERE link_id = $1 AND generation = $2 AND is_import AND available_at <> 'infinity'
+                    LIMIT $3
+                ) q
+            )
+            UPDATE email_sync_streams s SET lease_id = NULL, lease_until = NULL, next_run_at = now() + make_interval(secs => $7)
+            FROM queued WHERE queued.rows >= $3 AND s.id = $4 AND s.lease_id = $5 AND s.fence = $6
+        "#,lease.mailbox.link_id,lease.mailbox.sync_generation,i64::from(queued),lease.id,lease.lease_id,lease.fence,f64::from(delay))
+            .execute(&self.db).await.map_err(db_error)?;
+        Ok(paced.rows_affected() == 1)
+    }
+
     async fn claim_message(&self, lease_id: Uuid) -> Result<Option<MessageLease>, MailboxError> {
         // Naming both `is_import` values lets `available_at <= now()` end the claim index scan.
         // Without it, Postgres before 18 reads every backed-off row on each poll.
