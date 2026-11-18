@@ -8091,7 +8091,7 @@
                 }
               ]
             },
-            "description": "The last 24 hours in 15-minute steps, oldest first: average CPU and\nhighest memory of each step, absent where the computer did not run."
+            "description": "The last 24 hours in 15-minute steps, oldest first: average CPU and\nhighest memory of each step, absent where the computer has no\nreading (it did not run)."
           }
         }
       },
@@ -11112,12 +11112,12 @@
       "UsagePoint": {
         "type": "object",
         "description": "A computer's use at one point of the graph.",
-        "required": ["cpuPercent", "memoryBytes"],
+        "required": ["memoryBytes"],
         "properties": {
           "cpuPercent": {
-            "type": "number",
+            "type": ["number", "null"],
             "format": "double",
-            "description": "Share of its CPUs in use, 0 to 100."
+            "description": "Share of its CPUs in use, 0 to 100. Absent until a second reading\nof the same run measures it: a computer's first reading after it\nstarts or wakes has memory only."
           },
           "memoryBytes": {
             "type": "integer",

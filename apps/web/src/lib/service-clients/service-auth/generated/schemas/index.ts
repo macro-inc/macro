@@ -327,6 +327,7 @@ export * from './updateOverageRequest';
 export * from './upstreamErrorCode';
 export * from './upstreamErrorResponse';
 export * from './usagePoint';
+export * from './usagePointCpuPercent';
 export * from './usageSnapshot';
 export * from './usageSnapshotBlockedReason';
 export * from './usageSnapshotCreditPurchase';

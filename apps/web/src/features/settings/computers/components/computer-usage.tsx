@@ -46,9 +46,10 @@ export function ComputerUsageLine(props: {
   const latest = () => props.usage.latest;
   const cpu = () => {
     const now = latest();
-    return now
-      ? t('computers.usagePercent', { percent: Math.round(now.cpuPercent) })
-      : t('computers.usageIdle');
+    if (!now) return t('computers.usageIdle');
+    // A computer's first reading after it starts has no CPU measured yet.
+    if (now.cpuPercent == null) return t('computers.usageMeasuring');
+    return t('computers.usagePercent', { percent: Math.round(now.cpuPercent) });
   };
   const memory = () => {
     const now = latest();

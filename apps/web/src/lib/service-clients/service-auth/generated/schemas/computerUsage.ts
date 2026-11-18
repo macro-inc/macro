@@ -15,6 +15,7 @@ export interface ComputerUsage {
   computerId: string;
   latest?: ComputerUsageLatest;
   /** The last 24 hours in 15-minute steps, oldest first: average CPU and
-highest memory of each step, absent where the computer did not run. */
+highest memory of each step, absent where the computer has no
+reading (it did not run). */
   points: ComputerUsagePointsItem[];
 }

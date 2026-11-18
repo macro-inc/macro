@@ -94,6 +94,7 @@ export default {
   usagePercent: '{{percent}}%',
   usageMemory: '{{used}} of {{total}} GB',
   usageIdle: 'idle',
+  usageMeasuring: '–',
   usageCpuChart: 'CPU use over the last day',
   usageMemoryChart:
     'Memory this computer uses on its own over the last day, not counting memory shared with its system image',
