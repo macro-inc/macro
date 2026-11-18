@@ -61,8 +61,13 @@ pub(crate) struct DeltaPage<'a> {
     pub(crate) done: bool,
 }
 
+/// The most messages a delta round with a `receivedDateTime` filter lists,
+/// as Graph documents for message delta.
+const FILTERED_ROUND_LIMIT: usize = 5_000;
+
 impl Mailbox {
-    /// The first cursor of a folder's delta round.
+    /// The first cursor of a folder's delta round. A filtered round lists at
+    /// most [`FILTERED_ROUND_LIMIT`] messages, or `$top` if that is smaller.
     pub(crate) fn delta_start(
         &self,
         folder: &str,
@@ -80,7 +85,12 @@ impl Mailbox {
             e: self.delta_epoch,
             t: now_ms,
             q: select,
-            c: cap,
+            c: match received {
+                Some(_) => {
+                    Some(cap.map_or(FILTERED_ROUND_LIMIT, |cap| cap.min(FILTERED_ROUND_LIMIT)))
+                }
+                None => cap,
+            },
             o: newest_first,
             r: received,
         }
@@ -110,10 +120,12 @@ impl Mailbox {
     /// round capped by `$top` ends at the cap, and its delta token does not
     /// report what the cap left out.
     ///
-    /// A cursor with a `receivedDateTime` filter reports only the messages it
-    /// admits, changed or removed. Every round of a newest-first cursor lists
-    /// by `receivedDateTime` descending, a removal by the time the message
-    /// had when it left.
+    /// A cursor with a `receivedDateTime` filter reports only the changed
+    /// messages it admits, but every removal: Graph tracks a delta's removals
+    /// for the whole folder. (Graph also reports read-state changes of mail
+    /// the filter leaves out; the emulator does not.) Every round of a
+    /// newest-first cursor lists by `receivedDateTime` descending, a removal
+    /// by the time the message had when it left.
     pub(crate) fn folder_delta(
         &self,
         mut cursor: DeltaCursor,
@@ -159,9 +171,7 @@ impl Mailbox {
                     .is_some_and(|current| {
                         current.folder_id == cursor.f && current.changed_seq <= cursor.n
                     });
-                let reported = removed.folder_id == cursor.f
-                    && in_round(removed.seq)
-                    && admitted(removed.received);
+                let reported = removed.folder_id == cursor.f && in_round(removed.seq);
                 if reported && !back {
                     removals.insert(removed.message_id.as_str(), removed);
                 }

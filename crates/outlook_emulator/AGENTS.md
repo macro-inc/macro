@@ -26,8 +26,9 @@ local stack, without Microsoft accounts.
   round. The first request may also ask for `$orderby=receivedDateTime desc`
   (every round of the chain then lists newest first) and a `$filter` of
   `receivedDateTime ge` or `gt` a time (every round reports only the changes
-  and removals of mail it admits); the tokens carry them, as they carry
-  `$select` and `$top`. A token from before `expire_delta_tokens`, or older
+  of mail it admits, but every removal, as Graph does; a filtered round lists
+  at most 5,000 messages); the tokens carry them, as they carry `$select` and
+  `$top`. A token from before `expire_delta_tokens`, or older
   than the mailbox's `delta_token_lifetime_days`, answers 410
   `SyncStateNotFound`.
 - `POST /subscriptions` posts a validation token to the notification URL and

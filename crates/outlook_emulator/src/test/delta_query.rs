@@ -169,7 +169,7 @@ mailboxes:
 }
 
 #[tokio::test]
-async fn a_filtered_delta_reports_later_changes_only_to_mail_it_admits() {
+async fn a_filtered_delta_reports_changes_to_mail_it_admits_and_every_removal() {
     let seed = format!(
         r#"
 mailboxes:
@@ -225,9 +225,27 @@ mailboxes:
         .map(|entry| entry["id"].as_str().unwrap())
         .collect();
     assert_eq!(changed, ["New mail", "Recent read"]);
-    assert_eq!(removed, [recent_moved.as_str()]);
+    assert_eq!(removed, [recent_moved.as_str(), old_deleted.as_str()]);
 
     let (pages, _) = read_round(&emulator, checkpoint, 10).await;
+    assert_eq!(pages, vec![Vec::<Value>::new()]);
+}
+
+#[tokio::test]
+async fn a_filtered_round_lists_at_most_five_thousand_messages() {
+    let mut seed = format!("mailboxes:\n  - email: {ADA}\n    messages:\n");
+    for index in 0..5_001 {
+        seed.push_str(&format!(
+            "      - {{ subject: Message {index:04}, date: \"2026-11-02T00:00:00Z\" }}\n"
+        ));
+    }
+    let (emulator, _api) = start(&seed).await;
+    let since = ("$filter", "receivedDateTime ge 2026-11-01T00:00:00Z");
+
+    let (pages, checkpoint) = read_round(&emulator, inbox_delta(&emulator, &[since]), 1_000).await;
+
+    assert_eq!(pages.iter().map(Vec::len).sum::<usize>(), 5_000);
+    let (pages, _) = read_round(&emulator, checkpoint, 1_000).await;
     assert_eq!(pages, vec![Vec::<Value>::new()]);
 }
 
