@@ -9,6 +9,10 @@ pub mod call_archived;
 #[cfg(feature = "ai_tools")]
 pub mod toolset;
 
+/// `GET /crm/companies`, the `ListCompanies` listing over HTTP.
+#[cfg(all(feature = "axum", feature = "ai_tools"))]
+pub mod company_list;
+
 /// Pipeline routes.
 #[cfg(feature = "axum")]
 pub mod pipelines;

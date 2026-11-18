@@ -1,65 +1,18 @@
 use std::sync::Arc;
 
-use entity_access::domain::models::EntityType as AccessEntityType;
+use crate::test_support::{NoNotifications, NoPermissions};
 use entity_access::domain::models::{
     Entity, EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole, TeamRole,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use properties::domain::model::TaskAssignedNotification;
-use properties::domain::model::{EditReceipt, ViewReceipt};
-use properties::{NotificationService, PermissionService, PropertiesPgRepo, PropertiesServiceImpl};
+use properties::{PropertiesPgRepo, PropertiesServiceImpl};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::*;
 use crate::domain::stages::{StageInsert, StageRewrite};
 use crate::outbound::companies_repo::test::helpers::seed_team;
-
-struct NoPermissions;
-
-impl PermissionService for NoPermissions {
-    type Err = anyhow::Error;
-
-    async fn mint_view_receipt<'a>(
-        &self,
-        _user_id: Option<&'a MacroUserIdStr<'a>>,
-        _entity_id: &str,
-        _entity_type: AccessEntityType,
-    ) -> Result<ViewReceipt, Self::Err> {
-        unimplemented!("stage definitions never mint view receipts")
-    }
-
-    async fn mint_edit_receipt<'a>(
-        &self,
-        _user_id: &MacroUserIdStr<'a>,
-        _entity_id: &str,
-        _entity_type: AccessEntityType,
-    ) -> Result<EditReceipt, Self::Err> {
-        unimplemented!("stage definitions never mint edit receipts")
-    }
-
-    async fn grant_permissions_to_task<'a>(
-        &self,
-        _user_ids: &[MacroUserIdStr<'a>],
-        _task_id: &str,
-    ) -> Result<(), Self::Err> {
-        unimplemented!("stage definitions never grant task permissions")
-    }
-}
-
-struct NoNotifications;
-
-impl NotificationService for NoNotifications {
-    type Err = anyhow::Error;
-
-    async fn send_task_assigned<'a>(
-        &self,
-        _notification: TaskAssignedNotification<'a>,
-    ) -> Result<(), Self::Err> {
-        unimplemented!("stage definitions never notify")
-    }
-}
 
 type Store = PropertiesStageDefinitionStore<
     PropertiesServiceImpl<PropertiesPgRepo, NoPermissions, NoNotifications>,
