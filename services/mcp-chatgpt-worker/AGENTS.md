@@ -38,11 +38,27 @@ own permission checks and agent attribution apply.
 
 - `TOOL_GROUPING` switches between entity tools and one tool per operation;
   both lists are snapshotted in `packages/sdk-mcp`.
+- ChatGPT never sees a user id or email: every `macro|<email>` and email
+  in a result becomes a person token (`person_u_…` / `person_e_…`,
+  `src/person-tokens.ts`), and a token anywhere in a call's arguments turns
+  back into what it replaced before the call runs, so assigning, mentioning
+  and filtering by person still work. Tokens are AES-GCM under the
+  `PERSON_TOKEN_KEY` secret, bound to the viewer, no stored map.
+  `people_read` (always offered) is the one tool that returns a name and
+  email for a token. OpenAI rejected a submission for returning identifiers
+  the request didn't need.
+- `PERSON_TOKEN_KEY` (`openssl rand -base64 32 | bunx wrangler secret put
+  PERSON_TOKEN_KEY --env <env>`) is required in dev and prod; the Worker
+  refuses to start without it. Rotating it voids tokens ChatGPT holds.
 - `RESOURCE_URL` and `AUTHORIZATION_SERVER_URL` mirror
   `McpChatgptServiceUrl` and `McpPublicUrl` in `crates/macro_service_urls`;
   change all of them together. Service hosts come from the SDK for
   `MACRO_ENV`; `MACRO_HOSTS` (JSON) only points a local run at a named stack.
-- Deploys are `workflow_dispatch` only (`Deploy MCP ChatGPT Worker`).
+- Deploys follow sync-service: every push to main deploys dev (`Deploy on
+  Push`), every release deploys prod (`release-production`), and `Deploy MCP
+  ChatGPT Worker` can be dispatched by hand. Each run first checks the env has
+  the secrets in `scripts/check-deploy-secrets.mjs`; a missing one fails the
+  job and leaves the live version serving.
 - The SDK is imported by relative path from `packages/sdk/src`; SDK changes
   reach this Worker on its next deploy.
 

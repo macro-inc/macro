@@ -26,6 +26,7 @@ import { ProductCopy } from './ProductMention';
 import { isEmbeddedProductPage } from './productPagePreview';
 import { wallpapers } from './TutorialWallpaper';
 import './page-aura.css';
+import './product-graphics.css';
 
 // The frozen UI utilities and palette apply only inside this page. Legacy
 // public routes retain their own CSS; no authenticated app styles are loaded.

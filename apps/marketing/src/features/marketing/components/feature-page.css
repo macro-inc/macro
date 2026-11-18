@@ -10,7 +10,7 @@
 .feature-page-hero-mark { display: grid; place-items: center; width: 60px; height: 60px; margin-bottom: 28px; border: 1px solid color-mix(in srgb, var(--color-ink) 9%, transparent); border-radius: 18px; background: linear-gradient(145deg, color-mix(in srgb, var(--color-ink) 4%, transparent), transparent); color: var(--color-ink-muted); }
 .feature-page-hero-mark svg { width: 28px; height: 28px; }
 .feature-page-eyebrow { color: var(--color-ink-subtle); font-size: 12px; line-height: 1.6; }
-.feature-page-hero h1 { margin: 18px 0 24px; font: calc(315 + var(--cream-slab-weight-increase, 0)) clamp(40px, 5.4vw, 68px)/1.12 'Roboto Slab Variable', display, serif; letter-spacing: -.035em; text-wrap: balance; }
+.feature-page-hero h1 { margin: calc(18px - .05em) 0 calc(24px - .05em); font: calc(315 + var(--cream-slab-weight-increase, 0)) clamp(40px, 5.4vw, 68px)/1.22 'Roboto Slab Variable', display, serif; letter-spacing: -.035em; text-wrap: balance; }
 .feature-page-hero > p:not(.feature-page-eyebrow) { max-width: 460px; color: var(--color-ink-muted); font-size: 16px; line-height: 1.8; text-wrap: balance; }
 .feature-page .feature-page-cta { color: #000; }
 .feature-page-hero-actions .feature-page-cta { margin-top: 0; }
@@ -44,7 +44,7 @@
 .feature-page-footer a { color: var(--color-ink-subtle); font-size: 12px; text-decoration: none; }
 @media (max-width: 699px) {
   .feature-page-hero { padding: 120px 0 64px; }
-  .feature-page-hero h1 { font-size: clamp(38px, 11vw, 46px); line-height: 1.08; }
+  .feature-page-hero h1 { font-size: clamp(38px, 11vw, 46px); line-height: 1.18; }
   .feature-page-hero > p:not(.feature-page-eyebrow) { font-size: 14px; max-width: 100%; text-wrap: pretty; }
   .feature-page-section { padding: 56px 0 24px; }
   .feature-page-section .homepage-feature-heading { margin-bottom: 32px; }

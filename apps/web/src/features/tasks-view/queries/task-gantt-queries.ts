@@ -17,15 +17,10 @@ import type { TasksDataSourceItem } from './use-tasks-query';
 export function createTaskGanttQueries(options: {
   rows: Accessor<readonly TasksDataSourceItem[]>;
   grouping: Accessor<TaskGroupBy>;
-  projectsEnabled: Accessor<boolean>;
 }) {
   const grouping = () => {
     const group = options.grouping();
-    return group === 'none' ||
-      group === 'date' ||
-      (group === 'project' && !options.projectsEnabled())
-      ? undefined
-      : group;
+    return group === 'none' || group === 'date' ? undefined : group;
   };
   const tasks = createMemo(() => {
     const result = new Map<string, TaskEntityWithProperties>();

@@ -205,3 +205,14 @@ fn storage_proxy_rewrite_is_scoped_to_its_origin_and_path() {
         );
     }
 }
+
+#[test]
+fn test_transform_leaves_an_endpoint_by_address_alone() {
+    let input = "http://127.0.0.1:41873/email-attachments/draft/1?x-id=PutObject";
+
+    assert_eq!(transform_local_url(input, None), input);
+    assert_eq!(
+        transform_local_url(input, Some("https://devbox:8443/local-storage")),
+        input
+    );
+}

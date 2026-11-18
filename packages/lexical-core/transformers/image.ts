@@ -26,7 +26,14 @@ export const I_IMAGE_CONSTRAINED: ElementTransformer = {
 
     const constrainedWidth = node.getConstrainedWidth();
     const constrainedHeight = node.getConstrainedHeight();
-    if (constrainedWidth == null && constrainedHeight == null) {
+    // Only a plain URL image is fully described by `![alt](url)`; an
+    // uploaded one needs its source type and id.
+    if (
+      constrainedWidth == null &&
+      constrainedHeight == null &&
+      node.getSrcType() === 'url' &&
+      !node.getId()
+    ) {
       return null;
     }
 

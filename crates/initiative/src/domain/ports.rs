@@ -30,7 +30,7 @@ pub trait InitiativeDescriptionSurfaces: Send + Sync + 'static {
         markdown: String,
     ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
 
-    /// The description as GitHub-flavored markdown; empty while the surface was never ensured.
+    /// The description as lossless internal markdown; empty while the surface was never ensured.
     fn read(
         &self,
         initiative: InitiativeId,
@@ -191,7 +191,7 @@ pub trait InitiativeService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
 
-    /// The description of an initiative the receipt authorized for view, as GitHub-flavored
+    /// The description of an initiative the receipt authorized for view, as lossless internal
     /// markdown; empty while no one has opened or written it.
     fn read_description(
         &self,

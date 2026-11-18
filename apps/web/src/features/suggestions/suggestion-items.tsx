@@ -5,7 +5,7 @@ import {
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import { isAccessiblePreviewItem } from '@queries/preview/types';
 import { type ItemType, stringToItemType } from '@service-storage/client';
-import { Show, Suspense } from 'solid-js';
+import { type JSX, Show, Suspense } from 'solid-js';
 import type { SuggestionItemParts } from './context/suggestions-source';
 import type { SuggestionTarget } from './core/suggestion';
 
@@ -55,57 +55,68 @@ function useItem(target: () => SuggestionTarget) {
 type SourceProps = {
   target: SuggestionTarget;
   from?: string;
-  onOpen(): void;
+  fallback?: JSX.Element;
+  onOpen?: () => void;
 };
 
-function SourceLink(props: SourceProps) {
+function SourceLabel(props: SourceProps) {
   const item = useItem(() => props.target);
+  const text = (name: string) => (
+    <span class="truncate" data-suggestion-source>
+      {name}
+      <Show when={props.from}>{(from) => ` · ${from()}`}</Show>
+    </span>
+  );
 
   return (
-    <Show when={item.name()}>
+    <Show when={item.name()} fallback={props.fallback}>
       {(name) => (
-        <button
-          type="button"
-          class="flex min-w-0 items-center gap-1.5 rounded-sm outline-none not-touch:hover:text-ink focus-visible:ring-2 focus-visible:ring-edge-focus"
-          data-suggestion-source
-          onClick={() => props.onOpen()}
+        <Show
+          when={props.onOpen}
+          fallback={
+            <>
+              <Show when={item.icon()} keyed>
+                {(icon) => (
+                  <EntityIcon
+                    targetType={icon}
+                    theme="monochrome"
+                    class="h-3 w-3 text-ink-placeholder"
+                  />
+                )}
+              </Show>
+              {text(name())}
+            </>
+          }
         >
-          <Show when={item.icon()} keyed>
-            {(icon) => <EntityIcon targetType={icon} size="xs" />}
-          </Show>
-          <Show
-            when={itemType(props.target) === 'email'}
-            fallback={<span class="truncate">{name()}</span>}
-          >
-            <EmailSourceName from={props.from} subject={name()} />
-          </Show>
-        </button>
+          {(onOpen) => (
+            <button
+              type="button"
+              class="flex min-w-0 items-center gap-1.5 rounded-sm outline-none not-touch:hover:text-ink focus-visible:ring-2 focus-visible:ring-edge-focus"
+              onClick={() => onOpen()()}
+            >
+              <Show when={item.icon()} keyed>
+                {(icon) => <EntityIcon targetType={icon} size="xs" />}
+              </Show>
+              {text(name())}
+            </button>
+          )}
+        </Show>
       )}
     </Show>
   );
 }
 
-/** An email source's name: who wrote, then the subject. */
-function EmailSourceName(props: { from?: string; subject: string }) {
-  return (
-    <span class="truncate">
-      <Show when={props.from}>{(from) => `${from()} · `}</Show>
-      {props.subject}
-    </span>
-  );
-}
-
-/** The card parts that read the app's items, for the For you page. */
 /**
- * A source link behind its own boundary: its item is read on demand, and a
+ * A source's label behind its own boundary: its item is read on demand, and a
  * pending read must not replace the feed around it with a fallback.
  */
 function Source(props: SourceProps) {
   return (
     <Suspense>
-      <SourceLink {...props} />
+      <SourceLabel {...props} />
     </Suspense>
   );
 }
 
+/** The row parts that read the app's items, for the For you page. */
 export const SUGGESTION_ITEM_PARTS: SuggestionItemParts = { Source };

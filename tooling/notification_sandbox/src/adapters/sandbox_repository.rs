@@ -51,9 +51,12 @@ impl NotificationRepository for SandboxNotificationRepository {
     async fn get_unsubscribed_users<'a>(
         &self,
         item_id: &str,
+        is_direct_mention: bool,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
-        self.inner.get_unsubscribed_users(item_id, user_ids).await
+        self.inner
+            .get_unsubscribed_users(item_id, is_direct_mention, user_ids)
+            .await
     }
 
     async fn create_notification<'a, T: Serialize + Send + Sync>(

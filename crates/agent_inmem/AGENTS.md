@@ -40,6 +40,16 @@ milliseconds instead of waiting on container provisioning.
   Every usage row a turn records carries the session id
   (`ai_usage.agent_session_id`); its tools record through
   `ai_usage::for_agent_session`.
+- `src/rig_engine.rs` `GatedToolSet`: every MCP tool of a server other than
+  `macro_internal` (connected apps, custom servers, previews) is first put to
+  `NativeToolGate::refuse_remote_mcp`; the harness's gate refuses it in every
+  scoped session (suggestion generations and runs that send nothing), since
+  the egress proxy that carries it knows no scope. The internal server is
+  told by the server a tool was registered under
+  (`RemoteMcpToolSet::server_of`), never by the name's server segment, which
+  a custom server's name can mangle to (`macro_internal_`), and
+  `dialable_servers` dials each name once, as its first (the harness's own)
+  entry.
 - `src/domain/model_access.rs` (`SessionModels`) and `AgentState::turn_agent_key`:
   an agent with its own usable API key (`agent_api_keys`) runs every turn on
   it without admission, and its session offers only that provider's models.
@@ -67,6 +77,10 @@ milliseconds instead of waiting on container provisioning.
 
 Native user tools bypass the ordinary gate only when the final-draft review
 finisher is installed; otherwise dispatch must resolve their actor normally.
+Native tools that use nobody's access (`WebSearch`, `WebFetch`,
+`SelfKnowledge`) take no `acting_as` and wait for nobody, but still ask the
+gate: the harness's scoped gate refuses them in suggestion generations and
+runs that send nothing.
 
 Session tool schemas require `acting_as: requester | owner` for tools using
 account access, including deferred tools. The gate resolves the selected account
@@ -109,7 +123,7 @@ MCP catalog lacks any `mcp__macro_internal__` code tool fails
 - Owners with `auto-skills` (`domain::entity_routing`) route SDK entities on
   code-mode turns: the prompt is `routed_prompt` (no area guidance) and the
   entities `select_documentation` picks bring their `@agent` guide with their
-  index into the turn part. Everyone else keeps `prompt`, which inlines every
+  index onto the turn's request. Everyone else keeps `prompt`, which inlines every
   guide. Like skill routing, it ranks on the latest user message and the one
   before it, so a follow-up keeps the previous turn's entities.
 - `auto` is a picker entry, not a routable id: `RigTurnEngine` asks its
@@ -130,9 +144,12 @@ MCP catalog lacks any `mcp__macro_internal__` code tool fails
   build turn messages with `to_rig_messages_limited`, not `to_rig_messages`.
 - `rig_engine::system_prompt` orders text from most to least stable for the
   prompt cache: the static Macro prompt (the cached shared block, the same for
-  every agent), then the session's part, then the turn's (`with_turn`). Put
-  anything that changes per turn in the turn part, never in the shared block;
-  measure with `measure_prompt_cache_turns`.
+  every agent), then the session's part. Nothing per turn goes in the system
+  prompt: it sits before the history, so changing it misses the cache for the
+  whole conversation. A turn's SDK documentation rides on the request that
+  received it (`domain::turn_docs`, remembered per session in memory like
+  skills, at most `DOCS_PER_SESSION_BYTES` per session) so the history before
+  it stays cached; measure with `measure_prompt_cache_turns`.
 - Replay tool calls using `_meta.macro.toolName`; ACP titles may be human-readable
   MCP labels, so only use the title for older frames without tool-name metadata.
   An MCP tool's `mcp__<server>__<tool>` name rebuilds as the `McpToolCall` the

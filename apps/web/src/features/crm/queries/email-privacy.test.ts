@@ -12,10 +12,14 @@ import type {
 import { waitFor } from '@solidjs/testing-library';
 import { QueryClient } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
-import { createRoot, createSignal } from 'solid-js';
+import { type Accessor, createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EmailPrivacy } from '../core/email-privacy';
-import { createEmailPrivacySource } from './email-privacy';
+import type { EmailConsent, EmailPrivacy } from '../core/email-privacy';
+import {
+  createEmailConsentQuery,
+  createEmailPrivacySource,
+  createThreadExclusionQuery,
+} from './email-privacy';
 import { crmKeys } from './keys';
 
 type PrivacyClient = typeof crmEmailPrivacyClient;
@@ -31,6 +35,8 @@ const settings: CrmEmailPrivacyResponse = {
   mailbox_email: 'person@example.com',
   team_domains: [],
   personal_domains: [],
+  team_domain_warnings: {},
+  personal_domain_warnings: {},
   can_remove_team_domains: false,
 };
 const cleanups: (() => void)[] = [];
@@ -59,6 +65,9 @@ function mount(initial: Partial<CrmEmailPrivacyResponse> = {}) {
       get: vi
         .fn<PrivacyClient['get']>()
         .mockResolvedValue(ok({ ...settings, ...initial })),
+      getConsent: vi
+        .fn<PrivacyClient['getConsent']>()
+        .mockResolvedValue(ok({ ...settings, ...initial })),
       update: vi.fn<PrivacyClient['update']>().mockResolvedValue(ok(settings)),
     };
     const feedback = { success: vi.fn(), failure: vi.fn() };
@@ -69,7 +78,25 @@ function mount(initial: Partial<CrmEmailPrivacyResponse> = {}) {
       team,
       user
     );
-    return { source, client, privacy, feedback, setTeam, setUser };
+    const createStatus = (threadId: Accessor<string | undefined>) =>
+      createThreadExclusionQuery(
+        { client, privacy, feedback },
+        team,
+        user,
+        threadId
+      );
+    const createConsent = () =>
+      createEmailConsentQuery({ client, privacy, feedback }, team, user);
+    return {
+      source,
+      client,
+      privacy,
+      feedback,
+      setTeam,
+      setUser,
+      createStatus,
+      createConsent,
+    };
   });
 }
 
@@ -195,6 +222,88 @@ describe('CRM email privacy query adapter', () => {
   });
 });
 
+it('reads narrow consent and shares privacy updates without replacing full settings', async () => {
+  const h = mount();
+  await signIn(h);
+  let consent!: ReturnType<typeof h.createConsent>;
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    consent = h.createConsent();
+  });
+  await waitFor(() => expect(consent.isSuccess).toBe(true));
+  expect(h.privacy.getConsent).toHaveBeenCalledExactlyOnceWith(
+    expect.any(AbortSignal)
+  );
+  expect(h.privacy.get).toHaveBeenCalledOnce();
+  expect(consent.data).toEqual({
+    enabled: true,
+    mailboxEmail: 'person@example.com',
+    mailboxLinkId: null,
+  });
+  expect(h.source.query.data?.teamDomains).toEqual([]);
+  const withdrawn = { ...settings, enabled: false };
+  h.privacy.update.mockResolvedValue(ok(withdrawn));
+  h.privacy.get.mockResolvedValue(ok(withdrawn));
+  h.privacy.getConsent.mockResolvedValue(ok(withdrawn));
+  await h.source.update.mutateAsync({ action: 'set_consent', enabled: false });
+  await waitFor(() => expect(consent.data?.enabled).toBe(false));
+  const consentKey = crmKeys.emailConsent(
+    'team',
+    'user',
+    currentQueryAccount()?.session
+  ).queryKey;
+  expect(h.client.getQueryData<EmailConsent>(consentKey)?.enabled).toBe(false);
+  expect(h.source.query.data?.personalDomains).toEqual([]);
+});
+
+it('prevents an older consent read from replacing a confirmed privacy write', async () => {
+  const h = mount();
+  await signIn(h);
+  const held =
+    Promise.withResolvers<Awaited<ReturnType<PrivacyClient['getConsent']>>>();
+  h.privacy.getConsent.mockReturnValueOnce(held.promise);
+  let consent!: ReturnType<typeof h.createConsent>;
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    consent = h.createConsent();
+  });
+  await waitFor(() => expect(h.privacy.getConsent).toHaveBeenCalledOnce());
+  const signal = h.privacy.getConsent.mock.calls[0][0];
+  h.privacy.update.mockResolvedValue(ok({ ...settings, enabled: false }));
+  await h.source.update.mutateAsync({
+    action: 'set_thread_exclusion',
+    thread_id: 'thread',
+    excluded: false,
+  });
+  expect(signal?.aborted).toBe(true);
+  held.resolve(ok(settings));
+  await waitFor(() => expect(consent.data?.enabled).toBe(false));
+  expect(h.privacy.getConsent).toHaveBeenCalledOnce();
+});
+
+it('cancels the narrow consent read when the signed-in session changes', async () => {
+  const h = mount();
+  await signIn(h);
+  const key = crmKeys.emailConsent(
+    'team',
+    'user',
+    currentQueryAccount()?.session
+  ).queryKey;
+  const held =
+    Promise.withResolvers<Awaited<ReturnType<PrivacyClient['getConsent']>>>();
+  h.privacy.getConsent.mockReturnValueOnce(held.promise);
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    h.createConsent();
+  });
+  await waitFor(() => expect(h.privacy.getConsent).toHaveBeenCalledOnce());
+  const signal = h.privacy.getConsent.mock.calls[0][0];
+  await resetQueryAccountSession();
+  await waitFor(() => expect(signal?.aborted).toBe(true));
+  held.resolve(ok(settings));
+  expect(h.client.getQueryData(key)).toBeUndefined();
+});
+
 it('commits a thread exception through the shared privacy refresh and paginated source', async () => {
   const h = mount();
   await signIn(h);
@@ -218,7 +327,8 @@ it('commits a thread exception through the shared privacy refresh and paginated 
   await waitFor(() => expect(nextPage.isSuccess).toBe(true));
   expect(h.privacy.excludedThreads).toHaveBeenCalledWith(
     'cursor',
-    expect.any(AbortSignal)
+    expect.any(AbortSignal),
+    undefined
   );
   expect(nextPage.data?.threads[0].threadId).toBe('thread');
   const readers = [
@@ -329,6 +439,116 @@ it('keeps a restoration saved and refreshes exception pages when a contribution 
   expect(h.privacy.excludedThreads).toHaveBeenCalledTimes(2);
   expect(h.client.getQueryState(emailsKey)?.isInvalidated).toBe(true);
   expect(h.feedback.failure).toHaveBeenCalledOnce();
+});
+
+it('looks up one thread and refreshes the header and settings list together', async () => {
+  const h = mount();
+  await signIn(h);
+  let excluded = false;
+  h.privacy.excludedThreads.mockImplementation(async () =>
+    ok({
+      threads: excluded
+        ? [
+            {
+              thread_id: 'thread',
+              link_id: 'mailbox',
+              subject: 'Private subject',
+            },
+          ]
+        : [],
+      next_cursor: null,
+    })
+  );
+  h.privacy.update.mockImplementation(async (change) => {
+    if (change.action === 'set_thread_exclusion') excluded = change.excluded;
+    return ok(settings);
+  });
+  let status!: ReturnType<typeof h.createStatus>;
+  let list!: ReturnType<typeof h.source.createExcludedThreads>;
+  const [threadId, setThreadId] = createSignal<string>();
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    status = h.createStatus(threadId);
+  });
+  expect(h.privacy.excludedThreads).not.toHaveBeenCalled();
+  setThreadId('thread');
+  await waitFor(() => expect(status.isSuccess).toBe(true));
+  expect(h.privacy.excludedThreads).toHaveBeenCalledExactlyOnceWith(
+    undefined,
+    expect.any(AbortSignal),
+    'thread'
+  );
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    list = h.source.createExcludedThreads(() => undefined);
+  });
+  await waitFor(() => expect(list.isSuccess).toBe(true));
+  for (const value of [true, false]) {
+    await h.source.update.mutateAsync({
+      action: 'set_thread_exclusion',
+      thread_id: 'thread',
+      excluded: value,
+    });
+    await waitFor(() => {
+      expect(status.data?.threads).toHaveLength(value ? 1 : 0);
+      expect(list.data?.threads).toHaveLength(value ? 1 : 0);
+    });
+  }
+});
+
+it('removes an exclusion while the header’s first status read is pending', async () => {
+  const h = mount();
+  await signIn(h);
+  const previous = ok({
+    threads: [
+      {
+        thread_id: 'thread',
+        link_id: 'mailbox',
+        subject: 'Private subject',
+      },
+    ],
+    next_cursor: null,
+  });
+  const held =
+    Promise.withResolvers<
+      Awaited<ReturnType<PrivacyClient['excludedThreads']>>
+    >();
+  cleanups.push(() => held.resolve(previous));
+  h.privacy.excludedThreads
+    .mockResolvedValueOnce(previous)
+    .mockReturnValueOnce(held.promise)
+    .mockResolvedValue(ok({ threads: [], next_cursor: null }));
+  let list!: ReturnType<typeof h.source.createExcludedThreads>;
+  let status!: ReturnType<typeof h.createStatus>;
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    list = h.source.createExcludedThreads(() => undefined);
+  });
+  await waitFor(() => expect(list.data?.threads).toHaveLength(1));
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    status = h.createStatus(() => 'thread');
+  });
+  await waitFor(() =>
+    expect(h.privacy.excludedThreads).toHaveBeenCalledTimes(2)
+  );
+  const signal = h.privacy.excludedThreads.mock.calls[1][1];
+
+  const removal = h.source.update.mutateAsync({
+    action: 'set_thread_exclusion',
+    thread_id: 'thread',
+    excluded: false,
+  });
+  await waitFor(() => {
+    expect(status.data?.threads).toEqual([]);
+    expect(list.data?.threads).toEqual([]);
+  });
+  expect(signal?.aborted).toBe(true);
+  held.resolve(previous);
+  await removal;
+  expect(status.data?.threads).toEqual([]);
+  expect(list.data?.threads).toEqual([]);
+  expect(h.feedback.failure).not.toHaveBeenCalled();
 });
 
 it('cancels a private-subject read across login and never caches it for the previous session', async () => {

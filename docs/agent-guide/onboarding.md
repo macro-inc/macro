@@ -58,7 +58,7 @@ ends the trial and charges Max immediately.
 
 The last step, after the plan is chosen (Continue with Free, a paid checkout
 return, or a licensed team member), is **Put your busywork on autopilot.**
-It shows with `enable-routine-suggestions` and `enable-routine-code-steps` on.
+It shows with `enable-routine-suggestions` on.
 As soon as an inbox is connected during onboarding, AI starts suggesting
 routines (`POST /scheduled-action/suggestions/generate?timezone=<zone>`,
 once per person; the same run writes the person's suggestions when `enable-suggestions`

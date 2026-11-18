@@ -449,6 +449,9 @@ async fn run_server() -> anyhow::Result<()> {
     )
     .with_thread_exclusion_gate(Arc::new(
         crm::outbound::thread_exclusions::FlaggedThreadExclusions(flags.clone()),
+    ))
+    .with_selective_email_gate(Arc::new(
+        crm::outbound::email_policy::FlaggedSelectiveEmail(flags.clone()),
     ));
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
@@ -1001,10 +1004,7 @@ async fn run_server() -> anyhow::Result<()> {
         consumer_cancellation_token.clone(),
     ));
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
-        call::outbound::channel_threads::FlaggedChannelThreads::new(
-            flags.clone(),
-            call_root_poster.clone(),
-        ),
+        call::outbound::channel_threads::MessageChannelThreads::new(call_root_poster.clone()),
     ));
     let search_term_matching: Arc<dyn search_service::TermMatchingRollout> =
         match config.environment {
@@ -1072,10 +1072,12 @@ async fn run_server() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
-    let (webhook_stream_sender, _) =
-        tokio::sync::broadcast::channel(webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY);
+    let webhook_stream_feed = webhook::domain::stream::StreamFeed::new(
+        webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY,
+        webhook::domain::stream::WEBHOOK_STREAM_REPLAY_CAPACITY,
+    );
     let sse_stream_service = webhook::domain::stream::WebhookEventStreamServiceImpl::new(
-        webhook_stream_sender.clone(),
+        webhook_stream_feed.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
         crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
@@ -1088,7 +1090,7 @@ async fn run_server() -> anyhow::Result<()> {
     );
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
-        let sender = webhook_stream_sender;
+        let feed = webhook_stream_feed;
         let workspace_resolver = webhook_repository.clone();
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
@@ -1098,7 +1100,7 @@ async fn run_server() -> anyhow::Result<()> {
                     _ = cancellation_token.cancelled() => break,
                     result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
                         &brokers,
-                        &sender,
+                        &feed,
                         &workspace_resolver,
                     ) => result,
                 };
@@ -1712,9 +1714,6 @@ async fn run_server() -> anyhow::Result<()> {
         worker: editing_worker.clone(),
         admission: admission.clone(),
         recorder: document_ai_usage.clone(),
-        // Off when PostHog isn't configured, as for the agents' Canvas tools.
-        artifacts: ai_tools::canvas_artifacts_rollout_from_env(config.environment)?
-            .unwrap_or_else(|| Arc::new(|_| Box::pin(async { false }))),
         images: Arc::new(crate::outbound::canvas_images::StaticFileCanvasImages(
             static_file_service_client::StaticFileServiceClient::new(
                 config.internal_api_key.to_string(),

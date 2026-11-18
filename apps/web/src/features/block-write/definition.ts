@@ -1,7 +1,7 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
+import { lazy } from '@core/util/lazy';
 import { fetchFileDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 
 /**
  * The collaborative DOCX editor. It owns the `write` block name, which is the

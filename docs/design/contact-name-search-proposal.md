@@ -56,7 +56,11 @@ Use **name-prefix-first search with an indexable recent-first order**, not simpl
 replace the wildcard pattern or add a standalone text index.
 
 - Prefer exact normalized full-name matches, then contacts whose name words start
-  with every query word. `jo sm` finds a name with John and Smith; query-word order
+  with every query word. Policy 6 puts people the viewer has a direct message with
+  above everyone else among those matches, however exactly a stranger's name
+  matches, keeping these tiers inside each group; it also counts a one-term query
+  equal to the first name (the first space-separated term of a name without a
+  comma) as exact, as the browser menus already ranked people. `jo sm` finds a name with John and Smith; query-word order
   need not match display order.
 - Within a matching tier, order primarily by the existing published interaction
   recency, with a deterministic identity tie-break. This deliberately replaces the

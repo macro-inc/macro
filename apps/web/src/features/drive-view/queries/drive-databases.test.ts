@@ -1,7 +1,6 @@
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import { describe, expect, it } from 'vitest';
 import type { DriveSelection } from '../context/drive-source';
-import { availableDriveState } from '../primitives/drive-state';
 import {
   selectDriveDatabases,
   selectSidebarDatabases,
@@ -221,32 +220,6 @@ describe('Drive database listing', () => {
     expect(
       orderDriveEntities(entities, selected, []).map((entity) => entity.id)
     ).toEqual(['shared', 'mine']);
-  });
-});
-
-describe('disabled database filters', () => {
-  it('masks a persisted Database choice while keeping other types and route intent', () => {
-    const state = {
-      ...selection,
-      facets: { type: ['database', 'doc-markdown'], tags: ['urgent'] },
-      expandedFolderIds: [],
-      favoritesOpen: false,
-      databasesOpen: true,
-      rootOpen: true,
-    };
-    expect(availableDriveState(state, false, true).facets).toEqual({
-      type: ['doc-markdown'],
-      tags: ['urgent'],
-    });
-    expect(availableDriveState(state, true, true)).toBe(state);
-    expect(
-      availableDriveState(
-        { ...state, facets: { type: ['form', 'doc-markdown'], tags: [] } },
-        true,
-        false
-      ).facets.type
-    ).toEqual(['doc-markdown']);
-    expect(state.facets.type).toEqual(['database', 'doc-markdown']);
   });
 });
 

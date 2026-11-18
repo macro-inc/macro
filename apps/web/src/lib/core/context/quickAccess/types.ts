@@ -191,6 +191,8 @@ export type QuickAccessList<T extends QuickAccessItem = QuickAccessItem> = {
   isLoadingMore: Accessor<boolean>;
   error: Accessor<unknown>;
   loadMore: () => Promise<void>;
+  /** Reads a failed page again, where the list can. */
+  retry?: () => Promise<void>;
 };
 
 export type QuickAccessListOptions<
@@ -201,6 +203,9 @@ export type QuickAccessListOptions<
   searchTerm?: Accessor<string>;
   /** Disable this list without affecting other Quick Access consumers. */
   enabled?: Accessor<boolean>;
+  /** While false, an enabled list keeps its in-memory rows but neither
+   * searches the local cache nor rereads it on cache changes. */
+  readsCache?: Accessor<boolean>;
   /** Person scoring policy, applied before the native window limit. */
   peopleMode?: PeopleSearch['mode'];
   excludeSelf?: boolean;

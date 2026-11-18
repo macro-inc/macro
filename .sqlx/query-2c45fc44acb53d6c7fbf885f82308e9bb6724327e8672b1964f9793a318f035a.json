@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                d.id AS \"document_id!\",\n                source.from_import AS \"source_from_import!\",\n                EXISTS (\n                    SELECT 1 FROM email_links l WHERE l.macro_id = d.owner OFFSET 0\n                ) AS \"mailbox_kept!\",\n                EXISTS (\n                    SELECT 1\n                    FROM email_links l\n                    WHERE l.macro_id = d.owner AND l.created_at < d.\"createdAt\"\n                    OFFSET 0\n                ) AS \"mailbox_predates_document!\",\n                EXISTS (\n                    SELECT 1 FROM email_threads t WHERE t.id = source.thread_id OFFSET 0\n                ) AS \"thread_kept!\",\n                EXISTS (\n                    SELECT 1 FROM email_messages m WHERE m.id = source.message_id OFFSET 0\n                ) AS \"message_kept!\"\n            FROM (\n                SELECT\n                    ep.entity_id,\n                    CASE\n                        WHEN ep.values->'value'->0->>'entity_id'\n                            ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'\n                        THEN (ep.values->'value'->0->>'entity_id')::uuid\n                    END AS thread_id,\n                    CASE\n                        WHEN ep.values->'value'->0->>'specific_message_id'\n                            ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'\n                        THEN (ep.values->'value'->0->>'specific_message_id')::uuid\n                    END AS message_id,\n                    ep.updated_at = ep.created_at\n                        AND EXISTS (\n                            SELECT 1\n                            FROM (\n                                SELECT r.property_definition_id, r.created_at\n                                FROM entity_properties r\n                                WHERE r.entity_id = ep.entity_id AND r.entity_type = 'DOCUMENT'\n                                OFFSET 0\n                            ) r\n                            WHERE r.property_definition_id = '00000001-0000-0000-0000-00000000000e'\n                                AND r.created_at = ep.created_at\n                        ) AS from_import\n                FROM unnest($1::text[]) AS scanned(entity_id)\n                CROSS JOIN LATERAL (\n                    SELECT ep.entity_id, ep.property_definition_id, ep.values, ep.created_at, ep.updated_at\n                    FROM entity_properties ep\n                    WHERE ep.entity_id = scanned.entity_id AND ep.entity_type = 'DOCUMENT'\n                    OFFSET 0\n                ) ep\n                WHERE ep.property_definition_id = '00000001-0000-0000-0000-00000000000b'\n                    AND ep.values->'value'->0->>'entity_type' = 'THREAD'\n            ) source\n            CROSS JOIN LATERAL (\n                SELECT d.id, d.owner, d.\"createdAt\"\n                FROM \"Document\" d\n                WHERE d.id = source.entity_id AND d.\"deletedAt\" IS NULL\n                OFFSET 0\n            ) d\n            WHERE NOT EXISTS (\n                SELECT 1 FROM document_email de WHERE de.document_id = d.id OFFSET 0\n            )\n            ORDER BY d.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_from_import!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "mailbox_kept!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "mailbox_predates_document!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "thread_kept!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "message_kept!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "2c45fc44acb53d6c7fbf885f82308e9bb6724327e8672b1964f9793a318f035a"
+}
