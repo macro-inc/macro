@@ -43,7 +43,10 @@ pub struct RepoSessionDirectory<Repo>(pub Repo);
 impl<Repo: AgentSessionRepo> SessionDirectory for RepoSessionDirectory<Repo> {
     type Err = AgentSessionError;
 
-    async fn facts(&self, session: AgentSessionId) -> Result<Option<SessionFacts>, AgentSessionError> {
+    async fn facts(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<Option<SessionFacts>, AgentSessionError> {
         let Some(session) = self.0.find(session).await? else {
             return Ok(None);
         };

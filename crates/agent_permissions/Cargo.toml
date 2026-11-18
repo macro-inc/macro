@@ -30,12 +30,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 agent_fold = { path = "../folds/agent_fold", default-features = false, features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["schema", "test-utils"] }
-http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }
-
-[package.metadata.cargo-shear]
-# Named only in `#[sqlx::test(migrator = "...")]` strings.
-ignored = ["macro_db_migrator"]

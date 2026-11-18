@@ -949,6 +949,8 @@
       "crates/agent_git",
       "crates/agent_harness",
       "crates/agent_inmem",
+      "crates/agent_permission_registry",
+      "crates/agent_permissions",
       "crates/agent_preview",
       "crates/agent_runtime_protocol",
       "crates/agent_session",

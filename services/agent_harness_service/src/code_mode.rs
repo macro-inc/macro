@@ -284,8 +284,8 @@ pub const PERMISSIONS_FLAG: &str = "enable-agent-permissions";
 /// (local stacks without PostHog) or when the flags can't be read, it is off.
 pub struct PermissionsFlag<Flags>(pub Option<Flags>);
 
-impl<Flags: feature_flags::FeatureFlags + 'static> agent_permissions::domain::ports::PermissionsRollout
-    for PermissionsFlag<Flags>
+impl<Flags: feature_flags::FeatureFlags + 'static>
+    agent_permissions::domain::ports::PermissionsRollout for PermissionsFlag<Flags>
 {
     async fn enabled(&self, user: &MacroUserIdStr<'static>) -> bool {
         let Some(flags) = &self.0 else {

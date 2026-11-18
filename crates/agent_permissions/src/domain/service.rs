@@ -22,10 +22,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::model::{
     AgentAccess, AppliedTo, Caller, Catalog, Change, Credential, OperationKey, Origin,
-    PermissionError, PermissionState, PermissionsView, PolicyKind, PolicyOwner, ResolvedCall,
-    Rule, SessionFacts, SessionPolicy, Tightened, ToolPermissionCatalog,
+    PermissionError, PermissionState, PermissionsView, PolicyKind, PolicyOwner, ResolvedCall, Rule,
+    SessionFacts, SessionPolicy, Tightened, ToolPermissionCatalog,
 };
-use super::ports::{AgentDirectory, PermissionStore, PermissionsRollout, SessionDirectory};
+use super::ports::{
+    AgentDirectory, PermissionStore, PermissionsRollout, SessionDirectory, Write, WriteTo,
+};
 use super::resolve::{self, Layer, ViewAccess};
 
 /// The most changes one request may make: more than one group's custom view
@@ -76,8 +78,11 @@ pub trait AgentPermissions: Send + Sync + 'static {
 
     /// Delete every saved setting, so everything is always allowed again
     /// (session overlays stay). A person's own session only.
-    async fn reset(&self, caller: &Caller, agent: BotId)
-    -> Result<PermissionsView, PermissionError>;
+    async fn reset(
+        &self,
+        caller: &Caller,
+        agent: BotId,
+    ) -> Result<PermissionsView, PermissionError>;
 
     /// What a session's permissions say about each of `calls`. An operation
     /// the registry does not know is `never`. Does not check the rollout:
@@ -130,13 +135,6 @@ fn internal(error: impl std::error::Error + Send + Sync + 'static) -> Permission
     PermissionError::Internal(rootcause::Report::new(error).into_dynamic())
 }
 
-/// Where a tightening goes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Destination {
-    Saved,
-    Session(AgentSessionId),
-}
-
 /// The session an agent caller acts in, verified to run `agent`.
 type AgentContext = (AgentSessionId, SessionFacts);
 
@@ -149,7 +147,7 @@ fn tighten_destination(
     access: AgentAccess,
     owner: &PolicyOwner,
     context: Option<&AgentContext>,
-) -> Option<Destination> {
+) -> Option<WriteTo> {
     if let Credential::Agent { agent: acting, .. } = &caller.credential
         && *acting != agent
     {
@@ -162,10 +160,10 @@ fn tighten_destination(
         _ => false,
     };
     if person_may_edit {
-        return Some(Destination::Saved);
+        return Some(WriteTo::Saved);
     }
 
-    context.map(|(session, _)| Destination::Session(*session))
+    context.map(|(session, _)| WriteTo::Session(*session))
 }
 
 fn view_access(
@@ -355,11 +353,6 @@ where
         agent: BotId,
     ) -> Result<PermissionsView, PermissionError> {
         self.ensure_enabled(caller).await?;
-        let access = self.access(&caller.user, agent).await?;
-        if access == AgentAccess::NotFound {
-            return Err(PermissionError::NotFound);
-        }
-
         let is_this_agent = match &caller.credential {
             Credential::Agent { agent: acting, .. } if *acting != agent => {
                 return Err(PermissionError::Forbidden);
@@ -367,6 +360,10 @@ where
             Credential::Agent { .. } => true,
             Credential::PersonSession | Credential::Other => false,
         };
+        let access = self.access(&caller.user, agent).await?;
+        if access == AgentAccess::NotFound {
+            return Err(PermissionError::NotFound);
+        }
         if access == AgentAccess::NotManageable && !is_this_agent {
             return Err(PermissionError::Forbidden);
         }
@@ -433,9 +430,21 @@ where
             .session_rules(session_id)
             .await
             .map_err(internal)?;
-        let context = self.agent_context(caller, agent).await?;
-        self.build_view(caller, agent, access, owner, context.as_ref(), Some(overlay))
-            .await
+        // An agent acting in another session of the same agent tightens that
+        // one, not this.
+        let context = self
+            .agent_context(caller, agent)
+            .await?
+            .filter(|(acting_in, _)| *acting_in == session_id);
+        self.build_view(
+            caller,
+            agent,
+            access,
+            owner,
+            context.as_ref(),
+            Some(overlay),
+        )
+        .await
     }
 
     #[tracing::instrument(
@@ -454,11 +463,17 @@ where
         validate(&self.catalog, &changes)?;
         let (owner, kind, access) = self.editable_owner(caller, agent).await?;
 
-        let changes = resolve::normalize(changes, false);
+        let write = Write {
+            owner: &owner,
+            session: None,
+            to: WriteTo::Saved,
+            by: &caller.user,
+            via_agent: false,
+        };
         self.store
-            .apply(&owner, &changes, &caller.user, false)
+            .write(write, |_, _| Ok(resolve::normalize(changes, false)))
             .await
-            .map_err(internal)?;
+            .map_err(internal)??;
         self.build_view(caller, agent, access, (owner, kind), None, None)
             .await
     }
@@ -477,6 +492,11 @@ where
     ) -> Result<Tightened, PermissionError> {
         self.ensure_enabled(caller).await?;
         validate(&self.catalog, &changes)?;
+        if let Credential::Agent { agent: acting, .. } = &caller.credential
+            && *acting != agent
+        {
+            return Err(PermissionError::Forbidden);
+        }
         let access = self.access(&caller.user, agent).await?;
         if access == AgentAccess::NotFound {
             return Err(PermissionError::NotFound);
@@ -484,45 +504,57 @@ where
 
         let context = self.agent_context(caller, agent).await?;
         let (owner, kind) = Self::owner(caller, agent, access, context.as_ref());
-        let destination = tighten_destination(caller, agent, access, &owner, context.as_ref())
+        let to = tighten_destination(caller, agent, access, &owner, context.as_ref())
             .ok_or(PermissionError::Forbidden)?;
 
-        let saved = self.store.rules(&owner).await.map_err(internal)?;
-        let overlay = self
-            .session_rules(context.as_ref())
-            .await?
-            .unwrap_or_default();
-
-        let applied_to = match destination {
-            Destination::Saved => {
-                let changes = resolve::normalize(changes, false);
-                let after = resolve::apply(&saved, &changes);
-                resolve::tighten_only(&self.catalog, (&saved, &overlay), (&after, &overlay))
-                    .map_err(PermissionError::WouldLoosen)?;
-                let via_agent = matches!(caller.credential, Credential::Agent { .. });
-                self.store
-                    .apply(&owner, &changes, &caller.user, via_agent)
-                    .await
-                    .map_err(internal)?;
-                AppliedTo::Agent
-            }
-            Destination::Session(session) => {
-                let changes = resolve::normalize(changes, true);
-                let after = resolve::apply(&overlay, &changes);
-                resolve::tighten_only(&self.catalog, (&saved, &overlay), (&saved, &after))
-                    .map_err(PermissionError::WouldLoosen)?;
-                self.store
-                    .apply_session(session, &changes, &caller.user)
-                    .await
-                    .map_err(internal)?;
-                AppliedTo::Session
-            }
+        // A tightening never stores `always`, which would exempt an operation
+        // from a stricter group setting made later. The check runs on the
+        // rules as they stand under the store's lock, so a concurrent change
+        // can't slip between the check and the write.
+        let changes = resolve::normalize(changes, true);
+        let catalog = &self.catalog;
+        let write = Write {
+            owner: &owner,
+            session: context.as_ref().map(|(session, _)| *session),
+            to,
+            by: &caller.user,
+            via_agent: matches!(caller.credential, Credential::Agent { .. }),
+        };
+        self.store
+            .write(write, |saved, overlay| {
+                match to {
+                    // The saved policy applies to every session, so it must
+                    // not loosen whatever this session's overlay holds.
+                    WriteTo::Saved => {
+                        let after = resolve::apply(saved, &changes);
+                        resolve::tighten_only(catalog, (saved, &[]), (&after, &[]))
+                    }
+                    WriteTo::Session(_) => {
+                        let after = resolve::apply(overlay, &changes);
+                        resolve::tighten_only(catalog, (saved, overlay), (saved, &after))
+                    }
+                }
+                .map_err(PermissionError::WouldLoosen)?;
+                Ok(changes)
+            })
+            .await
+            .map_err(internal)??;
+        let applied_to = match to {
+            WriteTo::Saved => AppliedTo::Agent,
+            WriteTo::Session(_) => AppliedTo::Session,
         };
         tracing::Span::current().record("applied_to", tracing::field::debug(applied_to));
 
         let overlay = self.session_rules(context.as_ref()).await?;
         let permissions = self
-            .build_view(caller, agent, access, (owner, kind), context.as_ref(), overlay)
+            .build_view(
+                caller,
+                agent,
+                access,
+                (owner, kind),
+                context.as_ref(),
+                overlay,
+            )
             .await?;
         Ok(Tightened {
             applied_to,
@@ -577,30 +609,32 @@ where
 
         Ok(calls
             .iter()
-            .map(|key| match self.catalog.entry(&key.service, &key.operation) {
-                Some(entry) => {
-                    let (state, origin) = resolve::effective(&saved, &overlay, entry);
-                    ResolvedCall {
-                        key: key.clone(),
-                        entry: Some(entry.clone()),
-                        state,
-                        origin,
+            .map(
+                |key| match self.catalog.entry(&key.service, &key.operation) {
+                    Some(entry) => {
+                        let (state, origin) = resolve::effective(&saved, &overlay, entry);
+                        ResolvedCall {
+                            key: key.clone(),
+                            entry: Some(entry.clone()),
+                            state,
+                            origin,
+                        }
                     }
-                }
-                None => {
-                    tracing::error!(
-                        service = %key.service,
-                        operation = %key.operation,
-                        "an analyzed SDK operation is missing from the permission registry"
-                    );
-                    ResolvedCall {
-                        key: key.clone(),
-                        entry: None,
-                        state: PermissionState::Never,
-                        origin: Origin::Default,
+                    None => {
+                        tracing::error!(
+                            service = %key.service,
+                            operation = %key.operation,
+                            "an analyzed SDK operation is missing from the permission registry"
+                        );
+                        ResolvedCall {
+                            key: key.clone(),
+                            entry: None,
+                            state: PermissionState::Never,
+                            origin: Origin::Default,
+                        }
                     }
-                }
-            })
+                },
+            )
             .collect())
     }
 }
