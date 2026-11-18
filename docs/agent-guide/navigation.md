@@ -1689,7 +1689,10 @@ recency weights and type boosts live in `MENTION_RANKING_CONFIG` in the mention
 menu's `utils/mention-ranking.ts`.
 Broader entity matches remain reachable even when the local fuzzy matcher would
 omit them. Personal contacts preserve their local exact/word-prefix/contains and
-recent-first window order among equally good name matches; mixed menu scoring never
+recent-first window order among equally good name matches. People you have a direct
+message with lead every match at a word start, ahead of strangers whose whole name
+equals the query, and an exact first name counts as an exact name: `@rhea` lists
+the Rhea Okafor you message above accounts named just "Rhea" you never messaged; mixed menu scoring never
 drops reverse-word matches. In menus, further pages of people are listed below the
 earlier ones. Partial local contacts never trigger a remote suggestion search. To verify, type `@task` with a project named `Task planning`
 and many recent tasks containing “task”: the project should appear in the first
