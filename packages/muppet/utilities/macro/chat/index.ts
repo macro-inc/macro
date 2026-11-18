@@ -362,14 +362,25 @@ export type TypingIndicators = {
   readonly start: (channelId: string, root?: string) => () => Promise<void>;
 };
 
+/** A thread's root, or the channel itself. */
+const channelLevel = '';
+
 /**
  * Typing indicators that can overlap in one channel, each with a stop of its
- * own: "start" is sent (and resent, as indicators expire) while any is
- * showing, and "stop" once the last one stops, so one consumer (a greeting)
- * never ends another's (a reply's). A channel's stop is channel-wide in
- * Macro, so they are counted per channel, threads included. Sends never
- * throw: a failed one is retried by the next resend or ignored. Each
- * indicator stops by itself after `most`.
+ * own, so one consumer (a greeting) never ends another's (a reply's). Every
+ * consumer in a process shares one instance: `chat()` makes it, and builds
+ * its `typing` on it.
+ *
+ * - Indicators are counted per channel and per thread (`root`): "start" is
+ *   sent, and resent as indicators expire, for each thread that has one
+ *   showing.
+ * - Macro's "stop" ends the channel's typing, so it is sent only once the
+ *   channel's last indicator stops. A thread whose last indicator stops
+ *   while others in the channel still show just isn't resent, and expires.
+ * - A channel's sends go out in order, so a stop never overtakes its start.
+ *   Sends never throw: a failed one is ignored, and the next resend tries
+ *   again.
+ * - Each indicator stops by itself after `most`.
  */
 export const typingIndicators = ({
   send,
@@ -380,38 +391,93 @@ export const typingIndicators = ({
   readonly every?: number;
   readonly most?: number;
 }): TypingIndicators => {
-  const showing = new Map<
-    string,
-    { count: number; readonly tick: ReturnType<typeof setInterval> }
-  >();
+  type Showing = {
+    /** Live indicators by thread root (`channelLevel` for the channel). */
+    readonly roots: Map<string, number>;
+    readonly tick: ReturnType<typeof setInterval>;
+  };
+  const showing = new Map<string, Showing>();
+  /** Each channel's sends, chained, so they reach Macro in order. */
+  const queues = new Map<string, Promise<void>>();
+  const enqueue = (
+    channelId: string,
+    action: 'start' | 'stop',
+    root: string
+  ): Promise<void> => {
+    const now = (): Promise<void> =>
+      send(channelId, action, root === channelLevel ? undefined : root).catch(
+        () => undefined
+      );
+    // Sent at once when nothing is in flight there; after it otherwise.
+    const before = queues.get(channelId);
+    const sent = before === undefined ? now() : before.then(now);
+    queues.set(channelId, sent);
+    void sent.then(() => {
+      if (queues.get(channelId) === sent) queues.delete(channelId);
+    });
+    return sent;
+  };
+  const resend = (channelId: string): void => {
+    for (const root of showing.get(channelId)?.roots.keys() ?? [])
+      void enqueue(channelId, 'start', root);
+  };
   return {
-    start: (channelId, root) => {
-      const quiet = (action: 'start' | 'stop') =>
-        send(channelId, action, root).catch(() => undefined);
-      const shown = showing.get(channelId);
+    start: (channelId, given) => {
+      const root = given ?? channelLevel;
+      let shown = showing.get(channelId);
       if (shown === undefined) {
-        showing.set(channelId, {
-          count: 1,
-          tick: setInterval(() => void quiet('start'), every),
-        });
-        void quiet('start');
-      } else shown.count += 1;
+        shown = {
+          roots: new Map(),
+          tick: setInterval(() => resend(channelId), every),
+        };
+        showing.set(channelId, shown);
+      }
+      const live = shown.roots.get(root) ?? 0;
+      shown.roots.set(root, live + 1);
+      if (live === 0) void enqueue(channelId, 'start', root);
       let stopped: Promise<void> | undefined;
       const stop = (): Promise<void> => {
         stopped ??= (async () => {
           clearTimeout(cap);
           const now = showing.get(channelId);
-          if (now === undefined) return;
-          now.count -= 1;
-          if (now.count > 0) return;
+          const count = now?.roots.get(root) ?? 0;
+          if (now === undefined || count === 0) return;
+          if (count > 1) now.roots.set(root, count - 1);
+          else now.roots.delete(root);
+          // Others still show: nothing to send, but this stop resolves only
+          // once what was queued for the channel (its own start) is out.
+          if (now.roots.size > 0) {
+            await queues.get(channelId);
+            return;
+          }
           clearInterval(now.tick);
           showing.delete(channelId);
-          await quiet('stop');
+          await enqueue(channelId, 'stop', root);
         })();
         return stopped;
       };
       const cap = setTimeout(() => void stop(), most);
       return stop;
+    },
+  };
+};
+
+/**
+ * One indicator per channel on shared indicators, replaced by the next start
+ * there: what a reply needs. `stop(channelId)` stops only this one.
+ */
+export const typingOn = (indicators: TypingIndicators): Typing => {
+  const stops = new Map<string, () => Promise<void>>();
+  const stop = (channelId: string): Promise<void> => {
+    const own = stops.get(channelId);
+    stops.delete(channelId);
+    return own?.() ?? Promise.resolve();
+  };
+  return {
+    stop,
+    start: (channelId, root) => {
+      void stop(channelId);
+      stops.set(channelId, indicators.start(channelId, root));
     },
   };
 };
@@ -571,7 +637,8 @@ export const chatting = module({
 });
 
 /**
- * Macro chat as a behavior to `use`: `chat` and `typing` in the context, a
+ * Macro chat as a behavior to `use`: `chat`, `typing` and the
+ * `typingIndicators` it is built on in the context, a
  * `messages` source of every message posted where the agent is (its own
  * included: check `mine`), and the chat capabilities. Pass `chat` to use
  * another implementation, e.g. a fake in tests.
@@ -580,8 +647,15 @@ export const chat = (
   from: { readonly macro: () => Promise<Macro> } | { readonly chat: Chat }
 ) => {
   const port = 'chat' in from ? from.chat : sdkChat(from);
+  // One set of indicators for the process: replies' typing and anything else
+  // that types (a greeting) count together.
+  const indicators = typingIndicators({ send: port.typing });
   return behavior()
-    .decorate({ chat: port, typing: typing({ send: port.typing }) })
+    .decorate({
+      chat: port,
+      typing: typingOn(indicators),
+      typingIndicators: indicators,
+    })
     .source({ messages: source(port.incoming) })
     .capability(chatting);
 };

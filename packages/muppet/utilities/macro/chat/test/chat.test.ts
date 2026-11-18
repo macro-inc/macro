@@ -259,3 +259,58 @@ test('a typing send that fails never throws from start or stop', async () => {
   const stop = indicators.start('dm-1');
   await expect(stop()).resolves.toBeUndefined();
 });
+
+test('an indicator in a thread shows there too, and the channel stops only after both', async () => {
+  const sent: string[] = [];
+  const indicators = typingIndicators({
+    send: async (channelId, action, root) => {
+      sent.push(
+        `${action} ${channelId}${root === undefined ? '' : `/${root}`}`
+      );
+    },
+    every: 60_000,
+    most: 60_000,
+  });
+  const inChannel = indicators.start('c1');
+  const inThread = indicators.start('c1', 'r1');
+  await inThread();
+  // The thread's indicator stopped while the channel's still shows: no stop.
+  expect(sent).toEqual(['start c1', 'start c1/r1']);
+  await inChannel();
+  expect(sent).toEqual(['start c1', 'start c1/r1', 'stop c1']);
+});
+
+test("a channel's typing sends go out in order: a stop never overtakes its start", async () => {
+  const sent: string[] = [];
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const indicators = typingIndicators({
+    send: async (channelId, action) => {
+      if (action === 'start') await held;
+      sent.push(`${action} ${channelId}`);
+    },
+    every: 60_000,
+    most: 60_000,
+  });
+  const stopping = indicators.start('c1')();
+  release();
+  await stopping;
+  expect(sent).toEqual(['start c1', 'stop c1']);
+});
+
+test("chat()'s typing and its typingIndicators are one count per channel", async () => {
+  const fake = fakeChat([]);
+  const sent = fake.did;
+  const { typing: replies, typingIndicators: indicators } = chat({
+    chat: fake.port,
+  }).decorations;
+  const greeting = indicators.start('c1');
+  replies.start('c1');
+  await replies.stop('c1');
+  // The reply's stop leaves the greeting's indicator showing.
+  expect(sent).toEqual(['typing c1 start']);
+  await greeting();
+  expect(sent).toEqual(['typing c1 start', 'typing c1 stop']);
+});
