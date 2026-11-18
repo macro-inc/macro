@@ -58,40 +58,36 @@ export function createRangeDateSelection(options: {
       return true;
     return Boolean(options.endDisabled() && current.to && date > current.to);
   };
-  const change = (next: Selection) => {
-    if (!state.open || disabled(state.endpoint)) return;
-    if (next.from && dateIsDisabled(next.from)) return;
-    if (next.to && dateIsDisabled(next.to)) return;
-    if (!state.rangeMode) {
-      const selected =
-        state.endpoint === 'end' ? (next.to ?? next.from) : next.from;
-      if (!selected) return;
-      const current = options.value();
-      const value = {
-        allDay: current.allDay,
-        start: current.start,
-        end: current.end,
-      };
-      const date = formatLocalDate(selected);
-      const nextValue = { ...value };
-      if (state.endpoint === 'end') {
-        nextValue.end = value.allDay ? date : withLocalDate(value.end, date);
-      } else {
-        const start = value.allDay ? date : withLocalDate(value.start, date);
-        Object.assign(
-          nextValue,
-          value.allDay
-            ? moveAllDayRange(value, start)
-            : moveTimedRange(value, start)
-        );
-        if (options.endDisabled()) nextValue.end = value.end;
-      }
-      batch(() => {
-        options.onChange(nextValue);
-        close();
-      });
-      return;
+  const moveDate = (next: Selection) => {
+    const selected =
+      state.endpoint === 'end' ? (next.to ?? next.from) : next.from;
+    if (!selected) return;
+    const current = options.value();
+    const value = {
+      allDay: current.allDay,
+      start: current.start,
+      end: current.end,
+    };
+    const date = formatLocalDate(selected);
+    const nextValue = { ...value };
+    if (state.endpoint === 'end') {
+      nextValue.end = value.allDay ? date : withLocalDate(value.end, date);
+    } else {
+      const start = value.allDay ? date : withLocalDate(value.start, date);
+      Object.assign(
+        nextValue,
+        value.allDay
+          ? moveAllDayRange(value, start)
+          : moveTimedRange(value, start)
+      );
+      if (options.endDisabled()) nextValue.end = value.end;
     }
+    batch(() => {
+      options.onChange(nextValue);
+      close();
+    });
+  };
+  const changeRange = (next: Selection) => {
     let from = next.from;
     let to = next.to;
     const current = dates();
@@ -113,6 +109,13 @@ export function createRangeDateSelection(options: {
       });
       close();
     });
+  };
+  const change = (next: Selection) => {
+    if (!state.open || disabled(state.endpoint)) return;
+    if (next.from && dateIsDisabled(next.from)) return;
+    if (next.to && dateIsDisabled(next.to)) return;
+    if (state.rangeMode) changeRange(next);
+    else moveDate(next);
   };
   return {
     state,
