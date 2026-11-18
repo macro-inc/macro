@@ -2,8 +2,10 @@
  * Database tool renderers, loaded on first use so the chat bundle never
  * carries the databases UI or SQL engine; inert while databases are off.
  */
+
+import { lazy } from '@core/util/lazy';
 import type { ToolName } from '@service-cognition/generated/tools/tool';
-import { lazy, Suspense } from 'solid-js';
+import { Suspense } from 'solid-js';
 import type {
   RenderContext,
   ToolHandler,

@@ -19,6 +19,7 @@ chrono = { workspace = true }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 doppler-config = { workspace = true }
 email = { path = "../../crates/email", default-features = false, features = ["outbound", "ports"] }
+feature_flags = { path = "../../crates/feature_flags" }
 jev = { path = "../../crates/jev", features = ["outbound"] }
 kafka_util = { path = "../../crates/kafka_util" }
 macro_auth = { path = "../../crates/macro_auth" }
