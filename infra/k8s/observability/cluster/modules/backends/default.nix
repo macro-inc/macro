@@ -5,6 +5,7 @@
 # node, kubelet and cAdvisor metrics to Mimir, pod logs to Loki, and the
 # backends' own /metrics to Mimir, as the host's Prometheus scraped Loki,
 # Tempo and itself.
+{ lib, ... }:
 let
   shared = import ./lib.nix;
   inherit (shared) endpoints;
@@ -16,7 +17,24 @@ in
     ./mimir.nix
   ];
 
-  macro.alloyNode = {
+  # Where Loki and Tempo keep their data: the cluster's own buckets until the
+  # switch, then the host's, which hold its history (README "The switch").
+  # Mimir keeps its own bucket for good.
+  options.macro.backends.buckets =
+    lib.mapAttrs
+      (
+        name: default:
+        lib.mkOption {
+          type = lib.types.str;
+          inherit default;
+          description = "S3 bucket of ${name}: the AWS layer's `buckets.${name}` output, or from the switch its `host_buckets`.";
+        }
+      )
+      {
+        inherit (shared.buckets) loki tempo;
+      };
+
+  config.macro.alloyNode = {
     metricsForwardTo = [ "prometheus.remote_write.mimir.receiver" ];
     logsForwardTo = [ "loki.write.loki.receiver" ];
     extraConfig = ''

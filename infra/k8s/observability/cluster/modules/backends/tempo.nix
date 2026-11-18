@@ -75,7 +75,7 @@ in
         storage.trace = {
           backend = "s3";
           s3 = {
-            bucket = shared.buckets.tempo;
+            bucket = config.macro.backends.buckets.tempo;
             inherit region;
             endpoint = "s3.${region}.amazonaws.com";
           };

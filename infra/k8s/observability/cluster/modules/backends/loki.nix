@@ -12,7 +12,7 @@
 let
   shared = import ./lib.nix;
   inherit (shared) host;
-  bucket = shared.buckets.loki;
+  bucket = config.macro.backends.buckets.loki;
 
   selector = {
     "app.kubernetes.io/name" = "loki";

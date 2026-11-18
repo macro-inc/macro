@@ -6,6 +6,8 @@ rec {
 
   # Created by ../aws (settings.nix `buckets`), one per backend, each readable
   # only by that backend's Pod Identity role. Change both sides together.
+  # Loki and Tempo take theirs through `macro.backends.buckets` (default.nix),
+  # which the switch points at the host's buckets.
   buckets = {
     loki = "macro-observability-k8s-loki";
     tempo = "macro-observability-k8s-tempo";
