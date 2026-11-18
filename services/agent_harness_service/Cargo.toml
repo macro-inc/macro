@@ -40,6 +40,7 @@ agent_changes = { path = "../../crates/agent_changes" }
 agent_code_mode = { path = "../../crates/agent_code_mode" }
 agent_permissions = { path = "../../crates/agent_permissions" }
 agent_egress = { path = "../../crates/agent_egress" }
+agent_permissions = { path = "../../crates/agent_permissions" }
 agent_git = { path = "../../crates/agent_git" }
 agent_fold = { path = "../../crates/folds/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
@@ -218,6 +219,7 @@ web_search = { path = "../../crates/web_search", features = ["axum"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+agent_permission_registry = { path = "../../crates/agent_permission_registry" }
 agent = { path = "../../crates/agent" }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
 ai_tools = { path = "../../crates/ai_tools", features = ["test-support"] }
