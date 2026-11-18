@@ -63,54 +63,119 @@ pub async fn delete_email_by_link_id(client: &opensearch::OpenSearch, link_id: &
 /// Documents a delete-by-query over email message ids removed, and those it
 /// skipped because another write changed them between its search and delete.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
-pub(crate) struct DeletedByQuery {
+pub struct DeletedByQuery {
     #[serde(default)]
-    pub(crate) deleted: u64,
+    pub deleted: u64,
     #[serde(default)]
-    pub(crate) version_conflicts: u64,
+    pub version_conflicts: u64,
 }
 
-/// Deletes every document of the given email messages, whatever thread each
-/// was indexed under, in one delete-by-query that refreshes the index when it
-/// removed something, so the removals are visible to search when this
-/// returns. Documents another write changed mid-query are deleted on one
-/// second pass, instead of failing the whole request on the conflict.
-/// Returns how many documents were removed.
+/// Deletes every document of a thread page's spam and trash messages, whatever
+/// thread each was indexed under, in one delete-by-query that refreshes the
+/// index when it removed something, so removals are visible to search when
+/// this returns. A document another write changed after the page was read is
+/// skipped and fails the call: the caller rereads the thread instead of acting
+/// on a decision that may be stale; pass the result to [`fail_on_conflict`].
 pub async fn delete_email_messages(
     client: &opensearch::OpenSearch,
     message_ids: &[String],
     index_override: Option<&str>,
-) -> Result<u64> {
+) -> Result<DeletedByQuery> {
     if message_ids.is_empty() {
-        return Ok(0);
+        return Ok(DeletedByQuery::default());
     }
     let index = resolve_destination(index_override);
-    delete_with_recheck(|| delete_by_message_ids(client, message_ids, index)).await
+    delete_by_message_ids(client, message_ids, index).await
 }
 
-/// Runs `pass` once more when it skipped documents on version conflicts, and
-/// fails when they still conflict, so the caller's retry handles a document
-/// that keeps changing.
-pub(crate) async fn delete_with_recheck<F, Fut>(mut pass: F) -> Result<u64>
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = Result<DeletedByQuery>>,
-{
-    let first = pass().await?;
-    if first.version_conflicts == 0 {
-        return Ok(first.deleted);
-    }
-    let second = pass().await?;
-    if second.version_conflicts > 0 {
+/// Fails a delete that skipped documents on version conflicts.
+pub fn fail_on_conflict(pass: DeletedByQuery) -> Result<DeletedByQuery> {
+    if pass.version_conflicts > 0 {
         return Err(OpensearchClientError::Unknown {
             details: format!(
-                "{} email documents kept changing while being deleted",
-                second.version_conflicts
+                "{} email documents changed while being deleted",
+                pass.version_conflicts
             ),
             operation: OpensearchOperation::DeleteEmailMessages,
         });
     }
-    Ok(first.deleted + second.deleted)
+    Ok(pass)
+}
+
+/// Passes a single-message delete took and what it removed.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct EmailMessageDeleted {
+    pub deleted: u64,
+    pub passes: u8,
+}
+
+/// Deletes every document of one deleted message, whatever thread it was
+/// indexed under, visible to search when this returns. Deleting it cannot go
+/// stale, so a document another write changed mid-query is deleted on one
+/// more pass, after a refresh lets that pass see the change.
+pub async fn delete_email_message(
+    client: &opensearch::OpenSearch,
+    message_id: &str,
+    index_override: Option<&str>,
+) -> Result<EmailMessageDeleted> {
+    let index = resolve_destination(index_override);
+    let message_ids = [message_id.to_owned()];
+    delete_with_recheck(
+        || delete_by_message_ids(client, &message_ids, index),
+        || refresh_index(client, index),
+    )
+    .await
+}
+
+/// Runs `pass`; when it skipped documents on version conflicts, runs
+/// `refresh` and `pass` once more, and fails if they still conflict so the
+/// caller's retry handles a document that keeps changing.
+pub(crate) async fn delete_with_recheck<P, PF, R, RF>(
+    mut pass: P,
+    refresh: R,
+) -> Result<EmailMessageDeleted>
+where
+    P: FnMut() -> PF,
+    PF: Future<Output = Result<DeletedByQuery>>,
+    R: FnOnce() -> RF,
+    RF: Future<Output = Result<()>>,
+{
+    let first = pass().await?;
+    if first.version_conflicts == 0 {
+        return Ok(EmailMessageDeleted {
+            deleted: first.deleted,
+            passes: 1,
+        });
+    }
+    refresh().await?;
+    let second = fail_on_conflict(pass().await?)?;
+    Ok(EmailMessageDeleted {
+        deleted: first.deleted + second.deleted,
+        passes: 2,
+    })
+}
+
+async fn refresh_index(client: &opensearch::OpenSearch, index: &str) -> Result<()> {
+    const OPERATION: OpensearchOperation = OpensearchOperation::RefreshEmailIndex;
+    let response = client
+        .indices()
+        .refresh(opensearch::indices::IndicesRefreshParts::Index(&[index]))
+        .send()
+        .await
+        .map_err(|err| OpensearchClientError::request_failed(OPERATION, &err))?;
+    if response.status_code().is_success() {
+        return Ok(());
+    }
+    let status_code = response.status_code();
+    let body = response
+        .text()
+        .await
+        .map_err(|err| OpensearchClientError::deserialization_failed(OPERATION, &err))?;
+    tracing::error!(status_code = ?status_code, body = ?body, "error refreshing the email index");
+    Err(OpensearchClientError::Unknown {
+        details: body,
+        operation: OPERATION,
+    })
 }
 
 async fn delete_by_message_ids(
@@ -148,8 +213,8 @@ async fn delete_by_message_ids(
 /// version conflicts `conflicts=proceed` counts fail the call.
 pub(crate) fn parse_deleted_by_query(body: &str) -> Result<DeletedByQuery> {
     let value: serde_json::Value =
-        serde_json::from_str(body).map_err(|err| OpensearchClientError::Unknown {
-            details: format!("unreadable delete-by-query response: {err}"),
+        serde_json::from_str(body).map_err(|err| OpensearchClientError::DeserializationFailed {
+            details: err.to_string(),
             operation: OpensearchOperation::DeleteEmailMessages,
         })?;
     if value["failures"]
@@ -161,8 +226,8 @@ pub(crate) fn parse_deleted_by_query(body: &str) -> Result<DeletedByQuery> {
             operation: OpensearchOperation::DeleteEmailMessages,
         });
     }
-    serde_json::from_value(value).map_err(|err| OpensearchClientError::Unknown {
-        details: format!("unreadable delete-by-query counts: {err}"),
+    serde_json::from_value(value).map_err(|err| OpensearchClientError::DeserializationFailed {
+        details: err.to_string(),
         operation: OpensearchOperation::DeleteEmailMessages,
     })
 }

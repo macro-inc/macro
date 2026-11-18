@@ -222,9 +222,11 @@ pub async fn process_upsert_thread_message(
             ));
         }
 
-        opensearch_client
-            .delete_email_messages(&delete_message_ids, index_override)
-            .await?;
+        if !delete_message_ids.is_empty() {
+            opensearch_client
+                .delete_email_messages(&delete_message_ids, index_override)
+                .await?;
+        }
 
         if !upsert_email_message_args.is_empty() {
             let result = opensearch_client
@@ -302,9 +304,11 @@ pub async fn process_upsert_thread_batch_message(
             .push(upsert_args(message, content, owner, properties, now_millis));
     }
 
-    opensearch_client
-        .delete_email_messages(&delete_message_ids, index_override)
-        .await?;
+    if !delete_message_ids.is_empty() {
+        opensearch_client
+            .delete_email_messages(&delete_message_ids, index_override)
+            .await?;
+    }
 
     if !upsert_email_message_args.is_empty() {
         let result = opensearch_client

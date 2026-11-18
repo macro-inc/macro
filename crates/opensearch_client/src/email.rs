@@ -41,12 +41,16 @@ impl OpensearchClient {
         .await
     }
 
-    /// Deletes every document of the given email messages, whatever thread
-    /// each was indexed under, in one delete-by-query; removals are visible to
-    /// search when this returns.
+    /// Deletes every document of a thread page's spam and trash messages in
+    /// one delete-by-query, visible to search when this returns. Fails when a
+    /// document changed after the page was read, so the caller rereads it.
     #[tracing::instrument(
         skip(self, message_ids),
-        fields(messages = message_ids.len(), deleted = tracing::field::Empty),
+        fields(
+            messages = message_ids.len(),
+            deleted = tracing::field::Empty,
+            version_conflicts = tracing::field::Empty,
+        ),
         err
     )]
     pub async fn delete_email_messages(
@@ -58,7 +62,31 @@ impl OpensearchClient {
             delete::email::delete_email_messages(&self.inner, message_ids, index_override)
         })
         .await?;
-        tracing::Span::current().record("deleted", deleted);
+        let span = tracing::Span::current();
+        span.record("deleted", deleted.deleted);
+        span.record("version_conflicts", deleted.version_conflicts);
+        delete::email::fail_on_conflict(deleted).map(|_| ())
+    }
+
+    /// Deletes every document of one deleted email message, whatever thread
+    /// it was indexed under, visible to search when this returns.
+    #[tracing::instrument(
+        skip(self),
+        fields(deleted = tracing::field::Empty, passes = tracing::field::Empty),
+        err
+    )]
+    pub async fn delete_email_message(
+        &self,
+        message_id: &str,
+        index_override: Option<&str>,
+    ) -> Result<()> {
+        let deleted = resend_on_lost_connection(|| {
+            delete::email::delete_email_message(&self.inner, message_id, index_override)
+        })
+        .await?;
+        let span = tracing::Span::current();
+        span.record("deleted", deleted.deleted);
+        span.record("passes", deleted.passes);
         Ok(())
     }
 
