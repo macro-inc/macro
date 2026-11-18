@@ -256,9 +256,10 @@ rather than collapsing to a thin row. Channel and standalone
 calls navigate and leave through their existing session owner; standalone calls
 do not depend on the quick-call feed loading first.
 
-The desktop Chat sidebar has no separate Live section. Live calls are marked
-on their conversation rows with a waveform and elapsed time. Your current call
-uses the waveform as its channel icon and shows live participant avatars.
+The desktop Chat sidebar also marks live calls on their conversation rows
+with a waveform and elapsed time, in addition to its separate Live section.
+Your current call uses the waveform as its channel icon and shows live
+participant avatars.
 Ringing conversations keep their existing Answer and Decline actions; these
 use the real incoming-call signal rather than treating every active call as ringing.
 
