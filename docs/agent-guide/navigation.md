@@ -631,7 +631,9 @@ other splits remain intact.
 Ordinary rail, More-menu, and Go To shortcut navigation resumes opted-in apps'
 last locations during the current session, including nested details, tabs,
 filters, and local state registered with the split entry (such as scroll or
-selection). Views opt in with `useViewRestoration()`; views without the hook keep
+selection). A Go To shortcut that names a tab opens that tab
+instead: `g e` lands on Email's Signal and `g s` on Sent, as do their command
+menu entries. Views opt in with `useViewRestoration()`; views without the hook keep
 ordinary navigation behavior. The mobile dock uses the same memory; Search taps
 still start a fresh search. Memory is account-scoped and clears on reload,
 sign-out, or account changes. A leave guard stages each snapshot, but only a
@@ -876,7 +878,12 @@ only update the open menu’s transient draft; they do not create email-service 
 unfinished emails with no subject, body, or recipients. Any supplied recipient
 must resolve to an email address, and a connected inbox is required. A successful
 save closes the menu and opens the saved draft when available; a
-failed save preserves the input. **Cmd/Ctrl+Enter** continues to send the email.
+failed save preserves the input. **Send email** (or **Cmd/Ctrl+Enter**) saves the
+email as a draft and sends that draft; a successful send closes the menu and
+opens the sent thread. While the menu stays open on a failed save or send, a
+retry uses the same draft rather than a second one; a retried send sends the
+saved draft without saving it again. Choosing another inbox after a failed
+send deletes that draft and saves a new one in the chosen inbox.
 Search mode embeds Global Search's editor, Type/In/From filter chips, and
 result rows with highlighted message snippets. Extraction first selects the search
 type, then uses its schema: Channels has In/From; Tasks has status, priority,
@@ -1900,9 +1907,14 @@ restart rules still apply.
 - `#` — move email to Trash, with an Undo toast. Works on the selected or focused
   rows in a mail list and on the thread open in an email detail or block. Email
   only; other entity types keep Delete/Backspace and do not answer `#`.
-- `g` then `h` — Home; `g` then `i` remains an alias. While Email is focused,
-  `g i`/`o`/`s`/`t`/`d`/`e`/`a` open its tabs instead (`g i` Signal, `g t` Sent;
-  see `email.md`); `g h` still goes Home.
+- `g` then a letter goes to a view, the same from every view (no view takes
+  over an app-wide letter) and never while an editor or input has focus:
+  `h` Home (`i` too unless Notifications is on the rail), `a` Agents, `e` Email
+  on Signal, `s` Email on Sent, `f` Files, `d` Documents, `t` Tasks, `r`
+  Calendar, `c` Channels, `o` Customers, and with their flags `i`
+  Notifications, `n` Recent, `y` Activity, `l` Calls, `v` Reviews, `x`
+  External. A view may add letters the app doesn't use (`g g` jumps to the top
+  of a list).
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.
 - Splits: `` ` `` split, `Shift+Esc` maximize. `Shift+H`/`J`/`K`/`L` and

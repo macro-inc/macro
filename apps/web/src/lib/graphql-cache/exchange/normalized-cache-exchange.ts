@@ -111,6 +111,7 @@ import {
   type EntityResolverConfig,
 } from './entity-resolvers';
 import { isQueryObject, LiveQuery, withLiveQueryData } from './live-query';
+import { createMutationQueueOwner } from './mutation-queue-owner';
 import {
   createMutationQueueRunner,
   QUEUE_LEASE_MS,
@@ -510,6 +511,13 @@ export interface NormalizedCacheExchangeOptions {
   ) => boolean | Promise<boolean>;
   /** Spans, bounded logs, and counters for the durable mutation queue. */
   mutationQueueTelemetry?: MutationQueueTelemetry;
+  /**
+   * Web Locks for the queue's lease owners. The page holds a lock while it
+   * lives, so a page loaded after a reload or close can tell its predecessor
+   * has gone and release the claim it left on the queue head. Without them,
+   * that claim holds the queue until its lease runs out.
+   */
+  mutationQueueLocks?: LockManager;
   /**
    * True for a subscription whose payloads no reader takes from the cache,
    * such as a signal that only tells queries to refetch. Its results are
@@ -1014,7 +1022,10 @@ export function normalizedCacheExchange(
         }
       };
 
-      const queueOwner = `exchange:${host.clientId}`;
+      const queueOwner = createMutationQueueOwner(
+        host.clientId,
+        options.mutationQueueLocks
+      );
       const queueTelemetry =
         options.mutationQueueTelemetry ?? NOOP_MUTATION_QUEUE_TELEMETRY;
       const mutationQueue = createMutationQueueRunner({
@@ -1404,7 +1415,7 @@ export function normalizedCacheExchange(
           );
         const now = Date.now();
         const claim = {
-          owner: queueOwner,
+          owner: epoch.leaseOwner,
           nowMs: now,
           leaseExpiresAtMs: now + QUEUE_LEASE_MS,
         };

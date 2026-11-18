@@ -128,7 +128,21 @@ tab. Nothing exists on the server, so the DM is in neither person's list until
 the first message creates it and the view becomes the real conversation. Check
 that leaving without sending creates nothing, that the other person's list gains
 the DM only after the send, and that reloading a `pending-dm-` URL opens the
-Chat list on desktop and closes the pane on touch.
+Chat list on desktop and closes the pane on touch. Agent teammates are the
+exception: they write first, so their DM is created when it opens (see Agent
+teammates in [settings.md](settings.md#agent-teammates)).
+
+A person's first message in a new DM or group chat notifies its registered
+members as every later message does (an unread dot on the row, the Chat badge,
+and the message text in the push); people without an account get the
+invitation email instead. In a named channel, a person's first top-level
+message still invites the members it does not mention; a bot's first message
+does not. The recipient's open Chat list shows the new conversation without a
+reload. When the `soupUpdates` push for a channel created in the last few
+minutes says the viewer is a member, each list whose first page shows that
+channel type reads its first page again, for up to a minute, until the
+conversation is there, so a first read from a lagging replica does not leave it
+out.
 
 Sending a human
 message queues an immediate email for nonusers, including follow-up messages,
@@ -502,6 +516,9 @@ wrapping paragraph should stay expanded without briefly collapsing; check this
 after reopening the channel with a draft already saved. Open reply composers always place the editor
 above the action row, including for empty and single-line drafts, so the
 attachment, delete-reply, and send controls have their own space.
+A channel or thread open in two desktop tabs keeps one unsent draft: text typed
+and files attached or removed in one tab show in the other, sending from either
+clears both, and after a reload the draft appears once.
 Shift+Enter adds a line to the draft; Enter sends. The composer spaces its
 paragraphs the way the sent message does, so a multi-line draft reads as what
 it will send. Check a multi-line message against the draft that wrote it: the

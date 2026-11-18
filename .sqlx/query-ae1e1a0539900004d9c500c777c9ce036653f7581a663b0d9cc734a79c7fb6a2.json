@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE team_agents SET first_online_at = now()\n            WHERE user_id = $1 AND first_online_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ae1e1a0539900004d9c500c777c9ce036653f7581a663b0d9cc734a79c7fb6a2"
+}

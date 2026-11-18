@@ -82,6 +82,10 @@ test('a reply goes out in the thread', async ({ page, mailbox }) => {
   `mailbox.providerMessages()`, `gmailRawMessage` (`harness/provider.ts`), the
   email API (`mailbox.api`), `stack.serviceRequests()`, `stack.storedObjects()`
   and, last, `stack.sql`.
+- Leave a state the services check with the provider at the provider too:
+  `lapseGrant` (`harness/ways-elsewhere.ts`) revokes the grant at the
+  emulator. Setting `needs_reauth` with `stack.sql` alone lasts only until the
+  services get a token for the inbox from a provider that still grants it.
 - Failures of what the app depends on: `stack.failNextServiceRequest`,
   `stack.refuseQueueSends`, emulator faults, and Playwright's `page.route`.
 - Mark what the test covers: `did('AL-171')` where it performs an action of

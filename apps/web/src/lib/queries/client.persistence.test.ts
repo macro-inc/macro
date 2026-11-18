@@ -5,7 +5,6 @@ import {
 } from '@service-storage/crm-access-authority';
 import { expect, it, vi } from 'vitest';
 import { crmProtectedQueryKey } from './crm-cache-scope';
-import { emailKeys } from './email/keys';
 import type { PersistedQueryEntry } from './persistence/per-query-idb';
 
 const fixture = vi.hoisted(() => ({
@@ -50,9 +49,11 @@ it('restores owned mail without CRM proof and retires only protected snapshots o
   crmAccessAuthority.setSession('viewer');
   let ownedWitnessCurrent = true;
   rememberOwnedEmail('owned-thread', () => ownedWitnessCurrent);
+  // Exercise admission of legacy snapshots with the injected persistence
+  // scope; the current app no longer emits or restores these thread keys.
   const keys = [
-    emailKeys.threadMessages('owned-thread').queryKey,
-    emailKeys.threadMessages('crm-shared-thread').queryKey,
+    ['email', 'threadMessages', 'messages', 'owned-thread'],
+    ['email', 'threadMessages', 'messages', 'crm-shared-thread'],
     ['soup', 'astItems', { filters: {} }],
   ];
   for (const queryKey of keys) {

@@ -81,11 +81,12 @@ can be discarded and read again once. Initial and post-binding reads share that
 budget; the binding and command are not replayed. Login/host replacement and
 observed account changes, including a return to the same account, close recovery.
 The proof-refresh loop owns its own stale retry and disables the nested read retry.
-Email and Soup snapshots remain persisted; CRM-bearing snapshots require proof
-before restoration and are retired on a proven denial or account replacement.
-Legacy persisted thread pages use the entity-granted thread endpoint and remain
-protected unless a current ownership witness identifies the thread as personal.
-Shared or expired-witness snapshots cannot restore after a proven denial.
+The normalized cache persists email records; native-mobile Soup query snapshots
+also remain persisted. CRM-bearing snapshots require proof before restoration
+and are retired on a proven denial or account replacement. The app no longer
+persists or restores legacy TanStack email thread pages; that scope stays listed
+only so logout can wipe earlier snapshots. Their legacy keys remain classified
+as protected unless a current ownership witness identifies the thread as personal.
 Inbox-authorized thread messages remain available independently of CRM access. The first native or wasm proof preserves
 legacy offline snapshots when it is allowed or team-less; regrants also preserve
 content already admitted after denial. Inbox-authorized settings, labels, message

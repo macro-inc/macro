@@ -55,7 +55,10 @@ import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useDatabasesQuery } from '@queries/storage/databases';
 import { useFormsQuery } from '@queries/storage/forms';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
-import { ACCOUNT_WIDE_REFRESH_INTERVAL_MS } from '@queries/visible-refresh';
+import {
+  ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
+  intervalWhileRead,
+} from '@queries/visible-refresh';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
@@ -397,9 +400,11 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
-  // History and the recent channel list reread the cache only while some list
-  // here reads it (an open menu, a typed search); otherwise every cache change
-  // in a busy workspace would reread them with nothing on screen.
+  // History and the recent channel list follow cache changes closely only while
+  // some list here reads the cache (an open menu, a typed search), and at most
+  // once a minute otherwise: every cache change in a busy workspace would
+  // reread them with nothing on screen, and a read as a list opens would
+  // reorder the rows it has just shown.
   const [cacheReaders, setCacheReaders] = createSignal<Accessor<boolean>[]>([]);
   const listsReadCache = createMemo(() =>
     cacheReaders().some((reading) => reading())
@@ -434,8 +439,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         () => cachedChannelsQuery.refetch({ cancelRefetch: false }),
         {
           searchBuckets: () => ['channel', 'dm'],
-          intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
-          live: listsReadCache,
+          intervalMs: intervalWhileRead(
+            listsReadCache,
+            ACCOUNT_WIDE_REFRESH_INTERVAL_MS
+          ),
         }
       )
     );

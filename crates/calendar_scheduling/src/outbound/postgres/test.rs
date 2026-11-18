@@ -83,6 +83,7 @@ fn booking(profile: Uuid, start: DateTime<Utc>) -> BookingRecord {
             attendance: BookingAttendance::Unknown,
             reschedule_count: 0,
             rescheduled_at: None,
+            abandoned_at: None,
             location: String::new(),
             answers: Default::default(),
             question_labels: Default::default(),
@@ -373,6 +374,68 @@ async fn an_abandoned_operation_is_never_claimed_again(pool: PgPool) {
         reservations,
         Some(1),
         "an abandoned booking keeps its reservation"
+    );
+}
+
+/// Bookings abandoned before the booking carried its own abandon time read
+/// back with it, and a create refused on its first attempt reads back unsent.
+#[sqlx::test(migrations = false)]
+async fn older_abandoned_bookings_read_back_with_their_abandon_time(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PostgresRepository::new(pool.clone());
+    let p = repo.save_profile(owned()).await.unwrap();
+    let start = Utc::now() + Duration::days(2);
+    let reserve = |offset: i64, due: bool| {
+        let mut record = booking(p.id, start + Duration::hours(offset));
+        record.booking.status = BookingStatus::Processing;
+        let mut operation = CalendarOperation::new(CalendarOperationKind::Create);
+        if due {
+            operation.retry_at = Utc::now() - Duration::seconds(1);
+        }
+        record.operation = Some(operation);
+        record
+    };
+    let first = repo
+        .reserve(reserve(0, false), None, start, start + Duration::days(1))
+        .await
+        .unwrap();
+    repo.reserve(reserve(2, true), None, start, start + Duration::days(1))
+        .await
+        .unwrap();
+    let retried = repo.claim_recovery().await.unwrap().unwrap();
+    let past = Utc::now() - Duration::hours(1);
+    let mut late = booking(p.id, past);
+    late.booking.status = BookingStatus::Processing;
+    late.operation = Some(CalendarOperation::new(CalendarOperationKind::Create));
+    let late = repo
+        .reserve(late, None, past, past + Duration::days(1))
+        .await
+        .unwrap();
+    let mut ids = Vec::new();
+    for mut record in [first, retried, late] {
+        // The shape an older release wrote: only the operation knows.
+        record.booking.status = BookingStatus::Failed;
+        record.booking.abandoned_at = None;
+        record.operation.as_mut().unwrap().abandoned_at = Some(Utc::now());
+        ids.push(record.booking.id);
+        repo.update_booking(record, BookingStatus::Processing)
+            .await
+            .unwrap();
+    }
+    let first = repo.booking(ids[0]).await.unwrap().unwrap();
+    let operation = first.operation.as_ref().unwrap();
+    assert_eq!(first.booking.abandoned_at, operation.abandoned_at);
+    assert!(operation.unsent);
+    let retried = repo.booking(ids[1]).await.unwrap().unwrap();
+    let operation = retried.operation.as_ref().unwrap();
+    assert_eq!(retried.booking.abandoned_at, operation.abandoned_at);
+    assert!(!operation.unsent, "a retried create may have landed");
+    let late = repo.booking(ids[2]).await.unwrap().unwrap();
+    let operation = late.operation.as_ref().unwrap();
+    assert_eq!(late.booking.abandoned_at, operation.abandoned_at);
+    assert!(
+        !operation.unsent,
+        "abandoned after its start, so not necessarily refused"
     );
 }
 

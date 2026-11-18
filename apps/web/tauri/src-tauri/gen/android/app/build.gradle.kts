@@ -58,7 +58,6 @@ android {
     compileSdk = 36
     namespace = "com.macro.workspace.mobile"
     defaultConfig {
-        manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "com.macro.workspace.mobile"
         minSdk = 24
         targetSdk = 36
@@ -77,7 +76,6 @@ android {
     }
     buildTypes {
         getByName("debug") {
-            manifestPlaceholders["usesCleartextTraffic"] = "true"
             isDebuggable = true
             isJniDebuggable = true
             isMinifyEnabled = false

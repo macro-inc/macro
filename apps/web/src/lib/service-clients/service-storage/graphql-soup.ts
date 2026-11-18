@@ -1012,6 +1012,8 @@ export function getGraphqlSoupClient(): Client {
             // Preserve optimistic intent only while transport failures retry.
             shouldRetryMutation: shouldRetryGraphqlMutation,
             mutationQueueTelemetry,
+            // Undefined where the browser has no Web Locks.
+            mutationQueueLocks: navigator.locks,
             delegateRevalidation: delegateChannelNotificationRefresh,
             externalWriteTypes: resolveCrmExternalWriteTypes,
             isUncachedSubscription: isActivityUpdatesSubscription,

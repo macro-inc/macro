@@ -81,3 +81,16 @@ images align with their item's text, and that the saved Markdown indents each
 image under its item and renders back as one list, on desktop, tablet touch, and
 phone touch. Run just this case by adding `list-images.browser.e2e.ts` to the
 command above.
+
+## SVG code previews
+
+`svg-preview.browser.e2e.ts` previews an `svg` code block in a message
+(`StaticMarkdown`, preview turned on by the reader) and in a document saved with
+its preview on (`MarkdownShell`, which opens previewed). The SVG carries inline
+handlers on the root, an image, an animation, and HTML inside a
+`foreignObject`; the preview must draw it as an `<img>` at its own size and run
+none of them. A second case checks that an icon drawn in `currentColor` takes
+the text colour around the preview, as it did inline. Run just this case by
+adding `svg-preview.browser.e2e.ts` to the command above. On a machine with
+many network interfaces, run under `bwrap --dev-bind / / --unshare-net`, as
+`apps/web/AGENTS.md` explains.

@@ -32,6 +32,10 @@ export type Sample = {
   /** Soup reads answered from the local cache vs. the network. */
   soup: { local: number; network: number };
   longAnimationFrameBlockingMs: number | undefined;
+  /** The WebView's CPU throttle rate while the step ran (1: none). */
+  cpuThrottle: number;
+  /** The slowdown measured just before and just after the step. */
+  cpuThrottleMeasured?: [number, number];
   /** Host one-minute load average when the step ran (emulators share it). */
   hostLoad?: number;
   /** The flow's spans, from the touch: for finding where the time went. */
@@ -111,6 +115,7 @@ export function sampleFrom(
     variant,
     iteration,
     readyMs: ready - start,
+    cpuThrottle: session.cpuThrottle,
     spanMs: numberAttribute(root, 'ui.elapsed_ms'),
     root: root.name,
     routeId:

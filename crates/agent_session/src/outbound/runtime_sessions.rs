@@ -6,6 +6,9 @@ use crate::domain::{
 use agent_client_protocol::schema::v1::SessionId;
 use bot_id::BotId;
 
+#[cfg(test)]
+mod test;
+
 /// Postgres runtime session lookup.
 #[derive(Clone)]
 pub struct PgRuntimeSessions(pub sqlx::PgPool);
@@ -75,5 +78,36 @@ impl RuntimeSessionLookup for PgRuntimeSessions {
                 dormant: row.dormant,
             })
             .collect())
+    }
+
+    async fn bots_with_live_work(
+        &self,
+        bots: &[BotId],
+    ) -> Result<std::collections::HashSet<BotId>, Self::Err> {
+        let bots: Vec<_> = bots.iter().map(|bot| bot.as_uuid()).collect();
+        // One probe per bot that stops at its first session with work.
+        let rows = sqlx::query_scalar!(
+            r#"
+            SELECT bot.id AS "bot_id!"
+            FROM unnest($1::uuid[]) AS bot(id)
+            WHERE EXISTS (
+                SELECT 1 FROM agent_session s
+                WHERE s.bot_id = bot.id
+                  AND s.archived_by IS NULL
+                  AND (
+                      s.turn_state IN ('starting', 'running', 'stopping', 'blocked')
+                      OR EXISTS (
+                          SELECT 1 FROM agent_session_queue queue
+                          WHERE queue.agent_session_id = s.id
+                            AND jsonb_array_length(queue.entries) > 0
+                      )
+                  )
+            )
+            "#,
+            &bots,
+        )
+        .fetch_all(&self.0)
+        .await?;
+        Ok(rows.into_iter().map(BotId::new_from_uuid).collect())
     }
 }
