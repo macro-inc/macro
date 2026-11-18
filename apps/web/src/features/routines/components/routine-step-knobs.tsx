@@ -244,7 +244,7 @@ function KnobPopover(props: {
       <Popover.Portal mount={menuMount(trigger)}>
         <Popover.Content
           class={cn(
-            'menu-surface z-modal max-w-[calc(100vw-1rem)] p-3',
+            'menu-surface z-modal flex max-h-[var(--kb-popper-content-available-height)] max-w-[calc(100vw-1rem)] flex-col overflow-hidden p-3',
             props.knob.type === 'text' || props.knob.type === 'question'
               ? 'w-80'
               : 'w-auto min-w-64'
@@ -261,14 +261,18 @@ function KnobPopover(props: {
             picked.focus();
           }}
         >
-          <div ref={editor} class="grid gap-3">
-            <KnobEditor
-              knob={props.knob}
-              value={draft()}
-              problem={problem()}
-              onInput={setDraft}
-            />
-            <div class="flex items-center gap-2">
+          <div ref={editor} class="flex min-h-0 flex-col gap-3">
+            {/* Only the field scrolls, so Save stays in reach; its padding
+                keeps focus rings inside the scroller. */}
+            <div class="-m-1 min-h-0 overflow-y-auto p-1">
+              <KnobEditor
+                knob={props.knob}
+                value={draft()}
+                problem={problem()}
+                onInput={setDraft}
+              />
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
               <Button
                 type="button"
                 variant="ghost"
@@ -447,7 +451,9 @@ function KnobEditor(props: {
               {(option) => (
                 <RadioGroup.Item value={option} class="touch:min-h-11">
                   <RadioGroup.ItemControl />
-                  <RadioGroup.ItemLabel>{option}</RadioGroup.ItemLabel>
+                  <RadioGroup.ItemLabel class="flex flex-1 items-center self-stretch">
+                    {option}
+                  </RadioGroup.ItemLabel>
                 </RadioGroup.Item>
               )}
             </For>
