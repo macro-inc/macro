@@ -50,6 +50,8 @@ drop indicator, reorder math, and layout animation also serve Chat; Chat retains
 its own preference storage.
 
 Order is local to the account and view (`sidebar-section-order:<view>:<account>`).
+Open splits and tabs of the same account/view synchronize through storage
+notifications; account/view changes retire their previous listeners.
 Storage is schema-validated through `makePersistedState`; unavailable storage
 leaves in-memory ordering usable. Unknown keys are ignored and new sections stay
 in their default slots. Fixed rows and footer controls do not move. Sections move

@@ -80,4 +80,60 @@ describe('sidebar section preferences', () => {
       expect(state.order()).toEqual(['saved', 'library']);
     });
   });
+
+  it('synchronizes open splits only for the same account and view', () => {
+    createRoot((dispose) => {
+      disposers.push(dispose);
+      const first = createSidebarSectionOrder({
+        view: () => 'mail',
+        userId: () => 'viewer-a',
+      });
+      const second = createSidebarSectionOrder({
+        view: () => 'mail',
+        userId: () => 'viewer-a',
+      });
+      const drive = createSidebarSectionOrder({
+        view: () => 'drive',
+        userId: () => 'viewer-a',
+      });
+      const [user, setUser] = createSignal('viewer-b');
+      const anotherAccount = createSidebarSectionOrder({
+        view: () => 'mail',
+        userId: user,
+      });
+      first.setOrder(['saved', 'library']);
+      expect(second.order()).toEqual(['saved', 'library']);
+      expect(drive.order()).toEqual([]);
+      expect(anotherAccount.order()).toEqual([]);
+      second.setOrder(['library', 'saved']);
+      expect(first.order()).toEqual(['library', 'saved']);
+      setUser('viewer-a');
+      expect(anotherAccount.order()).toEqual(['library', 'saved']);
+      first.setOrder(['saved', 'library']);
+      expect(anotherAccount.order()).toEqual(['saved', 'library']);
+    });
+  });
+
+  it('accepts storage notifications without writing them back', () => {
+    createRoot((dispose) => {
+      disposers.push(dispose);
+      const state = createSidebarSectionOrder({
+        view: () => 'mail',
+        userId: () => 'viewer',
+      });
+      const write = vi.spyOn(Storage.prototype, 'setItem');
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'sidebar-section-order:mail:viewer',
+          newValue: '{"version":1,"order":["saved","library"]}',
+        })
+      );
+      expect(state.order()).toEqual(['saved', 'library']);
+      expect(write).not.toHaveBeenCalled();
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: null, newValue: null })
+      );
+      expect(state.order()).toEqual([]);
+    });
+  });
 });
