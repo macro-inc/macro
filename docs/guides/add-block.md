@@ -261,7 +261,8 @@ was moved onto `crates/docx_engine` the next day; start with a crate.
   gives it `just build-wasm <x>-engine` / `just ensure-wasm <x>-engine`, puts it
   in every app, preview, desktop and CI build and in `dev:prepare`, and adds its
   crates to the web CI path filters. Run `cargo x deps` to add its
-  `wasm_closures` entry, which keys its package cache.
+  `wasm_closures` entry, which keys its package cache, then `cargo x workflows`
+  so the generated web workflows pick up its crates.
 - **Output stays out of git.** Put a `.gitignore` containing `wasm/` in
   `src/lib/core/<x>-engine/`. If the crate has a Rust module named `build`,
   un-ignore it in the root `.gitignore`; `**/build` silently drops its files.
