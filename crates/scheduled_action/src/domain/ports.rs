@@ -656,9 +656,9 @@ pub trait DraftApps: Send + Sync + 'static {
     async fn connected(&self, owner: &MacroUserIdStr<'static>) -> Result<Vec<AgentMcpServer>>;
 
     /// The ones of `apps` a routine of `owner`'s can require once they
-    /// connect them, in order. Not an app `owner` would connect to its
-    /// vendor's own MCP server: connecting one never makes it an app a
-    /// routine can require.
+    /// connect them, in order: not one `owner` can't connect at all, nor
+    /// one they would connect to its vendor's own MCP server, which never
+    /// makes it an app a routine can require.
     async fn requirable(
         &self,
         owner: &MacroUserIdStr<'static>,

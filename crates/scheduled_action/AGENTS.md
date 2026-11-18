@@ -136,9 +136,10 @@ each run.
   required apps that aren't connected join the missing ones unbounded, so
   the drafter bounds the list again (`service::missing_apps`) before it
   asks which of them a routine of the owner's can require once connected
-  (`DraftApps::requirable`). The harness drops an app overlaid with its
-  vendor's own MCP server, which connects outside the counted grants,
-  unless the owner is on Macro Connect alone and Connect serves it. The
+  (`DraftApps::requirable`). For an owner on Macro Connect alone, who
+  connects every app through Connect, the harness keeps only the apps
+  Connect serves; for anyone else it drops an app overlaid with its
+  vendor's own MCP server, which connects outside the counted grants. The
   review then asks the person to connect only apps that make the routine
   saveable; when that can't be read, the draft names none. A step draft
   holds no apps. The `routine.draft` span records the drafter (`found` or
