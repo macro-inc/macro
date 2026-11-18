@@ -105,6 +105,14 @@ async function forgetLogin(instance: string, email: string) {
   const { user } = (await found.json()) as { user: { id: string } };
   const gone = await fetch(`${auth.url}/api/user/${user.id}?hardDelete=true`, { method: 'DELETE', headers: { Authorization: auth.key } });
   if (!gone.ok) throw new Error(`FusionAuth delete of ${email}: ${gone.status}`);
+  // The delete settles after it answers; seeding before then finds the old
+  // account, creates none, and leaves the person with no login.
+  for (let attempt = 0; ; attempt++) {
+    const after = await fetch(`${auth.url}/api/user?email=${encodeURIComponent(email)}`, { headers: { Authorization: auth.key } });
+    if (after.status === 404) return;
+    if (attempt >= 30) throw new Error(`FusionAuth still has ${email} 30 s after deleting it`);
+    await Bun.sleep(1000);
+  }
 }
 
 /**
