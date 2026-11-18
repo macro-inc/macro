@@ -1409,6 +1409,7 @@ export type MessagePart_Deserialize =
       text: string;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -1459,6 +1460,7 @@ export type MessagePart_Deserialize =
       size: number | null;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -1490,6 +1492,7 @@ export type MessagePart_Deserialize =
       text: string;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -1530,6 +1533,7 @@ export type MessagePart_Deserialize =
       detail: ToolDetail_Deserialize;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       entries?: never;
@@ -1567,6 +1571,7 @@ export type MessagePart_Deserialize =
       outcome: PermissionOutcome;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -1618,6 +1623,12 @@ export type MessagePart_Deserialize =
        *  covers without the owner being asked again.
        */
       remembered: boolean;
+      /**
+       *  For a hold on the agent's permissions (`macro-sdk`), the only
+       *  person who may approve or decline it; absent on other holds,
+       *  whose approver is the session's owner.
+       */
+      approver?: string | null;
     } & {
       control?: never;
       detail?: never;
@@ -1648,6 +1659,7 @@ export type MessagePart_Deserialize =
       outcome: ControlOutcome;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       detail?: never;
       entries?: never;
@@ -1681,6 +1693,7 @@ export type MessagePart_Deserialize =
       entries: PlanEntry[];
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -1727,6 +1740,7 @@ export type MessagePart_Deserialize =
       event: string | null;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -1796,6 +1810,7 @@ export type MessagePart_Deserialize =
       toolOutcome: UserToolOutcome | null;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -1827,6 +1842,7 @@ export type MessagePart_Serialize =
       text: string;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -1877,6 +1893,7 @@ export type MessagePart_Serialize =
       size: number | null;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -1908,6 +1925,7 @@ export type MessagePart_Serialize =
       text: string;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -1948,6 +1966,7 @@ export type MessagePart_Serialize =
       detail: ToolDetail_Serialize;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       entries?: never;
@@ -1985,6 +2004,7 @@ export type MessagePart_Serialize =
       outcome: PermissionOutcome;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -2036,6 +2056,12 @@ export type MessagePart_Serialize =
        *  covers without the owner being asked again.
        */
       remembered: boolean;
+      /**
+       *  For a hold on the agent's permissions (`macro-sdk`), the only
+       *  person who may approve or decline it; absent on other holds,
+       *  whose approver is the session's owner.
+       */
+      approver?: string | null;
     } & {
       control?: never;
       detail?: never;
@@ -2066,6 +2092,7 @@ export type MessagePart_Serialize =
       outcome: ControlOutcome;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       detail?: never;
       entries?: never;
@@ -2099,6 +2126,7 @@ export type MessagePart_Serialize =
       entries: PlanEntry[];
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -2145,6 +2173,7 @@ export type MessagePart_Serialize =
       event: string | null;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -2214,6 +2243,7 @@ export type MessagePart_Serialize =
       toolOutcome: UserToolOutcome | null;
     } & {
       approvalId?: never;
+      approver?: never;
       arguments?: never;
       control?: never;
       detail?: never;
@@ -2314,21 +2344,56 @@ export type PendingElicitation = {
 
 /**  An answerable request. Each variant retains its own response semantics. */
 export type PendingInteraction =
+  | PendingInteraction_Serialize
+  | PendingInteraction_Deserialize;
+
+/**  An answerable request. Each variant retains its own response semantics. */
+export type PendingInteraction_Deserialize =
   /**  A choice among the permission options offered by the agent. */
   | ({
-      kind: 'permission';
-    } & PendingPermission)
+      permission: {
+        kind: 'permission';
+      } & PendingPermission;
+    } & { elicitation?: never; tool_approval?: never })
   /**  A form, URL consent, or user tool review. */
   | ({
-      kind: 'elicitation';
-    } & PendingElicitation)
+      elicitation: {
+        kind: 'elicitation';
+      } & PendingElicitation;
+    } & { permission?: never; tool_approval?: never })
   /**
    *  An MCP tool call held until the session's owner approves it. Only
    *  the owner may approve or decline; anyone with edit access may cancel.
    */
   | ({
-      kind: 'tool_approval';
-    } & PendingToolApproval);
+      tool_approval: {
+        kind: 'tool_approval';
+      } & PendingToolApproval_Deserialize;
+    } & { elicitation?: never; permission?: never });
+
+/**  An answerable request. Each variant retains its own response semantics. */
+export type PendingInteraction_Serialize =
+  /**  A choice among the permission options offered by the agent. */
+  | ({
+      permission: {
+        kind: 'permission';
+      } & PendingPermission;
+    } & { elicitation?: never; tool_approval?: never })
+  /**  A form, URL consent, or user tool review. */
+  | ({
+      elicitation: {
+        kind: 'elicitation';
+      } & PendingElicitation;
+    } & { permission?: never; tool_approval?: never })
+  /**
+   *  An MCP tool call held until the session's owner approves it. Only
+   *  the owner may approve or decline; anyone with edit access may cancel.
+   */
+  | ({
+      tool_approval: {
+        kind: 'tool_approval';
+      } & PendingToolApproval_Serialize;
+    } & { elicitation?: never; permission?: never });
 
 /**  A permission request the current connection can still answer. */
 export type PendingPermission = {
@@ -2343,7 +2408,12 @@ export type PendingPermission = {
 };
 
 /**  A held MCP tool call the owner can still answer. */
-export type PendingToolApproval = {
+export type PendingToolApproval =
+  | PendingToolApproval_Serialize
+  | PendingToolApproval_Deserialize;
+
+/**  A held MCP tool call the owner can still answer. */
+export type PendingToolApproval_Deserialize = {
   /**  The approval an answer names. */
   approvalId: string;
   /**  The turn the call was made in. */
@@ -2356,6 +2426,34 @@ export type PendingToolApproval = {
   toolName: string;
   /**  Who prompted the turn; absent for a bot on nobody's behalf. */
   requestedBy: string | null;
+  /**
+   *  For a hold on the agent's permissions (`macro-sdk`), the only person
+   *  who may approve or decline it; absent on other holds, whose approver
+   *  is the session's owner.
+   */
+  approver?: string | null;
+};
+
+/**  A held MCP tool call the owner can still answer. */
+export type PendingToolApproval_Serialize = {
+  /**  The approval an answer names. */
+  approvalId: string;
+  /**  The turn the call was made in. */
+  turn: number;
+  /**  `macro`, or the connected app's slug. */
+  serverSlug: string;
+  /**  What a person calls the server the tool is on. */
+  serverName: string;
+  /**  The tool called. */
+  toolName: string;
+  /**  Who prompted the turn; absent for a bot on nobody's behalf. */
+  requestedBy: string | null;
+  /**
+   *  For a hold on the agent's permissions (`macro-sdk`), the only person
+   *  who may approve or decline it; absent on other holds, whose approver
+   *  is the session's owner.
+   */
+  approver?: string | null;
 };
 
 /**  One choice offered for a permission request. */
@@ -2732,7 +2830,7 @@ export type SessionMetadata_Deserialize = {
    *  Multiple permissions may coexist with the one allowed elicitation.
    *  History remains in the transcript after these live requests clear.
    */
-  pendingInteractions: PendingInteraction[];
+  pendingInteractions: PendingInteraction_Deserialize[];
   /**
    *  Where the newest turn stands, as one value. Readers used to derive it
    *  from the transcript's tail, the status, and their own record of what
@@ -2789,7 +2887,7 @@ export type SessionMetadata_Serialize = {
    *  Multiple permissions may coexist with the one allowed elicitation.
    *  History remains in the transcript after these live requests clear.
    */
-  pendingInteractions: PendingInteraction[];
+  pendingInteractions: PendingInteraction_Serialize[];
   /**
    *  Where the newest turn stands, as one value. Readers used to derive it
    *  from the transcript's tail, the status, and their own record of what
