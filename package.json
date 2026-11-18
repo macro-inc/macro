@@ -76,6 +76,7 @@
 			"packages/code-mode-sdk",
 			"packages/sdk-mcp",
 			"packages/email-renderer",
+			"packages/agent-faces",
 			"packages/entity-icons",
 			"packages/collaboration",
 			"packages/machine",
