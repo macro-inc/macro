@@ -1234,7 +1234,8 @@ above the floating controls. Empty descriptions show the full placeholder withou
 clamping or Show more. The property row contains only property pills; open the
 existing Details panel from its header island.
 The header has caret-only Back, the truncating project title, Share, and Details;
-there is no Tasks header island or Overview/Tasks switch. Each project pane hosts
+there is no hamburger, Tasks header island, or Overview/Tasks switch. Returning to
+the Projects list restores its hamburger navigation. Each project pane hosts
 and measures its own header islands, and the summary starts below that inset.
 The Tasks heading scrolls normally with the page and shows the progress ring,
 completed/total count, and Filters. Group headers also scroll on touch; desktop

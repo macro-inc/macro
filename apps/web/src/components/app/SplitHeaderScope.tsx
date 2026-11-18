@@ -1,5 +1,6 @@
 import { cn } from '@ui';
 import {
+  children,
   createContext,
   createSignal,
   type JSX,
@@ -134,8 +135,16 @@ function useScopeOrThrow() {
 function TopBar(props: { leading?: JSX.Element; class?: string }) {
   const scope = useScopeOrThrow();
   const floats = useTouchTopBarsFloat();
+  const leading = children(() => props.leading);
   return (
     <ViewShell.TopBar
+      navigation={
+        leading() ? (
+          <ViewShell.TopBarTitle class="shrink-0">
+            <div class="flex shrink-0 items-center">{leading()}</div>
+          </ViewShell.TopBarTitle>
+        ) : undefined
+      }
       ref={scope.headerCollapse.setRow}
       class={cn(
         'relative w-full py-0 touch:flex',
@@ -145,11 +154,6 @@ function TopBar(props: { leading?: JSX.Element; class?: string }) {
         props.class
       )}
     >
-      <Show when={props.leading}>
-        <ViewShell.TopBarTitle class="shrink-0">
-          <div class="flex shrink-0 items-center">{props.leading}</div>
-        </ViewShell.TopBarTitle>
-      </Show>
       {/* Contributions bring their own touch islands. */}
       <PriorityCollapseOverflowSensor
         controller={scope.headerCollapse}
@@ -157,7 +161,7 @@ function TopBar(props: { leading?: JSX.Element; class?: string }) {
         class="relative h-full min-w-0 shrink overflow-hidden touch:overflow-visible"
         contentClass={cn(
           'flex h-full items-center gap-1 touch:gap-2',
-          props.leading && 'pl-0.5 touch:pl-0'
+          leading() && 'pl-0.5 touch:pl-0'
         )}
         contentRef={(element) => scope.setLayoutRef('headerLeft', element)}
       />

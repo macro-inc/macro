@@ -122,7 +122,8 @@ nearest host only. Inline block previews (`PreviewFrame`) use the same scope.
 Project routes inside Tasks and mobile task details use `SplitHeaderScope.Pane`,
 which composes the root, top bar, and filling content area, so the collection pane
 measures its own islands instead of inheriting an unrelated outer split header inset.
-The project pane retains the shared split Back action, including history and direct-link fallbacks.
+The project pane retains the shared split Back action, including history and direct-link fallbacks, instead of adding a sidebar toggle beside it.
+A top bar's `navigation` slot replaces its automatic controls when a host supplies its own leading action.
 Touch collection navigation uses the global modal sheet at every width so its
 surface and backdrop cover floating list controls and app chrome. On narrow
 layouts it takes three quarters of the screen, at least 256px, capped by the
