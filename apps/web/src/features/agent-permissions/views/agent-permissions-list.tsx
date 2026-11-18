@@ -211,6 +211,69 @@ export function AgentPermissionsList(props: {
   const clearTool = (action: ActionPermission, tool: CatalogTool) =>
     apply({ target: toolTarget(tool), state: null }, action.state);
 
+  const toolActions = (group: CatalogGroup) =>
+    toolSections(group).sections.map((section) => section.action);
+
+  const sectionTools = (group: CatalogGroup, action: ActionDto) =>
+    toolSections(group).sections.find((section) => section.action === action)
+      ?.tools ?? [];
+
+  const toolRow = (group: CatalogGroup, tool: CatalogTool) => {
+    const action = () => permission(group.id, tool.action);
+    const key = targetKey(toolTarget(tool));
+    const rule = () => ruleFor(props.view.rules, toolTarget(tool));
+
+    const status = (): ToolRowStatus => {
+      const current = action();
+      if (current && toolOverride(current, tool)) {
+        return {
+          kind: 'differs',
+          action: actionName(tool.action),
+          actionState: stateLabel(current.state),
+        };
+      }
+      return rule() ? { kind: 'own' } : { kind: 'inherits' };
+    };
+
+    // While its own change saves, the chosen state; else its override, else
+    // its action's (which may itself be saving).
+    const shown = () => {
+      const pending = props.changes.pendingState(key);
+      if (pending) return pending;
+      const current = action();
+      const override = current && toolOverride(current, tool);
+      if (override) return override.state;
+      return shownActionState(group.id, tool.action);
+    };
+
+    const clear = () => {
+      const current = action();
+      if (current) clearTool(current, tool);
+    };
+
+    return (
+      <PermissionToolRow
+        rowKey={key}
+        flash={flashKey() === key}
+        label={<MatchText text={tool.label} query={props.query} />}
+        operation={<MatchText text={toolKey(tool)} query={props.query} />}
+        controlLabel={tool.label}
+        state={shown()}
+        status={status()}
+        byAgent={rule()?.viaAgent}
+        clearLabel={t('agentPermissions.useActionSetting', {
+          action: actionName(tool.action),
+        })}
+        onClear={rule() && action() && props.canEdit ? clear : undefined}
+        disabled={!props.canEdit || !action()}
+        onChange={(state) => {
+          const current = action();
+          if (current) setTool(current, tool, state);
+        }}
+      />
+    );
+  };
+
   // A deep link opens its group (in the initial store), then scrolls to its
   // row, flashes it and moves focus to its control.
   onMount(() => {
@@ -311,80 +374,14 @@ export function AgentPermissionsList(props: {
                   filter={narrowed(group.id) ? undefined : filter(group.id)}
                   onFilterChange={(next) => setUi('filters', group.id, next)}
                 >
-                  <For each={toolSections(group).sections}>
-                    {(section) => (
-                      <PermissionToolSection
-                        action={actionName(section.action)}
-                      >
-                        <For each={section.tools}>
-                          {(tool) => {
-                            const action = () =>
-                              permission(group.id, tool.action);
-                            const key = targetKey(toolTarget(tool));
-                            const rule = () =>
-                              ruleFor(props.view.rules, toolTarget(tool));
-                            const status = (): ToolRowStatus => {
-                              const current = action();
-                              if (current && toolOverride(current, tool)) {
-                                return {
-                                  kind: 'differs',
-                                  action: actionName(tool.action),
-                                  actionState: stateLabel(current.state),
-                                };
-                              }
-                              return rule()
-                                ? { kind: 'own' }
-                                : { kind: 'inherits' };
-                            };
-                            const shown = () => {
-                              const pending = props.changes.pendingState(key);
-                              if (pending) return pending;
-                              const current = action();
-                              const override =
-                                current && toolOverride(current, tool);
-                              if (override) return override.state;
-                              return shownActionState(group.id, tool.action);
-                            };
-                            return (
-                              <PermissionToolRow
-                                rowKey={key}
-                                flash={flashKey() === key}
-                                label={
-                                  <MatchText
-                                    text={tool.label}
-                                    query={props.query}
-                                  />
-                                }
-                                operation={
-                                  <MatchText
-                                    text={toolKey(tool)}
-                                    query={props.query}
-                                  />
-                                }
-                                controlLabel={tool.label}
-                                state={shown()}
-                                status={status()}
-                                byAgent={rule()?.viaAgent}
-                                clearLabel={t(
-                                  'agentPermissions.useActionSetting',
-                                  { action: actionName(tool.action) }
-                                )}
-                                onClear={
-                                  rule() && action() && props.canEdit
-                                    ? () => {
-                                        const current = action();
-                                        if (current) clearTool(current, tool);
-                                      }
-                                    : undefined
-                                }
-                                disabled={!props.canEdit || !action()}
-                                onChange={(state) => {
-                                  const current = action();
-                                  if (current) setTool(current, tool, state);
-                                }}
-                              />
-                            );
-                          }}
+                  {/* Keyed by action and by catalog tool, which stay the
+                      same objects across saves, so rows (and focus) survive
+                      the view being replaced. */}
+                  <For each={toolActions(group)}>
+                    {(action) => (
+                      <PermissionToolSection action={actionName(action)}>
+                        <For each={sectionTools(group, action)}>
+                          {(tool) => toolRow(group, tool)}
                         </For>
                       </PermissionToolSection>
                     )}
