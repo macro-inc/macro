@@ -198,9 +198,11 @@ test('a save refused because the scheduled email went out says the composer was 
   page,
   mailbox,
 }) => {
-  // The composer reads nothing meanwhile: it learns of the send only from
-  // the refused save.
   const draft = await savedNew(page, mailbox, 'Final numbers');
+  // The composer's reads of its draft fail from here on, so it learns of the
+  // send only from the refused save. Its timer would otherwise read the
+  // draft as scheduled or sent first now and then, and no save is refused.
+  await page.route(DRAFT_READ, (route) => route.abort('connectionfailed'));
   await scheduleElsewhere(mailbox, draft, morningIn(1));
   await makeDue(mailbox, draft);
   await mailbox.stack.runScheduledSweep();
