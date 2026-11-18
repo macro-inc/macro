@@ -125,3 +125,36 @@ test('a wide field owns the header and runs a recent search from the keyboard', 
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'New' })).toBeVisible();
 });
+
+async function openInHeader(page: Page, width: number) {
+  const { field } = await open(page, `?surface=header&width=${width}`);
+  await field.pressSequentially('budget');
+  return field.evaluate((input) => {
+    const frame = input.closest('[data-search-bar]')!.getBoundingClientRect();
+    const row = input.closest('[data-view-shell-top-bar] > :last-child')!;
+    return {
+      width: frame.width,
+      right: frame.right,
+      rowRight: row.getBoundingClientRect().right,
+      overflow: row.scrollWidth - row.clientWidth,
+    };
+  });
+}
+
+test('narrows the open field to keep it whole beside the header actions', async ({
+  page,
+}) => {
+  const narrow = await openInHeader(page, 560);
+  expect(narrow.overflow).toBeLessThanOrEqual(0);
+  expect(narrow.right).toBeLessThanOrEqual(narrow.rowRight);
+  expect(narrow.width).toBeLessThan(224);
+  expect(narrow.width).toBeGreaterThanOrEqual(96);
+  await expect(
+    page.getByRole('button', { name: 'Close search' })
+  ).toBeVisible();
+
+  // With room beside the actions, the field keeps its full width.
+  const wide = await openInHeader(page, 700);
+  expect(wide.width).toBeCloseTo(224, 0);
+  expect(wide.right).toBeLessThanOrEqual(wide.rowRight);
+});
