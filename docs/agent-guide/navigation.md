@@ -870,8 +870,9 @@ save closes the menu and opens the saved draft when available; a
 failed save preserves the input. **Send email** (or **Cmd/Ctrl+Enter**) saves the
 email as a draft and sends that draft; a successful send closes the menu and
 opens the sent thread. While the menu stays open on a failed save or send, a
-retry saves the same draft rather than a second one; choosing another inbox
-first starts a new draft.
+retry uses the same draft rather than a second one; a retried send sends the
+saved draft without saving it again. Choosing another inbox after a failed
+send deletes that draft and saves a new one in the chosen inbox.
 Search mode embeds Global Search's editor, Type/In/From filter chips, and
 result rows with highlighted message snippets. Extraction first selects the search
 type, then uses its schema: Channels has In/From; Tasks has status, priority,

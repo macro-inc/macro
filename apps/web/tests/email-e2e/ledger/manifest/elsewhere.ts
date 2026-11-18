@@ -579,7 +579,7 @@ export const elsewhere = {
       trigger: 'save or send pending',
       source: ['src/features/universal-input/views/universal-composer.tsx'],
       flag: 'enable-universal-input',
-      note: 'the result line ("Email draft saved" / "Email sent" and its Open) is never on screen: every host closes the universal input in the step that sets it, and opens what was made (STX-977)',
+      note: 'the result line ("Email draft saved" / "Email sent" and its Open) is never on screen: every host ends the universal input in the step that sets it (the menu closes; on a phone its text clears), and opens what was made (STX-977)',
     },
     {
       id: 'STX-034',
@@ -908,7 +908,7 @@ export const elsewhere = {
       surface: 'SX-20',
       fn: ['F-166'],
       state:
-        'result: the universal input closes, and the saved draft opens in the composer or the sent thread opens',
+        'result: the universal input ends, and the saved draft opens in the composer or the sent thread opens',
       trigger: 'the save or send finished',
       source: [
         'src/features/universal-input/universal-input.tsx',
