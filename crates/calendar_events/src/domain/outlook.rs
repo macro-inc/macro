@@ -758,11 +758,19 @@ impl<
         }
         // One revision per transaction: the outbox trigger locks these rows
         // from writes that change several events, so a batch that locked
-        // many at once could deadlock with them.
+        // many at once could deadlock with them. One that fails stays leased
+        // for its retry; the others are still acknowledged, so they are not
+        // published again.
+        let mut acknowledgement_error = None;
         for lease in &published {
-            self.repository.complete_projection(lease).await?;
+            if let Err(error) = self.repository.complete_projection(lease).await {
+                acknowledgement_error.get_or_insert(error);
+            }
         }
-        Ok(claimed == usize::from(PROJECTION_BATCH))
+        match acknowledgement_error {
+            Some(error) => Err(error),
+            None => Ok(claimed == usize::from(PROJECTION_BATCH)),
+        }
     }
     #[tracing::instrument(
         name = "calendar.projection_publish",

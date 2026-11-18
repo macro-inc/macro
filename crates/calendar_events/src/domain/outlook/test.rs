@@ -69,11 +69,13 @@ fn equally_near_events_and_untimed_ones_keep_id_order() {
     );
 }
 
-/// The revisions waiting for the relay, and the ones it acknowledged.
+/// The revisions waiting for the relay, and the ones it acknowledged. An
+/// acknowledgement of an entity `unavailable` names fails.
 #[derive(Clone, Default)]
 struct Outbox {
     pending: std::sync::Arc<std::sync::Mutex<Vec<CalendarProjectionLease>>>,
     completed: std::sync::Arc<std::sync::Mutex<Vec<Uuid>>>,
+    unavailable: Vec<Uuid>,
 }
 
 impl CalendarProjectionOutbox for Outbox {
@@ -87,6 +89,9 @@ impl CalendarProjectionOutbox for Outbox {
         Ok(pending.drain(..taken).collect())
     }
     async fn complete_projection(&self, lease: &CalendarProjectionLease) -> Result<(), Report> {
+        if self.unavailable.contains(&lease.event_id) {
+            return Err(rootcause::report!("the outbox is unavailable"));
+        }
         self.completed.lock().unwrap().push(lease.event_id);
         Ok(())
     }
@@ -217,5 +222,30 @@ async fn a_full_batch_asks_for_the_next_one_at_once() {
     assert_eq!(
         outbox.completed.lock().unwrap().len(),
         usize::from(PROJECTION_BATCH) + 1
+    );
+}
+
+#[tokio::test]
+async fn a_failed_acknowledgement_leaves_the_rest_acknowledged() {
+    let ada = Uuid::now_v7();
+    let stuck = revision("macro|ada@example.com", ada);
+    let acknowledged = revision("macro|ada@example.com", ada);
+    let (stuck_id, acknowledged_id) = (stuck.event_id, acknowledged.event_id);
+    let outbox = Outbox {
+        unavailable: vec![stuck_id],
+        ..Outbox::default()
+    };
+    *outbox.pending.lock().unwrap() = vec![stuck, acknowledged];
+    let relay =
+        CalendarProjectionRelay::new(outbox.clone(), Broker::default(), Refreshes::default());
+
+    assert!(
+        relay.run_once().await.is_err(),
+        "the round reports the failure"
+    );
+    assert_eq!(
+        *outbox.completed.lock().unwrap(),
+        [acknowledged_id],
+        "the revision after it is not published again"
     );
 }
