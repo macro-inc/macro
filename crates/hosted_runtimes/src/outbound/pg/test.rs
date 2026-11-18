@@ -760,6 +760,7 @@ async fn deleting_the_buyer_keeps_computers_and_reservations(pool: PgPool) {
 mod enrollment;
 
 mod capacity;
+mod moves;
 mod waiting;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

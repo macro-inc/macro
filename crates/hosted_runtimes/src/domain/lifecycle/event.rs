@@ -29,6 +29,10 @@ pub enum Event {
     RestartDue,
     /// The assigned host is unavailable.
     HostLost,
+    /// The computer's disks moved to another host, which is now its host
+    /// (`domain::moves`): a guest that ran boots there; any other stays as it is,
+    /// and its next start runs there.
+    Moved,
     /// Request power on.
     PowerOn,
     /// Request power off.
@@ -161,6 +165,9 @@ pub enum Rejected {
     /// The purchase's charge has not settled yet.
     #[error("this computer's payment is still being confirmed")]
     PaymentPending,
+    /// Only a computer whose guest exists can move to another host.
+    #[error("this computer cannot move to another host now")]
+    NotMovable,
 }
 
 /// Timers a computer can have pending; at most one of each kind.

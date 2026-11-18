@@ -17,6 +17,8 @@ use tracing::Instrument;
 use zeroize::Zeroizing;
 
 use crate::exec::{ExecRequest, Frame, FrameError};
+
+mod moves;
 use crate::{
     Action, Computer, ComputerId, CreateComputer, ErrorCode, ErrorResponse, GoldenImage, GoldenKey,
     HostInfo, HostLimits, SetEnrollment,

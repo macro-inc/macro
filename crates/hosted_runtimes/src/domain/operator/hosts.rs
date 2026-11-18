@@ -6,8 +6,10 @@ use super::*;
 impl<Repo, Machines, Registry, Time, SetupNotifier>
     ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier>
 where
-    Repo:
-        ComputerRepo + crate::domain::agent::ComputerAgents + crate::domain::ports::OvercommitRepo,
+    Repo: ComputerRepo
+        + crate::domain::agent::ComputerAgents
+        + crate::domain::ports::OvercommitRepo
+        + crate::domain::moves::ComputerMoves,
     Machines: Fleets,
     Registry: Harnesses,
     Time: Clock,
@@ -190,11 +192,17 @@ where
             .map(|instance| (instance.computer_id, instance))
             .collect();
         let expected = self.repo.instances_expected(host).await.map_err(internal)?;
+        // Stopped and staged while a move copies its last changes: neither
+        // crashed nor lost.
+        let held = self.repo.held_on(host).await.map_err(internal)?;
 
         for record in &expected {
             let Some(computer) = record.healthy() else {
                 continue;
             };
+            if held.contains(&computer.id) {
+                continue;
+            }
             let observed = instances.get(&computer.id).map(|instance| instance.status);
             if observed.is_some() {
                 match fleet.resources_match(computer).await {

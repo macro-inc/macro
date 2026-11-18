@@ -11,6 +11,7 @@ pub mod jails;
 pub mod layout;
 pub mod network;
 pub mod probe;
+pub mod replication;
 pub mod secret_scan;
 pub mod store;
 pub mod zfs;

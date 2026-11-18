@@ -29,9 +29,9 @@ async fn the_operator_leaves_another_hosts_effects_and_timers_alone() {
 
 /// The home host and one Firecracker row, each with its own fake fleet.
 #[derive(Default)]
-struct TwoHosts {
-    home: FakeFleet,
-    microvm: std::sync::Arc<FakeFleet>,
+pub(super) struct TwoHosts {
+    pub(super) home: FakeFleet,
+    pub(super) microvm: std::sync::Arc<FakeFleet>,
 }
 
 impl crate::domain::ports::Fleets for TwoHosts {
@@ -56,9 +56,9 @@ impl crate::domain::ports::Fleets for TwoHosts {
     }
 }
 
-const MICROVM: HostId = HostId::new(Uuid::from_u128(0x0f00));
+pub(super) const MICROVM: HostId = HostId::new(Uuid::from_u128(0x0f00));
 
-async fn two_host_operator()
+pub(super) async fn two_host_operator()
 -> ComputerOperator<FakeRepo, TwoHosts, FakeHarnesses, FixedClock, FakeSetupNotices> {
     let repo = FakeRepo {
         sold_units: 9,

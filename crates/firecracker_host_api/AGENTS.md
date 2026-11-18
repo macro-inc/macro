@@ -18,6 +18,9 @@ over mTLS, the answers, the exec protocol, and the MMDS document guests read.
 - `src/exec.rs`: exec frames, shared by the control-plane WebSocket and the
   vsock link to `services/firecracker_guest_agent`.
 - `src/mmds.rs`: the guest's MMDS document (snake_case: the guest's contract).
+- `src/moves.rs`: moving a computer between hosts: the control plane's
+  requests and the agent-to-agent peer protocol (JSON line + raw `zfs send`
+  stream over the WireGuard mesh).
 
 ## Scope
 

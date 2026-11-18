@@ -40,6 +40,12 @@ impl Store for FakeStore {
         self.0.lock().unwrap().remove(&computer_id);
         Ok(())
     }
+    async fn load_staged(
+        &self,
+        _computer_id: ComputerId,
+    ) -> Result<Option<ComputerRecord>, FakeError> {
+        Ok(None)
+    }
     async fn load_host_limits(&self) -> Result<Option<HostLimits>, FakeError> {
         Ok(None)
     }
@@ -342,6 +348,7 @@ pub(super) async fn host_with(store: FakeStore, machines: FakeMachines, slots: u
             dns: vec!["1.1.1.1".to_owned()],
             concurrent_launches: 2,
             slot_count: slots,
+            move_address: None,
         },
         tokio_util::task::TaskTracker::new(),
     )

@@ -87,6 +87,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's
   fixed-line WAV sample per process, billed to the admin's team when it is
   synthesized.
+- `src/computers/moves.rs`: `POST /internal/computers/{id}/move` `{"toHost"}`
+  and `GET /internal/computers/{id}/moves` (internal API key only): start and
+  watch moving a computer to another host; the operator's move pass (every
+  5 s) does the work.
 - `src/computers/agent_enrollment.rs`: the operator's `AgentEnrollmentSource`;
   every computer creation asks the auth service's internal
   `/internal/team_agent_enrollment` route, so an agent computer never enrolls

@@ -23,6 +23,7 @@ use crate::domain::service::{Clock, ComputerError};
 
 mod effects;
 mod hosts;
+mod moves;
 mod relief;
 #[cfg(test)]
 mod test;
@@ -41,6 +42,8 @@ pub const HOST_REGISTRATION_BACKOFF: Backoff = Backoff {
     first: std::time::Duration::from_secs(10),
     max: std::time::Duration::from_secs(60),
 };
+/// How soon a fleet effect of a computer held by a move is tried again.
+pub const MOVE_HOLD_RETRY: Duration = Duration::seconds(10);
 /// Minimum guest age before orphan deletion, to avoid racing creation.
 pub const ORPHAN_GRACE: Duration = Duration::minutes(10);
 const EFFECT_BATCH: u32 = 16;
@@ -82,8 +85,10 @@ struct HostReadiness {
 impl<Repo, Machines, Registry, Time, SetupNotifier>
     ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier>
 where
-    Repo:
-        ComputerRepo + crate::domain::agent::ComputerAgents + crate::domain::ports::OvercommitRepo,
+    Repo: ComputerRepo
+        + crate::domain::agent::ComputerAgents
+        + crate::domain::ports::OvercommitRepo
+        + crate::domain::moves::ComputerMoves,
     Machines: Fleets,
     Registry: Harnesses,
     Time: Clock,

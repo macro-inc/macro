@@ -9,6 +9,7 @@ pub mod ids;
 pub mod image;
 pub mod lifecycle;
 pub mod models;
+pub mod moves;
 #[cfg(feature = "ports")]
 pub mod operator;
 pub mod overcommit;

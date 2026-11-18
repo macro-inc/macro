@@ -24,6 +24,7 @@ use crate::domain::power::{Step, after, plan};
 
 mod enrollment;
 mod host;
+mod moves;
 mod operations;
 pub mod pressure;
 pub mod reconcile;
@@ -76,6 +77,15 @@ pub enum HostError {
     /// The guest agent did not answer, or what it ran failed.
     #[error("the guest did not answer: {0}")]
     GuestUnreachable(#[source] GuestFailure),
+    /// The computer is staged here (moving): not served, not created.
+    #[error("computer {0} is staged on this host by a move")]
+    Staged(ComputerId),
+    /// Another operation on the computer is in progress; retry.
+    #[error("{0}")]
+    Busy(String),
+    /// A move request this host cannot carry out.
+    #[error("{0}")]
+    MoveRefused(String),
     /// A host operation failed.
     #[error("{0}")]
     Internal(rootcause::Report),
@@ -142,6 +152,8 @@ impl HostError {
             Self::NoNetworkSlot => ErrorCode::NoNetworkSlot,
             Self::InvalidState(_) => ErrorCode::InvalidState,
             Self::GuestUnreachable(_) => ErrorCode::GuestUnreachable,
+            Self::Staged(_) | Self::Busy(_) => ErrorCode::InvalidState,
+            Self::MoveRefused(_) => ErrorCode::InvalidRequest,
             Self::Internal(_) => ErrorCode::Internal,
         }
     }
@@ -166,6 +178,8 @@ pub struct ServiceSettings {
     pub dns: Vec<String>,
     /// Launches (boots, restores, wakes) running at once.
     pub concurrent_launches: u16,
+    /// Where other hosts push computers moving here (`[moves] listen`).
+    pub move_address: Option<String>,
 }
 
 /// Reads the host's own numbers.
@@ -213,6 +227,8 @@ pub struct HostService<S, D, G, M, P> {
     /// without waiting for the computer's lock (held through a create's
     /// macro-restore).
     running: std::sync::Mutex<HashMap<ComputerId, ComputerRecord>>,
+    /// Computers staged here by a move: never created over.
+    staged: std::sync::Mutex<std::collections::HashSet<ComputerId>>,
     /// The control plane's memory limits for this host, once set.
     host_limits: std::sync::Mutex<Option<HostLimits>>,
     metrics: HostMetrics,
@@ -284,6 +300,7 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
             slots: std::sync::Mutex::new(slots),
             launches,
             running: std::sync::Mutex::new(running),
+            staged: std::sync::Mutex::new(std::collections::HashSet::new()),
             host_limits: std::sync::Mutex::new(host_limits),
             metrics,
             states: std::sync::Mutex::new(states),
@@ -449,6 +466,9 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
             }
             self.finish_restore(record).await?;
             return Ok(self.view(record));
+        }
+        if self.is_staged(computer_id) {
+            return Err(HostError::Staged(computer_id));
         }
         tracing::Span::current().record("created", true);
 

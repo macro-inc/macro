@@ -29,6 +29,7 @@ mod apply;
 mod effect_signals;
 pub use effect_signals::PgEffectSignals;
 mod hosts;
+mod moves;
 mod records;
 mod reservations;
 mod row;
@@ -937,6 +938,12 @@ impl ComputerRepo for PgComputerRepo {
                 UNION ALL
                 SELECT host_id, vcpus, memory_gib, disk_gib
                 FROM computer_reservation
+                UNION ALL
+                -- A moving computer also holds its units on the move's other host.
+                SELECT CASE WHEN computer.host_id = move.to_host THEN move.from_host ELSE move.to_host END,
+                       computer.vcpus, computer.memory_gib, computer.disk_gib
+                FROM computer_move move JOIN hosted_runtime computer ON computer.id = move.computer_id
+                WHERE move.stage IN ('seeding', 'cutting_over', 'verifying', 'rolling_back')
             )
             SELECT
                 host.id,

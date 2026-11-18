@@ -43,6 +43,7 @@ pub(crate) mod claude_expiry;
 pub(crate) mod default_agent;
 pub mod harnessd;
 mod in_use;
+pub(crate) mod moves;
 mod presence;
 pub mod sign_in_ahead;
 pub(crate) mod wake;
@@ -56,6 +57,9 @@ const TIMER_TICK: Duration = Duration::from_secs(5);
 const RECONCILE_TICK: Duration = Duration::from_secs(60);
 /// Memory reports, relief and wakes: well inside the reports' 30 s freshness.
 const OVERCOMMIT_TICK: Duration = Duration::from_secs(10);
+/// Each open computer move advances one step per pass; a final copy round
+/// takes seconds, so the pass is frequent.
+const MOVE_TICK: Duration = Duration::from_secs(5);
 /// How often expiry notices are checked.
 const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
 /// How often every awake computer's harnessd status is read, catching a
@@ -228,6 +232,7 @@ enum Pass {
     Timers,
     Reconcile,
     Overcommit,
+    Moves,
     ClaudeSignIns,
     ClaudeStatus,
 }
@@ -239,6 +244,7 @@ impl Pass {
             Self::Timers => TIMER_TICK,
             Self::Reconcile => RECONCILE_TICK,
             Self::Overcommit => OVERCOMMIT_TICK,
+            Self::Moves => MOVE_TICK,
             Self::ClaudeSignIns => CLAUDE_SIGN_IN_TICK,
             Self::ClaudeStatus => CLAUDE_STATUS_TICK,
         }
@@ -274,6 +280,7 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
         Pass::Timers,
         Pass::Reconcile,
         Pass::Overcommit,
+        Pass::Moves,
         Pass::ClaudeSignIns,
         Pass::ClaudeStatus,
     ] {
@@ -307,6 +314,7 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                 Pass::Timers
                 | Pass::Reconcile
                 | Pass::Overcommit
+                | Pass::Moves
                 | Pass::ClaudeSignIns
                 | Pass::ClaudeStatus => std::future::pending().await,
             }
@@ -338,6 +346,12 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                     .map_err(anyhow::Error::from),
                 Pass::Overcommit => shutdown
                     .run_until_cancelled(operator.overcommit())
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::Moves => shutdown
+                    .run_until_cancelled(operator.advance_moves())
                     .await
                     .transpose()
                     .map(|_| ())

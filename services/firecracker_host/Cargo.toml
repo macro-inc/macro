@@ -28,7 +28,7 @@ hyper = { workspace = true, features = ["client", "http1"] }
 hyper-util = { workspace = true, features = ["http1", "http2", "server", "server-auto", "service", "tokio"] }
 memchr = { workspace = true }
 pinned_tls = { path = "../../crates/pinned_tls" }
-opentelemetry = { workspace = true, features = ["metrics"] }
+opentelemetry = { workspace = true, features = ["metrics", "trace"] }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
@@ -44,6 +44,7 @@ tokio-rustls = { workspace = true }
 tokio-util = { workspace = true, features = ["rt"] }
 toml = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

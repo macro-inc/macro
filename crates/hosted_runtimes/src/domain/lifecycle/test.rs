@@ -904,6 +904,7 @@ fn any_event() -> impl Strategy<Value = Event> {
         Just(Event::InstanceLost),
         Just(Event::RestartDue),
         Just(Event::HostLost),
+        Just(Event::Moved),
         Just(Event::PowerOn),
         Just(Event::PowerOff),
         Just(Event::PowerOnRetry),
@@ -1130,4 +1131,55 @@ fn a_team_retry_of_a_powered_off_computer_leaves_nothing_to_unpage() {
     // give-up, which must page.
     assert_eq!(stopped.phase, Phase::Stopped);
     assert!(!stopped.retried_by_team);
+}
+
+#[test]
+fn a_running_computer_that_moved_boots_on_its_new_host() {
+    let running = ComputerState {
+        macrod_connected: true,
+        macrod_misses: 2,
+        ..billed(Phase::Running)
+    };
+
+    let (moved, effects) = transition(&running, &Event::Moved, context(true)).unwrap();
+
+    assert_eq!(moved.phase, Phase::Booting);
+    assert!(!moved.macrod_connected);
+    assert_eq!(moved.macrod_misses, 0);
+    assert_eq!(
+        effects,
+        vec![
+            Effect::Restart { host: HOST },
+            Effect::ScheduleTimer {
+                kind: TimerKind::MacrodMissing,
+                at: now() + MACROD_GRACE,
+            },
+        ]
+    );
+    // Verification is macrod connecting on the new host.
+    let (connected, _) = transition(&moved, &Event::MacrodConnected, context(true)).unwrap();
+    assert_eq!(connected.phase, Phase::Running);
+}
+
+#[test]
+fn a_stopped_computer_that_moved_stays_stopped() {
+    let stopped = ComputerState {
+        power: Power::Off,
+        ..billed(Phase::Stopped)
+    };
+
+    let (moved, effects) = transition(&stopped, &Event::Moved, context(true)).unwrap();
+
+    assert_eq!(moved.phase, Phase::Stopped);
+    assert_eq!(effects, vec![]);
+}
+
+#[test]
+fn a_computer_still_being_created_cannot_move() {
+    let creating = billed(Phase::Provisioning { start: true });
+
+    assert_eq!(
+        transition(&creating, &Event::Moved, context(true)),
+        Err(Rejected::NotMovable)
+    );
 }

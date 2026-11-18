@@ -90,6 +90,7 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
             },
             images: self.goldens.images(),
             goldens: self.goldens.list(),
+            move_address: self.settings.move_address.clone(),
         }
     }
 }

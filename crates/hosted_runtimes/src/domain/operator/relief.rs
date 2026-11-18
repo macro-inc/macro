@@ -153,7 +153,10 @@ pub enum DispatchWake {
 impl<Repo, Machines, Registry, Time, SetupNotifier>
     ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier>
 where
-    Repo: ComputerRepo + crate::domain::agent::ComputerAgents + OvercommitRepo,
+    Repo: ComputerRepo
+        + crate::domain::agent::ComputerAgents
+        + OvercommitRepo
+        + crate::domain::moves::ComputerMoves,
     Machines: Fleets,
     Registry: Harnesses,
     Time: Clock,

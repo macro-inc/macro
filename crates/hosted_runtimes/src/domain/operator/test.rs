@@ -3,6 +3,7 @@ mod agent;
 mod data_disk;
 mod effect_concurrency;
 mod host_scope;
+mod moves;
 mod redeploy;
 mod setup_notice;
 

@@ -23,7 +23,6 @@ client = [
   "dep:rustls",
   "dep:tokio-tungstenite",
   "dep:tracing",
-  "dep:zeroize",
   "tokio/net",
 ]
 
@@ -40,12 +39,13 @@ rustls = { workspace = true, features = ["std"], optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
+subtle = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["io-util"] }
 tokio-tungstenite = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
-zeroize = { workspace = true, optional = true }
+zeroize = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

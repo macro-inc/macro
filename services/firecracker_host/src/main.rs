@@ -8,6 +8,7 @@ use clap::{Parser, Subcommand};
 use firecracker_host::config::Config;
 use firecracker_host::config::DiskStorage;
 use firecracker_host::domain::model::Slot;
+use firecracker_host::domain::moves::MoveService;
 use firecracker_host::domain::service::{HostService, ServiceSettings};
 use firecracker_host::inbound;
 use firecracker_host::outbound::cgroup;
@@ -18,6 +19,7 @@ use firecracker_host::outbound::jails::{JailSettings, Jails};
 use firecracker_host::outbound::layout::Layout;
 use firecracker_host::outbound::network::Network;
 use firecracker_host::outbound::probe::ProcProbe;
+use firecracker_host::outbound::replication::{TcpPeers, ZfsReplicas};
 use firecracker_host::outbound::store::FileStore;
 use firecracker_host::outbound::zfs::Datasets;
 use hyper_util::rt::{TokioExecutor, TokioIo};
@@ -181,6 +183,7 @@ async fn serve(config: Config, cgroup_parent: String) -> Result<(), Report> {
             dns: config.network.dns.clone(),
             concurrent_launches: config.guest.concurrent_launches,
             slot_count: slots,
+            move_address: config.moves.as_ref().map(|moves| moves.listen.to_string()),
         },
         tasks.clone(),
     )
@@ -201,19 +204,43 @@ async fn serve(config: Config, cgroup_parent: String) -> Result<(), Report> {
         checks: HostChecks {
             durable_dir: root,
             nft_tables: HostChecks::nft_tables_for(&config.network.prefix),
-            zfs_dataset,
+            zfs_dataset: zfs_dataset.clone(),
         },
     });
-    let router =
-        inbound::axum_router::host_router(inbound::axum_router::HostRouterState::new(service))
-            .merge(inbound::health::router(Arc::clone(&health)));
+    let mut router = inbound::axum_router::host_router(inbound::axum_router::HostRouterState::new(
+        Arc::clone(&service),
+    ))
+    .merge(inbound::health::router(Arc::clone(&health)));
+    let shutdown = CancellationToken::new();
+    if let (Some(moves_config), Some(dataset)) = (&config.moves, &zfs_dataset) {
+        let moves = Arc::new(
+            MoveService::start(
+                Arc::clone(&service),
+                ZfsReplicas::new(dataset),
+                TcpPeers::new(moves_config.connect_timeout),
+                tasks.clone(),
+            )
+            .await
+            .map_err(|error| rootcause::report!("starting moves: {error}"))?,
+        );
+        router = router.merge(inbound::moves::router(Arc::clone(&moves)));
+        let listen = moves_config.listen;
+        let peer_tasks = tasks.clone();
+        let peer_shutdown = shutdown.clone();
+        tasks.spawn(async move {
+            if let Err(error) =
+                inbound::moves::serve_peers(moves, listen, peer_tasks, peer_shutdown).await
+            {
+                tracing::error!(error = %error, listen = %listen, "move listener failed");
+            }
+        });
+    }
 
     let acceptor =
         tokio_rustls::TlsAcceptor::from(Arc::new(inbound::tls::server_config(&config.tls)?));
     let listener = tokio::net::TcpListener::bind(config.listen).await?;
     tracing::info!(listen = %config.listen, "firecracker host agent listening");
 
-    let shutdown = CancellationToken::new();
     tasks.spawn({
         let shutdown = shutdown.clone();
         async move {

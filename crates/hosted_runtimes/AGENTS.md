@@ -44,6 +44,13 @@ read it before changing behaviour.
   `src/outbound/pg/admission.rs` and `pg/hosts.rs`; ports:
   `src/domain/ports/overcommit.rs`. Settings and live tuning:
   [overcommit runbook](../../docs/runbooks/computer-overcommit.md).
+- `src/domain/moves.rs` + `src/domain/operator/moves.rs`: moving a computer to
+  another host (seed rounds while it runs, cutover, flip, verify, rollback),
+  advanced by the move pass. The agents copy the ZFS dataset between
+  themselves; `flip` (`outbound/pg/moves.rs`) points `host_id` at the new host
+  and applies `Event::Moved` in one transaction. While a cutover or rollback
+  holds a computer, reconcile skips it and its fleet effects wait; an open
+  move counts the computer on both hosts in the held-capacity CTEs.
 
 ## Scope
 

@@ -8,6 +8,9 @@ use std::time::Duration;
 use clap::Subcommand;
 use firecracker_host_api::client::{HostClient, HostEndpoint};
 use firecracker_host_api::exec::{ExecRequest, Frame};
+use firecracker_host_api::moves::{
+    AdoptComputer, ExpectMove, MoveTicket, Replicate, ReplicationState,
+};
 use firecracker_host_api::{
     Action, ComputerId, ComputerResources, ComputerRole, ControlPlaneId, CreateComputer,
     EnrollmentDocument, EnrollmentGeneration, GoldenKey, GuestImage, PairingId, SetEnrollment,
@@ -21,6 +24,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 const GUEST_UID: u32 = 1000;
 const GUEST_HOME: &str = "/home/macro";
 const GUEST_PATH: &str = "/run/wrappers/bin:/run/current-system/sw/bin";
+/// How often `replicate` asks whether its round ended (a CLI waiting on a
+/// remote job; the agent has no push channel to the CLI).
+const REPLICATION_POLL: Duration = Duration::from_millis(250);
 
 /// The endpoint file: where the agent is and the PEM files to reach it.
 #[derive(Debug, Deserialize)]
@@ -119,6 +125,41 @@ pub enum ClientCommand {
     Hibernate { computer_id: ComputerId },
     /// Destroy the computer and its disks.
     Destroy { computer_id: ComputerId },
+    /// On the target: accept the computer from a source holding `ticket`
+    /// (e.g. `openssl rand -hex 32`).
+    ExpectMove {
+        computer_id: ComputerId,
+        #[arg(long)]
+        ticket: String,
+        #[arg(long, default_value_t = 24 * 60)]
+        expires_in_minutes: i64,
+    },
+    /// On the source: one replication round to the target's move
+    /// listener (`address:port` on the host mesh); waits for it to end.
+    Replicate {
+        computer_id: ComputerId,
+        #[arg(long)]
+        target: String,
+        #[arg(long)]
+        ticket: String,
+    },
+    /// On the source: the last replication round.
+    Replication { computer_id: ComputerId },
+    /// On the source: shut the guest down and stage it (the next round is
+    /// the final one).
+    Release { computer_id: ComputerId },
+    /// On the target: serve the staged computer (stopped).
+    Adopt {
+        computer_id: ComputerId,
+        #[arg(long)]
+        control_plane_id: String,
+        #[arg(long)]
+        generation: u32,
+    },
+    /// What this host holds of a moving computer.
+    MoveHolding { computer_id: ComputerId },
+    /// Drop the staged copy (never the live computer).
+    DropStaged { computer_id: ComputerId },
     /// Run a program in the guest; stdin, stdout and stderr pass through and
     /// the exit code is ours.
     Exec {
@@ -282,6 +323,71 @@ async fn run_command(endpoint: PathBuf, command: ClientCommand) -> Result<i32, C
         }
         ClientCommand::Destroy { computer_id } => {
             client.destroy(computer_id).await?;
+            String::new()
+        }
+        ClientCommand::ExpectMove {
+            computer_id,
+            ticket,
+            expires_in_minutes,
+        } => json(
+            &client
+                .expect_move(
+                    computer_id,
+                    &ExpectMove {
+                        ticket: MoveTicket::new(ticket),
+                        expires_at: chrono::Utc::now()
+                            + chrono::Duration::minutes(expires_in_minutes),
+                    },
+                )
+                .await?,
+        )?,
+        ClientCommand::Replicate {
+            computer_id,
+            target,
+            ticket,
+        } => {
+            let mut replication = client
+                .replicate(
+                    computer_id,
+                    &Replicate {
+                        target,
+                        ticket: MoveTicket::new(ticket),
+                    },
+                )
+                .await?;
+            while replication.state == ReplicationState::Running {
+                tokio::time::sleep(REPLICATION_POLL).await;
+                replication = client.replication(computer_id).await?;
+            }
+            let failed = matches!(replication.state, ReplicationState::Failed { .. });
+            println!("{}", json(&replication)?);
+            return Ok(i32::from(failed));
+        }
+        ClientCommand::Replication { computer_id } => {
+            json(&client.replication(computer_id).await?)?
+        }
+        ClientCommand::Release { computer_id } => json(&client.release(computer_id).await?)?,
+        ClientCommand::Adopt {
+            computer_id,
+            control_plane_id,
+            generation,
+        } => json(
+            &client
+                .adopt(
+                    computer_id,
+                    &AdoptComputer {
+                        control_plane_id: ControlPlaneId::try_new(&control_plane_id)
+                            .map_err(|error| rootcause::report!("{error}"))?,
+                        generation: EnrollmentGeneration::new(generation),
+                    },
+                )
+                .await?,
+        )?,
+        ClientCommand::MoveHolding { computer_id } => {
+            json(&client.move_holding(computer_id).await?)?
+        }
+        ClientCommand::DropStaged { computer_id } => {
+            client.drop_staged(computer_id).await?;
             String::new()
         }
         ClientCommand::Exec {

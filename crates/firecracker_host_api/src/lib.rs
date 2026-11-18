@@ -32,6 +32,7 @@ pub mod error;
 pub mod exec;
 pub mod host;
 pub mod mmds;
+pub mod moves;
 
 pub use computer::{
     Action, Computer, ComputerResources, CreateComputer, DiskBackend, EnrollmentDocument,

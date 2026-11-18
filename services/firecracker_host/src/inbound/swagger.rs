@@ -19,11 +19,19 @@ use utoipa::OpenApi;
         super::axum_router::clear_enrollment,
         super::axum_router::power,
         super::axum_router::exec,
+        super::moves::replication,
+        super::moves::replicate,
+        super::moves::release,
+        super::moves::move_holding,
+        super::moves::expect,
+        super::moves::drop_staged,
+        super::moves::adopt,
     ),
     tags(
         (name = "host", description = "The host"),
         (name = "goldens", description = "Golden snapshots"),
         (name = "computers", description = "Computers"),
+        (name = "moves", description = "Moving computers between hosts"),
     )
 )]
 pub struct ApiDoc;

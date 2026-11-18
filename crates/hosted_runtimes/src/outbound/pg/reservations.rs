@@ -92,6 +92,12 @@ impl PgComputerRepo {
                 UNION ALL
                 SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4)
                 FROM computer_reservation
+                UNION ALL
+                -- A moving computer also holds its units on the move's other host.
+                SELECT CASE WHEN computer.host_id = move.to_host THEN move.from_host ELSE move.to_host END,
+                       GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)
+                FROM computer_move move JOIN hosted_runtime computer ON computer.id = move.computer_id
+                WHERE move.stage IN ('seeding', 'cutting_over', 'verifying', 'rolling_back')
             )
             SELECT host.id
             FROM hosted_runtime_host host

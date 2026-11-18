@@ -27,6 +27,7 @@ use crate::domain::ports::{
 use crate::domain::service::Clock;
 use crate::domain::size::ComputerResources;
 
+mod moves;
 mod overcommit;
 #[cfg(test)]
 mod test;
@@ -127,6 +128,8 @@ pub struct FakeRepo {
     pub home_max_concurrent_starts: Option<u32>,
     /// Hosts' overcommit state, hibernations and wake requests.
     pub overcommit: overcommit::FakeOvercommit,
+    /// Moves (`domain::moves`), in the order created.
+    pub moves: Mutex<Vec<crate::domain::moves::ComputerMove>>,
 }
 
 impl crate::domain::agent::ComputerAgents for FakeRepo {

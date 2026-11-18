@@ -30,6 +30,12 @@ pub trait Store: Send + Sync + 'static {
     fn delete(&self, computer_id: ComputerId)
     -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// The record a staged (received) copy of the computer carries.
+    fn load_staged(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<Option<ComputerRecord>, Self::Err>> + Send;
+
     /// The host's limits, if the control plane set them.
     fn load_host_limits(
         &self,

@@ -37,6 +37,7 @@ use crate::domain::ports::{
 use crate::domain::size::ComputerResources;
 use crate::outbound::stderr_tail::{STDERR_TAIL_BYTES, log_failure};
 
+mod moves;
 #[cfg(test)]
 mod test;
 

@@ -6,8 +6,10 @@ use super::*;
 impl<Repo, Machines, Registry, Time, SetupNotifier>
     ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier>
 where
-    Repo:
-        ComputerRepo + crate::domain::agent::ComputerAgents + crate::domain::ports::OvercommitRepo,
+    Repo: ComputerRepo
+        + crate::domain::agent::ComputerAgents
+        + crate::domain::ports::OvercommitRepo
+        + crate::domain::moves::ComputerMoves,
     Machines: Fleets,
     Registry: Harnesses,
     Time: Clock,
@@ -188,6 +190,21 @@ where
         err
     )]
     pub(super) async fn run_one(&self, pending: PendingEffect) -> Result<(), ComputerError> {
+        if self
+            .repo
+            .held(pending.computer_id)
+            .await
+            .map_err(internal)?
+        {
+            // Its guest is between hosts; the effect runs on whichever host
+            // it is on once the move's cutover or rollback ends.
+            tracing::Span::current().record("effect", "held_by_move");
+            return self
+                .repo
+                .postpone_effect(pending.id, self.clock.now() + MOVE_HOLD_RETRY)
+                .await
+                .map_err(internal);
+        }
         let computer = self.computer(pending.computer_id).await?;
         crate::domain::telemetry::resume(computer.state.provision_traceparent.as_deref());
         tracing::Span::current().record("team_id", tracing::field::display(computer.team_id));

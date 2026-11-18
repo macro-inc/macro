@@ -20,6 +20,13 @@ rest and removes jails no record holds (`domain/service/reconcile.rs`); a
 `docs/architecture/firecracker-computers.md`; threat model:
 `docs/architecture/firecracker-computers-security.md`.
 
+Moving a computer to another host (`src/domain/moves.rs`, ZFS only, on
+when the config has `[moves]`): the control plane registers a ticket on
+the target, then asks the source for replication rounds (`zfs send` of the
+computer's dataset, pushed to the target's move listener on the host
+mesh: pre-copy while it runs, then a final round after `release`), then
+`adopt` on the target. `HostInfo.moveAddress` is the listener.
+
 ## Start here
 
 - `src/inbound/axum_router.rs`: every route (utoipa paths; `ApiDoc` in
@@ -48,6 +55,15 @@ rest and removes jails no record holds (`domain/service/reconcile.rs`); a
   zvols, which the jail turns into device nodes owned by the VM user).
 
 ## Gotchas
+
+- A moving computer's dataset is `staging/<id>` (received, or released),
+  never `computers/<id>`: startup loads only `computers/`, so a half-received
+  record (which says running, with the source's pid) is never served.
+  Staged computers are refused `create` until adopted or dropped. Golden
+  snapshots received from other hosts live in `bases/<guid>`; a computer's
+  first round is received as a clone of its base (`-o origin=`). Only disks
+  and the record move: `release` shuts the guest down (or drops its
+  hibernation), so the moved computer cold boots on its new host.
 
 - Every step that changes a computer saves its record before the next one,
   and the record says what was in flight (`start_pending`, `hibernating`,

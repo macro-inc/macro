@@ -4,6 +4,7 @@
 pub mod axum_router;
 pub mod cli;
 pub mod health;
+pub mod moves;
 pub mod swagger;
 pub mod tls;
 pub mod upkeep;

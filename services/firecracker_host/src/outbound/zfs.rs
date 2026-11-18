@@ -150,6 +150,27 @@ impl Datasets {
         zfs_output("zfs", &arguments).await.map(drop)
     }
 
+    /// Whether `relative` exists.
+    pub async fn exists(&self, relative: &str) -> Result<bool, ZfsError> {
+        let name = self.name(relative);
+        match zfs_output("zfs", &["list", "-H", "-o", "name", &name]).await {
+            Ok(_) => Ok(true),
+            Err(ZfsError::Command { message, .. }) if message.contains("does not exist") => {
+                Ok(false)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Set `relative`'s `refquota`.
+    pub async fn set_refquota(&self, relative: &str, bytes: u64) -> Result<(), ZfsError> {
+        let name = self.name(relative);
+        let refquota = format!("refquota={bytes}");
+        zfs_output("zfs", &["set", &refquota, &name])
+            .await
+            .map(drop)
+    }
+
     /// Snapshot `relative` as `@<name>`.
     pub async fn snapshot(&self, relative: &str, name: &str) -> Result<(), ZfsError> {
         let snapshot = format!("{}@{name}", self.name(relative));

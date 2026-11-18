@@ -62,6 +62,7 @@ impl HostOperations for FakeOperations {
             network_slots: NetworkSlots { total: 4, free: 4 },
             images: vec![GuestImage::try_new("macro-box/1").unwrap()],
             goldens: Vec::new(),
+            move_address: None,
         }
     }
 

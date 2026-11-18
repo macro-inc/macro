@@ -214,6 +214,13 @@ impl FileDisks {
                     + u64::from(record.resources.memory_mib).div_ceil(1024)
                     + QUOTA_HEADROOM_GIB;
                 let relative = format!("computers/{}", record.computer_id);
+                // A computer received from another host has its dataset (a
+                // clone of a base from that host) and no golden here.
+                if datasets.exists(&relative).await? {
+                    return Ok(datasets
+                        .set_refquota(&relative, quota_gib * BYTES_PER_GIB)
+                        .await?);
+                }
                 // A clone of the golden's snapshot: the rootfs is the
                 // golden's file in place, and a send from that snapshot
                 // carries only the computer's own blocks.

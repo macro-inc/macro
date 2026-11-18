@@ -480,6 +480,9 @@ fn error_code(error: &HostError) -> &'static str {
         HostError::NoNetworkSlot => "no_network_slot",
         HostError::InvalidState(_) => "invalid_state",
         HostError::GuestUnreachable(_) => "guest_unreachable",
+        HostError::Staged(_) => "staged",
+        HostError::Busy(_) => "busy",
+        HostError::MoveRefused(_) => "move_refused",
         HostError::Internal(_) => "internal",
     }
 }

@@ -94,6 +94,11 @@ pub struct HostInfo {
     pub images: Vec<GuestImage>,
     /// Every golden on the host.
     pub goldens: Vec<GoldenImage>,
+    /// Where other hosts push computers moving here (its move
+    /// listener, `address:port` on the private host mesh); absent when the
+    /// host does not receive computers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub move_address: Option<String>,
 }
 
 /// `PUT /v1/host/limits`: the host's memory policy, set by the control

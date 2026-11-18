@@ -28,6 +28,23 @@ pub struct Config {
     pub jail: JailConfig,
     /// Guest timings.
     pub guest: GuestConfig,
+    /// Moving computers to and from other hosts (ZFS storage only); absent
+    /// means this host neither sends nor receives computers.
+    #[serde(default)]
+    pub moves: Option<MovesConfig>,
+}
+
+/// The move listener other hosts push computers to.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MovesConfig {
+    /// This host's address on the private mesh between hosts and a port,
+    /// e.g. `10.88.0.2:8446`. The mesh (WireGuard) authenticates and
+    /// encrypts the link; a per-computer ticket authorizes each push.
+    pub listen: SocketAddr,
+    /// How long connecting to another host's listener may take.
+    #[serde(with = "seconds")]
+    pub connect_timeout: Duration,
 }
 
 /// mTLS: our certificate, and the only client certificates accepted.
@@ -213,6 +230,12 @@ pub enum Invalid {
     /// `listen` is a wildcard.
     #[error("listen must be a specific address, never a wildcard")]
     WildcardListen,
+    /// `moves.listen` is a wildcard.
+    #[error("moves.listen must be the host's mesh address, never a wildcard")]
+    WildcardMovesListen,
+    /// `moves` without ZFS storage.
+    #[error("moves need ZFS storage (storage.disks.kind = \"zfs\")")]
+    MovesNeedZfs,
     /// `network.dns` is empty.
     #[error("network.dns needs a resolver: guests have none on their link")]
     NoDns,
@@ -251,6 +274,14 @@ impl Config {
     fn check(&self) -> Result<(), ConfigError> {
         if self.listen.ip().is_unspecified() {
             return Err(Invalid::WildcardListen.into());
+        }
+        if let Some(moves) = &self.moves {
+            if moves.listen.ip().is_unspecified() {
+                return Err(Invalid::WildcardMovesListen.into());
+            }
+            if !matches!(self.storage.disks, DiskStorage::Zfs { .. }) {
+                return Err(Invalid::MovesNeedZfs.into());
+            }
         }
         if self.network.dns.is_empty() {
             return Err(Invalid::NoDns.into());

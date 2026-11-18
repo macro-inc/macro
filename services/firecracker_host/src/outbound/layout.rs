@@ -140,6 +140,22 @@ impl Layout {
         self.images.clone()
     }
 
+    /// `staging/`: computers received from, or released to, another host.
+    pub fn staging(&self) -> PathBuf {
+        self.durable.join("staging")
+    }
+
+    /// A staged computer's directory (its dataset's mountpoint).
+    pub fn staged(&self, computer_id: ComputerId) -> PathBuf {
+        self.staging().join(computer_id.to_string())
+    }
+
+    /// `bases/`: golden snapshots received from other hosts, which staged
+    /// computers are clones of.
+    pub fn bases(&self) -> PathBuf {
+        self.durable.join("bases")
+    }
+
     /// An installed image's directory.
     pub fn image(&self, image: &GuestImage) -> PathBuf {
         self.images.join(image.as_str())

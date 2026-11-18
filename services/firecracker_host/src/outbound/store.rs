@@ -130,6 +130,21 @@ impl Store for FileStore {
             })?
     }
 
+    async fn load_staged(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Option<ComputerRecord>, StoreError> {
+        let path = self.layout.staged(computer_id).join(RECORD);
+        let text = match std::fs::read(&path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(io("read", &path)(error)),
+        };
+        serde_json::from_slice(&text)
+            .map(Some)
+            .map_err(|source| StoreError::Parse { path, source })
+    }
+
     async fn delete(&self, computer_id: ComputerId) -> Result<(), StoreError> {
         let directory = self.layout.computer(computer_id);
         match std::fs::remove_dir_all(&directory) {

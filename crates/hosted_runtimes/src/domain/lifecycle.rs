@@ -701,6 +701,26 @@ pub fn transition(
             }
         }
 
+        Event::Moved => match state.phase {
+            // It was stopped for the move: boot it on its new host, which
+            // `host` (the row's host_id) already is, with the idempotent
+            // start a crashed guest gets.
+            Phase::Running | Phase::Booting => {
+                boot(&mut next, &mut effects, now, Some(Effect::Restart { host }));
+            }
+            // A stop in flight completes on the new host.
+            Phase::Stopping => {
+                next.macrod_connected = false;
+                next.macrod_misses = 0;
+                effects.push(Effect::Stop { host });
+            }
+            Phase::Stopped | Phase::Crashed { .. } => {
+                next.macrod_connected = false;
+                next.macrod_misses = 0;
+            }
+            Phase::Provisioning { .. } | Phase::Destroying => return Err(Rejected::NotMovable),
+        },
+
         Event::EffectFailed { failure, reason } => {
             if !gave_up(&state.phase) {
                 give_up(&mut next, &mut effects, *failure, reason.clone());

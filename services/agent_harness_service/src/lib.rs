@@ -2206,7 +2206,13 @@ pub async fn run() -> anyhow::Result<()> {
             .with_routine_sessions(routine_sessions)
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
-            .with_claude_access(computer_claude)
+            .with_claude_access(match &computer_operator {
+                Some(operator) => computer_claude.merge(computers::moves::router(
+                    Arc::clone(operator),
+                    MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                )),
+                None => computer_claude,
+            })
             .with_capabilities(capabilities)
             .with_voices(voices)
             .with_mode_choice(mode_choice)
