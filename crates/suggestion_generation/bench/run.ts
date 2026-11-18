@@ -86,19 +86,26 @@ export type Generation = {
 
 export const userId = (email: string) => `macro|${email}`;
 
-/** Apply a variant's scenario with the seed CLI; applying again deletes the person and everything of theirs first. */
+/**
+ * Seed a variant's scenario afresh with the seed CLI. `apply` alone deletes
+ * only the rows carrying the scenario's id marker, and a person signed up
+ * through the signup webhook has an id of the database's: `reset` deletes
+ * them by email too, and everything of theirs goes with them.
+ */
 export function seed(instance: string, persona: Persona, variant: Variant, now: number, log: string) {
   const dir = join(CACHE, instance, 'scenarios');
   mkdirSync(dir, { recursive: true });
   const path = join(dir, `${scenarioName(persona, variant)}.json`);
   writeFileSync(path, `${JSON.stringify(scenario(persona, variant, now), null, 1)}\n`);
-  const result = Bun.spawnSync(['just', 'seed-scenario', '--instance', instance, 'apply', '--file', path], {
-    cwd: REPO,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-  writeFileSync(log, result.stdout.toString() + result.stderr.toString(), { flag: 'a' });
-  if (result.exitCode !== 0) throw new Error(`seed-scenario ${scenarioName(persona, variant)} exited with ${result.exitCode}; see ${log}`);
+  for (const step of ['reset', 'apply']) {
+    const result = Bun.spawnSync(['just', 'seed-scenario', '--instance', instance, step, '--file', path], {
+      cwd: REPO,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    writeFileSync(log, result.stdout.toString() + result.stderr.toString(), { flag: 'a' });
+    if (result.exitCode !== 0) throw new Error(`seed-scenario ${step} ${scenarioName(persona, variant)} exited with ${result.exitCode}; see ${log}`);
+  }
 }
 
 /** Rows a clean person has none of; a reset that left any would let one run read another's work. */
