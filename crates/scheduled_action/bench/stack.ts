@@ -314,6 +314,10 @@ export function currentHarness(instance: string): string | undefined {
   }
 }
 
+/**
+ * Run the harness from `bin`. Compose merges volumes by container path, so
+ * this replaces only `/app/out` and keeps the stack's other mounts.
+ */
 export async function useHarness(at: Stack, bin: string) {
   if (!existsSync(join(bin, 'agent_harness_service'))) throw new Error(`no agent_harness_service in ${bin}`);
   const override = harnessOverride(at.instance);
@@ -324,10 +328,8 @@ export async function useHarness(at: Stack, bin: string) {
       '# Written by crates/scheduled_action/bench: the build the eval drafts against.',
       'services:',
       '  agent_harness_service:',
-      '    volumes: !override',
+      '    volumes:',
       `      - ${resolve(bin)}:/app/out:ro`,
-      '      - /nix/store:/nix/store:ro',
-      '      - /var/run/docker.sock:/var/run/docker.sock',
       '',
     ].join('\n'),
   );
