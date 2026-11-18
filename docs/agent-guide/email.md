@@ -1229,8 +1229,13 @@ does not.
 
 After a send is queued, its notice offers `Undo`. Undo restores the
 sent envelope and editable content, including when the reply used another inbox;
-a slow background refresh must not keep the restored editor disabled. A rejected
-send reports failure and restores its original reply editor if it is still mounted.
+a slow background refresh must not keep the restored editor disabled. Write a
+second reply to the same message during the undo window, then undo the first
+send before the second reply's initial save reaches the service. The editor keeps
+the second reply and says it was kept. Verify both drafts were saved and reload
+the thread to check that it opens the newer reply.
+A rejected send reports failure and restores its original reply editor if it is
+still mounted.
 A failure from an older, unmounted editor must not overwrite a newer edited reply.
 A presentation or refresh error after successful delivery is not a reason to send
 again. After the undo window and provider acceptance, send finalization supplies

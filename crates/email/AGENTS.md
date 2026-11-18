@@ -425,6 +425,8 @@ tools — hexagonal, heavily feature-gated.
   `SharedThreadReplyAccess` (edit access to its thread; wired in
   `document_storage_service` with `with_shared_thread_replies`). The reply
   starts a thread in the caller's inbox; other hosts keep `NoSharedThreadReplies`.
+- Let first saves adopt unbound reply drafts by reply target. Keep separately
+  bound working copies distinct when Undo restores a draft for that target.
 - Sender discovery authorizes the inbox first. Gmail aliases use the sender
   provider; Outlook exposes its verified primary address without a Gmail lookup.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
