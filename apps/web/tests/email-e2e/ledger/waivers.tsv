@@ -77,6 +77,5 @@ STX-309	-	needs	needs the AI service, and no test on the full-stack tier does it
 STX-310	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 STX-035	-	needs	needs the calendar service (a calendar sync error), and no test on the full-stack tier does it yet
 STX-319	-	needs	the tour is off unless the flag service turns on enable-in-app-tours, and the suite's bundle has no flag service
-AL-115	-	bug	a touch device lists saved views in the sidebar sheet, whose rows drag with a mouse alone and whose menus have no Move up or Move down, so a touch cannot reorder views (touch-saved-views-reorder); its tests are kept as known bugs
 STL-704	-	bug	the touch list header names the tab a saved view runs on (All) instead of the view (touch-header-saved-view-name); its test is kept as a known bug
 STC-004	-	no-user-path	a touch device composes with the phone composer at every width, which draws no header label; the desktop Mail page shows a new email and a draft from Drafts without a split header, so nothing draws the label or its badges

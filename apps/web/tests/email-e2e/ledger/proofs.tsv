@@ -246,6 +246,7 @@ AL-111	The email saved-view menu's "Edit" entry (EmailSavedViewMenuItems in emai
 AL-112	The email saved-view menu's "Duplicate" entry (EmailSavedViewMenuItems in email-saved-views.tsx) returns without opening the builder named "<name> (copy)".
 AL-113	The delete confirmation's "Delete view" button (DeleteSavedViewDialog in saved-view-dialogs.tsx) no longer calls the delete mutation; the menu entry that opens the confirmation is untouched.
 AL-114	The desktop saved-views list in email-saved-views.tsx ignores a dropped drag, so dragging a row past another no longer reorders; nothing else in the list changes.
+AL-115	Main before this fix enables drag on the navigation sheet's saved-view rows, removing Move up and Move down. The phone and tablet tests fail at Move up and, with the fix, check both moves against the stored order and the order after reload.
 AL-116	Save changes on an edited saved view saves nothing
 AL-117	Reset on an edited saved view keeps the edits
 AL-118	Reload saved view after a refused save reloads nothing
@@ -977,7 +978,7 @@ STL-707	not shown as the row says (alert with the save error inside the dialog):
 STL-708	not shown as the row says (Advanced settings start open when the view sets one; Inboxes shown with two or more inboxes; Tags shown when tags exist): its rendering is switched off or changed in src/features/email-view/components/EmailSavedViewFields.tsx
 STL-709	not shown as the row says (alert with the delete error inside the confirmation): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
 STL-710	Deleting the open saved view in email-saved-views.tsx no longer calls leaveSavedView, so the list does not return to the tab it was opened from.
-STL-711	email-saved-views.tsx passes Move up / Move down to the draggable desktop rows too, so a desktop row menu shows Move items. The touch half of the row is the known bug touch-saved-views-reorder: the sheet's menus have none to break.
+STL-711	Passing Move up and Move down to the draggable desktop rows breaks the desktop assertion. Main before the touch fix also makes the sheet rows draggable, breaking the phone assertion for Move down. With the fix, phone row menus show just the move toward the other row.
 STL-712	The email list header in EmailHeader.tsx no longer shows the open saved view's "Saved view actions" menu beside its name.
 STL-713	not shown as the row says ("Save changes" disabled while saving or when the view has skipped settings): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
 STL-900	The open list's live updates are cut off: graphql-soup-websocket.ts no longer subscribes to SoupUpdates and use-notification-updates.ts no longer refetches the thread of a new_email notification.
