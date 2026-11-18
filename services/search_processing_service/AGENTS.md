@@ -43,6 +43,11 @@ OpenSearch, and exposes backfill HTTP routes for each.
   the alias manually first (README "Agent-session indexing and rollout").
 - Kafka offsets commit on in-memory handoff, not after OpenSearch write —
   there is a crash-loss window; recovery is the backfill routes, not replay.
+  A graceful stop commits each partition it still owns back to its first
+  record no worker started (`inbound/kafka_consumer/offsets.rs`), so workers
+  must report every record they start and finish, once per delivery. Never
+  rewind to a started record: one that hangs or kills its worker would then
+  be retried on every stop.
 - The poll loop blocks on a full worker channel, so one slow, busy key stalls
   every topic. `coalescible_reread_key` skips agent-session events while a
   reread for that session is queued; only add an event kind there if handling
