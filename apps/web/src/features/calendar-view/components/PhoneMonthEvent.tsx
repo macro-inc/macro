@@ -28,7 +28,7 @@ export function PhoneMonthEvent(props: {
     <button
       data-calendar-month-event={props.event.id}
       type="button"
-      class="calendar-agenda-event flex min-h-11 w-full items-start gap-2 rounded-xl px-3 py-2 text-left text-base"
+      class="calendar-agenda-event flex min-h-11 w-full items-start gap-2 rounded-xl px-2.5 py-1 text-left text-sm"
       style={{ '--event-calendar-color': props.event.calendar.color }}
       onClick={(event) => props.onSelect(props.event, event.currentTarget)}
     >
@@ -36,7 +36,7 @@ export function PhoneMonthEvent(props: {
         <span class="block truncate font-medium">
           {props.event.title || t('calendar.agendaUntitled')}
         </span>
-        <span class="block truncate text-sm opacity-80">
+        <span class="block truncate text-xs opacity-80">
           {time()}
           <Show when={location()}> · {location()}</Show>
         </span>
@@ -45,7 +45,7 @@ export function PhoneMonthEvent(props: {
         <span class="flex shrink-0 -space-x-1 pt-0.5">
           <For each={props.event.attendees.slice(0, 4)}>
             {(attendee) => (
-              <span class="size-6">
+              <span class="size-5">
                 <UserIcon
                   id={emailToId(attendee.email)}
                   name={attendee.displayName || attendee.email}
