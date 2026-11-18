@@ -61,6 +61,9 @@ export class Booking extends MacroEntity<BookingRecord> {
   /** When the meeting last moved, if it ever did. */
   readonly rescheduledAt = this.field('rescheduledAt');
 
+  /** When Macro stopped trying to update the host's calendar. A `failed` booking with this set is not retried; cancelling it releases its time. */
+  readonly abandonedAt = this.field('abandonedAt');
+
   /** Final location or conference URL. */
   readonly location = this.field('location');
 
