@@ -16,9 +16,8 @@ Search icon. Command-F expands and focuses search; Close or Escape clears it
 and restores the icon. Touch keeps pill tabs and the header search. Above 720px on touch, the Calls
 list stays left of an empty or selected call preview, and Show sidebar opens
 view/filter navigation in a sheet. Ordinary selections remain in the preview.
-With `enable-quick-calls` enabled, `New call` opens a menu with `Start an instant
-call`, `Call a channel or contact`, and `Manage call links`; without the flag it
-opens the recipient picker directly. `Start an instant call` opens `/app/meet/new`
+`New call` opens a menu with `Start an instant
+call`, `Call a channel or contact`, and `Manage call links`. `Start an instant call` opens `/app/meet/new`
 without creating a meeting, the same setup reached from `New Call` beside
 Calendar's `New event` or `Create` → `Call` (`C C`). Scheduled calls are created
 through Calendar and can be shared with people who do not have a Macro account.

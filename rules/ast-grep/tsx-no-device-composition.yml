@@ -12,8 +12,9 @@ note: |-
 
   The ignore list has two parts. "Entries" is permanent: the one file per
   view that holds the device switch. "Not yet split" is a baseline of files
-  that predate the rule; delete a file's line when you split its view, and
-  never add one.
+  that predate the rule; delete a file's line when you split its view. Add
+  a file only when its split is already a task, named in a comment on its
+  line.
 files:
   - apps/web/src/features/**
 ignores:
@@ -25,6 +26,7 @@ ignores:
   - apps/web/src/features/block-agent/component/Block.tsx
   - apps/web/src/features/block-ai/ai-block.tsx
   - apps/web/src/features/block-call/component/CallBlockAdapter.tsx
+  - apps/web/src/features/block-canvas/canvas-next.tsx
   - apps/web/src/features/block-canvas/component/Block.tsx
   - apps/web/src/features/block-chat/component/Chat.tsx
   - apps/web/src/features/block-code/component/Block.tsx
@@ -45,13 +47,15 @@ ignores:
   - apps/web/src/features/email-view/components/EmailComposeRouteView.tsx
   - apps/web/src/features/email-view/components/EmailDetailView.tsx
   - apps/web/src/features/entity-appearance/appearance-menu.tsx
+  - apps/web/src/features/projects/add-project-tasks.tsx
   - apps/web/src/features/projects/new-project-task.tsx
+  - apps/web/src/features/projects/project-top-bar.tsx
   - apps/web/src/features/task-composer/compose-task.tsx
   - apps/web/src/features/tasks-view/components/TasksDetailView.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx
   - apps/web/src/features/agent-session-activity/components/activity-row.tsx
-  - apps/web/src/features/agents-view/components/AgentSessionPane.tsx
+  - apps/web/src/features/agents-view/components/AgentSessionPane.tsx # MACRO-5126 (3.4)
   - apps/web/src/features/agents-view/components/AgentsSidebar.tsx
   - apps/web/src/features/agents-view/components/ChatComposer.tsx
   - apps/web/src/features/agents-view/route-views.tsx
@@ -117,7 +121,7 @@ ignores:
   - apps/web/src/features/channel/Participants/ChannelBotsPanel.tsx
   - apps/web/src/features/channel/Participants/ChannelParticipantsTab.tsx
   - apps/web/src/features/channels-view/channels-view-skeleton.tsx
-  - apps/web/src/features/channels-view/channels-view.tsx
+  - apps/web/src/features/channels-view/channels-view.tsx # MACRO-5116 (2.2)
   - apps/web/src/features/channels-view/components/rail/ChannelListViews.tsx
   - apps/web/src/features/channels-view/components/rail/ChannelOption.tsx
   - apps/web/src/features/channels-view/components/rail/ExpandedChannelsRail.tsx

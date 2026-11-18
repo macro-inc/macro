@@ -59,6 +59,9 @@ pub enum ChannelEvent {
         channel_id: Uuid,
         /// Actor that deleted the channel.
         actor: ChannelSender<'static>,
+        /// Active participants just before the delete, whose access to the
+        /// channel ended with it.
+        participant_user_ids: Vec<MacroUserIdStr<'static>>,
     },
     /// A message was posted.
     MessagePosted {

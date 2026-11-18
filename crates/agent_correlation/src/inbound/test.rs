@@ -608,6 +608,98 @@ async fn a_scoped_token_in_the_cookie_scopes_the_request_whatever_else_it_carrie
     }
 }
 
+/// `propagate` alone, on a route that reads no `MacroAuthorization`, refuses
+/// tokens of different users before the handler runs, in any pairing of
+/// bearer, query parameter and cookie; one user's tokens pass.
+#[tokio::test]
+async fn propagate_refuses_tokens_of_different_users() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+    };
+    let handled = Arc::new(AtomicUsize::new(0));
+    let app = axum::Router::new()
+        .route(
+            "/items",
+            axum::routing::get({
+                let handled = handled.clone();
+                move || async move {
+                    handled.fetch_add(1, Ordering::SeqCst);
+                    StatusCode::OK
+                }
+            }),
+        )
+        .layer(axum::middleware::from_fn_with_state(state, propagate));
+    let owner = token(None, None);
+    let someone_else = encode_macro_api_token(EncodeMacroApiTokenArgs {
+        fusionauth_id: "fixture".into(),
+        macro_user_id: "macro|someone@example.com".into(),
+        organization_id: None,
+        issuer: "fixture".into(),
+        private_key: PRIVATE.into(),
+        expiry_seconds: 60,
+        agent_id: None,
+        agent_via: None,
+        agent_correlation_id: None,
+        agent_session_id: None,
+        routine_id: None,
+        agent_scope: None,
+    })
+    .unwrap();
+    let cookie = |token: &str| {
+        format!(
+            "{}={token}",
+            macro_auth::credential::access_token_cookie_name()
+        )
+    };
+    type Case<'a> = (String, Vec<(&'a str, String)>, StatusCode);
+    let cases: Vec<Case> = vec![
+        (
+            "/items".into(),
+            vec![
+                ("authorization", format!("Bearer {owner}")),
+                ("cookie", cookie(&someone_else)),
+            ],
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            format!("/items?macro-api-token={someone_else}"),
+            vec![("cookie", cookie(&owner))],
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            format!("/items?macro-api-token={owner}"),
+            vec![("authorization", format!("Bearer {someone_else}"))],
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/items".into(),
+            vec![
+                ("authorization", format!("Bearer {owner}")),
+                ("cookie", cookie(&owner)),
+            ],
+            StatusCode::OK,
+        ),
+    ];
+    for (uri, headers, expected) in cases {
+        let mut request = Request::builder().uri(&uri);
+        for (name, value) in &headers {
+            request = request.header(*name, value);
+        }
+        let response = app
+            .clone()
+            .oneshot(request.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{uri}");
+    }
+    assert_eq!(handled.load(Ordering::SeqCst), 1);
+}
+
 /// A refused sharing change is answered 403 on every route, whatever error
 /// the code between the refusal and the route made of it; a request that
 /// refused a change and still succeeded keeps its answer.
@@ -672,5 +764,54 @@ async fn a_refused_sharing_change_is_answered_as_a_refusal() {
             let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
             assert_eq!(body["message"], message);
         }
+    }
+}
+
+/// Normal member-authorized agent sessions retain direct contribution writes;
+/// only credentials carrying a restricted scope are refused at the route gate.
+#[tokio::test]
+async fn ordinary_agents_reach_policy_put_while_restricted_agents_do_not() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+    };
+    let app = axum::Router::new()
+        .route(
+            "/dss/v1/crm/email-privacy/policy",
+            axum::routing::put(|| async { StatusCode::OK }),
+        )
+        .layer(axum::middleware::from_fn_with_state(state, propagate));
+    for scope in [None, Some("no_send"), Some("dry_run"), Some("generation")] {
+        let bearer = mint(
+            Some(Uuid::from_u128(1)),
+            Some(Uuid::from_u128(3)),
+            None,
+            scope,
+        );
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/dss/v1/crm/email-privacy/policy")
+                    .header("authorization", format!("Bearer {bearer}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            if scope.is_none() {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            "{scope:?}",
+        );
     }
 }

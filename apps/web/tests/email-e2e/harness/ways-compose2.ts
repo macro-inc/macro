@@ -36,7 +36,11 @@ export async function openThread(
   });
   const thread = await mailbox.synced(subject);
   await mailbox.open(`/app/mail/${thread.id}`);
-  await expect(page.getByText(textOf(subject)).first()).toBeVisible();
+  // On a phone the list stays mounted under the thread, hidden, and its row
+  // shows the same text.
+  await expect(
+    page.getByText(textOf(subject)).filter({ visible: true }).first()
+  ).toBeVisible();
   return thread;
 }
 

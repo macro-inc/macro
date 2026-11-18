@@ -1815,6 +1815,16 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn take_back_team_agent(
+        &self,
+        team_id: uuid::Uuid,
+        agent_user_id: &MacroUserIdStr<'_>,
+        removed_by: MacroUserIdStr<'static>,
+    ) -> Result<(), RemoveUserFromTeamError> {
+        self.remove_member(team_id, agent_user_id, removed_by).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn reject_invitation(
         &self,
         user_id: &MacroUserIdStr<'_>,

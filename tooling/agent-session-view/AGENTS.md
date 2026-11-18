@@ -25,6 +25,11 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   largest prompt's parts, and flags (`no-sdk-index`, `guessed-sdk-methods`,
   `repeated-failure`, `failing-code`, ...). The viewer and the markdown both
   show it.
+- `reconstruct.py` and `asv_reconstruct.rs`: `--reconstruct`, the literal
+  text of each turn's reproducible prompt parts (the `<macro_sdk>` docs, the
+  preamble, the Macro prompt with its area guides, the identity and the
+  connected-integrations line), rebuilt by the code of the commit that served
+  the turn and checked against the span's bytes and hash.
 
 ## Recipes
 
@@ -41,10 +46,21 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   `DD_API_KEY` and `DD_APP_KEY` exported (Datadog us5; `DD_SITE` overrides).
   Spans are kept 15 days, so older sessions have none. The turn context
   comes with it; viewer keys: `n`/`p` failures, `j`/`k` turns.
+- Literal prompt parts: add `--reconstruct` to a `--datadog` render (or to
+  `--from-json` of an export with spans). It needs `gh`, AWS read access for
+  `ecs describe-task-definition`, and a Rust build: the first run at a commit
+  checks it out under `~/.cache/agent-session-view/src/<sha>`, builds that
+  commit's `code-mode-assets` Nix package (the generated SDK docs; a
+  checkout without a bun install can't make them) and then `ai_tools`,
+  which takes long; later runs read
+  `~/.cache/agent-session-view/reconstruct/<sha>/`. Set `ASV_BUILD_WRAPPER`
+  to prefix the build (a build-slot queue, `nice`).
 
 ## Checks
 
 - `python3 -m unittest discover tooling/agent-session-view` (stdlib only).
+- After changing `asv_reconstruct.rs`, run `--reconstruct` on a recent prod
+  session and see every rebuilt part "verified".
 - Render one export with `--from-json --out <scratch>.html` and open it, and
   again with `--markdown`.
 - `--query` against a local database holding a prompted session: load
@@ -75,6 +91,23 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   `eager-names-exceed-span`.
   Renaming either constant breaks this: update `EAGER_SOURCES` in
   `turn_context.py`.
+- The deploy commit: no span carries a version. The span's ECS
+  `task_family` tag names a task definition; the "Deploy Production Release"
+  run that was running when it was registered has the commit, whatever the
+  run's conclusion: one failed job (an unrelated worker) marks a run
+  "failure" though the services deployed. Otherwise the newest release
+  deployed before the turn (its run, or a re-run's first attempt, finished;
+  with no run listed, it was published) is used and labelled "inferred" with
+  the reason; dev sessions always get the last `main` commit before the turn.
+- Reconstructed parts: "verified" means the span's SHA-256 prefix (or, with
+  no hash, its byte count) matches; "mismatch" is shown in red and as the
+  `reconstruction-mismatch` flag; memory, session instructions, the session
+  note, the model id line and the opener note are not rebuilt (per user, or
+  inline in private functions) and show their size only. Tool schemas are not
+  rebuilt: Macro's own code-mode tools come from the MCP server, not the
+  harness process. `asv_reconstruct.rs` must compile at old commits: use only
+  long-lived public items, and when one moves, the run fails loudly at that
+  commit rather than guessing.
 - `invoke_agent`'s `gen_ai.tool.definitions` is cut at about 25 KB, so the
   deferred list can be partial. Only names, counts and sizes are read from
   spans, never their prompt or message text.

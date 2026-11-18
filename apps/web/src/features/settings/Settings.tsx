@@ -3,7 +3,6 @@ import {
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import {
   useParams,
@@ -12,10 +11,6 @@ import {
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitPanel } from '@components/app/split-panel';
-import {
-  enableEmailSignatures,
-  enableMacroComputers,
-} from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -32,6 +27,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
+import { useMacroComputersRollout } from '@queries/computers/computers';
 import { useSearchParams } from '@solidjs/router';
 import {
   createMemo,
@@ -115,9 +111,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // Hotkeys and touch pills follow the visible nav, which hides team pages
   // from people without a team.
   const navTabs = createMemo(() => navGroups().flatMap((group) => group.items));
-  const signatures = useFeatureFlag(enableEmailSignatures);
   const outlook = useOutlookAvailable();
-  const macroComputers = useFeatureFlag(enableMacroComputers);
+  const macroComputers = useMacroComputersRollout();
 
   const activeNavigationTab = activeTabId;
 
@@ -126,7 +121,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
     createSignal<SettingsSearchResult>();
   const searchResults = createMemo(() =>
     searchSettings(searchGroups(), searchQuery(), {
-      emailSignatures: signatures().enabled,
       outlook: outlook(),
       macroComputers: macroComputers().enabled,
     })

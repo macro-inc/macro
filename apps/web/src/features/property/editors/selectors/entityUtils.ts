@@ -78,7 +78,8 @@ export function useQuickAccessEntities<T extends EntityType>(
   entityType: Accessor<T | T[] | null | undefined>,
   searchTerm: Accessor<string> = () => '',
   enabled: Accessor<boolean> = () => true,
-  excludedPeople?: Accessor<ReadonlySet<string>>
+  excludedPeople?: Accessor<ReadonlySet<string>>,
+  readsCache?: Accessor<boolean>
 ) {
   const quickAccess = useQuickAccess();
 
@@ -112,6 +113,7 @@ export function useQuickAccessEntities<T extends EntityType>(
         enabled,
         peopleMode: 'property',
         excludedPeople,
+        readsCache,
       })
     );
   });
@@ -126,6 +128,12 @@ export function useQuickAccessEntities<T extends EntityType>(
     windowKey: () => (enabled() ? list()?.windowKey?.() : undefined),
     loadMore: async () => {
       if (enabled()) await list()?.loadMore();
+    },
+    // A list without its own retry reads its next page again.
+    retry: async () => {
+      const current = list();
+      if (!enabled() || !current) return;
+      await (current.retry ? current.retry() : current.loadMore());
     },
   };
 }

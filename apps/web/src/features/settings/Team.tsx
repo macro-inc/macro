@@ -9,6 +9,7 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import XIcon from '@icon/system/regular/x.svg';
+import { useMacroComputersRollout } from '@queries/computers/computers';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -476,8 +477,14 @@ export function InviteToTeamDialog(props: {
 }) {
   const inviteToTeamMutation = useInviteToTeamMutation();
   const agentFlag = useFeatureFlag(enableAgentTeammates);
+  // Adding an agent buys its computer, so it needs computers on too.
+  const computersFlag = useMacroComputersRollout();
   const canInviteAgents = () =>
-    !!props.canInviteAgents && !agentFlag().loading && agentFlag().enabled;
+    !!props.canInviteAgents &&
+    !agentFlag().loading &&
+    agentFlag().enabled &&
+    !computersFlag().loading &&
+    computersFlag().enabled;
   const [chosenKind, setChosenKind] = createSignal<InviteKind>('people');
   // A rollout or role change that revokes agents falls back to people.
   const kind = (): InviteKind => (canInviteAgents() ? chosenKind() : 'people');

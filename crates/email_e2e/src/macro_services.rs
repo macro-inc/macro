@@ -19,7 +19,7 @@ use axum::extract::{Request, State};
 use axum::http::{HeaderMap, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use rootcause::prelude::*;
-use tokio::net::TcpListener;
+use serde_json::Value;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -48,6 +48,68 @@ pub struct ServiceRequest {
     pub path: String,
     /// The body, when it was JSON.
     pub body: Option<serde_json::Value>,
+}
+
+/// One message a service asked the connection gateway to deliver.
+#[derive(Clone, Debug)]
+pub struct GatewayMessage {
+    /// Whom it is for: the user id, for a user entity.
+    pub entity_id: String,
+    /// What kind of message it is, such as `refresh_calendar`.
+    pub message_type: String,
+    /// What it says, decoded when it travelled as JSON text.
+    pub message: serde_json::Value,
+}
+
+impl ServiceRequest {
+    /// The messages this request asked the connection gateway to deliver, one
+    /// per recipient, whether it named one recipient or a batch of them.
+    pub fn gateway_messages(&self) -> Vec<GatewayMessage> {
+        let (CONNECTION_GATEWAY, Some(body)) = (self.service.as_str(), &self.body) else {
+            return vec![];
+        };
+        let path = self.path.split('?').next().unwrap_or_default();
+        let message = |entity_id: String, message_type: &Value, content: &Value| GatewayMessage {
+            entity_id,
+            message_type: message_type.as_str().unwrap_or_default().to_owned(),
+            message: match content {
+                Value::String(text) => serde_json::from_str(text).unwrap_or(Value::Null),
+                content => content.clone(),
+            },
+        };
+        let entity_id =
+            |entity: &Value| entity["entity_id"].as_str().unwrap_or_default().to_owned();
+        if let Some((_, entity)) = path.split_once("/message/send/") {
+            let id = entity.split_once('/').map(|(_, id)| id).unwrap_or_default();
+            let id = urlencoding::decode(id)
+                .map(|id| id.into_owned())
+                .unwrap_or_default();
+            return vec![message(id, &body["message_type"], &body["message"])];
+        }
+        if path.ends_with("/message/batch_send") {
+            return body["entities"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|entity| message(entity_id(entity), &body["message_type"], &body["message"]))
+                .collect();
+        }
+        if path.ends_with("/message/batch_send_unique") {
+            return body["messages"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|sent| {
+                    message(
+                        entity_id(&sent["entity"]),
+                        &sent["message_type"],
+                        &sent["message_content"],
+                    )
+                })
+                .collect();
+        }
+        vec![]
+    }
 }
 
 #[derive(Clone)]
@@ -167,7 +229,7 @@ impl MacroServices {
             document_storage: document_storage.clone(),
         };
 
-        let listener = TcpListener::bind("127.0.0.1:0")
+        let listener = crate::host::local_listener()
             .await
             .context("could not bind the Macro services stand-in")?;
         let address = listener.local_addr()?;

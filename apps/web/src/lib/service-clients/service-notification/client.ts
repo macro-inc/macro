@@ -188,33 +188,6 @@ export const notificationServiceClient = {
       })
     ).map((result) => result);
   },
-  async bulkMarkNotificationAsSeen(args: NotificationBulkRequest) {
-    const { notificationIds } = args;
-    return (
-      await notificationFetch<any>(`/user_notifications/bulk/seen`, {
-        method: 'PATCH',
-        body: JSON.stringify({ notificationIds }),
-      })
-    ).map((result) => result);
-  },
-  async bulkMarkNotificationAsDone(args: NotificationBulkRequest) {
-    const { notificationIds } = args;
-    return (
-      await notificationFetch<any>(`/user_notifications/bulk/done`, {
-        method: 'PATCH',
-        body: JSON.stringify({ notificationIds }),
-      })
-    ).map((result) => result);
-  },
-  async bulkMarkNotificationAsUndone(args: NotificationBulkRequest) {
-    const { notificationIds } = args;
-    return (
-      await notificationFetch<any>(`/user_notifications/bulk/undone`, {
-        method: 'PATCH',
-        body: JSON.stringify({ notificationIds }),
-      })
-    ).map((result) => result);
-  },
   async markNotificationEntityAsSeen(args: WithEventItemId) {
     const { event_item_id } = args;
     return (

@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
@@ -11,6 +12,7 @@ import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch } from '@core/util/freshSort';
 import { preserveOrderedWindow } from '@core/util/ordered-window';
+import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import {
@@ -37,10 +39,8 @@ import {
   createSignal,
   For,
   type JSX,
-  Match,
   on,
   Show,
-  Switch,
 } from 'solid-js';
 import {
   type CombinedEntity,
@@ -546,11 +546,27 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const resultCount = () => sortedEntities().length + (customEmail() ? 1 : 0);
 
-  createEffect(() => {
-    search();
-    resultCount();
-    setSelectedIndex(0);
+  // Hold the row the user moved to by identity while pages are added around
+  // it; a new search releases it.
+  const highlight = createSelectionAnchor({
+    items: sortedEntities,
+    key: (entity) => entity.id,
+    scope: search,
+    selectedIndex,
+    setSelectedIndex,
   });
+  // A new search moves the highlight and the list to the top; a further page
+  // listed below keeps both where the user put them.
+  createEffect(
+    on(
+      search,
+      () => {
+        setSelectedIndex(0);
+        if (scrollContainerRef) scrollContainerRef.scrollTop = 0;
+      },
+      { defer: true }
+    )
+  );
   let previousWindow: string | undefined;
   createEffect(
     on(quickAccess.windowKey, (key) => {
@@ -563,6 +579,38 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     })
   );
   const loadNext = () => fireAndForget(loadNextPages(), 'property-picker');
+  // Read each failed source again: a failed later email page is the next one
+  // still to fetch, and a failed first page is read from the start.
+  const retryEmailPages = (query: {
+    data?: unknown[];
+    error: unknown;
+    fetchNextPage: () => Promise<unknown>;
+    refetch: () => Promise<unknown>;
+  }) => {
+    if (!query.error) return undefined;
+    return query.data?.length ? query.fetchNextPage() : query.refetch();
+  };
+  const retryPages = () =>
+    fireAndForget(
+      Promise.all([
+        quickAccess.error() ? quickAccess.retry() : undefined,
+        needsEmailSearch() ? retryEmailPages(emailsQuery) : undefined,
+        emailSearchEnabled() ? retryEmailPages(emailSearchQuery) : undefined,
+      ]),
+      'property-picker'
+    );
+  // Further pages load as the end of the list scrolls into view. With no rows
+  // listed, the sentinel sits below the empty list and keeps reading pages
+  // until one matches or the sources end. A failed page waits for Retry. The
+  // sentinel opts out of scroll anchoring: as the anchor, it would be held in
+  // view while each page lands above it, and every page would load the next.
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () => hasMore() && !paginationError(),
+    isFetchingNextPage: isLoadingMore,
+    fetchNextPage: loadNext,
+  });
 
   // Scroll the selected row into view during keyboard navigation
   createEffect(() => {
@@ -594,11 +642,13 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
       e.preventDefault();
       setSelectedIndex((prev) => (Math.min(prev, total - 1) + 1) % total);
+      highlight.hold();
     } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
       e.preventDefault();
       setSelectedIndex(
         (prev) => (Math.min(prev, total - 1) - 1 + total) % total
       );
+      highlight.hold();
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const idx = Math.min(selectedIndex(), total - 1);
@@ -694,6 +744,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                         onMouseEnter={() => {
                           if (!keyboardMode()) {
                             setSelectedIndex(index());
+                            highlight.hold();
                           }
                         }}
                       >
@@ -776,6 +827,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                   );
                 }}
               </For>
+              <Show when={hasMore()}>
+                <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
+              </Show>
             </div>
           </Show>
           <Show when={customEmail()}>
@@ -831,7 +885,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         ) : (
           <div class="text-center py-4 text-ink-muted text-sm">
             <Show
-              when={!isLoadingEntities()}
+              when={!isLoadingEntities() && !hasMore()}
               fallback={<span>Loading...</span>}
             >
               {props.config.emptyMessage ??
@@ -840,17 +894,23 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           </div>
         )}
       </Show>
-      <Show when={hasMore()}>
+      <Show when={sortedEntities().length === 0 && hasMore()}>
+        <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
+      </Show>
+      <Show when={isLoadingMore()}>
+        <div role="status" class="px-2 py-2 text-xs text-ink-muted">
+          {t('common.loadingOptions')}
+        </div>
+      </Show>
+      <Show when={paginationError()}>
         <Button
           variant="ghost"
           class="w-full"
           disabled={isLoadingMore()}
           onPointerDown={(event) => event.preventDefault()}
-          onClick={loadNext}
+          onClick={retryPages}
         >
-          <Switch fallback={t('viewMenus.nextOptions')}>
-            <Match when={isLoadingMore()}>{t('common.loadingOptions')}</Match>
-          </Switch>
+          {t('viewMenus.retryOptions')}
         </Button>
       </Show>
     </div>

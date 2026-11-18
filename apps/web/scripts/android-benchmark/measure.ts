@@ -32,10 +32,20 @@ export type Sample = {
   /** Soup reads answered from the local cache vs. the network. */
   soup: { local: number; network: number };
   longAnimationFrameBlockingMs: number | undefined;
+  /** The WebView's CPU throttle rate while the step ran (1: none). */
+  cpuThrottle: number;
+  /** The slowdown measured just before and just after the step. */
+  cpuThrottleMeasured?: [number, number];
   /** Host one-minute load average when the step ran (emulators share it). */
   hostLoad?: number;
   /** The flow's spans, from the touch: for finding where the time went. */
-  spans: { name: string; startMs: number; durationMs: number }[];
+  spans: {
+    name: string;
+    startMs: number;
+    durationMs: number;
+    /** HTTP and GraphQL client spans: headers to the body's first read. */
+    bodyMs?: number;
+  }[];
 };
 
 /** Frequent, tiny spans that the counts above already cover. */
@@ -54,6 +64,14 @@ const IGNORED_REQUESTS = [
   /\/i\/ph\//,
   /google|doubleclick/,
 ];
+
+// A client span ends at the response headers; its body time is an attribute.
+function roundedBodyMs(span: CapturedSpan) {
+  const bodyMs =
+    numberAttribute(span, 'http.body_ms') ??
+    numberAttribute(span, 'graphql.body_ms');
+  return bodyMs === undefined ? undefined : Math.round(bodyMs);
+}
 
 function numberAttribute(span: CapturedSpan, key: string) {
   const value = span.attributes[key];
@@ -97,6 +115,7 @@ export function sampleFrom(
     variant,
     iteration,
     readyMs: ready - start,
+    cpuThrottle: session.cpuThrottle,
     spanMs: numberAttribute(root, 'ui.elapsed_ms'),
     root: root.name,
     routeId:
@@ -138,6 +157,7 @@ export function sampleFrom(
         name: span.name,
         startMs: Math.round(span.start - start),
         durationMs: Math.round(span.end - span.start),
+        bodyMs: roundedBodyMs(span),
       })),
   };
 }

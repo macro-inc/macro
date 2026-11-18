@@ -2,7 +2,6 @@ import {
   defaultEditorInitialValues,
   type EventEditorInitialValues,
 } from '@app/features/calendar/components/composer/event-form-model';
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { buildRecurrenceLines } from '@app/features/calendar/utils/recurrence';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { useUniversalInputEnabled } from '@app/features/universal-input/use-universal-input';
@@ -56,13 +55,10 @@ export async function suggestEmailEvent(
  * reads from `text`.
  */
 export function useCreateEmailEvent() {
-  const calendarEnabled = useCalendarUiFlag();
   const extractionEnabled = useUniversalInputEnabled();
   const openEventComposer = useOpenEventComposer();
   return {
-    enabled: calendarEnabled,
     open(email: { subject: string; guests: string[]; text: string }) {
-      if (!calendarEnabled()) return false;
       const shown = displaySubject(email.subject);
       const title = isPlaceholderSubject(shown) ? '' : shown;
       openEventComposer({

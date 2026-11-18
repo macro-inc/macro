@@ -50,11 +50,11 @@ even if the viewer switches boards while saving. The adapter supplies the select
 view ID so switching boards also retires unfinished visual moves and sort prompts.
 `browser-test/board.tsx` exercises shared cards, lane composition, and saved ordering with synthetic data.
 
-Successful domain block and unblock mutations evict indexed company rows and
-contact suggestions from the GraphQL cache before refreshing CRM and Soup
-queries. Refresh mounted GraphQL lists that can contain CRM records too: the
-REST mutation returns no changed rows, and hidden records are absent from the
-search index. Failed mutations leave those cached records intact.
+Successful domain block and unblock mutations refresh CRM and Soup email
+readers without archiving or restoring records. Failed mutations leave cached
+records intact. Privacy settings show the server's mailbox-domain refusal
+beside its input and existing-entry warning categories as row descriptions;
+company-domain and personal-provider explanations remain distinct.
 Company selection snapshots and deduplicates the company's domains, waits for
 every domain request, and retains failed domains for retry after the company
 disappears from suggestions. Keep successful blocks when another domain fails.
@@ -167,13 +167,9 @@ The selected-record fallback survives detail query errors until the record close
 Global task creation snapshots the focused pane's getter before opening, without
 fetching details or capturing navigation history. Record contexts isolate drafts.
 
-`enable-crm-activity` gates workspace activity tabs (labelled Sales Tasks, Sales Email,
-Sales Notes and Sales Calls), whether CRM supplies its
-composer context, and, with `enable-crm`, the Customer / Contact pill in the task
-composer and Universal Input's task mode. Those two read both flags through
-`customerContactEnabled`. It defaults off everywhere and can be overridden locally with
-`VITE_ENABLE_CRM_ACTIVITY=true`. Off hides activity navigation and skips activity
-queries; saved activity links wait for flag loading, then fall back to Companies.
+The workspace activity tabs are labelled Sales Tasks, Sales Email, Sales Notes and
+Sales Calls. CRM supplies its composer context, and the task composer and Universal
+Input's task mode show the Customer / Contact pill.
 The standard record task action still associates the task with its record.
 The registry and launcher never read this flag. With no supplied context, the
 standard composer opens immediately. Each opening snapshots its

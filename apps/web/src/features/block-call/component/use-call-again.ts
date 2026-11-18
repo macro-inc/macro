@@ -1,4 +1,3 @@
-import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import type { CallJoinIntent } from '@channel/Call/call-lifecycle';
 import { getMeetingPath } from '@channel/Call/call-link';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
@@ -15,15 +14,9 @@ export function useCallAgain(
   channelId: Accessor<string | null | undefined>
 ) {
   const navigate = useNavigate();
-  const flag = useQuickCallsFlag();
-  const quickCallsEnabled = () => !flag().loading && flag().enabled;
-  const meeting = useCallLinkQuery(() =>
-    quickCallsEnabled() && !channelId() ? callId() : undefined
-  );
+  const meeting = useCallLinkQuery(() => (channelId() ? undefined : callId()));
   const shareToken = () =>
-    quickCallsEnabled() && meeting.isSuccess
-      ? meeting.data?.shareToken
-      : undefined;
+    meeting.isSuccess ? meeting.data?.shareToken : undefined;
   const canCallAgain = () => Boolean(channelId() || shareToken());
   const rejoin = async (channel: string, intent: CallJoinIntent) => {
     try {

@@ -41,7 +41,8 @@ read their code, and follow that pattern rather than inventing a new one.
   in the view, so an action added for desktop cannot reach mobile.
 - When you split a view, delete its files from the "Not yet split" list in
   `rules/ast-grep/tsx-no-device-composition.yml` and add its entry to the list
-  above it. Never add a file to "Not yet split".
+  above it. Add a file to "Not yet split" only when its view's split is
+  already a task, named in a comment on the file's line; otherwise split it.
 - Gate hover and press styles with `not-touch:`; iOS leaves hover stuck.
 - No action lives only behind hover. `HoverCard` renders nothing on touch,
   so give it a tap path that opens a sheet, as `UserCardTrigger` does.

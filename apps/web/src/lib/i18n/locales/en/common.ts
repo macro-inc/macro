@@ -30,6 +30,8 @@ export default {
   pleaseTryAgain: 'Please try again',
   loading: 'Loading…',
   loadingConversation: 'Loading conversation',
+  loadingPeople: 'Loading people',
+  peopleUnavailable: "Couldn't load people",
   delete: 'Delete',
   rename: 'Rename',
   more: 'More',
@@ -40,6 +42,6 @@ export default {
   loadingOptions: 'Loading options…',
   optionsUnavailable: 'Options unavailable. Selected values are kept.',
   optionsIncomplete: 'Cached options or selected names may be incomplete.',
-  noOptionsInWindow: 'No matches in this page or cached snapshot.',
+  noMatchingOptions: 'No matching options.',
   settings: 'Settings',
 };

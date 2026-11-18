@@ -164,6 +164,10 @@ export default {
   privacyTeamDomainLabel: 'Domain to block for the team',
   privacyPersonalDomainLabel: 'Domain to block for my emails',
   privacyDomainPlaceholder: 'example.com',
+  privacyCompanyMailboxDomain:
+    "Colleagues on a mailbox's own company domain are already kept out of the CRM. Blocking this domain would hide all of that mailbox's email.",
+  privacyPersonalMailboxDomain:
+    "Blocking this domain would hide all of a connected mailbox's email from the CRM.",
   privacyAddDomain: 'Add domain',
   privacyLoadFailed: 'Email settings could not be loaded.',
   privacyLoading: 'Loading email settings…',

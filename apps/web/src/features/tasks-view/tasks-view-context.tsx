@@ -14,10 +14,7 @@ import type {
 import { normalizeFacetSelection } from '@app/features/soup';
 import { createTagFacetContext } from '@app/features/soup/filters/facets/tag-facet';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  enableGantt,
-  enableProjects,
-} from '@app/lib/core/constant/featureFlags';
+import { enableGantt } from '@app/lib/core/constant/featureFlags';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   createSearchParams,
@@ -142,7 +139,6 @@ export type TasksViewContext = {
   savedViewTeam?: Accessor<{ id: string; name: string } | undefined>;
   facetContext: Accessor<TaskFacetContext>;
   createTask?: TasksViewProviderProps['onCreateTask'];
-  projectsEnabled: Accessor<boolean>;
   showTaskProject: Accessor<boolean>;
   ganttEnabled: Accessor<boolean>;
   setState: SetStoreFunction<TasksViewState>;
@@ -201,9 +197,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const tagSetsReady = useTagSetsReady();
   const [newSavedView, setNewSavedView] = createSignal<boolean | string>(false);
   const [savedViewNavigation, setSavedViewNavigation] = createSignal({});
-  const projectsFlag = useFeatureFlag(enableProjects);
-  const projectsEnabled = () => projectsFlag().enabled;
-  const showTaskProject = () => projectsEnabled() && !props.hideTaskProject;
+  const showTaskProject = () => !props.hideTaskProject;
   const ganttFlag = useFeatureFlag(enableGantt);
   const ganttEnabled = () => ganttFlag().enabled;
   const calendar = createDateBucketBoundariesSignal();
@@ -261,9 +255,6 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return persistedState.layout;
     },
     get groupBy() {
-      if (persistedState.groupBy === 'project' && !projectsEnabled()) {
-        return 'status';
-      }
       if (state.layout !== 'board') {
         return persistedState.groupBy;
       }
@@ -271,9 +262,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return toTaskBoardGrouping(persistedState.groupBy);
     },
     get tab(): TasksTab {
-      return isProjectTab(persistedState.tab) && !projectsEnabled()
-        ? 'my-tasks'
-        : persistedState.tab;
+      return persistedState.tab;
     },
   });
 
@@ -636,7 +625,6 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   );
 
   const setTab = (tab: TasksTab) => {
-    if (isProjectTab(tab) && !projectsEnabled()) return;
     const leavingSavedView = state.savedViewActive;
     if (leavingSavedView) leaveSavedView();
     if (persistedState.tab === tab && !leavingSavedView) {
@@ -704,7 +692,6 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     },
     state,
     calendar,
-    projectsEnabled,
     showTaskProject,
     ganttEnabled,
     setState: setStateWithSearch,

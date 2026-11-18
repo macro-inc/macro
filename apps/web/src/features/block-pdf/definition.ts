@@ -4,12 +4,12 @@ import {
   LoadErrors,
   loadResult,
 } from '@core/block';
+import { lazy } from '@core/util/lazy';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import type { GetDocumentResponseDataViewLocation } from '@service-storage/generated/schemas/getDocumentResponseDataViewLocation';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { err, ok } from 'neverthrow';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { lazy } from 'solid-js';
 import PdfJsWorker from './PdfViewer/pdfjs-worker?worker';
 
 export const definition = defineBlock({

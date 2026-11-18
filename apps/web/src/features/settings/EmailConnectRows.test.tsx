@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   failure: vi.fn(),
 }));
 const [connected, setConnected] = createSignal(false);
-const [multiInbox, setMultiInbox] = createSignal(false);
 const [outlookOffered, setOutlookOffered] = createSignal(true);
 
 vi.mock('@core/email-link', () => ({
@@ -25,13 +24,9 @@ vi.mock('@queries/auth/outlook-link', () => ({
   fetchEmailConnectionProviders: mocks.providers,
   useOutlookAvailable: () => outlookOffered,
 }));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: multiInbox() }),
-}));
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_INBOX_RESYNC: false,
   ENABLE_INBOX_SYNC_STATUS: false,
-  enableMultiInbox: 'enable-multi-inbox',
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure, success: vi.fn() },
@@ -46,9 +41,6 @@ vi.mock('@queries/email/link', () => ({
 vi.mock('@app/features/calendar/components/TurnOffCalendarDialog', () => ({
   TurnOffCalendarDialog: () => null,
 }));
-vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
-  useCalendarUiFlag: () => () => false,
-}));
 vi.mock('./InboxSettingsOperations', () => ({
   InboxSettingsOperations: () => null,
 }));
@@ -56,7 +48,6 @@ vi.mock('./SignatureSection', () => ({ clearSignatureState: vi.fn() }));
 
 beforeEach(() => {
   setConnected(false);
-  setMultiInbox(false);
   setOutlookOffered(true);
   mocks.providers.mockResolvedValue({ outlook: true });
 });
@@ -91,13 +82,9 @@ it('stops before consent when Outlook closed after the row was shown', async () 
   expect(mocks.startAddInbox).not.toHaveBeenCalled();
 });
 
-it('offers another account only with multiple inboxes enabled', () => {
+it('offers another account once an inbox is connected', () => {
   setConnected(true);
   render(() => <EmailCard />);
-  expect(
-    screen.queryByRole('button', { name: 'Connect an Outlook account' })
-  ).toBeNull();
-  setMultiInbox(true);
   expect(
     screen.getByRole('button', { name: 'Connect an Outlook account' })
   ).toBeTruthy();

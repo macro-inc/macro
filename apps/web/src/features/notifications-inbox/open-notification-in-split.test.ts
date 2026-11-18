@@ -54,6 +54,7 @@ function teamRow(notifications = [request()]): NotificationInboxRow {
   return {
     id: 'team:team-1#password_access_requested:request-1',
     type: 'access_requested',
+    alsoListedAs: [],
     revision: 'rev-1',
     latestAt: 1,
     unseen: true,

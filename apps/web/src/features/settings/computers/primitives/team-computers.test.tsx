@@ -10,17 +10,15 @@ import { useTeamComputers } from './team-computers';
 
 const mocks = vi.hoisted(() => ({
   listComputers: vi.fn(),
+  rollout: vi.fn(),
   getHarnesses: vi.fn(),
 }));
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: false }),
-}));
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({ isPending: false, data: { id: 'team-1' } }),
 }));
 vi.mock('@service-auth/computers', () => ({
-  computersClient: { list: mocks.listComputers },
+  computersClient: { list: mocks.listComputers, rollout: mocks.rollout },
   COMPUTERS_UNAVAILABLE: 'COMPUTERS_UNAVAILABLE',
   BILLING_PROVIDER_FAILED: 'BILLING_PROVIDER_FAILED',
 }));
@@ -35,7 +33,8 @@ afterEach(() => {
   unmount = undefined;
 });
 
-it('shows and fetches no computers with enable-macro-computers off', async () => {
+it('shows and fetches no computers when the backend has not rolled them out', async () => {
+  mocks.rollout.mockResolvedValue(ok({ enabled: false }));
   mocks.listComputers.mockResolvedValue(ok([]));
   mocks.getHarnesses.mockResolvedValue(ok([]));
   const queryClient = new QueryClient({
@@ -56,5 +55,6 @@ it('shows and fetches no computers with enable-macro-computers off', async () =>
   expect(teamComputers?.enabled()).toBe(false);
   expect(teamComputers?.canPurchase()).toBe(false);
   expect(teamComputers?.computers()).toEqual([]);
+  expect(mocks.rollout).toHaveBeenCalled();
   expect(mocks.listComputers).not.toHaveBeenCalled();
 });

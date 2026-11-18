@@ -23,6 +23,11 @@ const gatewayLoadBalancer = getGatewayAlb();
 // NOTE: the BASE_NAME for sps does not match the pulumi project name so do not change
 const BASE_NAME = 'search-processing';
 const REPO_ROOT = '../../..';
+// Autoscaling follows CPU, not Kafka lag, and a deploy sets the desired count:
+// keep production at six tasks, one per partition of the email topic, while
+// its backlog drains, so a deploy or a scale-in does not leave the consumer
+// behind the topic's retention and no task carries two partitions' backlog.
+const MIN_TASKS = stack === 'prod' ? 6 : 1;
 
 type Args = {
   clusterName: pulumi.Output<string> | string;
@@ -267,7 +272,7 @@ export class SearchProcessingService extends pulumi.ComponentResource {
             }`,
           },
         },
-        desiredCount: 1,
+        desiredCount: MIN_TASKS,
       },
       {
         parent: this,
@@ -332,7 +337,7 @@ export class SearchProcessingService extends pulumi.ComponentResource {
       `${BASE_NAME}-service-scalable-target-${stack}`,
       {
         maxCapacity: stack === 'prod' ? 10 : 3,
-        minCapacity: 1,
+        minCapacity: MIN_TASKS,
         resourceId: pulumi.interpolate`service/${this.clusterName}/${this.service.service.name}`,
         scalableDimension: 'ecs:service:DesiredCount',
         serviceNamespace: 'ecs',

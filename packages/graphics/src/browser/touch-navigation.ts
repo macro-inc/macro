@@ -6,10 +6,60 @@ import { createGlide, type FingerPair, pinchStep } from '../pan-zoom';
 const GLIDE_RELEASE_MS = 150;
 /** How far back the pair's last moments are read to tell a pinch from a pan. */
 const PINCH_WINDOW_MS = 160;
+/** How long one finger rests before it is a long press, and how far it may drift. */
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP_PX = 10;
+/** How long after a long press lifts the browser's click for it may still come. */
+const LIFT_CLICK_MS = 500;
 
 const insideEditableText = (target: Element) =>
   target.closest('[contenteditable]')?.getAttribute('contenteditable') ===
   'true';
+
+/**
+ * A browser clicks whatever is under a finger as it lifts. Under a finger that
+ * long-pressed, that is what the host opened for the press (a menu, with a row
+ * there), and the browser clicks it although the press itself was cancelled.
+ * The lift belongs to the long press, so the mouse events and the click the
+ * browser makes for it stop here. A script's own `click()` is not the finger's
+ * and passes.
+ *
+ * Not every lift is followed by a click: a browser sends none once the hold is
+ * too long to be a tap. So this ends with the click, with the next press or
+ * key, or a moment after the lift, whichever comes first.
+ */
+function swallowLiftClick() {
+  const listening = new AbortController();
+  const { signal } = listening;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stop = () => {
+    clearTimeout(timer);
+    listening.abort();
+  };
+  const swallow = (event: Event) => {
+    if (!event.isTrusted) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (event.type === 'click') stop();
+  };
+  for (const type of ['mousedown', 'mouseup', 'click'])
+    window.addEventListener(type, swallow, { capture: true, signal });
+  window.addEventListener('keydown', stop, { capture: true, signal });
+  return {
+    /** The finger is up: its click comes now or not at all. */
+    lifted() {
+      if (!signal.aborted) timer ??= setTimeout(stop, LIFT_CLICK_MS);
+    },
+    /**
+     * A press is its own, and so is what it clicks. A finger landing beside
+     * the one that long-pressed is not a new press: that one has yet to lift.
+     */
+    pressed(event: PointerEvent) {
+      if (timer !== undefined || event.isPrimary) stop();
+    },
+    stop,
+  };
+}
 
 /**
  * Two fingers navigate, whatever the tool: their midpoint pans the camera and
@@ -24,6 +74,10 @@ const insideEditableText = (target: Element) =>
  * A pen or a mouse pressed on the surface keeps its gesture: fingers landing
  * meanwhile (a resting palm) are ignored, as they were before fingers navigated.
  *
+ * One finger held still is a long press when the host has a use for it. It
+ * voids the first finger's gesture the same way, and the finger then does
+ * nothing more: not before it lifts, and not by lifting.
+ *
  * The listeners sit on the window's capture phase so they see every touch on
  * the surface, including the ones a tool handler stops from propagating.
  */
@@ -33,6 +87,7 @@ export function attachTouchNavigation(
   options: {
     ignoreTarget?: (target: EventTarget | null) => boolean;
     navigation?: 'free' | 'centered-image';
+    longPress?: () => ((point: Point) => void) | undefined;
   } = {}
 ) {
   // Fingers on the surface in the order they landed, in client coordinates.
@@ -50,6 +105,16 @@ export function attachTouchNavigation(
   let cancelled = false;
   // Pens and mice pressed on the surface.
   const otherPointers = new Set<number>();
+  let longPress:
+    | { id: number; origin: Point; timer: ReturnType<typeof setTimeout> }
+    | undefined;
+
+  const cancelLongPress = () => {
+    if (longPress) clearTimeout(longPress.timer);
+    longPress = undefined;
+  };
+  // What the lift of the last long press would click.
+  let liftClick: ReturnType<typeof swallowLiftClick> | undefined;
 
   const glide = createGlide((delta) => {
     editor.panBy(delta);
@@ -90,7 +155,7 @@ export function attachTouchNavigation(
   // the browser sends when it takes a touch over for its own pan or zoom. This
   // surface opts out of that (`touch-action: none`) and navigates itself, so it
   // tells the gesture owners the same way.
-  const voidSingleFingerGesture = (landing: number) => {
+  const voidSingleFingerGesture = (landing?: number) => {
     voiding = true;
     for (const id of touches.keys()) {
       if (id === landing) continue;
@@ -139,6 +204,24 @@ export function attachTouchNavigation(
     editor.panZoomBy(step.pan, step.center, step.zoom);
   };
 
+  // Each finger reports its own moves, so two fingers ask twice a frame. The
+  // camera moves once per frame, to where both fingers are by then: every move
+  // of it re-lays out the whole scene.
+  let frame: number | undefined;
+  let frameTime = 0;
+  const navigateNextFrame = (time: number) => {
+    frameTime = time;
+    frame ??= requestAnimationFrame(() => {
+      frame = undefined;
+      navigate(frameTime);
+    });
+  };
+  const dropFrame = () => {
+    if (frame === undefined) return;
+    cancelAnimationFrame(frame);
+    frame = undefined;
+  };
+
   /**
    * A pinch does not fling. With one finger still and the other spreading, the
    * midpoint travels too, at half the speed the spread changes; two fingers
@@ -160,6 +243,7 @@ export function attachTouchNavigation(
   const pointerDown = (event: PointerEvent) => {
     // Any press catches a glide in flight.
     glide.cancel();
+    liftClick?.pressed(event);
     const target = event.target;
     if (!(target instanceof Element) || !element.contains(target)) return;
     if (event.pointerType !== 'touch') {
@@ -183,8 +267,28 @@ export function attachTouchNavigation(
     if (!touches.size) cancelled = false;
     if (!touches.size) selectionBefore = editor.getSession().selectedIds;
 
-    touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    if (touches.size < 2) return;
+    const point = { x: event.clientX, y: event.clientY };
+    touches.set(event.pointerId, point);
+    cancelLongPress();
+    if (touches.size < 2) {
+      const onLongPress = options.longPress?.();
+      if (!onLongPress) return;
+      const pressed = () => {
+        longPress = undefined;
+        // From here the finger is spent: it neither finishes what it started
+        // nor begins anything else before it lifts.
+        navigating = true;
+        voidSingleFingerGesture();
+        liftClick = swallowLiftClick();
+        onLongPress(point);
+      };
+      longPress = {
+        id: event.pointerId,
+        origin: point,
+        timer: setTimeout(pressed, LONG_PRESS_MS),
+      };
+      return;
+    }
 
     swallow(event);
     if (!navigating) {
@@ -203,15 +307,23 @@ export function attachTouchNavigation(
       otherPointers.delete(event.pointerId);
     if (!touches.has(event.pointerId)) return;
     touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (longPress?.id === event.pointerId) {
+      const drift = Math.hypot(
+        event.clientX - longPress.origin.x,
+        event.clientY - longPress.origin.y
+      );
+      if (drift > LONG_PRESS_SLOP_PX) cancelLongPress();
+    }
     if (!navigating) return;
 
     swallow(event);
-    if (pair?.ids.includes(event.pointerId)) navigate(event.timeStamp);
+    if (pair?.ids.includes(event.pointerId)) navigateNextFrame(event.timeStamp);
   };
 
   const pointerEnd = (event: PointerEvent) => {
     otherPointers.delete(event.pointerId);
     if (voiding || !touches.has(event.pointerId)) return;
+    if (longPress?.id === event.pointerId) cancelLongPress();
     if (!navigating) {
       touches.delete(event.pointerId);
       return;
@@ -220,6 +332,10 @@ export function attachTouchNavigation(
     swallow(event);
     if (event.type === 'pointercancel') cancelled = true;
     if (pair?.ids.includes(event.pointerId)) {
+      // The step below takes the fingers as they are now, so the frame that
+      // was waiting has nothing left to do. A finger that is not of the pair
+      // leaves that frame alone: the pair's last move is still owed.
+      dropFrame();
       // Take the lifting finger's last position (a cancelled touch reports
       // none), then hand over to the next pair if a third finger is still down.
       if (event.type === 'pointerup')
@@ -235,6 +351,7 @@ export function attachTouchNavigation(
     if (touches.size) return;
 
     navigating = false;
+    liftClick?.lifted();
     const flicked =
       !cancelled &&
       event.timeStamp - pairEndedAt <= GLIDE_RELEASE_MS &&
@@ -243,6 +360,19 @@ export function attachTouchNavigation(
     else glide.reset();
   };
 
+  // A surface that leaves one finger to the page lets the browser pan it
+  // (`touch-action: pan-x pan-y`), with any number of fingers. Two fingers
+  // are for the canvas: say so before the browser starts scrolling with them.
+  const touchMove = (event: TouchEvent) => {
+    if (navigating && event.cancelable) event.preventDefault();
+  };
+  // Fingers on the surface, by their touch events. The browser takes a
+  // finger's pointer events away once it scrolls the page with it, and the
+  // finger is still there.
+  let fingers = 0;
+  const countFingers = (event: TouchEvent) => {
+    fingers = event.targetTouches.length;
+  };
   const wheel = () => glide.cancel();
   // A press released in another window never reports its release here. Forget
   // it, or a mouse that went away pressed would keep fingers from navigating.
@@ -253,18 +383,29 @@ export function attachTouchNavigation(
   window.addEventListener('pointerup', pointerEnd, true);
   window.addEventListener('pointercancel', pointerEnd, true);
   element.addEventListener('wheel', wheel, { passive: true });
+  element.addEventListener('touchmove', touchMove, { passive: false });
+  element.addEventListener('touchstart', countFingers, { passive: true });
+  element.addEventListener('touchend', countFingers, { passive: true });
+  element.addEventListener('touchcancel', countFingers, { passive: true });
   window.addEventListener('blur', blur);
 
   return {
     /** Touches are down on the surface, so a WebKit gesture event duplicates them. */
-    tracking: () => touches.size > 0,
+    tracking: () => touches.size > 0 || fingers > 0,
     detach() {
       glide.cancel();
+      dropFrame();
+      cancelLongPress();
+      liftClick?.stop();
       window.removeEventListener('pointerdown', pointerDown, true);
       window.removeEventListener('pointermove', pointerMove, true);
       window.removeEventListener('pointerup', pointerEnd, true);
       window.removeEventListener('pointercancel', pointerEnd, true);
       element.removeEventListener('wheel', wheel);
+      element.removeEventListener('touchmove', touchMove);
+      element.removeEventListener('touchstart', countFingers);
+      element.removeEventListener('touchend', countFingers);
+      element.removeEventListener('touchcancel', countFingers);
       window.removeEventListener('blur', blur);
     },
   };

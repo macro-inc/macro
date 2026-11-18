@@ -174,10 +174,15 @@ async fn classify<'e>(
     document_ids: &[String],
 ) -> Result<Vec<Release>, sqlx::Error> {
     // Adopted: moved into a folder, shared (a grant to anyone but the owner,
-    // or sharing changed after import), or edited (a second version, a PDF
-    // highlight or placed comment, a comment thread). The OFFSET fences keep
-    // each check a probe per document; without them stale statistics turn
-    // a check into a hash of its whole table.
+    // or sharing changed after import), renamed, moved or reshared through
+    // `edit_document` (recorded as an `edited` activity), or edited (a second
+    // version with content of its own, a placeable added, changed or removed
+    // in the PDF viewer, a PDF highlight or placed comment, a comment thread).
+    // Opening is not adopting: the PDF viewer saves a version holding only its
+    // modification data on the first open by anyone who can edit, and again
+    // when it closes. The OFFSET fences keep each check a probe per document;
+    // without them stale statistics turn a check into a hash of its whole
+    // table.
     sqlx::query_as!(
         Release,
         r#"
@@ -205,7 +210,50 @@ async fn classify<'e>(
                         OFFSET 0
                     )
                     OR EXISTS (
-                        SELECT 1 FROM "DocumentInstance" i WHERE i."documentId" = d.id OFFSET 1
+                        SELECT 1
+                        FROM activity_events a
+                        WHERE a.entity_type = 'document'
+                            AND a.entity_id = d.id
+                            AND a.action = 'edited'
+                        OFFSET 0
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM "DocumentInstance" i
+                        WHERE i."documentId" = d.id
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM "DocumentInstanceModificationData" m
+                                WHERE m."documentInstanceId" = i.id
+                                OFFSET 0
+                            )
+                        OFFSET 1
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM (
+                            SELECT saved.placeables
+                            FROM "DocumentInstance" i
+                            CROSS JOIN LATERAL (
+                                SELECT CASE
+                                    WHEN jsonb_typeof(m."modificationData"->'placeables') = 'array'
+                                    THEN m."modificationData"->'placeables'
+                                    ELSE '[]'::jsonb
+                                END AS placeables
+                                FROM "DocumentInstanceModificationData" m
+                                WHERE m."documentInstanceId" = i.id
+                                OFFSET 0
+                            ) saved
+                            WHERE i."documentId" = d.id
+                            OFFSET 0
+                        ) saved
+                        HAVING COUNT(DISTINCT jsonb_array_length(saved.placeables)) > 1
+                            OR BOOL_OR(EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements(saved.placeables) p
+                                WHERE p->'originalIndex' = '-1'::jsonb
+                                    OR p->'wasEdited' = 'true'::jsonb
+                            ))
                     )
                     OR EXISTS (
                         SELECT 1 FROM "PdfHighlightAnchor" h WHERE h."documentId" = d.id OFFSET 0

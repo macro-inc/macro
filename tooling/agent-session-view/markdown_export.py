@@ -18,6 +18,8 @@ SLOWEST_GAPS = 8
 
 AGENT_CONTEXT = re.compile(r"<m-agent-context>.*?</m-agent-context>", re.S)
 CODE_TOOLS = {"ExecuteCode", "mcp__macro_internal__ExecuteCode"}
+# Tools whose program is in `rawInput.input` rather than `rawInput.source`.
+SHELL_TOOLS = {"BashCodeExecution", "TextEditorCodeExecution"}
 # Code-mode statuses of a program that did not succeed.
 FAILED_PROGRAM = ("failed", "timed_out", "cancelled")
 
@@ -182,9 +184,8 @@ def parse(frames, tool_spans=None):
             step = Step(len(turn.steps) + 1, "tool", started, started - previous, tool_name(update))
             step.span = span
             step.tool_number = sum(1 for each in turn.steps if each.kind == "tool") + 1
-            raw = dict(update.get("rawInput") or {})
-            step.code = raw.pop("source", None)
-            step.arguments = raw
+            step.arguments = {}
+            take_input(step, update.get("rawInput"))
             step.status = update.get("status") or "pending"
             calls[update.get("toolCallId")] = step
             turn.steps.append(step)
@@ -192,8 +193,14 @@ def parse(frames, tool_spans=None):
                 finish(step, update, t)
             previous = step.ended
             continue
-        elif kind == "tool_call_update" and update.get("status") in ("completed", "failed"):
+        elif kind == "tool_call_update":
             called = calls.get(update.get("toolCallId"))
+            # A streamed call announces itself first and sends its arguments,
+            # code included, in a later update.
+            if called is not None:
+                take_input(called, update.get("rawInput"))
+            if update.get("status") not in ("completed", "failed"):
+                continue
             step = None
             if called is not None:
                 finish(called, update, t)
@@ -209,6 +216,19 @@ def parse(frames, tool_spans=None):
             continue
         previous = t
     return turns
+
+
+def take_input(step, raw):
+    """Fold a call's arguments into its step, its program apart as `code`."""
+    if not raw:
+        return
+    raw = dict(raw)
+    code = raw.pop("source", None)
+    if code is None and step.name.removeprefix("mcp__macro_internal__") in SHELL_TOOLS:
+        code = raw.pop("input", None)
+    if code is not None:
+        step.code = code
+    step.arguments.update(raw)
 
 
 def nth_span(spans, n):
@@ -289,6 +309,7 @@ def render(export, contexts=()):
                     out.append(f"- turn {turn.number} step {step.number} `{step.name}`: {step.error}")
 
     full = [f"# Full code and results: {sid}", ""]
+    written = {}
     for turn in turns:
         took = f"{turn.ended - turn.started:.0f}s" if turn.ended else "unfinished"
         out += [
@@ -349,6 +370,16 @@ def render(export, contexts=()):
         answer = "".join(turn.answer).strip()
         if answer:
             out += ["", "Answer:", "", cut(answer, TEXT_BUDGET)]
+        literal = contexts[turn.number - 1].get("literal") if contexts else None
+        for part in (literal or {}).get("parts") or []:
+            if part.get("text") is None:
+                continue
+            full.append(f"## {turn.number} literal {part['label']} ({part['status']})\n")
+            if part["hash"] in written:
+                full.append(f"Same text as turn {written[part['hash']]}.\n")
+                continue
+            written[part["hash"]] = turn.number
+            full.append(fence(part["text"]) + "\n")
     return "\n".join(out) + "\n", "\n".join(full) + "\n"
 
 
@@ -388,8 +419,30 @@ def context_lines(context):
             for group in context["prompt"]["largest"] for name, size in group["parts"].items()
         ]
         lines.append(f"- largest prompt of {context['prompt']['calls']} model calls: {', '.join(parts)}")
+    literal = context.get("literal")
+    if literal:
+        lines += literal_lines(literal)
     for found in context["flags"]:
         lines.append(f"- **flag** `{found['id']}` ({found['level']}): {flag_text(found)}")
+    return lines
+
+
+def literal_lines(literal):
+    """How each rebuilt prompt part compares with the span; texts go to the full file."""
+    commit = literal.get("commit")
+    where = (
+        f"reconstructed from source at `{commit['sha'][:11]}`, "
+        f"{'exact' if commit['exact'] else '**inferred**'}: {commit['reason']}"
+    ) if commit else "no commit"
+    if literal.get("error"):
+        return [f"- literal prompt parts: **not rebuilt** ({where}): {literal['error'][:300]}"]
+    lines = [f"- literal prompt parts, {where} (texts in the full file):"]
+    for part in literal["parts"]:
+        status = "**MISMATCH**" if part["status"] == "mismatch" else part["status"]
+        size = f"span {kilobytes(part['span_bytes'])}" if part["bytes"] is None else (
+            f"{kilobytes(part['bytes'])}, span {kilobytes(part['span_bytes'])}"
+        )
+        lines.append(f"  - {part['label']}: {status}, {size}" + (f" ({part['note']})" if part["note"] else ""))
     return lines
 
 

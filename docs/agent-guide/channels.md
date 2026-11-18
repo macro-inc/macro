@@ -128,7 +128,21 @@ tab. Nothing exists on the server, so the DM is in neither person's list until
 the first message creates it and the view becomes the real conversation. Check
 that leaving without sending creates nothing, that the other person's list gains
 the DM only after the send, and that reloading a `pending-dm-` URL opens the
-Chat list on desktop and closes the pane on touch.
+Chat list on desktop and closes the pane on touch. Agent teammates are the
+exception: they write first, so their DM is created when it opens (see Agent
+teammates in [settings.md](settings.md#agent-teammates)).
+
+A person's first message in a new DM or group chat notifies its registered
+members as every later message does (an unread dot on the row, the Chat badge,
+and the message text in the push); people without an account get the
+invitation email instead. In a named channel, a person's first top-level
+message still invites the members it does not mention; a bot's first message
+does not. The recipient's open Chat list shows the new conversation without a
+reload. When the `soupUpdates` push for a channel created in the last few
+minutes says the viewer is a member, each list whose first page shows that
+channel type reads its first page again, for up to a minute, until the
+conversation is there, so a first read from a lagging replica does not leave it
+out.
 
 Sending a human
 message queues an immediate email for nonusers, including follow-up messages,
@@ -151,10 +165,11 @@ Team channels are always discoverable to the team. Private channels can only be 
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
 
 The channel header's Invite dialog and Participants add controls use paged personal
-suggestions, not a complete address book. Next options (or PageDown) replaces the
-window; selected people and typed external addresses remain independent. Existing
-members are excluded, including anyone who joins while selected. A large roster
-can leave a short or empty page with more options available. Add all teammates
+suggestions, not a complete address book. Scrolling to the end (or PageDown) lists
+the next page below the earlier ones, up to 500 people; selected people and typed
+external addresses remain independent. Existing members are excluded, including
+anyone who joins while selected. A large roster can leave a short or empty page;
+the picker reads on until a page matches or the directory ends. Add all teammates
 uses the current team roster, never just the visible suggestion page.
 
 The first message in a DM to an unregistered recipient sends an email saying
@@ -501,6 +516,9 @@ wrapping paragraph should stay expanded without briefly collapsing; check this
 after reopening the channel with a draft already saved. Open reply composers always place the editor
 above the action row, including for empty and single-line drafts, so the
 attachment, delete-reply, and send controls have their own space.
+A channel or thread open in two desktop tabs keeps one unsent draft: text typed
+and files attached or removed in one tab show in the other, sending from either
+clears both, and after a reload the draft appears once.
 Shift+Enter adds a line to the draft; Enter sends. The composer spaces its
 paragraphs the way the sent message does, so a multi-line draft reads as what
 it will send. Check a multi-line message against the draft that wrote it: the
@@ -599,6 +617,14 @@ a cached channel without typing `@`. Then open mentions, search, close, and reop
 results must reflect current people and entities, and scrolling or keyboard
 navigation must still load more results. Check both mobile and desktop.
 
+In a task, project, or document Discussion the `@` menu's people come from the
+contact directory. Until they arrive, People shows Macro and loading rows where
+the people and other agents will go, and a phone lists nothing below Macro yet.
+On a fresh load and on reopening, at desktop and phone width, no agent may show
+in a row a person then takes, and the menu must not change height as they land.
+When the people read fails (a busy cache times it out), the menu reads it again
+once by itself and shows "Couldn't load people" with Retry only if that fails too.
+
 The shared `@` menu also offers `Recent agent sessions` after Channels and
 before Companies (the latest 500 accessible sessions, searchable by title or
 persona). These inline chips show the shared
@@ -635,9 +661,8 @@ message; ordinary Markdown blockquotes remain presentation-only and do not count
 The composer always keeps an editable empty line after a block reference, including after
 the user deletes that line, so clicking below the reference can restore the text caret.
 
-The mention menu offers a single `@Macro`; the `enable-chat-v3-agents` rollout decides
-whether it answers in the thread as the classic bot or opens an agent session. Without the
-rollout, `@Macro` answers in the thread (classic bot). Its tool calls execute immediately — there is
+The mention menu offers a single `@Macro`, which opens an agent session. The classic
+in-channel bot, which the menu no longer offers, answers in the thread. Its tool calls execute immediately — there is
 no composer or pending-confirmation card in a channel, so asking it to create a calendar
 event without attendees creates the event right away (unlike an agent session, where
 creation waits for the session owner to review it). For an event with attendees the bot is prompted to
@@ -727,8 +752,7 @@ collapse control. The card never expands in place.
 
 Built-in provider agents are offered before account setup, each within its own
 rollout: `@cursor` requires the `enable-cursor-agents` flag (local override:
-`VITE_ENABLE_CURSOR_AGENTS`), and `@codex` requires both
-`enable-chat-v3-agents` and `enable-codex-agents` (local override:
+`VITE_ENABLE_CURSOR_AGENTS`), and `@codex` requires `enable-codex-agents` (local override:
 `VITE_ENABLE_CODEX_AGENTS`). Outside a rollout the entry is absent from
 the mention menu and from task agent assignees, even when that bot is already a
 channel participant. Custom agents keep their channel visibility rules

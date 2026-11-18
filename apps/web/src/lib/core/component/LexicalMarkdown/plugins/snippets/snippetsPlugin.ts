@@ -1,4 +1,3 @@
-import { enableSnippets, isFeatureEnabled } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { $dfsIterator, mergeRegister } from '@lexical/utils';
 import type { PeerIdValidator } from '@macro-inc/lexical-core';
@@ -201,9 +200,6 @@ function registerSnippetsPlugin(
   }
 
   function typeSymbolCommand() {
-    // Checked per keystroke so the PostHog flag applies without a reload;
-    // when disabled the `;` falls through as regular text.
-    if (!isFeatureEnabled(enableSnippets)) return false;
     const shouldTrigger = validTriggerPosition(editor);
     if (shouldTrigger) {
       editor.update(() => {

@@ -46,7 +46,8 @@ as exact; bounded personal-contact windows use their separate policy below.
 
 Ordinary entity relevance keeps its fixed per-item score. Personal contacts use
 exact normalized names, then every query word prefixing a name word in any order,
-then literal contains. Each tier is recent-first with stable identity ties: `jo sm`
+then literal contains, then address terms (`gmail.com`, or a local part unlike
+the name). Each tier is recent-first with stable identity ties: `jo sm`
 and `sm jo` can find John Smith; `jhn` cannot, while `ohn` can. Complete email
 addresses and Macro IDs are exact identities, never display-name aliases.
 Incomplete typed addresses use email-prefix matching.

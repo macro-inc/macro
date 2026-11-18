@@ -1,6 +1,7 @@
 import type {
   ApiContactInfo,
   ApiDraftContactInfo,
+  ApiThreadPreviewCursorInner,
   CalendarInvitation,
   GetThreadResponses,
   MailboxOperation,
@@ -235,6 +236,23 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
   /** A handle to a thread by id. Details load on first access. */
   static byId(client: MacroClient, id: string): EmailThread {
     return new EmailThread(client, id);
+  }
+
+  /**
+   * A handle seeded from an inbox preview with the thread columns it carries.
+   * Its subject is the latest message's and its times are inbox sort times,
+   * so `subject()` and the timestamps still read the thread.
+   */
+  static fromPreview(
+    client: MacroClient,
+    preview: ApiThreadPreviewCursorInner,
+  ): EmailThread {
+    return new EmailThread(client, preview.id).withListed({
+      is_read: preview.isRead,
+      inbox_visible: preview.inboxVisible,
+      link_id: preview.linkId,
+      provider_id: preview.providerId,
+    });
   }
 
   /** When the thread was created. */
@@ -504,7 +522,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     );
   }
 
-  /** Search email threads by subject and content, most relevant first, auto-paginated. */
+  /** Search email threads by subject and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { email_filters: {} },
     type: 'email',

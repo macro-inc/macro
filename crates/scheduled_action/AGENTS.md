@@ -75,8 +75,8 @@ each run.
   how to use found and left items (`finding/items.md`: a trigger filter by
   id, a code step's text knob by exact name, Ask AI instructions or a
   condition by name and id; a new item the request asks for is created
-  once and used by id), the code-step guide, Macro's catalog code
-  routines as examples, and the reference of the routines and `ai` areas.
+  once and used by id), the code-step guide, the catalog's code
+  routines marked `example`, and the reference of the routines and `ai` areas.
   They are the same for every draft on one model with the same mix of
   code and conditions, so the agent puts them in its cached prompt prefix
   (`PrepareRoutineSession::instructions`). A code step never messages or
@@ -137,7 +137,8 @@ each run.
   (the draft's shape, one run of the routine, a blind judge); `compare`
   says win, loss or noise against a baseline (see its README). Run it
   before and after a change to the instructions, the wait or anything else
-  on the drafting path.
+  on the drafting path. Routine *suggestions* have their own bench,
+  `crates/suggestion_generation/bench/`, which reuses `bench/stack.ts`.
 - `src/domain/drafts/jobs.rs` + `src/inbound/draft_job_router.rs`:
   background drafts, the same drafter without the waiting request. `POST
   /scheduled-actions/draft-jobs` validates the request and waits only for

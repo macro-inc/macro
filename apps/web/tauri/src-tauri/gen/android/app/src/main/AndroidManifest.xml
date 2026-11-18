@@ -17,8 +17,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:theme="@style/Theme.app"
-        android:usesCleartextTraffic="${usesCleartextTraffic}">
+        android:theme="@style/Theme.app">
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|fontScale|density|layoutDirection|navigation"
             android:launchMode="singleTask"

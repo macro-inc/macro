@@ -120,6 +120,20 @@ details.ctx { margin-top: 6px; font-size: 12px; color: var(--muted); }
 details.ctx pre { white-space: pre-wrap; }
 .end { color: var(--muted); font-size: 12.5px; padding: 6px 2px 0; }
 .hidden { display: none !important; }
+.card.literal { grid-column: 1 / -1; }
+.card.literal .part { margin: 3px 0; }
+.card.literal summary { cursor: pointer; }
+.status { display: inline-block; border-radius: 4px; padding: 0 6px; font-size: 11px; font-weight: 600; }
+.status.ok { background: var(--tool-soft); color: var(--ink); }
+.status.bad { background: var(--fail); color: #fff; }
+.status.warn { background: var(--warn-soft); color: var(--ink); border: 1px solid var(--warn); }
+.status.muted { background: var(--chip); color: var(--muted); }
+.warn-text { color: var(--warn); }
+.literal-error { background: var(--fail-soft); border: 1px solid var(--fail); color: var(--ink); border-radius: 6px; padding: 4px 8px; margin: 6px 0; font-weight: 600; }
+pre.literal-text { max-height: 480px; }
+.stream { margin: 4px 0 6px; }
+.stream .label { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.stream.bad pre { background: var(--fail-soft); }
 .theme { margin-left: auto; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 12px; }
 .keys { color: var(--muted); font-size: 11.5px; }
 .keys kbd { font-family: var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; background: var(--bg); }
@@ -179,6 +193,7 @@ mark { background: var(--warn-soft); color: inherit; }
     <input type="search" id="search" placeholder="Filter steps by text…">
     <label><input type="checkbox" id="expandThinking"> expand thinking</label>
     <label><input type="checkbox" id="expandTools"> expand tool calls</label>
+    <label><input type="checkbox" id="expandCode" checked> show code runs</label>
     <label><input type="checkbox" id="onlyFailures"> failures only</label>
     <label><input type="checkbox" id="hideThinking"> hide thinking</label>
     <span class="keys"><kbd>n</kbd>/<kbd>p</kbd> next/previous failure · <kbd>j</kbd>/<kbd>k</kbd> next/previous turn</span>
@@ -197,6 +212,23 @@ const parseTime = s => Date.parse(String(s).replace(' ', 'T').replace(/(\.\d{3})
 const secs = ms => ms == null ? '–' : ms < 1000 ? `${Math.round(ms)}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m${Math.round(ms % 60000 / 1000)}s`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const el = (tag, attrs = {}, html = '') => { const n = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); n.innerHTML = html; return n; };
+
+// The language of each code tool's program; ExecuteCode's is in
+// `rawInput.source`, the others' in `rawInput.input`.
+const CODE_LANGUAGES = { ExecuteCode: 'javascript', BashCodeExecution: 'bash', TextEditorCodeExecution: 'plaintext' };
+
+function takeInput(item, raw) {
+  if (!raw || typeof raw !== 'object') return;
+  const input = { ...raw };
+  let code = input.source;
+  delete input.source;
+  if (code === undefined && item.name !== 'ExecuteCode' && CODE_LANGUAGES[item.name] && input.input !== undefined) {
+    code = input.input;
+    delete input.input;
+  }
+  if (code !== undefined) item.source = typeof code === 'string' ? code : JSON.stringify(code, null, 2);
+  Object.assign(item.input, input);
+}
 
 function buildTurns(frames) {
   // A provider can reuse a tool call id: updates go to its latest call, and
@@ -220,15 +252,16 @@ function buildTurns(frames) {
       if (previous && previous.kind === k) { previous.text += text; previous.end = t; }
       else turn.items.push({ kind: k, text, start: t, end: t });
     } else if (kind === 'tool_call') {
-      const input = { ...(update.rawInput || {}) }, source = input.source;
-      delete input.source;
-      const item = { kind: 'tool', id: update.toolCallId, title: update.title, name: (update._meta?.macro?.toolName || update.title || '?').replace(/^mcp__macro_internal__/, ''), input, source, start: t, end: null, status: update.status || 'pending', output: undefined, content: null };
+      const item = { kind: 'tool', id: update.toolCallId, title: update.title, name: (update._meta?.macro?.toolName || update.title || '?').replace(/^mcp__macro_internal__/, ''), input: {}, source: undefined, start: t, end: null, status: update.status || 'pending', output: undefined, content: null };
+      takeInput(item, update.rawInput);
       item.occurrence = occurrences[update.toolCallId] = (occurrences[update.toolCallId] ?? -1) + 1;
       tools[update.toolCallId] = item;
       turn.items.push(item);
     } else if (kind === 'tool_call_update') {
       const item = tools[update.toolCallId];
       if (!item) continue;
+      // A streamed call sends its arguments, code included, after it starts.
+      takeInput(item, update.rawInput);
       if (update.status) item.status = update.status;
       if (update.rawOutput !== undefined) item.output = update.rawOutput;
       if (update.content) item.content = update.content;
@@ -367,16 +400,39 @@ function toolBody(item) {
   const body = el('div', { class: 'body' });
   if (Object.keys(item.input).length) { body.append(el('h4', {}, 'Arguments')); body.append(jsonBlock(item.input)); }
   if (item.source) {
-    body.append(el('h4', {}, 'Code'));
-    const pre = el('pre', { class: 'code' }), code = el('code', { class: 'language-javascript' });
+    body.append(el('h4', {}, `Code · ${item.source.split('\n').length} lines`));
+    const pre = el('pre', { class: 'code' }), code = el('code', { class: `language-${CODE_LANGUAGES[item.name] || 'javascript'}` });
     code.textContent = item.source;
     pre.append(code); body.append(pre);
     if (window.hljs) hljs.highlightElement(code);
   }
   const out = item.output !== undefined ? item.output : item.content;
   body.append(el('h4', {}, `Result · ${esc(item.status)}${item.softFail ? ' (reported failure)' : ''}`));
-  body.append(out === undefined || out === null ? el('div', { class: 'event' }, 'no output recorded') : jsonBlock(out));
+  if (out === undefined || out === null) body.append(el('div', { class: 'event' }, 'no output recorded'));
+  else body.append(...codeResult(out), jsonBlock(out));
   return body;
+}
+
+// The parts of a code run's result worth reading first: its error, and a
+// shell's output streams. The whole result follows them.
+function codeResult(out) {
+  if (!out || typeof out !== 'object') return [];
+  const parts = [];
+  const block = (label, text, cls = '') => {
+    if (text === undefined || text === null || text === '') return;
+    const wrap = el('div', { class: `stream ${cls}` }, `<div class="label">${esc(label)}</div>`);
+    const pre = el('pre', { class: 'json' });
+    pre.textContent = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
+    wrap.append(pre);
+    parts.push(wrap);
+  };
+  block('error', out.error, 'bad');
+  const shell = out.content && typeof out.content === 'object' && !Array.isArray(out.content) ? out.content : null;
+  if (shell && ('stdout' in shell || 'stderr' in shell)) {
+    block(`stdout${shell.return_code != null ? ` · exit ${shell.return_code}` : ''}`, shell.stdout);
+    block('stderr', shell.stderr, 'bad');
+  }
+  return parts;
 }
 
 function renderTool(item) {
@@ -384,6 +440,7 @@ function renderTool(item) {
   const status = item.status === 'failed' ? 'failed' : item.softFail ? 'soft' : item.status === 'completed' ? 'ok' : 'pending';
   const node = el('details', { class: `tool ${status}`, id: item.dom });
   node.dataset.tool = item.name;
+  node.dataset.code = item.source ? '1' : '';
   node.dataset.failed = status === 'failed' || status === 'soft' ? '1' : '';
   node.append(el('summary', {}, `<span class="dot"></span><span class="num">#${item.n}</span><span class="name">${esc(item.name)}</span>` +
     `<span class="args-inline">${esc(item.source ? item.source.replace(/\s+/g, ' ').slice(0, 160) : oneLine(item.input))}</span>` +
@@ -541,6 +598,7 @@ function renderContext(turn) {
       : `<details><summary>${tools.deferred.length} deferred MCP tools of ${num(tools.offered)} listed${tools.offered_cut ? ' (listing cut short)' : ''}</summary>${nameChips(tools.deferred, used)}</details>`));
   card.querySelectorAll('a[data-dom]').forEach(a => a.onclick = e => { e.preventDefault(); jumpTo(a.dataset.dom); });
   wrap.append(card);
+  if (context.literal) wrap.append(renderLiteral(context.literal));
 
   const largest = context.prompt.largest;
   if (largest) {
@@ -555,6 +613,47 @@ function renderContext(turn) {
     wrap.append(promptCard);
   }
   return wrap;
+}
+
+const LITERAL_STATUS = {
+  verified: ['ok', '✓ verified'], mismatch: ['bad', '✕ MISMATCH'], unverified: ['warn', 'unverified'], 'not reconstructed': ['muted', 'not reconstructed'],
+};
+
+// The turn's prompt parts as rebuilt from source at the commit that served
+// it, each checked against the bytes and hash the span recorded.
+function renderLiteral(literal) {
+  const card = el('div', { class: 'card literal' });
+  const commit = literal.commit;
+  const where = commit
+    ? `reconstructed from source at <code>${esc(commit.sha.slice(0, 11))}</code> · ${commit.exact ? 'exact' : '<b class="warn-text">inferred</b>'}: ${esc(commit.reason)}`
+    : '';
+  card.innerHTML = `<h5>Literal prompt parts</h5><div class="muted">${where}</div>`;
+  if (literal.error) {
+    card.append(el('div', { class: 'literal-error' }, `Not rebuilt: ${esc(literal.error)}`));
+    return card;
+  }
+  const wrong = literal.parts.filter(part => part.status === 'mismatch');
+  if (wrong.length) card.append(el('div', { class: 'literal-error' }, `MISMATCH: ${wrong.map(part => esc(part.label)).join(', ')} differ from what the span recorded`));
+  for (const part of literal.parts) {
+    const [tone, label] = LITERAL_STATUS[part.status] || ['muted', esc(part.status)];
+    const size = part.bytes == null
+      ? `span ${kb(part.span_bytes)}`
+      : `${kb(part.bytes)}${part.span_bytes != null && part.span_bytes !== part.bytes ? ` vs span ${kb(part.span_bytes)}` : ''}${part.span_hash ? ` · hash ${esc(part.hash)}${part.span_hash !== part.hash ? ` vs span ${esc(part.span_hash)}` : ''}` : ''}`;
+    const head = `<span class="status ${tone}">${label}</span> <b>${esc(part.label)}</b> <span class="muted">${size}${part.note ? ' · ' + esc(part.note) : ''}</span>`;
+    const text = part.hash ? DATA.literal_texts?.[part.hash] : null;
+    if (text == null) { card.append(el('div', { class: 'part' }, head)); continue; }
+    const details = el('details', { class: 'part' }, `<summary>${head}</summary>`);
+    let shown = false;
+    details.addEventListener('toggle', () => {
+      if (!details.open || shown) return;
+      const pre = el('pre', { class: 'json literal-text' });
+      pre.textContent = text;
+      details.append(pre);
+      shown = true;
+    });
+    card.append(details);
+  }
+  return card;
 }
 
 // A sticky bar per turn: its number, flags and one square per tool call,
@@ -751,6 +850,9 @@ document.getElementById('theme').onclick = () => {
   setTheme(next);
   try { localStorage.setItem('asv-theme', next); } catch {}
 };
+const openCode = open => document.querySelectorAll('details.tool[data-code="1"]').forEach(d => d.open = open);
+openCode(document.getElementById('expandCode').checked);
+document.getElementById('expandCode').addEventListener('change', e => openCode(e.target.checked));
 document.getElementById('expandTools').addEventListener('change', e => document.querySelectorAll('details.tool').forEach(d => d.open = e.target.checked));
 </script>
 </body>

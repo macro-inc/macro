@@ -1,24 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  calendarUiEnabled: true,
   calendarSearchEnabled: true,
-  snippetsEnabled: true,
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
-  enableCalendarUi: { key: 'enable-calendar-ui' },
-  enableSnippets: { key: 'enable-snippets' },
   enableSupportedSoupForeignEntities: {
     key: 'enable-supported-soup-foreign-entities',
   },
   isCalendarSearchUiEnabled: () => mocks.calendarSearchEnabled,
   isFeatureEnabled: (flag: { key?: string }) => {
     switch (flag.key) {
-      case 'enable-calendar-ui':
-        return mocks.calendarUiEnabled;
-      case 'enable-snippets':
-        return mocks.snippetsEnabled;
       case 'enable-supported-soup-foreign-entities':
         return false;
       default:
@@ -28,9 +20,7 @@ vi.mock('@core/constant/featureFlags', () => ({
 }));
 
 afterEach(() => {
-  mocks.calendarUiEnabled = true;
   mocks.calendarSearchEnabled = true;
-  mocks.snippetsEnabled = true;
 });
 
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -41,18 +31,14 @@ import { compileToAst, queryStateFrom } from '../filters/filter-store/compile';
 import { VIEW_TAB_LISTS } from '../soup-view/tab-lists';
 import { getViewPreset, VIEW_TAB_PRESETS } from './soup-filter-presets';
 
-it.each([true, false])(
-  'preserves document exclusions with snippets enabled=%s',
-  (enabled) => {
-    mocks.snippetsEnabled = enabled;
-    const query = compileSearchQuery({
-      ...parseSearchFilters(''),
-      type: 'document-or-file',
-    });
-    expect(query.exclude?.subType).toContain('task');
-    expect(query.exclude?.subType?.includes('snippet') ?? false).toBe(!enabled);
-  }
-);
+it('preserves document exclusions without excluding snippets', () => {
+  const query = compileSearchQuery({
+    ...parseSearchFilters(''),
+    type: 'document-or-file',
+  });
+  expect(query.exclude?.subType).toContain('task');
+  expect(query.exclude?.subType?.includes('snippet') ?? false).toBe(false);
+});
 
 const mailTabs = Object.keys(VIEW_TAB_PRESETS.mail.tabs);
 
@@ -80,35 +66,30 @@ describe('documents view GraphQL input contract', () => {
   const context = { userId: 'macro|phase-0@example.com', isTeamAdmin: false };
   const tabs = ['owned', 'shared', 'attachments', 'all'] as const;
 
-  it.each([true, false])(
-    'captures every production tab with snippets enabled=%s',
-    (snippetsEnabled) => {
-      mocks.snippetsEnabled = snippetsEnabled;
+  it('captures every production tab', () => {
+    const inputs = Object.fromEntries(
+      tabs.map((tab) => {
+        const preset = getViewPreset('documents', tab, context);
+        if (!preset) throw new Error(`missing documents/${tab} preset`);
 
-      const inputs = Object.fromEntries(
-        tabs.map((tab) => {
-          const preset = getViewPreset('documents', tab, context);
-          if (!preset) throw new Error(`missing documents/${tab} preset`);
+        return [
+          tab,
+          makeGraphqlSoupInput({
+            params: {
+              limit: 100,
+              sort_method: preset.sortMethod ?? 'updated_at',
+              ...(preset.sortDirection
+                ? { sort_direction: preset.sortDirection }
+                : {}),
+            },
+            body: compileToAst(queryStateFrom(preset.filters)),
+          }),
+        ];
+      })
+    );
 
-          return [
-            tab,
-            makeGraphqlSoupInput({
-              params: {
-                limit: 100,
-                sort_method: preset.sortMethod ?? 'updated_at',
-                ...(preset.sortDirection
-                  ? { sort_direction: preset.sortDirection }
-                  : {}),
-              },
-              body: compileToAst(queryStateFrom(preset.filters)),
-            }),
-          ];
-        })
-      );
-
-      expect(inputs).toMatchSnapshot();
-    }
-  );
+    expect(inputs).toMatchSnapshot();
+  });
 });
 
 describe('task view presets', () => {
@@ -176,17 +157,6 @@ describe('inbox view presets', () => {
     // not-done notification come back.
     expect(ast.calf).toEqual({
       '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }],
-    });
-  });
-
-  it('keeps calendar events nil-scoped when the calendar flag is off', () => {
-    mocks.calendarUiEnabled = false;
-
-    const filters = getViewPreset('home', 'signal')?.filters;
-    const ast = compileToAst(queryStateFrom(filters!));
-
-    expect(ast.calf).toEqual({
-      l: { id: '00000000-0000-0000-0000-000000000000' },
     });
   });
 });

@@ -21,9 +21,7 @@ import { getPermissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import {
-  enableCalendarUi,
   enablePasswords,
-  enableProjects,
   enableWhatsappLinked,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
@@ -35,7 +33,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { openExternalUrl } from '@core/util/url';
 import { Telemetry } from '@macro-inc/observability';
-import { cachedUserId } from '@queries/auth/cached-user-id';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import type { PushNotificationNavigation } from '@service-notification/generated/schemas/pushNotificationNavigation';
 import { errAsync, ResultAsync } from 'neverthrow';
@@ -537,7 +534,6 @@ function getSupportedHandler(
         };
       })
       .with('initiative_discussion', () => {
-        if (!isFeatureEnabled(enableProjects)) return null;
         const meta = notification.notification_metadata;
         if (
           meta.tag !== 'initiative_discussion' ||
@@ -591,13 +587,6 @@ function getSupportedHandler(
         if (meta.tag !== 'calendar_event_reminder') return null;
 
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          // A reminder delivered before the flag closed still has a live
-          // notification; opening it must not reach a surface the user is no
-          // longer meant to have.
-          if (!isFeatureEnabled(enableCalendarUi)) {
-            onApplied?.();
-            return;
-          }
           const content = meta.content;
           const time = content.startsAt
             ? {
@@ -630,10 +619,6 @@ function getSupportedHandler(
 
         // The request is answered from the shared event's details.
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          if (!isFeatureEnabled(enableCalendarUi)) {
-            onApplied?.();
-            return;
-          }
           openCalendarView(
             { eventId: meta.content.eventId },
             {
@@ -770,10 +755,10 @@ function getSupportedHandler(
               return;
             }
             // Loaded on demand: the DM lookup pulls in the channel list.
-            const { openDirectMessage } = await import(
-              '@core/util/open-direct-message'
+            const { openTeamAgentDirectMessage } = await import(
+              '@core/util/open-team-agent-direct-message'
             );
-            await openDirectMessage(cachedUserId(), agent.userId, (content) =>
+            await openTeamAgentDirectMessage(agent.userId, (content) =>
               openContent(lm, content, { newSplit, sourceHandle, onApplied })
             );
           };
@@ -807,6 +792,24 @@ export function openRuntimesSettings(
       id: 'settings',
       entryMetadata: {
         route: paneRoute({ id: 'settings', params: { tab: 'harness' } }),
+      },
+    },
+    options
+  );
+}
+
+/** Settings → Billing, where a declined card is updated. */
+export function openBillingSettings(
+  layoutManager: SplitManager,
+  options: OpenOptions
+) {
+  openContent(
+    layoutManager,
+    {
+      type: 'component',
+      id: 'settings',
+      entryMetadata: {
+        route: paneRoute({ id: 'settings', params: { tab: 'billing' } }),
       },
     },
     options

@@ -62,8 +62,8 @@ attribution) instead of sniffing request headers. A Macro API token's signed
 `agent_id` and `routine_id` reach `MacroUserAuthentication`;
 `attribution()` reads them as `CredentialAttribution`. Routes where only a
 person may decide, answer or approve (review decisions, elicitation and
-permission answers, held tool-call approvals, the email sign-in, call tokens)
-refuse anything but `Person` through `is_program_run(attribution, headers)`;
+permission answers, held tool-call approvals, the email sign-in, call tokens, Google and GitHub
+link starts) refuse anything but `Person` through `is_program_run(attribution, headers)`;
 sign-in routes answer with `PROGRAM_SIGN_IN_REFUSAL`. Routes that only ask a
 program to confirm (email send and schedule, calendar create) use `is_agent_run`,
 which leaves owner routine steps (`Routine`) alone so scheduled sends keep
@@ -85,6 +85,7 @@ the account, or changes its managers.
 
 ## Gotchas
 
+- `rewrite_program_json` rewrites a JSON response only for a program's request (`request_is_program`: the header, or the request's own user token, from `request_credential`, signed for an agent or routine run). Layer it inside compression, so it reads the handler's JSON.
 - Both extractors read the request's credential only through
   `macro_auth::credential::request_credential`, the same reading the agent
   scope check (`agent_correlation`) uses, so the two can't disagree. A user

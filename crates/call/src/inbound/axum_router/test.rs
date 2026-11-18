@@ -348,7 +348,7 @@ mod authenticated_join_routes {
         ))
     }
 
-    fn router(service: MockCallService) -> axum::Router {
+    pub(super) fn router(service: MockCallService) -> axum::Router {
         router_with_flag(service, true)
     }
 
@@ -876,5 +876,140 @@ mod scoped_edits {
             .unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
         assert_eq!(*shares.lock().unwrap(), [false, true]);
+    }
+}
+
+mod call_record_urls {
+    use macro_authorization::CredentialAttribution;
+    use uuid::Uuid;
+
+    fn recorded_call() -> crate::domain::models::CallRecord {
+        crate::domain::models::CallRecord {
+            discussion: crate::domain::models::CallDiscussion::CallChat {
+                call_id: Uuid::nil(),
+            },
+            call_id: Uuid::nil(),
+            channel_id: None,
+            room_name: None,
+            created_by: "macro|member@example.com".to_string(),
+            started_at: chrono::DateTime::UNIX_EPOCH,
+            ended_at: None,
+            duration_ms: None,
+            egress_id: None,
+            recording_started_at: None,
+            recording_key: Some("recordings/r1.mp4".to_string()),
+            preview_key: Some("recordings/r1.jpg".to_string()),
+            recording_url: Some("https://bucket.example/r1.mp4?X-Amz-Signature=secret".to_string()),
+            recording_preview_url: Some(
+                "https://bucket.example/r1.jpg?X-Amz-Signature=secret".to_string(),
+            ),
+            channel_name: None,
+            custom_name: None,
+            summary: None,
+            team_share_access_level: None,
+            share_with_team: false,
+            is_active: false,
+            status: None,
+            user_access_level: None,
+            viewer_has_declined: false,
+            participants: Vec::new(),
+            guests: Vec::new(),
+            transcript: Vec::new(),
+            source: None,
+        }
+    }
+
+    /// A presigned recording URL is a bearer secret for as long as it lasts:
+    /// a program reads the call without it and fetches the bytes through
+    /// Macro's recording route instead.
+    #[test]
+    fn a_program_reads_a_call_record_without_presigned_urls() {
+        let mut code_mode = axum::http::HeaderMap::new();
+        code_mode.insert(
+            macro_authorization::CODE_EXECUTION_HEADER,
+            "1".parse().unwrap(),
+        );
+        let browser = axum::http::HeaderMap::new();
+        for (program, attribution, headers) in [
+            ("an agent run", CredentialAttribution::Agent, &browser),
+            (
+                "an owner-identity routine run",
+                CredentialAttribution::Routine,
+                &browser,
+            ),
+            (
+                "the code-mode runtime",
+                CredentialAttribution::Person,
+                &code_mode,
+            ),
+        ] {
+            let record = super::super::without_presigned_urls_for_programs(
+                recorded_call(),
+                attribution,
+                headers,
+            );
+            assert_eq!(record.recording_url, None, "{program}");
+            assert_eq!(record.recording_preview_url, None, "{program}");
+            assert!(
+                record.recording_key.is_some(),
+                "{program}: the bytes stay reachable"
+            );
+        }
+        let person = super::super::without_presigned_urls_for_programs(
+            recorded_call(),
+            CredentialAttribution::Person,
+            &browser,
+        );
+        assert!(person.recording_url.is_some(), "a person keeps the URLs");
+    }
+}
+
+mod meeting_links {
+    use super::authenticated_join_routes::router;
+    use crate::domain::ports::MockCallService;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tower::ServiceExt;
+    use uuid::Uuid;
+
+    async fn mint_link(bearer: &str, code_execution: bool) -> StatusCode {
+        let mut service = MockCallService::new();
+        service.expect_share_call().never();
+        let mut request = Request::post(format!("/record/{}/link", Uuid::nil()))
+            .header("authorization", format!("Bearer {bearer}"));
+        if code_execution {
+            request = request.header(macro_authorization::CODE_EXECUTION_HEADER, "1");
+        }
+        router(service)
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+            .status()
+    }
+
+    /// A new meeting link for a call lets anyone holding it join as a guest,
+    /// so a program never mints one; a person shares the call from Macro.
+    #[tokio::test]
+    async fn a_program_cannot_mint_a_link_for_a_call() {
+        for (program, bearer, code_execution) in [
+            ("an agent run", "agent-jwt", false),
+            ("an owner-identity routine run", "routine", false),
+            ("the code-mode runtime", "member", true),
+        ] {
+            assert_eq!(
+                mint_link(bearer, code_execution).await,
+                StatusCode::FORBIDDEN,
+                "{program}"
+            );
+        }
+    }
+
+    /// A person passes the guard; this test router's access store then
+    /// answers, so anything but 403 shows the guard let it through.
+    #[tokio::test]
+    async fn a_person_passes_the_guard() {
+        assert_ne!(mint_link("member", false).await, StatusCode::FORBIDDEN);
     }
 }

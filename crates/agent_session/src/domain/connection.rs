@@ -350,6 +350,22 @@ where
         self.closed.cancelled().await;
     }
 
+    /// Tell the runtime the agents bound to it may have changed.
+    pub async fn agents_changed(&self) -> std::result::Result<(), TransportError> {
+        self.outbound.send(ToRuntimeMessage::AgentsChanged).await
+    }
+
+    /// Hand the runtime an agent teammate's environment to run. Nothing
+    /// answers; the agent's own online report confirms it.
+    pub async fn apply_agent(
+        &self,
+        environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+    ) -> Result<(), TransportError> {
+        self.outbound
+            .send(ToRuntimeMessage::ApplyAgent { environment })
+            .await
+    }
+
     /// Ask the runtime to inspect a separate fresh ACP process and await the
     /// next answer this connection produces.
     ///
