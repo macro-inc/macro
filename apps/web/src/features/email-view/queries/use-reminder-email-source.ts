@@ -233,7 +233,7 @@ export function useReminderEmailSource(
       !failed().length &&
       !loadError() &&
       !collection.error,
-    rows: () => entities().length,
+    rows: () => entities().map((email) => email.id),
     hasNextPage: () => !!collection.hasNextPage,
     loadMore,
   });

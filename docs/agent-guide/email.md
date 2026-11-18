@@ -379,11 +379,13 @@ tutorial row, a spinner while the search runs (from the first character), and
 rows. A page that adds no row (an alias, saved view or client-side filter drops
 its hits, or the service's done check for Archived read its bound of index pages
 without keeping one) is read past by itself, after the first page and after each
-Load More, up to five pages per load (`MAX_PAGES_PER_LOAD`). A load that ends
-there without a row leaves `No matches in the next pages. Search further`, which
-reads five more. Check with a term that matches many inbox threads and few
-archived ones: every Load More adds a row or ends on that label, never a click
-that adds nothing. To check the tab switch,
+Load More, up to five pages per load (`MAX_PAGES_PER_LOAD`). A load stops at
+a new row, at the end of the results (Load More goes away), on an error, or at
+that cap; one that reaches the cap without a row leaves `No matches in the next
+pages. Search further`, which reads up to five more. Check with a term that
+matches many inbox threads and few archived ones: every Load More adds a row,
+ends the results, or ends on that label, never a click that adds nothing. To
+check the tab switch,
 rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
 network read must not leave the old rows visible or expose their Load more action.
 

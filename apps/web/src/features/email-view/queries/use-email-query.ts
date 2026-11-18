@@ -580,8 +580,12 @@ export function useEmailDataSource(
   // A page of hits can leave no rows: membership or a client-side facet drops
   // them, or the service's state checks (Archived's done) ran out before
   // keeping one. Page on, a bounded run per load, until a row shows.
+  // Favorites search sends the favorite ids, so a new set is a new search.
+  const searchScope = createMemo(() =>
+    showsFavorites() ? JSON.stringify([scope(), favoriteThreadIds()]) : scope()
+  );
   const emptyPages = advanceEmptyPages({
-    scope,
+    scope: searchScope,
     enabled: () => sourceEnabled() && usesServiceSearch(),
     ready: () =>
       filtersReady() &&
@@ -593,7 +597,7 @@ export function useEmailDataSource(
       !search.error() &&
       !aliasSearchError() &&
       !retainedQueries().some((query) => query.error()),
-    rows: () => entities().length,
+    rows: () => entities().map((email) => email.id),
     hasNextPage: search.hasNextPage,
     loadMore: search.fetchNextPage,
   });
