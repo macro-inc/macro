@@ -239,6 +239,12 @@ pkgs.testers.runNixOSTest {
             assert actual == value, f"{key} = {actual}, wanted {value}"
         host.succeed("test \"$(cat /sys/kernel/mm/ksm/run)\" = 0")
 
+    with subtest("the only swap is zram"):
+        host.wait_until_succeeds("grep -q '^/dev/zram0 ' /proc/swaps", timeout=60)
+        swaps = host.succeed("tail -n +2 /proc/swaps").split()
+        devices = [field for field in swaps if field.startswith("/")]
+        assert devices == ["/dev/zram0"], devices
+
     with subtest("the ZFS dataset clones blocks"):
         host.succeed("test \"$(zfs get -H -o value mounted tank/firecracker)\" = yes")
         host.succeed("test \"$(zfs get -H -o value compression tank/firecracker)\" = lz4")
@@ -305,8 +311,10 @@ pkgs.testers.runNixOSTest {
             curl = "curl --fail --silent --show-error --cert ${credentials}/client.crt --key ${credentials}/client.key --cacert /tmp/server.crt"
             controlPlane.succeed(
                 f"{curl} -X PUT -H 'content-type: application/json' https://192.168.1.2:8444/v1/host/limits"
-                " --data '{\"guestMemoryMaxBytes\": 2147483648, \"squeezeAboveBytes\": null, \"squeezeBelowBytes\": null, \"homeDiskGib\": [1]}'"
+                " --data '{\"guestMemoryMaxBytes\": 2147483648, \"squeezeAboveBytes\": 68719476736, \"squeezeBelowBytes\": 103079215104, \"homeDiskGib\": [1]}'"
             )
+            # The squeeze window (far above this VM's memory, so it never
+            # squeezes) needs swap: ready only because zram is there.
             controlPlane.wait_until_succeeds(f"{curl} https://192.168.1.2:8444/health", timeout=300)
             golden = "tank/firecracker/goldens/test/1v-512m"
             snapshot = host.succeed(f"zfs list -H -t snapshot -o name -s creation {golden} | tail -n 1").strip()

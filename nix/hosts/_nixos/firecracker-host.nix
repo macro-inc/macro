@@ -195,6 +195,19 @@ in
       default = 128;
       description = "Netns slots: the most computers with a process at once.";
     };
+    zramPercent = lib.mkOption {
+      type = lib.types.ints.between 1 100;
+      default = 25;
+      description = ''
+        Size of the zram swap device, in percent of RAM (uncompressed; zstd
+        stores guest pages at roughly a third). The squeeze pushes idle
+        computers' memory there while host memory is inside the control
+        plane's squeeze window, so it must hold what the window can push: a
+        window of 90-102 GiB on a 128 GiB host squeezes up to ~12 GiB of host
+        memory, well inside the default 32 GiB. zram is the host's only swap:
+        a swap device on disk would take guest memory to disk.
+      '';
+    };
     uplink = lib.mkOption {
       type = lib.types.str;
       default = "eth0";
@@ -419,6 +432,11 @@ in
           message = "A user, group or subordinate id range falls in the Firecracker VMs' range (${toString uidBase} + slots).";
         }
         {
+          # Swap files and partitions alike: guest memory never goes to disk.
+          assertion = config.swapDevices == [ ];
+          message = "Firecracker hosts swap only to zram (macro.firecrackerHost.zramPercent); swapDevices must be empty.";
+        }
+        {
           assertion = cfg.datadog.enable -> cfg.datadog.apiKeyFile != null;
           message = "macro.firecrackerHost.datadog.apiKeyFile is required with the Datadog agent on.";
         }
@@ -460,6 +478,14 @@ in
         "kvm-intel"
         "tun"
       ];
+
+      # The squeeze's only swap, in RAM. The agent fails its swap health
+      # check (and stops squeezing) if anything else swaps.
+      zramSwap = {
+        enable = true;
+        algorithm = "zstd";
+        memoryPercent = cfg.zramPercent;
+      };
 
       # S-12 and friends: the host runs nothing but the agent, its VMs and
       # their Firecracker processes.
