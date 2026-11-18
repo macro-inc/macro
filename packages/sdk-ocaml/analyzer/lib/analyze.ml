@@ -74,15 +74,26 @@ let expand env type_ =
       | _ -> None
       | exception _ -> None)
 
-let rec returns_request ?env type_ =
+(* The client configuration type, under the same names. A configuration
+   chooses the URL each request goes to (its hosts), so a program that
+   builds one can send an operation's request to another operation's URL. *)
+let is_config_path path =
+  let name = Path.name path in
+  name = "Macro_sdk_runtime__Config.t"
+  || String.starts_with ~prefix:"Macro_sdk" name
+     && ends_with ~suffix:".Config.t" name
+
+let rec returns ~is_path ?env type_ =
   let result = final_result type_ in
   match Types.get_desc result with
-  | Tconstr (path, _, _) when is_request_path path -> true
+  | Tconstr (path, _, _) when is_path path -> true
   | Tconstr _ -> (
       match expand env result with
-      | Some expanded -> returns_request ?env expanded
+      | Some expanded -> returns ~is_path ?env expanded
       | None -> false)
   | _ -> false
+
+let returns_request ?env type_ = returns ~is_path:is_request_path ?env type_
 
 (* Whether a value of this type can hand out a request: the request type
    occurs in a covariant position (a result, or inside a result). Type
@@ -255,6 +266,13 @@ let judge state env name (description : Types.value_description) =
              "belongs to %s, whose code the analysis cannot see (only the \
               standard library and the SDK's libraries are allowed)"
              comp_unit)
+      else if
+        comp_unit = "Macro_sdk_runtime__Config"
+        && returns ~is_path:is_config_path ~env description.val_type
+      then
+        Refused
+          "builds a client configuration, whose hosts can send an operation to \
+           another operation's URL"
       else
         match Shape.Uid.Tbl.find_opt state.sdk description.val_uid with
         | Some (Operation operation) -> Calls operation
@@ -455,31 +473,36 @@ let iterator state =
     | Tmty_typeof _ -> ()
     | _ -> default.module_type sub module_type
   in
-  let forged_request expression
+  let forged expression
       (fields : (Data_types.label_description * record_label_definition) array)
       =
     (* A record type can re-export the request's fields
        ([type r = Macro_sdk.Request.t = { ... }]): expand it first. *)
     let env = environment expression.exp_env in
-    let is_request type_ =
+    let is is_path type_ =
       match Types.get_desc (Ctype.expand_head env type_) with
       | Tconstr (path, _, _) ->
           let path =
             try Env.normalize_type_path None env path with Not_found -> path
           in
-          is_request_path path
+          is_path path
       | _ -> false
     in
-    if
-      is_request expression.exp_type
+    let builds is_path =
+      is is_path expression.exp_type
       || Array.exists
            (fun ((label : Data_types.label_description), _) ->
-             is_request label.lbl_res)
+             is is_path label.lbl_res)
            fields
-    then
+    in
+    if builds is_request_path then
       refuse state expression.exp_loc
         "builds a Macro_sdk_runtime.Request.t by hand, so its operation cannot \
-         be known"
+         be known";
+    if builds is_config_path then
+      refuse state expression.exp_loc
+        "builds a Macro_sdk_runtime.Config.t by hand, whose hosts can send an \
+         operation to another operation's URL"
   in
   let expr sub (expression : expression) =
     (match expression.exp_desc with
@@ -499,7 +522,7 @@ let iterator state =
               (Path.last operator.bop_op_path)
               operator.bop_op_val)
           (let_ :: ands)
-    | Texp_record { fields; _ } -> forged_request expression fields
+    | Texp_record { fields; _ } -> forged expression fields
     | _ -> ());
     default.expr sub expression
   in
