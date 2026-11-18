@@ -29,6 +29,13 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   not-connected answers. A call as the owner in a turn someone else prompted
   is held per call through `OwnerApprovals::hold_in_process`, the same
   approval record as the native tool gate.
+- A hold on an agent's permissions (`SDK_PERMISSION_SLUG`, `macro-sdk`,
+  `PermissionApprovals::hold_permissions`): an OCaml program that may call
+  "ask" operations waits for the account it acts as (recorded as the
+  approval's owner, sent as the notice's `approver`); its arguments carry
+  `permission.operations`. Always allowing remembers one standing approval
+  per operation for that account. Only a person's own session may approve or
+  decline it (`answer`'s `by_person`); other holds ignore that.
 
 ## Scope
 

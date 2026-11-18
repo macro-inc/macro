@@ -678,6 +678,9 @@ async fn run() -> anyhow::Result<()> {
     .context("failed to compose cognition APIs")?;
     let cognition_router = cognition_runtime.router.clone();
     let code_scratch = tempfile::tempdir()?;
+    // Lists the SDK operations an OCaml program may call, for the permission
+    // gate; only with the OCaml bundle.
+    let mut ocaml_analyzer: Option<Arc<dyn code_execution::domain::ProgramAnalyzer>> = None;
     let code_runner = match &config.deno_binary {
         Some(binary) => {
             let runner = code_execution::outbound::deno::DenoRunner::new(
@@ -691,6 +694,17 @@ async fn run() -> anyhow::Result<()> {
             let ocaml_fingerprint = runner
                 .ocaml_bundle()
                 .map(|bundle| bundle.fingerprint().to_owned());
+            if let Some(bundle) = runner.ocaml_bundle() {
+                let analyzer = code_execution::outbound::ocaml::analyze::OcamlAnalyzer::new(
+                    Arc::clone(bundle),
+                    code_scratch.path().join("analyses"),
+                    8,
+                    code_execution::domain::Limits::default().max_source_bytes,
+                )
+                .await
+                .map_err(|error| anyhow::anyhow!("invalid OCaml analyzer: {error}"))?;
+                ocaml_analyzer = Some(Arc::new(analyzer));
+            }
             let runner: Arc<dyn code_execution::domain::CodeRunner> = Arc::new(runner);
             // Public MCP runs get their own admission budget so external
             // clients cannot exhaust the slots agent sessions rely on.
@@ -924,6 +938,33 @@ async fn run() -> anyhow::Result<()> {
         agent_code_mode::domain::ui_commands::NavigableRoutes::generated()
             .context("the generated agent route table does not parse")?,
     );
+    // Agent permissions (`enable-agent-permissions`): who may edit an agent
+    // is the bots service's rule, and the catalog is the checked-in registry.
+    // Its routes and the OCaml gate share it.
+    let agent_permissions_service: Arc<dyn agent_permissions::domain::service::AgentPermissions> =
+        Arc::new(
+            agent_permissions::domain::service::AgentPermissionsService::new(
+                agent_permissions::outbound::pg::PgPermissionStore::new(pool.clone()),
+                tool_permissions::BotsAgentDirectory(bots::domain::service::BotServiceImpl::new(
+                    PgBotsRepo::new(pool.clone()),
+                    broker.clone(),
+                    computers::harness_service(&pool),
+                )),
+                tool_permissions::RepoSessionDirectory(session_repo.clone()),
+                code_mode::PermissionsFlag(feature_flags.clone()),
+                Arc::new(agent_permissions::outbound::registry::registry_catalog()),
+            ),
+        );
+    // The gate on OCaml programs, where this build can run them.
+    let permission_gate = ocaml_analyzer.map(|analyzer| {
+        Arc::new(code_mode::permissions::PermissionGate {
+            analyzer,
+            permissions: Arc::clone(&agent_permissions_service),
+            holds: tool_approvals.clone(),
+            rollout: Arc::new(code_mode::PermissionsFlag(feature_flags.clone())),
+            prompters: Arc::new(session_repo.clone()),
+        })
+    });
     let session_code_mode = agent_code_mode::domain::CodeModeService::new(
         code_executor,
         Arc::new(code_mode::RunCredentials {
@@ -936,6 +977,7 @@ async fn run() -> anyhow::Result<()> {
             gate: owner_tool_gate.clone(),
             endpoints: code_mode::sdk_endpoints()?,
             scopes: Arc::clone(&session_scopes),
+            permissions: permission_gate.clone(),
         }),
         execution_store,
         execution_turns,
@@ -948,6 +990,11 @@ async fn run() -> anyhow::Result<()> {
         Some(fingerprint) => session_code_mode.with_ocaml(agent_code_mode::domain::OcamlPrograms {
             fingerprint,
             rollout: Arc::new(code_mode::OcamlFlag(feature_flags.clone())),
+            permissions: permission_gate.is_some().then(
+                || -> Arc<dyn agent_code_mode::domain::OcamlRollout> {
+                    Arc::new(code_mode::PermissionsFlag(feature_flags.clone()))
+                },
+            ),
         }),
         None => session_code_mode,
     };
@@ -1014,6 +1061,7 @@ async fn run() -> anyhow::Result<()> {
             reviews: reviews_cell.clone(),
             gate: owner_tool_gate.clone(),
             app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
+            permissions: Some(Arc::clone(&agent_permissions_service)),
         },
     );
     // One connector for the agent and the telemetry catalog. It pools each
@@ -2088,21 +2136,7 @@ async fn run() -> anyhow::Result<()> {
     // is the bots service's rule, and the catalog is the checked-in registry.
     let agent_tool_permissions = agent_permissions::inbound::axum_router::router(
         agent_permissions::inbound::axum_router::AgentPermissionsRouterState::new(
-            Arc::new(
-                agent_permissions::domain::service::AgentPermissionsService::new(
-                    agent_permissions::outbound::pg::PgPermissionStore::new(pool.clone()),
-                    tool_permissions::BotsAgentDirectory(
-                        bots::domain::service::BotServiceImpl::new(
-                            PgBotsRepo::new(pool.clone()),
-                            broker.clone(),
-                            computers::harness_service(&pool),
-                        ),
-                    ),
-                    tool_permissions::RepoSessionDirectory(session_repo.clone()),
-                    code_mode::PermissionsFlag(feature_flags.clone()),
-                    Arc::new(agent_permissions::outbound::registry::registry_catalog()),
-                ),
-            ),
+            Arc::clone(&agent_permissions_service),
             entity_access.clone(),
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),

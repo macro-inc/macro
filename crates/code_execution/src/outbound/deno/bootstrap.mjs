@@ -181,7 +181,27 @@ async function runOcaml(context, assets) {
   return parse(frame);
 }
 try {
-  const {maxResultBytes, operations, unattended, language, ocamlAssets, ...context} = await new Response(Deno.stdin.readable).json();
+  const {maxResultBytes, operations, unattended, language, ocamlAssets, allowedOperations, ...context} = await new Response(Deno.stdin.readable).json();
+  // The requests an OCaml program was checked to send (the permission gate);
+  // absent, every request goes as before. Each is matched by its operation
+  // and by where it goes: method, the service's host and the route.
+  const allowed = language === "ocaml" && Array.isArray(allowedOperations)
+    ? allowedOperations.map(call => {
+      const host = new URL(context.hosts[call.service] ?? "http://invalid.invalid");
+      const base = host.pathname.replace(/\/$/, "");
+      const route = String(call.route).split("{}").map(part => part.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&")).join("[^/]+");
+      return {...call, origin: host.origin, pattern: new RegExp(`^${base.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&")}${route}$`)};
+    })
+    : null;
+  // Checks the request exactly as it will be sent.
+  const admitted = (operation, request) => {
+    if (!operation) return false;
+    const url = new URL(request.url);
+    const method = request.method.toUpperCase();
+    return allowed.some(call =>
+      call.service === operation.service && call.operationId === operation.operationId &&
+      call.method === method && call.origin === url.origin && call.pattern.test(url.pathname));
+  };
   // A dry run answers each write with an empty result, so it shows what the
   // program would do. Operations missing from the catalog count as writes.
   const dryRun = unattended?.dryRun === true;
@@ -238,6 +258,20 @@ try {
   let nextOcamlRequest = 0;
   globalThis.fetch = async (input, init) => {
     const operation = init?.macroSdkOperation;
+    // The gate's backstop: a request outside what the program was checked
+    // to call is never sent, nor one that doesn't say what it calls.
+    if (allowed) {
+      // One Request, checked and sent: nothing about it can change between.
+      const request = new Request(input, init);
+      input = request;
+      init = {macroSdkOperation: operation};
+      if (!admitted(operation, request)) {
+        const service = String(operation?.service ?? "unknown");
+        const operationId = String(operation?.operationId ?? "unknown");
+        if (operation) observe({id: ++nextOcamlRequest, service, operation: String(operation.operation), status: "refused"});
+        throw new Error(`${service}.${operationId} is outside what this program was checked to call; it was not sent.`);
+      }
+    }
     if (language !== "ocaml" || !operation) return sendRequest(input, init);
     const event = {id: ++nextOcamlRequest, service: String(operation.service), operation: String(operation.operation)};
     if (dryRun && catalog.get(`${event.service}.${event.operation}`)?.write !== false) {

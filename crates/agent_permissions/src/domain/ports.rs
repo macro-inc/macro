@@ -7,17 +7,18 @@ use agent_fold::domain::log::AgentSessionId;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
-use super::model::{AgentAccess, Change, PolicyOwner, Rule, SessionFacts};
+use super::model::{AgentAccess, Change, PermissionError, PolicyOwner, Rule, SessionFacts};
 
-/// Saved settings and session overlays. Every write applies all its changes
-/// in one transaction; a change with `state: None` deletes the row.
+/// Saved settings and session overlays.
 pub trait PermissionStore: Send + Sync + 'static {
     /// The adapter's error.
     type Err: std::error::Error + Send + Sync + 'static;
 
     /// A policy's saved settings.
-    fn rules(&self, owner: &PolicyOwner)
-    -> impl Future<Output = Result<Vec<Rule>, Self::Err>> + Send;
+    fn rules(
+        &self,
+        owner: &PolicyOwner,
+    ) -> impl Future<Output = Result<Vec<Rule>, Self::Err>> + Send;
 
     /// A session's overlay.
     fn session_rules(
@@ -25,27 +26,47 @@ pub trait PermissionStore: Send + Sync + 'static {
         session: AgentSessionId,
     ) -> impl Future<Output = Result<Vec<Rule>, Self::Err>> + Send;
 
-    /// Save normalized `changes` to a policy, as set by `by`; `via_agent`
-    /// when the agent restricted itself.
-    fn apply(
+    /// Change a policy or a session's overlay in one transaction: lock the
+    /// policy (and the session, when `write.session` names one) against every
+    /// other write, read its rules and the overlay, ask `plan` for the
+    /// changes, and save them to `write.to`. A change with `state: None`
+    /// deletes the row. When `plan` refuses, nothing is written and its error
+    /// is returned inside `Ok`.
+    fn write<Plan>(
         &self,
-        owner: &PolicyOwner,
-        changes: &[Change],
-        by: &MacroUserIdStr<'static>,
-        via_agent: bool,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+        write: Write<'_>,
+        plan: Plan,
+    ) -> impl Future<Output = Result<Result<(), PermissionError>, Self::Err>> + Send
+    where
+        Plan: FnOnce(&[Rule], &[Rule]) -> Result<Vec<Change>, PermissionError> + Send;
 
-    /// Save normalized `changes` (restrictions or removals) to a session's
-    /// overlay.
-    fn apply_session(
-        &self,
-        session: AgentSessionId,
-        changes: &[Change],
-        by: &MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Delete every saved setting of a policy. Session overlays stay.
+    /// Delete every saved setting of a policy, under the same lock as
+    /// [`PermissionStore::write`]. Session overlays stay.
     fn reset(&self, owner: &PolicyOwner) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// What a [`PermissionStore::write`] reads, locks and saves to.
+#[derive(Debug, Clone, Copy)]
+pub struct Write<'a> {
+    /// The policy, always read and locked.
+    pub owner: &'a PolicyOwner,
+    /// The session whose overlay is read and locked too.
+    pub session: Option<AgentSessionId>,
+    /// Where the changes go.
+    pub to: WriteTo,
+    /// Who made them (the person an agent acts for).
+    pub by: &'a MacroUserIdStr<'static>,
+    /// The agent restricted itself.
+    pub via_agent: bool,
+}
+
+/// Where a write's changes are saved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WriteTo {
+    /// The policy's saved settings.
+    Saved,
+    /// `session`'s overlay (restrictions only).
+    Session(AgentSessionId),
 }
 
 /// Who may edit an agent: the same rule as editing the agent itself.

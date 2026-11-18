@@ -34,13 +34,17 @@ pub(super) fn observe(
         "started" => RecordedCallStatus::Running,
         "completed" => RecordedCallStatus::Completed,
         "failed" => RecordedCallStatus::Failed,
+        "refused" => RecordedCallStatus::Refused,
         _ => return,
     };
     if let Some(existing) = activity.iter_mut().find(|item| item.id == event.id) {
         if existing.label == *label && existing.status == RecordedCallStatus::Running {
             existing.status = status;
         }
-    } else if status == RecordedCallStatus::Running {
+    } else if matches!(
+        status,
+        RecordedCallStatus::Running | RecordedCallStatus::Refused
+    ) {
         if activity.len() < 128 {
             activity.push(ExecutionActivity {
                 id: event.id,

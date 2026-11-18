@@ -1,6 +1,13 @@
 open Typedtree
 
-type operation = { service : string; operation : string; path : string }
+type operation = {
+  service : string;
+  operation : string;
+  path : string;
+  meth : string;
+  route : string;
+}
+
 type location = { file : string; line : int; column : int }
 type via = Reference | Module
 type found = { operation : operation; locations : (location * via) list }
@@ -25,9 +32,9 @@ let public_path unit value =
 let by_value =
   let table = Hashtbl.create 1024 in
   List.iter
-    (fun (unit, value, service, operation) ->
+    (fun (unit, value, service, operation, meth, route) ->
       Hashtbl.replace table (unit, value)
-        { service; operation; path = public_path unit value })
+        { service; operation; path = public_path unit value; meth; route })
     Operation_table.all;
   table
 
@@ -39,7 +46,7 @@ let operations =
 
 let service_units =
   List.sort_uniq compare
-    (List.map (fun (unit, _, _, _) -> unit) Operation_table.all)
+    (List.map (fun (unit, _, _, _, _, _) -> unit) Operation_table.all)
 
 (* ---------- types ---------- *)
 
@@ -729,6 +736,8 @@ let to_json = function
                        ("service", `String operation.service);
                        ("operation", `String operation.operation);
                        ("path", `String operation.path);
+                       ("method", `String operation.meth);
+                       ("route", `String operation.route);
                        ( "locations",
                          `List
                            (List.map

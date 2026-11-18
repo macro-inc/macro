@@ -9,6 +9,7 @@ description = "Per-agent tool permissions: which SDK operations an agent's code 
 agent_correlation = { path = "../agent_correlation" }
 agent_fold = { path = "../folds/agent_fold", default-features = false }
 agent_permission_registry = { path = "../agent_permission_registry", features = ["openapi"] }
+ai_toolset = { path = "../ai_toolset" }
 async-trait = { workspace = true }
 axum = { workspace = true }
 bot_id = { path = "../bot_id", features = ["schema"] }
@@ -18,6 +19,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 rootcause = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
@@ -30,12 +32,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 agent_fold = { path = "../folds/agent_fold", default-features = false, features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["schema", "test-utils"] }
-http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }
-
-[package.metadata.cargo-shear]
-# Named only in `#[sqlx::test(migrator = "...")]` strings.
-ignored = ["macro_db_migrator"]

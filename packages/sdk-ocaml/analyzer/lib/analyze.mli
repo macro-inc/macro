@@ -11,6 +11,10 @@ type operation = {
   service : string;  (** spec name, e.g. ["storage"] *)
   operation : string;  (** operationId, e.g. ["create_task_handler"] *)
   path : string;  (** e.g. ["Macro_sdk.Storage.create_task_handler"] *)
+  meth : string;  (** the request's HTTP method, e.g. ["POST"] *)
+  route : string;
+      (** the request's path, ["{}"] for each parameter, e.g.
+          ["/documents/{}/markdown"] *)
 }
 
 val operations : operation list

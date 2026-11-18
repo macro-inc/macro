@@ -20,7 +20,11 @@ mod test;
 /// What an operation does to its group's data, the unit a person allows,
 /// asks about or refuses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema), schema(as = PermissionAction))]
+#[cfg_attr(
+    feature = "openapi",
+    derive(utoipa::ToSchema, schemars::JsonSchema),
+    schema(as = PermissionAction)
+)]
 #[serde(rename_all = "lowercase")]
 pub enum Action {
     /// Makes something new.
@@ -59,7 +63,9 @@ impl Action {
 
     /// The action named `name` (its stored name), if there is one.
     pub fn parse(name: &str) -> Option<Action> {
-        Action::ALL.into_iter().find(|action| action.as_str() == name)
+        Action::ALL
+            .into_iter()
+            .find(|action| action.as_str() == name)
     }
 }
 

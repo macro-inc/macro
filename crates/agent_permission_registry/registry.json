@@ -85,7 +85,7 @@
       "remove_queued_action": {"group": "agents", "action": "update", "label": "Remove queued action"},
       "rename_agent_session": {"group": "agents", "action": "update", "label": "Rename agent session"},
       "report_agent_session_app_connected": {"group": "agents", "action": "update", "label": "Report agent session app connected"},
-      "reset_agent_tool_permissions": {"group": "agents", "action": "update", "label": "Reset agent tool permissions"},
+      "reset_agent_tool_permissions": {"group": "agents", "action": "destroy", "label": "Reset agent tool permissions"},
       "retry_agent_conversation_turn": {"group": "agents", "action": "update", "label": "Retry agent conversation turn"},
       "search_connected_app_tools": {"group": "connections", "action": "read", "label": "Search connected app tools"},
       "set_agent_session_archived": {"group": "agents", "action": "update", "label": "Set agent session archived"},

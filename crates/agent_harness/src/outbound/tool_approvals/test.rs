@@ -29,6 +29,7 @@ impl ToolApprovalAnswers for RecordingReleases {
         _id: ToolApprovalId,
         _answer: ApprovalAnswer,
         _by: &MacroUserIdStr<'static>,
+        _by_person: bool,
     ) -> Result<ToolApproval, ToolApprovalError> {
         unimplemented!("releases only")
     }

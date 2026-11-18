@@ -2,6 +2,8 @@
 //! `persona_tool_permission` (a person's settings for a built-in persona) and
 //! `agent_session_tool_permission` (an agent's restrictions on itself for one
 //! session). Every query is a lookup by its table's primary-key prefix.
+//! Writes take a transaction-scoped advisory lock per policy and per
+//! session, so a check and the write it allows see the same rules.
 
 #[cfg(test)]
 mod test;
@@ -9,10 +11,10 @@ mod test;
 use agent_fold::domain::log::AgentSessionId;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 
-use crate::domain::model::{Change, PolicyOwner, Rule, Target, TargetKind};
-use crate::domain::ports::PermissionStore;
+use crate::domain::model::{Change, PermissionError, PolicyOwner, Rule, Target, TargetKind};
+use crate::domain::ports::{PermissionStore, Write, WriteTo};
 
 /// Why the store failed.
 #[derive(Debug, thiserror::Error)]
@@ -89,199 +91,293 @@ impl Batch {
     }
 }
 
+/// The advisory lock key of a policy or a session, hashed by Postgres.
+fn lock_key(owner: Option<&PolicyOwner>, session: Option<AgentSessionId>) -> String {
+    match (owner, session) {
+        (Some(PolicyOwner::Agent(agent)), _) => format!("agent_tool_permission:{agent}"),
+        (Some(PolicyOwner::Persona { persona, user }), _) => {
+            format!("persona_tool_permission:{persona}:{}", user.as_ref())
+        }
+        (None, Some(session)) => {
+            format!("agent_session_tool_permission:{}", session.as_uuid())
+        }
+        (None, None) => String::new(),
+    }
+}
+
+async fn lock(connection: &mut PgConnection, key: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key,)
+        .fetch_one(connection)
+        .await?;
+    Ok(())
+}
+
+async fn policy_rules(
+    connection: &mut PgConnection,
+    owner: &PolicyOwner,
+) -> Result<Vec<Rule>, PgPermissionStoreError> {
+    match owner {
+        PolicyOwner::Agent(agent) => sqlx::query!(
+            r#"
+            SELECT kind, target, state, via_agent, updated_at
+            FROM agent_tool_permission
+            WHERE bot_id = $1
+            "#,
+            agent.as_uuid(),
+        )
+        .fetch_all(connection)
+        .await?
+        .into_iter()
+        .map(|row| {
+            rule(
+                &row.kind,
+                &row.target,
+                &row.state,
+                row.via_agent,
+                row.updated_at,
+            )
+        })
+        .collect(),
+        PolicyOwner::Persona { persona, user } => sqlx::query!(
+            r#"
+            SELECT kind, target, state, via_agent, updated_at
+            FROM persona_tool_permission
+            WHERE user_id = $1 AND persona_id = $2
+            "#,
+            user.as_ref(),
+            persona.as_uuid(),
+        )
+        .fetch_all(connection)
+        .await?
+        .into_iter()
+        .map(|row| {
+            rule(
+                &row.kind,
+                &row.target,
+                &row.state,
+                row.via_agent,
+                row.updated_at,
+            )
+        })
+        .collect(),
+    }
+}
+
+async fn overlay_rules(
+    connection: &mut PgConnection,
+    session: AgentSessionId,
+) -> Result<Vec<Rule>, PgPermissionStoreError> {
+    // Only the agent restricts a session, so every row is via the agent.
+    sqlx::query!(
+        r#"
+        SELECT kind, target, state, created_at
+        FROM agent_session_tool_permission
+        WHERE agent_session_id = $1
+        "#,
+        session.as_uuid(),
+    )
+    .fetch_all(connection)
+    .await?
+    .into_iter()
+    .map(|row| rule(&row.kind, &row.target, &row.state, true, row.created_at))
+    .collect()
+}
+
+async fn save_policy(
+    connection: &mut PgConnection,
+    owner: &PolicyOwner,
+    batch: &Batch,
+    by: &MacroUserIdStr<'static>,
+    via_agent: bool,
+) -> Result<(), sqlx::Error> {
+    match owner {
+        PolicyOwner::Agent(agent) => {
+            sqlx::query!(
+                r#"
+                DELETE FROM agent_tool_permission
+                WHERE bot_id = $1
+                  AND (kind, target) IN (SELECT * FROM UNNEST($2::text[], $3::text[]))
+                "#,
+                agent.as_uuid(),
+                &batch.delete_kinds,
+                &batch.delete_targets,
+            )
+            .execute(&mut *connection)
+            .await?;
+            sqlx::query!(
+                r#"
+                INSERT INTO agent_tool_permission
+                    (bot_id, kind, target, state, updated_by, via_agent)
+                SELECT $1, kind, target, state, $5, $6
+                FROM UNNEST($2::text[], $3::text[], $4::text[]) AS change (kind, target, state)
+                ON CONFLICT (bot_id, kind, target) DO UPDATE
+                SET state = EXCLUDED.state,
+                    updated_by = EXCLUDED.updated_by,
+                    via_agent = EXCLUDED.via_agent,
+                    updated_at = now()
+                "#,
+                agent.as_uuid(),
+                &batch.upsert_kinds,
+                &batch.upsert_targets,
+                &batch.upsert_states,
+                by.as_ref(),
+                via_agent,
+            )
+            .execute(&mut *connection)
+            .await?;
+        }
+        PolicyOwner::Persona { persona, user } => {
+            sqlx::query!(
+                r#"
+                DELETE FROM persona_tool_permission
+                WHERE user_id = $1 AND persona_id = $2
+                  AND (kind, target) IN (SELECT * FROM UNNEST($3::text[], $4::text[]))
+                "#,
+                user.as_ref(),
+                persona.as_uuid(),
+                &batch.delete_kinds,
+                &batch.delete_targets,
+            )
+            .execute(&mut *connection)
+            .await?;
+            sqlx::query!(
+                r#"
+                INSERT INTO persona_tool_permission
+                    (user_id, persona_id, kind, target, state, via_agent)
+                SELECT $1, $2, kind, target, state, $6
+                FROM UNNEST($3::text[], $4::text[], $5::text[]) AS change (kind, target, state)
+                ON CONFLICT (user_id, persona_id, kind, target) DO UPDATE
+                SET state = EXCLUDED.state,
+                    via_agent = EXCLUDED.via_agent,
+                    updated_at = now()
+                "#,
+                user.as_ref(),
+                persona.as_uuid(),
+                &batch.upsert_kinds,
+                &batch.upsert_targets,
+                &batch.upsert_states,
+                via_agent,
+            )
+            .execute(&mut *connection)
+            .await?;
+        }
+    }
+    Ok(())
+}
+
+async fn save_overlay(
+    connection: &mut PgConnection,
+    session: AgentSessionId,
+    batch: &Batch,
+    by: &MacroUserIdStr<'static>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        DELETE FROM agent_session_tool_permission
+        WHERE agent_session_id = $1
+          AND (kind, target) IN (SELECT * FROM UNNEST($2::text[], $3::text[]))
+        "#,
+        session.as_uuid(),
+        &batch.delete_kinds,
+        &batch.delete_targets,
+    )
+    .execute(&mut *connection)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session_tool_permission
+            (agent_session_id, kind, target, state, set_by)
+        SELECT $1, kind, target, state, $5
+        FROM UNNEST($2::text[], $3::text[], $4::text[]) AS change (kind, target, state)
+        ON CONFLICT (agent_session_id, kind, target) DO UPDATE
+        SET state = EXCLUDED.state,
+            set_by = EXCLUDED.set_by,
+            created_at = now()
+        "#,
+        session.as_uuid(),
+        &batch.upsert_kinds,
+        &batch.upsert_targets,
+        &batch.upsert_states,
+        by.as_ref(),
+    )
+    .execute(&mut *connection)
+    .await?;
+    Ok(())
+}
+
 impl PermissionStore for PgPermissionStore {
     type Err = PgPermissionStoreError;
 
     #[tracing::instrument(skip_all, err)]
     async fn rules(&self, owner: &PolicyOwner) -> Result<Vec<Rule>, Self::Err> {
-        match owner {
-            PolicyOwner::Agent(agent) => sqlx::query!(
-                r#"
-                SELECT kind, target, state, via_agent, updated_at
-                FROM agent_tool_permission
-                WHERE bot_id = $1
-                "#,
-                agent.as_uuid(),
-            )
-            .fetch_all(&self.pool)
-            .await?
-            .into_iter()
-            .map(|row| rule(&row.kind, &row.target, &row.state, row.via_agent, row.updated_at))
-            .collect(),
-            PolicyOwner::Persona { persona, user } => sqlx::query!(
-                r#"
-                SELECT kind, target, state, via_agent, updated_at
-                FROM persona_tool_permission
-                WHERE user_id = $1 AND persona_id = $2
-                "#,
-                user.as_ref(),
-                persona.as_uuid(),
-            )
-            .fetch_all(&self.pool)
-            .await?
-            .into_iter()
-            .map(|row| rule(&row.kind, &row.target, &row.state, row.via_agent, row.updated_at))
-            .collect(),
-        }
+        let mut connection = self.pool.acquire().await?;
+        policy_rules(&mut connection, owner).await
     }
 
     #[tracing::instrument(skip_all, err)]
     async fn session_rules(&self, session: AgentSessionId) -> Result<Vec<Rule>, Self::Err> {
-        // Only the agent restricts a session, so every row is via the agent.
-        sqlx::query!(
-            r#"
-            SELECT kind, target, state, created_at
-            FROM agent_session_tool_permission
-            WHERE agent_session_id = $1
-            "#,
-            session.as_uuid(),
-        )
-        .fetch_all(&self.pool)
-        .await?
-        .into_iter()
-        .map(|row| rule(&row.kind, &row.target, &row.state, true, row.created_at))
-        .collect()
+        let mut connection = self.pool.acquire().await?;
+        overlay_rules(&mut connection, session).await
     }
 
-    #[tracing::instrument(skip_all, fields(changes = changes.len()), err)]
-    async fn apply(
+    #[tracing::instrument(skip_all, err)]
+    async fn write<Plan>(
         &self,
-        owner: &PolicyOwner,
-        changes: &[Change],
-        by: &MacroUserIdStr<'static>,
-        via_agent: bool,
-    ) -> Result<(), Self::Err> {
-        let batch = Batch::new(changes);
+        write: Write<'_>,
+        plan: Plan,
+    ) -> Result<Result<(), PermissionError>, Self::Err>
+    where
+        Plan: FnOnce(&[Rule], &[Rule]) -> Result<Vec<Change>, PermissionError> + Send,
+    {
         let mut transaction = self.pool.begin().await?;
-        match owner {
-            PolicyOwner::Agent(agent) => {
-                sqlx::query!(
-                    r#"
-                    DELETE FROM agent_tool_permission
-                    WHERE bot_id = $1
-                      AND (kind, target) IN (SELECT * FROM UNNEST($2::text[], $3::text[]))
-                    "#,
-                    agent.as_uuid(),
-                    &batch.delete_kinds,
-                    &batch.delete_targets,
+
+        // Policy first, then session: every writer locks in this order.
+        lock(&mut transaction, &lock_key(Some(write.owner), None)).await?;
+        if let Some(session) = write.session {
+            lock(&mut transaction, &lock_key(None, Some(session))).await?;
+        }
+
+        let saved = policy_rules(&mut transaction, write.owner).await?;
+        let overlay = match write.session {
+            Some(session) => overlay_rules(&mut transaction, session).await?,
+            None => Vec::new(),
+        };
+        let changes = match plan(&saved, &overlay) {
+            Ok(changes) => changes,
+            Err(refused) => return Ok(Err(refused)),
+        };
+
+        let batch = Batch::new(&changes);
+        match write.to {
+            WriteTo::Saved => {
+                save_policy(
+                    &mut transaction,
+                    write.owner,
+                    &batch,
+                    write.by,
+                    write.via_agent,
                 )
-                .execute(&mut *transaction)
-                .await?;
-                sqlx::query!(
-                    r#"
-                    INSERT INTO agent_tool_permission
-                        (bot_id, kind, target, state, updated_by, via_agent)
-                    SELECT $1, kind, target, state, $5, $6
-                    FROM UNNEST($2::text[], $3::text[], $4::text[]) AS change (kind, target, state)
-                    ON CONFLICT (bot_id, kind, target) DO UPDATE
-                    SET state = EXCLUDED.state,
-                        updated_by = EXCLUDED.updated_by,
-                        via_agent = EXCLUDED.via_agent,
-                        updated_at = now()
-                    "#,
-                    agent.as_uuid(),
-                    &batch.upsert_kinds,
-                    &batch.upsert_targets,
-                    &batch.upsert_states,
-                    by.as_ref(),
-                    via_agent,
-                )
-                .execute(&mut *transaction)
                 .await?;
             }
-            PolicyOwner::Persona { persona, user } => {
-                sqlx::query!(
-                    r#"
-                    DELETE FROM persona_tool_permission
-                    WHERE user_id = $1 AND persona_id = $2
-                      AND (kind, target) IN (SELECT * FROM UNNEST($3::text[], $4::text[]))
-                    "#,
-                    user.as_ref(),
-                    persona.as_uuid(),
-                    &batch.delete_kinds,
-                    &batch.delete_targets,
-                )
-                .execute(&mut *transaction)
-                .await?;
-                sqlx::query!(
-                    r#"
-                    INSERT INTO persona_tool_permission
-                        (user_id, persona_id, kind, target, state, via_agent)
-                    SELECT $1, $2, kind, target, state, $6
-                    FROM UNNEST($3::text[], $4::text[], $5::text[]) AS change (kind, target, state)
-                    ON CONFLICT (user_id, persona_id, kind, target) DO UPDATE
-                    SET state = EXCLUDED.state,
-                        via_agent = EXCLUDED.via_agent,
-                        updated_at = now()
-                    "#,
-                    user.as_ref(),
-                    persona.as_uuid(),
-                    &batch.upsert_kinds,
-                    &batch.upsert_targets,
-                    &batch.upsert_states,
-                    via_agent,
-                )
-                .execute(&mut *transaction)
-                .await?;
+            WriteTo::Session(session) => {
+                save_overlay(&mut transaction, session, &batch, write.by).await?;
             }
         }
         transaction.commit().await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(skip_all, fields(changes = changes.len()), err)]
-    async fn apply_session(
-        &self,
-        session: AgentSessionId,
-        changes: &[Change],
-        by: &MacroUserIdStr<'static>,
-    ) -> Result<(), Self::Err> {
-        let batch = Batch::new(changes);
-        let mut transaction = self.pool.begin().await?;
-        sqlx::query!(
-            r#"
-            DELETE FROM agent_session_tool_permission
-            WHERE agent_session_id = $1
-              AND (kind, target) IN (SELECT * FROM UNNEST($2::text[], $3::text[]))
-            "#,
-            session.as_uuid(),
-            &batch.delete_kinds,
-            &batch.delete_targets,
-        )
-        .execute(&mut *transaction)
-        .await?;
-        sqlx::query!(
-            r#"
-            INSERT INTO agent_session_tool_permission
-                (agent_session_id, kind, target, state, set_by)
-            SELECT $1, kind, target, state, $5
-            FROM UNNEST($2::text[], $3::text[], $4::text[]) AS change (kind, target, state)
-            ON CONFLICT (agent_session_id, kind, target) DO UPDATE
-            SET state = EXCLUDED.state,
-                set_by = EXCLUDED.set_by,
-                created_at = now()
-            "#,
-            session.as_uuid(),
-            &batch.upsert_kinds,
-            &batch.upsert_targets,
-            &batch.upsert_states,
-            by.as_ref(),
-        )
-        .execute(&mut *transaction)
-        .await?;
-        transaction.commit().await?;
-        Ok(())
+        Ok(Ok(()))
     }
 
     #[tracing::instrument(skip_all, err)]
     async fn reset(&self, owner: &PolicyOwner) -> Result<(), Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        lock(&mut transaction, &lock_key(Some(owner), None)).await?;
         match owner {
             PolicyOwner::Agent(agent) => {
                 sqlx::query!(
                     "DELETE FROM agent_tool_permission WHERE bot_id = $1",
                     agent.as_uuid(),
                 )
-                .execute(&self.pool)
+                .execute(&mut *transaction)
                 .await?;
             }
             PolicyOwner::Persona { persona, user } => {
@@ -290,10 +386,11 @@ impl PermissionStore for PgPermissionStore {
                     user.as_ref(),
                     persona.as_uuid(),
                 )
-                .execute(&self.pool)
+                .execute(&mut *transaction)
                 .await?;
             }
         }
+        transaction.commit().await?;
         Ok(())
     }
 }

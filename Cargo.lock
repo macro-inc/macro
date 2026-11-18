@@ -332,6 +332,8 @@ dependencies = [
 name = "agent_code_mode"
 version = "0.1.0"
 dependencies = [
+ "agent_permission_registry",
+ "agent_permissions",
  "agent_runtime_protocol",
  "agent_session",
  "ai_toolset",
@@ -649,6 +651,7 @@ dependencies = [
  "agent_git",
  "agent_harness",
  "agent_inmem",
+ "agent_permission_registry",
  "agent_permissions",
  "agent_preview",
  "agent_runtime_protocol",
@@ -899,6 +902,7 @@ dependencies = [
 name = "agent_permission_registry"
 version = "0.1.0"
 dependencies = [
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -913,18 +917,19 @@ dependencies = [
  "agent_correlation",
  "agent_fold",
  "agent_permission_registry",
+ "ai_toolset",
  "async-trait",
  "axum",
  "bot_id",
  "chrono",
  "entity_access",
- "http-body-util",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
  "model_user",
  "rootcause",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",

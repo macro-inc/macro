@@ -7,7 +7,8 @@ use axum::http::Request;
 use entity_access::domain::models::EntityAccessReceipt;
 use entity_access::domain::ports::NoOpEntityAccessService;
 use macro_authorization::{
-    CredentialOrigin, InternalIdentityClaims, MacroAuthorizationError, ValidatedCredential, ValidatedIdentity,
+    CredentialOrigin, InternalIdentityClaims, MacroAuthorizationError, ValidatedCredential,
+    ValidatedIdentity,
 };
 use model_user::UserContext;
 use rootcause::Report;
@@ -143,7 +144,12 @@ fn app(permissions: Arc<FakePermissions>) -> Router {
     ))
 }
 
-async fn send(app: Router, method: &str, uri: &str, token: &str) -> (StatusCode, serde_json::Value) {
+async fn send(
+    app: Router,
+    method: &str,
+    uri: &str,
+    token: &str,
+) -> (StatusCode, serde_json::Value) {
     let body = if method == "PUT" || method == "POST" {
         Body::from(
             serde_json::json!({
@@ -179,13 +185,22 @@ async fn send(app: Router, method: &str, uri: &str, token: &str) -> (StatusCode,
 
 const AGENT_ROUTES: [(&str, &str); 5] = [
     ("GET", "/agent-tool-permissions/catalog"),
-    ("GET", "/agents/00000000-0000-0000-0000-00000000b07a/tool-permissions"),
-    ("PUT", "/agents/00000000-0000-0000-0000-00000000b07a/tool-permissions"),
+    (
+        "GET",
+        "/agents/00000000-0000-0000-0000-00000000b07a/tool-permissions",
+    ),
+    (
+        "PUT",
+        "/agents/00000000-0000-0000-0000-00000000b07a/tool-permissions",
+    ),
     (
         "POST",
         "/agents/00000000-0000-0000-0000-00000000b07a/tool-permissions/tighten",
     ),
-    ("DELETE", "/agents/00000000-0000-0000-0000-00000000b07a/tool-permissions"),
+    (
+        "DELETE",
+        "/agents/00000000-0000-0000-0000-00000000b07a/tool-permissions",
+    ),
 ];
 
 #[tokio::test]
@@ -199,7 +214,10 @@ async fn every_route_is_not_found_while_the_feature_is_off() {
         assert_eq!(status, StatusCode::NOT_FOUND, "{method} {uri}");
         assert_eq!(body["code"], "not_found");
     }
-    assert_eq!(permissions.callers.lock().unwrap().len(), AGENT_ROUTES.len());
+    assert_eq!(
+        permissions.callers.lock().unwrap().len(),
+        AGENT_ROUTES.len()
+    );
 }
 
 #[tokio::test]
@@ -209,7 +227,13 @@ async fn the_credential_reaches_the_service_as_what_it_is() {
         callers: Mutex::new(vec![]),
     });
     for token in ["person", "agent", "key"] {
-        send(app(Arc::clone(&permissions)), "GET", AGENT_ROUTES[1].1, token).await;
+        send(
+            app(Arc::clone(&permissions)),
+            "GET",
+            AGENT_ROUTES[1].1,
+            token,
+        )
+        .await;
     }
     assert_eq!(
         *permissions.callers.lock().unwrap(),
@@ -232,7 +256,10 @@ fn refusals_answer_with_their_status_and_code() {
     };
     assert_eq!(response(PermissionError::NotFound), StatusCode::NOT_FOUND);
     assert_eq!(response(PermissionError::Forbidden), StatusCode::FORBIDDEN);
-    assert_eq!(response(PermissionError::NeedsPerson), StatusCode::FORBIDDEN);
+    assert_eq!(
+        response(PermissionError::NeedsPerson),
+        StatusCode::FORBIDDEN
+    );
     assert_eq!(
         response(PermissionError::Invalid("no changes".to_owned())),
         StatusCode::BAD_REQUEST

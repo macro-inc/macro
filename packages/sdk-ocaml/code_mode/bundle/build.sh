@@ -18,7 +18,7 @@ build=$(mktemp -d)
 dune build --root . --profile wasm --build-dir "$build" \
   ./runtime/macro_sdk_runtime.cma ./generated/macro_sdk.cma \
   ./fetch/macro_sdk_fetch.cma ./code_mode/code_mode.cma \
-  ./code_mode/policy/code_mode_policy.exe
+  ./code_mode/policy/code_mode_policy.exe ./analyzer/bin/macro_sdk_calls.exe
 b=$build/default
 
 # What a program may see: the SDK, its runtime, yojson, uri, the transport
@@ -57,8 +57,10 @@ done
 wasm_of_ocaml compile "${flags[@]}" -o "$out/lib/std_exit.wasmo" "$(ocamlc -where)/std_exit.cmo"
 
 # The run-time toolchain: ocamlc, wasm_of_ocaml and the binaryen tools it
-# runs, and the policy check (code_mode/policy) the harness runs on each
-# program's typed tree. A compile child's PATH is this directory. ocamlc and wasm_of_ocaml
+# runs, the policy check (code_mode/policy) the harness runs on each
+# program's typed tree, and the analyzer (analyzer/) that lists the SDK
+# operations a program may call, for the permission gate. A compile
+# child's PATH is this directory. ocamlc and wasm_of_ocaml
 # are copies so the nix build can drop their references to the whole OCaml
 # installation (about 700 MB with wasm_of_ocaml's build inputs): ocamlc
 # reads the standard library's interfaces from stdlib/ (-nostdlib), and
@@ -66,6 +68,7 @@ wasm_of_ocaml compile "${flags[@]}" -o "$out/lib/std_exit.wasmo" "$(ocamlc -wher
 cp "$(readlink -f "$(command -v ocamlc)")" "$out/bin/ocamlc"
 cp "$(readlink -f "$(command -v wasm_of_ocaml)")" "$out/bin/wasm_of_ocaml"
 install -m 755 "$b/code_mode/policy/code_mode_policy.exe" "$out/bin/code_mode_policy"
+install -m 755 "$b/analyzer/bin/macro_sdk_calls.exe" "$out/bin/macro_sdk_calls"
 rm -rf "$build"
 chmod u+w "$out/bin/ocamlc" "$out/bin/wasm_of_ocaml"
 for tool in wasm-opt wasm-merge wasm-metadce; do

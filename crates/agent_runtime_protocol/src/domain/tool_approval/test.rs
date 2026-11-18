@@ -13,6 +13,7 @@ fn notice(status: ToolApprovalStatus) -> ToolApprovalNotice {
         status,
         resolved_by: None,
         remembered: false,
+        approver: None,
     }
 }
 

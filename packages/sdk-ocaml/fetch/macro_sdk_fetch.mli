@@ -15,10 +15,11 @@
     {b The contract with the caller's [fetch].} Each call is one
     [fetch(url, init)] with [init.method], [init.headers] (an array of
     [[name, value]] pairs), [init.body] (a [Uint8Array], when there is one)
-    and [init.macroSdkOperation = {service, operation}]: the spec's service
-    name and the TypeScript SDK's method name for the operation
-    ({!sdk_method}), the same pair the TypeScript SDK hands to
-    [gateRequests] and uses for [sdkVerbs] keys. A plain [fetch] ignores
+    and [init.macroSdkOperation = {service, operation, operationId}]: the
+    spec's service name and the TypeScript SDK's method name for the
+    operation ({!sdk_method}), the same pair the TypeScript SDK hands to
+    [gateRequests] and uses for [sdkVerbs] keys, plus the raw operationId,
+    the key code mode's permission gate checks. A plain [fetch] ignores
     the extra field. Code mode's bootstrap wraps [fetch] and reads it to
     gate the call and add its verb header:
     - answer with a [Response] instead of sending (a dry run's skip): the
