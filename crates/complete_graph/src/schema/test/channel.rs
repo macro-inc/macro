@@ -25,6 +25,7 @@ fn soup_channel(
                 owner_id: MacroUserIdStr::try_from(VALID_USER_ID.to_string()).unwrap(),
             },
             participants: Vec::new(),
+            bot_participants: Vec::new(),
             is_participant: true,
         },
         latest_message: LatestMessage::default(),
