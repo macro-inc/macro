@@ -81,3 +81,16 @@ images align with their item's text, and that the saved Markdown indents each
 image under its item and renders back as one list, on desktop, tablet touch, and
 phone touch. Run just this case by adding `list-images.browser.e2e.ts` to the
 command above.
+
+## Enter in lists
+
+`list-enter.browser.e2e.ts` presses Enter in bullet, numbered, and checklist
+items in three editors (`list-enter.html?surface=`): the document editor's
+plugins, a Markdown editor with no Enter handler of its own, and a composer
+whose Enter sends. In each, Enter on an item with text adds an item, Enter on
+an empty top-level item leaves the list, and Enter on an empty nested item
+outdents it one level. The composer keeps Enter for the list while the caret
+is in one, sends once it is outside every list, and still sends on Cmd/Ctrl+Enter.
+Run just this case by adding `list-enter.browser.e2e.ts` to the command above;
+on a machine with many network interfaces, run it under
+`bwrap --dev-bind / / --unshare-net` (see `apps/web/AGENTS.md`).
