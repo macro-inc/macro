@@ -495,7 +495,8 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             .rows_affected()
                 > 0;
             change.changed |= calendar_changed || providers_changed;
-            // Only the sync's schedule reads it, so no viewer refreshes.
+            // Only the sync's schedule and sync health read it, so no viewer
+            // refreshes.
             sqlx::query!(
                 "UPDATE calendars SET system_calendar=$2 WHERE id=$1 AND system_calendar<>$2",
                 c.id,
