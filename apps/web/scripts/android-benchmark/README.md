@@ -140,15 +140,22 @@ not: pick items whose titles are unique in their list. Lists are virtual, so
 a row far down is not in the page: the harness scrolls the list from the top
 until the row renders, reading further pages as the list does, for up to
 20 s. Scrolling is untimed: when a step had to scroll to its target, the
-harness waits for the list to come to rest and finds the row again before the
-timed tap.
+harness waits at least a second, until the list has stopped loading
+(`aria-busy`) and its height has held for half a second, and finds the row
+again before the timed tap.
 
 The harness never opens a row that shows unread items (an unread rail or dot,
-or a mention count), because opening it would mark them read. Active channels
+or a mention count), because opening it would mark them read. A list can
+also move between finding the row and the touch landing (a row above it gets
+a message and moves up), so the page checks the touch itself: unless it lands
+inside the row it found, and that row still shows no unread, the page drops
+the touch and the events after it, and the step fails. Active channels
 turn unread often, so list several channels: when preparing the channel
 scenario each iteration uses the first candidate that is in the list and
-shows no unread, and skips the others with a warning. Each channel sample
-records its `target`: the candidate's position (`index` of `of`) and a short
+shows no unread, and skips the others with a warning. When every candidate
+shows unread, the iteration skips its channel steps and records a
+`channel.prepare` failure. Each channel sample (open and back) records its
+`target`: the candidate's position (`index` of `of`) and a short
 hash of its id (`fingerprint`), never its name. The summary has a `target`
 column and puts different targets in separate rows, warning when a run used
 more than one. Put the quietest channels first, as a run that moves to
@@ -159,7 +166,8 @@ not show, so pick documents without unread comments.
 Each scenario that opens items checks, when it prepares, that the app reached
 its list and that every item it opens is there, before its first step. A
 scenario that cannot prepare before it has ever measured a step stops the run
-with an error (a target file without the item, a renamed control); later in a
+with an error (a target file without the item, a renamed control, a target
+not in its list); later in a
 run it skips that iteration's steps and records a `<scenario>.prepare`
 failure. Opening still records the items as viewed, which reorders Recent
 lists and can move the channel's read position; the harness finds rows by

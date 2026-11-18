@@ -13,6 +13,8 @@ export type Step = {
   route: (targets: Targets) => string;
   /** The targets-file item the step opens, recorded with its sample. */
   opens?: TargetKey;
+  /** The item a back step leaves, whose size its time depends on: recorded too. */
+  leaves?: TargetKey;
 };
 
 export type Scenario = {
@@ -38,7 +40,7 @@ const tab = (label: string) => () =>
   `[...document.querySelectorAll('button')].filter((b) => b.textContent.trim() === ${quote(label)})`;
 
 /** A row's unread markers: an unread rail, a pin's dot, a mention count. */
-const UNREAD = '[data-unread="true"], [aria-label*="unread" i]';
+export const UNREAD = '[data-unread="true"], [aria-label*="unread" i]';
 
 /** Thrown in the page when a list holds no row with the title. */
 export const NOT_IN_LIST = 'is not in the list';
@@ -134,11 +136,12 @@ const VIEWS: { id: string; label: string; route: string; content?: string }[] = 
   },
 ];
 
-const back = (id: string, route: string): Step => ({
+const back = (id: string, route: string, leaves?: TargetKey): Step => ({
   id,
   target: button('Go Back'),
   ready: { root: navigation },
   route: () => route,
+  leaves,
 });
 
 export const SCENARIOS: Record<string, Scenario> = {
@@ -163,7 +166,7 @@ export const SCENARIOS: Record<string, Scenario> = {
         route: (targets) => `/channel/${targets.channel?.id}`,
         opens: 'channel',
       },
-      back('channel.back', '#/channels'),
+      back('channel.back', '#/channels', 'channel'),
     ],
   },
   document: {

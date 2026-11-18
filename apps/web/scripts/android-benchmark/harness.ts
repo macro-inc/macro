@@ -1,7 +1,14 @@
 import type { Device } from './device';
 import { type Sample, sampleFrom, type Variant } from './measure';
 import type { CapturedSpan } from './otlp';
-import { NOT_IN_LIST, row, type Scenario, SHOWS_UNREAD, type Step } from './scenarios';
+import {
+  NOT_IN_LIST,
+  row,
+  type Scenario,
+  SHOWS_UNREAD,
+  type Step,
+  UNREAD,
+} from './scenarios';
 import { type Located, Session } from './session';
 import {
   candidates,
@@ -16,7 +23,7 @@ import {
 export const sleep = (ms: number) =>
   new Promise((done) => setTimeout(done, ms));
 
-/** How long a list gets to come to rest after scrolling to a target. */
+/** The least time a list gets to come to rest after scrolling to a target. */
 const SCROLL_SETTLE_MS = 1000;
 
 /**
@@ -32,6 +39,8 @@ async function settledTarget(
   for (let attempt = 0; point.moved; attempt++) {
     if (attempt === 3) throw new Error('The target kept moving');
     await sleep(SCROLL_SETTLE_MS);
+    // A scroll can load further pages; wait for them and their rows too.
+    await session.waitForQuiet();
     point = await session.waitFor(expression);
   }
   return point;
@@ -94,8 +103,12 @@ async function tapAndMeasure(
   const before = await session.cdp.evaluate<number>(
     'performance.timeOrigin + performance.now()'
   );
+  // Rows that open an item must not show unread when the touch lands.
+  await session.guardTap(step.opens ? UNREAD : undefined);
   await session.device.tap(point.x, point.y, holdMs);
   const start = await waitForTap(session, before);
+  const refused = await session.tapRefused();
+  if (refused) throw new Error(`${step.id}: touch dropped, ${refused}`);
   const root = await session.waitForSpan(
     (span) => span.start >= start && step.ready.root(span),
     start

@@ -71,6 +71,12 @@ describe('compareRuns', () => {
     expect(compareRuns(a, b).warnings[0]).toMatch(/unrecorded target/);
   });
 
+  it('checks the back step of a channel against its target too', () => {
+    const a = run([{ scenario: 'channel.back', readyMs: 300, target: channel(0, 'aaaa0000') }]);
+    const b = run([{ scenario: 'channel.back', readyMs: 300, target: channel(1, 'bbbb1111') }]);
+    expect(compareRuns(a, b).steps[0].differentTargets).toBe(true);
+  });
+
   it('lists steps only one run measured', () => {
     const a = run([{ scenario: 'view.mail', readyMs: 100 }]);
     const b = run([{ scenario: 'view.files', readyMs: 100 }]);

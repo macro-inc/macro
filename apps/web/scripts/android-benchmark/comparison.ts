@@ -22,8 +22,8 @@ export type ComparedStep = {
   differentTargets: boolean;
 };
 
-/** Steps that open a targets-file item; older results don't say which. */
-const OPENS_TARGET = /^(channel|document\.(small|large))\.open$/;
+/** Steps whose time depends on the target; older results don't say which. */
+const OPENS_TARGET = /^(channel\.(open|back)|document\.(small|large)\.open)$/;
 
 function key(sample: Results['samples'][number]) {
   return `${sample.cpuThrottle}\u0000${sample.scenario}\u0000${sample.variant}`;

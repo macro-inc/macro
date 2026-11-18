@@ -24,7 +24,12 @@ import {
 import { type Sample, sampleFrom } from './measure';
 import { SCENARIOS } from './scenarios';
 import { summarize } from './stats';
-import { candidates, fingerprint, parseTargets } from './targets';
+import {
+  candidates,
+  fingerprint,
+  NoCandidateError,
+  parseTargets,
+} from './targets';
 import { parseCpuThrottle } from './throttle';
 
 const { values: options } = parseArgs({
@@ -130,8 +135,10 @@ async function iteration(index: number, cpuThrottle: number) {
         const message = (error as Error).message;
         failures.push({ scenario: `${id}.prepare`, iteration: index, cpuThrottle, error: message });
         const ids = new Set(scenario.steps.map((step) => step.id));
-        // Not once measured: every iteration would fail the same way.
-        if (!samples.some((sample) => ids.has(sample.scenario)))
+        // Not once measured: every iteration would fail the same way. Every
+        // candidate showing unread is a moment, not a setup error: skip it.
+        const transient = error instanceof NoCandidateError && error.onlyUnread;
+        if (!transient && !samples.some((sample) => ids.has(sample.scenario)))
           throw new StopRun(`${id} could not prepare: ${message}`);
         console.warn(`  ${index} ${cpuThrottle}× ${id} could not prepare, skipped: ${message}`);
         continue;
@@ -141,7 +148,7 @@ async function iteration(index: number, cpuThrottle: number) {
         for (const step of scenario.steps) {
           try {
             const sample = await measureStep(session, step, targets, variant, index);
-            const target = choices.find((choice) => choice.key === step.opens);
+            const target = choices.find((choice) => choice.key === (step.opens ?? step.leaves));
             samples.push({ ...sample, target, hostLoad: loadavg()[0] });
             console.log(
               `  ${index} ${cpuThrottle}× ${variant.padEnd(4)} ${step.id.padEnd(22)} ${Math.round(sample.readyMs)} ms`

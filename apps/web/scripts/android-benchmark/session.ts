@@ -236,8 +236,11 @@ export class Session {
           if (element.getBoundingClientRect().top !== rect.top) moved = true;
         }
         const point = reachable(element);
-        if (point)
+        if (point) {
+          // What guardTap checks the touch against.
+          window.__macroBenchmarkTarget = element;
           return { x: point.x * devicePixelRatio, y: point.y * devicePixelRatio, moved };
+        }
       }
       return undefined;
     })()`);
@@ -273,9 +276,11 @@ export class Session {
       let scheduled = false;
       let observer;
       let interval;
-      const visible = () => [...document.querySelectorAll(selector)].slice(0, 20).some((element) => {
+      const visible = () => [...document.querySelectorAll(selector)].filter((element) => {
         const rect = element.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return false;
+        return rect.width > 0 && rect.height > 0;
+      }).slice(0, 20).some((element) => {
+        const rect = element.getBoundingClientRect();
         const y = rect.top + rect.height / 2;
         if (y < 0 || y > innerHeight) return false;
         const hit = document.elementFromPoint(rect.left + rect.width / 2, y);
@@ -309,6 +314,78 @@ export class Session {
       };
       addEventListener('pointerdown', arm, { capture: true, once: true, passive: true });
     })()`);
+  }
+
+  /**
+   * Guards the next touch: the list can move between finding the target and
+   * the touch landing (a row above it gets a message and moves up), and the
+   * touch would then open another row. Unless the touch lands inside the
+   * element the last {@link locate} returned, and that element shows no
+   * unread items when `refuseUnread` is set, the page drops the touch and the
+   * events that follow it. {@link tapRefused} says whether it did.
+   */
+  async guardTap(unreadSelector: string | undefined): Promise<void> {
+    await this.cdp.evaluate(`(() => {
+      const target = window.__macroBenchmarkTarget;
+      const unread = ${JSON.stringify(unreadSelector ?? null)};
+      const guard = (window.__macroBenchmarkGuard = { refused: undefined });
+      const drop = (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      };
+      const follow = ['pointerup', 'pointercancel', 'touchstart', 'touchend', 'mousedown', 'mouseup', 'click'];
+      const check = (event) => {
+        if (!target || !target.isConnected || !(event.target instanceof Node) || !target.contains(event.target))
+          guard.refused = 'the touch landed outside the target';
+        else if (unread && target.querySelector(unread))
+          guard.refused = 'the target shows unread items';
+        if (!guard.refused) return;
+        drop(event);
+        for (const type of follow) addEventListener(type, drop, { capture: true });
+        setTimeout(() => {
+          for (const type of follow) removeEventListener(type, drop, { capture: true });
+        }, 2000);
+      };
+      addEventListener('pointerdown', check, { capture: true, once: true });
+    })()`);
+  }
+
+  /** Why the guarded touch was dropped, if it was. */
+  async tapRefused(): Promise<string | undefined> {
+    return (
+      (await this.cdp.evaluate<string | null>(
+        'window.__macroBenchmarkGuard?.refused ?? null'
+      )) ?? undefined
+    );
+  }
+
+  /**
+   * Waits until a list has finished reacting to a scroll: no element says it
+   * is loading (`aria-busy`) and the scroll containers' heights have held
+   * for half a second, up to `timeoutMs`.
+   */
+  async waitForQuiet(timeoutMs = 10_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    let last = '';
+    let stableSince = Date.now();
+    while (Date.now() < deadline) {
+      const state = await this.cdp.evaluate<string>(`(() => {
+        const busy = document.querySelector('[aria-busy="true"]') !== null;
+        const heights = [...document.querySelectorAll('[data-soup-entity]')]
+          .slice(0, 1)
+          .map((row) => {
+            let scroller = row.parentElement;
+            while (scroller && !/auto|scroll/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+            return scroller ? scroller.scrollHeight : 0;
+          });
+        return (busy ? 'busy' : 'idle') + ':' + document.querySelectorAll('[data-soup-entity]').length + ':' + heights.join(',');
+      })()`);
+      if (state !== last) {
+        last = state;
+        stableSince = Date.now();
+      } else if (!state.startsWith('busy') && Date.now() - stableSince >= 500) return;
+      await sleep(100);
+    }
   }
 
   /** When the watched content was painted, waiting up to `timeoutMs`. */

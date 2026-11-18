@@ -92,6 +92,16 @@ const DESCRIPTIONS: Record<Exclude<Observation, 'quiet'>, string> = {
   missing: 'is not in the list',
 };
 
+/** No candidate could be opened; `onlyUnread` when each one was there but unread. */
+export class NoCandidateError extends Error {
+  constructor(
+    message: string,
+    readonly onlyUnread: boolean
+  ) {
+    super(message);
+  }
+}
+
 /**
  * Picks the first candidate whose row shows no unread, looking at each in
  * order and none after it: finding a row can mean scrolling a long list.
@@ -107,8 +117,10 @@ export async function chooseCandidate(
       `Set ${key === 'channel' ? 'channel or channels' : key} in the targets file`
     );
   const skipped: string[] = [];
+  let onlyUnread = true;
   for (const [index, candidate] of items.entries()) {
     const observation = await observe(candidate);
+    onlyUnread &&= observation === 'unread';
     if (observation === 'quiet')
       return {
         choice: { key, index, of: items.length, fingerprint: fingerprint(candidate.id) },
@@ -116,5 +128,8 @@ export async function chooseCandidate(
       };
     skipped.push(`${key} candidate ${index} ${DESCRIPTIONS[observation]}`);
   }
-  throw new Error(`No ${key} candidate can be opened: ${skipped.join('; ')}`);
+  throw new NoCandidateError(
+    `No ${key} candidate can be opened: ${skipped.join('; ')}`,
+    onlyUnread
+  );
 }

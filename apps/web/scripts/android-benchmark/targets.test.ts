@@ -3,6 +3,7 @@ import {
   candidates,
   chooseCandidate,
   fingerprint,
+  NoCandidateError,
   type Observation,
   parseTargets,
   type TargetItem,
@@ -105,6 +106,22 @@ describe('chooseCandidate', () => {
       'No channel candidate can be opened: channel candidate 0 shows unread; channel candidate 1 is not in the list'
     );
     await expect(failure).rejects.not.toThrow(/Alpha|Beta/);
+  });
+
+  it('tells an all-unread moment from a setup error', async () => {
+    const unread = await chooseCandidate(
+      'channel',
+      [A, B],
+      observer({ Alpha: 'unread', Beta: 'unread' }).observe
+    ).catch((error: unknown) => error);
+    expect(unread).toBeInstanceOf(NoCandidateError);
+    expect((unread as NoCandidateError).onlyUnread).toBe(true);
+    const missing = await chooseCandidate(
+      'channel',
+      [A, B],
+      observer({ Alpha: 'unread', Beta: 'missing' }).observe
+    ).catch((error: unknown) => error);
+    expect((missing as NoCandidateError).onlyUnread).toBe(false);
   });
 
   it('asks for the key when there is no candidate', async () => {
