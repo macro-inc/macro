@@ -144,6 +144,7 @@ type BuilderProps = ManagedDialogProps & {
         title?: string;
         submitLabel?: string;
         source: 'builder' | 'save_filters' | 'duplicate';
+        existing?: SavedView;
       }
     | { mode: 'edit'; record: SavedView }
   );
@@ -196,6 +197,7 @@ function EmailSavedViewDialog(props: BuilderProps) {
       {...shared}
       mode="create"
       id={props.id}
+      existing={props.existing}
       name={props.name}
       sharedTeamId={props.sharedTeamId}
       config={config()}
@@ -273,6 +275,7 @@ function useOpenEmailSavedViewBuilder(owner: Owner | null = getOwner()) {
             request.isCurrent() && creation.current()?.id === draft.id,
           mode: 'create' as const,
           id: draft.id,
+          existing: creation.persisted(),
           name: draft.name,
           sharedTeamId: draft.sharedTeamId,
           title: opening.copyOf ? t('emailViews.duplicateTitle') : undefined,

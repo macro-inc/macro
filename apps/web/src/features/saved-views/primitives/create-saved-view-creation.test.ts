@@ -63,7 +63,12 @@ describe('new saved-view lifecycle and ordering', () => {
   it('does not retain a saved record when its list arrived before confirmation', () => {
     const state = setup();
     const draft = state.creation.begin({}, 'New view');
-    const confirmed = { ...SAVED, id: draft.id };
+    const confirmed = {
+      ...SAVED,
+      id: draft.id,
+      name: 'New view',
+      config: { filter: '' },
+    };
     state.setRecords([SAVED, confirmed]);
     expect(state.creation.confirm(confirmed)).toBe(true);
     state.setRecords([SAVED]);
@@ -74,7 +79,12 @@ describe('new saved-view lifecycle and ordering', () => {
   it('appends the saved draft and does not resurrect it after list removal', () => {
     const state = setup();
     const draft = state.creation.begin({}, 'New view');
-    const confirmed = { ...SAVED, id: draft.id, name: 'New view' };
+    const confirmed = {
+      ...SAVED,
+      id: draft.id,
+      name: 'New view',
+      config: { filter: '' },
+    };
     expect(state.creation.confirm(confirmed)).toBe(true);
     expect(state.creation.items()?.map((record) => record.id)).toEqual([
       'existing',

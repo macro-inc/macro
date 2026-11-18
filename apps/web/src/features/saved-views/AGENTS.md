@@ -26,7 +26,7 @@ Reusable named view definitions. Consumers are main Tasks, Projects, and Email; 
 - Do not migrate CRM's legacy personal views or team settings into this consumer.
 - Share definitions, not access to their matching entities; the backend owns authorization.
 - Rebuild loaded cursor chains after confirmed membership changes; never invent permission state or splice a full page.
-- Keep consumer edits on failed saves; only confirmed writes replace the baseline, and Reset adopts the latest authorized definition withheld during editing.
+- Keep consumer edits on failed or stale saves; if edits arrive during initial creation, retain the draft and retry with the confirmed record's revision. Only matching confirmed writes replace the baseline, and Reset adopts the latest authorized definition withheld during editing.
 - Keep same-viewer confirmed definitions through transient read errors; explicit unavailable data and account changes must hide the previous definition.
 - Keep sharing guidance beside the checkbox as a focusable info control; support hover and tap without toggling sharing.
 - Identify the saved view by name in edit and delete dialog titles; wrap long names on narrow screens.

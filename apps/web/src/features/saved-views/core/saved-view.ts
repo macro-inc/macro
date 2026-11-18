@@ -37,10 +37,12 @@ export function appendSavedViewDraft(
   records: readonly SavedView[],
   draft?: NewSavedView
 ): SavedViewEntry[] {
-  const entries: SavedViewEntry[] = records.map((record) => ({
-    kind: 'saved',
-    record,
-  }));
+  const entries: SavedViewEntry[] = records
+    .filter((record) => record.id !== draft?.id)
+    .map((record) => ({
+      kind: 'saved',
+      record,
+    }));
   if (draft) entries.push({ kind: 'draft', draft });
   return entries;
 }

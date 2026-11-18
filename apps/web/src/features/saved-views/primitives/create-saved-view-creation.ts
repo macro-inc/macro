@@ -29,6 +29,7 @@ export function createSavedViewCreation(options: {
     baseline?: { config: unknown; name: string };
     changed: boolean;
     confirmed?: SavedView;
+    persisted?: SavedView;
     saving: boolean;
   }>({ changed: false, saving: false });
   let navigate = (action: () => void) => action();
@@ -49,6 +50,7 @@ export function createSavedViewCreation(options: {
           baseline: undefined,
           changed: false,
           confirmed: undefined,
+          persisted: undefined,
         });
       },
       { defer: true }
@@ -69,11 +71,21 @@ export function createSavedViewCreation(options: {
       name,
       sharedTeamId: null,
     };
-    setState({ draft, baseline: { config, name }, changed });
+    setState({
+      draft,
+      baseline: { config, name },
+      changed,
+      persisted: undefined,
+    });
     return draft;
   };
   const discard = () =>
-    setState({ draft: undefined, baseline: undefined, changed: false });
+    setState({
+      draft: undefined,
+      baseline: undefined,
+      changed: false,
+      persisted: undefined,
+    });
   const dirty = () => {
     const draft = current();
     const baseline = state.baseline;
@@ -91,11 +103,22 @@ export function createSavedViewCreation(options: {
     if (state.draft) setState('draft', patch);
   };
   const confirm = (record: SavedView) => {
-    if (!state.draft || state.draft.id !== record.id) return false;
+    const draft = state.draft;
+    if (!draft || draft.id !== record.id) return false;
     setState(
       'confirmed',
       options.list()?.some((item) => item.id === record.id) ? undefined : record
     );
+    const matches =
+      draft.name.trim() === record.name &&
+      draft.sharedTeamId === record.sharedTeamId &&
+      options.equal(options.capture(), record.config);
+    if (!matches) {
+      // The first write succeeded, but newer edits still belong to this draft.
+      // Retry updates that newly-created record rather than replaying creation.
+      setState({ persisted: record, changed: true });
+      return false;
+    }
     discard();
     options.confirmed?.();
     return true;
@@ -143,6 +166,7 @@ export function createSavedViewCreation(options: {
     items,
     entries,
     saving: () => state.saving,
+    persisted: () => state.persisted,
     viewerId: options.viewerId,
     isInternalNavigation: () => internalNavigation,
     internalNavigation: <T>(action: () => T): T => {

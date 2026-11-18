@@ -206,6 +206,7 @@ function useCreateTaskSavedViewDialog(owner = getOwner()) {
           request.isCurrent() && creation?.current()?.id === draft.id,
         mode: 'create' as const,
         id: draft.id,
+        existing: creation?.persisted(),
         name: draft.name,
         sharedTeamId: draft.sharedTeamId,
         config: savedViews.capture().unwrapOr(draft.config),

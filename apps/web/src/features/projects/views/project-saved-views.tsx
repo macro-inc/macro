@@ -114,6 +114,7 @@ function createProjectViewDialogs(views: ProjectViews, owner = getOwner()) {
       () => ({
         mode: 'create' as const,
         id: draft.id,
+        existing: views.creation.persisted(),
         name: draft.name,
         sharedTeamId: draft.sharedTeamId,
         config: views.draft.capture().unwrapOr(draft.config),
