@@ -161,13 +161,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   admins (`teams`) and sends `agent_sign_in_expiry` (agent `claude`; inbox, gateway, push)
   on the harness entity, with an id derived from harness, sign-in, stage and
   expiry so replicas and retries never notify twice.
-- `src/computers/setup_notice.rs`: `IngressSetupNotices`, the operator's
-  `SetupNotices` port: sends the buyer `computer_setup` (ready, or failed with
-  the status's failure reason; inbox, gateway, push) on the team entity, with
-  an id derived from computer and outcome (plus `failed_at` for a failure).
-  An agent teammate's computer goes to the agent's inviter instead, with
-  `agent { userId, name }` read from `team_agents` (`PgTeamAgentsRepo`); a
-  removed agent, or one whose inviter is gone, sends nothing.
+- The operator's `SetupNotices` port is `IngressSetupNotices` in
+  `crates/team_agents` (`outbound/setup_notices.rs`), shared with the auth
+  service's agent ready notice; see that crate's `AGENTS.md`.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Wherever
   the harness can run code, every client but ChatGPT gets only

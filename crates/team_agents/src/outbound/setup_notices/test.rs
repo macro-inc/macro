@@ -1,5 +1,8 @@
 use std::sync::Mutex;
 
+use crate::domain::models::{
+    AgentReady, ComputerDetails, CreatedAccount, NewAgentAccount, PersonaSeed, TeamAgentRecord,
+};
 use chrono::{TimeZone, Utc};
 use harness_id::HarnessId;
 use hosted_runtimes::domain::ids::ComputerId;
@@ -10,7 +13,6 @@ use notification::domain::service::SendNotificationError;
 use rootcause::Report;
 use serde::Serialize;
 use serde_json::json;
-use team_agents::domain::models::{NewAgentAccount, PersonaSeed, TeamAgentRecord};
 
 use super::*;
 
@@ -39,6 +41,10 @@ fn failed_at(hour: u32) -> SetupNotice {
     }
 }
 
+fn id(notice: &SetupNotice) -> Uuid {
+    notification_id(notice.computer_id, &notice.outcome)
+}
+
 #[test]
 fn every_delivery_of_an_outcome_has_one_notification_id_and_each_attempt_its_own() {
     let renamed = SetupNotice {
@@ -50,17 +56,11 @@ fn every_delivery_of_an_outcome_has_one_notification_id_and_each_attempt_its_own
         ..ready()
     };
 
-    assert_eq!(notification_id(&ready()), notification_id(&renamed));
-    assert_ne!(notification_id(&ready()), notification_id(&other_computer));
-    assert_eq!(
-        notification_id(&failed_at(12)),
-        notification_id(&failed_at(12))
-    );
-    assert_ne!(
-        notification_id(&failed_at(12)),
-        notification_id(&failed_at(13))
-    );
-    assert_ne!(notification_id(&ready()), notification_id(&failed_at(12)));
+    assert_eq!(id(&ready()), id(&renamed));
+    assert_ne!(id(&ready()), id(&other_computer));
+    assert_eq!(id(&failed_at(12)), id(&failed_at(12)));
+    assert_ne!(id(&failed_at(12)), id(&failed_at(13)));
+    assert_ne!(id(&ready()), id(&failed_at(12)));
 }
 
 #[derive(Default)]
@@ -93,7 +93,7 @@ struct Unused;
 impl TeamAgentRepository for Agents {
     type Err = Unused;
 
-    async fn create_account(&self, _: &NewAgentAccount) -> Result<(), Unused> {
+    async fn create_account(&self, _: &NewAgentAccount) -> Result<CreatedAccount, Unused> {
         Err(Unused)
     }
 
@@ -116,6 +116,10 @@ impl TeamAgentRepository for Agents {
     async fn list_for_team(&self, _: Uuid) -> Result<Vec<TeamAgentRecord>, Unused> {
         Err(Unused)
     }
+
+    async fn mark_online(&self, _: &MacroUserIdStr<'_>) -> Result<(), Unused> {
+        Err(Unused)
+    }
 }
 
 fn ada(created_by: Option<&str>) -> TeamAgentRecord {
@@ -131,6 +135,7 @@ fn ada(created_by: Option<&str>) -> TeamAgentRecord {
             voice: None,
         },
         created_at: chrono::DateTime::UNIX_EPOCH,
+        first_online_at: None,
     }
 }
 
@@ -141,11 +146,84 @@ fn agent_ready() -> SetupNotice {
     }
 }
 
+fn agent_failed() -> SetupNotice {
+    SetupNotice {
+        agent: agent_ready().agent,
+        ..failed_at(12)
+    }
+}
+
 async fn sent(notice: SetupNotice, agents: Vec<TeamAgentRecord>) -> Vec<serde_json::Value> {
     let ingress = Arc::new(CapturingIngress::default());
     let notices = IngressSetupNotices::new(Arc::clone(&ingress), Agents(agents));
-    notices.send(notice).await.unwrap();
+    SetupNotices::send(&notices, notice).await.unwrap();
     ingress.0.lock().unwrap().clone()
+}
+
+fn ada_is_up() -> AgentReady {
+    AgentReady {
+        computer_id: ready().computer_id,
+        team_id: ready().team_id,
+        computer: ComputerDetails {
+            name: "Build box".to_owned(),
+            harness_id: ready().harness_id,
+        },
+        inviter: MacroUserIdStr::try_from("macro|inviter@example.com".to_owned()).unwrap(),
+        agent: agent_ready().agent.unwrap(),
+        agent_name: "Ada".to_owned(),
+    }
+}
+
+#[tokio::test]
+async fn an_agent_invited_before_online_reports_is_still_told_about_when_macrod_connects() {
+    // Backfilled as online: its workspace never reports, so the operator's
+    // ready notice is the only one it gets.
+    let legacy = TeamAgentRecord {
+        first_online_at: Some(chrono::DateTime::UNIX_EPOCH),
+        ..ada(Some("macro|inviter@example.com"))
+    };
+
+    let sent = sent(agent_ready(), vec![legacy]).await;
+
+    assert_eq!(sent.len(), 1);
+    assert_eq!(
+        sent[0]["req"]["recipient_ids"],
+        json!(["macro|inviter@example.com"])
+    );
+    assert_eq!(sent[0]["uuid_to_write"], json!(id(&agent_ready())));
+}
+
+#[tokio::test]
+async fn an_agent_computer_is_not_ready_when_macrod_connects_but_when_its_agent_is_up() {
+    // macrod connecting doesn't start the agent; nothing is sent for it.
+    assert_eq!(
+        sent(agent_ready(), vec![ada(Some("macro|inviter@example.com"))]).await,
+        Vec::<serde_json::Value>::new()
+    );
+
+    let ingress = Arc::new(CapturingIngress::default());
+    let notices = IngressSetupNotices::new(Arc::clone(&ingress), Agents(vec![]));
+    AgentReadyNotices::send(&notices, ada_is_up())
+        .await
+        .unwrap();
+    let sent = ingress.0.lock().unwrap().clone();
+
+    assert_eq!(sent.len(), 1);
+    assert_eq!(
+        sent[0]["req"]["recipient_ids"],
+        json!(["macro|inviter@example.com"])
+    );
+    assert_eq!(
+        sent[0]["req"]["notification"]["content"]["agent"],
+        json!({ "userId": "macro|ada@agents.macro.invalid", "name": "Ada" })
+    );
+    assert_eq!(
+        sent[0]["req"]["notification"]["content"]["outcome"],
+        json!({ "kind": "ready" })
+    );
+    // The computer's one ready notice: an older operator's, sent when macrod
+    // connected, is the same notification.
+    assert_eq!(sent[0]["uuid_to_write"], json!(id(&agent_ready())));
 }
 
 #[tokio::test]
@@ -161,8 +239,8 @@ async fn a_plain_computers_notice_goes_to_its_buyer_without_an_agent() {
 }
 
 #[tokio::test]
-async fn an_agent_computers_notice_goes_to_the_agents_inviter_by_the_agents_name() {
-    let sent = sent(agent_ready(), vec![ada(Some("macro|inviter@example.com"))]).await;
+async fn an_agent_computers_failure_goes_to_the_agents_inviter_by_the_agents_name() {
+    let sent = sent(agent_failed(), vec![ada(Some("macro|inviter@example.com"))]).await;
 
     assert_eq!(sent.len(), 1);
     assert_eq!(
@@ -178,11 +256,11 @@ async fn an_agent_computers_notice_goes_to_the_agents_inviter_by_the_agents_name
 #[tokio::test]
 async fn a_removed_agent_or_a_deleted_inviter_has_no_one_to_tell() {
     assert_eq!(
-        sent(agent_ready(), vec![]).await,
+        sent(agent_failed(), vec![]).await,
         Vec::<serde_json::Value>::new()
     );
     assert_eq!(
-        sent(agent_ready(), vec![ada(None)]).await,
+        sent(agent_failed(), vec![ada(None)]).await,
         Vec::<serde_json::Value>::new()
     );
 }

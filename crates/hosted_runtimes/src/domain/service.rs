@@ -20,6 +20,8 @@ use crate::domain::ports::{
 };
 use crate::domain::size::ComputerSize;
 
+mod agent_invites;
+pub use agent_invites::MAX_AGENT_ATTEMPTS;
 mod billing;
 pub use billing::{ObservedItem, SubscriptionObserved, SubscriptionStatus};
 mod purchase;
@@ -403,6 +405,20 @@ impl<
         self.require_attached().await?;
         let event = if on { Event::PowerOn } else { Event::PowerOff };
         self.apply_for_team(team_id, computer_id, event).await
+    }
+
+    /// The agent teammate the computer runs reported itself online, which
+    /// ends its first start. Not gated on an attached fleet: it changes only
+    /// the computer's record. Telling it again changes nothing.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn agent_online(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<(), ComputerError> {
+        self.team_computer(team_id, computer_id).await?;
+        self.apply(computer_id, Event::AgentOnline).await?;
+        Ok(())
     }
 
     /// Retry a computer that gave up restarting, without changing its billing.

@@ -70,14 +70,13 @@ pub struct GuestImages<Image> {
 }
 
 impl<Image> GuestImages<Image> {
-    /// The image a new guest is created from: the agent image when its
-    /// enrollment carries an agent. A guest recreated after a loss enrolls
-    /// the same way, so an agent computer stays on the agent image.
+    /// The image a new guest is created from: the agent image for an agent
+    /// computer. A guest recreated after a loss enrolls with the same role,
+    /// so an agent computer stays on the agent image.
     pub fn for_enrollment(&self, enrollment: &Enrollment) -> &Image {
-        if enrollment.agent.is_some() {
-            &self.agent
-        } else {
-            &self.regular
+        match enrollment.role {
+            crate::domain::enrollment::ComputerRole::Agent => &self.agent,
+            crate::domain::enrollment::ComputerRole::Person => &self.regular,
         }
     }
 

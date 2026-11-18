@@ -500,9 +500,10 @@ export type CreateTeamAgent = {
      */
     avatarUrl?: string | null;
     /**
-     * What the agent is responsible for. Seeds its workspace.
+     * What the agent is responsible for. Seeds its workspace; when this and
+     * `personality` are empty the agent asks its owner what to take on.
      */
-    jobDescription: string;
+    jobDescription?: string;
     /**
      * Display name.
      */
@@ -510,7 +511,7 @@ export type CreateTeamAgent = {
     /**
      * How the agent behaves and talks. Seeds its workspace.
      */
-    personality: string;
+    personality?: string;
     /**
      * One key per Invite dialog, reused when the invite is retried, so a
      * retry never buys a second computer.
@@ -1814,6 +1815,13 @@ export type PurchaseBody = {
 };
 
 /**
+ * Why a purchase was refused, as a stable code the buy and add-agent dialogs
+ * show their own way. One vocabulary for `/team/computers` and
+ * `/team_agents`.
+ */
+export type PurchaseRefusalCode = 'team_on_trial' | 'payment_declined' | 'no_room' | 'invite_in_progress';
+
+/**
  * Where a purchase stands when its request returns.
  */
 export type PurchaseState = 'ready' | 'confirming';
@@ -2397,9 +2405,22 @@ export type TeamAgent = {
 };
 
 /**
+ * [`ErrorResponse`] plus a stable code for refusals the invite dialog shows
+ * its own way rather than as a message.
+ */
+export type TeamAgentErrorBody = {
+    code?: null | PurchaseRefusalCode;
+    /**
+     * Human-readable message.
+     */
+    message: string;
+    size?: null | ComputerSize;
+};
+
+/**
  * Where an agent teammate is, from its computer.
  */
-export type TeamAgentStatus = 'provisioning' | 'running' | 'paused' | 'failed' | 'released';
+export type TeamAgentStatus = 'provisioning' | 'starting' | 'running' | 'paused' | 'failed' | 'released';
 
 /**
  * A team's agents.
@@ -5167,8 +5188,15 @@ export type CreateTeamAgentData = {
 export type CreateTeamAgentErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * The card was declined (`payment_declined`); nothing was created
+     */
+    402: TeamAgentErrorBody;
     403: ErrorResponse;
-    409: ErrorResponse;
+    /**
+     * No room for the size (`no_room`, with `size`), or the invite is in flight (`invite_in_progress`); nothing was created
+     */
+    409: TeamAgentErrorBody;
     500: ErrorResponse;
     502: ErrorResponse;
 };
@@ -5180,6 +5208,28 @@ export type CreateTeamAgentResponses = {
 };
 
 export type CreateTeamAgentResponse = CreateTeamAgentResponses[keyof CreateTeamAgentResponses];
+
+export type ReportTeamAgentOnlineData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team_agents/me/online';
+};
+
+export type ReportTeamAgentOnlineErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ReportTeamAgentOnlineError = ReportTeamAgentOnlineErrors[keyof ReportTeamAgentOnlineErrors];
+
+export type ReportTeamAgentOnlineResponses = {
+    204: void;
+};
+
+export type ReportTeamAgentOnlineResponse = ReportTeamAgentOnlineResponses[keyof ReportTeamAgentOnlineResponses];
 
 export type DeleteTeamAgentData = {
     body?: never;

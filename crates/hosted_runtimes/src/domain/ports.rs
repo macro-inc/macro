@@ -386,6 +386,22 @@ pub trait ComputerRepo: Send + Sync + 'static {
     fn allocation(&self) -> impl Future<Output = Result<Vec<HostAllocation>, Self::Err>> + Send;
 }
 
+/// Takes back an agent teammate whose computer was released after failing
+/// its first start: the agent teammates domain, which depends on this crate,
+/// implements it.
+pub trait AgentInvites: Send + Sync + 'static {
+    /// Undo failure; the effect is retried.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Remove `agent` from `team_id` as removing an agent does, keeping its
+    /// account. Idempotent: an agent already taken back is done.
+    fn undo_invite(
+        &self,
+        team_id: Uuid,
+        agent: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
 /// Errors from billing a team.
 #[derive(Debug, thiserror::Error)]
 pub enum BillingError {
@@ -457,6 +473,16 @@ pub trait Billing: Send + Sync + 'static {
         size: ComputerSize,
     ) -> impl Future<Output = Result<Quote, BillingError>> + Send;
 
+    /// The price to buy one computer of `size` at, from ONE read of the
+    /// team's subscription: refuses a trialing team with
+    /// [`BillingError::TeamOnTrial`] (computers are for paying teams) and
+    /// fetches no price details, which a purchase does not need.
+    fn purchase_price(
+        &self,
+        team_id: Uuid,
+        size: ComputerSize,
+    ) -> impl Future<Output = Result<stripe::PriceId, BillingError>> + Send;
+
     /// Add the computer's own item at its saved `price_id`, plus
     /// `extra_items`, in ONE update that fails rather than leaving an unpaid
     /// invoice. `idempotency_key` makes a retried call a no-op returning the
@@ -502,6 +528,19 @@ pub trait Billing: Send + Sync + 'static {
         subscription_item: &SubscriptionItemId,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<(), BillingError>> + Send;
+
+    /// Undo the purchase of `computer_id`: credit note the computer's lines
+    /// on the invoice its purchase paid, refunding the part paid by card and
+    /// restoring any part paid from the team's credit balance. Idempotent on
+    /// `idempotency_key`; a replay answers with the same credit note. `None`
+    /// when no paid invoice carries the computer, so nothing was charged.
+    fn refund_computer_purchase(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<Option<crate::domain::lifecycle::PurchaseRefund>, BillingError>>
+    + Send;
 
     /// Refuse a team whose subscription is trialing with
     /// [`BillingError::TeamOnTrial`]: every computer item (purchase, undo,
@@ -726,6 +765,18 @@ pub trait Harnesses: Send + Sync + 'static {
     /// to it, so no agent is left on a machine that is gone; absent is fine.
     /// Safe to repeat: a retry still finds agents bound to a deleted harness.
     fn revoke(&self, computer: &Computer) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Ask for the agent teammate of `computer_id` (enrollment `generation`)
+    /// to be handed to macrod on `harness_id`, so the guest starts it.
+    /// Carries no credential: the replica holding macrod's socket issues the
+    /// agent's environment and sends it down that socket. Not confirmed here:
+    /// the agent's own online report is.
+    fn deliver_agent(
+        &self,
+        harness_id: HarnessId,
+        computer_id: ComputerId,
+        generation: crate::domain::enrollment::EnrollmentGeneration,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Give the team a coding agent on the computer's harness, created by the
     /// buyer. Skips when an agent is already bound to the harness.

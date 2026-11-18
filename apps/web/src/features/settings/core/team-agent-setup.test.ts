@@ -33,6 +33,10 @@ describe('teamAgentRunState', () => {
     expect(teamAgentRunState({ status: 'provisioning' }, undefined)).toBe(
       'setting_up'
     );
+    // The computer is up but the agent hasn't come online yet.
+    expect(teamAgentRunState({ status: 'starting' }, { connected: true })).toBe(
+      'setting_up'
+    );
     expect(teamAgentRunState({ status: 'failed' }, undefined)).toBe(
       'setup_failed'
     );

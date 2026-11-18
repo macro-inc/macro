@@ -271,6 +271,7 @@ struct FakeHarnesses {
     enrollments: Mutex<Vec<Option<HarnessId>>>,
     fail_default_agent: std::sync::atomic::AtomicBool,
     default_agents: Mutex<Vec<(ComputerId, HarnessId)>>,
+    delivered_agents: Mutex<Vec<(HarnessId, ComputerId, EnrollmentGeneration)>>,
 }
 
 impl Harnesses for FakeHarnesses {
@@ -307,6 +308,19 @@ impl Harnesses for FakeHarnesses {
     }
 
     async fn revoke(&self, _computer: &Computer) -> Result<(), FakeError> {
+        Ok(())
+    }
+
+    async fn deliver_agent(
+        &self,
+        harness_id: HarnessId,
+        computer_id: ComputerId,
+        generation: EnrollmentGeneration,
+    ) -> Result<(), FakeError> {
+        self.delivered_agents
+            .lock()
+            .unwrap()
+            .push((harness_id, computer_id, generation));
         Ok(())
     }
 
@@ -419,7 +433,7 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
                 name: ComputerName::try_new("Ada").unwrap(),
                 deployment: crate::domain::fakes::deployment(),
                 traceparent: None,
-                agent: None,
+                role: crate::domain::enrollment::ComputerRole::Person,
             },
             true,
         )]

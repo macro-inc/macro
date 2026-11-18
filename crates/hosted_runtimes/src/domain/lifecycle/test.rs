@@ -6,7 +6,9 @@ use proptest::prelude::*;
 use super::*;
 
 mod billing;
+mod charging;
 mod comped;
+mod first_start;
 mod instance_lost;
 mod setup_notice;
 
@@ -44,6 +46,9 @@ fn billed(phase: Phase) -> ComputerState {
         capacity_wait: None,
         retried_by_team: false,
         failure: None,
+        awaiting_agent: false,
+        first_start_failures: 0,
+        refund: None,
     }
 }
 
@@ -75,6 +80,9 @@ fn stopped_computer_starts_on_power_on() {
         capacity_wait: None,
         retried_by_team: false,
         failure: None,
+        awaiting_agent: false,
+        first_start_failures: 0,
+        refund: None,
     };
 
     let (next, effects) = transition(&state, &Event::PowerOn, context(true)).unwrap();
@@ -97,6 +105,9 @@ fn stopped_computer_starts_on_power_on() {
             capacity_wait: None,
             retried_by_team: false,
             failure: None,
+            awaiting_agent: false,
+            first_start_failures: 0,
+            refund: None,
         }
     );
     assert_eq!(
@@ -119,6 +130,7 @@ fn a_confirmed_purchase_provisions_with_room() {
         },
         crate::domain::setup::SetupTimeline::started(now() - Duration::seconds(5)),
         None,
+        false,
         context(true),
     );
 
@@ -144,6 +156,7 @@ fn a_confirmed_purchase_on_a_full_host_creates_stopped_and_waits() {
         },
         crate::domain::setup::SetupTimeline::started(now()),
         None,
+        false,
         context(false),
     );
 
@@ -846,6 +859,9 @@ fn check(cases: Vec<Case>) {
             capacity_wait: None,
             retried_by_team: false,
             failure: None,
+            awaiting_agent: false,
+            first_start_failures: 0,
+            refund: None,
         };
 
         let outcome = transition(&state, &case.event, context(case.host_has_room));
@@ -966,6 +982,7 @@ proptest! {
                         active(),
                         crate::domain::setup::SetupTimeline::started(now()),
                         None,
+                        false,
                         Context {
                             host: HOST,
                             enrollment_generation: crate::domain::enrollment::EnrollmentGeneration::new(0),

@@ -765,6 +765,10 @@ async fn run_server() -> anyhow::Result<()> {
         ),
         agent_credentials::rollout::PgAgentCreators::new(db.clone()),
         feature_flags.clone(),
+        team_agents::outbound::setup_notices::IngressSetupNotices::new(
+            notification_ingress_service.clone(),
+            team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
+        ),
         crate::outbound::agent_addresses::AgentAddresses,
     ));
     let domain_notice_service =
@@ -804,6 +808,13 @@ async fn run_server() -> anyhow::Result<()> {
     let computer_billing = TaskTracker::new();
     computer_billing.spawn(run_computer_billing_effects(
         computer_service.clone(),
+        computer_billing_stop.clone(),
+    ));
+    // Takes back the agent teammate of a computer released after failing its
+    // first start.
+    computer_billing.spawn(run_computer_agent_effects(
+        computer_service.clone(),
+        team_agents_service.clone(),
         computer_billing_stop.clone(),
     ));
     computer_billing.close();
@@ -1085,6 +1096,30 @@ const IOS_APP_BUNDLE_ID: &str = "com.macro.app.prod";
 
 /// How often due computer billing effects are carried out.
 const COMPUTER_BILLING_TICK: std::time::Duration = std::time::Duration::from_secs(10);
+
+async fn run_computer_agent_effects(
+    service: Arc<crate::api::context::ComputerServiceType>,
+    team_agents: Arc<crate::api::context::TeamAgentsServiceType>,
+    stop: CancellationToken,
+) {
+    let mut interval = tokio::time::interval(COMPUTER_BILLING_TICK);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            () = stop.cancelled() => return,
+            _ = interval.tick() => {}
+        }
+        match service.run_agent_effects(team_agents.as_ref()).await {
+            Ok(_) => {}
+            Err(error) if error.is_storage_unavailable() => {
+                tracing::warn!("computer storage unavailable; agent effects pass skipped");
+            }
+            Err(error) => {
+                tracing::error!(error = ?error, "computer agent effects pass failed");
+            }
+        }
+    }
+}
 
 async fn run_computer_billing_effects(
     service: Arc<crate::api::context::ComputerServiceType>,

@@ -60,7 +60,6 @@ pub struct ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier> {
     notices: SetupNotifier,
     clock: Time,
     deployment: std::sync::Arc<dyn crate::domain::enrollment::DeploymentSource>,
-    agents: std::sync::Arc<dyn crate::domain::agent::AgentEnrollmentSource>,
     host: tokio::sync::Mutex<HostReadiness>,
 }
 
@@ -97,23 +96,12 @@ where
             notices,
             clock,
             deployment,
-            agents: std::sync::Arc::new(crate::domain::agent::NoAgentEnrollment),
             host: tokio::sync::Mutex::new(HostReadiness::default()),
         };
         // Fleet connectivity is independent of the harness's other routes.
         // Keep the operator so its periodic passes can recover registration.
         let _ = operator.host_id().await;
         Ok(operator)
-    }
-
-    /// Issue each agent computer's enrollment from `agents`. Without it,
-    /// every computer enrolls without an agent.
-    pub fn with_agent_enrollment(
-        mut self,
-        agents: std::sync::Arc<dyn crate::domain::agent::AgentEnrollmentSource>,
-    ) -> Self {
-        self.agents = agents;
-        self
     }
 
     async fn host_id(&self) -> Result<HostId, ComputerError> {
@@ -365,12 +353,16 @@ where
                         "invalid enrollment generation"
                     )));
                 }
+                let role = match self.repo.agent_of(computer_id).await.map_err(internal)? {
+                    Some(_) => crate::domain::enrollment::ComputerRole::Agent,
+                    None => crate::domain::enrollment::ComputerRole::Person,
+                };
                 let enrollment = CreateEnrollment {
                     harnesses: &self.harnesses,
                     deployment: self.deployment.as_ref(),
-                    agents: self.agents.as_ref(),
                     computer: &computer,
                     generation: *generation,
+                    role,
                 };
                 let result = match self
                     .fleet
@@ -432,6 +424,24 @@ where
                 self.harnesses.revoke(&computer).await.map_err(internal)?;
                 Ok(None)
             }
+            Effect::DeliverAgent => {
+                let computer = self.computer(computer_id).await?;
+                // The agent already reported online, or the computer is gone:
+                // nothing to hand over.
+                if !computer.state.awaiting_agent || !computer.state.is_live() {
+                    return Ok(None);
+                }
+                let Some(harness_id) = computer.harness_id else {
+                    return Err(ComputerError::Internal(rootcause::report!(
+                        "a connected computer has no harness"
+                    )));
+                };
+                self.harnesses
+                    .deliver_agent(harness_id, computer_id, computer.enrollment_generation)
+                    .await
+                    .map_err(internal)?;
+                Ok(None)
+            }
             Effect::PageOperator { reason } => {
                 // Alerting keys on this event; see the crate's AGENTS.md.
                 tracing::error!(computer_id = %computer_id, reason = %reason, "computer needs an operator");
@@ -455,11 +465,14 @@ where
                     .map_err(internal)?;
                 Ok(None)
             }
-            Effect::RemoveBillingItem { .. } | Effect::ScheduleTimer { .. } => {
-                Err(ComputerError::Internal(rootcause::report!(
-                    "a non-fleet effect reached the fleet worker"
-                )))
-            }
+            Effect::RemoveBillingItem { .. }
+            | Effect::RefundPurchase { .. }
+            | Effect::Charge
+            | Effect::SettleCharge { .. }
+            | Effect::ScheduleTimer { .. }
+            | Effect::UndoAgentInvite => Err(ComputerError::Internal(rootcause::report!(
+                "a non-fleet effect reached the fleet worker"
+            ))),
         }
     }
 
@@ -859,8 +872,12 @@ fn effect_failure(effect: &Effect) -> Option<Failure> {
         | Effect::RevokeHarness
         | Effect::PageOperator { .. }
         | Effect::RemoveBillingItem { .. }
+        | Effect::RefundPurchase { .. }
+        | Effect::Charge
+        | Effect::SettleCharge { .. }
         | Effect::ScheduleTimer { .. } => Some(Failure::Power),
-        Effect::NotifySetup { .. } => None,
+        // The agent's own deadline fails its start, not the hand-off.
+        Effect::NotifySetup { .. } | Effect::UndoAgentInvite | Effect::DeliverAgent => None,
     }
 }
 
@@ -879,19 +896,24 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
         | Effect::RestartMacrod { host }
         | Effect::Destroy { host } => Some(*host),
         Effect::RemoveBillingItem { .. }
+        | Effect::RefundPurchase { .. }
+        | Effect::Charge
+        | Effect::SettleCharge { .. }
         | Effect::RevokeHarness
         | Effect::ScheduleTimer { .. }
         | Effect::PageOperator { .. }
-        | Effect::NotifySetup { .. } => None,
+        | Effect::NotifySetup { .. }
+        | Effect::DeliverAgent
+        | Effect::UndoAgentInvite => None,
     }
 }
 
 struct CreateEnrollment<'a, Registry> {
     harnesses: &'a Registry,
     deployment: &'a dyn crate::domain::enrollment::DeploymentSource,
-    agents: &'a dyn crate::domain::agent::AgentEnrollmentSource,
     computer: &'a Computer,
     generation: EnrollmentGeneration,
+    role: crate::domain::enrollment::ComputerRole,
 }
 
 impl<Registry: Harnesses> FleetEnrollment for CreateEnrollment<'_, Registry> {
@@ -909,16 +931,6 @@ impl<Registry: Harnesses> FleetEnrollment for CreateEnrollment<'_, Registry> {
             .deployment
             .deployment()
             .map_err(|_| EnrollmentIssueError)?;
-        // An agent computer never enrolls without its agent: a failed
-        // issuance fails this enrollment, and the Create effect retries.
-        let agent = self
-            .agents
-            .issue(self.computer.id, self.generation)
-            .await
-            .map_err(|error| {
-                tracing::warn!(%error, "agent enrollment issuance failed");
-                EnrollmentIssueError
-            })?;
         // Creating a pairing retires the earlier claim secret, so a guest from a
         // lost earlier issuance can no longer claim.
         let pairing = self
@@ -934,7 +946,7 @@ impl<Registry: Harnesses> FleetEnrollment for CreateEnrollment<'_, Registry> {
             name: self.computer.name.clone(),
             deployment,
             traceparent: super::telemetry::traceparent(),
-            agent,
+            role: self.role,
         })
     }
 }

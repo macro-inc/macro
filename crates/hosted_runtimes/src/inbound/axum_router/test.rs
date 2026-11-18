@@ -33,6 +33,35 @@ async fn a_trialing_team_gets_a_coded_forbidden() {
     );
 }
 
+/// The buy dialog marks the size it had no room for, so a refused purchase
+/// for lack of room names the size beside a stable code.
+#[tokio::test]
+async fn no_room_is_a_coded_conflict_naming_the_size() {
+    let response =
+        ComputersHttpError::from(ComputerError::SoldOut(ComputerSize::Large)).into_response();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["code"], "no_room");
+    assert_eq!(body["size"], "large");
+}
+
+/// A declined card is shown inline, so it carries a stable code.
+#[tokio::test]
+async fn a_declined_charge_is_a_coded_payment_required() {
+    let response = ComputersHttpError::from(ComputerError::Billing(BillingError::PaymentFailed))
+        .into_response();
+    assert_eq!(response.status(), StatusCode::PAYMENT_REQUIRED);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["code"], "payment_declined");
+    assert!(body.get("size").is_none());
+}
+
 use crate::domain::fakes::TEAM;
 use crate::domain::service::test::availability::{assert_no_http_work, detached_router_service};
 use axum::{

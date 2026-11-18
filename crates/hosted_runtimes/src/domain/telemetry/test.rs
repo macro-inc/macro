@@ -87,9 +87,27 @@ fn setup_waits_export_recorded_times_under_the_purchase_trace() {
             .unwrap()
     };
     let mut setup = SetupTimeline::started(at(0));
-    let mut finished = setup.advance(&Phase::Provisioning { start: true }, false, false, at(5));
-    finished.extend(setup.advance(&Phase::Booting, false, false, at(20)));
-    finished.extend(setup.advance(&Phase::Running, true, false, at(80)));
+    let mut finished = setup.advance(
+        &Phase::Provisioning { start: true },
+        false,
+        false,
+        crate::domain::setup::PaymentProgress::Settled,
+        at(5),
+    );
+    finished.extend(setup.advance(
+        &Phase::Booting,
+        false,
+        false,
+        crate::domain::setup::PaymentProgress::Settled,
+        at(20),
+    ));
+    finished.extend(setup.advance(
+        &Phase::Running,
+        true,
+        false,
+        crate::domain::setup::PaymentProgress::Settled,
+        at(80),
+    ));
 
     setup_waits(
         &provider.tracer("test"),
@@ -152,6 +170,7 @@ fn work_joins_the_purchase_trace_only_while_setup_runs() {
         },
         crate::domain::setup::SetupTimeline::started(now),
         None,
+        false,
         Context {
             host,
             enrollment_generation: Default::default(),
@@ -170,7 +189,13 @@ fn work_joins_the_purchase_trace_only_while_setup_runs() {
             .setup
             .as_mut()
             .expect("provisioned computers time setup");
-        setup.advance(&Phase::Running, true, false, now);
+        setup.advance(
+            &Phase::Running,
+            true,
+            false,
+            crate::domain::setup::PaymentProgress::Settled,
+            now,
+        );
         let after = tracing::info_span!("after");
         adopt(&after, &state);
         drop(after.enter());

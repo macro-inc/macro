@@ -71,15 +71,44 @@ read it before changing behaviour.
 - `PageOperator` is the log event `computer needs an operator` (error level);
   alerts key on it.
 - `NotifySetup` tells the buyer how first setup ended through the
-  `ports::SetupNotices` port (adapter: agent_harness_service
-  `computers/setup_notice.rs`): `Ready` on the first macrod connection,
+  `ports::SetupNotices` port (adapter: team_agents
+  `outbound/setup_notices.rs`): `Ready` on the first macrod connection,
   `Failed` on each give-up before it (keyed by `failed_at`, so a retried
   attempt notifies again). It never fails the computer when it cannot be sent.
   `SetupNotice.agent` names the agent teammate an agent computer runs
-  (`ComputerAgents::agent_of`), so the adapter can tell its inviter by name.
+  (`ComputerAgents::agent_of`), so the adapter can tell its inviter by name;
+  for such a computer the adapter skips `Ready`, which the agent's own
+  online report sends instead.
 - The operator leases fleet effects and timers only for its own host
   (`ports::HostScope::Only`); billing passes `HostScope::Every`. Purchases
   land only on admitting hosts (`hosted_runtime_host.admitting`).
+- First start: until setup completes, and for an agent computer until its
+  agent reports online (`ComputerState::awaiting_agent`, cleared by
+  `Event::AgentOnline` from team_agents; each macrod connection meanwhile
+  queues `Effect::DeliverAgent`, which hands the agent over the runtime bus to
+  the replica holding macrod's socket; `TimerKind::AgentStartDue` gives it
+  `AGENT_START_DEADLINE` after macrod connects, then fails it with
+  `Failure::AgentNotStarted`). A give-up during the first start counts in
+  `first_start_failures`; the first leaves the computer for a team retry
+  (no new charge), the second (`MAX_FIRST_START_FAILURES`) releases it
+  (`EndsAt{now}`, Destroy), queues `Effect::RefundPurchase` (billing worker:
+  a credit note on the purchase's invoice under `computer-refund:{id}`,
+  recorded as `ComputerState::refund`, then the item removed without
+  proration) and `Effect::UndoAgentInvite` (agents worker), and notifies
+  `SetupOutcome::Released`.
+- The agents worker (`ComputerService::run_agent_effects`, run by
+  authentication_service with team_agents as `ports::AgentInvites`) retries
+  with `BILLING_BACKOFF` and gives up after `MAX_AGENT_ATTEMPTS` with the error
+  log `agent invite undo abandoned`; a refund that exhausts its attempts logs
+  `computer purchase refund abandoned`. Alerts key on both
+  (`infra/stacks/monitoring/monitors/computers.ts`).
+- A charged purchase converts before it charges: the request holds the
+  computer's billing guard and runs the charge while the fleet creates the
+  guest (`Billing::Charging`, `Charger::Request`). Anything that acts on
+  billing while charging must handle `Charging`: billing requests are
+  `Rejected::PaymentPending`, releases queue `Effect::SettleCharge`, and
+  `TimerKind::ChargeUnsettled` (`CHARGE_TAKEOVER`) hands a charge the request
+  never answered to the billing worker (`Effect::Charge`, never abandoned).
 - Keep `#![deny(missing_docs)]` and document every public item tersely (CS-54).
 
 ## Related

@@ -285,6 +285,14 @@ async fn relay(
                         });
                     }
                     Some(ToRuntimeMessage::AgentsChanged) => agents_changed.notify_one(),
+                    Some(ToRuntimeMessage::ApplyAgent { environment }) => {
+                        // Read by the guest's agent units; outside a Macro
+                        // computer nothing installs it, so it does nothing.
+                        match apply_agent(&environment.0) {
+                            Ok(()) => tracing::info!("staged the agent teammate's environment"),
+                            Err(error) => tracing::error!(error = %error, "could not stage the agent teammate's environment"),
+                        }
+                    }
                     Some(other) => tracing::debug!(message = ?other, "ignoring an unknown runtime message"),
                     None => return Ok(Relayed::Closed),
                 }
@@ -364,6 +372,18 @@ async fn hand_off(
 
 /// Relay one agent line, letting `self_knowledge` learn which session a
 /// `session/new` answer created.
+#[cfg(unix)]
+fn apply_agent(environment: &std::collections::BTreeMap<String, String>) -> rootcause::Result<()> {
+    crate::agent_env::stage_agent_env(Path::new(crate::agent_env::AGENT_ENV_INBOX), environment)
+}
+
+#[cfg(not(unix))]
+fn apply_agent(_environment: &std::collections::BTreeMap<String, String>) -> rootcause::Result<()> {
+    Err(rootcause::report!(
+        "agent teammates run only on Macro computers"
+    ))
+}
+
 fn forward_to_service(
     line: &str,
     to_service: &tokio::sync::mpsc::UnboundedSender<ToServerMessage>,

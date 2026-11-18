@@ -357,10 +357,16 @@ pub struct Reservation {
     pub created_at: DateTime<Utc>,
 }
 
+/// The Stripe idempotency key of a purchase's charge, the same on every
+/// attempt; a reservation's id is its computer's.
+pub fn charge_key(computer_id: ComputerId) -> String {
+    format!("computer-add:{computer_id}")
+}
+
 impl Reservation {
     /// The Stripe idempotency key of this purchase's charge.
     pub fn charge_key(&self) -> String {
-        format!("computer-add:{}", self.id)
+        charge_key(self.id)
     }
 
     /// A reservation as its team sees it: purchasing, setup step
@@ -415,12 +421,20 @@ pub enum Reserved {
 pub enum Purchase {
     /// The computer exists and is being set up.
     Ready(ComputerId),
-    /// The charge's outcome is not known yet; the computer appears (or the
-    /// purchasing entry disappears, uncharged) once it is.
+    /// The charge's outcome is not known yet: the computer is purchasing
+    /// until it is, then billed or (refused) released and gone from lists.
     Confirming(ComputerId),
 }
 
 impl Purchase {
+    /// `"ready"` or `"confirming"`, for telemetry.
+    pub fn outcome(&self) -> &'static str {
+        match self {
+            Self::Ready(_) => "ready",
+            Self::Confirming(_) => "confirming",
+        }
+    }
+
     /// The purchased (or future) computer.
     pub fn computer_id(self) -> ComputerId {
         match self {
@@ -589,6 +603,26 @@ impl HostRegistration {
     pub fn sold_capacity_units(&self) -> u32 {
         self.awake_capacity_units() * self.oversell_factor
     }
+}
+
+/// Why a purchase was refused, as a stable code the buy and add-agent dialogs
+/// show their own way. One vocabulary for `/team/computers` and
+/// `/team_agents`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, strum::Display, strum::AsRefStr)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum PurchaseRefusalCode {
+    /// The team's subscription is trialing; computers are for paying teams.
+    TeamOnTrial,
+    /// The card was declined; nothing was bought.
+    PaymentDeclined,
+    /// No host has room for the size, checked before any charge; nothing
+    /// was bought.
+    NoRoom,
+    /// An earlier request with the same purchase key is still under way;
+    /// retry with that key.
+    InviteInProgress,
 }
 
 /// The coarse status the team sees.
@@ -800,6 +834,8 @@ impl Computer {
                 None,
             ),
             Billing::Comped { .. } => (BillingStatus::Comped, None, None, None),
+            // Provisioning already; the purchase's charge has not settled.
+            Billing::Charging { .. } => (BillingStatus::Purchasing, None, None, None),
         };
         let live = self.state.is_live();
 
@@ -820,9 +856,9 @@ impl Computer {
                     step,
                     match step {
                         SetupStep::Billing => timeline.map(|setup| setup.reserved_at),
-                        SetupStep::Creating => {
-                            timeline.map(|setup| setup.paid_at.unwrap_or(setup.reserved_at))
-                        }
+                        SetupStep::Creating => timeline.map(|setup| {
+                            setup.provisioning_started_at().unwrap_or(setup.reserved_at)
+                        }),
                         SetupStep::Connecting => timeline.and_then(|setup| setup.booting_at),
                         SetupStep::Booting | SetupStep::Ready => None,
                     },

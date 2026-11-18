@@ -137,11 +137,15 @@ impl PgComputerRepo {
         }
 
         let waiting_for_capacity = state.waiting_for_capacity();
-        let (phase, connected) = (state.phase.clone(), state.macrod_connected);
+        let (phase, connected, payment) = (
+            state.phase.clone(),
+            state.macrod_connected,
+            state.payment_progress(),
+        );
         let finished_setup = state
             .setup
             .as_mut()
-            .map(|setup| setup.advance(&phase, connected, waiting_for_capacity, now))
+            .map(|setup| setup.advance(&phase, connected, waiting_for_capacity, payment, now))
             .unwrap_or_default();
 
         if !state.is_live() {

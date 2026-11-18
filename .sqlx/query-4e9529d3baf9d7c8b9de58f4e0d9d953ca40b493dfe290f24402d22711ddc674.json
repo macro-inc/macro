@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT user_id, team_id, created_by,\n                   persona_seed AS \"persona_seed: sqlx::types::Json<PersonaSeed>\",\n                   created_at\n            FROM team_agents\n            WHERE user_id = $1\n            ",
+  "query": "\n            SELECT user_id, team_id, created_by,\n                   persona_seed AS \"persona_seed: sqlx::types::Json<PersonaSeed>\",\n                   created_at, first_online_at\n            FROM team_agents\n            WHERE team_id = $1\n            ORDER BY created_at, user_id\n            ",
   "describe": {
     "columns": [
       {
@@ -27,11 +27,16 @@
         "ordinal": 4,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "first_online_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -39,8 +44,9 @@
       false,
       true,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "884ba2279aec801e572642a342f901a5f4580b4c9a2666bbdf5e8b1ed79d3f14"
+  "hash": "4e9529d3baf9d7c8b9de58f4e0d9d953ca40b493dfe290f24402d22711ddc674"
 }

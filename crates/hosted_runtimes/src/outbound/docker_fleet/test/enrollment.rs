@@ -53,7 +53,7 @@ impl FleetEnrollment for TestEnrollment {
             name: ComputerName::try_new("Fixture computer").unwrap(),
             deployment: crate::domain::fakes::deployment(),
             traceparent: None,
-            agent: None,
+            role: crate::domain::enrollment::ComputerRole::Person,
         })
     }
 }

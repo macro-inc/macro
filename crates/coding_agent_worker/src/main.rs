@@ -16,6 +16,10 @@
 //! `agent_trigger.new` delivery opens a session and forwards the first prompt;
 //! `agent_trigger.existing` deliveries forward follow-up messages.
 
+// Agent teammates run only on Linux Macro computers; elsewhere `harness::apply_agent`
+// refuses the hand-off.
+#[cfg(unix)]
+mod agent_env;
 mod computer;
 mod config;
 mod daemon;

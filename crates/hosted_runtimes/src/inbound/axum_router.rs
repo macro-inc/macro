@@ -25,7 +25,8 @@ use uuid::Uuid;
 
 use crate::domain::ids::ComputerId;
 use crate::domain::models::{
-    ComputerStatus, Purchase, PurchaseBilling, PurchaseKey, PurchaseRequest, SizeOffer,
+    ComputerStatus, Purchase, PurchaseBilling, PurchaseKey, PurchaseRefusalCode, PurchaseRequest,
+    SizeOffer,
 };
 use crate::domain::ports::{
     Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps,
@@ -610,8 +611,16 @@ impl IntoResponse for ComputersHttpError {
         };
         let code = match &self.0 {
             ComputerError::Billing(BillingError::TeamOnTrial) => {
-                Some(ComputersErrorCode::TeamOnTrial)
+                Some(PurchaseRefusalCode::TeamOnTrial)
             }
+            ComputerError::Billing(BillingError::PaymentFailed) => {
+                Some(PurchaseRefusalCode::PaymentDeclined)
+            }
+            ComputerError::SoldOut(_) => Some(PurchaseRefusalCode::NoRoom),
+            _ => None,
+        };
+        let size = match &self.0 {
+            ComputerError::SoldOut(size) => Some(*size),
             _ => None,
         };
         (
@@ -619,6 +628,7 @@ impl IntoResponse for ComputersHttpError {
             Json(ComputersErrorBody {
                 message: message.into(),
                 code,
+                size,
             }),
         )
             .into_response()
@@ -631,15 +641,10 @@ impl IntoResponse for ComputersHttpError {
 struct ComputersErrorBody {
     message: std::borrow::Cow<'static, str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    code: Option<ComputersErrorCode>,
-}
-
-/// Machine-readable computer error codes.
-#[derive(serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-enum ComputersErrorCode {
-    /// The team's subscription is trialing; computers are for paying teams.
-    TeamOnTrial,
+    code: Option<PurchaseRefusalCode>,
+    /// The size there was no room for, with [`PurchaseRefusalCode::NoRoom`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    size: Option<ComputerSize>,
 }
 
 #[cfg(test)]

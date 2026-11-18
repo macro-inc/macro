@@ -132,6 +132,8 @@ export const authExcluded = [
   'refresh',
   'rejectInvitation',
   'removeUserFromTeam',
+  // An agent teammate's own report that it is up; the starter agent calls it.
+  'reportTeamAgentOnline',
   'resendFusionauthVerifyUserEmail',
   'resolveGtmInviteLink',
   'revokeGtmInviteLink',

@@ -8,7 +8,13 @@ type Agent = {
   personality: string;
   createdBy: string | null;
   computerId: string | null;
-  status: 'provisioning' | 'running' | 'paused' | 'failed' | 'released';
+  status:
+    | 'provisioning'
+    | 'starting'
+    | 'running'
+    | 'paused'
+    | 'failed'
+    | 'released';
   createdAt: string;
 };
 
@@ -131,6 +137,8 @@ async function scriptAuthService(
     removed: [] as string[],
     retries: [] as string[],
     reads: 0,
+    // The read on which an agent's computer came up.
+    startedAt: 0,
     step: 'creating' as SetupStep,
     voices: {} as Record<string, string>,
     voiceSaves: [] as unknown[],
@@ -169,6 +177,7 @@ async function scriptAuthService(
     catalogEntry: 'standard@2026-11',
     status: {
       provisioning: 'setting_up',
+      starting: 'ready',
       running: 'ready',
       paused: 'stopped',
       failed: 'failed',
@@ -183,7 +192,7 @@ async function scriptAuthService(
       agent.status === 'failed'
         ? "The computer couldn't be created on the host."
         : undefined,
-    poweredOn: agent.status === 'running',
+    poweredOn: agent.status === 'running' || agent.status === 'starting',
     agentCount: 0,
     canUndoCancel: false,
     canRestore: false,
@@ -209,12 +218,21 @@ async function scriptAuthService(
 
     if (path.endsWith('/team_agents') && request.method() === 'GET') {
       backend.reads += 1;
+      // The computer comes up, then the agent reports itself online two
+      // reads later.
       for (const agent of backend.agents) {
+        if (
+          agent.status === 'starting' &&
+          backend.reads > backend.startedAt + 2
+        )
+          agent.status = 'running';
         if (
           agent.status === 'provisioning' &&
           backend.reads > provisioningReads
-        )
-          agent.status = 'running';
+        ) {
+          agent.status = 'starting';
+          backend.startedAt = backend.reads;
+        }
       }
       return json(200, { agents: backend.agents });
     }
@@ -506,7 +524,12 @@ test('inviting an agent closes the dialog at once and its row shows the setup st
   );
   await screenshot(page, testInfo, 'members-setting-up-step');
 
-  // The list polls while the agent is provisioning.
+  // The list polls while the agent is provisioning, and while its computer
+  // is up but the agent hasn't reported itself online.
+  await expect(agentRow.getByRole('status')).toHaveText('Starting', {
+    timeout: 20_000,
+  });
+  await screenshot(page, testInfo, 'members-starting');
   await expect(agentRow.getByRole('status')).toHaveText('Running', {
     timeout: 20_000,
   });
@@ -937,6 +960,13 @@ test('a DM with an agent teammate that is not running says so', async ({
       ADA
     );
   };
+
+  // The computer is up, but the agent hasn't come online yet.
+  await show('starting', true);
+  await expect(banner).toHaveText(
+    "Ada is still being set up. It'll answer once it's ready."
+  );
+  await expect(dm.locator('[data-agent-dm-chip]')).toHaveText('Setting up');
 
   await show('failed', false);
   await expect(banner).toContainText("Ada isn't running: setup failed.");

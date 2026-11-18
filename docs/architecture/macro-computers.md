@@ -172,18 +172,41 @@ attempt, so a busy database never fails a computer or abandons a removal.
   15 minutes). The charge is ONE subscription update adding the computer's
   own item (`computer_id` metadata, a price of its own) plus `extra_items`,
   `always_invoice` + `error_if_incomplete`, Stripe idempotency key
-  `computer-add:{reservation id}`. Definite success converts the reservation
-  (`convert_reservation`: delete it, insert the computer in Provisioning with
-  `Billing::Active{item}`, enqueue Create, in one transaction); a definite
-  refusal deletes it and returns the typed error; an unknown outcome answers
-  `Confirming` (HTTP 202). `confirm_reservations` (run by the billing worker)
-  replays the same idempotent update for reservations older than
-  `CONFIRM_DELAY` until expiry, then `settle_computer_add` abandons the change
-  for good and converts only if the subscription carries an item with the
-  computer's id; otherwise the reservation is deleted. An error shown to the
-  buyer therefore always means nothing was charged. Status/list show a
-  reservation as status `purchasing` (setup step `billing`); every request on
-  it is `ComputerError::NotPurchased` (409).
+  `computer-add:{reservation id}`. The charge runs beside the guest's
+  creation: the request takes the computer's billing guard, converts the
+  reservation at once (`convert_reservation`: delete it, insert the computer
+  in Provisioning with `Billing::Charging{extra_items, charger: Request}`,
+  enqueue Create and a `ChargeUnsettled` timer at `CHARGE_TAKEOVER`, in one
+  transaction; the fleet operator wakes on LISTEN and restores while Stripe
+  invoices), then charges (span `computer.purchase.charge`) and answers only
+  once the outcome is definite, so ready time is max(charge, restore). Success
+  applies `ChargeSucceeded{item}` (`Active`) → `Ready` (200). A definite
+  refusal applies `ChargeFailed{seen: ByBuyer}`: released (Destroy +
+  RevokeHarness, `EndsAt{now}`, `Failure::Payment`, units freed), no setup
+  notice, and the typed error (402 for a decline) whose caller undoes what it
+  set up (team_agents' invite). An unknown outcome applies `ChargeUnsettled`
+  (`charger: Worker`, `Effect::Charge`) → `Confirming` (202); the billing
+  worker replays the same key and settles it for good on its last attempt
+  (`settle_computer_add`), and a refusal found then is `ChargeFailed{seen:
+  Later}`, which notifies `Failed{Payment}` and queues `UndoAgentInvite`. The
+  takeover timer does the same for a request that died part way. While
+  charging, cancel/undo/restore are `Rejected::PaymentPending` (409), an
+  agent's credentials wait (`DeliverAgent` comes with `ChargeSucceeded` if
+  macrod already connected), and subscription snapshots skip the computer. A
+  release while charging (team release, team deletion, a second failed first
+  start) queues `SettleCharge{landed: Remove | Refund}`, which waits on the
+  billing guard, fences the add and removes (or refunds, then removes) an
+  item that landed. A declined computer is released, so it is never listed;
+  a retry of its purchase key answers `PaymentFailed` again, and one while
+  charging `Confirming`. `confirm_reservations` (run by the billing worker)
+  handles a reservation whose request never converted it: it replays the
+  same idempotent update after `CONFIRM_DELAY` until expiry, then
+  `settle_computer_add` abandons the change for good and converts only if the
+  subscription carries an item with the computer's id; otherwise the
+  reservation is deleted. An error shown to the buyer therefore always means
+  nothing was charged. Status/list show a reservation as status `purchasing`
+  (setup step `billing`), and a charging computer with billing `purchasing`;
+  every request on a reservation is `ComputerError::NotPurchased` (409).
 - **Billing**: cancel removes the item at once without proration (the period
   is paid) → `EndsAt{at = period end}` and a `BillingEnds` timer at `at` that
   stops the computer and starts retention (`RetentionExpired` at `at +
@@ -220,8 +243,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
   (`readd_charge`); a pending one is left for a later snapshot. The billing
   worker handles each effect on its own: a failure to read the computer is
   retried with backoff and counts toward the abandonment alert, and a
-  quarantined computer's removal still runs. A purchase whose charge succeeded but whose
-  conversion failed answers `Confirming`, never an error.
+  quarantined computer's removal still runs. A purchase whose charge outcome
+  could not be recorded answers `Confirming`, never an error.
   Items naming no known computer are logged, never mapped.
 - **Team deletion**: `TeamComputerRelease::release_team` deletes the team's
   reservations first (one converting meanwhile is then listed as a computer;
@@ -380,7 +403,26 @@ attempt, so a busy database never fails a computer or abandons a removal.
   `SetupNotices` port as a `computer_setup` notification; a send that keeps
   failing is dropped after its retries and never fails the computer. For an
   agent teammate's computer the notice carries the agent (`agent_of`) and goes
-  to the agent's inviter by the agent's name: "<name> is ready".
+  to the agent's inviter by the agent's name, but only when it failed: macrod
+  connecting doesn't start the agent, so "<name> is ready" is sent by the auth
+  service when the agent first reports online (`POST /team_agents/me/online`,
+  `crates/team_agents/AGENTS.md`), under the same notification id.
+- **Failed first start**: the first start lasts until setup completes and,
+  for an agent teammate's computer, until the agent reports online
+  (`awaiting_agent`; the report applies `AgentOnline`, and an
+  `AgentStartDue` timer `AGENT_START_DEADLINE` (3 min) after macrod connects
+  fails it with `Failure::AgentNotStarted`). The first give-up in it waits
+  for a team retry on the same computer, with no new charge. The second
+  (`MAX_FIRST_START_FAILURES`) releases the computer (`EndsAt{now}`, Destroy,
+  RevokeHarness), queues `RefundPurchase` and `UndoAgentInvite`, and notifies
+  `SetupOutcome::Released` (a `computer_setup` `Failed` notice with
+  `released`). The billing worker credit notes the purchase's invoice lines
+  (the computer's own price) under `computer-refund:{computer id}`,
+  refunding what the card paid and crediting back what the team's balance
+  paid, records the credit note and refund on the computer
+  (`PurchaseRefunded`), then removes the item without proration. The agents
+  worker (authentication_service, team_agents as `AgentInvites`) takes the
+  agent back: keys, repository, membership and seat; the account stays.
 - **Gateway**: computers call Claude via `ANTHROPIC_BASE_URL=<agent harness service>/anthropic`
   with a per-session token; see `services/agent_harness_service/AGENTS.md`.
 
@@ -389,10 +431,16 @@ attempt, so a busy database never fails a computer or abandons a removal.
 `ComputerService::purchase_for_agent` is `purchase_for_team` with the computer
 linked to an agent account (`hosted_runtime.agent_user_id`, one computer per
 agent); `ComputerAgents` reads the link. hosted_runtimes knows nothing else about
-the agent: at enrollment the operator asks its `AgentEnrollmentSource`
-(`domain/agent.rs`) for `Enrollment.agent`, which team_agents issues. A failed
-issuance fails the enrollment, so an agent computer never boots without its
-agent; `NoAgentEnrollment` (the default) enrolls every computer without one.
+the agent: its enrollment names only `role: agent` (`ComputerRole`, which
+picks the guest image and what the guest grants its user) and carries no
+credential. When macrod connects while the agent hasn't reported online, the
+lifecycle queues `Effect::DeliverAgent` (and the `AgentStartDue` deadline);
+the operator publishes `{harness, computer, generation}` (plus trace context)
+on the runtime bus via `Harnesses::deliver_agent`, and only the replica
+holding macrod's socket issues the agent's environment through its
+`AgentEnrollmentSource` (team_agents' `issue_enrollment`, which rotates the
+agent's key) and sends it down that socket as `ToRuntimeMessage::ApplyAgent`.
+Each macrod connection hands it over again until the agent reports online.
 team_agents reads an agent computer's roster state with
 `ComputerService::status_for_roster` (answered on a detached fleet too) and
 releases it with `request_release` when the agent is removed: normal release
@@ -463,9 +511,9 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
   never grow the setup trace. Already-entered callbacks use `resume` (link).
 - `apply_locked` advances the timeline after each transition and exports the
   waits that ended, with their recorded start and end, through the global
-  tracer: `computer.setup.payment` (reservation → conversion),
-  `computer.setup.create` (→ guest booting, including outbox and capacity
-  waits), `computer.setup.boot` (→ first macrod connection) and the total
+  tracer: `computer.setup.payment` (reservation → charge settled or comp;
+  it overlaps the next waits), `computer.setup.create` (conversion → guest
+  booting, including outbox and capacity waits), `computer.setup.boot` (→ first macrod connection) and the total
   `computer.setup`. They carry `computer_id`, `team_id`, `size`, `host_id`,
   `generation`, `billing_kind` and `capacity_waited`. A rolled-back
   transaction can export a wait that a retry exports again.

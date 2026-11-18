@@ -19,11 +19,13 @@ const PROVISIONING_POLL_MS = 3_000;
 type CreateTeamAgentArgs = { teamId: string; request: CreateTeamAgent };
 type RemoveTeamAgentArgs = { teamId: string; userId: string };
 
-/** Polls only while an agent's computer is still being set up. */
+/** Polls only while an agent's computer is still being set up, or the agent is starting. */
 export function teamAgentsPollInterval(
   agents: readonly TeamAgent[] | undefined
 ): number | false {
-  const provisioning = agents?.some((agent) => agent.status === 'provisioning');
+  const provisioning = agents?.some(
+    (agent) => agent.status === 'provisioning' || agent.status === 'starting'
+  );
   return provisioning ? PROVISIONING_POLL_MS : false;
 }
 

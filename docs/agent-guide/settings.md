@@ -266,8 +266,9 @@ own row (name, **Agent** tag, job description) with a status in place of a
 role: **Setting up** with a spinner while its computer provisions, with the
 computer's setup step under the job description (**Updating billing…**,
 **Creating the computer**, **Starting up**, **Connecting to Macro**; the agent
-and computer lists poll), then **Running**, **Paused**, **Needs attention** or
-**Released**. A failed computer's row offers owners and admins **Retry**,
+and computer lists poll), then **Starting** (spinner; the computer is up and
+the agent itself hasn't reported online yet; still polled), then **Running**,
+**Paused**, **Needs attention** or **Released**. A failed computer's row offers owners and admins **Retry**,
 the computer's own retry (`POST /team/computers/{id}/retry`), so it never buys
 a second computer. The invite form also has a **Voice** picker (`GET /voices` on the
 agent harness): it suggests a voice from the personality, **Play sample** plays
@@ -278,8 +279,8 @@ row's waveform button (**Change voice**): **Save voice** calls
 agent's repository and applies from its next call; a failed save keeps the
 pick for retry.
 
-When the agent's computer first connects, its inviter (the team agent's
-`created_by`) gets the `computer_setup` notification with the agent's
+When the agent itself first reports online (not when its computer connects),
+its inviter (the team agent's `created_by`) gets the `computer_setup` notification with the agent's
 `agent { userId, name }`: "<name> is ready", in-app as a one-minute notice
 with **Message <name>** (the DM, through the same open-DM path as any member)
 and, for owners and admins (who own the computer's runtime), **Connect
@@ -307,7 +308,8 @@ sign-out), or
 `claude.sign_in.entry` (`team_agent_row`, `notification`).
 
 A DM with an agent teammate that isn't running says so in its header (a
-short chip) and above the composer; messages still send. **Setting up**: "<name>
+short chip) and above the composer; messages still send. **Setting up** (also
+while the agent is **Starting**): "<name>
 is still being set up. It'll answer once it's ready."; a failed setup:
 "<name> isn't running: setup failed." with **Retry** for owners and admins;
 a powered-off computer, or one whose macrod isn't connected: "<name> isn't

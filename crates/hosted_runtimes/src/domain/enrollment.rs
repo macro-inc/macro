@@ -36,10 +36,22 @@ pub struct Enrollment {
     /// reports join it. Opaque ids only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub traceparent: Option<String>,
-    /// The agent teammate this computer runs, if it was bought for one.
-    /// Older macrod builds ignore it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent: Option<crate::domain::agent::AgentEnrollment>,
+    /// Whom the computer is for. Decides the guest image and what the guest
+    /// grants its user; never changes for a computer. Carries no credential:
+    /// an agent's environment arrives later over macrod's socket.
+    pub role: ComputerRole,
+}
+
+/// Whom a computer is for, fixed at purchase.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ComputerRole {
+    /// A person's computer: its user may administer it.
+    Person,
+    /// An agent teammate's computer: the agent runs there, and its user gets
+    /// no administrator rights.
+    Agent,
 }
 
 /// The service addresses of the deployment a computer joins, as the guest

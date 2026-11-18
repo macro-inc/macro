@@ -94,6 +94,7 @@ fn host_uuids(scope: &HostScope) -> Option<Vec<Uuid>> {
 enum OutboxWorker {
     Fleet,
     Billing,
+    Agents,
 }
 
 impl TryFrom<EffectWorker> for OutboxWorker {
@@ -102,6 +103,7 @@ impl TryFrom<EffectWorker> for OutboxWorker {
         match worker {
             EffectWorker::Fleet => Ok(Self::Fleet),
             EffectWorker::Billing => Ok(Self::Billing),
+            EffectWorker::Agents => Ok(Self::Agents),
             EffectWorker::Timers => Err(PgComputerError::NotAnOutboxWorker(worker)),
         }
     }
@@ -246,6 +248,7 @@ impl ComputerRepo for PgComputerRepo {
             billing,
             crate::domain::setup::SetupTimeline::started(reservation.created_at),
             reservation.provision_traceparent.clone(),
+            reservation.agent.is_some(),
             Context {
                 host: reservation.host,
                 enrollment_generation: Default::default(),
@@ -262,11 +265,11 @@ impl ComputerRepo for PgComputerRepo {
             })
             .unwrap_or_default();
         let waiting_for_capacity = state.waiting_for_capacity();
-        let phase = state.phase.clone();
+        let (phase, payment) = (state.phase.clone(), state.payment_progress());
         let finished_setup = state
             .setup
             .as_mut()
-            .map(|setup| setup.advance(&phase, false, waiting_for_capacity, now))
+            .map(|setup| setup.advance(&phase, false, waiting_for_capacity, payment, now))
             .unwrap_or_default();
         let (price_id, comp_reason) = match &reservation.funding {
             Funding::Stripe { price_id } => (Some(price_id.as_str()), None),
@@ -633,9 +636,10 @@ impl ComputerRepo for PgComputerRepo {
         let worker = OutboxWorker::try_from(worker)?;
         let hosts = host_uuids(&scope);
         // Quarantine stops fleet work, but a billing item removal still runs:
-        // it only ever stops a charge, and its item is in the effect.
+        // it only ever stops a charge, and its item is in the effect. Taking
+        // back an agent reads only the computer's agent link.
         let healthy_ids = match worker {
-            OutboxWorker::Billing => {
+            OutboxWorker::Billing | OutboxWorker::Agents => {
                 sqlx::query_scalar!(
                     r#"
                     SELECT DISTINCT effect.computer_id AS "computer_id!"

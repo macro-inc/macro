@@ -43,7 +43,6 @@ pub(crate) mod claude_expiry;
 pub(crate) mod default_agent;
 pub mod harnessd;
 mod presence;
-pub(crate) mod setup_notice;
 pub mod sign_in_ahead;
 
 use default_agent::{DefaultAgentRequest, DefaultAgents};
@@ -81,7 +80,7 @@ pub type Operator = ComputerOperator<
     ConfiguredFleet,
     HostedHarnesses,
     SystemClock,
-    setup_notice::IngressSetupNotices<SetupNotifications, PgTeamAgentsRepo>,
+    team_agents::outbound::setup_notices::IngressSetupNotices<SetupNotifications, PgTeamAgentsRepo>,
 >;
 
 /// Build the operator from explicit config, or `None` when this deployment
@@ -93,6 +92,7 @@ pub(crate) async fn operator(
     harnesses: Arc<dyn HostedHarnessService>,
     default_agents: Arc<dyn DefaultAgents>,
     notifications: Arc<SetupNotifications>,
+    runtime_bus: redis::Client,
 ) -> anyhow::Result<Option<Arc<Operator>>> {
     let Some(fleet_config) = fleet_config else {
         tracing::warn!("no computer fleet attached; computer routes are unavailable");
@@ -173,19 +173,17 @@ pub(crate) async fn operator(
         HostedHarnesses {
             service: harnesses,
             default_agents,
+            runtime_bus,
         },
-        setup_notice::IngressSetupNotices::new(notifications, PgTeamAgentsRepo::new(pool.clone())),
+        team_agents::outbound::setup_notices::IngressSetupNotices::new(
+            notifications,
+            PgTeamAgentsRepo::new(pool.clone()),
+        ),
         SystemClock,
         Arc::new(ServiceDeployment),
     )
     .await
-    .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?
-    // Every computer asks: one bought for an agent teammate must never
-    // enroll without its agent.
-    // The authentication service checks its own internal key, not ours.
-    .with_agent_enrollment(Arc::new(agent_enrollment::AuthAgentEnrollment::new(
-        config.authentication_service_secret_key.as_ref(),
-    )?));
+    .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?;
     Ok(Some(Arc::new(operator)))
 }
 
@@ -465,6 +463,8 @@ impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for S
 pub struct HostedHarnesses {
     service: Arc<dyn HostedHarnessService>,
     default_agents: Arc<dyn DefaultAgents>,
+    /// Where agent hand-offs go to the replica holding macrod's socket.
+    runtime_bus: redis::Client,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -473,6 +473,8 @@ pub enum HostedHarnessError {
     Harness(#[from] HarnessError),
     #[error(transparent)]
     DefaultAgent(#[from] default_agent::DefaultAgentError),
+    #[error(transparent)]
+    Bus(#[from] crate::runtime_commands::RuntimeBusError),
 }
 
 impl Harnesses for HostedHarnesses {
@@ -517,6 +519,21 @@ impl Harnesses for HostedHarnesses {
                 .await?;
             tracing::info!(computer_id = %computer.id, %harness_id, deleted, "deleted the computer's agents");
         }
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn deliver_agent(
+        &self,
+        harness_id: HarnessId,
+        computer_id: ComputerId,
+        generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
+    ) -> Result<(), Self::Err> {
+        crate::runtime_commands::publish_deliver_agent(
+            &self.runtime_bus,
+            &crate::runtime_commands::DeliverAgent::new(harness_id, computer_id, generation),
+        )
+        .await?;
         Ok(())
     }
 

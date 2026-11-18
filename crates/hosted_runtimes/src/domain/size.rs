@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
     strum::EnumString,
     strum::EnumIter,
 )]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
     feature = "outbound",

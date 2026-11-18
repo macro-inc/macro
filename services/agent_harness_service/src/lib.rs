@@ -1431,6 +1431,7 @@ pub async fn run() -> anyhow::Result<()> {
             pool.clone(),
         )),
         Arc::clone(&notifications),
+        redis.clone(),
     )
     .await?;
     let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> = Arc::new(
@@ -1763,6 +1764,13 @@ pub async fn run() -> anyhow::Result<()> {
     let runtime_command_redis = redis.clone();
     let runtime_command_harness = harness.clone();
     let runtime_command_runtimes = Arc::clone(&runtimes);
+    // The replica holding an agent computer's socket issues its agent's
+    // environment; it never crosses the runtime bus. The authentication
+    // service checks its own internal key, not ours.
+    let runtime_command_agents: Arc<dyn hosted_runtimes::domain::agent::AgentEnrollmentSource> =
+        Arc::new(computers::agent_enrollment::AuthAgentEnrollment::new(
+            config.authentication_service_secret_key.as_ref(),
+        )?);
     let (runtime_commands_ready, mut runtime_commands_readiness) =
         tokio::sync::watch::channel(false);
     let runtime_commands = tokio::spawn(async move {
@@ -1781,6 +1789,31 @@ pub async fn run() -> anyhow::Result<()> {
                     runtime_command_harness.clone(),
                     runtime_commands_ready.clone(),
                     runtime_command_models.clone(),
+                    {
+                        let runtimes = Arc::clone(&runtime_command_runtimes);
+                        let agents = Arc::clone(&runtime_command_agents);
+                        Arc::new(move |request| {
+                            let connected = {
+                                let runtimes = Arc::clone(&runtimes);
+                                Arc::new(move |harness| runtimes.is_connected(harness))
+                            };
+                            let send: runtime_commands::SendAgent = {
+                                let runtimes = Arc::clone(&runtimes);
+                                Arc::new(move |harness, environment| {
+                                    let runtimes = Arc::clone(&runtimes);
+                                    Box::pin(async move {
+                                        runtimes.apply_agent(harness, environment).await
+                                    })
+                                })
+                            };
+                            Box::pin(runtime_commands::deliver_agent_to_runtime(
+                                request,
+                                Arc::clone(&agents),
+                                connected,
+                                send,
+                            ))
+                        })
+                    },
                 )
             },
         )

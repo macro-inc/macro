@@ -101,6 +101,9 @@ pub struct FakeRepo {
     pub heartbeats: Mutex<Vec<(HostId, DateTime<Utc>)>>,
     pub timers: Mutex<Vec<DueTimer>>,
     pub fail_next_apply: AtomicBool,
+    /// While set, converting a reservation fails as storage would, before
+    /// anything is written, so the purchase leaves its reservation.
+    pub convert_fails: AtomicBool,
     /// `get` calls so far.
     pub gets: AtomicUsize,
     /// The 1-based `get` calls that fail as if no connection could be had.
@@ -305,6 +308,9 @@ impl ComputerRepo for FakeRepo {
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        if self.convert_fails.load(Ordering::SeqCst) {
+            return Err(FakeError::Storage);
+        }
         let Some(reservation) = self.reservations.lock().unwrap().remove(&reservation_id) else {
             return Ok(None);
         };
@@ -312,6 +318,7 @@ impl ComputerRepo for FakeRepo {
             billing,
             crate::domain::setup::SetupTimeline::started(reservation.created_at),
             reservation.provision_traceparent.clone(),
+            reservation.agent.is_some(),
             Context {
                 host: reservation.host,
                 enrollment_generation: Default::default(),
@@ -320,9 +327,9 @@ impl ComputerRepo for FakeRepo {
                 policy: policy(),
             },
         );
-        let phase = state.phase.clone();
+        let (phase, payment) = (state.phase.clone(), state.payment_progress());
         if let Some(setup) = state.setup.as_mut() {
-            setup.advance(&phase, false, false, now);
+            setup.advance(&phase, false, false, payment, now);
         }
         let mut computer = Computer {
             id: reservation.id,
@@ -441,13 +448,14 @@ impl ComputerRepo for FakeRepo {
             Err(rejected) => return Ok(Some(Applied::Rejected(rejected))),
         };
         // Latch setup milestones like the Postgres applier.
-        let (phase, connected, waiting) = (
+        let (phase, connected, waiting, payment) = (
             state.phase.clone(),
             state.macrod_connected,
             state.waiting_for_capacity(),
+            state.payment_progress(),
         );
         if let Some(setup) = state.setup.as_mut() {
-            setup.advance(&phase, connected, waiting, now);
+            setup.advance(&phase, connected, waiting, payment, now);
         }
         computer.state = state;
         self.push_effects(computer, effects, now);
@@ -826,6 +834,9 @@ pub fn state(phase: crate::domain::lifecycle::Phase) -> crate::domain::lifecycle
         capacity_wait: None,
         retried_by_team: false,
         failure: None,
+        awaiting_agent: false,
+        first_start_failures: 0,
+        refund: None,
     }
 }
 
@@ -908,12 +919,10 @@ pub fn enrollment(computer_id: ComputerId, agent: bool) -> crate::domain::enroll
         name: crate::domain::models::ComputerName::try_new("Fixture computer").unwrap(),
         deployment: deployment(),
         traceparent: None,
-        agent: agent.then(|| crate::domain::agent::AgentEnrollment {
-            agent_user_id: macro_user_id::user_id::MacroUserIdStr::try_from(
-                "macro|agent@example.com".to_owned(),
-            )
-            .unwrap(),
-            env: crate::domain::agent::AgentEnv::default(),
-        }),
+        role: if agent {
+            crate::domain::enrollment::ComputerRole::Agent
+        } else {
+            crate::domain::enrollment::ComputerRole::Person
+        },
     }
 }
