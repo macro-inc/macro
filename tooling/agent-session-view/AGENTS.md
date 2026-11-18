@@ -96,9 +96,9 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   run that was running when it was registered has the commit, whatever the
   run's conclusion: one failed job (an unrelated worker) marks a run
   "failure" though the services deployed. Otherwise the newest release
-  deployed before the turn (its run finished, or, with no run listed, its
-  release published) is used and labelled "inferred" with the reason; dev
-  sessions always get the last `main` commit before the turn.
+  deployed before the turn (its run, or a re-run's first attempt, finished;
+  with no run listed, it was published) is used and labelled "inferred" with
+  the reason; dev sessions always get the last `main` commit before the turn.
 - Reconstructed parts: "verified" means the span's SHA-256 prefix (or, with
   no hash, its byte count) matches; "mismatch" is shown in red and as the
   `reconstruction-mismatch` flag; memory, session instructions, the session

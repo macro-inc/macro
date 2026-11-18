@@ -315,7 +315,7 @@ RELEASES_2026_11_18 = [
 ]
 
 
-def github(runs, releases, tags=None, registered=None):
+def github(runs, releases, tags=None, registered=None, attempts=None):
     """A `subprocess.run` stand-in for the deploy lookup's `gh` and `aws` reads."""
     def run(args, **_):
         if args[0] == "aws":
@@ -323,9 +323,13 @@ def github(runs, releases, tags=None, registered=None):
                 raise subprocess.CalledProcessError(255, args)
             return completed(json.dumps(registered))
         path = args[2]
+        if "/attempts/" in path:
+            return completed(json.dumps((attempts or {})[path]))
         if "/actions/runs" in path:
             return completed(json.dumps(runs))
         if "/releases" in path:
+            if releases is None:
+                raise subprocess.CalledProcessError(1, args)
             return completed(json.dumps(releases))
         if "/commits/" in path:
             return completed(json.dumps((tags or {})[path.rsplit("/", 1)[1]]))
@@ -421,9 +425,33 @@ class Reconstruct(unittest.TestCase):
 
     def test_a_rerun_older_release_does_not_overtake_a_newer_one(self):
         runs = [dict(run) for run in RUNS_2026_11_18["workflow_runs"]]
-        runs[1].update(run_attempt=2, updated_at="2026-11-18T19:20:00Z")
-        commit = lookup(None, "2026-11-18T19:30:00Z", {"workflow_runs": runs}, RELEASES_2026_11_18)
+        runs[1].update(id=2, run_attempt=2, updated_at="2026-11-18T19:20:00Z")
+        attempts = {"repos/{owner}/{repo}/actions/runs/2/attempts/1": {"updated_at": "2026-11-18T01:22:25Z"}}
+        commit = lookup(None, "2026-11-18T19:30:00Z", {"workflow_runs": runs}, RELEASES_2026_11_18,
+                        attempts=attempts)
         self.assertEqual(commit["sha"], "7b93e795a5a")
+
+    def test_a_rerun_counts_from_its_first_attempt_end(self):
+        runs = [dict(run) for run in RUNS_2026_11_18["workflow_runs"]]
+        runs[0].update(id=1, run_attempt=2, status="in_progress", conclusion=None, updated_at="2026-11-18T20:00:00Z")
+        attempts = {"repos/{owner}/{repo}/actions/runs/1/attempts/1": {"updated_at": "2026-11-18T19:02:03Z"}}
+        early = lookup(None, "2026-11-18T18:40:00Z", {"workflow_runs": runs}, RELEASES_2026_11_18, attempts=attempts)
+        late = lookup(None, "2026-11-18T19:30:00Z", {"workflow_runs": runs}, RELEASES_2026_11_18, attempts=attempts)
+        self.assertEqual((early["sha"], late["sha"]), ("dce2afa890f", "7b93e795a5a"))
+
+    def test_a_queued_run_registered_nothing(self):
+        queued = [dict(RUNS_2026_11_18["workflow_runs"][0], status="queued", conclusion=None,
+                       created_at="2026-11-18T18:50:00Z", updated_at="2026-11-18T18:50:00Z")]
+        commit = lookup("agent-harness-service-8410addf:1", "2026-11-18T19:30:00Z",
+                        {"workflow_runs": queued + RUNS_2026_11_18["workflow_runs"][1:]}, RELEASES_2026_11_18,
+                        registered="2026-11-18T18:55:51.371000+00:00")
+        self.assertFalse(commit["exact"])
+
+    def test_an_unreadable_release_listing_keeps_the_exact_match(self):
+        commit = lookup("agent-harness-service-8410addf:1", "2026-11-18T19:30:00Z", RUNS_2026_11_18, None,
+                        registered="2026-11-18T18:55:51.371000+00:00")
+        self.assertEqual(commit["sha"], "7b93e795a5a")
+        self.assertTrue(commit["exact"])
 
     def test_a_prerelease_is_never_inferred(self):
         runs = {"workflow_runs": RUNS_2026_11_18["workflow_runs"][1:]}

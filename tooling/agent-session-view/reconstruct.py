@@ -36,6 +36,7 @@ CACHE = pathlib.Path.home() / ".cache" / "agent-session-view"
 EXAMPLE = HERE / "asv_reconstruct.rs"
 EXAMPLE_PATH = "crates/ai_tools/examples/asv_reconstruct.rs"
 PROD_DEPLOY = "Deploy Production Release"
+NOT_STARTED = {"queued", "pending", "waiting", "requested"}
 # `select_documentation` records its bytes before closing the block.
 SDK_CLOSE = "</macro_sdk>\n"
 NOT_REBUILT = {
@@ -96,14 +97,18 @@ def production_deploys():
     whole run "failure" though the services deployed."""
     try:
         listing = run_json(["gh", "api", "repos/{owner}/{repo}/actions/runs?event=release&per_page=100"])
-        releases = run_json(["gh", "api", "repos/{owner}/{repo}/releases?per_page=100"])
-        return {
-            "runs": [run for run in listing["workflow_runs"] if run["name"] == PROD_DEPLOY],
-            "releases": [release for release in releases # A prerelease never triggers the deploy workflow.
-                         if not release["draft"] and not release["prerelease"] and release["published_at"]],
-        }
+        runs = [run for run in listing["workflow_runs"] if run["name"] == PROD_DEPLOY]
     except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError) as error:
         return {"unreadable": f"production deploy runs not readable ({type(error).__name__})"}
+    try:
+        releases = run_json(["gh", "api", "repos/{owner}/{repo}/releases?per_page=100"])
+        return {"runs": runs, "releases": [
+            release for release in releases
+            # A prerelease never triggers the deploy workflow.
+            if not release["draft"] and not release["prerelease"] and release["published_at"]
+        ]}
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError) as error:
+        return {"runs": runs, "releases": [], "releases_unreadable": f"releases not readable ({type(error).__name__})"}
 
 
 def outcome(run):
@@ -126,6 +131,8 @@ def deploy_commit(task, turn_started, env, deploys):
                 "--query", "taskDefinition.registeredAt", "--output", "json",
             ]))
             for run in runs:
+                if run["status"] in NOT_STARTED:
+                    continue
                 # A run still going has no end yet.
                 ended = iso(run["updated_at"]) if run["status"] == "completed" else turn_started
                 if iso(run["created_at"]) <= registered <= ended:
@@ -136,22 +143,34 @@ def deploy_commit(task, turn_started, env, deploys):
             reason = f"task definition {task} not readable ({type(error).__name__})"
     else:
         reason = "the spans name no ECS task definition"
+    if "releases_unreadable" in deploys:
+        reason += "; " + deploys["releases_unreadable"]
     return newest_release_before(turn_started, runs, deploys["releases"], reason)
 
 
+def first_attempt_end(run):
+    """A re-run moves the run's end; its first attempt deployed the services."""
+    attempt = run_json(["gh", "api", f"repos/{{owner}}/{{repo}}/actions/runs/{run['id']}/attempts/1"])
+    return iso(attempt["updated_at"])
+
+
 def newest_release_before(turn_started, runs, releases, reason):
-    """The newest release deployed before the turn: one whose deploy run
-    finished before it, or, for a release with no run listed, one published
-    before it. A re-run moves the run's end, so a re-run counts from its
-    start. Releases are ordered by when they started deploying."""
+    """The newest release deployed before the turn: one whose deploy run (its
+    first attempt, when re-run) finished before it, or, for a release with no
+    run listed, one published before it. Releases are ordered by when they
+    started deploying."""
     candidates = []
     for run in runs:
-        if run["status"] != "completed" or run["conclusion"] not in ("success", "failure", "cancelled", "timed_out"):
-            continue
         rerun = run.get("run_attempt", 1) > 1
-        deployed = iso(run["created_at"] if rerun else run["updated_at"])
-        when = (f"its deploy run started before the turn ({iso(run['created_at']):%Y-%m-%d %H:%M}Z; re-run since)"
-                if rerun else f"its deploy run finished before the turn ({deployed:%Y-%m-%d %H:%M}Z)")
+        if not rerun and (run["status"] != "completed"
+                          or run["conclusion"] not in ("success", "failure", "cancelled", "timed_out")):
+            continue
+        try:
+            deployed = first_attempt_end(run) if rerun else iso(run["updated_at"])
+        except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError):
+            continue
+        attempt = " (first attempt)" if rerun else ""
+        when = f"its deploy run{attempt} finished before the turn ({deployed:%Y-%m-%d %H:%M}Z)"
         candidates.append((iso(run["created_at"]), deployed, run["head_branch"], run, when))
     with_runs = {run["head_branch"] for run in runs}
     for release in releases:
@@ -299,23 +318,23 @@ def attach(export, contexts, turns, env):
                 continue
             if task:
                 commits[task] = commit
-        groups.setdefault(commit["sha"], (commit, []))[1].append((context, turn))
+        groups.setdefault(commit["sha"], []).append((context, turn, commit))
 
     candidates = integration_candidates(spans)
-    for sha, (commit, members) in groups.items():
+    for sha, members in groups.items():
         docs = [
             {"entities": context["documentation"]["entities"], "guidance": context["documentation"]["guidance"]}
-            for context, _ in members if context["documentation"]
+            for context, _, _ in members if context["documentation"]
         ]
         request = {"docs": docs, "identities": identities(export), "integrations": candidates}
         try:
             output = render(sha, request)
         except (ReconstructionFailed, OSError, subprocess.CalledProcessError, ValueError) as error:
-            for context, _ in members:
+            for context, _, commit in members:
                 context["literal"] = {"commit": commit, "error": str(error)}
             continue
         rendered_docs = iter(output["docs"])
-        for context, turn in members:
+        for context, turn, commit in members:
             mark(context, commit, parts(context, turn, calls, output, rendered_docs))
 
 
