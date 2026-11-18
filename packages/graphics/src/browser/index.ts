@@ -77,6 +77,13 @@ export type GraphicsInputOptions = {
    * inspector. Fingers get larger handle targets whether or not this is set.
    */
   touchHandles?: boolean;
+  /**
+   * Leave one finger, a pen and the plain wheel to the page. A surface inside
+   * a scrolling document sets this until the person asks to interact with it:
+   * swipes and the wheel scroll the document, while two fingers (and a pinch
+   * or Ctrl/Cmd wheel) still move the canvas. A mouse works as ever.
+   */
+  yieldToPage?: () => boolean;
 };
 
 /** Attach camera controls to a focusable viewport. No document-global keyboard shortcuts. */
@@ -274,6 +281,8 @@ export function attachCameraControls(
     });
   };
   const pointerDown = (event: PointerEvent) => {
+    // A pen pans the page like a finger does; only a mouse cannot.
+    if (options.yieldToPage?.() && event.pointerType !== 'mouse') return;
     if (
       options.suspended?.() ||
       options.ignoreTarget?.(event.target) ||
@@ -541,6 +550,8 @@ export function attachCameraControls(
   };
   const wheel = (event: WheelEvent) => {
     if (options.suspended?.()) return;
+    // The page scrolls, unless this is a pinch or a deliberate zoom.
+    if (options.yieldToPage?.() && !event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
     if (drag) return;
     const rect = element.getBoundingClientRect();

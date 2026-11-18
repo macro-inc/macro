@@ -264,7 +264,32 @@ pub trait OutlookCalendarRepository: CalendarRepository {
         lease: &OutlookCalendarLease,
         kind: CalendarProviderErrorKind,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// Release a matching lease to retry after `delay`, recording no failure:
+    /// Macro's own request admission refused a call, so nothing reached
+    /// Microsoft.
+    fn defer_outlook_calendar(
+        &self,
+        lease: &OutlookCalendarLease,
+        delay: std::time::Duration,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// How much claimable work is waiting.
+    fn outlook_queue_depth(&self)
+    -> impl Future<Output = Result<OutlookQueueDepth, Report>> + Send;
 }
+
+/// The claimable work waiting for an Outlook sync loop.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OutlookQueueDepth {
+    /// Due, unleased work rows of accounts a claim may take.
+    pub due_items: i64,
+    /// How long the longest-waiting of them has been due, when any is.
+    pub oldest_due_seconds: Option<i64>,
+}
+
+/// The wait before retrying a deferred claim when the admission names none.
+const DEFERRAL: std::time::Duration = std::time::Duration::from_secs(5);
+/// The longest a deferred claim waits, the same cap as a failure's backoff.
+const MAX_DEFERRAL: std::time::Duration = std::time::Duration::from_secs(900);
 
 /// Domain coordinator for discovery, backfill, delta and bounded polling.
 pub struct OutlookCalendarSync<R, P, T, N> {
@@ -297,6 +322,28 @@ impl<
         self.writes_enabled = enabled;
         self
     }
+    /// Log how much claimable work is waiting, so a monitor can read queue
+    /// depth and the longest wait directly. Spans are sampled; the log is not.
+    #[tracing::instrument(
+        name = "calendar.outlook_queue_depth",
+        skip_all,
+        fields(due_items = tracing::field::Empty, oldest_due_seconds = tracing::field::Empty),
+        err
+    )]
+    pub async fn report_queue_depth(&self) -> Result<OutlookQueueDepth, Report> {
+        let depth = self.repository.outlook_queue_depth().await?;
+        let span = tracing::Span::current();
+        span.record("due_items", depth.due_items);
+        if let Some(oldest) = depth.oldest_due_seconds {
+            span.record("oldest_due_seconds", oldest);
+        }
+        tracing::info!(
+            due_items = depth.due_items,
+            oldest_due_seconds = depth.oldest_due_seconds,
+            "Outlook calendar sync queue depth"
+        );
+        Ok(depth)
+    }
     /// Claim and perform one bounded job. Heartbeats also revalidate custody.
     pub async fn run_once(&self) -> Result<bool, Report> {
         let Some(lease) = self
@@ -311,10 +358,23 @@ impl<
             return Ok(false);
         };
         let result = self.run_claim(&lease).await;
-        if let Err(error) = &result {
-            self.repository
-                .fail_outlook_calendar(&lease, error.kind())
-                .await?;
+        match &result {
+            Err(error) if error.kind() == CalendarProviderErrorKind::Deferred => {
+                let delay = error
+                    .retry_after()
+                    .unwrap_or(DEFERRAL)
+                    .clamp(std::time::Duration::from_secs(1), MAX_DEFERRAL);
+                self.repository
+                    .defer_outlook_calendar(&lease, delay)
+                    .await?;
+                return Ok(true);
+            }
+            Err(error) => {
+                self.repository
+                    .fail_outlook_calendar(&lease, error.kind())
+                    .await?;
+            }
+            Ok(()) => {}
         }
         result.map_err(|error| rootcause::report!(error))?;
         if lease.target.is_none() {
@@ -538,7 +598,14 @@ fn record_milestone(
 }
 
 fn record_failure(span: &tracing::Span, error: &CalendarProviderError) {
-    span.record("outcome", "failed");
+    span.record(
+        "outcome",
+        if error.kind() == CalendarProviderErrorKind::Deferred {
+            "deferred"
+        } else {
+            "failed"
+        },
+    );
     span.record("error_kind", tracing::field::debug(error.kind()));
 }
 
