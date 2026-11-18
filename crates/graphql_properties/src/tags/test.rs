@@ -32,6 +32,18 @@ impl EntityPropertyReader for TestReader {
         Ok(Vec::new())
     }
 
+    async fn get_definitions_with_options(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _scope: GraphqlPropertyDefinitionScope,
+        _for_entity_type: Option<models_properties::EntityType>,
+    ) -> Result<
+        Vec<models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions>,
+        rootcause::Report,
+    >{
+        Ok(Vec::new())
+    }
+
     async fn get_options(
         &self,
         _user_id: &MacroUserIdStr<'static>,
@@ -148,4 +160,19 @@ async fn tag_sets_list_provisioned_and_unprovisioned_sets_with_labels() {
 async fn schema_only_reader_fails_closed_for_tag_sets() {
     let user = MacroUserIdStr::parse_from_str(VIEWER).expect("valid user");
     assert!(NoOpEntityPropertyReader.get_tag_sets(&user).await.is_err());
+}
+
+#[tokio::test]
+async fn a_tag_definitions_options_come_from_the_set_without_another_read() {
+    // The test reader's options batch finds nothing, so a second read would
+    // fail the field as not visible.
+    let response = schema()
+        .execute("{ tagSets { definition { options { id } } } }")
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().expect("JSON result");
+    assert_eq!(
+        data["tagSets"][0]["definition"]["options"][0]["id"],
+        Uuid::from_u128(2).to_string()
+    );
 }
