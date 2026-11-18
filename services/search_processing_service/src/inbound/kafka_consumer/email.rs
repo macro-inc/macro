@@ -9,7 +9,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{EventOutcome, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY, retry_processing};
-use crate::process::email::{remove, upsert};
+use crate::process::email::{mailbox_delete::MailboxDeletes, remove, upsert};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum EmailIndexAction {
@@ -236,6 +236,7 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
 async fn process_email_index_action(
     db: &PgPool,
     opensearch_client: &OpensearchClient,
+    mailbox_deletes: &MailboxDeletes,
     action: EmailIndexAction,
 ) -> anyhow::Result<()> {
     match action {
@@ -262,9 +263,7 @@ async fn process_email_index_action(
             )
             .await
         }
-        EmailIndexAction::RemoveLink { link_id } => {
-            remove::process_remove_messages_by_link_id(opensearch_client, link_id).await
-        }
+        EmailIndexAction::RemoveLink { link_id } => mailbox_deletes.start(link_id).await,
         EmailIndexAction::Ignore => Ok(()),
     }
 }
@@ -272,6 +271,7 @@ async fn process_email_index_action(
 pub(super) async fn process_email_event(
     db: &PgPool,
     opensearch_client: &OpensearchClient,
+    mailbox_deletes: &MailboxDeletes,
     event: &EmailMacroEvent,
     partition: i32,
     offset: i64,
@@ -299,7 +299,7 @@ pub(super) async fn process_email_event(
                 attempt,
                 "processing email search-index event"
             );
-            process_email_index_action(db, opensearch_client, action)
+            process_email_index_action(db, opensearch_client, mailbox_deletes, action)
                 .await
                 .inspect_err(|error| {
                     if attempt < MAX_PROCESSING_ATTEMPTS {

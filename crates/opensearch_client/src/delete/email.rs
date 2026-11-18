@@ -12,52 +12,127 @@ fn resolve_destination(index_override: Option<&str>) -> &str {
     index_override.unwrap_or(SearchIndex::Emails.as_ref())
 }
 
-/// Deletes all email messages with the specified link_id
-#[tracing::instrument(skip(client))]
-pub async fn delete_email_by_link_id(client: &opensearch::OpenSearch, link_id: &str) -> Result<()> {
-    let query = serde_json::json!({
-        "query": {
-            "term": {
-                "link_id": link_id
-            }
-        },
-    });
-
+/// Starts deleting every email document of an inbox as a background
+/// OpenSearch task and returns its id without waiting. The task is throttled
+/// to `docs_per_second` across automatic slices so it cannot crowd out search,
+/// skips documents changed mid-delete instead of aborting, and forces no
+/// refresh: the scheduled refresh makes the removals visible.
+pub async fn start_email_link_delete(
+    client: &opensearch::OpenSearch,
+    link_id: &str,
+    docs_per_second: i64,
+) -> Result<String> {
+    const OPERATION: OpensearchOperation = OpensearchOperation::StartEmailLinkDelete;
     let response = client
         .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
             SearchIndex::Emails.as_ref(),
         ]))
-        .body(query)
-        .refresh(true) // Ensure the index reflects changes immediately
+        .body(serde_json::json!({ "query": { "term": { "link_id": link_id } } }))
+        .wait_for_completion(false)
+        .conflicts(opensearch::params::Conflicts::Proceed)
+        .slices(opensearch::params::Slices::Auto)
+        .requests_per_second(docs_per_second)
         .send()
         .await
-        .map_err(|err| {
-            OpensearchClientError::request_failed(OpensearchOperation::DeleteEmailByLinkId, &err)
-        })?;
+        .map_err(|err| OpensearchClientError::request_failed(OPERATION, &err))?;
 
     let status_code = response.status_code();
-
+    let body = response
+        .text()
+        .await
+        .map_err(|err| OpensearchClientError::deserialization_failed(OPERATION, &err))?;
     if !status_code.is_success() {
-        let body = response.text().await.map_err(|err| {
-            OpensearchClientError::deserialization_failed(
-                OpensearchOperation::DeleteEmailByLinkId,
-                &err,
-            )
-        })?;
-
-        tracing::error!(
-            status_code = ?status_code,
-            body = ?body,
-            "error deleting chats by id"
-        );
-
+        tracing::error!(status_code = ?status_code, body = ?body, "error starting an inbox delete");
         return Err(OpensearchClientError::Unknown {
             details: body,
-            operation: OpensearchOperation::DeleteEmailByLinkId,
+            operation: OPERATION,
         });
     }
+    let started: serde_json::Value = serde_json::from_str(&body).map_err(|err| {
+        OpensearchClientError::DeserializationFailed {
+            details: err.to_string(),
+            operation: OPERATION,
+        }
+    })?;
+    started["task"].as_str().map(str::to_owned).ok_or_else(|| {
+        OpensearchClientError::DeserializationFailed {
+            details: format!("no task id in {body}"),
+            operation: OPERATION,
+        }
+    })
+}
 
-    Ok(())
+/// Progress of a background email delete task.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct EmailDeleteTask {
+    /// Whether the task has finished, successfully or not.
+    pub completed: bool,
+    /// Documents deleted so far, or in all once completed.
+    pub deleted: u64,
+    /// Documents the task found to delete.
+    pub total: u64,
+    /// Why the task failed: its error, or its per-document failures.
+    pub failure: Option<String>,
+}
+
+/// Reads a background email delete task's progress.
+pub async fn email_delete_task(
+    client: &opensearch::OpenSearch,
+    task_id: &str,
+) -> Result<EmailDeleteTask> {
+    const OPERATION: OpensearchOperation = OpensearchOperation::EmailDeleteTask;
+    // The typed tasks API is behind the client's experimental feature.
+    let response = client
+        .send::<(), ()>(
+            opensearch::http::Method::Get,
+            &format!("/_tasks/{task_id}"),
+            opensearch::http::headers::HeaderMap::new(),
+            None,
+            None,
+            None,
+        )
+        .await
+        .map_err(|err| OpensearchClientError::request_failed(OPERATION, &err))?;
+    let status_code = response.status_code();
+    let body = response
+        .text()
+        .await
+        .map_err(|err| OpensearchClientError::deserialization_failed(OPERATION, &err))?;
+    if !status_code.is_success() {
+        return Err(OpensearchClientError::Unknown {
+            details: body,
+            operation: OPERATION,
+        });
+    }
+    parse_email_delete_task(&body)
+}
+
+pub(crate) fn parse_email_delete_task(body: &str) -> Result<EmailDeleteTask> {
+    let task: serde_json::Value =
+        serde_json::from_str(body).map_err(|err| OpensearchClientError::DeserializationFailed {
+            details: err.to_string(),
+            operation: OpensearchOperation::EmailDeleteTask,
+        })?;
+    let completed = task["completed"].as_bool().unwrap_or(false);
+    let counts = if completed && task["response"].is_object() {
+        &task["response"]
+    } else {
+        &task["task"]["status"]
+    };
+    let failure = if task["error"].is_object() {
+        Some(task["error"].to_string())
+    } else {
+        task["response"]["failures"]
+            .as_array()
+            .filter(|failures| !failures.is_empty())
+            .map(|failures| serde_json::Value::from(failures.clone()).to_string())
+    };
+    Ok(EmailDeleteTask {
+        completed,
+        deleted: counts["deleted"].as_u64().unwrap_or(0),
+        total: counts["total"].as_u64().unwrap_or(0),
+        failure,
+    })
 }
 
 /// Documents a delete-by-query over email message ids removed, and those it

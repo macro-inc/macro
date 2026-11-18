@@ -121,10 +121,23 @@ impl OpensearchClient {
         Ok(())
     }
 
-    /// Deletes all email messages with the specified link_id
-    pub async fn delete_email_messages_by_link_id(&self, link_id: &str) -> Result<()> {
-        resend_on_lost_connection(|| delete::email::delete_email_by_link_id(&self.inner, link_id))
-            .await
+    /// Starts deleting every email document of an inbox as a throttled
+    /// background OpenSearch task and returns its id without waiting.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn start_email_link_delete(
+        &self,
+        link_id: &str,
+        docs_per_second: i64,
+    ) -> Result<String> {
+        resend_on_lost_connection(|| {
+            delete::email::start_email_link_delete(&self.inner, link_id, docs_per_second)
+        })
+        .await
+    }
+
+    /// Reads a background email delete task's progress.
+    pub async fn email_delete_task(&self, task_id: &str) -> Result<delete::email::EmailDeleteTask> {
+        resend_on_lost_connection(|| delete::email::email_delete_task(&self.inner, task_id)).await
     }
 
     pub async fn delete_email_messages_by_user_id(&self, user_id: &str) -> Result<()> {

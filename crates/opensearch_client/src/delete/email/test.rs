@@ -287,3 +287,54 @@ async fn deleting_a_moved_message_s_old_copies_forces_no_refresh() {
         outside_thread_query("message-1", "thread-2")
     );
 }
+
+#[test]
+fn a_running_delete_task_reports_its_progress() {
+    let task = parse_email_delete_task(
+        r#"{"completed":false,"task":{"status":{"total":40,"deleted":5}}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        task,
+        EmailDeleteTask {
+            completed: false,
+            deleted: 5,
+            total: 40,
+            failure: None,
+        }
+    );
+}
+
+#[test]
+fn a_completed_delete_task_reports_its_response_counts() {
+    let task = parse_email_delete_task(
+        r#"{"completed":true,"task":{"status":{"total":40,"deleted":39}},"response":{"total":40,"deleted":40,"failures":[]}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        task,
+        EmailDeleteTask {
+            completed: true,
+            deleted: 40,
+            total: 40,
+            failure: None,
+        }
+    );
+}
+
+#[test]
+fn a_delete_task_with_failures_or_an_error_reports_a_failure() {
+    let with_failures = parse_email_delete_task(
+        r#"{"completed":true,"response":{"deleted":3,"failures":[{"cause":{"type":"es_rejected_execution_exception"}}]}}"#,
+    )
+    .unwrap();
+    assert!(with_failures.failure.is_some());
+
+    let with_error = parse_email_delete_task(
+        r#"{"completed":true,"error":{"type":"search_phase_execution_exception"}}"#,
+    )
+    .unwrap();
+    assert!(with_error.failure.is_some());
+}
