@@ -88,6 +88,12 @@ arrived. The banner never suggests turning the calendar off, which deletes
 Macro's copy and starts the import again.
 The banner stays visible as partial results arrive and disappears when sync finishes.
 A routine sync of an already imported account never shows it.
+With the GraphQL calendar cache, months already in the cache fetch nothing, so
+the client reads the status itself: when the cache starts, whenever it catches
+up with the server (reconnect, coming online, becoming visible, a cache reset),
+and every minute while the server says syncing. Verify a reload during an
+import: load the calendar while the server reports syncing, let the background
+backfill settle, reload the same tab, and confirm the banner is back.
 Errors retain the separate retry state. Verify delayed occurrence
 responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
