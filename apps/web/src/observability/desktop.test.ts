@@ -196,9 +196,14 @@ describe('native build', () => {
 
   it('leaves the build absent when the binary fails or never answers', async () => {
     vi.resetModules();
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
     vi.mocked(invoke).mockReset().mockRejectedValue(new Error('not found'));
     let { readNativeBuildAttribute } = await import('./desktop');
     expect(await readNativeBuildAttribute()).toBeUndefined();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    process.off('unhandledRejection', unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
     // A failed call is not kept: the next reader asks the binary again.
     vi.mocked(invoke).mockResolvedValue({ nativeBuild: 24 });
     expect(await readNativeBuildAttribute()).toBe(24);

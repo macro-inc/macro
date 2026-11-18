@@ -9,7 +9,7 @@ import {
 } from '@macro-inc/observability';
 import { raceTimeout } from '@solid-primitives/promise';
 import { invoke } from '@tauri-apps/api/core';
-import { ResultAsync } from 'neverthrow';
+import { type Result, ResultAsync } from 'neverthrow';
 import type {
   BundleReloadDiagnostics,
   BundleStartup,
@@ -249,11 +249,14 @@ export function nativeBuildAttribute(build: unknown): number | undefined {
  * deadline as the diagnostics snapshot.
  */
 export async function readNativeBuildAttribute(): Promise<number | undefined> {
-  const build = await ResultAsync.fromPromise(
-    raceTimeout(installedNativeBuild(), 3000),
-    () => undefined
-  );
-  return build.isOk() ? nativeBuildAttribute(build.value) : undefined;
+  // `raceTimeout` leaves a rejection of its input unhandled, so it races a
+  // lookup that cannot reject.
+  const build = await raceTimeout(lookupNativeBuild(), 3000);
+  return build?.isOk() ? nativeBuildAttribute(build.value) : undefined;
+}
+
+async function lookupNativeBuild(): Promise<Result<unknown, undefined>> {
+  return await ResultAsync.fromPromise(installedNativeBuild(), () => undefined);
 }
 
 export async function readDesktopDiagnostics(): Promise<
