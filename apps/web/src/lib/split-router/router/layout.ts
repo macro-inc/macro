@@ -51,6 +51,8 @@ export type ShowLayoutOptions = {
   closeOpen?: boolean;
   /** With `closeOpen`, open panes to park anyway. */
   park?: readonly PaneId[];
+  /** Recorded on the navigation's perf span. */
+  attributes?: Navigation['attributes'];
 };
 
 const shownEntry = (pane: LayoutPane): Entry => pane.entries[pane.index]!;
@@ -224,6 +226,7 @@ export function createLayout(options: {
       // Whether a view comes back from parked instead of rendering, so a
       // restore is not read as a fast render.
       attributes: {
+        ...showOptions.attributes,
         'navigation.restored_from_parked': next.some(
           (pane) => !open.includes(pane)
         ),

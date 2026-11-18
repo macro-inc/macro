@@ -92,6 +92,7 @@ function setup(url: string, returnsTo: (view: string) => boolean = () => true) {
       },
       viewState: { keep: (owner: string) => kept.push(owner) },
       activateSplit: (id: string) => activated.push(id),
+      unSpotlightSplit: () => {},
     } as unknown as SplitManager;
     const parking = createMobileDockParking({ router, manager, sessionKey });
     const show = async (id: string) => {
@@ -154,11 +155,18 @@ describe('mobile dock parking', () => {
 
     await show('mail');
     await show('home');
-    expect(
-      navigationAttributes.map(
-        (attributes) => attributes['navigation.restored_from_parked']
-      )
-    ).toEqual([false, true]);
+    expect(navigationAttributes).toEqual([
+      expect.objectContaining({
+        'navigation.restored_from_parked': false,
+        'mobile_dock.evicted': 0,
+        'mobile_dock.parked_count': 1,
+      }),
+      expect.objectContaining({
+        'navigation.restored_from_parked': true,
+        'mobile_dock.evicted': 0,
+        'mobile_dock.parked_count': 1,
+      }),
+    ]);
   });
 
   it('closes panes opened above the view and parks only the view', async () => {
@@ -166,6 +174,8 @@ describe('mobile dock parking', () => {
 
     await show('mail');
     expect(router.panes().map(viewOf)).toEqual(['mail']);
+    // A pane of its own, not the channel's with the channel in its history.
+    expect(router.panes()).toEqual([pane(3)]);
     expect(parked().map(viewOf)).toEqual(['home']);
     expect(router.retainedPanes().map(viewOf)).not.toContain('block');
   });

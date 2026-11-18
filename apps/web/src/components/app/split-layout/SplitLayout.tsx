@@ -232,6 +232,7 @@ export function SplitLayout() {
                 .retainedPanes()
                 .filter((pane) => !router.panes().includes(pane))
             }
+            openPanes={router.panes}
             panelRefs={panelRefs}
           />
         )}

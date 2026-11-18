@@ -27,6 +27,8 @@ export type MobileSplitContainerProps = {
   stack: MobilePaneStack;
   /** Panes kept mounted off screen (parked dock views). */
   parkedPanes: Accessor<readonly PaneId[]>;
+  /** The router's open panes, which the stack follows a computation later. */
+  openPanes: Accessor<readonly PaneId[]>;
   panelRefs: Map<SplitId, HTMLDivElement>;
 };
 
@@ -37,7 +39,8 @@ export type MobileSplitContainerProps = {
  */
 function createMountedPanes(
   stack: MobilePaneStack,
-  parked: Accessor<readonly PaneId[]>
+  parked: Accessor<readonly PaneId[]>,
+  open: Accessor<readonly PaneId[]>
 ): Accessor<readonly SplitId[]> {
   const [mounted, setMounted] = createSignal<readonly SplitId[]>([]);
 
@@ -46,9 +49,14 @@ function createMountedPanes(
       (id): id is SplitId => id !== undefined
     );
     const wanted = [...shown, ...parked().map(splitOf)];
+    // A parked pane shown again leaves the parked panes before the stack
+    // shows it; a mounted pane the router keeps in front stays meanwhile.
+    const front = open().slice(-2).map(splitOf);
 
     setMounted((current) => {
-      const kept = current.filter((id) => wanted.includes(id));
+      const kept = current.filter(
+        (id) => wanted.includes(id) || front.includes(id)
+      );
       const added = wanted.filter((id) => !kept.includes(id));
       return [...kept, ...added];
     });
@@ -68,7 +76,7 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
   );
 
   const motion = createMobileSplitMotion({ stack });
-  const mounted = createMountedPanes(stack, props.parkedPanes);
+  const mounted = createMountedPanes(stack, props.parkedPanes, props.openPanes);
 
   const paneFor = (id: SplitId) =>
     createMemo(() => {

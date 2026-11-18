@@ -46,7 +46,11 @@ import { MobileSplitContainer } from '../mobile/MobileSplitContainer';
 const id = (value: string) => value as SplitId;
 
 function mountContainer() {
+  // What the stack shows, which follows the router's open panes.
   const [open, setOpen] = createSignal<readonly SplitId[]>([id('mail')]);
+  const [routerOpen, setRouterOpen] = createSignal<readonly PaneId[]>([
+    'mail' as PaneId,
+  ]);
   const [parked, setParked] = createSignal<readonly PaneId[]>([]);
   const stack: MobilePaneStack = {
     front: () => open().at(-1),
@@ -65,21 +69,27 @@ function mountContainer() {
       }}
       stack={stack}
       parkedPanes={parked}
+      openPanes={routerOpen}
       panelRefs={new Map<SplitId, HTMLDivElement>()}
     />
   ));
 
-  /** The dock switch: `next` comes to the front, the open view parks. */
-  const switchTo = (next: string) => {
+  /**
+   * The dock switch: `next` comes to the front, the open view parks. The
+   * router changes its open and parked panes in one batch; with
+   * `stackLags`, the stack follows only afterwards.
+   */
+  const switchTo = (next: string, stackLags = false) => {
     const leaving = open().map((split) => split as string as PaneId);
-    // The router changes open and retained panes in one batch.
     batch(() => {
       setParked((current) => [
         ...current.filter((pane) => pane !== next),
         ...leaving,
       ]);
-      setOpen([id(next)]);
+      setRouterOpen([next as PaneId]);
+      if (!stackLags) setOpen([id(next)]);
     });
+    if (stackLags) setOpen([id(next)]);
   };
 
   return { ...result, switchTo };
@@ -112,6 +122,15 @@ describe('parked panes in the mobile split container', () => {
     expect(wrapperOf(container, 'mail').inert).toBe(false);
     expect(mounts.get('mail')).toBe(1);
     expect(mounts.get('channels')).toBe(1);
+  });
+
+  it('keeps a view mounted when the router shows it before the stack does', () => {
+    const { switchTo } = mountContainer();
+    switchTo('channels');
+    const before = mounts.get('mail');
+
+    switchTo('mail', true);
+    expect(mounts.get('mail')).toBe(before);
   });
 
   it('leaves Android Back to the shown view, not a parked one', () => {
