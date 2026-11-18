@@ -130,6 +130,17 @@ export default {
   name: 'Name',
   sizeTitle: 'Get a Macro computer',
   buy: 'Buy',
+  buyReadyHeadsUp:
+    "It's ready in a couple of seconds, on the list with the team's other computers.",
+  gettingIt: 'Getting your computer…',
+  tryAgainPriced: 'Try again · {{price}}',
+  updateCard: 'Update card',
+  declined:
+    'Your card was declined. Nothing was charged and nothing was set up. Update the card, or try again if your bank has cleared it.',
+  declinedCaption:
+    'Try again charges the card on file once more. The size and name are kept.',
+  noRoom:
+    'No room for a {{size}} computer right now. Nothing was charged. Pick another size.',
   buyHeadsUp:
     "Next you'll name your agent and sign in to Claude (Pro or Max) — have claude.ai handy.",
   stepBuy: 'Buy computer',
@@ -178,7 +189,6 @@ export default {
   retrySetup: 'Retry setup',
   setupFailedTitle: 'Setup failed',
   signInSkipped: 'Not needed: the agent runs on Macro credits.',
-  tryItAfterSetup: 'Try it and creating agents unlock once setup finishes.',
   buyAfterSizesLoad: 'Buy unlocks once the sizes have loaded.',
   setupContinuesInBackground:
     'You can close this; setup carries on and the computer’s row shows its progress.',
@@ -187,8 +197,6 @@ export default {
   setupSteps: 'Setup steps',
   signInToClaude: 'Sign in to Claude',
   signInTabTitle: '● Paste your Claude code — Macro',
-  almostReady: 'Almost ready',
-  almostReadyBody: 'Finishing setup on {{computer}}.',
   setupAgentTitle: "Let's set up an agent on it",
   agentName: 'Agent name',
   claudeChoice: 'Which Claude should it use?',
@@ -198,17 +206,22 @@ export default {
   claudeCreditsChoice: 'Macro credits',
   claudeCreditsChoiceHint: "Runs on Macro's API key and your team's credits.",
   setupDoneTitle: '{{agent}} is ready',
-  setupDoneBody:
-    'It runs on {{computer}}. Try {{agent}} now, or create another agent that runs there.',
-  setupDoneBodyForAgent:
-    'It runs on {{computer}}. Try {{agent}} now, or use this computer for the agent you are editing.',
-  createAgentHere: 'Create an agent on this computer',
+  setupReadyBody: 'It runs on {{computer}}. Say hi to get started.',
+  setupReadyBodyForAgent:
+    "It runs on {{computer}}. Use it for the agent you're editing.",
+  settingUpAgentTitle: 'Setting up {{agent}}',
+  settingUpAgentBody: 'This takes a few seconds.',
+  settingUpAgent: 'Setting up…',
+  finishFailedTitle: "Couldn't finish setting up {{agent}}",
+  finishFailedBody:
+    "{{computer}} is up, but its setup didn't finish. Retry to finish it.",
+  chatWithAgent: 'Chat with {{agent}}',
+  addAnotherAgent: 'Add another agent',
   setupReadyNotice: 'Your computer is ready: connect your AI and finish setup',
   setupReadyNoticeBody:
     '{{computer}} is up. Bring your AI, then create an agent on it.',
   setupFailedNotice: '{{computer}} could not be set up',
   useForThisAgent: 'Use for this agent',
-  tryIt: 'Try it',
   done: 'Done',
   fromPrice: 'From {{price}}',
   fromPriceLower: 'from {{price}}',

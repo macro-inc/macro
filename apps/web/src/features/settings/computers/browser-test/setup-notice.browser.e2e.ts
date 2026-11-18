@@ -117,7 +117,7 @@ test('closes during setup, is told the computer is ready, and finishes from the 
     return json(route, 200, computers[0]);
   });
 
-  await page.goto('/');
+  await page.goto('/?after=guided');
   // A cold dev server can take a while to serve the first page.
   await expect(
     page.getByRole('button', { name: 'Get a computer' })
@@ -128,9 +128,10 @@ test('closes during setup, is told the computer is ready, and finishes from the 
   await dialog(page)
     .getByRole('button', { name: 'Buy · $40.00/month' })
     .click();
+  // Buy waits up to five seconds for the computer before setup goes on.
   await expect(
     dialog(page).getByRole('heading', { name: "Let's set up an agent on it" })
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 10_000 });
   await pace(page);
 
   // Closing right after Buy never cancels anything: the row carries the live
@@ -205,9 +206,7 @@ test('closes during setup, is told the computer is ready, and finishes from the 
   await expect(
     dialog(page).getByRole('heading', { name: "Maya's Agent is ready" })
   ).toBeVisible({ timeout: 10_000 });
-  await dialog(page)
-    .getByRole('button', { name: 'Create an agent on this computer' })
-    .click();
+  await dialog(page).getByRole('button', { name: 'Add another agent' }).click();
   const form = page.getByRole('region', { name: 'New agent' });
   await expect(form).toBeVisible({ timeout: 60_000 });
   await expect(
@@ -237,7 +236,7 @@ test('a failed setup notice says why and reopens setup to Retry', async ({
   await page.route('**/auth/team/computers/offers', (route) =>
     json(route, 200, offers)
   );
-  await page.goto('/');
+  await page.goto('/?after=guided');
   await expect(row(page)).toContainText(
     'Setup failed: The host ran out of disk.'
   );

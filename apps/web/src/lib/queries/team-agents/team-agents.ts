@@ -1,5 +1,5 @@
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type CreateTeamAgent,
   type TeamAgent,
@@ -16,7 +16,12 @@ import { teamAgentKeys } from './keys';
 
 const PROVISIONING_POLL_MS = 3_000;
 
-type CreateTeamAgentArgs = { teamId: string; request: CreateTeamAgent };
+type CreateTeamAgentArgs = {
+  teamId: string;
+  request: CreateTeamAgent;
+  /** The Add flow's span, so the invite joins its trace across the await. */
+  parentSpan?: Span;
+};
 type RemoveTeamAgentArgs = { teamId: string; userId: string };
 
 /** Polls only while an agent's computer is still being set up, or the agent is starting. */
@@ -40,6 +45,17 @@ function teamAgentsQueryOptions(teamId: string, enabled: boolean) {
       thrownResultErrorHasCode(query.state.error, 'UNAUTHORIZED')
         ? false
         : teamAgentsPollInterval(query.state.data?.agents),
+  });
+}
+
+/**
+ * The team's agent teammates read now, bypassing the cache's freshness, for
+ * a caller waiting on one of them; the list query shows the same answer.
+ */
+export async function fetchTeamAgents(teamId: string): Promise<TeamAgents> {
+  return await queryClient.fetchQuery({
+    ...teamAgentsQueryOptions(teamId, true),
+    staleTime: 0,
   });
 }
 
@@ -89,21 +105,24 @@ function forgetAgent(teamId: string, userId: string) {
 }
 
 async function createTeamAgent(vars: CreateTeamAgentArgs) {
-  return await Telemetry.span('team-agent.invite', async (span) => {
-    span.setAttr('team.id', vars.teamId);
-    span.setAttr('computer.size', vars.request.size);
-    if (vars.request.voice) span.setAttr('voice.model', vars.request.voice);
-    try {
-      const agent = await throwOnErr(() =>
-        teamAgentsClient.create(vars.request)
-      );
-      span.setAttr('agent.user_id', agent.userId);
-      return agent;
-    } catch (error) {
-      span.error('Agent invitation failed');
-      throw error;
-    }
-  });
+  const invite = (span: Span) => inviteTeamAgent(vars, span);
+  if (vars.parentSpan)
+    return await vars.parentSpan.span('team-agent.invite', invite);
+  return await Telemetry.span('team-agent.invite', invite);
+}
+
+async function inviteTeamAgent(vars: CreateTeamAgentArgs, span: Span) {
+  span.setAttr('team.id', vars.teamId);
+  span.setAttr('computer.size', vars.request.size);
+  if (vars.request.voice) span.setAttr('voice.model', vars.request.voice);
+  try {
+    const agent = await throwOnErr(() => teamAgentsClient.create(vars.request));
+    span.setAttr('agent.user_id', agent.userId);
+    return agent;
+  } catch (error) {
+    span.error('Agent invitation failed');
+    throw error;
+  }
 }
 
 export function useCreateTeamAgentMutation() {

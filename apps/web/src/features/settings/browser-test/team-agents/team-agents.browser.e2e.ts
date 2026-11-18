@@ -123,8 +123,9 @@ async function scriptAuthService(
   options: {
     agents?: Agent[];
     failedVoiceSaves?: number;
-    /** Invites the server refuses before one goes through. */
+    /** Invites the server refuses before one goes through, and how. */
     failedCreates?: number;
+    refusal?: 'payment_declined' | 'no_room';
     /** Whether macrod on an agent's computer has connected. */
     computerConnected?: boolean;
     /** Owners and admins own an agent computer's runtime; others don't see it. */
@@ -242,7 +243,9 @@ async function scriptAuthService(
       backend.created.push(body);
       if (backend.failedCreates > 0) {
         backend.failedCreates -= 1;
-        return json(409, { message: 'This size is sold out.' });
+        return options.refusal === 'no_room'
+          ? json(409, { message: 'No room', code: 'no_room', size: body.size })
+          : json(402, { message: 'Declined', code: 'payment_declined' });
       }
       backend.reads = 0;
       const agent: Agent = {
@@ -299,6 +302,8 @@ async function scriptAuthService(
       return route.fulfill({ status: 204 });
     }
 
+    if (path.endsWith('/team/computers/rollout'))
+      return json(200, { enabled: true });
     if (path.endsWith('/team/computers/offers')) return json(200, OFFERS);
 
     if (path.endsWith('/team/computers') && request.method() === 'GET')
@@ -453,87 +458,59 @@ async function openInviteAgent(page: Page) {
 async function fillAda(page: Page) {
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('textbox', { name: 'Name' }).fill('Ada');
-  await dialog
-    .getByRole('textbox', { name: 'Job description' })
-    .fill('Triage new support emails and draft replies for review.');
-  await dialog
-    .getByRole('textbox', { name: 'Personality' })
-    .fill('Warm and concise. Asks before guessing.');
 }
 
-test('inviting an agent closes the dialog at once and its row shows the setup step', async ({
+test('adding an agent waits in the dialog until it is online, then closes into its DM', async ({
   page,
 }, testInfo) => {
-  const backend = await scriptAuthService(page, 4);
+  const backend = await scriptAuthService(page, 2);
   await page.goto('/');
   const dialog = await openInviteAgent(page);
 
-  // Disabled, with the reason beside it.
-  const invite = dialog.getByRole('button', { name: /^Invite agent/ });
-  await expect(invite).toBeDisabled();
-  await expect(dialog).toContainText(
-    'Fill in the name, job description, and personality to invite.'
+  // Disabled, with the reason beside it; a suggestion names it.
+  const add = dialog.getByRole('button', { name: /^Add/ });
+  await expect(add).toBeDisabled();
+  await expect(dialog).toContainText('Give your agent a name to continue.');
+  await screenshot(page, testInfo, 'add-agent-empty');
+  await dialog.getByRole('button', { name: 'Ada', exact: true }).click();
+  await expect(dialog.getByRole('textbox', { name: 'Name' })).toHaveValue(
+    'Ada'
   );
-  await screenshot(page, testInfo, 'invite-agent-empty');
 
-  await fillAda(page);
   // Standard is preselected; XL is sold out. The price is the computer's.
   await expect(dialog.getByRole('radio', { name: 'Standard' })).toBeChecked();
   await expect(dialog.getByRole('radio', { name: 'XL' })).toBeDisabled();
   await dialog.getByText('Large', { exact: true }).click();
-  await expect(invite).toHaveText('Invite agent · $80.00/month');
+  await expect(add).toHaveText('Add Ada · $80.00/month');
+  await screenshot(page, testInfo, 'add-agent-named');
 
-  // The personality suggests a voice; an explicit pick replaces it.
-  const voice = dialog.getByRole('combobox', { name: 'Voice' });
-  await expect(voice).toHaveValue('Thalia');
-  await dialog.getByRole('button', { name: 'Show voices' }).click();
-  await page.getByRole('option', { name: 'Arcas' }).click();
-  await expect(voice).toHaveValue('Arcas');
-
-  await invite.click();
-  // No Claude sign-in step: the dialog closes and says what happens next.
-  await expect(dialog).toBeHidden();
+  await add.click();
+  await expect(
+    dialog.getByRole('button', { name: /Adding Ada/ })
+  ).toBeVisible();
+  await screenshot(page, testInfo, 'add-agent-adding');
+  // It closes once the agent reports itself online: no notice, no setup card.
+  await expect(dialog).toBeHidden({ timeout: 10_000 });
   await expect(
     page.getByText("Ada is being set up. We'll let you know when it's ready.")
-  ).toBeVisible();
-  await screenshot(page, testInfo, 'invite-closes-with-notice');
+  ).toHaveCount(0);
   expect(backend.claudeCalls).toEqual([]);
   expect(backend.created).toEqual([
     {
       name: 'Ada',
-      jobDescription: 'Triage new support emails and draft replies for review.',
-      personality: 'Warm and concise. Asks before guessing.',
+      jobDescription: '',
+      personality: '',
       size: 'large',
       avatarUrl: null,
       purchaseKey: expect.any(String),
-      voice: 'aura-2-arcas-en',
     },
   ]);
 
-  // One row for the agent: Setting up, with the step its computer is on.
   const agentRow = page.locator('[data-member-kind="agent"]');
   await expect(agentRow).toHaveCount(1);
-  await expect(agentRow.getByRole('status')).toHaveText('Setting up');
-  await expect(agentRow.locator('[data-agent-setup-step]')).toHaveText(
-    'Creating the computer'
-  );
-  backend.step = 'booting';
-  await expect(agentRow.locator('[data-agent-setup-step]')).toHaveText(
-    'Starting up',
-    { timeout: 15_000 }
-  );
-  await screenshot(page, testInfo, 'members-setting-up-step');
-
-  // The list polls while the agent is provisioning, and while its computer
-  // is up but the agent hasn't reported itself online.
-  await expect(agentRow.getByRole('status')).toHaveText('Starting', {
-    timeout: 20_000,
-  });
-  await screenshot(page, testInfo, 'members-starting');
-  await expect(agentRow.getByRole('status')).toHaveText('Running', {
-    timeout: 20_000,
-  });
+  await expect(agentRow.getByRole('status')).toHaveText('Running');
   await expect(agentRow.locator('[data-agent-setup-step]')).toHaveCount(0);
+  await screenshot(page, testInfo, 'members-online');
 
   // Removing deletes its computer and files, so it asks first; Cancel keeps it.
   await agentRow.getByRole('button', { name: 'Remove agent' }).click();
@@ -554,25 +531,70 @@ test('inviting an agent closes the dialog at once and its row shows the setup st
   expect(backend.removed).toEqual([ADA]);
 });
 
-test('a refused invite brings its error into view and keeps its purchase key', async ({
+test('an agent still starting after five seconds closes the dialog, and its row shows the setup step', async ({
   page,
 }, testInfo) => {
-  const backend = await scriptAuthService(page, 0, { failedCreates: 1 });
+  await scriptAuthService(page, 40);
   await page.goto('/');
   const dialog = await openInviteAgent(page);
   await fillAda(page);
-  await dialog.getByRole('button', { name: /^Invite agent/ }).click();
+  await dialog.getByRole('button', { name: /^Add Ada/ }).click();
+  await expect(
+    dialog.getByRole('button', { name: /Adding Ada/ })
+  ).toBeVisible();
+  await expect(dialog).toBeVisible();
 
-  const error = dialog.locator('[data-invite-error]');
-  await expect(error).toContainText("Couldn't buy a computer for this agent.");
-  await expect(error).toBeInViewport();
-  await expect(error).toBeFocused();
-  await screenshot(page, testInfo, 'invite-error-in-view');
+  await expect(dialog).toBeHidden({ timeout: 10_000 });
+  const agentRow = page.locator('[data-member-kind="agent"]');
+  await expect(agentRow.getByRole('status')).toHaveText('Setting up');
+  await expect(agentRow.locator('[data-agent-setup-step]')).toHaveText(
+    'Creating the computer'
+  );
+  await screenshot(page, testInfo, 'members-slow-path');
+});
 
-  await dialog.getByRole('button', { name: /^Invite agent/ }).click();
-  await expect(dialog).toBeHidden();
-  const [refused, retried] = backend.created as { purchaseKey: string }[];
-  expect(retried?.purchaseKey).toBe(refused?.purchaseKey);
+test('a declined card keeps the dialog, nothing behind, and Try again buys anew', async ({
+  page,
+}, testInfo) => {
+  const backend = await scriptAuthService(page, 0, {
+    failedCreates: 1,
+    refusal: 'payment_declined',
+  });
+  await page.goto('/');
+  const dialog = await openInviteAgent(page);
+  await fillAda(page);
+  await dialog.getByRole('button', { name: /^Add Ada/ }).click();
+
+  const notice = dialog.locator('[data-add-agent-state="declined"]');
+  await expect(notice).toContainText('Nothing was charged');
+  await expect(notice).toBeInViewport();
+  await expect(
+    dialog.getByRole('button', { name: 'Update card' })
+  ).toBeVisible();
+  await expect(page.locator('[data-member-kind="agent"]')).toHaveCount(0);
+  await screenshot(page, testInfo, 'add-agent-declined');
+
+  await dialog.getByRole('button', { name: /^Try again/ }).click();
+  await expect(dialog).toBeHidden({ timeout: 10_000 });
+  const [declined, again] = backend.created as { purchaseKey: string }[];
+  expect(again?.purchaseKey).not.toBe(declined?.purchaseKey);
+});
+
+test('a size with no room is marked and another size can be added', async ({
+  page,
+}, testInfo) => {
+  await scriptAuthService(page, 0, { failedCreates: 1, refusal: 'no_room' });
+  await page.goto('/');
+  const dialog = await openInviteAgent(page);
+  await fillAda(page);
+  await dialog.getByRole('button', { name: /^Add Ada/ }).click();
+
+  await expect(dialog).toContainText('No room for a Standard computer');
+  await expect(dialog.getByRole('radio', { name: 'Standard' })).toBeDisabled();
+  await expect(dialog.getByRole('radio', { name: 'Large' })).toBeChecked();
+  await screenshot(page, testInfo, 'add-agent-no-room');
+  await dialog.getByRole('button', { name: /^Add Ada/ }).click();
+  await expect(dialog).toBeHidden({ timeout: 10_000 });
 });
 
 test('the inviter hears when the agent is ready: Message Ada, and Connect Claude plan, closable', async ({

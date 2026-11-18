@@ -14,6 +14,7 @@ import { openDirectMessage } from '@core/util/open-direct-message';
 import { cachedUserId } from '@queries/auth/cached-user-id';
 import { fetchHarnesses } from '@queries/harnesses/harnesses';
 import {
+  openBillingSettings,
   openRuntimesSettings,
   openTeamMembersSettings,
 } from './notification-navigation';
@@ -38,6 +39,12 @@ export function openAgentDirectMessage(agentUserId: string) {
     }),
     'notifications'
   );
+}
+
+/** Settings → Billing, from wherever the app is: to update a declined card. */
+export function openBilling() {
+  const layout = globalSplitManager();
+  if (layout) openBillingSettings(layout, {});
 }
 
 /** Connect Claude plan for an agent teammate, on its row in Settings → Members. */

@@ -47,7 +47,7 @@ import {
 } from '../primitives/setup-request';
 import { useTeamComputers } from '../primitives/team-computers';
 import { ClaudeSignInDialog } from './claude-sign-in-dialog';
-import { ComputerBuyFlow } from './computer-buy-flow';
+import { type AfterPurchase, ComputerBuyFlow } from './computer-buy-flow';
 import type { SetupStepId } from './computer-setup-dialog';
 
 /**
@@ -403,6 +403,8 @@ export function MacroComputers(props: {
   /** Get a computer, at the top of Machines, opened the buy flow. */
   buying: boolean;
   onBuyingChange: (buying: boolean) => void;
+  /** Where Buy goes once the computer is up; `close` unless given. */
+  afterPurchase?: AfterPurchase;
 }) {
   const isAdmin = useIsTeamAdmin();
   const { enabled, computers, failed } = useTeamComputers();
@@ -508,6 +510,7 @@ export function MacroComputers(props: {
           here reopens where its setup left off. */}
       <ComputerBuyFlow
         open={buying() || !!settingUp()}
+        afterPurchase={props.afterPurchase}
         computerId={settingUp()}
         resumeStep={resumeAt()}
         onClose={() => {

@@ -1,7 +1,10 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
-import { enableAgentTeammates } from '@core/constant/featureFlags';
+import {
+  enableAgentTeammates,
+  enableMacroComputers,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -476,8 +479,14 @@ export function InviteToTeamDialog(props: {
 }) {
   const inviteToTeamMutation = useInviteToTeamMutation();
   const agentFlag = useFeatureFlag(enableAgentTeammates);
+  // Adding an agent buys its computer, so it needs computers on too.
+  const computersFlag = useFeatureFlag(enableMacroComputers);
   const canInviteAgents = () =>
-    !!props.canInviteAgents && !agentFlag().loading && agentFlag().enabled;
+    !!props.canInviteAgents &&
+    !agentFlag().loading &&
+    agentFlag().enabled &&
+    !computersFlag().loading &&
+    computersFlag().enabled;
   const [chosenKind, setChosenKind] = createSignal<InviteKind>('people');
   // A rollout or role change that revokes agents falls back to people.
   const kind = (): InviteKind => (canInviteAgents() ? chosenKind() : 'people');
