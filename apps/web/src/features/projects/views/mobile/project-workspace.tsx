@@ -8,7 +8,6 @@ import { AddProjectTasks } from '../../add-project-tasks';
 import { ProjectProgress } from '../../components/project-progress';
 import type { ProjectWorkspaceProps } from '../../context/project-workspace';
 import { canEditProject } from '../../core/project';
-import { createProjectTasksSticky } from '../../primitives/create-project-tasks-sticky';
 import { ProjectTasksProvider } from '../../project-tasks-provider';
 import { ProjectSummary } from '../shared/project-summary';
 import { ProjectTasksEmptyState } from '../shared/project-tasks-empty-state';
@@ -20,8 +19,6 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
   const [summary, setSummary] = createSignal<HTMLDivElement>();
   const [heading, setHeading] = createSignal<HTMLDivElement>();
   const [description, setDescription] = createSignal<HTMLDivElement>();
-  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
-  const tasksStuck = createProjectTasksSticky(scroller, sentinel);
   const viewportSize = createElementSize(scroller);
   const descriptionSize = createElementSize(description);
   const summarySize = createElementSize(summary);
@@ -56,9 +53,12 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
       >
         <div
           ref={setScroller}
-          class="h-full min-h-0 w-full overflow-y-auto overscroll-none pb-[calc(var(--mobile-content-inset-bottom,0px)+16px)]"
+          class="h-full min-h-0 w-full overflow-y-auto overscroll-none pb-[calc(max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))+16px)]"
         >
-          <div ref={setSummary} class="px-5 pt-4 pb-8">
+          <div
+            ref={setSummary}
+            class="px-5 pt-[calc(var(--mobile-content-inset-top,0px)+1rem)] pb-8"
+          >
             <ProjectSummary {...props}>
               <MobileProjectDescription
                 ref={setDescription}
@@ -69,25 +69,8 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
               {props.discussion}
             </ProjectSummary>
           </div>
-          <div aria-hidden="true" class="relative h-0">
-            <div ref={setSentinel} class="absolute -top-px h-px w-px" />
-          </div>
           <section aria-label={t('nav.tasks')}>
-            <div
-              ref={setHeading}
-              class="sticky top-0 z-10 flex h-14 items-center gap-2 bg-panel px-4"
-              data-stuck={tasksStuck() ? '' : undefined}
-            >
-              {/* Use the same gradient utilities as ScrollIndicators without its scroll listener. */}
-              <div
-                aria-hidden="true"
-                class="pointer-events-none absolute inset-x-0 top-full h-5 bg-linear-to-b from-(--scroll-indicator-from) to-transparent motion-safe:transition-opacity motion-safe:duration-150"
-                classList={{
-                  'opacity-0': !tasksStuck(),
-                  'opacity-100': tasksStuck(),
-                }}
-                style={{ '--scroll-indicator-from': 'var(--color-panel)' }}
-              />
+            <div ref={setHeading} class="flex h-14 items-center gap-2 px-4">
               <ProjectProgress project={props.project} size="md" />
               <h2 class="text-base font-semibold">{t('nav.tasks')}</h2>
               <span class="text-sm text-ink-muted">
@@ -110,7 +93,6 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
                 scrollStart={
                   (summarySize.height ?? 0) + (headingSize.height ?? 0) + 4
                 }
-                stickyInset={headingSize.height ?? 0}
               />
             </Show>
           </section>

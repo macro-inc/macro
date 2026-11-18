@@ -26,8 +26,8 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture. Key the stateful Tasks workspace by its Tasks/Projects restoration destination so explicit route restoration stays independent.
 - Align wide desktop group-header glyphs with the first row control; keep caret containers square and preserve each header's caret-to-content gap and value-icon slot across widths without changing padding, the 44px touch target, or the layout-neutral border.
 - Keep `soup-list` on list roots for shared row geometry; truncate long group labels instead of wrapping.
-- Pin the current list group header within its scroller until the next header replaces it; retain the real virtual row, mobile chrome clearance, collapse controls, and unobscured keyboard targets.
-- Embed task rows in a host page with `scrollContainer`, `scrollStart`, and `stickyInset`; keep the host's summary and pinned heading outside virtual rows and preserve the default internal scroller elsewhere.
+- Pin the current list group header only on desktop until the next header replaces it; let touch group headers scroll normally while retaining collapse controls and keyboard navigation.
+- Embed task rows in a host page with `scrollContainer` and `scrollStart`; keep the host's measured header inset and summary outside virtual rows, and preserve the default internal scroller elsewhere.
 - Keep desktop and tablet task rows on the shared column grid at every pane width with `ListColumnHeader` cells; use the headerless `NarrowRowGrid` layout only on phones.
 - Set task-list horizontal padding from its container width: 8px below 640px, 12px from 640px, and 4px on phones.
 - Render phone task rows with the narrow layout, an 8px unread-only rail, no checkbox column, 4px outer list padding, and 44px row height; preserve row selection handlers and 36px property-editor touch targets.
@@ -65,7 +65,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Keep sidebar actions targeted to their own record; Rename opens naming and sharing without saving temporary settings, and Duplicate starts with a prefilled private copy and warns before omitting unsupported settings.
 - Keep saved-view names and menus in the sidebar; overlay creation above the filter drawer footer on a drawer-colored backing without blocking the last scrollable controls, and put Save changes at the footer's right edge, opposite Clear all.
 - Keep saved-view selection and creation in the shared sidebar on desktop and touch; omit header pickers and duplicate built-in tabs, and isolate Create view's keyboard scope from task-list shortcuts.
-- Render touch task controls through `MobileListLayout`, reserve its inset inside `ListViewport`, and keep touch column headings and warning rows inside the scroller.
+- Render touch task controls through `MobileListLayout`, reserve its top inset inside `ListViewport`, and leave the greater of bottom safe area and floating chrome plus 16px after the final row; keep touch column headings and warning rows inside the scroller.
 - Keep desktop list-header filters, layout, sort, and grouping at `md` / `icon-md` (32px), matching New and Search; preserve the mobile filter drawer.
 - The Title sort sends Soup's `name` method, ascending until the viewer reverses it. Keep `sortTasks`'s local comparator on the same order — `compareSoupNames` (lower-cased ICU root order, matching the server's `und-x-icu`), unnamed last, newest update then descending ID — so loaded rows do not move while a page revalidates.
 - Show one local New view draft row after creation starts; prefill its save dialog with New view, replace the row on confirmed save, and remove it on cancellation or navigation without adding fake cached records.

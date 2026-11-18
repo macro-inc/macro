@@ -44,17 +44,15 @@ export function MobileProjectDetailHeader(props: ProjectDetailHeaderProps) {
           )}
         </Show>
       </MobileHeader>
-      <div class="shrink-0 pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
-        <Show when={!isMobile()}>
-          <div class="px-4 pb-2">
-            <ProjectSectionTabs
-              compact={() => false}
-              section={props.section}
-              onChange={props.onSectionChange}
-            />
-          </div>
-        </Show>
-      </div>
+      <Show when={!isMobile()}>
+        <div class="shrink-0 px-4 pb-2 pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
+          <ProjectSectionTabs
+            compact={() => false}
+            section={props.section}
+            onChange={props.onSectionChange}
+          />
+        </div>
+      </Show>
     </>
   );
 }

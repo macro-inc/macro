@@ -169,6 +169,22 @@ function TopBar(props: { leading?: JSX.Element; class?: string }) {
   );
 }
 
+/** A detail pane with its own header; disable hosting for a desktop-owned bar. */
+function Pane(props: ParentProps<{ when?: boolean; leading?: JSX.Element }>) {
+  return (
+    <Root when={props.when}>
+      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+        <Show when={props.when ?? true}>
+          <TopBar leading={props.leading} />
+        </Show>
+        <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          {props.children}
+        </div>
+      </div>
+    </Root>
+  );
+}
+
 /** The row under the top bar that hosted toolbars contribute to. */
 function Toolbar() {
   const scope = useScopeOrThrow();
@@ -191,4 +207,4 @@ function Toolbar() {
   );
 }
 
-export const SplitHeaderScope = { Root, TopBar, Toolbar };
+export const SplitHeaderScope = { Root, Pane, TopBar, Toolbar };

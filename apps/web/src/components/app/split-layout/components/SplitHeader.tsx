@@ -125,7 +125,7 @@ function splitBackFallback(content: SplitContent): SplitContent | undefined {
   if (isMobile()) return projectBackFallback(content);
 }
 
-function SplitBackButton() {
+export function SplitBackButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return null;
   const fallback = () => splitBackFallback(context.handle.content());

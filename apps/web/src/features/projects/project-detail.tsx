@@ -10,6 +10,7 @@ import {
   projectTaskRoute,
   tasksSplitRoute,
 } from '@app/routes/routes';
+import { useSplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitDisplayName,
@@ -100,6 +101,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const commands = context.createCommands();
   const openShare = useProjectShareModal(source.project, commands);
   const barFloats = useTouchTopBarsFloat();
+  const hostedHeader = useSplitHeaderScope();
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const navigate = useNavigate();
@@ -193,7 +195,10 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       </Show>
       <div
         class="relative min-h-0 min-w-0 flex-1"
-        classList={{ 'touch:[--mobile-content-inset-top:0px]': !barFloats() }}
+        classList={{
+          'touch:[--mobile-content-inset-top:0px]':
+            !isMobile() || (!!hostedHeader && !barFloats()),
+        }}
       >
         <Suspense
           fallback={<ProjectContentSkeleton section={props.route.section} />}

@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, type JSX, Suspense } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
@@ -17,7 +18,7 @@ export function ListViewport<T>(props: {
   stickyInset?: number;
   /** Scrolls above the rows, outside them, so list focus skips it. */
   start?: JSX.Element;
-  /** Reserve floating touch chrome inside the scroller. */
+  /** Reserve floating touch chrome inside this list's own scroller. */
   touchInset?: boolean;
   children: (item: T) => JSX.Element;
 }) {
@@ -54,7 +55,7 @@ export function ListViewport<T>(props: {
         <StickyVirtualizer
           ref={props.ref}
           data={props.items}
-          isSticky={props.isSticky}
+          isSticky={isTouchDevice() ? undefined : props.isSticky}
           scrollRef={props.scrollContainer ?? viewport()}
           startMargin={(props.scrollStart ?? 0) + (startSize.height ?? 0)}
           stickyInset={props.stickyInset ?? insetSize.height ?? 0}
@@ -68,6 +69,12 @@ export function ListViewport<T>(props: {
           {(row) => <div>{props.children(row)}</div>}
         </StickyVirtualizer>
       </Suspense>
+      {props.touchInset && !props.scrollContainer && (
+        <div
+          aria-hidden
+          class="h-0 touch:h-[calc(max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))+16px)]"
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 # Tasks
 
 On touch, **Show sidebar** stays on the left while **Search** and **Filters** float on the right over the full-height list with a list-local top fade. The initial chrome inset, tutorial, warning rows, and touch column headings scroll with the tasks. Above 720px on touch, the task or project list remains left of an empty or selected detail preview. At every touch width, Show sidebar opens navigation (task views, projects, saved views) in a sheet; there are no view pills.
+Search uses the same 40px glass island as Filters. Tasks and Projects lists reserve the greater of the bottom safe area and floating controls, plus 16px, so the final row can scroll fully clear of them.
 
 ## Surface
 
@@ -235,10 +236,9 @@ unchanged; the value-icon slot keeps its width when the pane narrows. Long label
 truncate on one line. Group-header caret containers stay square around their
 16px glyphs, with 16px status and priority icons. Desktop list insets follow the
 list container: 8px below 640px and 12px from 640px; phone insets remain 4px.
-In grouped task and project lists, the current group header stays pinned at the top
-of the scrolling pane until the next group pushes it away. The pinned header still
-collapses or expands its group; keyboard navigation keeps rows below it visible.
-Mobile headers remain below the floating chrome.
+In grouped task and project lists, desktop group headers stay pinned at the top
+of the scrolling pane until the next group pushes them away. Touch group headers
+scroll with their rows rather than pinning; collapse and expand work on both.
 Phone task rows have 44px row height and an 8px unread-dot rail without a checkbox
 column. The rail stays reserved on read tasks so titles do not shift. Status and
 priority controls retain their 36px touch targets; selection highlighting and row
@@ -1234,11 +1234,11 @@ above the floating controls. Empty descriptions show the full placeholder withou
 clamping or Show more. The property row contains only property pills; open the
 existing Details panel from its header island.
 The header has caret-only Back, the truncating project title, Share, and Details;
-there is no Tasks header island or Overview/Tasks switch. The Tasks heading pins
-beneath the header and shows the progress ring, completed/total count, and Filters.
-An extra 8px separates Tasks from the summary at rest. Only while pinned, a 20px
-page-color gradient fades task rows beneath the heading; reduced motion disables
-the opacity transition.
+there is no Tasks header island or Overview/Tasks switch. Each project pane hosts
+and measures its own header islands, and the summary starts below that inset.
+The Tasks heading scrolls normally with the page and shows the progress ring,
+completed/total count, and Filters. Group headers also scroll on touch; desktop
+sticky group headers are unchanged.
 One floating Task menu stays available at the bottom right, including at rest
 and in empty projects. No inline Add task remains on phones; empty states keep
 their explanation and Documentation link. The list reserves space below its last

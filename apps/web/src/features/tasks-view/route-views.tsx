@@ -16,7 +16,9 @@ import {
   projectTaskRoute,
   tasksSplitRoute,
 } from '@app/routes/routes';
+import { SplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { SidePanel } from '@components/app/side-panel';
+import { SplitBackButton } from '@components/app/split-layout/components/SplitHeader';
 import {
   AppView,
   RedirectSplit,
@@ -131,7 +133,10 @@ export function ProjectDetailRouteView() {
       <SplitRouter.Outlet
         fallback={() => (
           <SidePanel.Root floating defaultOpen={false}>
-            <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+            <SplitHeaderScope.Pane
+              when={isTouchDevice()}
+              leading={<SplitBackButton />}
+            >
               <ProjectDetail
                 route={{
                   id: params.projectId,
@@ -142,7 +147,7 @@ export function ProjectDetailRouteView() {
                   navigate({ route: tasksSplitRoute, params: {} })
                 }
               />
-            </div>
+            </SplitHeaderScope.Pane>
           </SidePanel.Root>
         )}
       />

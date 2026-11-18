@@ -21,6 +21,7 @@ align trailing controls by their outer edges or offset an individual icon.
 - `ListHeader` reserves the title's natural width and scrolls right-aligned controls
   in the remaining space; keep switcher triggers inside the title's clip boundary.
 - Keep collection navigation on the left and search/filter actions on the right; on touch, keep trailing actions outside scrollable view tabs. Give the action group `min-w-0 flex-1` and use the search field's `wide` layout so expanded search fits the remaining width, including 320px panes.
+- Render the shared expandable Search trigger with the same 40px glass island and 24px glyph as the other floating touch controls; keep desktop Search at its existing control size.
 - `ViewSidebar.CloseButton` closes the owning split in both docked navigation and
   narrow navigation overlays. Its visibility follows the split controller, not
   the sidebar breakpoint; the last remaining list split still has no close action.
@@ -118,6 +119,10 @@ standalone header without a Block. A `SplitHeaderScope.Root` that is off hides
 any enclosing scope from its content, so `useSplitHeaderScope` answers for the
 nearest host only. Inline block previews (`PreviewFrame`) use the same scope.
 
+Project routes inside Tasks and mobile task details use `SplitHeaderScope.Pane`,
+which composes the root, top bar, and filling content area, so the collection pane
+measures its own islands instead of inheriting an unrelated outer split header inset.
+The project pane retains the shared split Back action, including history and direct-link fallbacks.
 Touch collection navigation uses the global modal sheet at every width so its
 surface and backdrop cover floating list controls and app chrome. On narrow
 layouts it takes three quarters of the screen, at least 256px, capped by the
