@@ -83,11 +83,11 @@ export function MobileDockButton(props: MobileDockButtonProps) {
             }
           >
             {(count) => (
-              // Anchored by its left edge, so a longer count grows away
-              // from the glyph.
+              // Anchored by its right edge, so a longer count stays inside
+              // the button instead of reaching its neighbour.
               <UnreadCount
                 label={count()}
-                class="absolute -top-1.5 left-[calc(100%-6px)] ring-chrome"
+                class="absolute -right-2.5 -top-1.5 ring-chrome"
               />
             )}
           </Show>

@@ -25,12 +25,12 @@ export function SidebarUnreadDot(props: { active?: boolean; count?: string }) {
       }
     >
       {(count) => (
-        // Anchored by its left edge at the glyph's corner, so a longer count
-        // grows into the rail's padding instead of over the glyph.
+        // Anchored to the button's right edge: the rail's scroller clips
+        // anything past it, so a longer count grows towards the glyph.
         <UnreadCount
           label={count()}
           data-sidebar-unread-count
-          class="absolute left-[22px] top-0.5 ring-surface"
+          class="absolute right-0 top-0.5 ring-surface"
         />
       )}
     </Show>
