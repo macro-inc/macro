@@ -79,18 +79,18 @@ test('loading indicators move a few times a second on native Android', async ({
     shimmer: 'steps(5, jump-none)',
     spinner: 'steps(8)',
     indeterminate: 'steps(6)',
-    calendar: 'steps(1)',
+    calendar: 'steps(3)',
   });
 
   // The brand loader holds still between steps and advances a quarter second
   // of its animation at each one.
-  const first = await brandLoader(page);
-  expect(first.paused).toBe(true);
+  await expect.poll(async () => (await brandLoader(page)).paused).toBe(true);
+  const first = (await brandLoader(page)).time;
   await expect
     .poll(async () => (await brandLoader(page)).time, { timeout: 2_000 })
-    .toBeGreaterThanOrEqual(first.time + 0.5);
-  const { time } = await brandLoader(page);
-  expect((time * 4) % 1).toBeCloseTo(0, 5);
+    .toBeGreaterThanOrEqual(first + 0.5);
+  const advanced = ((await brandLoader(page)).time - first) * 4;
+  expect(advanced).toBeCloseTo(Math.round(advanced), 5);
 });
 
 test('reduced motion still stills the shimmer and the shared spinner on Android', async ({

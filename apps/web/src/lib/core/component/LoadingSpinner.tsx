@@ -15,13 +15,14 @@ const ANDROID_STEP_MS = 250;
  */
 function stepOnAndroid(svg: SVGSVGElement) {
   if (!isPlatform('android')) return;
+  let timer: ReturnType<typeof setInterval> | undefined;
+  onCleanup(() => clearInterval(timer));
   onElementConnect(svg, () => {
     svg.pauseAnimations();
-    const timer = setInterval(
+    timer = setInterval(
       () => svg.setCurrentTime(svg.getCurrentTime() + ANDROID_STEP_MS / 1000),
       ANDROID_STEP_MS
     );
-    onCleanup(() => clearInterval(timer));
   });
 }
 
