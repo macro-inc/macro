@@ -514,19 +514,23 @@ the shimmer.
   **Waiting on you** appears above the desktop conversation list only while
   sessions await input. Its amber ring identifies the section; its rows use
   blue unread dots and regular-weight titles. Waiting sessions do not repeat in
-  **Conversations**. Search, filters, and Show hidden routine runs apply to both.
+  **Open PRs** or **Conversations**. Search, filters, and Show hidden routine runs
+  apply to every active section.
   **Sort conversations** offers **Last updated** (default) and **Date created**,
   newest first. The server query follows the selected sort. **Filter conversations**
   combines Type, Status, and Pull request filters; choices within a category are
   ORed and categories are ANDed. Sort and filters are remembered per user;
   previously saved grouping is ignored by the redesigned desktop list.
   With `enable-agent-updates`, **Open PRs** remains between Waiting on you and
-  Conversations, showing active coding sessions with open or draft PRs.
-  It stays hidden when empty and retains its existing duplicate-row behavior.
+  Conversations, showing non-waiting active coding sessions with open or draft
+  PRs. Each session appears in only one section; disabling Open PRs returns its
+  rows to Conversations. All sections follow the selected sort. Pinned rows do
+  not stop pagination from filling Conversations, even when Open PRs is collapsed.
+  The section stays hidden when empty.
   Desktop rows are one line: a status glyph, the title, and a PR or branch icon.
   The working glyph is the transcript's rotating five-dot plus; idle is an outline
-  ring, unread is blue, and failed is a red five-dot ×. Unread titles are semibold
-  outside Waiting on you. Home keeps its existing row layout and indicators.
+  ring, unread is blue, and failed is a red five-dot ×. Session titles keep normal
+  weight in every state. Home keeps its existing row layout and indicators.
   Rows follow persisted turn updates without a reload.
   Hovering a desktop row swaps its code icon for its age, using the selected sort
   timestamp. Pointing at that slot restores the icon and opens its preview.

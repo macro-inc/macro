@@ -238,4 +238,62 @@ describe('createConversationList', () => {
     expect(state.calls()).toBe(1);
     state.dispose();
   });
+
+  it('fills Conversations beyond a full page of pinned PRs', () => {
+    const state = createRoot((dispose) => {
+      const pinned: AgentSessionEntity[] = Array.from(
+        { length: 100 },
+        (_, index) => ({
+          type: 'agent_session',
+          id: `pinned-${index}`,
+          name: 'Pinned',
+          ownerId: 'owner',
+          botId: 'cursor',
+          harness: 'cursor',
+          status: 'acp_ready',
+          pullRequestState: 'open',
+        })
+      );
+      const [rows, setRows] = createSignal<AgentSessionEntity[]>(pinned);
+      const [enabled, setEnabled] = createSignal(false);
+      let calls = 0;
+      const list = createConversationList({
+        conversations: rows,
+        archived: () => [],
+        filters: () => EMPTY_CONVERSATION_FILTERS,
+        sort: () => 'updated',
+        factsOf: () => ({
+          mode: 'code',
+          state: 'dormant',
+          unread: false,
+          pullRequest: 'open',
+        }),
+        openPullRequestOwnerId: () => (enabled() ? 'owner' : undefined),
+        hasNextPage: () => true,
+        loading: () => false,
+        loadingNextPage: () => false,
+        error: () => false,
+        fill: () => 'conversations',
+        onLoadMore: () => {
+          calls++;
+        },
+      });
+      return { dispose, list, setEnabled, setRows, pinned, calls: () => calls };
+    });
+    expect(state.calls()).toBe(0);
+    state.setEnabled(true);
+    expect(state.calls()).toBe(1);
+    expect(state.list.conversations()).toHaveLength(0);
+    state.setRows([
+      ...state.pinned,
+      ...state.pinned.slice(0, 20).map((row) => ({
+        ...row,
+        id: `normal-${row.id}`,
+        pullRequestState: null,
+      })),
+    ]);
+    expect(state.list.conversations()).toHaveLength(20);
+    expect(state.calls()).toBe(1);
+    state.dispose();
+  });
 });

@@ -11,7 +11,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { unreadFilterFn } from '@entity/utils/filter';
 import { Key } from '@solid-primitives/keyed';
 import { Button, cn } from '@ui';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { AgentCreateMenu } from '../../components/AgentsSidebar';
 import { AgentsSidebarFooter } from '../../components/agents-sidebar/footer';
 import { AgentsSidebarHeader } from '../../components/agents-sidebar/header';
@@ -32,7 +32,6 @@ import {
 } from '../../core/conversation-filters';
 import type { ConversationSort } from '../../core/conversation-list';
 import type { AgentsMode } from '../../core/mode';
-import { selectOpenPullRequests } from '../../core/open-pull-requests';
 import type { AgentsPage } from '../../core/pages';
 import type { AgentConversationEntity } from '../../core/recent-conversations';
 import { createConversationList } from '../../primitives/conversation-list';
@@ -87,25 +86,21 @@ export function DesktopAgentsSidebar(props: DesktopAgentsSidebarProps) {
     error: () => props.error,
     onLoadMore: props.onLoadMore,
     fill: () => 'conversations',
+    openPullRequestOwnerId: () =>
+      props.showOpenPullRequests ? props.ownerId : undefined,
   });
   const visibleCount = () =>
-    listState.waiting().length + listState.conversations().length;
-  const openPullRequests = createMemo(() =>
-    props.showOpenPullRequests
-      ? selectOpenPullRequests(
-          props.conversations,
-          props.ownerId,
-          props.modeForConversation
-        )
-      : []
-  );
+    listState.waiting().length +
+    listState.openPullRequests().length +
+    listState.conversations().length;
+  const openPullRequests = listState.openPullRequests;
   const controller = createListController({
     items: () => [
       ...new Map(
         [
           ...listState.waiting(),
-          ...listState.conversations(),
           ...openPullRequests(),
+          ...listState.conversations(),
         ].map((row) => [row.id, row])
       ).values(),
     ],
@@ -223,6 +218,7 @@ export function DesktopAgentsSidebar(props: DesktopAgentsSidebarProps) {
                 <ViewSidebar.Nav
                   class="min-h-0 overflow-auto"
                   aria-label={t('agentWork.openPullRequestsLabel')}
+                  onScroll={onScroll}
                 >
                   {renderRows(openPullRequests())}
                 </ViewSidebar.Nav>

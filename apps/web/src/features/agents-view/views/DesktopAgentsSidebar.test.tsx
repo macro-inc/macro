@@ -172,11 +172,16 @@ describe('desktop conversation navigation', () => {
     },
     { type: 'chat', id: 'chat', name: 'Saved chat', ownerId: 'me' },
   ];
-  const setup = (filters: ConversationFilters = EMPTY_CONVERSATION_FILTERS) => {
+  const setup = (
+    filters: ConversationFilters = EMPTY_CONVERSATION_FILTERS,
+    showPrs = false
+  ) => {
     const open = vi.fn();
     const openPage = vi.fn();
     const sort = vi.fn();
     const [data, setData] = createSignal(rows);
+    const [showOpenPullRequests, setShowOpenPullRequests] =
+      createSignal(showPrs);
     render(() => (
       <DesktopAgentsSidebar
         ownerId="me"
@@ -197,7 +202,7 @@ describe('desktop conversation navigation', () => {
         error={false}
         hasNextPage={false}
         loadingNextPage={false}
-        showOpenPullRequests={false}
+        showOpenPullRequests={showOpenPullRequests()}
         onSearchChange={vi.fn()}
         showUnlistedRuns={false}
         onShowUnlistedRunsChange={vi.fn()}
@@ -212,7 +217,7 @@ describe('desktop conversation navigation', () => {
         }}
       />
     ));
-    return { open, openPage, sort, setData };
+    return { open, openPage, sort, setData, setShowOpenPullRequests };
   };
 
   it('partitions waiting rows once and moves them when the turn resumes', () => {
@@ -244,6 +249,99 @@ describe('desktop conversation navigation', () => {
     ).toBeTruthy();
   });
 
+  it('keeps open-PR sessions in one section across turn and flag changes', () => {
+    const { setData, setShowOpenPullRequests } = setup(
+      EMPTY_CONVERSATION_FILTERS,
+      true
+    );
+    const waitingPr: AgentConversationEntity = {
+      type: 'agent_session',
+      id: 'waiting-pr',
+      name: 'Waiting PR',
+      ownerId: 'me',
+      botId: 'agent',
+      status: 'ready',
+      turnState: 'blocked',
+      pullRequestState: 'open',
+    };
+    const workingPr: AgentConversationEntity = {
+      ...waitingPr,
+      id: 'working-pr',
+      name: 'Working PR',
+      turnState: 'running',
+    };
+    setData([waitingPr, workingPr, rows[2]]);
+
+    const waiting = screen.getByRole('region', { name: 'Waiting on you' });
+    const openPrs = screen.getByRole('navigation', {
+      name: 'Open pull requests',
+    });
+    const conversations = screen.getByRole('navigation', {
+      name: 'Conversations',
+    });
+    expect(screen.getAllByRole('button', { name: 'Waiting PR' })).toHaveLength(
+      1
+    );
+    expect(screen.getAllByRole('button', { name: 'Working PR' })).toHaveLength(
+      1
+    );
+    expect(
+      within(waiting).getByRole('button', { name: 'Waiting PR' })
+    ).toBeTruthy();
+    expect(
+      within(openPrs).getByRole('button', { name: 'Working PR' })
+    ).toBeTruthy();
+    expect(
+      within(openPrs).queryByRole('button', { name: 'Waiting PR' })
+    ).toBeNull();
+    expect(
+      within(conversations).queryByRole('button', { name: 'Working PR' })
+    ).toBeNull();
+
+    setData([{ ...waitingPr, turnState: 'running' }, workingPr, rows[2]]);
+    expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull();
+    expect(
+      within(openPrs).getByRole('button', { name: 'Waiting PR' })
+    ).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Waiting PR' })).toHaveLength(
+      1
+    );
+
+    setShowOpenPullRequests(false);
+    expect(
+      screen.queryByRole('navigation', { name: 'Open pull requests' })
+    ).toBeNull();
+    expect(
+      within(conversations).getByRole('button', { name: 'Waiting PR' })
+    ).toBeTruthy();
+    expect(
+      within(conversations).getByRole('button', { name: 'Working PR' })
+    ).toBeTruthy();
+  });
+
+  it('does not bypass conversation filters through the open-PR section', () => {
+    const { setData } = setup(
+      { type: ['chat'], status: [], pullRequest: [] },
+      true
+    );
+    setData([
+      {
+        type: 'agent_session',
+        id: 'open-pr',
+        name: 'Filtered PR',
+        ownerId: 'me',
+        botId: 'agent',
+        status: 'ready',
+        pullRequestState: 'open',
+      },
+      rows[2],
+    ]);
+    expect(
+      screen.queryByRole('navigation', { name: 'Open pull requests' })
+    ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Filtered PR' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Saved chat' })).toBeTruthy();
+  });
   it('opens Archived from the footer without losing normal Shift-open', () => {
     const { open, openPage } = setup();
     fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
