@@ -10,6 +10,8 @@
 
 The affected unit suite passes. Web checks and `just check` pass. Review fixes
 retain edits made during initial saving and keep Email draft initialization reactive.
+CI identified paragraph descriptions included in the single-line menu-label
+fixture; the fixture now excludes those descriptions without changing app text.
 
 Browser checks, signed-in checks, fixture browser suites, and screenshots are left
 for the user. No further browser automation will run for this change.
