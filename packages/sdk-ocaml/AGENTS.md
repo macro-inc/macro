@@ -9,8 +9,8 @@ WebAssembly transport over JavaScript's `fetch`, for code mode) and
 `code_mode` (`code_mode/`, the code-mode program contract and the prebuilt
 Wasm bundle programs compile against). The OCaml counterpart of
 `../sdk/generated`. Also `analyzer/`: a static analysis tool that lists the
-operations a compiled program may call (`macro_sdk_calls`), not wired into
-anything yet.
+operations a compiled program may call (`macro_sdk_calls`), code-mode
+programs included; not wired into anything yet.
 
 ## How it works
 
@@ -46,7 +46,11 @@ encoding) and hands the reply to `interpret`.
 
 ## Recipes
 
-- Specs changed: `just generate`, then commit `generated/`.
+- Specs changed: `just generate`, then commit `generated/`. A new
+  operation also needs a line in
+  `../../crates/agent_permission_registry/registry.json` (its group, action
+  and label; that crate's `AGENTS.md`); `test_registry` fails until it has
+  one, and on a line for an operation that is gone.
 - New schema shape the generator rejects: handle it in `gen/lower_schema.ml`,
   emit it in `gen/emit_types.ml`, add it to `test/fixtures/kinds.json` and
   `test/test_kinds.ml`.
@@ -76,6 +80,12 @@ encoding) and hands the reply to `interpret`.
 - The analyzer's soundness rests on `analyzer/test/test_coverage.ml`: an SDK
   value that can return a `Request.t` but is not an operation in the table
   fails it. Fix the analyzer, never the test.
+- The analyzer trusts `fetch/` and `code_mode/` (`Analyze.default_libraries`)
+  without analyzing them; `analyzer/test/test_trusted.ml` fails if either
+  names `Macro_sdk` or builds or rewrites a request. Keep them that way: an operation they
+  sent themselves would be invisible to agent permissions. Never trust
+  `Js_of_ocaml`. Their interfaces reach the corpus through copies
+  (`analyzer/test/code_mode_interfaces`), which follow the `.mli` files.
 - Corpus programs state expected line numbers; `dune fmt` can move lines,
   so rerun `dune test` after formatting them.
 - Generated code must not use string templates or regexes: build Parsetree

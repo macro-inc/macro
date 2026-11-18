@@ -550,6 +550,7 @@ jobs:
             - 'packages/sdk/specs/**'
             - 'packages/sdk/src/config.ts'
             - 'packages/sdk/generated/*/sdk.gen.ts'
+            - 'crates/agent_permission_registry/registry.json'
             - 'flake.lock'
             - 'nix/cloud-storage.nix'
             - '.github/workflows/sdk-ocaml-check.yml'

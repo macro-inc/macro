@@ -1389,6 +1389,10 @@
       "crates/web_search",
       "crates/workspace-hack"
     ],
+    "agent_permission_registry": [
+      "crates/agent_permission_registry",
+      "crates/workspace-hack"
+    ],
     "agent_preview": [
       "crates/agent",
       "crates/agent_correlation",

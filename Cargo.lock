@@ -911,6 +911,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_permission_registry"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_preview"
 version = "0.1.0"
 dependencies = [

@@ -380,21 +380,43 @@ It refuses (cannot analyze) what can reach an operation without naming it:
 `external` declarations, `Obj`, `Marshal`, `input_value`, `Camlinternal*`,
 `unsafe_*` functions and primitives, `%identity` externals outside the
 standard library, programs compiled with `-unsafe`, a `Request.t` built or
-updated by hand, and any value outside the table whose type can hand out a
-request. It also refuses any reference to a unit outside the standard
-library, the SDK, its transport and the libraries their interfaces expose
+updated by hand, a client configuration built or updated (its hosts choose
+the URL a request goes to, so a read could be sent to a write's URL), and
+any value outside the table whose type can hand out a request. It also refuses any reference to a unit outside the standard
+library, the SDK, its transports (`Macro_sdk_eio`, code mode's
+`Macro_sdk_fetch`), `Code_mode` and the libraries their interfaces expose
 (`Analyze.default_libraries`; add more with `--allow-library UNIT`): another
-unit of the program, `Dynlink` or a third-party library could call the SDK
-where the analysis cannot see. Those libraries are trusted, not analyzed.
+unit of the program, `Dynlink`, `Js_of_ocaml` or a third-party library could
+call the SDK where the analysis cannot see. Those libraries are trusted, not
+analyzed; `test_trusted` checks that code mode's runtime never names the
+generated SDK or builds or rewrites a request.
 
 The list is the SDK operations the program may call, not a permission
-boundary: a program holds its credential (`Config.t` is readable) and can
-send raw HTTP through another client, which this tool does not report.
+boundary on its own: a program holds its credential (`Config.t` is
+readable), and a native program can send raw HTTP through another client,
+which this tool does not report. A code-mode program has no other client,
+but the transport's `fetch` still carries the URL it was given; the gate that
+runs code mode must check that each request's URL is its operation's.
 
 `analyzer/test/corpus/` holds the programs it is tested on, each stating its
 expected answer on its first line; `test_coverage` checks that the table
 matches the specs and the compiled interfaces, and that a program naming
 all 913 operations is analyzed to all of them.
+Code-mode programs in the corpus (`code_mode_*.ml`) type-check against
+copies of `fetch/` and `code_mode/`'s interfaces
+(`analyzer/test/code_mode_interfaces`), since those libraries build only in
+the wasm profile.
+
+### Permission classification
+
+Agent permissions classify every operation by a group (Email, Documents &
+projects, ...) and an action (create, read, update, destroy, send) in
+`crates/agent_permission_registry/registry.json`, keyed by service and
+operationId like the analyzer's output. `analyzer/test/test_registry.ml`
+fails `dune test` (CI: `OCaml SDK Check`) when an operation in `generated/`
+is not classified or the registry names one that no longer exists: after
+`just generate` adds an operation, classify it there (that crate's
+`AGENTS.md` says how).
 
 ## Regenerate
 
