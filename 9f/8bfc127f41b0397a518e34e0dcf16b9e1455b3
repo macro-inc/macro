@@ -1,0 +1,41 @@
+crates/agent_permission_registry/src/test.rs
+  s_0d20781b0961ab::t_7e742237a93790 1-23,34-42,47-50,55-68
+  s_0d20781b0961ab::t_7c196496cf7849 24-33,43-46,51-54
+crates/agent_permission_registry/registry.json
+  s_0d20781b0961ab::t_37fc44d3c3da37 1-964
+Cargo.toml
+  s_0d20781b0961ab::t_7e742237a93790 28
+crates/agent_permission_registry/AGENTS.md
+  s_0d20781b0961ab::t_7e742237a93790 1-42
+packages/sdk-ocaml/analyzer/test/dune
+  s_0d20781b0961ab::t_a367e20cc1b6cc 54
+  s_0d20781b0961ab::t_7604835e4ed867 5,47-53
+crates/agent_permission_registry/Cargo.toml
+  s_0d20781b0961ab::t_bfbce8162bd7fd 1-11
+packages/sdk-ocaml/analyzer/test/test_registry.ml
+  s_0d20781b0961ab::t_a367e20cc1b6cc 9,44-45,51-52
+  s_0d20781b0961ab::t_7604835e4ed867 1-8,10-43,46-50,53-62
+crates/agent_permission_registry/src/lib.rs
+  s_0d20781b0961ab::t_7c196496cf7849 65-67,88-95
+  s_0d20781b0961ab::t_7e742237a93790 1-64,68-87,96
+Cargo.lock
+  s_0d20781b0961ab::t_21cb89eac89036 897-905
+crates/agent_permission_registry/CLAUDE.md
+  s_0d20781b0961ab::t_314044aa089e36 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9f8bfc127f41b0397a518e34e0dcf16b9e1455b3",
+  "prompts": {},
+  "sessions": {
+    "s_0d20781b0961ab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d4872cb4-4667-43b0-b58e-3a155924d613",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
