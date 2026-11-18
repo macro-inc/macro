@@ -155,6 +155,7 @@ struct WrittenDocument {
     markdown: String,
     links: NotionLinks,
     dates: Option<SourceDates>,
+    folder: Option<Uuid>,
     visibility: crate::domain::ports::ImportVisibility,
 }
 
@@ -165,6 +166,7 @@ struct WrittenDocument {
 struct FakeWriter {
     databases: Mutex<usize>,
     tasks: Mutex<Vec<crate::domain::ports::ImportVisibility>>,
+    task_folders: Mutex<Vec<Option<Uuid>>>,
     folder_visibilities: Mutex<Vec<crate::domain::ports::ImportVisibility>>,
     folders: Mutex<Vec<(String, Option<Uuid>)>>,
     documents: Mutex<Vec<WrittenDocument>>,
@@ -222,6 +224,22 @@ impl WorkspaceWriter for FakeWriter {
         Ok(Uuid::from_u128(900 + folders.len() as u128))
     }
 
+    async fn folder_has_explicit_grant(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+    ) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+
+    async fn folder_has_team_edit_grant(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+    ) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+
     async fn folder_exists(
         &self,
         _user: &MacroUserIdStr<'static>,
@@ -247,7 +265,7 @@ impl WorkspaceWriter for FakeWriter {
         markdown: &str,
         links: &NotionLinks,
         _properties: &ImportedDocumentProperties,
-        _folder: Option<Uuid>,
+        folder: Option<Uuid>,
         dates: Option<SourceDates>,
         visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
@@ -260,6 +278,7 @@ impl WorkspaceWriter for FakeWriter {
                 markdown: markdown.to_string(),
                 links: links.clone(),
                 dates,
+                folder,
                 visibility,
             });
         }
@@ -274,11 +293,12 @@ impl WorkspaceWriter for FakeWriter {
         _markdown: &str,
         _links: &NotionLinks,
         _properties: &ImportedTaskProperties,
-        _folder: Option<Uuid>,
+        folder: Option<Uuid>,
         _dates: Option<SourceDates>,
         visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         self.tasks.lock().unwrap().push(visibility);
+        self.task_folders.lock().unwrap().push(folder);
         Ok(id.to_string())
     }
 
@@ -439,6 +459,7 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
         &links,
         &progress,
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
@@ -616,7 +637,8 @@ async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
             .collect(),
     };
     let writer = FakeWriter::default();
-    let source_item = source_item("Bugs");
+    let mut source_item = source_item("Bugs");
+    source_item.shared = true;
     let store = FakeStore::default();
     let user = user();
     let progress = Progress::new(&store, &user, source_item.import_id, &[]);
@@ -632,6 +654,7 @@ async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
         &NotionLinks::default(),
         &progress,
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
@@ -695,6 +718,7 @@ async fn a_cancelled_import_stops_before_writing_rows() {
         &NotionLinks::default(),
         &progress,
         &cancel,
+        None,
     )
     .await;
 
@@ -755,6 +779,7 @@ async fn a_database_whose_rows_have_no_content_gets_no_page_column() {
         &NotionLinks::default(),
         &progress,
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
@@ -828,6 +853,7 @@ async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates
         &NotionLinks::default(),
         &Progress::new(&store, &user, item.import_id, &[]),
         &Cancel::default(),
+        None,
     )
     .await;
     assert_eq!(first.unwrap_err().to_string(), "the process stopped");
@@ -847,6 +873,7 @@ async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates
         &NotionLinks::default(),
         &Progress::new(&store, &user, item.import_id, &recorded),
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
@@ -916,6 +943,7 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
         &NotionLinks::default(),
         &Progress::new(&store, &user, item.import_id, &[]),
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap_err();
@@ -935,6 +963,7 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
         &NotionLinks::default(),
         &Progress::new(&store, &user, item.import_id, &recorded),
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
@@ -962,49 +991,4 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
     assert_eq!(linked.len(), 2);
 }
 
-#[tokio::test]
-async fn task_lists_apply_the_reviewed_link_policy_to_each_task_and_folder() {
-    use crate::domain::{ports::ImportVisibility, service::notion_workspace::write::write_tasks};
-    for (shared, expected) in [
-        (false, ImportVisibility::Personal),
-        (true, ImportVisibility::Shared),
-    ] {
-        let notion = FakeNotion {
-            fetched: Mutex::new(0),
-            source: NotionDataSource {
-                id: id('e'),
-                database_id: id('f'),
-                title: "Tasks".into(),
-                database_parent: NotionParent::Workspace,
-                in_trash: false,
-                properties: Vec::new(),
-            },
-            rows: vec![
-                notion_row('1', "First task", vec![]),
-                notion_row('2', "Second task", vec![]),
-            ],
-            bodies: [(id('1'), "Task body".into())].into(),
-        };
-        let writer = FakeWriter::default();
-        let store = FakeStore::default();
-        let user = user();
-        let item = source_item("Tasks");
-        let progress = Progress::new(&store, &user, item.import_id, &[]);
-        write_tasks(
-            &notion,
-            &writer,
-            &user,
-            &item,
-            Uuid::from_u128(42),
-            shared,
-            &PeopleMap::new(),
-            &NotionLinks::default(),
-            &progress,
-            &Cancel::default(),
-        )
-        .await
-        .unwrap();
-        assert_eq!(*writer.tasks.lock().unwrap(), vec![expected, expected]);
-        assert_eq!(*writer.folder_visibilities.lock().unwrap(), vec![expected]);
-    }
-}
+mod folders;

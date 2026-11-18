@@ -88,9 +88,16 @@ impl NotionApi for Pages {
 
     async fn data_source(
         &self,
-        _: &NotionId,
+        id: &NotionId,
     ) -> std::result::Result<NotionDataSource, NotionError> {
-        unimplemented!("only pages here")
+        Ok(NotionDataSource {
+            id: id.clone(),
+            database_id: page_id('d'),
+            title: "Rows".into(),
+            database_parent: import_notion::domain::model::NotionParent::Workspace,
+            in_trash: false,
+            properties: Vec::new(),
+        })
     }
 
     async fn database_sources(
@@ -105,7 +112,10 @@ impl NotionApi for Pages {
         _: &NotionId,
         _: Option<String>,
     ) -> std::result::Result<RowsPage, NotionError> {
-        unimplemented!("only pages here")
+        Ok(RowsPage {
+            rows: vec![self.page(&page_id('f')).await?],
+            next: import_notion::domain::model::RowsNext::End,
+        })
     }
 
     async fn users(
@@ -138,6 +148,7 @@ impl NotionConnections for Connected {
 #[derive(Default)]
 struct Writer {
     folders: Mutex<Vec<String>>,
+    folder_delay: Option<std::time::Duration>,
     folder_visibilities: Mutex<Vec<(String, crate::domain::ports::ImportVisibility)>>,
     documents: Mutex<Vec<(Uuid, String, NotionLinks)>>,
     shares: Mutex<Vec<SharedEntity>>,
@@ -146,155 +157,15 @@ struct Writer {
     visibilities: Mutex<Vec<(Uuid, crate::domain::ports::ImportVisibility)>>,
     tracker_projects: Mutex<Vec<Uuid>>,
     tracker_links: Mutex<Vec<Uuid>>,
+    tracker_events: Mutex<Vec<(Uuid, &'static str)>>,
     reject_tracker_links: std::sync::atomic::AtomicBool,
     reject_tracker_projects: std::sync::atomic::AtomicBool,
     /// Each document written with the source dates it was given.
     document_dates: Mutex<Vec<(Uuid, Option<SourceDates>)>>,
-}
-
-impl WorkspaceWriter for Writer {
-    async fn create_tracker_project(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        id: Uuid,
-        _: &str,
-        _: &str,
-        visibility: crate::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<Uuid> {
-        self.visibilities.lock().unwrap().push((id, visibility));
-        if self
-            .reject_tracker_projects
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            anyhow::bail!("temporary project failure");
-        }
-        let mut projects = self.tracker_projects.lock().unwrap();
-        if !projects.contains(&id) {
-            projects.push(id);
-        }
-        Ok(id)
-    }
-    async fn create_tracker_task(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        id: Uuid,
-        _: &str,
-        _: &str,
-        _: &ImportedTaskProperties,
-        visibility: crate::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
-        self.visibilities.lock().unwrap().push((id, visibility));
-        let mut tasks = self.tracker_tasks.lock().unwrap();
-        if !tasks.contains(&id) {
-            tasks.push(id);
-        }
-        Ok(id.to_string())
-    }
-    async fn link_tracker_task(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        id: Uuid,
-        _: &crate::domain::ports::TrackerTaskRelations,
-    ) -> anyhow::Result<()> {
-        if self
-            .reject_tracker_links
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            anyhow::bail!("temporary property failure");
-        }
-        self.tracker_links.lock().unwrap().push(id);
-        Ok(())
-    }
-
-    async fn create_folder(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        name: &str,
-        _: Option<Uuid>,
-        visibility: crate::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<Uuid> {
-        self.folder_visibilities
-            .lock()
-            .unwrap()
-            .push((name.to_string(), visibility));
-        self.folders.lock().unwrap().push(name.to_string());
-        Ok(Uuid::now_v7())
-    }
-
-    async fn folder_exists(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> anyhow::Result<bool> {
-        Ok(true)
-    }
-
-    async fn share_with_team(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        entity: SharedEntity,
-    ) -> anyhow::Result<()> {
-        self.shares.lock().unwrap().push(entity);
-        Ok(())
-    }
-
-    async fn create_document(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        id: Uuid,
-        name: &str,
-        _: &str,
-        links: &NotionLinks,
-        _: &ImportedDocumentProperties,
-        _: Option<Uuid>,
-        dates: Option<SourceDates>,
-        visibility: crate::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
-        self.visibilities.lock().unwrap().push((id, visibility));
-        self.document_dates.lock().unwrap().push((id, dates));
-        if let Some((entered, shutdown)) = &self.hold {
-            entered.notify_one();
-            shutdown.cancelled().await;
-            anyhow::bail!("the process stopped");
-        }
-        self.documents
-            .lock()
-            .unwrap()
-            .push((id, name.to_string(), links.clone()));
-        Ok(id.to_string())
-    }
-
-    async fn create_task(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: Uuid,
-        _: &str,
-        _: &str,
-        _: &NotionLinks,
-        _: &ImportedTaskProperties,
-        _: Option<Uuid>,
-        _: Option<SourceDates>,
-        _visibility: crate::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
-        unimplemented!("only pages here")
-    }
-
-    async fn create_database(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: &str,
-    ) -> anyhow::Result<NewDatabase> {
-        unimplemented!("only pages here")
-    }
-
-    async fn apply_database_ops(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: Uuid,
-        _: Vec<models_databases::DatabaseOp>,
-    ) -> anyhow::Result<Vec<models_databases::OpResult>> {
-        unimplemented!("only pages here")
-    }
-
-    async fn team_members(&self, _: &MacroUserIdStr<'static>) -> anyhow::Result<Vec<TeamMember>> {
-        Ok(Vec::new())
-    }
+    folder_records: Mutex<Vec<(Uuid, String, Option<Uuid>)>>,
+    document_folders: Mutex<Vec<(Uuid, Option<Uuid>)>>,
+    task_folders: Mutex<Vec<Option<Uuid>>>,
+    grants: Mutex<std::collections::HashSet<Uuid>>,
 }
 
 impl EntityCreator for Writer {
@@ -1052,51 +923,7 @@ async fn a_plan_presented_while_planning_fills_in_batch_by_batch_and_restages_on
 mod events;
 mod tracker;
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn written_pages_keep_their_notion_dates(pool: PgPool) {
-    let owner = user("dates");
-    let mut spec = page('f', "Spec");
-    spec.parent_foreign_id = Some(page_id('e').as_str().to_string());
-    let (review, rows) = approved(&pool, &owner, &[page('e', "Wiki"), spec]).await;
-    let repo = PgImportRepo::new(pool.clone());
-    planned(&repo, &owner).await;
-    let tracker = TaskTracker::new();
-    let writer = Arc::new(Writer::default());
-    let service = ImportServiceImpl::new(
-        PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
-        Arc::clone(&writer),
-        Arc::new(ai_usage::NoOpUsageRecorder),
-    )
-    .with_notion_connections(Arc::new(Connected))
-    .with_job_shutdown(tokio_util::sync::CancellationToken::new(), tracker.clone());
+mod dates;
+mod folders;
 
-    service
-        .start_notion_write(&owner, review, NotionWriteChoices::default())
-        .await
-        .unwrap();
-    tracker.close();
-    tracker.wait().await;
-
-    let at = |month| Utc.with_ymd_and_hms(2024, month, 1, 0, 0, 0).unwrap();
-    let mut documents = writer.document_dates.lock().unwrap().clone();
-    documents.sort_by_key(|(id, _)| *id);
-    let mut expected = vec![
-        (
-            write::document_id(rows[0]),
-            Some(SourceDates {
-                created: at(1),
-                last_edited: at(3),
-            }),
-        ),
-        (
-            write::document_id(rows[1]),
-            Some(SourceDates {
-                created: at(2),
-                last_edited: at(6),
-            }),
-        ),
-    ];
-    expected.sort_by_key(|(id, _)| *id);
-    assert_eq!(documents, expected, "each page keeps its own dates");
-}
+mod writer;

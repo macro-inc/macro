@@ -289,6 +289,187 @@ impl NotionRunRepo for PgImportRepo {
         Ok(folder.flatten())
     }
 
+    async fn personal_root_folder(&self, user: &MacroUserIdStr<'static>) -> Result<Option<Uuid>> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT personal_root_folder_id FROM import_run
+            WHERE user_id = $1 AND source = $2
+            "#,
+            user.as_ref(),
+            self.workspace_source.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .flatten())
+    }
+
+    async fn set_personal_root_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> Result<()> {
+        let updated = sqlx::query!(
+            r#"
+            UPDATE import_run
+            SET personal_root_folder_id = $2, personal_folder_ids = '{}'::jsonb
+            WHERE user_id = $1 AND source = $3
+            "#,
+            user.as_ref(),
+            folder,
+            self.workspace_source.as_ref(),
+        )
+        .execute(&self.pool)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(anyhow::anyhow!("personal mirror import run is missing").into());
+        }
+        Ok(())
+    }
+
+    async fn personal_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        path: &[String],
+    ) -> Result<Option<Uuid>> {
+        let key = serde_json::to_string(path)?;
+        let id = sqlx::query_scalar!(
+            r#"
+            SELECT personal_folder_ids ->> $3 AS folder FROM import_run
+            WHERE user_id = $1 AND source = $2
+            "#,
+            user.as_ref(),
+            self.workspace_source.as_ref(),
+            key,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .flatten();
+        id.map(|id| {
+            id.parse()
+                .map_err(|error| anyhow::anyhow!("invalid personal folder id: {error}").into())
+        })
+        .transpose()
+    }
+
+    async fn set_personal_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        path: &[String],
+        folder: Uuid,
+    ) -> Result<()> {
+        let key = serde_json::to_string(path)?;
+        let updated = sqlx::query!(
+            r#"
+            UPDATE import_run
+            SET personal_folder_ids = jsonb_set(
+                COALESCE(personal_folder_ids, '{}'::jsonb), ARRAY[$3], to_jsonb($4::text)
+            )
+            WHERE user_id = $1 AND source = $2
+            "#,
+            user.as_ref(),
+            self.workspace_source.as_ref(),
+            key,
+            folder.to_string(),
+        )
+        .execute(&self.pool)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(anyhow::anyhow!("personal mirror import run is missing").into());
+        }
+        Ok(())
+    }
+
+    async fn set_shared_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        folder: Uuid,
+    ) -> Result<()> {
+        // Keep the source lookup on the item PK even with stale owner statistics.
+        let updated = sqlx::query!(
+            r#"
+            INSERT INTO import_entity_written AS shared_folder (import_id, kind, object, macro_id)
+            SELECT entity.id, 'folder', 'shared', $3
+            FROM import_entity AS entity
+            WHERE entity.id = $2 AND (SELECT entity.user_id OFFSET 0) = $1
+            ON CONFLICT (import_id, kind, object) DO UPDATE SET macro_id = EXCLUDED.macro_id
+            "#,
+            user.as_ref(),
+            import_id,
+            folder,
+        )
+        .execute(&self.pool)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(
+                anyhow::anyhow!("import item is missing or not owned by the caller").into(),
+            );
+        }
+        Ok(())
+    }
+
+    async fn record_personal_relocation(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        folder: Uuid,
+    ) -> Result<()> {
+        // Fence the tuple's owner check so stale statistics cannot drive this
+        // one-item update through the user's entire ledger instead of its PK.
+        let updated = sqlx::query!(
+            r#"
+            UPDATE import_entity AS entity
+            SET metadata = jsonb_set(entity.metadata, '{personalFolderId}', to_jsonb($3::text))
+            WHERE entity.id = $1 AND (SELECT entity.user_id OFFSET 0) = $2
+            "#,
+            import_id,
+            user.as_ref(),
+            folder.to_string(),
+        )
+        .execute(&self.pool)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(
+                anyhow::anyhow!("import item is missing or not owned by the caller").into(),
+            );
+        }
+        Ok(())
+    }
+
+    async fn record_separate_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        folder: Uuid,
+        visibility: crate::domain::ports::ImportVisibility,
+    ) -> Result<()> {
+        let visibility = match visibility {
+            crate::domain::ports::ImportVisibility::Personal => "personal",
+            crate::domain::ports::ImportVisibility::Shared => "shared",
+        };
+        let record = serde_json::json!({"visibility":visibility, "folderId":folder});
+        // Fence the tuple's owner check so stale statistics cannot drive this
+        // one-item update through the user's entire ledger instead of its PK.
+        let updated = sqlx::query!(
+            r#"
+            UPDATE import_entity AS entity
+            SET metadata = jsonb_set(entity.metadata, '{separateFolder}', $3)
+            WHERE entity.id = $1 AND (SELECT entity.user_id OFFSET 0) = $2
+            "#,
+            import_id,
+            user.as_ref(),
+            record,
+        )
+        .execute(&self.pool)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(
+                anyhow::anyhow!("import item is missing or not owned by the caller").into(),
+            );
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn set_root_folder(&self, user: &MacroUserIdStr<'static>, folder: Uuid) -> Result<()> {
         sqlx::query!(

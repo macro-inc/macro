@@ -105,6 +105,7 @@ pub(in super::super) async fn write_database<
     links: &NotionLinks,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
+    personal_folder: Option<Uuid>,
 ) -> anyhow::Result<WrittenDatabase> {
     let source = api.data_source(&item.notion_id).await?;
     let created = database_once(writer, user, item, progress).await?;
@@ -218,6 +219,7 @@ pub(in super::super) async fn write_database<
         links,
         progress,
         cancel,
+        personal_folder,
     )
     .await?;
     Ok(written)
@@ -411,13 +413,11 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
     links: &NotionLinks,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
+    personal_folder: Option<Uuid>,
 ) -> anyhow::Result<()> {
-    let visibility = if share {
-        ImportVisibility::Shared
-    } else {
-        ImportVisibility::Personal
-    };
-    let bodies_folder: tokio::sync::OnceCell<Uuid> = tokio::sync::OnceCell::new();
+    let visibility = ImportVisibility::from_shared(item.shared);
+    let bodies_folder: tokio::sync::OnceCell<Uuid> =
+        tokio::sync::OnceCell::new_with(personal_folder);
     let bodies_name = capped_name(&format!("{} pages", item.title));
     let linked: Vec<anyhow::Result<Option<RowChange>>> = stream::iter(rows.iter().cloned())
         .map(|row| {

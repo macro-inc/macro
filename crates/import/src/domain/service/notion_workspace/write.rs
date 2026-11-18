@@ -371,23 +371,25 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
     links: &NotionLinks,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
+    personal_folder: Option<Uuid>,
 ) -> anyhow::Result<Uuid> {
-    let visibility = if share {
-        ImportVisibility::Shared
-    } else {
-        ImportVisibility::Personal
-    };
+    let visibility = ImportVisibility::from_shared(item.shared);
     let rows = all_rows(api, &item.notion_id).await?.rows;
-    let tasks_folder = folder_once(
-        writer,
-        user,
-        progress,
-        WrittenKind::TasksFolder,
-        &capped_name(&item.title),
-        folder,
-        visibility,
-    )
-    .await?;
+    let tasks_folder = match personal_folder {
+        Some(folder) => folder,
+        None => {
+            folder_once(
+                writer,
+                user,
+                progress,
+                WrittenKind::TasksFolder,
+                &capped_name(&item.title),
+                folder,
+                visibility,
+            )
+            .await?
+        }
+    };
     // Shared before the tasks are made, so each is shared as it lands in
     // the folder; shared again on resume, which is harmless.
     if share {

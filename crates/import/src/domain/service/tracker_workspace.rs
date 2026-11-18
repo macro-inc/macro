@@ -444,11 +444,7 @@ where
                 TeamClaim::Held | TeamClaim::Free => {}
             }
         }
-        let visibility = if meta.plan.shared && team.is_some() {
-            ImportVisibility::Shared
-        } else {
-            ImportVisibility::Personal
-        };
+        let visibility = ImportVisibility::from_shared(meta.plan.shared);
         let id = values::target_id(row.id);
         match &meta.object {
             TrackerObject::Group(group) => {

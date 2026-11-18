@@ -74,6 +74,33 @@ pub(in crate::domain::service) fn report(
             }
         }
         let Some(plan) = &meta.plan else { continue };
+        if row
+            .metadata
+            .get("personalFolderId")
+            .and_then(serde_json::Value::as_str)
+            .is_some()
+        {
+            report.warnings.push(format!(
+                "{} was kept in Notion (personal) to avoid inherited folder sharing.",
+                meta.title
+            ));
+        }
+
+        match row.metadata.get("separateFolder")
+            .and_then(|folder| folder.get("visibility"))
+            .and_then(serde_json::Value::as_str)
+        {
+            Some("shared") => report.warnings.push(format!(
+                "{}: created a separate shared folder because the existing one holds personal items.",
+                meta.title,
+            )),
+            Some("personal") => report.warnings.push(format!(
+                "{}: created a separate personal folder to keep it apart from the existing shared folder.",
+                meta.title,
+            )),
+            _ => {}
+        }
+
         match row.kind {
             ImportKind::DataSource => report.data_sources += 1,
             ImportKind::Issue | ImportKind::JiraIssue => report.issues += 1,

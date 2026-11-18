@@ -130,9 +130,47 @@ where
             TeamClaim::Free => false,
         };
         let (api, cancel) = (target.api, target.cancel);
+        let proposed = target
+            .place
+            .folder_for(item, item.kind != ImportKind::DataSource);
+        let path = target.place.path_for(proposed)?;
+        let folder = if item.shared {
+            proposed
+        } else {
+            self.personal_item_folder(user, item.import_id, proposed, path)
+                .await?
+        };
+        let personal_child_folder = if !item.shared && item.kind == ImportKind::DataSource {
+            let (kind, name) = match item.decision {
+                NotionDecision::Tasks => (
+                    crate::domain::models::WrittenKind::TasksFolder,
+                    import_notion::domain::macro_cells::capped_name(&item.title),
+                ),
+                _ => (
+                    crate::domain::models::WrittenKind::BodiesFolder,
+                    import_notion::domain::macro_cells::capped_name(&format!(
+                        "{} pages",
+                        item.title
+                    )),
+                ),
+            };
+            match progress.get(kind) {
+                Some(previous) => {
+                    let mut path = path.to_vec();
+                    path.push(name);
+                    let resolved = self
+                        .personal_item_folder(user, item.import_id, previous, &path)
+                        .await?;
+                    (resolved != previous).then_some(resolved)
+                }
+                None => None,
+            }
+        } else {
+            None
+        };
+
         let (entity_id, entity_type) = match (item.kind, item.decision) {
             (ImportKind::DataSource, NotionDecision::Tasks) => {
-                let folder = target.place.folder_for(item, false);
                 let tasks = write::write_tasks(
                     api,
                     self.creator.as_ref(),
@@ -144,12 +182,12 @@ where
                     target.links,
                     progress,
                     cancel,
+                    personal_child_folder,
                 )
                 .await?;
                 (tasks.to_string(), write::FOLDER_ENTITY)
             }
             (ImportKind::DataSource, _) => {
-                let folder = target.place.folder_for(item, false);
                 let written = write::write_database(
                     api,
                     self.creator.as_ref(),
@@ -161,6 +199,7 @@ where
                     target.links,
                     progress,
                     cancel,
+                    personal_child_folder,
                 )
                 .await?;
                 let id = written.database_id.to_string();
@@ -172,7 +211,6 @@ where
                 (id, write::DATABASE_ENTITY)
             }
             _ => {
-                let folder = target.place.folder_for(item, true);
                 let markdown = full_markdown(api, &item.notion_id).await?;
                 let id = target
                     .links
@@ -203,11 +241,7 @@ where
                         &properties,
                         Some(folder),
                         dates,
-                        if share {
-                            ImportVisibility::Shared
-                        } else {
-                            ImportVisibility::Personal
-                        },
+                        ImportVisibility::from_shared(item.shared),
                     )
                     .await?;
                 if share {

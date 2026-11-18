@@ -88,6 +88,18 @@ async fn failed_relationships_are_reported_and_retry_reuses_the_created_task(poo
     assert_eq!(service.creator.tracker_tasks.lock().unwrap().len(), 1);
     let created = service.creator.tracker_tasks.lock().unwrap()[0];
     assert!(service.creator.shares.lock().unwrap().is_empty());
+    assert!(
+        service
+            .creator
+            .visibilities
+            .lock()
+            .unwrap()
+            .contains(&(created, crate::domain::ports::ImportVisibility::Shared))
+    );
+    assert_eq!(
+        *service.creator.tracker_events.lock().unwrap(),
+        vec![(created, "enrich")]
+    );
     let staged = repo
         .list(
             &owner,
@@ -330,9 +342,67 @@ async fn failed_projects_keep_child_relationships_retryable(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn personal_tracker_items_use_owner_only_links(pool: PgPool) {
+async fn reviewed_tracker_visibility_controls_deferred_sharing(pool: PgPool) {
+    use crate::domain::ports::ImportVisibility;
     for source in [ImportSource::Linear, ImportSource::Jira] {
-        let owner = teammate(&pool, source.as_ref(), Uuid::now_v7()).await;
+        for (sharing, expected) in [
+            (NotionSharing::Personal, ImportVisibility::Personal),
+            (NotionSharing::Team, ImportVisibility::Shared),
+        ] {
+            let owner = teammate(
+                &pool,
+                &format!("{}-{expected:?}", source.as_ref()).to_lowercase(),
+                Uuid::now_v7(),
+            )
+            .await;
+            let tracker = TaskTracker::new();
+            let service = service(
+                &pool,
+                Writer::default(),
+                CancellationToken::new(),
+                tracker.clone(),
+            )
+            .scoped(source);
+            let repo = service.repo.clone();
+            let rows = tracker_plan::rows(source, &snapshot(), sharing, true).unwrap();
+            let rows = tracker_plan::decide(&rows, &Default::default(), sharing, true).unwrap();
+            repo.start_run(&owner, source, &[]).await.unwrap();
+            let (review, _) = approved_source(&pool, &owner, &rows, source).await;
+            repo.finish_run(&owner, source, RunStatus::Ready, None)
+                .await
+                .unwrap();
+            service
+                .start_workspace_write(&owner, source, review, NotionWriteChoices::default())
+                .await
+                .unwrap();
+            tracker.close();
+            tracker.wait().await;
+            let policies = service.creator.visibilities.lock().unwrap();
+            assert_eq!(policies.len(), 2, "one project and one task");
+            assert!(policies.iter().all(|(_, policy)| *policy == expected));
+            let task = service.creator.tracker_tasks.lock().unwrap()[0];
+            let events = service.creator.tracker_events.lock().unwrap();
+            match expected {
+                ImportVisibility::Personal => {
+                    assert!(service.creator.shares.lock().unwrap().is_empty());
+                    assert_eq!(*events, vec![(task, "enrich")]);
+                }
+                ImportVisibility::Shared => {
+                    assert_eq!(
+                        *service.creator.shares.lock().unwrap(),
+                        vec![SharedEntity::Document(task)]
+                    );
+                    assert_eq!(*events, vec![(task, "enrich"), (task, "share")]);
+                }
+            }
+        }
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_teamless_shared_verdict_still_reaches_each_tracker_writer(pool: PgPool) {
+    for source in [ImportSource::Linear, ImportSource::Jira] {
+        let owner = user(&format!("teamless-{}", source.as_ref()));
         let tracker = TaskTracker::new();
         let service = service(
             &pool,
@@ -341,13 +411,19 @@ async fn personal_tracker_items_use_owner_only_links(pool: PgPool) {
             tracker.clone(),
         )
         .scoped(source);
-        let repo = service.repo.clone();
-        let rows = tracker_plan::rows(source, &snapshot(), NotionSharing::Personal, true).unwrap();
-        let rows = tracker_plan::decide(&rows, &Default::default(), NotionSharing::Personal, true)
-            .unwrap();
-        repo.start_run(&owner, source, &[]).await.unwrap();
+        let rows = tracker_plan::rows(source, &snapshot(), NotionSharing::Team, true).unwrap();
+        let rows = tracker_plan::decide(
+            &rows,
+            &std::collections::HashMap::new(),
+            NotionSharing::Team,
+            true,
+        )
+        .unwrap();
+        service.repo.start_run(&owner, source, &[]).await.unwrap();
         let (review, _) = approved_source(&pool, &owner, &rows, source).await;
-        repo.finish_run(&owner, source, RunStatus::Ready, None)
+        service
+            .repo
+            .finish_run(&owner, source, RunStatus::Ready, None)
             .await
             .unwrap();
         service
@@ -356,12 +432,12 @@ async fn personal_tracker_items_use_owner_only_links(pool: PgPool) {
             .unwrap();
         tracker.close();
         tracker.wait().await;
-        let policies = service.creator.visibilities.lock().unwrap();
-        assert_eq!(policies.len(), 2, "one project and one task");
+        let visibilities = service.creator.visibilities.lock().unwrap();
+        assert_eq!(visibilities.len(), 2);
         assert!(
-            policies
-                .iter()
-                .all(|(_, policy)| *policy == crate::domain::ports::ImportVisibility::Personal)
+            visibilities.iter().all(
+                |(_, visibility)| *visibility == crate::domain::ports::ImportVisibility::Shared
+            )
         );
         assert!(service.creator.shares.lock().unwrap().is_empty());
     }

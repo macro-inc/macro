@@ -85,6 +85,11 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 team foreign key cascades, and the passwords repository includes it in retained
 data checks and explicit vault purge. It does not depend on a successful item.
 
+`import_run.personal_root_folder_id` and `personal_folder_ids` are nullable,
+additive state owned by the import repository. Preserve both when a later run
+restarts, just like `root_folder_id`; they identify the user's persistent
+owner-only Notion mirror. No existing folders or import rows are backfilled.
+
 ## Gotchas
 
 - `document_email` has a statement-level `AFTER DELETE` trigger

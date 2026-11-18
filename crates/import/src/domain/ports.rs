@@ -601,6 +601,16 @@ pub enum ImportVisibility {
     Shared,
 }
 
+impl ImportVisibility {
+    /// Convert the reviewed sharing decision into the writer's visibility contract.
+    pub fn from_shared(shared: bool) -> Self {
+        match shared {
+            true => Self::Shared,
+            false => Self::Personal,
+        }
+    }
+}
+
 /// Creates the Macro side of a workspace import: folders mirroring the
 /// source's tree, documents and tasks inside them, and databases.
 ///
@@ -650,6 +660,21 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         parent: Option<Uuid>,
         visibility: ImportVisibility,
     ) -> impl Future<Output = anyhow::Result<Uuid>> + Send;
+
+    /// Whether `folder` or an ancestor has an explicit grant beyond its owner.
+    /// Link permissions alone do not grant access to descendants.
+    fn folder_has_explicit_grant(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
+
+    /// Whether the owner's current team already has a direct explicit Edit grant.
+    fn folder_has_team_edit_grant(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
 
     /// Whether `folder` still exists and `user` can create inside it.
     fn folder_exists(
@@ -943,6 +968,59 @@ pub trait NotionRunRepo: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Option<Uuid>>> + Send;
+
+    /// The user's persistent owner-only mirror root.
+    fn personal_root_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<Uuid>>> + Send;
+
+    /// Replace the mirror root and clear its old path identities.
+    fn set_personal_root_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The folder recorded for a source path in the current personal mirror.
+    fn personal_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        path: &[String],
+    ) -> impl Future<Output = Result<Option<Uuid>>> + Send;
+
+    /// Record a personal subfolder's path identity.
+    fn set_personal_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        path: &[String],
+        folder: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record a destination relocation for the item's import report.
+    fn record_personal_relocation(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        folder: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist a newly created shared branch, replacing an unshared old branch's pointer.
+    fn set_shared_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        folder: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Explain a new folder kept separate from an existing visibility branch.
+    fn record_separate_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        folder: Uuid,
+        visibility: ImportVisibility,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Record `folder` as the user's "Notion" folder.
     fn set_root_folder(

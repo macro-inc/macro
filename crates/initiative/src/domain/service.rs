@@ -85,7 +85,7 @@ where
         request: CreateInitiativeRequest,
         attribution: activity::Attribution,
         id: InitiativeId,
-        initial_link_share: Option<models_permissions::share_permission::LinkShareState>,
+        initial_link_share: models_permissions::share_permission::InitialLinkShare,
     ) -> Result<InitiativeDetail, InitiativeError> {
         self.create_with_id(user_id, request, attribution, id, true, initial_link_share)
             .await
@@ -114,7 +114,7 @@ where
         attribution: activity::Attribution,
         id: InitiativeId,
         reuse: bool,
-        initial_link_share: Option<models_permissions::share_permission::LinkShareState>,
+        initial_link_share: models_permissions::share_permission::InitialLinkShare,
     ) -> Result<InitiativeDetail, InitiativeError> {
         let authorized = match &attribution {
             activity::Attribution::Direct { actor } => {
@@ -149,8 +149,12 @@ where
             .await
             .map_err(Into::into)?;
         let share_permission = match initial_link_share {
-            Some(state) => SharePermissionV2::from_link_share_state(state),
-            None => SharePermissionV2::new_initiative_share_permission(team_default),
+            models_permissions::share_permission::InitialLinkShare::Exact(state) => {
+                SharePermissionV2::from_link_share_state(state)
+            }
+            models_permissions::share_permission::InitialLinkShare::EntityDefault => {
+                SharePermissionV2::new_initiative_share_permission(team_default)
+            }
         };
         let team_share = if request.share_with_team.unwrap_or(true) {
             TeamShareCreation::Initiative
@@ -385,7 +389,7 @@ where
             attribution,
             InitiativeId::generate(),
             false,
-            None,
+            models_permissions::share_permission::InitialLinkShare::EntityDefault,
         )
         .await
     }

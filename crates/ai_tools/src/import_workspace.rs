@@ -228,6 +228,49 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
     }
 
     #[tracing::instrument(skip(self, user), err)]
+    async fn folder_has_explicit_grant(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> anyhow::Result<bool> {
+        let receipt = self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &folder.to_string(),
+                model_entity::EntityType::Project,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("no edit access to import folder: {error:?}"))?;
+        Ok(self
+            .project_service
+            .folder_has_explicit_grant(receipt)
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn folder_has_team_edit_grant(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> anyhow::Result<bool> {
+        let receipt = self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &folder.to_string(),
+                model_entity::EntityType::Project,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("no edit access to import folder: {error:?}"))?;
+        Ok(self
+            .project_service
+            .folder_has_team_edit_grant(receipt)
+            .await?)
+    }
+
     async fn folder_exists(
         &self,
         user: &MacroUserIdStr<'static>,

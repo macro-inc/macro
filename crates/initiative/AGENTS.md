@@ -69,8 +69,9 @@ realtime appearance events do not re-ingest history.
 - Skill: `cloud-storage-hexagonal-architecture`
 
 `create_imported` is the trusted workspace-import creation path: it accepts a
-ledger-derived id, complete source markdown and an optional exact initial
-link-share override. Personal imports pass OFF; shared imports retain defaults.
+ledger-derived id, complete source markdown and the canonical
+`models_permissions::share_permission::InitialLinkShare`. Personal imports pass
+`Exact(Off)`; shared imports pass `EntityDefault`.
 It checks attribution and owner before reusing an existing project, and repairs
 property initialization on replay.
 Interactive creation keeps its existing generated ids and description limits.

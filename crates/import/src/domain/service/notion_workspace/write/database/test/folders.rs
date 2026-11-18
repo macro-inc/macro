@@ -1,0 +1,263 @@
+use super::*;
+
+#[tokio::test]
+async fn task_lists_apply_the_reviewed_link_policy_to_each_task_and_folder() {
+    use crate::domain::{ports::ImportVisibility, service::notion_workspace::write::write_tasks};
+    for (shared, expected) in [
+        (false, ImportVisibility::Personal),
+        (true, ImportVisibility::Shared),
+    ] {
+        let notion = FakeNotion {
+            fetched: Mutex::new(0),
+            source: NotionDataSource {
+                id: id('e'),
+                database_id: id('f'),
+                title: "Tasks".into(),
+                database_parent: NotionParent::Workspace,
+                in_trash: false,
+                properties: Vec::new(),
+            },
+            rows: vec![
+                notion_row('1', "First task", vec![]),
+                notion_row('2', "Second task", vec![]),
+            ],
+            bodies: [(id('1'), "Task body".into())].into(),
+        };
+        let writer = FakeWriter::default();
+        let store = FakeStore::default();
+        let user = user();
+        let mut item = source_item("Tasks");
+        item.shared = shared;
+        let progress = Progress::new(&store, &user, item.import_id, &[]);
+        write_tasks(
+            &notion,
+            &writer,
+            &user,
+            &item,
+            Uuid::from_u128(42),
+            shared,
+            &PeopleMap::new(),
+            &NotionLinks::default(),
+            &progress,
+            &Cancel::default(),
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(*writer.tasks.lock().unwrap(), vec![expected, expected]);
+        assert_eq!(*writer.folder_visibilities.lock().unwrap(), vec![expected]);
+    }
+}
+
+#[tokio::test]
+async fn private_destinations_override_old_body_and_task_folder_markers() {
+    use crate::domain::service::notion_workspace::write::write_tasks;
+    for kind in [WrittenKind::BodiesFolder, WrittenKind::TasksFolder] {
+        let notion = FakeNotion {
+            fetched: Mutex::new(0),
+            source: NotionDataSource {
+                id: id('e'),
+                database_id: id('f'),
+                title: "Items".into(),
+                database_parent: NotionParent::Workspace,
+                in_trash: false,
+                properties: Vec::new(),
+            },
+            rows: vec![notion_row('1', "Personal row", vec![])],
+            bodies: [(id('1'), "Private body".into())].into(),
+        };
+        let writer = FakeWriter::default();
+        let user = user();
+        let item = source_item("Items");
+        let old = Uuid::from_u128(700);
+        let private = Uuid::from_u128(701);
+        let store = FakeStore::default();
+        let previous = [WrittenObject::own(item.import_id, kind, old)];
+        let progress = Progress::new(&store, &user, item.import_id, &previous);
+        match kind {
+            WrittenKind::BodiesFolder => {
+                write_database(
+                    &notion,
+                    &writer,
+                    &user,
+                    &item,
+                    Uuid::from_u128(42),
+                    false,
+                    &PeopleMap::new(),
+                    &NotionLinks::default(),
+                    &progress,
+                    &Cancel::default(),
+                    Some(private),
+                )
+                .await
+                .unwrap();
+                let docs = writer.documents.lock().unwrap();
+                assert_eq!(docs.len(), 1);
+                assert_eq!(docs[0].folder, Some(private));
+            }
+            WrittenKind::TasksFolder => {
+                assert_eq!(
+                    write_tasks(
+                        &notion,
+                        &writer,
+                        &user,
+                        &item,
+                        Uuid::from_u128(42),
+                        false,
+                        &PeopleMap::new(),
+                        &NotionLinks::default(),
+                        &progress,
+                        &Cancel::default(),
+                        Some(private)
+                    )
+                    .await
+                    .unwrap(),
+                    private
+                );
+                assert_eq!(*writer.task_folders.lock().unwrap(), vec![Some(private)]);
+            }
+            _ => unreachable!(),
+        }
+        assert!(
+            writer.folders.lock().unwrap().is_empty(),
+            "the recorded shared folder is never reused or changed"
+        );
+    }
+}
+
+#[tokio::test]
+async fn sharing_an_incomplete_source_reuses_only_that_sources_private_outputs() {
+    use crate::domain::service::notion_workspace::write::write_tasks;
+    for kind in [WrittenKind::BodiesFolder, WrittenKind::TasksFolder] {
+        let notion = FakeNotion {
+            fetched: Mutex::new(0),
+            source: NotionDataSource {
+                id: id('e'),
+                database_id: id('f'),
+                title: "Items".into(),
+                database_parent: NotionParent::Workspace,
+                in_trash: false,
+                properties: Vec::new(),
+            },
+            rows: vec![
+                notion_row('1', "Earlier private row", vec![]),
+                notion_row('2', "Remaining row", vec![]),
+            ],
+            bodies: [
+                (id('1'), "Earlier body".into()),
+                (id('2'), "Remaining body".into()),
+            ]
+            .into(),
+        };
+        let writer = FakeWriter::default();
+        let user = user();
+        let mut item = source_item("Items");
+        item.shared = true;
+        let own_folder = Uuid::from_u128(700);
+        let unrelated_folder = Uuid::from_u128(800);
+        // One row and the source's private destination survived an interruption.
+        // The new review says Shared for this same source, including that row.
+        let mut previous = vec![
+            WrittenObject::own(item.import_id, kind, own_folder),
+            WrittenObject::own(Uuid::from_u128(999), kind, unrelated_folder),
+        ];
+        match kind {
+            WrittenKind::TasksFolder => previous.push(WrittenObject::for_row(
+                item.import_id,
+                WrittenKind::Task,
+                &id('1'),
+                Uuid::from_u128(600),
+            )),
+            WrittenKind::BodiesFolder => {
+                for (kind, value) in [
+                    (WrittenKind::Database, DATABASE),
+                    (WrittenKind::Table, TABLE),
+                    (WrittenKind::TitleColumn, TITLE_COLUMN),
+                    (WrittenKind::Schema, DATABASE),
+                ] {
+                    previous.push(WrittenObject::own(item.import_id, kind, value));
+                }
+                previous.push(WrittenObject::for_row(
+                    item.import_id,
+                    WrittenKind::Row,
+                    &id('1'),
+                    Uuid::from_u128(699),
+                ));
+                previous.push(WrittenObject::for_row(
+                    item.import_id,
+                    WrittenKind::Body,
+                    &id('1'),
+                    Uuid::from_u128(600),
+                ));
+            }
+            _ => unreachable!(),
+        }
+        let store = FakeStore(Mutex::new(previous.clone()));
+        let progress = Progress::new(&store, &user, item.import_id, &previous);
+        match kind {
+            WrittenKind::TasksFolder => {
+                assert_eq!(
+                    write_tasks(
+                        &notion,
+                        &writer,
+                        &user,
+                        &item,
+                        Uuid::from_u128(42),
+                        true,
+                        &PeopleMap::new(),
+                        &NotionLinks::default(),
+                        &progress,
+                        &Cancel::default(),
+                        None
+                    )
+                    .await
+                    .unwrap(),
+                    own_folder
+                );
+                assert_eq!(*writer.task_folders.lock().unwrap(), vec![Some(own_folder)]);
+            }
+            WrittenKind::BodiesFolder => {
+                write_database(
+                    &notion,
+                    &writer,
+                    &user,
+                    &item,
+                    Uuid::from_u128(42),
+                    true,
+                    &PeopleMap::new(),
+                    &NotionLinks::default(),
+                    &progress,
+                    &Cancel::default(),
+                    None,
+                )
+                .await
+                .unwrap();
+                let docs = writer.documents.lock().unwrap();
+                assert_eq!(docs.len(), 1, "the earlier row body is reused");
+                assert_eq!(docs[0].folder, Some(own_folder));
+                assert_eq!(
+                    *writer.databases.lock().unwrap(),
+                    0,
+                    "the same source database is reused"
+                );
+            }
+            _ => unreachable!(),
+        }
+        let shares = writer.shares.lock().unwrap();
+        assert!(
+            shares.iter().any(
+                |share| matches!(share, SharedEntity::Folder(folder) if *folder == own_folder)
+            )
+        );
+        assert!(
+            shares.iter().all(|share| match share {
+                SharedEntity::Folder(folder) => *folder == own_folder,
+                SharedEntity::Database(database) =>
+                    kind == WrittenKind::BodiesFolder && *database == DATABASE,
+                _ => false,
+            }),
+            "unrelated private outputs and the shared parent must remain unchanged"
+        );
+        assert!(writer.folders.lock().unwrap().is_empty());
+    }
+}

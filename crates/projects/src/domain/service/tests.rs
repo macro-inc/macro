@@ -880,7 +880,7 @@ async fn a_project_dated_by_contents_starts_never_edited_and_leaves_its_parent_a
                 name: "Imported".to_string(),
                 project_parent_id: Some(parent_id),
             },
-            None,
+            models_permissions::share_permission::InitialLinkShare::EntityDefault,
         )
         .await
         .unwrap();
@@ -2959,7 +2959,7 @@ async fn personal_imported_folder_ignores_team_link_default() {
                 name: "Imported".into(),
                 project_parent_id: None,
             },
-            Some(LinkShareState::Off),
+            models_permissions::share_permission::InitialLinkShare::Exact(LinkShareState::Off),
         )
         .await
         .unwrap();

@@ -42,9 +42,10 @@ impl ToolEntityCreator {
                     name: capped_name(name, MAX_INITIATIVE_NAME_GRAPHEMES),
                     description: Some(markdown.to_string()),
                     member_ids: None,
-                    share_with_team: Some(
-                        visibility == import::domain::ports::ImportVisibility::Shared,
-                    ),
+                    share_with_team: Some(match visibility {
+                        import::domain::ports::ImportVisibility::Shared => true,
+                        import::domain::ports::ImportVisibility::Personal => false,
+                    }),
                     property_values: Vec::new(),
                 },
                 activity::Attribution::from(&Self::creation_principal(user)),

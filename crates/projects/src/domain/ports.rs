@@ -100,12 +100,26 @@ pub trait ProjectRepo: Send + Sync + 'static {
         project_id: &str,
     ) -> impl Future<Output = Result<SharePermissionV2, Self::Err>> + Send;
 
+    /// Whether a folder or an ancestor has an explicit grant beyond `owner`.
+    fn folder_has_explicit_grant(
+        &self,
+        project_id: Uuid,
+        owner: &model_owner::Owner,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Load the canonical team-share facts (persisted owner, owner's team,
     /// current explicit grant, revision) the owner policy authorizes against.
     fn get_team_share_facts(
         &self,
         project_id: &str,
     ) -> impl Future<Output = Result<TeamShareFacts, ProjectError>> + Send;
+
+    /// Whether this team's explicit direct folder grant is already Edit.
+    fn folder_has_team_edit_grant(
+        &self,
+        project_id: uuid::Uuid,
+        team_id: uuid::Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Get previews for the supplied project identifiers.
     fn batch_get_project_preview(
@@ -471,6 +485,18 @@ pub trait ProjectService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<SharePermissionV2, ProjectError>> + Send;
 
+    /// Check the explicit grants a new child would inherit, excluding owner grants.
+    fn folder_has_explicit_grant(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> impl Future<Output = Result<bool, ProjectError>> + Send;
+
+    /// Whether the actual owner's current team already has a direct Edit grant.
+    fn folder_has_team_edit_grant(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> impl Future<Output = Result<bool, ProjectError>> + Send;
+
     /// Get the caller's access level from a validated receipt.
     fn get_project_access_level(
         &self,
@@ -494,7 +520,7 @@ pub trait ProjectService: Send + Sync + 'static {
         &self,
         principal: &CreationPrincipal,
         args: CreateProjectRequest,
-        initial_link_share: Option<models_permissions::share_permission::LinkShareState>,
+        initial_link_share: models_permissions::share_permission::InitialLinkShare,
     ) -> impl Future<Output = Result<Project, ProjectError>> + Send;
 
     /// Edit project metadata and sharing settings.

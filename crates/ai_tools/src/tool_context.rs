@@ -1645,20 +1645,26 @@ fn imported_document_metadata(
 ) -> documents::domain::create::NewDocumentMetadataBuilder {
     let metadata = documents::domain::create::NewDocumentMetadata::builder(name);
     match imported_link_share(visibility) {
-        Some(state) => metadata.initial_link_share(state),
-        None => metadata,
+        models_permissions::share_permission::InitialLinkShare::Exact(state) => {
+            metadata.initial_link_share(state)
+        }
+        models_permissions::share_permission::InitialLinkShare::EntityDefault => metadata,
     }
 }
 
 /// Translate the reviewed import policy into an exact link override when needed.
 pub(crate) fn imported_link_share(
     visibility: import::domain::ports::ImportVisibility,
-) -> Option<models_permissions::share_permission::LinkShareState> {
+) -> models_permissions::share_permission::InitialLinkShare {
     match visibility {
         import::domain::ports::ImportVisibility::Personal => {
-            Some(models_permissions::share_permission::LinkShareState::Off)
+            models_permissions::share_permission::InitialLinkShare::Exact(
+                models_permissions::share_permission::LinkShareState::Off,
+            )
         }
-        import::domain::ports::ImportVisibility::Shared => None,
+        import::domain::ports::ImportVisibility::Shared => {
+            models_permissions::share_permission::InitialLinkShare::EntityDefault
+        }
     }
 }
 

@@ -56,9 +56,26 @@ and are created with link sharing explicitly off, even when the owner team
 defaults to TEAM or PUBLIC. Shared verdicts keep the entity/team defaults. New
 root and mixed-content folders also start with link sharing off; folders that
 contain only shared content retain defaults. Existing entities are not changed.
+Convert reviewed sharing once with `ImportVisibility::from_shared`; derive team
+and link policy from that verdict instead of passing independent flags. Keep
+Shared link defaults when the user has left the team since review; team claims
+only control explicit team grants.
+
+Resolve each personal destination through
+`ImportServiceImpl::personal_item_folder(user, import_id, destination, path)`.
+`WorkspaceWriter::folder_has_explicit_grant` reads the folder and its ancestors
+through Projects; links alone do not grant descendant access. An unsafe
+folder is mirrored by `personal_mirror_folder(user, path)` under the lazily
+created, top-level "Notion (personal)" folder, with Personal subfolders. These
+public domain helpers also serve database filing. `notion_workspace/personal.rs`
+owns the contract. The root and path identities live on `import_run`
+(`personal_root_folder_id`, `personal_folder_ids`), survive subsequent runs,
+and are checked for liveness and new grants before reuse. Relocations are
+recorded in the item's metadata and listed in the report's warnings. Old shared
+folders are never changed.
 The write shares documents, databases (with their row bodies' folder) and
 task-list folders it makes (`WorkspaceWriter::share_with_team`), and a page's
-folder only when everything written inside it is shared, since explicitly
+new shared folder branch only when everything written inside it is shared, since explicitly
 sharing a folder grants access to its contents. A teammate's shared database is linked like a page, but relations
 from this import's other databases into it are not linked.
 
@@ -201,6 +218,21 @@ from this import's other databases into it are not linked.
 
 - Rules: `.agents/rules/rust/architecture.md`
 - Skill: `cloud-storage-hexagonal-architecture`
+
+Keep structural folder roles separate in `import_entity_written`: the ordinary
+`folder` marker is personal/mixed, and `folder` with object `shared` is the
+all-shared branch. Replace its pointer when a user removed the previous folder's
+grant; never restore that grant or add one to the ordinary marker. Reuse a legacy
+ordinary folder only while the actual owner's team already has a direct Edit
+grant; never promote a mirror folder. Record a separate-folder report warning
+when a new visibility branch must be created beside an existing one. The
+per-user write lease excludes other processes, and weak per-user async
+locks serialize parallel mirror resolutions within a process. Never hold a
+process-wide lock across folder creation calls.
+
+Treat a Shared re-review of an incomplete data source as consent to share that
+source's existing database, task list and body folders; do not share a parent
+that also holds unrelated personal items.
 
 ## Issue tracker workspace imports
 

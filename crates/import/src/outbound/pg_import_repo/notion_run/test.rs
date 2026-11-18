@@ -530,3 +530,80 @@ async fn workspace_sources_have_independent_leases_roots_and_adoption(pool: PgPo
     assert_eq!(adopted[0].job, Some(job));
     assert_eq!(repo.root_folder(&owner).await.unwrap(), None);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn personal_mirror_updates_require_an_existing_run(pool: PgPool) {
+    let repo = PgImportRepo::new(pool);
+    let owner = user("missing-mirror-run");
+    assert!(
+        repo.set_personal_root_folder(&owner, Uuid::now_v7())
+            .await
+            .is_err()
+    );
+    assert!(
+        repo.set_personal_folder(&owner, &["Notes".into()], Uuid::now_v7())
+            .await
+            .is_err()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn folder_report_updates_validate_the_target_items_owner(pool: PgPool) {
+    use crate::domain::{models::Initiator, ports::ImportVisibility};
+    let repo = PgImportRepo::new(pool);
+    let owner = user("folder-report-owner");
+    let other = user("folder-report-other");
+    let metadata = serde_json::json!({"title":"Private item"});
+    let row = repo
+        .upsert_staged(
+            &owner,
+            ImportSource::Notion,
+            ImportKind::Page,
+            Initiator::Manual,
+            &"e".repeat(32),
+            &metadata,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let folder = Uuid::now_v7();
+    assert!(
+        repo.set_shared_folder(&other, row.id, folder)
+            .await
+            .is_err()
+    );
+    assert!(repo.written(&owner, &[row.id]).await.unwrap().is_empty());
+    assert!(
+        repo.record_personal_relocation(&other, row.id, folder)
+            .await
+            .is_err()
+    );
+    assert!(
+        repo.record_separate_folder(&other, row.id, folder, ImportVisibility::Shared)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        repo.get(&owner, row.id).await.unwrap().unwrap().metadata,
+        metadata
+    );
+    repo.set_shared_folder(&owner, row.id, folder)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.written(&owner, &[row.id]).await.unwrap()[0].macro_id,
+        folder
+    );
+    repo.record_personal_relocation(&owner, row.id, folder)
+        .await
+        .unwrap();
+    repo.record_separate_folder(&owner, row.id, folder, ImportVisibility::Shared)
+        .await
+        .unwrap();
+    let saved = repo.get(&owner, row.id).await.unwrap().unwrap();
+    assert_eq!(saved.metadata["personalFolderId"], folder.to_string());
+    assert_eq!(
+        saved.metadata["separateFolder"]["folderId"],
+        folder.to_string()
+    );
+}

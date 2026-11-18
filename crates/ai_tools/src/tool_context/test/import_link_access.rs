@@ -1,331 +1,478 @@
-use documents::domain::{
-    content::DocumentContent,
-    create::{DocumentCreator, MarkdownSubtype, NewMarkdownTextDocument, NewNotionDocument},
-    models::{CreateTaskRequest, DocumentError, InitialLinkShare, NewDocument},
-    notion_markdown::NotionMarkdown,
-    ports::{
-        create::{DocumentBytesUpload, DocumentBytesUploadPort, DocumentCreationService},
-        markdown::{MarkdownInitializationPort, MarkdownSnapshot},
-        mentions::NoOpDocumentMentionTracker,
-    },
-    response::CreateDocumentResponseData,
+//! Access regressions through the real importer writer, document service and database.
+use entity_access::{
+    domain::{models::AccessLevel, ports::AccessRepository},
+    outbound::PgAccessRepository,
 };
-use macro_user_id::cowlike::CowLike;
-use model_owner::CreationPrincipal;
-use std::sync::{Arc, Mutex};
+use import::domain::{
+    models::{ImportSource, RunStatus},
+    ports::{ImportRepo, ImportVisibility, NotionRunRepo, SharedEntity, WorkspaceWriter},
+};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use sqlx::PgPool;
+use std::sync::Arc;
+use uuid::Uuid;
+mod host;
 
-#[derive(Default)]
-struct CreationProbe {
-    document: Mutex<Option<NewDocument>>,
+struct Users {
+    owner: MacroUserIdStr<'static>,
+    teammate: MacroUserIdStr<'static>,
+    team: Uuid,
 }
 
-impl DocumentCreationService for CreationProbe {
-    async fn create_document(
-        &self,
-        _: &CreationPrincipal,
-        document: NewDocument,
-        _: Option<String>,
-    ) -> Result<CreateDocumentResponseData, DocumentError> {
-        *self.document.lock().unwrap() = Some(document);
-        Err(DocumentError::BadRequest(
-            "stop after capturing the creation request".into(),
-        ))
-    }
-    async fn initialize_canvas(&self, _: &str) -> Result<(), DocumentError> {
-        unreachable!()
-    }
-    async fn handle_task_properties(
-        &self,
-        _: &CreationPrincipal,
-        _: &str,
-        _: &CreateTaskRequest,
-    ) -> Result<(), DocumentError> {
-        unreachable!()
-    }
-    async fn mark_document_uploaded(&self, _: &str) -> Result<(), DocumentError> {
-        unreachable!()
-    }
-    async fn set_document_content(&self, _: &str, _: DocumentContent) -> Result<(), DocumentError> {
-        unreachable!()
-    }
-    async fn cleanup_created_document(&self, _: &str) {
-        unreachable!()
-    }
-}
-
-struct Unused;
-impl MarkdownInitializationPort for Unused {
-    async fn initialize_existing_markdown(
-        &self,
-        _: &str,
-        _: &str,
-    ) -> Result<Vec<u8>, DocumentError> {
-        unreachable!()
-    }
-    async fn initialize_existing_notion(
-        &self,
-        _: &str,
-        _: &NotionMarkdown,
-    ) -> Result<MarkdownSnapshot, DocumentError> {
-        unreachable!()
-    }
-}
-impl DocumentBytesUploadPort for Unused {
-    async fn upload_document_bytes(&self, _: DocumentBytesUpload) -> Result<(), DocumentError> {
-        unreachable!()
-    }
-}
-
-/// Exercise the import's initial link policy against the real access repository.
-/// No direct or folder grants are installed, so only document link access can win.
-#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
-async fn personal_imports_deny_teammate_link_access(pool: sqlx::PgPool) -> anyhow::Result<()> {
-    imported_link_access(
-        &pool,
-        import::domain::ports::ImportVisibility::Personal,
-        None,
-    )
-    .await
-}
-
-#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
-async fn shared_imports_retain_teammate_link_access(pool: sqlx::PgPool) -> anyhow::Result<()> {
-    imported_link_access(
-        &pool,
-        import::domain::ports::ImportVisibility::Shared,
-        Some(entity_access::domain::models::AccessLevel::Edit),
-    )
-    .await
-}
-
-async fn imported_link_access(
-    pool: &sqlx::PgPool,
-    sharing: import::domain::ports::ImportVisibility,
-    expected: Option<entity_access::domain::models::AccessLevel>,
-) -> anyhow::Result<()> {
-    use entity_access::domain::ports::AccessRepository;
-    use entity_access::outbound::PgAccessRepository;
-    use macro_user_id::user_id::MacroUserIdStr;
-    use models_permissions::share_permission::{
-        LinkShare, SharePermissionV2, TeamLinkShareDefault,
-    };
-    use uuid::Uuid;
-
-    let LinkFixture {
-        owner,
-        teammate,
-        team,
-        folder,
-    } = team_link_folder(pool).await?;
-    let access = PgAccessRepository::new(pool.clone());
-    let mut unexpected_access = Vec::new();
-    for scope in [LinkShare::Team, LinkShare::Public] {
-        for (kind, is_task, is_notion) in [
-            ("page", false, true),
-            ("row body", false, true),
-            ("Notion task", true, true),
-            ("Linear task", true, false),
-            ("Jira task", true, false),
-        ] {
-            let probe = Arc::new(CreationProbe::default());
-            let creator = DocumentCreator::new(
-                Arc::clone(&probe),
-                Unused,
-                Unused,
-                NoOpDocumentMentionTracker,
-            );
-            let metadata = super::super::imported_document_metadata(kind, sharing).build();
-            let subtype = if is_task {
-                MarkdownSubtype::Task {
-                    property_values: None,
-                    share_with_team: false,
-                    team_id: Some(team),
-                }
-            } else {
-                MarkdownSubtype::Note
-            };
-            let principal = crate::ToolEntityCreator::creation_principal(
-                &MacroUserIdStr::parse_from_str(&owner)?.into_owned(),
-            );
-            // Stop at the creation service boundary, after the real metadata and
-            // subtype conversion but before editor initialization.
-            let result = if is_notion {
-                creator
-                    .create_notion_markdown(
-                        &principal,
-                        NewNotionDocument {
-                            metadata,
-                            notion: crate::import_workspace::notion_markdown(
-                                "Body",
-                                &Default::default(),
-                            ),
-                            subtype,
-                        },
-                    )
-                    .await
-            } else {
-                creator
-                    .create_markdown_text(
-                        &principal,
-                        NewMarkdownTextDocument {
-                            metadata,
-                            markdown: "Body".into(),
-                            subtype,
-                        },
-                    )
-                    .await
-            };
-            assert!(result.is_err());
-            let document = probe
-                .document
-                .lock()
-                .unwrap()
-                .take()
-                .expect("creation was called");
-            let permission = match document.initial_link_share {
-                InitialLinkShare::Exact(state) => SharePermissionV2::from_link_share_state(state),
-                InitialLinkShare::EntityDefault => {
-                    SharePermissionV2::new_document_share_permission(
-                        document.file_type,
-                        Some(TeamLinkShareDefault(Some(scope))),
-                    )
-                }
-            };
-            let document = Uuid::now_v7().to_string();
-            let permission_id = Uuid::now_v7().to_string();
-            sqlx::query!(
-                "INSERT INTO \"Document\" (id, name, owner, \"projectId\", \"fileType\", uploaded) VALUES ($1, $2, $3, $4, 'md', true)",
-                &document,
-                kind,
-                owner,
-                folder.to_string()
-            )
-            .execute(pool)
-            .await?;
-            sqlx::query!("INSERT INTO \"SharePermission\" (id, \"linkShare\", \"linkShareAccessLevel\") VALUES ($1, $2, $3::text::\"AccessLevel\")", &permission_id, permission.link_share.map(|scope| scope.to_string()), permission.link_share_access_level.map(|level| level.to_string()))
-                .execute(pool).await?;
-            sqlx::query!("INSERT INTO \"DocumentPermission\" (\"documentId\", \"sharePermissionId\") VALUES ($1, $2)", &document, permission_id).execute(pool).await?;
-            let granted = access
-                .get_document_access(&document, Some(&teammate.0))
-                .await?;
-            if granted != expected {
-                unexpected_access.push(format!(
-                    "{kind} with {scope:?} default and {sharing:?}: {granted:?}"
-                ));
-            }
-        }
-    }
-    assert!(
-        unexpected_access.is_empty(),
-        "unexpected link access: {unexpected_access:?}"
-    );
-    Ok(())
-}
-
-struct LinkFixture {
-    owner: String,
-    teammate: macro_user_id::user_id::MacroUserIdStr<'static>,
-    team: uuid::Uuid,
-    folder: uuid::Uuid,
-}
-
-async fn team_link_folder(pool: &sqlx::PgPool) -> anyhow::Result<LinkFixture> {
-    use entity_access::{
-        domain::{models::AccessLevel, ports::AccessRepository},
-        outbound::PgAccessRepository,
-    };
-    use macro_user_id::user_id::MacroUserIdStr;
-    use uuid::Uuid;
-    // Access source ids are cached by user id across test databases.
+async fn users(pool: &PgPool) -> anyhow::Result<Users> {
     let run = Uuid::now_v7();
-    let owner = format!("macro|import-owner-{run}@example.com");
+    let owner = MacroUserIdStr::parse_from_str(&format!("macro|import-owner-{run}@example.com"))?
+        .into_owned();
     let teammate =
         MacroUserIdStr::parse_from_str(&format!("macro|import-teammate-{run}@example.com"))?
             .into_owned();
-    for user in [owner.as_str(), teammate.as_ref()] {
-        let macro_id = Uuid::now_v7();
-        sqlx::query!("INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)", macro_id, user).execute(pool).await?;
+    for user in [&owner, &teammate] {
+        let id = Uuid::now_v7();
+        sqlx::query!("INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)", id, user.as_ref()).execute(pool).await?;
         sqlx::query!(
-            "INSERT INTO \"User\" (id, email, macro_user_id) VALUES ($1, $1, $2)",
-            user,
-            macro_id
+            r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#,
+            user.as_ref(),
+            id
         )
         .execute(pool)
         .await?;
     }
     let team = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Import Team', $2)",
-        team,
-        owner
-    )
-    .execute(pool)
-    .await?;
-    sqlx::query!("INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $3, 'owner'), ($2, $3, 'member')", owner, teammate.as_ref(), team).execute(pool).await?;
-
-    let folder = Uuid::now_v7();
-    let permission = Uuid::now_v7().to_string();
-    sqlx::query!(
-        r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, 'Imported folder', $2)"#,
-        folder.to_string(),
-        owner
-    )
-    .execute(pool)
-    .await?;
-    sqlx::query!(r#"INSERT INTO "SharePermission" (id, "linkShare", "linkShareAccessLevel") VALUES ($1, 'TEAM', 'edit')"#, &permission).execute(pool).await?;
-    sqlx::query!(
-        r#"INSERT INTO "ProjectPermission" ("projectId", "sharePermissionId") VALUES ($1, $2)"#,
-        folder.to_string(),
-        permission
-    )
-    .execute(pool)
-    .await?;
-    assert_eq!(
-        PgAccessRepository::new(pool.clone())
-            .get_project_access(&folder.to_string(), Some(&teammate.0))
-            .await?,
-        Some(AccessLevel::Edit)
-    );
-    Ok(LinkFixture {
+    sqlx::query!("INSERT INTO team (id, name, owner_id, seat_count, default_link_share) VALUES ($1, 'Import Team', $2, 2, 'TEAM')", team, owner.as_ref()).execute(pool).await?;
+    sqlx::query!("INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $3, 'owner'), ($2, $3, 'member')", owner.as_ref(), teammate.as_ref(), team).execute(pool).await?;
+    Ok(Users {
         owner,
         teammate,
         team,
-        folder,
     })
 }
 
 #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
-async fn team_folder_link_does_not_open_an_owner_only_child(
-    pool: sqlx::PgPool,
+async fn personal_imports_deny_teammate_link_access(pool: PgPool) -> anyhow::Result<()> {
+    imported_access(&pool, ImportVisibility::Personal, None).await
+}
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn shared_imports_retain_teammate_link_access(pool: PgPool) -> anyhow::Result<()> {
+    imported_access(&pool, ImportVisibility::Shared, Some(AccessLevel::Edit)).await
+}
+
+async fn imported_access(
+    pool: &PgPool,
+    visibility: ImportVisibility,
+    expected: Option<AccessLevel>,
 ) -> anyhow::Result<()> {
-    use entity_access::{domain::ports::AccessRepository, outbound::PgAccessRepository};
-    let LinkFixture {
-        owner,
-        teammate,
-        folder,
-        ..
-    } = team_link_folder(&pool).await?;
-    let document = uuid::Uuid::now_v7().to_string();
-    let permission = uuid::Uuid::now_v7().to_string();
-    sqlx::query!(r#"INSERT INTO "Document" (id, name, owner, "fileType", uploaded, "projectId") VALUES ($1, 'Personal child', $3, 'md', true, $2)"#, &document, folder.to_string(), owner).execute(&pool).await?;
-    sqlx::query!(
-        r#"INSERT INTO "SharePermission" (id) VALUES ($1)"#,
-        &permission
-    )
-    .execute(&pool)
-    .await?;
-    sqlx::query!(
-        r#"INSERT INTO "DocumentPermission" ("documentId", "sharePermissionId") VALUES ($1, $2)"#,
-        &document,
-        permission
-    )
-    .execute(&pool)
-    .await?;
+    let users = users(pool).await?;
+    let host = host::host(pool).await;
+    let folder = host
+        .creator
+        .create_folder(&users.owner, "Imported", None, ImportVisibility::Personal)
+        .await?;
+    let access = PgAccessRepository::new(pool.clone());
+    for scope in ["TEAM", "PUBLIC"] {
+        sqlx::query!(
+            "UPDATE team SET default_link_share = $2 WHERE id = $1",
+            users.team,
+            scope
+        )
+        .execute(pool)
+        .await?;
+        for kind in [
+            "page",
+            "row body",
+            "Notion task",
+            "Linear task",
+            "Jira task",
+        ] {
+            let id = Uuid::now_v7();
+            let document = match kind {
+                "page" | "row body" => {
+                    host.creator
+                        .create_document(
+                            &users.owner,
+                            id,
+                            kind,
+                            "Body",
+                            &Default::default(),
+                            &Default::default(),
+                            Some(folder),
+                            None,
+                            visibility,
+                        )
+                        .await?
+                }
+                "Notion task" => {
+                    host.creator
+                        .create_task(
+                            &users.owner,
+                            id,
+                            kind,
+                            "Body",
+                            &Default::default(),
+                            &Default::default(),
+                            Some(folder),
+                            None,
+                            visibility,
+                        )
+                        .await?
+                }
+                _ => {
+                    host.creator
+                        .create_tracker_task(
+                            &users.owner,
+                            id,
+                            kind,
+                            "Body",
+                            &Default::default(),
+                            visibility,
+                        )
+                        .await?
+                }
+            };
+            assert_eq!(
+                access
+                    .get_document_access(&document, Some(&users.teammate.0))
+                    .await?,
+                expected,
+                "{kind}, {scope}, {visibility:?}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn team_folder_link_does_not_open_an_owner_only_child(pool: PgPool) -> anyhow::Result<()> {
+    let users = users(&pool).await?;
+    let host = host::host(&pool).await;
+    let folder = host
+        .creator
+        .create_folder(
+            &users.owner,
+            "Link shared folder",
+            None,
+            ImportVisibility::Shared,
+        )
+        .await?;
+    assert!(
+        !host
+            .creator
+            .folder_has_explicit_grant(&users.owner, folder)
+            .await?
+    );
+    let access = PgAccessRepository::new(pool);
     assert_eq!(
-        PgAccessRepository::new(pool)
-            .get_document_access(&document, Some(&teammate.0))
+        access
+            .get_project_access(&folder.to_string(), Some(&users.teammate.0))
+            .await?,
+        Some(AccessLevel::View)
+    );
+    let private_folder = host
+        .creator
+        .create_folder(
+            &users.owner,
+            "Personal child folder",
+            Some(folder),
+            ImportVisibility::Personal,
+        )
+        .await?;
+    assert_eq!(
+        access
+            .get_project_access(&private_folder.to_string(), Some(&users.teammate.0))
             .await?,
         None
     );
+    let document = host
+        .creator
+        .create_document(
+            &users.owner,
+            Uuid::now_v7(),
+            "Personal child",
+            "Body",
+            &Default::default(),
+            &Default::default(),
+            Some(folder),
+            None,
+            ImportVisibility::Personal,
+        )
+        .await?;
+    assert_eq!(
+        access
+            .get_document_access(&document, Some(&users.teammate.0))
+            .await?,
+        None
+    );
+    Ok(())
+}
+
+struct NoConnector;
+impl mcp_select::ConnectorSelect for NoConnector {
+    async fn user_toolset(&self, _: &MacroUserIdStr<'static>) -> mcp_select::UserMcpTools {
+        unreachable!()
+    }
+    async fn connector_toolset(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: mcp_select::ConnectorRef<'_>,
+    ) -> anyhow::Result<Option<mcp_select::UserMcpTools>> {
+        unreachable!()
+    }
+    async fn connector_connected(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: mcp_select::ConnectorRef<'_>,
+    ) -> anyhow::Result<bool> {
+        unreachable!()
+    }
+}
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn a_new_personal_child_of_a_previously_shared_folder_stays_owner_only(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let users = users(&pool).await?;
+    let host = host::host(&pool).await;
+    let creator = Arc::new(host.creator);
+    let repo = import::outbound::pg_import_repo::PgImportRepo::new(pool.clone());
+    let service = import::domain::service::ImportServiceImpl::new(
+        repo.clone(),
+        Arc::new(NoConnector),
+        creator.clone(),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    );
+    // First run explicitly shares the page folder.
+    repo.start_run(&users.owner, ImportSource::Notion, &[])
+        .await?;
+    let shared = creator
+        .create_folder(&users.owner, "Team wiki", None, ImportVisibility::Shared)
+        .await?;
+    creator
+        .share_with_team(&users.owner, SharedEntity::Folder(shared))
+        .await?;
+    assert!(
+        creator
+            .folder_has_team_edit_grant(&users.owner, shared)
+            .await?
+    );
+    let nested = creator
+        .create_folder(
+            &users.owner,
+            "Notes",
+            Some(shared),
+            ImportVisibility::Personal,
+        )
+        .await?;
+    assert!(
+        creator
+            .folder_has_explicit_grant(&users.owner, nested)
+            .await?
+    );
+    repo.finish_run(
+        &users.owner,
+        ImportSource::Notion,
+        RunStatus::Completed,
+        None,
+    )
+    .await?;
+    // A later run places a new personal page below that source page.
+    repo.start_run(&users.owner, ImportSource::Notion, &[RunStatus::Completed])
+        .await?;
+    for (original, foreign_id, path) in [
+        (
+            shared,
+            "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            vec!["Team wiki".into()],
+        ),
+        (
+            nested,
+            "ffffffffffffffffffffffffffffffff",
+            vec!["Team wiki".into(), "Notes".into()],
+        ),
+    ] {
+        let row = repo
+            .upsert_staged(
+                &users.owner,
+                ImportSource::Notion,
+                import::domain::models::ImportKind::Page,
+                import::domain::models::Initiator::Manual,
+                foreign_id,
+                &serde_json::json!({
+                    "title": "Personal child", "url": null, "summary": null,
+                    "plan": {"decision":"copy", "shared":false, "shareable":true}
+                }),
+            )
+            .await?
+            .expect("new personal page");
+        let id = Uuid::now_v7();
+        let destination = service
+            .personal_item_folder(&users.owner, row.id, original, &path)
+            .await?;
+        let document = creator
+            .create_document(
+                &users.owner,
+                id,
+                "Personal child",
+                "Body",
+                &Default::default(),
+                &Default::default(),
+                Some(destination),
+                None,
+                ImportVisibility::Personal,
+            )
+            .await?;
+        assert_eq!(
+            PgAccessRepository::new(pool.clone())
+                .get_document_access(&document, Some(&users.teammate.0))
+                .await?,
+            None
+        );
+        assert_ne!(destination, original);
+        let saved = repo.get(&users.owner, row.id).await?.expect("saved import");
+        assert_eq!(saved.metadata["personalFolderId"], destination.to_string());
+    }
+    use import::domain::service::NotionWorkspaceImporter;
+    let report = service.notion_import_report(&users.owner).await?;
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Personal child")
+                && warning.contains("Notion (personal)"))
+    );
+
+    assert!(
+        creator
+            .folder_has_explicit_grant(&users.owner, shared)
+            .await?
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn the_personal_mirror_root_and_paths_survive_two_runs(pool: PgPool) -> anyhow::Result<()> {
+    let users = users(&pool).await?;
+    let host = host::host(&pool).await;
+    let creator = Arc::new(host.creator);
+    let repo = import::outbound::pg_import_repo::PgImportRepo::new(pool);
+    let service = import::domain::service::ImportServiceImpl::new(
+        repo.clone(),
+        Arc::new(NoConnector),
+        creator.clone(),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    );
+    repo.start_run(&users.owner, ImportSource::Notion, &[])
+        .await?;
+    let path = vec!["Team wiki".into(), "Notes".into()];
+    let first = service.personal_mirror_folder(&users.owner, &path).await?;
+    let root = repo.personal_root_folder(&users.owner).await?;
+    repo.finish_run(
+        &users.owner,
+        ImportSource::Notion,
+        RunStatus::Completed,
+        None,
+    )
+    .await?;
+    repo.start_run(&users.owner, ImportSource::Notion, &[RunStatus::Completed])
+        .await?;
+    assert_eq!(
+        service.personal_mirror_folder(&users.owner, &path).await?,
+        first
+    );
+    assert_eq!(repo.personal_root_folder(&users.owner).await?, root);
+    // A cached branch shared after the import is replaced without changing it.
+    let shared_prefix = repo
+        .personal_folder(&users.owner, &path[..1])
+        .await?
+        .unwrap();
+    creator
+        .share_with_team(&users.owner, SharedEntity::Folder(shared_prefix))
+        .await?;
+    let replacement = service.personal_mirror_folder(&users.owner, &path).await?;
+    assert_ne!(replacement, first);
+    assert_eq!(repo.personal_root_folder(&users.owner).await?, root);
+    assert!(
+        !creator
+            .folder_has_explicit_grant(&users.owner, replacement)
+            .await?
+    );
+    assert!(
+        creator
+            .folder_has_explicit_grant(&users.owner, first)
+            .await?
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn teamless_shared_imports_keep_markdown_defaults(pool: PgPool) -> anyhow::Result<()> {
+    let users = users(&pool).await?;
+    sqlx::query!(
+        "DELETE FROM team_user WHERE user_id = $1",
+        users.owner.as_ref()
+    )
+    .execute(&pool)
+    .await?;
+    let host = host::host(&pool).await;
+    let access = PgAccessRepository::new(pool);
+    for visibility in [ImportVisibility::Shared, ImportVisibility::Personal] {
+        for kind in ["page", "Notion task", "tracker task"] {
+            let id = Uuid::now_v7();
+            let document = match kind {
+                "page" => {
+                    host.creator
+                        .create_document(
+                            &users.owner,
+                            id,
+                            kind,
+                            "Body",
+                            &Default::default(),
+                            &Default::default(),
+                            None,
+                            None,
+                            visibility,
+                        )
+                        .await?
+                }
+                "Notion task" => {
+                    host.creator
+                        .create_task(
+                            &users.owner,
+                            id,
+                            kind,
+                            "Body",
+                            &Default::default(),
+                            &Default::default(),
+                            None,
+                            None,
+                            visibility,
+                        )
+                        .await?
+                }
+                _ => {
+                    host.creator
+                        .create_tracker_task(
+                            &users.owner,
+                            id,
+                            kind,
+                            "Body",
+                            &Default::default(),
+                            visibility,
+                        )
+                        .await?
+                }
+            };
+            let expected = match visibility {
+                ImportVisibility::Shared => Some(AccessLevel::Edit),
+                ImportVisibility::Personal => None,
+            };
+            assert_eq!(
+                access
+                    .get_document_access(&document, Some(&users.teammate.0))
+                    .await?,
+                expected,
+                "{kind}, {visibility:?}"
+            );
+        }
+    }
     Ok(())
 }

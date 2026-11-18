@@ -671,7 +671,7 @@ async fn replayed_import_reuses_only_the_same_owners_project() {
             request(),
             attribution(),
             initiative_id(),
-            None,
+            models_permissions::share_permission::InitialLinkShare::EntityDefault,
         )
         .await
         .unwrap();
@@ -682,7 +682,7 @@ async fn replayed_import_reuses_only_the_same_owners_project() {
             request(),
             activity::Attribution::direct(activity::Actor::new_from_user(user(OTHER))),
             initiative_id(),
-            None,
+            models_permissions::share_permission::InitialLinkShare::EntityDefault,
         )
         .await;
     assert!(matches!(other, Err(InitiativeError::Unauthorized)));
@@ -708,7 +708,7 @@ async fn personal_imported_project_ignores_team_link_default() {
             },
             activity::Attribution::direct(activity::Actor::new_from_user(user(OWNER))),
             initiative_id(),
-            Some(LinkShareState::Off),
+            models_permissions::share_permission::InitialLinkShare::Exact(LinkShareState::Off),
         )
         .await
         .unwrap();

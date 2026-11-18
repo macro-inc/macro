@@ -30,6 +30,13 @@ Every other app opens Pipedream's Connect UI inside the dialog. A connected row
   **Open full review** uses the existing full-height sheet. Approve on the card,
   or say yes and let the agent submit it with `DecideReview`; planning must be ready.
   Stop affects the selected source only, and completed copies stay in Macro.
+Personal choices create owner-only copies. For Notion, when an old destination
+folder was explicitly shared, personal copies go into the matching path under
+**Notion (personal)**. The import report lists each relocation; the old shared
+folder stays as it is. A later shared plan uses a separate shared folder when
+reusing the old folder would expose personal contents, and the report explains
+that separation.
+
 - Files also offers **Upload files** and **Upload a folder** (Drive's own
   uploads), and Customers offers **Upload a CSV** (the existing CSV import).
   Each closes the dialog first.

@@ -103,13 +103,14 @@ pub enum WrittenKind {
 
 /// One thing a write created: `kind` for ledger row `import_id` (and, for
 /// per-row kinds, the Notion `object` it stands for) is Macro's `macro_id`.
+/// Structural folders may also name a visibility branch in `object`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WrittenObject {
     /// The ledger row it was written for.
     pub import_id: Uuid,
     /// What it is.
     pub kind: WrittenKind,
-    /// The Notion row or property it is for; empty for the row's own object.
+    /// The Notion row/property or folder visibility branch; empty for the row's own object.
     pub object: String,
     /// The Macro id.
     pub macro_id: Uuid,
