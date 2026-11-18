@@ -30,6 +30,7 @@ use super::{
         ClearAction, ClearCursor, ClearPass, ClearRun, InboxChange, InboxClearRequest,
         InboxDoneOutcome, InboxEntry, InboxNotificationDoneOutcome, InboxPage, InboxQuery,
         InboxRow, InboxRowId, InboxRowTarget, InboxRowType, InboxScope, StartedClear,
+        UNREAD_ROWS_COUNTED, UnreadRows,
     },
     policy,
     ports::ClearUpdates,
@@ -38,6 +39,7 @@ use super::{
 
 #[cfg(test)]
 mod test;
+mod unread;
 
 /// The notification inbox's use cases.
 pub trait NotificationInboxService: Send + Sync + 'static {
@@ -152,6 +154,25 @@ pub trait NotificationInboxService: Send + Sync + 'static {
         scope: InboxScope,
         rows: Vec<InboxRowId>,
     ) -> impl Future<Output = Result<Vec<InboxChange<Self::Entity>>, FeedError>> + Send;
+
+    /// Count the unread rows of the viewer's whole inbox, by kind, without
+    /// paging it: only groups that may hold an unread row are read, and an
+    /// entity type's groups stop being read once they hold
+    /// [`UNREAD_ROWS_COUNTED`] unread rows.
+    fn unread_rows(
+        &self,
+        viewer: FeedViewer,
+    ) -> impl Future<Output = Result<UnreadRows, FeedError>> + Send;
+
+    /// Bring `unread` up to date after `groups` changed, reading those
+    /// groups alone. Everything is counted again only when a count that had
+    /// stopped at [`UNREAD_ROWS_COUNTED`] falls back under it.
+    fn recount_unread_rows(
+        &self,
+        viewer: FeedViewer,
+        unread: UnreadRows,
+        groups: Vec<FeedKey>,
+    ) -> impl Future<Output = Result<UnreadRows, FeedError>> + Send;
 }
 
 /// The notification inbox service over the shared feed layer.
@@ -1054,5 +1075,38 @@ where
             .await?;
         tracing::Span::current().record("notifications", changed.len());
         Ok(self.recompute_groups(&viewer, &scope, groups).await?)
+    }
+
+    #[tracing::instrument(
+        name = "notification_inbox.unread_rows",
+        skip_all,
+        fields(
+            user = %viewer.user,
+            groups = tracing::field::Empty,
+            rows = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn unread_rows(&self, viewer: FeedViewer) -> Result<UnreadRows, FeedError> {
+        let unread = self.count_unread(&viewer).await?;
+        let span = tracing::Span::current();
+        span.record("groups", unread.groups.len());
+        span.record("rows", unread.groups.values().map(Vec::len).sum::<usize>());
+        Ok(unread)
+    }
+
+    #[tracing::instrument(
+        name = "notification_inbox.recount_unread_rows",
+        skip_all,
+        fields(user = %viewer.user, groups = groups.len()),
+        err
+    )]
+    async fn recount_unread_rows(
+        &self,
+        viewer: FeedViewer,
+        unread: UnreadRows,
+        groups: Vec<FeedKey>,
+    ) -> Result<UnreadRows, FeedError> {
+        Ok(self.recount_unread(&viewer, unread, groups).await?)
     }
 }

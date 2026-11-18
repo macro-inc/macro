@@ -18,6 +18,7 @@ use super::*;
 use crate::domain::models::ClearStatus;
 
 mod fake_clears;
+mod unread_rows;
 
 const CHANNEL: u128 = 0xC0;
 const ROOT: u128 = 0x7A;

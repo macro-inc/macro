@@ -3,12 +3,12 @@
 use std::collections::HashMap;
 
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
+use model_entity::{Entity, EntityType};
 use rootcause::Report;
 use uuid::Uuid;
 
 use super::models::{
-    CandidateKeying, CandidatePage, CandidateRequest, FeedNotification, FeedTrigger,
+    CandidateKeying, CandidatePage, CandidateRequest, FeedNotification, FeedTrigger, FeedViewer,
 };
 
 /// Lists hydrated, authorized candidates in feed order. A candidate the
@@ -23,6 +23,18 @@ pub trait CandidateSource: Send + Sync + 'static {
         &self,
         request: CandidateRequest,
     ) -> impl Future<Output = Result<CandidatePage<Self::Entity>, Report>> + Send;
+
+    /// The entities that may hold something unread for the viewer: up to
+    /// `limit` of each of `types` with an unseen notification, and the email
+    /// threads with unread mail among the viewer's `limit` newest pending
+    /// mail notifications. Neither authorized nor filtered: a feed reads
+    /// them through [`Self::page`], restricted to them, before trusting one.
+    fn unread_keys(
+        &self,
+        viewer: &FeedViewer,
+        types: Vec<EntityType>,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, Report>> + Send;
 }
 
 /// The state a viewer's notifications move to.
