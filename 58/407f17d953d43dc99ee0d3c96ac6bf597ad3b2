@@ -1,0 +1,23 @@
+apps/web/src/features/meetings/caller-name.test.ts
+  s_661bd9a2a08729::t_190a82a473309b 5-6,9-28,33,38-42,44-54,57-60,62,66
+apps/web/src/features/meetings/caller-name.ts
+  s_661bd9a2a08729::t_c4edb291d16911 1,3-6,9-13,16-22
+apps/web/src/features/meetings/views/incoming-call-notifications.tsx
+  s_661bd9a2a08729::t_224c4e530ea3cd 3,26-43,51-58,69,102,109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "58407f17d953d43dc99ee0d3c96ac6bf597ad3b2",
+  "prompts": {},
+  "sessions": {
+    "s_661bd9a2a08729": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d2d88736-ecda-463f-806d-69cacb50e672",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
