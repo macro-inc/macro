@@ -227,6 +227,38 @@ async fn row_types_narrow_the_rows_and_drop_groups_without_any() {
 }
 
 #[tokio::test]
+async fn a_thread_is_listed_under_each_kind_it_shows() {
+    let listed = |page: InboxPage<&'static str>| -> Vec<InboxRowId> {
+        page.entries
+            .iter()
+            .flat_map(|entry| &entry.rows)
+            .map(|row| row.id.clone())
+            .collect()
+    };
+
+    // The mention thread has a reply, so replies list it too.
+    let with_reply = inbox();
+    let replies = with_reply
+        .service
+        .page(viewer(), query(vec![InboxRowType::ChannelThread]))
+        .await
+        .unwrap();
+    assert_eq!(listed(replies), vec![row(&channel(), &thread_slot())]);
+
+    // A reply that mentions the viewer is a thread mentions list too.
+    let reply_mention = harness(
+        vec![candidate("channel", channel().into_entity(), Some(9), None)],
+        vec![channel_mention(1, CHANNEL, 0x101, Some(ROOT), 9)],
+    );
+    let mentions = reply_mention
+        .service
+        .page(viewer(), query(vec![InboxRowType::ChannelMention]))
+        .await
+        .unwrap();
+    assert_eq!(listed(mentions), vec![row(&channel(), &thread_slot())]);
+}
+
+#[tokio::test]
 async fn done_acknowledges_what_a_row_shows_and_hides_up_to_its_revision() {
     let harness = inbox();
     let thread = row(&channel(), &thread_slot());

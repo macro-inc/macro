@@ -3,6 +3,7 @@ use notification::domain::models::NotificationState;
 use serde_json::{Value, json};
 
 use super::*;
+use crate::domain::models::InboxScope;
 
 const CHANNEL: u128 = 0xC0;
 const ROOT: u128 = 0x7A;
@@ -171,6 +172,98 @@ fn a_mention_in_a_reply_is_a_thread_row() {
         ])),
         vec![(InboxRowType::ChannelThread, vec![uuid(1)], vec![uuid(2)])]
     );
+}
+
+fn scope(row_types: &[InboxRowType]) -> InboxScope {
+    InboxScope {
+        row_types: row_types.to_vec(),
+        unread_only: false,
+    }
+}
+
+/// How many of `rows` each scope lists.
+fn listed_in(rows: &[InboxRow], scopes: &[&[InboxRowType]]) -> Vec<usize> {
+    scopes
+        .iter()
+        .map(|row_types| {
+            let scope = scope(row_types);
+            rows.iter().filter(|row| scope.admits(row)).count()
+        })
+        .collect()
+}
+
+const MENTIONS: &[InboxRowType] = &[
+    InboxRowType::ChannelMention,
+    InboxRowType::DiscussionMention,
+];
+const REPLIES: &[InboxRowType] = &[InboxRowType::ChannelThread, InboxRowType::DiscussionThread];
+const COMMENTS: &[InboxRowType] = &[InboxRowType::DiscussionMessages];
+const MENTIONS_AND_REPLIES: &[InboxRowType] = &[
+    InboxRowType::ChannelMention,
+    InboxRowType::DiscussionMention,
+    InboxRowType::ChannelThread,
+    InboxRowType::DiscussionThread,
+];
+
+#[test]
+fn a_reply_that_mentions_you_is_listed_under_mentions_and_replies() {
+    let listed = channel_rows(&[
+        channel_reply(1, CHANNEL, ROOT, 0x100, 1),
+        channel_mention(2, CHANNEL, 0x101, Some(ROOT), 2),
+    ]);
+    assert_eq!(listed[0].row_type, InboxRowType::ChannelThread);
+    assert_eq!(listed[0].also_listed_as, vec![InboxRowType::ChannelMention]);
+    assert_eq!(
+        listed_in(&listed, &[MENTIONS, REPLIES, MENTIONS_AND_REPLIES, &[]]),
+        vec![1, 1, 1, 1]
+    );
+}
+
+#[test]
+fn a_thread_without_mentions_is_not_listed_under_mentions() {
+    let listed = channel_rows(&[channel_reply(1, CHANNEL, ROOT, 0x100, 1)]);
+    assert!(listed[0].also_listed_as.is_empty());
+    assert_eq!(listed_in(&listed, &[MENTIONS, REPLIES]), vec![0, 1]);
+}
+
+#[test]
+fn a_mention_with_replies_is_listed_under_replies_too() {
+    let listed = channel_rows(&[
+        channel_mention(1, CHANNEL, ROOT, None, 1),
+        channel_reply(2, CHANNEL, ROOT, 0x101, 2),
+    ]);
+    assert_eq!(listed[0].row_type, InboxRowType::ChannelMention);
+    assert_eq!(listed[0].also_listed_as, vec![InboxRowType::ChannelThread]);
+    assert_eq!(
+        listed_in(&listed, &[MENTIONS, REPLIES, MENTIONS_AND_REPLIES]),
+        vec![1, 1, 1]
+    );
+
+    // A reaction to the mention is not a reply.
+    let reacted = channel_rows(&[
+        channel_mention(1, CHANNEL, ROOT, None, 1),
+        channel_reaction(2, CHANNEL, ROOT, None, 2),
+    ]);
+    assert!(reacted[0].also_listed_as.is_empty());
+    assert_eq!(listed_in(&reacted, &[MENTIONS, REPLIES]), vec![1, 0]);
+}
+
+#[test]
+fn comments_that_mention_you_are_listed_under_comments_too() {
+    let doc = group(EntityType::Document, DOC);
+    let listed = rows_of(
+        &doc,
+        &[
+            doc_comment_mention(1, DOC, 0xA0, 0xA0, 1),
+            doc_reply(2, DOC, 0xA1, 0xA0, 2),
+        ],
+    );
+    assert_eq!(listed[0].row_type, InboxRowType::DiscussionMention);
+    assert_eq!(
+        listed[0].also_listed_as,
+        vec![InboxRowType::DiscussionMessages]
+    );
+    assert_eq!(listed_in(&listed, &[MENTIONS, COMMENTS]), vec![1, 1]);
 }
 
 #[test]
