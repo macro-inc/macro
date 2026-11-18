@@ -99,7 +99,8 @@ const loggedShapes = new Set<string>();
 export async function traceSoupRestFallback<T>(
   fallback: SoupRestFallback,
   kind: SoupRestFallbackKind,
-  read: () => Promise<T>
+  read: () => Promise<T>,
+  signal?: AbortSignal
 ): Promise<T> {
   const attributes = {
     'soup.fallback.reason': fallback.reason,
@@ -118,11 +119,19 @@ export async function traceSoupRestFallback<T>(
       try {
         return await read();
       } catch (error) {
-        span.error(error);
+        // A cancelled read (a newer query or a mutation superseded it) is not a
+        // failure of the fallback.
+        if (signal?.aborted || isAbortError(error))
+          span.setAttr('soup.fallback.cancelled', true);
+        else span.error(error);
         throw error;
       }
     }
   );
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
 }
 
 /** Test seam: forget which shapes were already logged this session. */

@@ -137,7 +137,8 @@ async function fetchRestSoupAstItemsPage(
   return await traceSoupRestFallback(
     fallback,
     args.groupBy ? 'grouped' : 'flat',
-    read
+    read,
+    requestSignal
   );
 }
 

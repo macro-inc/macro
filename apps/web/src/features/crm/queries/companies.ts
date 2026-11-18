@@ -147,6 +147,18 @@ function wipeCompanyEmailCache(
 }
 
 /**
+ * Shows a created company in mounted listings. The create returns no Soup row
+ * for the GraphQL cache, so its lists (Quick Access, mention and participant
+ * suggestions) read again alongside the REST ones.
+ */
+async function refreshCompanyListings(deps: CrmRecordDependencies) {
+  await Promise.all([
+    deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+    refreshActiveGraphqlSoupQueries({ where: listCanIncludeCrm }),
+  ]);
+}
+
+/**
  * Manually creates a CRM company via `POST /crm/companies` (a team-scoped
  * display name + optional domain). Seeds the company detail cache from the
  * response and invalidates soup so the new company appears in the
@@ -169,7 +181,7 @@ export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
       onSuccess: (data) => {
         analytics.track('crm_company_created', { companyId: data.id });
         deps.client.setQueryData(crmKeys.company(data.id).queryKey, data);
-        return deps.client.invalidateQueries({ queryKey: soupKeys._def });
+        return refreshCompanyListings(deps);
       },
     }),
     () => deps.client
@@ -198,7 +210,7 @@ export function createCompanyImporter(
         return 'exists';
       throw new ThrownResultError(created.error);
     },
-    refresh: () => deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+    refresh: () => refreshCompanyListings(deps),
   };
 }
 

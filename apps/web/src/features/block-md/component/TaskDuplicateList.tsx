@@ -75,7 +75,9 @@ function SimilarTasksInner(props: {
   // they render identically to the soup task list.
   const soup = useSoupAstItemsQuery(
     () => taskDuplicatesArgs(ids()),
-    () => ({ enabled: ids().length > 0 })
+    // Keep the shown matches while the next ids load, so the section never
+    // collapses between keystrokes.
+    () => ({ enabled: ids().length > 0, keepPreviousData: true })
   );
 
   // Keep the similarity ranking order.
