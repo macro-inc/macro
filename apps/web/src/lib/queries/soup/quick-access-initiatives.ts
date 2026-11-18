@@ -6,6 +6,7 @@ import {
 import type { InitiativeEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import {
+  QUICK_ACCESS_FEED_OPTIONS,
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
@@ -31,7 +32,10 @@ export const QUICK_ACCESS_INITIATIVES_ARGS: SoupAstItemsQueryArgs = {
  * other entity.
  */
 export function useQuickAccessInitiativesQuery() {
-  const query = useSoupAstItemsQuery(() => QUICK_ACCESS_INITIATIVES_ARGS);
+  const query = useSoupAstItemsQuery(
+    () => QUICK_ACCESS_INITIATIVES_ARGS,
+    () => QUICK_ACCESS_FEED_OPTIONS
+  );
 
   const initiatives = createMemo<InitiativeEntity[]>(() =>
     queryReadyGate(query)

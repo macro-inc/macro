@@ -268,7 +268,7 @@ export function useMarkThreadAsUnreadMutation(
         getUnmaintainedGraphqlSoupRevalidations()
       );
       if (disposition === 'committed' && !graphqlCacheEnabled())
-        await refreshActiveGraphqlSoupQueries();
+        await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
     },
     ...withCallbacks<void, Error, MarkThreadAsUnreadParams>(
       {

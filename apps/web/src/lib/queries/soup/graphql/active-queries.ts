@@ -16,6 +16,8 @@ type ActiveGraphqlSoupQuery = {
   body?: () => unknown;
   /** The normalized cache keeps this list's rows and membership current. */
   cacheMaintained?: () => boolean;
+  /** The list never shows, filters or sorts by notification or read state. */
+  ignoresNotifications?: () => boolean;
 };
 
 const activeQueries = new Set<ActiveGraphqlSoupQuery>();
@@ -125,11 +127,15 @@ export async function refreshActiveGraphqlSoupQueries(
     where?: (body: unknown) => boolean;
     /** Skip lists the cache keeps current: the write already updated them. */
     unmaintainedOnly?: boolean;
+    /** The write changed only notification or read state. */
+    notificationsOnly?: boolean;
   } = {}
 ): Promise<void> {
   const applicable = (query: ActiveGraphqlSoupQuery) => {
     if (!query.isEnabled()) return false;
     if (options.unmaintainedOnly && query.cacheMaintained?.()) return false;
+    if (options.notificationsOnly && query.ignoresNotifications?.())
+      return false;
     if (options.where && !options.where(query.body?.())) return false;
     if (!query.target) return true;
     const target = query.target();

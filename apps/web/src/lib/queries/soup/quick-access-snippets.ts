@@ -6,6 +6,7 @@ import {
 import { isSnippetEntity, type SnippetEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import {
+  QUICK_ACCESS_FEED_OPTIONS,
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
@@ -29,7 +30,10 @@ export const QUICK_ACCESS_SNIPPETS_ARGS: SoupAstItemsQueryArgs = {
  * never opened.
  */
 export function useQuickAccessSnippetsQuery() {
-  const query = useSoupAstItemsQuery(() => QUICK_ACCESS_SNIPPETS_ARGS);
+  const query = useSoupAstItemsQuery(
+    () => QUICK_ACCESS_SNIPPETS_ARGS,
+    () => QUICK_ACCESS_FEED_OPTIONS
+  );
 
   const snippets = createMemo<SnippetEntity[]>(() =>
     queryReadyGate(query) ? query.data.entities.filter(isSnippetEntity) : []

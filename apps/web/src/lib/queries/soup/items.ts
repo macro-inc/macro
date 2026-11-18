@@ -86,7 +86,17 @@ interface SoupItemsQueryOptions {
   showSupportedForeignEntities?: boolean;
   /** Resets view-owned GraphQL state before a mutation-driven network refresh. */
   onBeforeGraphqlRefresh?: () => void;
+  /**
+   * The reader neither shows nor filters or sorts by notification or read
+   * state, so writes that change only that state skip reading it again.
+   */
+  ignoresNotifications?: boolean;
 }
+
+/** Quick Access and menu feeds list entities by name; they show no unread state. */
+export const QUICK_ACCESS_FEED_OPTIONS: SoupItemsQueryOptions = {
+  ignoresNotifications: true,
+};
 
 /**
  * Cached page for `useSoupAstItemsQuery`. Discriminated by `kind`:
@@ -429,6 +439,7 @@ export function useSoupAstItemsQuery(
       }),
       // Grouped lists don't report it yet, so writes still read them again.
       cacheMaintained: () => activeGraphqlQuery().cacheMaintained?.() ?? false,
+      ignoresNotifications: () => options?.().ignoresNotifications ?? false,
     })
   );
 

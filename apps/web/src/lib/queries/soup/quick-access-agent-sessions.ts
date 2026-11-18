@@ -7,7 +7,11 @@ import type { AgentSessionEntity } from '@entity';
 import { useBotsQuery } from '../bots/bots';
 import { firstPartyBotName } from '../bots/first-party-bot-name';
 import { queryReadyGate } from '../gate';
-import { type SoupAstItemsQueryArgs, useSoupAstItemsQuery } from './items';
+import {
+  QUICK_ACCESS_FEED_OPTIONS,
+  type SoupAstItemsQueryArgs,
+  useSoupAstItemsQuery,
+} from './items';
 
 /** Agent sessions only, most recently updated first. */
 export const QUICK_ACCESS_AGENT_SESSIONS_ARGS: SoupAstItemsQueryArgs = {
@@ -21,7 +25,10 @@ export const QUICK_ACCESS_AGENT_SESSIONS_ARGS: SoupAstItemsQueryArgs = {
 
 /** Shared discovery feed; starts with Quick Access, before a mention menu opens. */
 export function useQuickAccessAgentSessionsQuery() {
-  const query = useSoupAstItemsQuery(() => QUICK_ACCESS_AGENT_SESSIONS_ARGS);
+  const query = useSoupAstItemsQuery(
+    () => QUICK_ACCESS_AGENT_SESSIONS_ARGS,
+    () => QUICK_ACCESS_FEED_OPTIONS
+  );
   const botsQuery = useBotsQuery();
   // Optional persona enrichment never holds up the session list or other entities.
   const sessions = (): AgentSessionEntity[] => {

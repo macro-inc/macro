@@ -6,6 +6,7 @@ import {
 import { isSkillEntity, type SkillEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import {
+  QUICK_ACCESS_FEED_OPTIONS,
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
@@ -29,7 +30,10 @@ export const QUICK_ACCESS_SKILLS_ARGS: SoupAstItemsQueryArgs = {
  * never opened.
  */
 export function useQuickAccessSkillsQuery() {
-  const query = useSoupAstItemsQuery(() => QUICK_ACCESS_SKILLS_ARGS);
+  const query = useSoupAstItemsQuery(
+    () => QUICK_ACCESS_SKILLS_ARGS,
+    () => QUICK_ACCESS_FEED_OPTIONS
+  );
 
   const skills = createMemo<SkillEntity[]>(() =>
     queryReadyGate(query) ? query.data.entities.filter(isSkillEntity) : []

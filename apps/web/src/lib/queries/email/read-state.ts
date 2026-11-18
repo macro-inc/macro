@@ -23,7 +23,7 @@ export async function markEmailThreadSeen(
       getUnmaintainedGraphqlSoupRevalidations()
     );
     if (disposition === 'committed' && !graphqlCacheEnabled()) {
-      await refreshActiveGraphqlSoupQueries();
+      await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
     }
   } finally {
     await invalidateEmailFolderQueries();
