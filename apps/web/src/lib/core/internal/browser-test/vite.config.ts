@@ -96,6 +96,15 @@ export default defineConfig({
         )
           return `${directory}/soup-filter-adapters.tsx`;
         if (
+          importer?.endsWith('/queries/contacts/recipient-source.ts') &&
+          [
+            '@core/context/channels',
+            '@core/user/inboxOnly',
+            './use-directory',
+          ].includes(source)
+        )
+          return `${directory}/share-recipient-adapters.ts`;
+        if (
           importer?.endsWith('/queries/contacts/use-directory.ts') &&
           [
             '../auth/use-query-account',
