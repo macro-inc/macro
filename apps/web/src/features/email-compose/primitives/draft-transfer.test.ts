@@ -280,15 +280,11 @@ it('aborts a refused move when the write is still running after the wait', async
     });
 
     const moving = outlookDraftTransfer().move(outlook, 'outlook-source');
-    const aborted = expect(moving).rejects.toBeInstanceOf(
-      DraftTransferAborted
-    );
+    const aborted = expect(moving).rejects.toBeInstanceOf(DraftTransferAborted);
     await vi.advanceTimersByTimeAsync(31_000);
     await aborted;
     expect(requestsTo('/drafts/draft-1/transfer')).toHaveLength(1);
-    expect(requestsTo('/drafts/draft-1/operation').length).toBeGreaterThan(
-      20
-    );
+    expect(requestsTo('/drafts/draft-1/operation').length).toBeGreaterThan(20);
   } finally {
     vi.useRealTimers();
   }
