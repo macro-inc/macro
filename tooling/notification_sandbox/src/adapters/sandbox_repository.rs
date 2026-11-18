@@ -1,6 +1,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::{CreatedAt, Query};
+use notification::domain::channel_settings::ChannelNotificationSettings;
 use notification::domain::models::TaggedContent;
 use notification::domain::models::request::{NotificationListFilters, NotificationStatus};
 use notification::domain::models::{
@@ -56,6 +57,16 @@ impl NotificationRepository for SandboxNotificationRepository {
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         self.inner
             .get_unsubscribed_users(item_id, is_direct_mention, user_ids)
+            .await
+    }
+
+    async fn get_channel_notification_settings<'a>(
+        &self,
+        channel_id: Uuid,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>, Report> {
+        self.inner
+            .get_channel_notification_settings(channel_id, user_ids)
             .await
     }
 
