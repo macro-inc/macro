@@ -1,16 +1,11 @@
 // What the tests of the saved views' own states share: a gate on one of the
-// storage service's saved-view requests (held, refused or let through), the
-// phone the picker is seen on, and a second inbox with a send-as alias.
+// storage service's saved-view requests (held, refused or let through), and
+// a second inbox with a send-as alias.
 
-import { devices, type Page, type Route } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 import { expect, type Mailbox } from './fixtures';
 import type { LinkedInbox } from './stack';
 import { closeMenus, filterSubmenu, openFilterGroup } from './ways-list1';
-
-const { defaultBrowserType: _browser, ...iPhone } = devices['iPhone 13'];
-
-/** The phone the picker and its drawer are seen on. */
-export const PHONE = iPhone;
 
 /** The second inbox some tests link, and its send-as alias. */
 export const WORK = 'work@example.com';

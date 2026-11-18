@@ -4,30 +4,7 @@ name: infra code check
 'on':
   workflow_call: {}
 jobs:
-  path-check:
-    runs-on: namespace-profile-linux-small
-    outputs:
-      should_run: ${{ steps.filter.outputs.should_run }}
-    timeout-minutes: 10
-    steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-    - id: filter
-      name: Filter changed paths
-      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
-      with:
-        filters: |
-          should_run:
-            - 'infra/**'
-            - 'flake.nix'
-            - 'flake.lock'
-            - '.github/actions/setup-nix-dev-shell/**'
-            - '.github/actions/teardown-nix/**'
-            - '.github/workflows/code_check_infra.yml'
   biome-check:
-    needs:
-    - path-check
-    if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     timeout-minutes: 15
@@ -36,6 +13,11 @@ jobs:
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         fetch-depth: '0'
+        filter: blob:none
+    - name: Prepare the blobless checkout
+      run: |
+        if git config extensions.partialclone >/dev/null; then git config --unset extensions.partialclone; fi
+        git config diff.renames false
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -52,9 +34,6 @@ jobs:
       if: always()
       uses: './.github/actions/teardown-nix'
   check:
-    needs:
-    - path-check
-    if: needs.path-check.outputs.should_run == 'true'
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     timeout-minutes: 15
     steps:
@@ -79,32 +58,3 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
-  status-check:
-    needs:
-    - path-check
-    - biome-check
-    - check
-    if: always()
-    name: Infra Status Check
-    runs-on: namespace-profile-linux-small
-    timeout-minutes: 5
-    steps:
-    - name: Check job results
-      run: |
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "biome-check: ${{ needs.biome-check.result }}"
-        echo "check: ${{ needs.check.result }}"
-
-        # Only success and skipped are OK. A job that hits its timeout reports
-        # cancelled, and passing on that would merge code whose checks never ran.
-        for result in \
-          "${{ needs.path-check.result }}" \
-          "${{ needs.biome-check.result }}" \
-          "${{ needs.check.result }}"; do
-          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-            echo "❌ One or more jobs failed or were cancelled"
-            exit 1
-          fi
-        done
-
-        echo "✅ All jobs passed or were skipped"

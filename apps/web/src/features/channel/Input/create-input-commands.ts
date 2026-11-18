@@ -55,8 +55,10 @@ export function createInputCommands(
         // Clear before delivery. The optimistic message paints as soon as
         // onSend mutates, and waiting for that promise lets the sent text
         // stay in the box — a second copy — until the request settles.
-        deps.reset();
+        // The editor clears first, through its focus-preserving path; the
+        // reset after it then has nothing left to import into the editor.
         deps.clearComposer?.();
+        deps.reset();
         try {
           await onSend(current);
           span.setAttr('composer.outcome', 'dispatched');
@@ -95,8 +97,8 @@ export function createInputCommands(
     },
     close: () => {
       const current = deps.snapshot();
-      deps.reset();
       deps.clearComposer?.();
+      deps.reset();
       Promise.resolve(deps.callbacks?.onClose?.(current)).catch(
         reportCallbackError
       );

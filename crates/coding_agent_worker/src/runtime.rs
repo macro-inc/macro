@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::watch;
+use tokio::sync::{Notify, watch};
 use tokio::time::Instant;
 use tokio_retry::strategy::ExponentialBackoff;
 use tokio_tungstenite::tungstenite;
@@ -38,6 +38,7 @@ const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(30);
 /// socket and terminates the ACP process group.
 pub struct Runtime {
     connected: watch::Receiver<bool>,
+    agents_changed: Arc<Notify>,
     _task: AbortOnDropHandle<()>,
 }
 
@@ -57,6 +58,7 @@ impl Runtime {
         computer: Option<Arc<Computer>>,
     ) -> Self {
         let (connected_tx, connected) = watch::channel(false);
+        let agents_changed = Arc::new(Notify::new());
         let task = tokio::spawn(serve(
             macro_api.gateway_url(),
             credentials.token.clone(),
@@ -65,12 +67,14 @@ impl Runtime {
             tap,
             turns,
             connected_tx,
+            Arc::clone(&agents_changed),
             adopted,
             handoffs,
             computer,
         ));
         Self {
             connected,
+            agents_changed,
             _task: AbortOnDropHandle::new(task),
         }
     }
@@ -78,6 +82,12 @@ impl Runtime {
     /// Follows whether the runtime connection is currently up.
     pub fn connection_state(&self) -> watch::Receiver<bool> {
         self.connected.clone()
+    }
+
+    /// Raised when the service says the agents bound to this harness may have
+    /// changed. A raise while nobody waits is kept for the next waiter.
+    pub fn agents_changed(&self) -> Arc<Notify> {
+        Arc::clone(&self.agents_changed)
     }
 
     /// Wait briefly for the supervisor to connect before dispatching a prompt.
@@ -112,6 +122,7 @@ async fn serve(
     tap: Option<LineTap>,
     turns: ActiveTurns,
     connected: watch::Sender<bool>,
+    agents_changed: Arc<Notify>,
     mut adopted: Option<RunningAgent>,
     mut handoffs: Handoffs,
     computer: Option<Arc<Computer>>,
@@ -140,6 +151,7 @@ async fn serve(
                     adopted.take(),
                     &mut handoffs,
                     computer.clone(),
+                    &agents_changed,
                 )
                 .await
                 {

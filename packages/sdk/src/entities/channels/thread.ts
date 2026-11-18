@@ -68,20 +68,23 @@ export class Thread {
   }
 
   /**
-   * Post a reply in this thread.
+   * Post a reply in this thread; pass `silent: true` for a routine update
+   * that should notify nobody.
    *
    * @param body - Plain text, or a rich body composed with {@link msg}.
    * @param opts.images - Static images to attach, such as one from
    *   `macro.images.generate()`.
    * @param opts.documents - Macro documents to attach as file chips, such as
    *   a file from `macro.documents.upload()`.
+   * @param opts.silent - Send no push, email or inbox entry to anyone,
+   *   mentioned people included; the reply still appears in the thread.
    * @returns The created reply.
    *
    * @write
    */
   async reply(
     body: string | RichMessage,
-    opts?: { images?: StaticImage[]; documents?: Document[] },
+    opts?: { images?: StaticImage[]; documents?: Document[]; silent?: boolean },
   ): Promise<Message> {
     const id = await postToChannel(this.client, this, toBody(body), opts);
     return Message.byId(this.client, this.channelId, id);

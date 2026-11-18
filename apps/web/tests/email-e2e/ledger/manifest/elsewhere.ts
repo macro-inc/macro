@@ -575,14 +575,11 @@ export const elsewhere = {
       id: 'STX-303',
       surface: 'SX-20',
       fn: ['F-166'],
-      state:
-        'Result "Email draft saved" / "Email sent"; buttons "Saving…" / "Working…" while pending',
-      trigger: 'save or send finished / pending',
-      source: [
-        'src/features/universal-input/actions.ts',
-        'src/features/universal-input/views/universal-composer.tsx',
-      ],
+      state: 'Buttons "Saving…" / "Working…" while the save or send is pending',
+      trigger: 'save or send pending',
+      source: ['src/features/universal-input/views/universal-composer.tsx'],
       flag: 'enable-universal-input',
+      note: 'the result line ("Email draft saved" / "Email sent" and its Open) is never on screen: every host ends the universal input in the step that sets it (the menu closes; on a phone its text clears), and opens what was made (STX-977)',
     },
     {
       id: 'STX-034',
@@ -905,6 +902,19 @@ export const elsewhere = {
         'Review card of a drafted email after it is sent: status "Sent", its fields and "Send email" disabled',
       trigger: 'the user sent the draft from the card',
       source: ['src/features/agent-reviews/views/review-stack.tsx'],
+    },
+    {
+      id: 'STX-977',
+      surface: 'SX-20',
+      fn: ['F-166'],
+      state:
+        'result: the universal input ends, and the saved draft opens in the composer or the sent thread opens',
+      trigger: 'the save or send finished',
+      source: [
+        'src/features/universal-input/universal-input.tsx',
+        'src/features/universal-input/actions.ts',
+      ],
+      flag: 'enable-universal-input',
     },
   ],
 } as const satisfies Group;

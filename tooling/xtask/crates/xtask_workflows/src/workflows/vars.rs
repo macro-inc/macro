@@ -90,6 +90,17 @@ pub const NIX_CHECKS_CACHE_TAG: &str = "nix-checks";
 /// a different workload and runner profile.
 pub const WEB_SCCACHE_NAME: &str = "web-ci";
 
+/// Namespace cache tag for the web Generated Code Check alone. Its volume keeps
+/// cargo's `target` directory ([`CARGO_TARGET_VOLUME_DIR`]) and the times its
+/// sources' contents first appeared. The last job to finish on a tag replaces the
+/// volume, so on a shared tag another job would put back a `target` that never
+/// saw this job's build.
+pub const WEB_CODEGEN_CACHE_TAG: &str = "web-codegen";
+
+/// Cargo's `target` directory, kept on the [`WEB_CODEGEN_CACHE_TAG`] volume and
+/// made reusable by `steps::reuse_cargo_target`.
+pub const CARGO_TARGET_VOLUME_DIR: &str = "${{ github.workspace }}/target";
+
 /// Namespace cache tag for the sync-service worker deploy. Its own pool: this
 /// job compiles for `wasm32-unknown-unknown`, so nothing in the host-target
 /// volumes ([`CI_CACHE_TAG`]) would serve it anyway.
@@ -107,6 +118,15 @@ pub const VITEST_MODULE_CACHE_VOLUME_DIR: &str = "/home/runner/.cache/vitest-mod
 /// Browser wasm packages keyed by their inputs, so the PR build reuses a package
 /// whose crates did not change (`apps/web/scripts/cached-wasm-build.sh`).
 pub const WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs";
+
+/// The workspace's root `node_modules`, kept on the PR check volumes. Bun can't
+/// hardlink from its cache on the volume into the workspace disk, so a fresh
+/// install copied about 1.9 GB in every web job (about 25 s); with the tree in
+/// place, `bun install --frozen-lockfile` only checks it against `bun.lock` and
+/// fixes what differs. Bun never removes a package the lockfile dropped, so
+/// `setup-reqs-web` empties a tree another lockfile installed. PR jobs write it, so no job that deploys, the web PR
+/// Build with its preview credentials included, mounts it.
+pub const NODE_MODULES_VOLUME_DIR: &str = "${{ github.workspace }}/node_modules";
 
 /// The deploy build's wasm packages, kept in a GitHub Actions cache rather than
 /// on the cache volume, which PR jobs write. Off the volume on purpose.

@@ -128,6 +128,20 @@ describe('TypeDoc documentation packaging', () => {
     expect(entity?.index).not.toContain('Constructor');
   });
 
+  it('keeps lazy return types with generics and unions beside ordinary fields', () => {
+    const pages = fixturePages();
+    pages.set(
+      'src/entities/example/example/classes/Example.md',
+      EXAMPLE.replace(
+        '## Methods',
+        '| <a id="property-content"></a> `content` | `readonly` | () => `Promise`\\<`string` \\| `null`\\> | - | - |\n\n## Methods'
+      )
+    );
+    expect(pack(pages).entities[0]?.index).toContain(
+      'Fields: id, content(): Promise<string | null>'
+    );
+  });
+
   it('splits classes into methods and names links by the symbol to read', () => {
     const { symbols } = pack();
     expect(symbols['ExampleNamespace.create']).toContain(
@@ -237,6 +251,13 @@ describe('TypeDoc documentation packaging', () => {
       if (!found) throw new Error(`Missing ${name} docs`);
       return found.index;
     };
+    const messageIndex = entity('channels')
+      .split('### Message\n')[1]
+      ?.split('\n### ')[0];
+    expect(messageIndex).toContain('content(): Promise<string>');
+    expect(entity('email')).toContain('subject(): Promise<string | undefined>');
+    expect(entity('email')).toContain('body(): Promise<');
+    expect(entity('channels')).toContain('name(): Promise<string>');
     expect(entity('agentSessions')).toContain('### SessionReview');
     expect(entity('agentSessions')).toContain('`SessionReview.submitAll`');
     expect(docs.symbols.ReviewRecord_Serialize).toContain('presentedAt');
@@ -279,11 +300,20 @@ describe('TypeDoc documentation packaging', () => {
     expect(entity('favorites')).not.toContain('PinsNamespace');
     expect(entity('images')).toContain('### ImagesNamespace');
     expect(entity('me')).toContain('### MeNamespace');
-    for (const doc of docs.entities)
-      expect(Buffer.byteLength(doc.index)).toBeLessThan(16 * 1024);
     for (const reference of Object.values(docs.symbols)) {
       expect(Buffer.byteLength(reference)).toBeLessThan(16 * 1024);
       expect(reference).not.toContain('/home/');
+    }
+  });
+
+  it('keeps every entity index below 16 KiB', async () => {
+    const docs = JSON.parse(await readFile(artifact, 'utf8')) as SdkDocs;
+    for (const doc of docs.entities) {
+      const bytes = Buffer.byteLength(doc.index);
+      expect(
+        bytes,
+        `${doc.name}: ${16 * 1024 - bytes} bytes spare`
+      ).toBeLessThan(16 * 1024);
     }
   });
 });

@@ -1,9 +1,10 @@
 import { TraceFlow, useFlow } from '@app/observability/flow';
 import { initializeUiOperationTelemetry } from '@app/observability/ui-operation';
+import { lazy } from '@core/util/lazy';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { err, ok } from 'neverthrow';
-import { createEffect, createSignal, lazy, on, Show } from 'solid-js';
+import { createEffect, createSignal, on, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 vi.mock('@core/context/user', () => ({ useIsAuthenticated: () => () => true }));

@@ -1,5 +1,5 @@
 import { defineBlock, LoadErrors, loadResult } from '@core/block';
-import { lazy } from 'solid-js';
+import { lazy } from '@core/util/lazy';
 
 export const definition = defineBlock({
   name: 'database',

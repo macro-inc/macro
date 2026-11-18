@@ -13,18 +13,12 @@ import {
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazy } from '@core/util/lazy';
 import { downloadFile } from '@filesystem/download';
 import { waitForDocumentContentReady } from '@queries/storage/document-location';
 import { fetchDocumentMetadata } from '@queries/storage/document-metadata';
 import { createCallback } from '@solid-primitives/rootless';
-import {
-  createSignal,
-  lazy,
-  onCleanup,
-  onMount,
-  Show,
-  Suspense,
-} from 'solid-js';
+import { createSignal, onCleanup, onMount, Show, Suspense } from 'solid-js';
 import { SpreadsheetSkeleton } from '../../block-spreadsheet/components/SpreadsheetSkeleton';
 import { isUploadedWorkbook } from '../../block-spreadsheet/core/uploaded-workbook';
 import {
