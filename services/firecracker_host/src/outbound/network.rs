@@ -90,10 +90,12 @@ impl Network {
             && Path::new("/sys/class/net").join(&veth).exists();
         // A slot made under another `jail.uid_base` has a tap the slot's
         // user cannot open: it is made again.
-        if present && tap_owner(&netns).await.as_deref() == Some(uid.as_str()) {
+        let reusable = present && tap_owner(&netns).await.as_deref() == Some(uid.as_str());
+        // Remade: present but unusable. A fresh or reused slot records false.
+        tracing::Span::current().record("remade", present && !reusable);
+        if reusable {
             return Ok(());
         }
-        tracing::Span::current().record("remade", present);
         // A half-made slot from an interrupted start goes first.
         let _ = run("ip", &["netns", "del", &netns]).await;
         let _ = run("ip", &["link", "del", &veth]).await;

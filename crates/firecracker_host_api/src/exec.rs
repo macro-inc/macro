@@ -45,8 +45,10 @@ pub struct ExecRequest {
     pub env: BTreeMap<String, String>,
     /// Working directory.
     pub cwd: String,
-    /// The host agent's trace id (W3C hex), set by the agent for the guest
-    /// agent to record: the guest exports no traces of its own.
+    /// The host agent's trace id (W3C hex), for the guest agent to record:
+    /// the guest exports no traces of its own. The host agent always
+    /// replaces what a client sends (with `None` outside a trace); a client
+    /// joins the trace through the exec request's `traceparent` header.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trace_id: Option<String>,
 }
