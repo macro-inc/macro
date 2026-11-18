@@ -23,10 +23,17 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
 - Never put an expression inside a `run` script or `actions/github-script`
   `script`: GitHub pastes it in as code. Set it in the step's `env` and read
   `"$NAME"` (shell) or `process.env.NAME` (JS); rendering rejects `${{` there.
-- Name a job or step output once, as a `JobOutput<T>` / `StepOutput<T>` const
-  (`Flag` for `'true'`/`'false'` outputs), and use that const both to declare
-  and to read it. Rendering fails when a job reads `needs.X` without listing X,
-  reads an output X doesn't declare, or reads a step that hasn't run yet.
+- Give each job and step that anything refers to a `JobHandle` / `StepHandle`
+  const next to its definition, with its outputs as `JobOutput<T>` /
+  `StepOutput<T>` fields (`Flag` for `'true'`/`'false'` outputs). Use the handle
+  for `add_job`, `needs`, `.id(..)`, declaring outputs and reading them, so a
+  wrong name fails to compile. Rendering still fails when a job reads `needs.X`
+  without listing X, reads an output X doesn't declare, or reads a step that
+  hasn't run yet.
+- Composite actions are modules in `workflows/composite/`, registered in
+  `composite::ACTIONS`; `cargo x workflows` writes their `action.yml`. Call one
+  through its generated `Local<Name>` type, and a reusable workflow through its
+  generated `Call<Name>` type (both in `src/workflows/actions.rs`).
 - Change a generated workflow (header `DO NOT EDIT`) by editing its source module,
   then run `cargo x workflows` and commit the regenerated YAML with it.
 - `cargo x workflows` also writes `tooling/xtask/crates/xtask_workflows/checks.lock`:
@@ -45,13 +52,14 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
   through its generated type in `src/workflows/actions.rs` (inputs are setters,
   outputs `StepOutput`s), never `Step::uses`.
 - `check generated workflows` lints every workflow with actionlint (shellcheck
-  on `run` scripts) and every workflow and composite action with zizmor. Fix a finding when the fix leaves
-  what the job runs unchanged; otherwise allowlist it with its reason, one
-  rule and file per entry: shellcheck in `.github/actionlint.yaml` `paths:`,
-  zizmor in `.github/zizmor.yml`, and for composite actions inline
-  `# zizmor: ignore[rule] reason`. New runner labels go in
-  `.github/actionlint.yaml`.
+  on `run` scripts) and every workflow and composite action with zizmor. Fix a
+  finding when the fix leaves what the job runs unchanged; otherwise allowlist
+  it with its reason, one rule and file per entry: shellcheck in the
+  `SHELLCHECK_IGNORES` table in `src/workflows/actionlint.rs` (which generates
+  `.github/actionlint.yaml`; its runner labels come from the workflows'
+  `runs-on`), zizmor in `.github/zizmor.yml`.
 
 Check: `cargo x workflows --check` passes, no new `.github/workflows/*.yml`
-lacks the generated header, and `nix develop .#workflow-lint -c sh -c
-'actionlint && zizmor --offline .github'` passes.
+lacks the generated header, `nix develop .#workflow-lint -c sh -c
+'actionlint && zizmor --offline .github'` passes, and the
+`rust-workflows-*` ast-grep rules report nothing.
