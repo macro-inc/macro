@@ -349,6 +349,50 @@ async fn mailbox_wide_refusals_do_not_bring_a_message_closer_to_abandonment(db: 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn new_mail_on_a_message_an_import_was_reading_waits_for_no_import_delay(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    queue(&db, link, "both", 0).await;
+    let import = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    assert!(import.is_import);
+    // While the import reads it, a synced folder's page lists the message.
+    sqlx::query!(
+        "UPDATE email_sync_streams SET initial_complete = true, position = 'checkpoint' WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let stream = repo.claim_stream(Uuid::now_v7()).await.unwrap().unwrap();
+    repo.commit_page(
+        &stream,
+        &MailboxChangePage {
+            changed: vec![ProviderId::new("both").unwrap()],
+            removed: Vec::new(),
+            position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
+            reader_revision: 1,
+        },
+    )
+    .await
+    .unwrap();
+
+    // The import's share of the request window refuses the read; live
+    // reads still have room.
+    repo.release_message(
+        &import,
+        MessageRetry::After {
+            seconds: 590,
+            counted: false,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert!(row(&db, link, "both").await.delay_seconds <= 0);
+    let live = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    assert!(!live.is_import);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_abandoned_import_message_does_not_hold_the_import_open(db: PgPool) {
     let telemetry = Telemetry::default();
     let _guard = telemetry.install();

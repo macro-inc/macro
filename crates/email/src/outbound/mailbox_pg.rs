@@ -399,12 +399,16 @@ impl MailboxSyncRepository for PgMailboxSync {
         retry: MessageRetry,
     ) -> Result<(), MailboxError> {
         match retry {
+            // A revision queued during the lease (new mail on a message an
+            // import was reading) is due at once: the delay was the leased
+            // read's, and an import's refusal can leave live reads room.
             MessageRetry::After { seconds, counted } => {
                 sqlx::query!(r#"
-                    UPDATE email_message_reconciliation SET lease_id = NULL,lease_until = NULL,available_at = now() + make_interval(secs => $5),
+                    UPDATE email_message_reconciliation SET lease_id = NULL,lease_until = NULL,
+                        available_at = CASE WHEN revision = $7 THEN now() + make_interval(secs => $5) ELSE now() END,
                         attempts = attempts - CASE WHEN $6 THEN 0 ELSE 1 END
                     WHERE link_id = $1 AND generation = $2 AND provider_id = $3 AND lease_id = $4
-                "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id,f64::from(seconds),counted)
+                "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id,f64::from(seconds),counted,lease.revision)
                     .execute(&self.db).await.map_err(db_error)?;
             }
             // `available_at = 'infinity'` is the abandoned state: claims stop at

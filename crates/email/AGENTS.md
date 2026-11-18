@@ -471,6 +471,8 @@ tools — hexagonal, heavily feature-gated.
   every other mailbox's import, and any message that waited for room, behind
   its whole backlog. Gmail's backfill lists its next page behind the threads
   it queued for the same reason. Live folder streams are never paced.
+  A message released after a failed read is due at once when a newer
+  revision arrived during the lease.
 - "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
   under the link lock, once per import run: the folder-catalog stream's
   `import_completed_at` is stamped when every folder is enumerated and no
