@@ -123,8 +123,9 @@ tab far to the right.
 Mail-client keys work in the list, the reading pane, and the open thread while
 Email is focused: `s` star and `z` undo the last action. `g` then a letter
 keeps its app-wide meaning inside Email too ([navigation](navigation.md)):
-`g e` opens Email on Signal and `g s` on Sent from any view; other tabs are on
-the number keys and the sidebar. `Escape` in a
+`g e` opens Email on Signal and `g s` on Sent from any view, as long as no
+editor or input (Email search included) has focus; other tabs are on the
+number keys and the sidebar. `Escape` in a
 list steps back one level: it clears a selection, then a search, and with
 neither returns to Signal; in the reading pane it first hands the keyboard back
 to the list. From the search field, `ArrowDown` or `Enter` moves to the first
