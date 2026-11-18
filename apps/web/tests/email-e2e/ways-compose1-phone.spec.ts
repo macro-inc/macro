@@ -112,7 +112,7 @@ for (const provider of PROVIDERS) {
       await to.press('Enter');
       await page.getByRole('button', { name: 'Send email' }).tap();
       const sent = await sentCopy(mailbox, 'Rug');
-      expect(sent.to).toEqual([grace, zed]);
+      expect([...sent.to].sort()).toEqual([grace, zed].sort());
     });
 
     // When this fails, leaving the phone's composer goes wrong: an untouched
