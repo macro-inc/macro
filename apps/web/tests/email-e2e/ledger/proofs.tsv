@@ -145,7 +145,6 @@ AL-001	the sidebar's Inbox item does not reopen the Inbox tab that was last open
 AL-002	A press on a desktop sidebar tab returns before setTab in EmailSidebar.tsx, so the sidebar's Favorites (and other tabs) no longer switch the list. Run on touch as well: the sidebar sheet lists the same `Tab` rows, and with setTab skipped the sheet still closes but All leaves Noise open, so the header never names All.
 AL-003	The header's Inbox view tabs (Signal / Noise) ignore a change instead of calling setTab in EmailHeader.tsx.
 AL-004	The touch header's Inbox pills (the PillTabs onChange in email-view.tsx) return before setTab, so a tap on Noise leaves Signal open.
-AL-005	pressing g and a letter opens no tab
 AL-006	the number keys do not switch tabs
 AL-007	pressing Tab or Shift+Tab does not move between the Inbox tabs
 AL-008	pressing Escape does not go back to the Signal tab
@@ -381,6 +380,7 @@ AL-904	The Undo button of the "Sender block queued" toast in thread.ts returns b
 AL-905	The "Grant access" button of a permission request in PermissionRequestsView.tsx no longer calls resolve with the chosen level.
 AL-910	opening a thread from its address loads no thread
 AL-911	The touch header's Show sidebar pill (ViewSidebarToggle in ViewNavigationControls.tsx) returns before expanding when the aside is a sheet, so no sheet opens; the desktop's Show navigation is untouched.
+AL-912	The Sent go-to link's handler in GoToHotkeys (sidebar.tsx) returns before navigating, so g then s leaves Email on the tab it was on. The AL-400 test goes to Sent the same way before it leaves for Tasks, so it fails at that step too.
 AX-001	Connect on the Google Workspace row of Settings › Email does nothing: its onClick no longer calls onConnectEmail('GMAIL') in Email.tsx.
 AX-002	Connect on the Outlook row of Settings › Email does nothing: its onClick no longer calls onConnectEmail('OUTLOOK') in Email.tsx.
 AX-003	Enable on the disabled primary inbox row does nothing: the button in DisabledPrimaryRow no longer calls props.onEnable in Email.tsx.

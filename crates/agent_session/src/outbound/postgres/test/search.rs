@@ -90,11 +90,14 @@ async fn indexing_pages_current_sessions_and_serializes_snapshot_leases(pool: Pg
         .unwrap()
         .unwrap();
     drop(other);
+    let first_grant = lease.granted_at;
     drop(lease);
-    let _lease = tokio::time::timeout(Duration::from_secs(5), waiting)
+    let next = tokio::time::timeout(Duration::from_secs(5), waiting)
         .await
         .unwrap()
         .unwrap();
+    // The next grant is later: writes under it are versioned above the first's.
+    assert!(next.granted_at > first_grant);
 
     AgentSessionRepo::delete(&repo, first.id).await.unwrap();
     assert_eq!(

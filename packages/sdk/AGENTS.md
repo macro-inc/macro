@@ -278,6 +278,7 @@ the existing gateway prefixes.
   with `system_properties`' `StatusOption` and `PriorityOption`. Task create
   `propertyValues` replace the service defaults (creator assigned, Not
   started), so `Task.create` spells them out when it sends any.
+- `crm.emailPrivacy` (`src/entities/crm-email-privacy/`, the `crmEmailPrivacy` code-mode category) wraps own-member policy and existing privacy endpoints; preserve exact observed tokens, caller-supplied idempotency keys, preview slot identities and explicit partial counts. Never refresh a token or retry a sharing decision after a conflict. Rule target handles do not fetch content on inspection.
 - CRM records and initiatives share `messages/discussion.ts`: their comments are
   messages under a `crm_company`, `crm_contact` or `initiative` parent.
 - `crm.blockDomain` refuses domains covering a team member's connected primary

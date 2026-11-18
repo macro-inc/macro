@@ -489,7 +489,10 @@ export class Document
 
   /**
    * Current Markdown for native documents, extracted text for PDF/Word,
-   * or raw file content for other formats. Native reads include live edits.
+   * or raw file content for other formats. Native reads include live edits
+   * and are the same lossless Markdown as `contentWithRevision()`: chips,
+   * tables and other rich content are `<m-*>` tags. To write the text back,
+   * read it with `contentWithRevision()` so the revision matches it.
    *
    * @readonly
    */

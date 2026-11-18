@@ -70,6 +70,9 @@ a local stack, without Google accounts.
 - `src/sign_in.rs` and `templates/`: the sign-in page, authorization codes,
   ID tokens and userinfo.
 - `src/test/`: the real client and adapter against the emulator.
+- `tests/calendar_spans.rs`: what the Google adapter records in spans and
+  logs, in a test binary of its own so no other test changes which callsites
+  the captured subscriber sees.
 
 ## Scope
 

@@ -14,6 +14,7 @@ import { createEffect, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ContactDirectoryPage, readContactDirectory } from './directory';
 import { createContactDirectoryWindow } from './directory-query';
+import { watchContactReaders } from './readers';
 
 vi.mock('./backfill', () => ({
   loadContactCheckpoint: () => ({ pages: 200, completedAt: 1 }),
@@ -295,5 +296,60 @@ it('keeps its window key through a refresh of the same page and changes it for t
   await vi.advanceTimersByTimeAsync(300);
   expect(window!.windowKey()).toBeDefined();
   expect(window!.windowKey()).not.toBe(firstPage);
+  client.clear();
+});
+
+it('counts as an open contact reader once its first page settles, while enabled and mounted', async () => {
+  vi.useFakeTimers();
+  const readersOpen = watchContactReaders();
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const [enabled, setEnabled] = createSignal(false);
+  let answer = Promise.withResolvers<ContactDirectoryPage>();
+  const reader = vi.fn<typeof readContactDirectory>(() => answer.promise);
+  const page: ContactDirectoryPage = {
+    source: 'cache',
+    sync: 'snapshot',
+    offline: false,
+    query: '',
+    users: [],
+    nextCursor: null,
+  };
+  function Harness() {
+    createContactDirectoryWindow(
+      () => ({ userId: 'macro|viewer@example.com' }),
+      reader,
+      enabled,
+      { debounceMs: 0 }
+    );
+    return null;
+  }
+  const view = render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  setEnabled(true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader).toHaveBeenCalledOnce();
+  expect(readersOpen()).toBe(false);
+
+  answer.resolve(page);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(readersOpen()).toBe(true);
+  setEnabled(false);
+  expect(readersOpen()).toBe(false);
+  await vi.advanceTimersByTimeAsync(0);
+
+  answer = Promise.withResolvers<ContactDirectoryPage>();
+  setEnabled(true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(readersOpen()).toBe(false);
+  answer.reject(new Error('read failed'));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(readersOpen()).toBe(true);
+  view.unmount();
+  expect(readersOpen()).toBe(false);
   client.clear();
 });

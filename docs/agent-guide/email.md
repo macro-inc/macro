@@ -121,10 +121,11 @@ emulation: the pill row scrolls, so the search pill can start off screen on a
 tab far to the right.
 
 Mail-client keys work in the list, the reading pane, and the open thread while
-Email is focused: `s` star, `z` undo the last action, and `g` then a letter
-for a tab (`i` Signal, `o` Noise, `s` Favorites, `t` Sent, `d` Drafts, `e`
-Archived, `a` All). These letters replace the app-wide `g` targets only inside
-Email (`g t` is still Tasks elsewhere); `g h` still goes Home. `Escape` in a
+Email is focused: `s` star and `z` undo the last action. `g` then a letter
+keeps its app-wide meaning inside Email too ([navigation](navigation.md)):
+`g e` opens Email on Signal and `g s` on Sent from any view, as long as no
+editor or input (Email search included) has focus; other tabs are on the
+number keys and the sidebar. `Escape` in a
 list steps back one level: it clears a selection, then a search, and with
 neither returns to Signal; in the reading pane it first hands the keyboard back
 to the list. From the search field, `ArrowDown` or `Enter` moves to the first
@@ -1183,7 +1184,13 @@ focus belongs to the sent message card in the same thread pane, even while
 the thread refresh is still pending. Replying again requires clicking Reply
 or using a reply shortcut.
 Sending a new email opens its thread with the message already shown as sent; it
-must not show the draft or **Loading draft…** first.
+must not show the draft or **Loading draft…** first. The thread opens by the
+server's id: a new email sent before its draft's first save is confirmed (paste
+the body and press `Cmd+Enter` at once, from **New**, `Create` → `Email` or
+`Cmd+K`) stays in the locked composer until the server accepts the send, then
+opens the thread, never the not-found page. An Undo that restores the draft, or
+leaving the composer, cancels that navigation; an Undo too late to stop the send
+does not.
 
 After a send is queued, its notice offers `Undo`. Undo restores the
 sent envelope and editable content, including when the reply used another inbox;
@@ -1291,6 +1298,13 @@ selected inbox after reconnect, even when the intermediate draft save is still
 queued. Uploaded files remain attached. Forwarded and imported provider attachments retain their source-inbox access checks.
 Provider-bound drafts use the explicit inbox-transfer flow. Accepted Outlook
 sends remain owned by its provider coordinator; ambiguity is reconciled there.
+Choosing another inbox saves the draft first. The service refuses to move an
+Outlook draft while that save is still being written to Outlook, so the move
+waits for the write (up to 30 seconds) and asks again with the same operation:
+From keeps the chosen inbox. A refusal with no write in flight (a Gmail draft),
+a write that ends in a conflict, or a write still running after the wait cancels
+the move with **Retry inbox change**; a refusal of a draft whose write has just
+finished is asked once more first.
 
 Verify: queue a new message and a reply offline, close and reopen the app, and
 check their persistent status and read-only content. Cancel one before reconnect

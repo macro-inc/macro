@@ -10,6 +10,7 @@ import { channelsSearch } from '@app/features/channels-view/channels-route';
 import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { EntityAppearanceTrigger } from '@app/features/entity-appearance/entity-appearance';
 import { useDocumentAppearance } from '@app/features/entity-appearance/queries/document-appearance';
+import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { createSearchParams, useParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { useMarkdownName } from '@block-md/component/MarkdownNameProvider';
@@ -36,6 +37,7 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { buildEntityData, type EntityData } from '@entity';
 import {
   type Accessor,
@@ -127,6 +129,7 @@ function HomeEntityBreadcrumb(props: {
 function HomeMarkdownBreadcrumb(props: {
   target: EntityDetailTarget;
   value: Accessor<string>;
+  hotkeyScope: string;
   appearance?: EntityAppearance | null;
   ownerId: string;
   projectId?: string;
@@ -164,6 +167,21 @@ function HomeMarkdownBreadcrumb(props: {
     if (permissions.canComment()) return Permissions.CAN_COMMENT;
     return Permissions.CAN_VIEW;
   };
+
+  const { closePreview } = useHomeView();
+  useBlockEntityCommands({
+    id: documentId(),
+    scopeId: props.hotkeyScope,
+    onDeleted: closePreview,
+    resolveEntity: () =>
+      buildEntityData({
+        id: documentId(),
+        name: name(),
+        blockName: blockType(),
+        ownerId: props.ownerId,
+        projectId: props.projectId,
+      }),
+  });
 
   return (
     <HomeEntityBreadcrumb
@@ -304,117 +322,124 @@ function HomeEntityDetailBody(props: {
       : undefined;
   };
   const openShare = useDocumentShareModal(documentShareTarget);
+  // The list beside the detail registers the same entity keys on the split's
+  // scope, so the detail keeps its own in a child scope, as Mail's reading
+  // pane does; one registration would otherwise replace the other.
+  const [attachHotkeys, detailHotkeyScope] = useHotkeyDOMScope('home-detail');
   return (
-    <EntityDetailFrame
-      target={props.target}
-      topBar={
-        <Show when={props.target.type !== 'channel'}>
-          <ViewShell.TopBar class="touch:flex">
-            <ViewShell.TopBarTitle>
-              <ViewBreadcrumbs.Outlet aria-label="Home location" />
-            </ViewShell.TopBarTitle>
-            <ViewShell.TopBarActions>
-              <SidePanel.HeaderActionsOutlet />
-              <Show when={documentShareTarget()}>
-                {(target) => (
-                  <ShareTrigger
-                    onClick={openShare}
-                    id={target().documentId}
-                    blockType={target().blockAlias}
-                    hotkeyScope={panel.splitHotkeyScope}
-                  />
-                )}
-              </Show>
-              <SidePanel.Toggle />
-            </ViewShell.TopBarActions>
-          </ViewShell.TopBar>
-        </Show>
-      }
-    >
-      <EntityDetail
+    <div ref={attachHotkeys} class="size-full min-h-0 min-w-0">
+      <EntityDetailFrame
         target={props.target}
-        navigationRequest={props.navigationRequest}
-        channel={{
-          // Read as the composer connects, for the row that opened it.
-          autofocus: arrivalFocusesComposer(panel.handle),
-          composerFocusRequest: composerFocusRequest(),
-          onEscapeToList: home.focusList,
-        }}
+        topBar={
+          <Show when={props.target.type !== 'channel'}>
+            <ViewShell.TopBar class="touch:flex">
+              <ViewShell.TopBarTitle>
+                <ViewBreadcrumbs.Outlet aria-label="Home location" />
+              </ViewShell.TopBarTitle>
+              <ViewShell.TopBarActions>
+                <SidePanel.HeaderActionsOutlet />
+                <Show when={documentShareTarget()}>
+                  {(target) => (
+                    <ShareTrigger
+                      onClick={openShare}
+                      id={target().documentId}
+                      blockType={target().blockAlias}
+                      hotkeyScope={panel.splitHotkeyScope}
+                    />
+                  )}
+                </Show>
+                <SidePanel.Toggle />
+              </ViewShell.TopBarActions>
+            </ViewShell.TopBar>
+          </Show>
+        }
       >
-        {(context) => {
-          const name = () => {
-            switch (context.type) {
-              case 'channel':
-                return context.name();
-              case 'document':
-                return (
-                  context.documentMetadata.documentName ||
-                  blockNameToDefaultFile(entityDetailBlockType(props.target))
-                );
-            }
-          };
-          const channel = () =>
-            context.type === 'channel' ? context : undefined;
-          const document = () =>
-            context.type === 'document' ? context : undefined;
-          const blockType = entityDetailBlockType(props.target);
-          const isMarkdown =
-            context.type === 'document' &&
-            (blockType === 'md' ||
-              blockType === 'task' ||
-              blockType === 'snippet' ||
-              blockType === 'skill');
+        <EntityDetail
+          target={props.target}
+          navigationRequest={props.navigationRequest}
+          channel={{
+            // Read as the composer connects, for the row that opened it.
+            autofocus: arrivalFocusesComposer(panel.handle),
+            composerFocusRequest: composerFocusRequest(),
+            onEscapeToList: home.focusList,
+          }}
+        >
+          {(context) => {
+            const name = () => {
+              switch (context.type) {
+                case 'channel':
+                  return context.name();
+                case 'document':
+                  return (
+                    context.documentMetadata.documentName ||
+                    blockNameToDefaultFile(entityDetailBlockType(props.target))
+                  );
+              }
+            };
+            const channel = () =>
+              context.type === 'channel' ? context : undefined;
+            const document = () =>
+              context.type === 'document' ? context : undefined;
+            const blockType = entityDetailBlockType(props.target);
+            const isMarkdown =
+              context.type === 'document' &&
+              (blockType === 'md' ||
+                blockType === 'task' ||
+                blockType === 'snippet' ||
+                blockType === 'skill');
 
-          return (
-            <>
-              <Show
-                when={isMarkdown}
-                fallback={
-                  <Show
-                    when={document()}
-                    fallback={
-                      <HomeEntityBreadcrumb
-                        name={name}
-                        target={props.target}
-                        value={props.value}
-                      />
-                    }
-                  >
-                    {(current) => (
-                      <HomeDocumentBreadcrumb
-                        context={current()}
-                        target={props.target}
-                        value={props.value}
-                      />
-                    )}
-                  </Show>
-                }
-              >
-                <HomeMarkdownBreadcrumb
-                  target={props.target}
-                  value={props.value}
-                  appearance={document()?.documentMetadata.appearance}
-                  ownerId={document()?.documentMetadata.owner ?? ''}
-                  projectId={
-                    document()?.documentMetadata.projectId ?? undefined
+            return (
+              <>
+                <Show
+                  when={isMarkdown}
+                  fallback={
+                    <Show
+                      when={document()}
+                      fallback={
+                        <HomeEntityBreadcrumb
+                          name={name}
+                          target={props.target}
+                          value={props.value}
+                        />
+                      }
+                    >
+                      {(current) => (
+                        <HomeDocumentBreadcrumb
+                          context={current()}
+                          target={props.target}
+                          value={props.value}
+                        />
+                      )}
+                    </Show>
                   }
-                />
-              </Show>
-              <Show when={channel()}>
-                {(current) => (
-                  <ChannelDetailTopBar
-                    channelId={current().channelId}
-                    leading={
-                      <ViewBreadcrumbs.Outlet aria-label="Channel location" />
+                >
+                  <HomeMarkdownBreadcrumb
+                    target={props.target}
+                    value={props.value}
+                    hotkeyScope={detailHotkeyScope}
+                    appearance={document()?.documentMetadata.appearance}
+                    ownerId={document()?.documentMetadata.owner ?? ''}
+                    projectId={
+                      document()?.documentMetadata.projectId ?? undefined
                     }
                   />
-                )}
-              </Show>
-            </>
-          );
-        }}
-      </EntityDetail>
-    </EntityDetailFrame>
+                </Show>
+                <Show when={channel()}>
+                  {(current) => (
+                    <ChannelDetailTopBar
+                      channelId={current().channelId}
+                      leading={
+                        <ViewBreadcrumbs.Outlet aria-label="Channel location" />
+                      }
+                    />
+                  )}
+                </Show>
+              </>
+            );
+          }}
+        </EntityDetail>
+      </EntityDetailFrame>
+    </div>
   );
 }
 

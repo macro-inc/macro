@@ -1049,6 +1049,9 @@ where
                     .await?;
                 self.publish_write_outcome(&outcome);
                 report.team_ooo_changed |= outcome.team_ooo_changed;
+                if outcome.change != CalendarEventChange::Unchanged {
+                    report.events_changed += 1;
+                }
                 report.aligned_copies.extend(outcome.aligned_copies);
                 calendar_count += 1;
             }
@@ -1097,6 +1100,7 @@ where
                     .watch_calendar(
                         access_token,
                         key.email_link_id,
+                        calendar_id,
                         &watch_provider_calendar_id,
                         channel_id,
                         watch,
