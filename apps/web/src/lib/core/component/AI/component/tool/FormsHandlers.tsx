@@ -1,5 +1,7 @@
 /** Forms UI loads only when an enabled Forms tool appears in the transcript. */
-import { lazy, Suspense } from 'solid-js';
+
+import { lazy } from '@core/util/lazy';
+import { Suspense } from 'solid-js';
 import type {
   RenderContext,
   ToolHandler,
