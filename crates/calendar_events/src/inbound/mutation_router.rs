@@ -530,8 +530,8 @@ fn refuse_unconfirmed_program_invite(
     confirmation: Option<&str>,
     approval: Option<ProgramApproval>,
 ) -> Result<(), CalendarMutationApiError> {
-    let _ = approval;
-    let confirmed = confirmation.is_some_and(|quote| !quote.trim().is_empty());
+    let confirmed =
+        confirmation.is_some_and(|quote| !quote.trim().is_empty()) || approval.is_some();
     if is_agent_run(attribution, headers) && !confirmed {
         return Err(CalendarMutationApiError {
             code: CalendarMutationErrorCode::ConfirmationRequired,

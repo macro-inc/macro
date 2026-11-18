@@ -345,6 +345,17 @@ where
         }
 
         let requester_id = request_context.user_id.to_string();
+        // A quote is the user's approval of the guests the call changes,
+        // forwarded so calendar_service's invite rule lets it through.
+        let request_context = match self.user_confirmation.as_deref() {
+            None => request_context,
+            Some(quote) => request_context.with_quoted_confirmation(quote).ok_or_else(|| {
+                ToolCallError {
+                    description: "userConfirmation must quote the user's own reply approving these invitations. Write out who will be invited, ask whether to invite them, and call again once they approve.".to_owned(),
+                    internal_error: anyhow::anyhow!("UpdateCalendarEvent called with a blank confirmation"),
+                }
+            })?,
+        };
         let mutations = service_context.mutations_for(&request_context);
         let scope = match (self.scope, self.recurrence_id.clone()) {
             (UpdateScopeInput::All, None) => CalendarUpdateScope::All,

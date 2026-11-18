@@ -341,6 +341,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `attendees`, refuse an agent run (`is_agent_run`, 403
   `confirmation_required`) unless `userConfirmation` quotes the user's
   approval, since the calendar emails new guests. The quote is not stored.
+  A forwarded `ProgramApproval` from an internal caller counts too: the
+  native `UpdateCalendarEvent` turns its optional `userConfirmation` into a
+  `Quoted` approval (`with_quoted_confirmation`) and refuses a blank one.
   A person in the app and an owner routine invite as before, and the copy
   check still applies.
 - No provider field says whose calendar it is. An inbox syncs every calendar
