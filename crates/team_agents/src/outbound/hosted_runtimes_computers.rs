@@ -6,13 +6,15 @@ use hosted_runtimes::domain::{
     agent::ComputerAgents,
     lifecycle::Rejected,
     models::{self, FleetAttachment},
-    ports::{Billing, CompPolicy, ComputerRepo, FleetAttachmentSource},
+    ports::{Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource},
     service::{Clock, ComputerError, ComputerService},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use crate::domain::models::{ComputerId, ComputerPurchase, ComputerState, TeamAgentError};
+use crate::domain::models::{
+    ComputerDetails, ComputerId, ComputerPurchase, ComputerState, TeamAgentError,
+};
 use crate::domain::ports::Computers;
 
 #[cfg(test)]
@@ -43,9 +45,8 @@ fn purchase_error(error: ComputerError) -> TeamAgentError {
             "Macro computers are unavailable right now".to_owned(),
         ),
         ComputerError::RolloutDisabled => TeamAgentError::NotEnabled,
-        sold_out @ ComputerError::SoldOut(_) => {
-            TeamAgentError::ComputerUnavailable(sold_out.to_string())
-        }
+        ComputerError::SoldOut(size) => TeamAgentError::NoRoom(size),
+        ComputerError::Billing(BillingError::PaymentFailed) => TeamAgentError::PaymentDeclined,
         ComputerError::SizeNotOffered => {
             TeamAgentError::ComputerUnavailable("this computer size isn't offered".to_owned())
         }
@@ -175,7 +176,36 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn details(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<ComputerDetails, TeamAgentError> {
+        let (status, _) = self
+            .service
+            .status_for_roster(team_id, computer_id)
+            .await
+            .map_err(TeamAgentError::internal)?;
+        Ok(ComputerDetails {
+            name: status.name,
+            harness_id: status.harness_id,
+        })
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn release(&self, team_id: Uuid, computer_id: ComputerId) -> Result<(), TeamAgentError> {
         released(self.service.request_release(team_id, computer_id).await)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn agent_online(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<(), TeamAgentError> {
+        self.service
+            .agent_online(team_id, computer_id)
+            .await
+            .map_err(TeamAgentError::internal)
     }
 }

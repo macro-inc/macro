@@ -150,6 +150,32 @@ where
             .map(|entry| Arc::clone(&entry.connection))?;
         Some(connection.probe_models().await)
     }
+
+    /// Hand `harness`'s live runtime an agent teammate's environment.
+    /// Returns whether this process holds a connection for it.
+    pub async fn apply_agent(
+        &self,
+        harness: HarnessId,
+        environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+    ) -> bool {
+        let Some(connection) = self
+            .connections
+            .get(&harness)
+            .map(|entry| Arc::clone(&entry.connection))
+        else {
+            return false;
+        };
+        match connection.apply_agent(environment).await {
+            Ok(()) => {
+                tracing::info!(%harness, "handed this harness's runtime its agent");
+                true
+            }
+            Err(error) => {
+                tracing::warn!(%harness, error = ?error, "could not hand this harness's runtime its agent");
+                false
+            }
+        }
+    }
 }
 
 impl<Sender> RuntimeRegistry<Sender>

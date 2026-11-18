@@ -672,6 +672,16 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), RemoveUserFromTeamError>> + Send;
+
+    /// [`Self::remove_team_agent`] without an admin's receipt, for the agent
+    /// teammates domain taking back an agent whose computer was released
+    /// after failing its first start. `removed_by` is who invited it.
+    fn take_back_team_agent(
+        &self,
+        team_id: uuid::Uuid,
+        agent_user_id: &MacroUserIdStr<'_>,
+        removed_by: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<(), RemoveUserFromTeamError>> + Send;
 }
 
 /// Manages a team's shareable invite link and joins users through it.

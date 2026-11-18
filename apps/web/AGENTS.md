@@ -452,10 +452,10 @@ regression over the production `ThreadList` is
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
-Inviting an agent teammate from Team → Members (People | Agent in Invite to
-Team, behind `enable-agent-teammates`): the dialog closing with its notice, a
-refused invite's error in view, its row's Setting up step → Running and failed
-Retry, the ready and failed notifications (Message, Connect Claude plan for
+Adding an agent teammate from Team → Members (People | Agent in Invite to
+Team, behind `enable-agent-teammates`): the dialog waiting until the agent is
+online, falling back to the row after five seconds, a declined card and a size
+with no room in place, its row's Setting up step and failed Retry, the ready and failed notifications (Message, Connect Claude plan for
 admins only, Retry), Connect Claude plan's one-screen sign-in with its
 expired, rejected and unreachable states, its row's Claude sign-in and switch
 back to credits, the DM status banner, and its removal have a backend-free
@@ -1000,12 +1000,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   the Drive/Tasks lists, custom MCP servers then connected ones first,
   described by what each does in Macro; preserve `agent-connections` and `team-connections` as aliases for existing links.
 - Keep Macro computers (`features/settings/computers`) team-only. Gate purchase
-  and Claude account surfaces with `enableMacroComputers`
-  (`enable-macro-computers`); keep existing lists in Runtimes and Billing and
+  and Claude account surfaces with `useMacroComputersRollout`
+  (`@queries/computers/computers`: the backend's `enable-macro-computers` plus
+  dev allowlist answer, never a client PostHog read); keep existing lists in Runtimes and Billing and
   management actions available with rollout off. `useTeamComputers` loads by
   team membership and exposes `canPurchase` separately. Members read; admins
   buy and manage. Show the exact price before buying, send one `purchaseKey`
-  per Buy dialog on every retry (202 `confirming` is success), offer no power,
+  per Buy dialog on every retry and a new one only after a declined card,
+  wait in the dialog up to five seconds for the computer (or agent) to come
+  up (`computers/primitives/wait-for-progress.ts`), offer no power,
   billing or release while `purchasing`, confirm Restore before billing again,
   and release only after the computer's name is typed. See the
   [Macro computers walkthrough](../../docs/agent-guide/settings.md#macro-computers).
@@ -1186,7 +1189,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model, effort and priority tier controls separate: the model selector opens the catalog, and Effort and Priority tier (`ComposerSettingMenu`) show their current value beside the icon and list the runtime's advertised choices; on touch they are icon buttons that open a bottom sheet.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
-  `bunx playwright test --config src/features/block-pr/browser-test/playwright.config.ts`.
+  `bunx playwright test --config src/features/block-pr/browser-test/playwright.config.ts`; the same config's
+  `changes-split.browser.e2e.ts` checks that a narrow PR split opens Changes over the PR, never as a split inside it.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
 - PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com. Load Macro's own static-file URLs and public Klipy GIFs directly with anonymous CORS, including in the image viewer. The proxy authenticates by session cookie, so a proxied `<img>` uses `crossorigin="use-credentials"` and a fetch of it `credentials: 'include'` (`isImageProxyUrl`); `anonymous` drops the cookie cross-origin and the proxy answers 401.
 - Download selected GIFs without re-encoding through the shared abortable static-file uploader, and insert an `sfs` image only after success; preserve the caret, discard failed or unaccepted uploads, reject stale completions, and keep failure retry in the picker. Give explicit GIF picker opens precedence over formatting and link menus, and anchor to the editor when the browser selection is missing or has no rendered geometry.
@@ -1775,13 +1779,16 @@ arrives, while the desktop and phone apps, where that tab would land blank in
 the system browser, open the link once it arrives. The backend also requires management rights for Claude account changes.
 Focused tests: `bun run test src/features/settings/computers`.
 
-Guided purchase (the Buy computer → Configure agent → Bring your AI → Create
-agent dialog) has a backend-free browser regression that mounts the real section
+Buy (one dialog with no steps: waiting until the computer is up, then its
+agent's Ready and Chat with it;
+a declined card and a size with no room in place) and the guided variant (the
+Buy computer → Configure agent → Bring your AI → Create agent dialog, opened
+with `?after=guided` in the fixture) have a backend-free browser regression that mounts the real section
 over the real computers client and answers `/auth/team/computers/*` from
 Playwright, covering the size skeleton, every step, each offers failure (422,
-403, 502, 503, dropped connection, timeout), and the two endings (Try it into
-the real composer with the agent selected, Create an agent on this computer into
-the real create form with the computer chosen), and the setup notices (close
+403, 502, 503, dropped connection, timeout), and the two endings (Chat with <agent> into
+the agent's DM, Add another agent into the real create form with the computer
+chosen), and the setup notices (close
 after Buy, the "ready" notice reopens the dialog on Bring your AI through to
 Create agent; the failure notice reopens it on Retry setup) on desktop and
 phone:
@@ -1793,7 +1800,7 @@ Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,
 computer, total and next-invoice amounts; never calculate a bill from catalog
 quotes. Format provider minor units using currency precision and Stripe's
 ISK/UGX wire-format exceptions.
-`TeamBillingBreakdown` renders provider lines behind `enableMacroComputers`; a
+`TeamBillingBreakdown` renders provider lines behind `useMacroComputersRollout`; a
 null breakdown keeps the existing plan and computers UI. With the flag off the
 backend returns no breakdown and the page shows only the plan.
 
