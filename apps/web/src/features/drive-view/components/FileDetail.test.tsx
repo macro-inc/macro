@@ -1,6 +1,7 @@
 import { TraceFlow, useFlow } from '@app/observability/flow';
 import { initializeUiOperationTelemetry } from '@app/observability/ui-operation';
 import { ThrownResultError } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { type Accessor, createSignal, type JSX, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -213,6 +214,73 @@ describe('file access errors', () => {
       );
       expect(container.textContent).not.toContain('Request access');
     }
+  );
+});
+
+it('shows a plain message for a failed load and retries it', async () => {
+  const load = vi
+    .fn<() => Promise<Loaded>>()
+    .mockRejectedValueOnce(
+      new ThrownResultError([
+        { code: 'NETWORK_ERROR', message: 'Network error occurred' },
+      ])
+    )
+    .mockResolvedValue({ userAccessLevel: 'view' });
+  const container = mount(load);
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain(
+      'This document couldn’t be displayed.'
+    )
+  );
+  expect(container.textContent).not.toContain('ThrownResultError');
+  expect(container.textContent).not.toContain('Network error occurred');
+
+  [...container.querySelectorAll('button')]
+    .find((button) => button.textContent === 'Try again')!
+    .click();
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain('Document content: view')
+  );
+  expect(load).toHaveBeenCalledTimes(2);
+});
+
+it('records a render error on telemetry instead of showing it', async () => {
+  const recordError = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+  let fail = true;
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  dispose = render(
+    () => (
+      <FileDetailLoadGate
+        documentId="image-document"
+        entityType="image"
+        label="image"
+        load={async () => ({ userAccessLevel: 'view' })}
+      >
+        {() => {
+          if (fail) throw new Error('Image decode failed');
+          return <div>Image content</div>;
+        }}
+      </FileDetailLoadGate>
+    ),
+    container
+  );
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain('This image couldn’t be displayed.')
+  );
+  expect(container.textContent).not.toContain('Image decode failed');
+  expect(recordError).toHaveBeenCalledWith(new Error('Image decode failed'), {
+    surface: 'file-detail',
+    'doc.type': 'image',
+    'document.id': 'image-document',
+  });
+
+  fail = false;
+  [...container.querySelectorAll('button')]
+    .find((button) => button.textContent === 'Try again')!
+    .click();
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain('Image content')
   );
 });
 

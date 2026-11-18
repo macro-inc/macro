@@ -18,7 +18,7 @@ import {
 } from '@core/component/SharePermissions';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
-import type { Span } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { Button } from '@ui';
@@ -89,9 +89,6 @@ function FileDetailBodyState(props: {
             role="alert"
           >
             <span>This {props.label} couldn’t be displayed.</span>
-            <pre class="max-h-48 max-w-full overflow-auto whitespace-pre-wrap text-left text-failure text-xs">
-              {String(props.error)}
-            </pre>
             <Button variant="secondary" size="sm" onClick={props.onAction}>
               {props.actionLabel ?? 'Reset'}
             </Button>
@@ -228,14 +225,22 @@ export function FileDetailLoadGate<
             onCleanup(() => release(data));
             return (
               <ErrorBoundary
-                fallback={(error, reset) => (
-                  <FileDetailBodyState
-                    label={props.label}
-                    error={error}
-                    actionLabel="Reset"
-                    onAction={reset}
-                  />
-                )}
+                fallback={(error, reset) => {
+                  // A failed load is already on its `document.load` span.
+                  Telemetry.error(error, {
+                    surface: 'file-detail',
+                    'doc.type': props.entityType,
+                    'document.id': props.documentId,
+                  });
+                  return (
+                    <FileDetailBodyState
+                      label={props.label}
+                      error={error}
+                      actionLabel="Try again"
+                      onAction={reset}
+                    />
+                  );
+                }}
               >
                 {props.children(data)}
               </ErrorBoundary>
