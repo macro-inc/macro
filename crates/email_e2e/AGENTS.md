@@ -407,10 +407,15 @@ shared with the web app's suite) and backend entry points second.
   `professional_subscriber` role.
 - Kafka topics are shared by every scenario. The email services only need
   the broker to accept what they publish. `document_storage_service` reads
-  topics, which a stack that starts it creates when missing, and its
-  consumers share their groups across scenarios: an event one scenario
-  publishes may be read by another scenario's process, so do not assert on
-  what that service does with Kafka events.
+  topics and exits at startup when one is missing, so every stack creates
+  the missing topics before it starts a service and waits until the broker
+  serves them all: a fresh broker answers that a topic it was just told to
+  create does not exist until it has applied that, which on a CI runner
+  took up to 18 s behind the 50 partitions of `__consumer_offsets` (CI's
+  broker now makes one). Document storage's consumers share their groups
+  across scenarios: an event one scenario publishes may be read by another
+  scenario's process, so do not assert on what that service does with
+  Kafka events.
 - One search indexer at a time: every indexer is in the consumer group
   `search-processing-service`, so two of them split the topics between
   them and each misses the other's share. The `email-e2e-search` test
