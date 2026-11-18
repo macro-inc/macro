@@ -290,7 +290,7 @@ keep their New action or their own reply/comment composer.
 The phone Agents composer is a chrome island above the dock. At rest it is a
 46px pill with the vertically centered “Message Macro AI” placeholder or a
 one-line draft, and no Send control. Tapping the editor expands it to show
-attachments above the text, then 36px Add, model/agent, dictation, and Send controls.
+attachments above the text, then Add on the left and dictation, model/agent, and Send on the right. The model sits immediately before Send.
 The editor and model picker stay mounted when the composer collapses; attachment
 state survives hiding the chips. Home keeps a separate draft and attachment store.
 
@@ -700,13 +700,14 @@ the shimmer.
 - On Home and New conversation, selecting Code expands the input even
   with an empty or short draft. Both pages place the composer above the viewport's
   vertical center. The heading stays anchored while the composer expands downward,
-  with the repository bar below the input on desktop and above it on mobile.
-  The plus attachment button stays at the far left: before the
-  text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
-  on the left and the agent/model and Send on the right. On mobile, the grouped Auto/Chat/Code pill sits at the top left and repository controls at the top right; repository and branch selection open in standard bottom drawers. The same grouped Tabs pill sits in the desktop settings row; switching modes does not change the row height.
-  Selecting Chat hides the repository controls and keeps the mode switch in
-  the settings row, without remounting the editor or losing the draft. Reduced-motion
-  preferences disable the animation. The hidden drawer is inert. **Repository**
+  with controls inside the composer. Only the plus attachment action stays on the
+  left of the bottom row. The right group contains mode/repository controls on
+  desktop, then dictation, the agent/model selector, and Send. Mode/repository
+  controls can wrap above the final controls; model and Send remain adjacent.
+  On mobile, grouped Auto/Chat/Code stays above the composer with repository
+  controls; both pickers open standard bottom drawers. Selecting Chat hides
+  repository controls without remounting the editor or losing the draft.
+  Reduced-motion preferences disable the expansion animation. **Repository**
   (**Auto-detect** with a GitHub icon unless a default was saved) opens a searchable list:
   **Auto-detect**, then the repositories the signed-in user reaches
   through Macro's GitHub App (`GET /agent-repositories` on the agent harness),
@@ -1123,8 +1124,9 @@ file or a guessed remote revision.
 ## Starting from Home
 
 Home mounts the same new-conversation composer as the Agents page.
-The greeting, agent/model selector, coding repository/branch drawer, and send flow
-are shared. Sending stays on Home and opens the new session in Home's detail
+The greeting, agent/model selector, coding repository/branch controls, and send flow
+are shared. Its bottom row keeps only + on the left, with the model immediately
+before Send on the right. Sending stays on Home and opens the new session in Home's detail
 pane (`/home/agent/<id>`) with the first prompt shown as sent; its row joins the
 top of the Home list once the session is created.
 Session creation and prompt delivery use the shared pending-session flow.
@@ -1834,8 +1836,8 @@ invalid event links are omitted.
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text
-sits on top and a footer row holds the model (left, as a provider logo and
-name, e.g. `✳ Sonnet 5.5 ⌄`) and **Send** (right). On touch devices Enter on the
+sits on top and a footer row holds only + on the left, with dictation, the model
+(as a provider logo and name), and **Send** on the right. On touch devices Enter on the
 virtual keyboard inserts a newline and never sends; only **Send** submits, the
 same as channel composers. This also applies to the Agents workspace session
 and new-conversation inputs and to the mobile **Ask AI** composer. On desktop
@@ -1845,7 +1847,7 @@ bottom sheet listing every model the same way, with a check on the current one
 only ids: Macro Agent's `anthropic/claude-sonnet-5-5` shows as **Sonnet 5.5**. On desktop the
 transcript and composer use the shared channel message width so expanding **Context** only
 grows vertically; your messages are right-aligned bubbles and the model pill
-sits above the box. Tap the session title
+sits inside the composer's bottom row, immediately before Send or Stop. Tap the session title
 to open the title menu (caret), then **Rename** — that opens the generic entity
 rename dialog. Do not expect a tap on the name itself to start
 an inline edit.

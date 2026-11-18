@@ -638,13 +638,16 @@ export function NewChatPage(props: {
         </div>
       }
       drawer={
-        <div class="flex w-full min-w-0 items-center gap-2">
+        <div
+          class="flex min-w-0 flex-wrap items-center gap-2 not-touch:justify-end"
+          classList={{ 'w-full': isTouchDevice() }}
+        >
           {modeSwitch()}
           <Show when={coding()}>
             <div
               class="min-w-0"
               classList={{
-                'flex-1': !phoneComposer(),
+                'w-60 max-w-full': !phoneComposer(),
                 'w-fit max-w-[calc(100%_-_96px)]': phoneComposer(),
               }}
             >

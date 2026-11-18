@@ -491,7 +491,11 @@ export function ChatComposer(props: {
                   top padding; touch keeps the compact row's vertical inset. */}
                     <div
                       ref={setLayout}
-                      data-composer-compact={!drawerOpen() && isCompact()}
+                      data-composer-compact={
+                        !(props.session && !isTouchDevice()) &&
+                        !drawerOpen() &&
+                        isCompact()
+                      }
                       data-composer-coding={drawerOpen() || undefined}
                       data-composer-collapsed={collapsed() || undefined}
                       class="group/composer flex min-w-0 data-[composer-compact=false]:flex-wrap items-end gap-2 p-[7.5px] pl-3 data-[composer-compact=false]:pb-2.5 data-[composer-compact=false]:px-3 data-[composer-compact=false]:pt-[calc(7.5px_+_(33.75px_-_1.5rem)/2)] not-touch:data-[composer-compact=false]:pt-4 data-[composer-collapsed=true]:h-(--mobile-chrome-button-size) data-[composer-collapsed=true]:items-center data-[composer-collapsed=true]:py-0 data-[composer-collapsed=true]:pl-3.5 data-[composer-collapsed=true]:pr-[9.5px]"
@@ -508,25 +512,33 @@ export function ChatComposer(props: {
                       {editorRow()}
                       <div
                         data-composer-controls
-                        class="order-2 flex min-w-0 max-w-[55%] group-data-[composer-compact=false]/composer:max-w-none group-data-[composer-compact=false]/composer:flex-1 shrink-0 items-center gap-2"
+                        class="order-2 ml-auto flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2"
                         role="group"
                         aria-label="Composer settings"
                       >
-                        <div class="ml-auto flex min-w-0 max-w-full items-center gap-2 [&_.menu]:right-0 [&_.menu]:left-auto [&_.menu-anchor]:min-w-0 [&_.pill]:max-w-full">
+                        <Show when={!isTouchDevice() && props.drawer}>
+                          <div
+                            class="min-w-0 max-w-full"
+                            role="group"
+                            aria-label="Conversation settings"
+                            hidden={!drawerOpen()}
+                          >
+                            {props.drawer}
+                          </div>
+                        </Show>
+                        <div class="flex min-w-0 max-w-full items-center gap-2">
                           <div
                             class={
                               collapsed() || (isTouchDevice() && !hasFocused())
                                 ? 'hidden'
-                                : 'flex min-w-0 items-center gap-2'
+                                : 'contents'
                             }
                           >
-                            {props.selector}
-                            <div class={collapsed() ? 'hidden' : 'contents'}>
-                              <DictationButton
-                                dictation={dictation}
-                                disabled={disabled()}
-                              />
-                            </div>
+                            <DictationButton
+                              dictation={dictation}
+                              disabled={disabled()}
+                            />
+                            <div class="min-w-0">{props.selector}</div>
                           </div>
                           {sendControl()}
                         </div>
@@ -536,7 +548,6 @@ export function ChatComposer(props: {
                 </Input.DropZone>
                 <DictationPanel dictation={dictation} />
               </ComposerSurface>
-              <Show when={!isTouchDevice()}>{repositoryDrawer()}</Show>
             </>
           }
         >
@@ -565,10 +576,17 @@ export function ChatComposer(props: {
               {/* File pickers and portaled menus must survive focus leaving the editor. */}
               <div class={collapsed() ? 'hidden' : 'contents'}>
                 <Show when={props.onAttachFiles}>{attachControl()}</Show>
-                <div class="min-w-0 flex-1">{props.selector}</div>
-                <DictationButton dictation={dictation} disabled={disabled()} />
               </div>
-              {sendControl()}
+              <div class="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
+                <div class={collapsed() ? 'hidden' : 'contents'}>
+                  <DictationButton
+                    dictation={dictation}
+                    disabled={disabled()}
+                  />
+                  <div class="min-w-0">{props.selector}</div>
+                </div>
+                {sendControl()}
+              </div>
             </MobileComposerControls>
           </MobileComposerRoot>
           <DictationPanel dictation={dictation} />
