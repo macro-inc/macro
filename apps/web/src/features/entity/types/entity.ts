@@ -13,6 +13,7 @@ import type {
   CallStatus as StorageCallStatus,
 } from '@service-storage/generated/schemas';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import type { ChannelParticipant } from '@service-storage/generated/schemas/channelParticipant';
 import type { EntityAppearance } from '@service-storage/generated/schemas/entityAppearance';
 import type {
   GraphqlEmailFocusCategory,
@@ -156,6 +157,8 @@ export type ChannelEntity = EntityBase & {
   teamId?: string;
   interactedAt?: DateValue | null;
   participantIds?: string[];
+  /** Active participants with their roles, earliest joined first. */
+  participants?: ChannelParticipant[];
   /**
    * Whether the viewer is an active participant of the channel. `false` only
    * for team channels of the viewer's teams they haven't joined (surfaced in

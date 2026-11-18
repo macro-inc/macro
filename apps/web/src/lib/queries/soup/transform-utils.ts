@@ -912,6 +912,10 @@ export const mapApiSoupItemToEntity = (
         updatedAt: item.data.channel.updated_at,
         createdAt: item.data.channel.created_at,
         participantIds: item.data.participants.map((p) => p.user_id),
+        // The server returns participants unordered; list them as they joined.
+        participants: [...item.data.participants].sort((a, b) =>
+          a.joined_at.localeCompare(b.joined_at)
+        ),
         isParticipant: item.data.is_participant ?? true,
         viewedAt: item.data.viewed_at ?? item.data.interacted_at,
         interactedAt: item.data.interacted_at,
