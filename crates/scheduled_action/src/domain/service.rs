@@ -705,10 +705,9 @@ const MAX_MISSING_APPS: usize = 10;
 const MAX_APP_TEXT: usize = 100;
 
 /// The apps a routine draft's session `named` as missing, as a check keeps
-/// them: trimmed, each slug once, never one `task` already requires, and
-/// only ones shaped like an app (a slug of letters, digits, `_` and `-`, and
-/// a name), at most [`MAX_MISSING_APPS`]. The session found them in the
-/// catalog; whether they are connected is the person's to see.
+/// them ([`missing_apps`]), never one `task` already requires. The session
+/// found them in the catalog; whether they are connected is the person's to
+/// see.
 pub(crate) fn named_missing_apps(
     named: Vec<AgentMcpServer>,
     task: &serde_json::Value,
@@ -716,8 +715,18 @@ pub(crate) fn named_missing_apps(
     let required = RoutineProgram::from_task(task)
         .map(|program| program.mcp_servers)
         .unwrap_or_default();
+    missing_apps(named, &required)
+}
+
+/// `apps` as a routine may name them missing: trimmed, each slug once, never
+/// one in `required`, and only ones shaped like an app (a slug of letters,
+/// digits, `_` and `-`, and a name), at most [`MAX_MISSING_APPS`].
+pub(crate) fn missing_apps(
+    apps: Vec<AgentMcpServer>,
+    required: &[AgentMcpServer],
+) -> Vec<AgentMcpServer> {
     let mut kept: Vec<AgentMcpServer> = Vec::new();
-    for app in named {
+    for app in apps {
         let slug = app.app_slug.trim();
         let name = app.server_name.trim();
         let shaped = !slug.is_empty()
