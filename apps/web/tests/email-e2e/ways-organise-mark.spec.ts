@@ -82,9 +82,8 @@ for (const provider of PROVIDERS) {
     }) => {
       const ids = await deliverAll(mailbox, ['Minutes', 'Budget']);
       const read = (subject: string) => readAt(mailbox, subject);
-      const header = page
-        .getByRole('region', { name: 'Reading pane' })
-        .getByRole('group', { name: 'Email actions' });
+      const pane = page.getByRole('region', { name: 'Reading pane' });
+      const header = pane.getByRole('group', { name: 'Email actions' });
       const seenInFlight = seenRequestsInFlight(page);
       // u is refused while a read is on its way, and Mark as read while the
       // unread is: each has finished before the next is asked.
@@ -110,7 +109,7 @@ for (const provider of PROVIDERS) {
         .toEqual(expect.arrayContaining(Object.values(ids)));
       await page.getByRole('button', { name: 'Show reading pane' }).click();
 
-      await openFromList(page, ids.Minutes, 'About Minutes.');
+      await openFromList(page, ids.Minutes, 'About Minutes.', pane);
       await unreadWithU('Minutes');
       await header.getByRole('button', { name: 'Mark as read' }).click();
       did('AL-126', 'F-068');
@@ -119,7 +118,7 @@ for (const provider of PROVIDERS) {
         header.getByRole('button', { name: 'Mark as unread' })
       ).toBeVisible();
 
-      await openFromList(page, ids.Budget, 'About Budget.');
+      await openFromList(page, ids.Budget, 'About Budget.', pane);
       await unreadWithU('Budget');
       await titleMenu(page, 'Budget', /^Mark Read/);
       did('AL-151', 'F-068');

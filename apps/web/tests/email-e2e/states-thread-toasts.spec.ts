@@ -12,6 +12,7 @@ import {
   holdOperation,
   refuseOperation,
 } from './harness/states-thread';
+import { readAt } from './harness/ways-organise-more';
 import {
   allRead,
   deliverEach,
@@ -177,11 +178,12 @@ test.describe('the read notices of a thread in the reading pane', () => {
     const ids = await deliverEach(mailbox, ['Minutes', 'Budget']);
     const header = await readingPane(page, mailbox, ids);
     const seenInFlight = seenRequestsInFlight(page);
+    const readAtProvider = readAt(mailbox, 'Minutes');
     let refusing = false;
     await refuseOperation(page, 'MarkEmailThreadSeen', () => refusing);
 
     await openFromList(page, ids.Minutes, 'About Minutes.');
-    await allRead(mailbox, ids.Minutes);
+    await expect.poll(readAtProvider).toBe(true);
     await expect.poll(seenInFlight).toBe(0);
     const unreadWithU = async () => {
       await page.getByRole('heading', { name: 'Minutes', level: 1 }).click();
@@ -190,9 +192,7 @@ test.describe('the read notices of a thread in the reading pane', () => {
       await expect(unreadNotice).toBeVisible();
       await unreadNotice.getByRole('button', { name: 'Close' }).click();
       await expect(unreadNotice).toHaveCount(0);
-      await expect
-        .poll(async () => (await held(mailbox, 'Minutes'))?.read)
-        .toBe(false);
+      await expect.poll(readAtProvider).toBe(false);
     };
     const read = header.getByRole('button', { name: 'Mark as read' });
     await unreadWithU();
@@ -200,7 +200,7 @@ test.describe('the read notices of a thread in the reading pane', () => {
     await read.click();
     await expect(notice(page, 'Marked as read')).toBeVisible();
     saw('STL-077');
-    await allRead(mailbox, ids.Minutes);
+    await expect.poll(readAtProvider).toBe(true);
     await expect.poll(seenInFlight).toBe(0);
 
     refusing = true;

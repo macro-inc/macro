@@ -142,9 +142,8 @@ test.describe('the header of a thread open on a desktop', () => {
     mailbox,
   }) => {
     const ids = await deliverAll(mailbox, ['Minutes', 'Budget']);
-    const header = page
-      .getByRole('region', { name: 'Reading pane' })
-      .getByRole('group', { name: 'Email actions' });
+    const pane = page.getByRole('region', { name: 'Reading pane' });
+    const header = pane.getByRole('group', { name: 'Email actions' });
     const toggle = header.getByRole('button', { name: /^Mark as (un)?read$/ });
     const seenInFlight = seenRequestsInFlight(page);
 
@@ -154,7 +153,7 @@ test.describe('the header of a thread open on a desktop', () => {
       .poll(() => rowIds(page))
       .toEqual(expect.arrayContaining(Object.values(ids)));
     await page.getByRole('button', { name: 'Show reading pane' }).click();
-    await openFromList(page, ids.Minutes, 'About Minutes.');
+    await openFromList(page, ids.Minutes, 'About Minutes.', pane);
     await expect.poll(readAt(mailbox, 'Minutes')).toBe(true);
     await expect.poll(seenInFlight).toBe(0);
     await expect(toggle).toHaveAccessibleName('Mark as unread');
@@ -164,7 +163,7 @@ test.describe('the header of a thread open on a desktop', () => {
     await expect(toggle).toHaveAccessibleName('Mark as read');
     saw('STL-072', 'F-068');
 
-    await openFromList(page, ids.Budget, 'About Budget.');
+    await openFromList(page, ids.Budget, 'About Budget.', pane);
     await expect.poll(readAt(mailbox, 'Budget')).toBe(true);
     await expect(toggle).toHaveAccessibleName('Mark as unread');
   });
