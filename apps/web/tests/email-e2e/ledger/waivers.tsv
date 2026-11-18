@@ -30,7 +30,6 @@ AL-152	-	needs	needs the AI service, and no test on the full-stack tier does it 
 AL-614	-	needs	needs the notification service, and no test on the full-stack tier does it yet
 AL-620	-	no-user-path	The dialog shows this Copy Link only to a viewer who cannot forward, and every viewer of an email thread can.
 STL-605	-	needs	needs the notification service, and no test on the full-stack tier does it yet
-AC-014	-	bug	a tap on the folded recipients of a phone's new email does not open them (phone-recipient-summary-tap-ignored); its test is kept as a known bug
 AC-319	-	bug	Escape in the phone reply Subject: field does not leave it: the composer puts the focus straight back (phone-reply-subject-escape-keeps-focus); its test is kept as a known bug
 STC-314	-	no-user-path	the recipient picker leaves the user's own address out of its suggestions, and typed or pasted it becomes a plain chip
 STC-046	-	no-user-path	a composer that learns its draft was sent elsewhere closes in the same step that sets this state: the reply composer hides itself, and the standalone one is replaced by the thread
