@@ -1,8 +1,4 @@
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   readRecordsByKeys,
@@ -29,7 +25,6 @@ import {
   invalidateSoupEntity,
   refetchSoupEntity,
 } from '../soup/cache';
-import { markThreadDraftSaved } from './draft-cache';
 import {
   draftFailureCode,
   executeGraphqlDeleteEmailDraft,
@@ -54,7 +49,7 @@ import {
   watchLocalEmailSends,
 } from './local-drafts';
 import { emailSendDelivering, isEmailSendIntent } from './send-intent';
-import { fetchAndCacheThread, type ThreadQueryTransport } from './thread';
+import { fetchAndCacheThread } from './thread';
 
 export {
   assertEmailDraftQueueAvailable,
@@ -183,22 +178,11 @@ export function watchEmailDrafts(
 /**
  * Whether a surface's draft writes ride the durable GraphQL mutation queue,
  * where offline writes persist locally and replay as idempotent upserts
- * keyed by client handles.
- *
- * A write must use the transport the surface's thread read used: a queued
- * save against a REST-read thread has no cached page for its optimistic
- * patch, so the draft would be durable but invisible offline. Replies follow
- * their thread query's transport; a surface without one follows the soup
- * flag. The uncached fallback client has no queue, so REST remains the
- * fallback there.
+ * keyed by client handles. The uncached fallback client has no queue, so REST
+ * remains the fallback there.
  */
-export function draftQueueActive(
-  threadTransport?: ThreadQueryTransport
-): boolean {
-  if (!graphqlCacheEnabled() && !graphqlDraftQueueBlocked()) return false;
-  return threadTransport
-    ? threadTransport === 'graphql'
-    : isFeatureEnabled(enableGraphqlSoup);
+export function draftQueueActive(): boolean {
+  return graphqlCacheEnabled() || graphqlDraftQueueBlocked();
 }
 
 /** A server rejection of a draft write; autosave never retries these. */
@@ -233,7 +217,6 @@ function rejection(
     throw new Error(`${message}: network`);
   }
   if (code === 'DRAFT_ALREADY_SENT') {
-    markThreadDraftSaved(threadId);
     invalidateSoupEntity(threadId);
     void refetchSoupEntity(threadId, 'emailThread').catch(reportError);
     fireAndForget(fetchAndCacheThread(threadId), 'email-draft-queue');
@@ -426,9 +409,7 @@ export async function saveEmailDraftQueued(
 /** A committed save's cache effects; a failure here never fails the save. */
 function refreshAfterCommittedSave(input: QueuedSaveInput, threadId: string) {
   try {
-    markThreadDraftSaved(threadId);
     if (input.previousThreadId && input.previousThreadId !== threadId) {
-      markThreadDraftSaved(input.previousThreadId);
       invalidateSoupEntity(input.previousThreadId);
       void refetchSoupEntity(input.previousThreadId, 'emailThread').catch(
         reportError
@@ -500,7 +481,6 @@ export async function deleteEmailDraftQueued(input: {
     return { kind: 'queued' };
   }
   try {
-    markThreadDraftSaved(input.threadId);
     queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
     if (!input.completingThread) {
       void refetchSoupEntity(input.threadId, 'emailThread').catch(reportError);

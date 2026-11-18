@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::domain::models::{DynamicSort, grouping::ItemGroupingInfo};
+use document_sub_type::DocumentSubType;
 use item_filters::ast::{
     calendar_event::CalendarEventLiteral,
     chat::ChatLiteral,
@@ -143,6 +144,7 @@ async fn matching(pool: &PgPool, properties: Expr<DocumentLiteral>) -> anyhow::R
             cursor: first_page(properties),
             exclude_frecency: false,
         },
+        false,
     )
     .await?
     .iter()
@@ -233,6 +235,60 @@ async fn grouped_totals_count_each_match_of_ored_options_once(pool: PgPool) -> a
     assert_eq!(
         placed.iter().map(|(_, _, id)| *id).collect::<BTreeSet<_>>(),
         set(&[A, C])
+    );
+    Ok(())
+}
+
+/// Whether each `ep_prop` scan under `node` runs inside a subplan.
+fn property_probes(node: &Value, in_subplan: bool, probes: &mut Vec<bool>) {
+    let in_subplan = in_subplan || node.get("Subplan Name").is_some();
+    if node["Alias"] == "ep_prop" {
+        probes.push(in_subplan);
+    }
+    for child in node["Plans"].as_array().into_iter().flatten() {
+        property_probes(child, in_subplan, probes);
+    }
+}
+
+/// The Tasks view lists every task with OR'ed statuses. Pulled up into a
+/// semi-join, their one `?|` test drove the page from every matching status
+/// row in the table; fenced, it stays a probe of each candidate's row.
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn ored_statuses_probe_each_task_of_a_broad_list(pool: PgPool) -> anyhow::Result<()> {
+    seed(&pool).await?;
+    let status = |id| {
+        Expr::val(PropertiesLiteral {
+            property_definition_id: STATUS,
+            entity_type: Some(PropertyEntityType::Task),
+            value: PropertyMatchValue::SelectOption(id),
+        })
+    };
+    let tasks = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::val(DocumentLiteral::SubType(
+            DocumentSubType::Task,
+        )))),
+        properties_filter: Some(Arc::new(Expr::or(
+            status(NOT_STARTED),
+            Expr::or(status(IN_PROGRESS), status(BLOCKED)),
+        ))),
+        chat_filter: Some(Arc::new(Expr::val(ChatLiteral::Importance(false)))),
+        project_filter: Some(Arc::new(Expr::val(ProjectLiteral::Importance(false)))),
+        calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
+        ..EntityFilterAst::mock_empty()
+    };
+    let viewer = user_id(&pool).await?;
+    let plan = explain_first_page(&pool, &viewer.to_string(), &tasks).await?;
+    let mut probes = Vec::new();
+    property_probes(&plan[0]["Plan"], false, &mut probes);
+    assert!(
+        !probes.is_empty() && probes.iter().all(|in_subplan| *in_subplan),
+        "the status test joined the page instead of probing each task: {plan}"
     );
     Ok(())
 }

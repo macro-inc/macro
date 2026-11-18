@@ -176,6 +176,25 @@ pub trait ActivityRepo {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
+/// Answers whether a subject did anything in a time range, without reading
+/// the rows: callers deciding whether to spend work on a period ask this first.
+pub trait SubjectActivityPresence {
+    /// The adapter's error type.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Whether `subject_id` has an activity in `[from, to)` that touched an
+    /// entity: views and appearance changes ([`NON_TOUCH_ACTION_TAGS`]) do not
+    /// count.
+    ///
+    /// [`NON_TOUCH_ACTION_TAGS`]: super::models::NON_TOUCH_ACTION_TAGS
+    fn touched_between(
+        &self,
+        subject_id: &str,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+}
+
 /// Reads activities. Rows come back newest-first (`occurred_at DESC, id
 /// DESC` — the stored keyset order), decoded forward-tolerantly: rows whose
 /// action this reader doesn't know surface as

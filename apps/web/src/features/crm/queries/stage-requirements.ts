@@ -7,7 +7,8 @@ import { crmKeys } from './keys';
 
 function stageRequirementsOptions(
   storage: CrmRecordDependencies['storage'],
-  pipelineId: string
+  pipelineId: string,
+  poll: boolean
 ) {
   return {
     queryKey: crmKeys.stageRequirements(pipelineId).queryKey,
@@ -23,18 +24,26 @@ function stageRequirementsOptions(
           fields: rule.requiredColumnIds,
         })
       ),
-    refetchInterval: 5000,
+    // The pipeline page polls so an edit made elsewhere shows; a one-off reader
+    // keeps its first answer, and the server's stage guard covers the rest.
+    ...(poll
+      ? { refetchInterval: 5000 }
+      : {
+          refetchInterval: false as const,
+          staleTime: Number.POSITIVE_INFINITY,
+        }),
   };
 }
 
 /** Pipeline policy is fetched separately from the host-independent table schema. */
 export function useStageRequirements(
   deps: CrmRecordDependencies,
-  pipelineId: string
+  pipelineId: string,
+  { poll = true }: { poll?: boolean } = {}
 ) {
   const queryKey = crmKeys.stageRequirements(pipelineId).queryKey;
   const query = useQuery(
-    () => stageRequirementsOptions(deps.storage, pipelineId),
+    () => stageRequirementsOptions(deps.storage, pipelineId, poll),
     () => deps.client
   );
   return {

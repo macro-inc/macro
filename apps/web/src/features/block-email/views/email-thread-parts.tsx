@@ -7,10 +7,10 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { ListNavigationButtons } from '@components/app/split-layout/components/SplitHeader';
 import { TOKENS } from '@core/hotkey/tokens';
-import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
-import CheckIcon from '@icon/system/regular/check.svg';
-import EnvelopeSimpleIcon from '@icon/system/regular/envelope-simple.svg';
-import EnvelopeSimpleOpenIcon from '@icon/system/regular/envelope-simple-open.svg';
+import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
+import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import EnvelopeOpenIcon from '@icon/system/regular/envelope-open.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
 import { ButtonGroup } from '@ui';
 import { type JSX, Show } from 'solid-js';
@@ -30,6 +30,7 @@ export function emailThreadMenu(actions: EmailThreadMenuActions): BlockTool[] {
     actions.createTask,
     actions.createEvent,
     actions.share,
+    actions.excludeFromCrm,
     actions.moveToFolder,
     actions.downloadEml,
     actions.trash,
@@ -42,10 +43,9 @@ export function emailThreadMenu(actions: EmailThreadMenuActions): BlockTool[] {
 function EmailThreadControls(props: EmailThreadControlState) {
   return (
     <>
+      {props.crmExclusion}
       {props.reminder}
-      {/* Read-state toggle. Viewing the thread marks it read, so it
-            starts as Mark as unread; marking unread flips it to a bold
-            accent closed envelope that re-marks the thread read. */}
+      {/* Match the title menu's action glyph; retain accent ink for unread threads. */}
       <Show when={props.isOwnThread}>
         <ButtonGroup.Button
           variant="ghost"
@@ -64,9 +64,9 @@ function EmailThreadControls(props: EmailThreadControlState) {
         >
           <Show
             when={props.isUnread}
-            fallback={<EnvelopeSimpleOpenIcon class="size-4" />}
+            fallback={<EnvelopeIcon class="size-4" />}
           >
-            <EnvelopeSimpleIcon class="size-4 text-accent" />
+            <EnvelopeOpenIcon class="size-4 text-accent" />
           </Show>
         </ButtonGroup.Button>
       </Show>
@@ -85,8 +85,11 @@ function EmailThreadControls(props: EmailThreadControlState) {
           // Same focus-preservation as the read-state toggle above.
           onMouseDown={(e) => e.preventDefault()}
         >
-          <Show when={props.isDone} fallback={<CheckIcon class="size-4" />}>
-            <CheckBoldIcon class="size-4 text-accent" />
+          <Show
+            when={props.isDone}
+            fallback={<CheckCircleIcon class="size-4" />}
+          >
+            <ArrowCounterClockwiseIcon class="size-4 text-accent" />
           </Show>
         </ButtonGroup.Button>
       </Show>

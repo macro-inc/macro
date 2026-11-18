@@ -5,6 +5,9 @@ use chrono::NaiveDate;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
+/// The `memory_refresh_piece.piece` of a staged profile; activity pieces use their granularity.
+const PROFILE_PIECE: &str = "profile";
+
 impl ComposedMemoryRepo for PgMemoryRepo {
     #[tracing::instrument(skip_all, err)]
     async fn enroll(&self, user: &MacroUserIdStr<'_>) -> Result<()> {
@@ -20,15 +23,19 @@ impl ComposedMemoryRepo for PgMemoryRepo {
     #[tracing::instrument(skip_all, err)]
     async fn claim_refresh(&self, yesterday: NaiveDate) -> Result<Option<RefreshClaim>> {
         let token = macro_uuid::generate_uuid_v7();
+        // Attempts count claims of the same day, so a crash or timeout counts too.
         let row = sqlx::query!(r#"
             WITH due AS (
                 SELECT j.user_id, COALESCE(p.through_date + 1, (j.created_at AT TIME ZONE 'UTC')::date - 1) AS day
                 FROM memory_refresh_job j LEFT JOIN memory_profile p ON p.user_id = j.user_id
-                WHERE j.lease_until < NOW() AND (p.through_date IS NULL OR p.through_date < $1)
+                WHERE j.lease_until < NOW()
+                  AND COALESCE(p.through_date + 1, (j.created_at AT TIME ZONE 'UTC')::date - 1) <= $1
                 ORDER BY j.lease_until, j.user_id LIMIT 1 FOR UPDATE OF j SKIP LOCKED
             )
-            UPDATE memory_refresh_job j SET lease_token = $2, lease_until = NOW() + INTERVAL '25 minutes'
-            FROM due WHERE j.user_id = due.user_id RETURNING j.user_id, due.day AS "day!"
+            UPDATE memory_refresh_job j SET lease_token = $2, lease_until = NOW() + INTERVAL '25 minutes',
+                attempts = CASE WHEN j.attempt_date = due.day THEN j.attempts + 1 ELSE 1 END,
+                attempt_date = due.day
+            FROM due WHERE j.user_id = due.user_id RETURNING j.user_id, due.day AS "day!", j.attempts
         "#, yesterday, token).fetch_optional(&self.inner).await?;
         row.map(|r| {
             Ok(RefreshClaim {
@@ -36,6 +43,7 @@ impl ComposedMemoryRepo for PgMemoryRepo {
                     .map_err(|e| MemoryError::Other(e.into()))?,
                 date: r.day,
                 token,
+                attempt: u8::try_from(r.attempts).unwrap_or(u8::MAX),
             })
         })
         .transpose()
@@ -45,6 +53,78 @@ impl ComposedMemoryRepo for PgMemoryRepo {
     async fn release_refresh(&self, claim: &RefreshClaim) -> Result<()> {
         sqlx::query!("UPDATE memory_refresh_job SET lease_token = NULL, lease_until = NOW() WHERE user_id = $1 AND lease_token = $2", claim.user.as_ref(), claim.token)
             .execute(&self.inner).await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn retry_refresh(&self, claim: &RefreshClaim, after: chrono::Duration) -> Result<()> {
+        sqlx::query!(
+            "UPDATE memory_refresh_job SET lease_token = NULL, lease_until = NOW() + $3::bigint * INTERVAL '1 second' WHERE user_id = $1 AND lease_token = $2",
+            claim.user.as_ref(),
+            claim.token,
+            after.num_seconds()
+        )
+        .execute(&self.inner)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn staged(&self, user: &MacroUserIdStr<'_>, date: NaiveDate) -> Result<StagedPieces> {
+        let rows = sqlx::query!(
+            "SELECT piece, period_start, period_end, content FROM memory_refresh_piece WHERE user_id = $1 AND date = $2",
+            user.as_ref(),
+            date
+        )
+        .fetch_all(&self.inner)
+        .await?;
+        let mut staged = StagedPieces::default();
+        for row in rows {
+            if row.piece == PROFILE_PIECE {
+                staged.profile = Some(row.content);
+            } else {
+                staged.activity.push(Activity {
+                    granularity: row
+                        .piece
+                        .parse()
+                        .map_err(|e: strum::ParseError| MemoryError::Other(e.into()))?,
+                    period_start: row.period_start,
+                    period_end: row.period_end,
+                    content: row.content,
+                });
+            }
+        }
+        Ok(staged)
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn stage(&self, user: &MacroUserIdStr<'_>, date: NaiveDate, piece: &Piece) -> Result<()> {
+        let (kind, start, end, content) = match piece {
+            Piece::Activity(row) => (
+                row.granularity.as_ref(),
+                row.period_start,
+                row.period_end,
+                row.content.as_str(),
+            ),
+            Piece::Profile(content) => (PROFILE_PIECE, date, date, content.as_str()),
+        };
+        sqlx::query!(
+            r#"
+            INSERT INTO memory_refresh_piece (user_id, piece, date, period_start, period_end, content)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (user_id, piece) DO UPDATE
+            SET date = EXCLUDED.date, period_start = EXCLUDED.period_start,
+                period_end = EXCLUDED.period_end, content = EXCLUDED.content, created_at = NOW()
+        "#,
+            user.as_ref(),
+            kind,
+            date,
+            start,
+            end,
+            content
+        )
+        .execute(&self.inner)
+        .await?;
         Ok(())
     }
 
@@ -140,7 +220,7 @@ impl ComposedMemoryRepo for PgMemoryRepo {
         user: &MacroUserIdStr<'_>,
         expected: i64,
         date: NaiveDate,
-        profile: &str,
+        profile: Option<&str>,
         activity: &[Activity],
         teams: &[Uuid],
     ) -> Result<()> {
@@ -151,7 +231,7 @@ impl ComposedMemoryRepo for PgMemoryRepo {
             .execute(&mut *tx).await?;
         let updated = sqlx::query!(
             r#"
-            UPDATE memory_profile SET content = $3, through_date = $4,
+            UPDATE memory_profile SET content = COALESCE($3, content), through_date = $4,
                 revision = revision + 1, updated_at = NOW()
             WHERE user_id = $1 AND revision = $2
         "#,
@@ -187,6 +267,12 @@ impl ComposedMemoryRepo for PgMemoryRepo {
             .execute(&mut *tx)
             .await?;
         }
+        sqlx::query!(
+            "DELETE FROM memory_refresh_piece WHERE user_id = $1",
+            user.as_ref()
+        )
+        .execute(&mut *tx)
+        .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -194,7 +280,7 @@ impl ComposedMemoryRepo for PgMemoryRepo {
     #[tracing::instrument(skip_all, err)]
     async fn profiles(&self, users: &[String]) -> Result<Vec<(String, String)>> {
         Ok(sqlx::query!(
-            "SELECT user_id, content FROM memory_profile WHERE user_id = ANY($1) ORDER BY user_id",
+            "SELECT user_id, content FROM memory_profile WHERE user_id = ANY($1) AND content <> '' ORDER BY user_id",
             users
         )
         .fetch_all(&self.inner)

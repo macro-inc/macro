@@ -1016,7 +1016,6 @@ const debugComponentIds = [
         'user-icon',
         'dynamic-ui',
         'agent-ui',
-        'agent-replay',
         'agent-progress',
         'agent-changes-ui',
         'diff-view-ui',
@@ -1026,7 +1025,6 @@ const debugComponentIds = [
   ...(DEV_MODE_ENV
     ? [
         'document-where-playground',
-        'projection-playground',
         'md-parse',
         'md-builder',
         'collab-surface-demo',

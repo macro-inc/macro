@@ -100,7 +100,7 @@ fn stage_read(
         let mut p = Params::default();
         let restriction = seed.restriction(&mut p, "seed");
         let scope = sql::scope(&mut p, read, true);
-        let matching = if stage == NameStage::Contains {
+        let matching = if matches!(stage, NameStage::Contains | NameStage::Address) {
             sql::seed_filter(&mut p, read, Some(stage), seed)
         } else {
             "1".into()

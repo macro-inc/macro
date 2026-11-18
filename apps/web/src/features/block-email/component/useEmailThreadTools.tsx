@@ -2,6 +2,10 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import {
+  ThreadExclusionButton,
+  useThreadExclusionAction,
+} from '@app/features/crm/thread-exclusion-adapter';
 import { downloadEmailMessageEml } from '@app/features/email-message/eml-download-adapter';
 import type { EmailThreadListNavigation } from '@app/features/email-thread/context/email-thread-context';
 import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
@@ -32,17 +36,17 @@ import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
 import IconShared from '@icon/share.svg';
-import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
-import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
-import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import CalendarPlusIcon from '@icon/system/regular/calendar-plus.svg';
-import CheckIcon from '@icon/system/regular/check.svg';
+import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
-import EnvelopeSimpleIcon from '@icon/system/regular/envelope-simple.svg';
-import EnvelopeSimpleOpenIcon from '@icon/system/regular/envelope-simple-open.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import EnvelopeOpenIcon from '@icon/system/regular/envelope-open.svg';
+import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
 import ProhibitIcon from '@icon/system/regular/prohibit.svg';
-import TrashIcon from '@icon/system/regular/trash.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import SignalIcon from '@icon/system/regular/wave-sine.svg';
 import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -63,6 +67,7 @@ export type EmailThreadToolsOptions = {
 
 /** Read and done state for a thread header's toggles, with its reminder. */
 export type EmailThreadControlState = {
+  crmExclusion?: JSX.Element;
   reminder?: JSX.Element;
   isOwnThread: boolean;
   isDone: boolean;
@@ -107,6 +112,11 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     if (!thread || !queryReadyGate(linksQuery)) return false;
     return linksQuery.data.links.some((link) => link.id === thread.link_id);
   };
+  const crmPrivacy = useThreadExclusionAction(
+    () => props.id,
+    isOwnThread,
+    () => emailCtx.thread()?.link_id
+  );
 
   const isDone = () => emailCtx.isThreadDone();
 
@@ -251,14 +261,14 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
   const actions = {
     markDone: {
       label: 'Mark Done',
-      icon: CheckIcon,
+      icon: CheckCircleIcon,
       action: toggleMarkDone,
       condition: () => isOwnThread() && !isDone(),
       hotkeyToken: TOKENS.entity.action.markDone,
     },
     markNotDone: {
       label: 'Mark Not Done',
-      icon: CheckBoldIcon,
+      icon: ArrowCounterClockwise,
       action: toggleMarkDone,
       condition: () =>
         isOwnThread() && isDone() && emailCtx.canMarkThreadNotDone(),
@@ -266,14 +276,14 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     },
     markUnread: {
       label: 'Mark Unread',
-      icon: EnvelopeSimpleOpenIcon,
+      icon: EnvelopeIcon,
       action: toggleMarkUnread,
       condition: () => isOwnThread() && !emailCtx.isThreadMarkedUnread(),
       hotkeyToken: TOKENS.entity.action.markUnread,
     },
     markRead: {
       label: 'Mark Read',
-      icon: EnvelopeSimpleIcon,
+      icon: EnvelopeOpenIcon,
       action: toggleMarkUnread,
       condition: () => isOwnThread() && emailCtx.isThreadMarkedUnread(),
       hotkeyToken: TOKENS.entity.action.markRead,
@@ -314,7 +324,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     moveToFolder: {
       group: 'file',
       label: 'Move to folder',
-      icon: ArrowRightIcon,
+      icon: FolderIcon,
       action: moveToFolder,
       condition: () => {
         const entity = emailEntity();
@@ -358,6 +368,18 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
         emailCtx.canActOnSender() &&
         senderBucket() !== 'noise',
     },
+    excludeFromCrm: {
+      group: 'sharing',
+      get label() {
+        return crmPrivacy.label();
+      },
+      get disabledReason() {
+        return crmPrivacy.disabledReason();
+      },
+      icon: EyeSlashIcon,
+      action: crmPrivacy.toggle,
+      condition: crmPrivacy.visible,
+    },
     blockSender: {
       group: 'sender',
       label: 'Block Sender',
@@ -374,6 +396,17 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     permissions: () => getPermissions(emailCtx.thread()?.access_level),
     actions,
     controls: {
+      get crmExclusion() {
+        return (
+          <ThreadExclusionButton
+            visible={crmPrivacy.visible()}
+            excluded={crmPrivacy.excluded()}
+            label={crmPrivacy.label()}
+            disabledReason={crmPrivacy.disabledReason()}
+            onClick={crmPrivacy.toggle}
+          />
+        );
+      },
       get reminder() {
         const entity = emailEntity();
         return entity && isOwnThread() ? (

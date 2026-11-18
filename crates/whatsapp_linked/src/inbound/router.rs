@@ -75,19 +75,75 @@ where
     Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
+    let people_only = axum::middleware::from_fn_with_state(
+        state.authorization_state.clone(),
+        refuse_programs::<Auth>,
+    );
     no_store(
         Router::new()
             .route("/account", get(account::<Auth>))
-            .route("/connect", post(connect::<Auth>))
+            .route("/connect", post(connect::<Auth>).layer(people_only.clone()))
             .route("/disconnect", post(disconnect::<Auth>))
-            .route("/pairing/{id}", get(pairing::<Auth>).delete(cancel::<Auth>))
-            .route("/pairing/{id}/passkey", post(passkey::<Auth>))
+            .route(
+                "/pairing/{id}",
+                get(pairing::<Auth>)
+                    .layer(people_only.clone())
+                    .delete(cancel::<Auth>),
+            )
+            .route(
+                "/pairing/{id}/passkey",
+                post(passkey::<Auth>).layer(people_only),
+            )
             .route("/chats", get(chats::<Auth>))
             .route("/lookups", post(start_lookup::<Auth>))
             .route("/lookups/{id}", get(lookup::<Auth>))
             .route("/history-import", post(import_history::<Auth>)),
     )
     .with_state(state)
+}
+
+/// A pairing links a WhatsApp phone to the account for as long as it stays
+/// linked, and its QR code or passkey is all a phone needs, so only a person
+/// starts one or reads its code: never an agent's program (a credential
+/// signed for an agent or a routine run, or the code-mode header). A
+/// credential that does not verify is rejected here.
+async fn refuse_programs<Auth: MacroAuthorizationService>(
+    State(authorization): State<macro_authorization::MacroAuthorizationState<Auth>>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::{extract::FromRequestParts as _, response::IntoResponse as _};
+    let (mut parts, body) = request.into_parts();
+    let principal = match macro_authorization::OptionalMacroAuthorizationExtractor::<
+        Auth,
+        macro_authorization::AnyPrincipal,
+    >::from_request_parts(&mut parts, &authorization)
+    .await
+    {
+        Ok(extractor) => extractor.authorization,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let program = match &principal {
+        Some(macro_authorization::MacroAuthorization::User(user)) => {
+            macro_authorization::is_program_run(user.attribution(), &parts.headers)
+        }
+        _ => parts
+            .headers
+            .contains_key(macro_authorization::CODE_EXECUTION_HEADER),
+    };
+    if program {
+        tracing::warn!("refused a WhatsApp pairing to a program");
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "code": "forbidden",
+                "message": "An agent's program cannot pair WhatsApp. Tell the user to connect it themselves in Macro, under Settings.",
+            })),
+        )
+            .into_response();
+    }
+    next.run(axum::extract::Request::from_parts(parts, body))
+        .await
 }
 
 /// The caller's own account.

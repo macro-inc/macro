@@ -26,7 +26,7 @@ const DETAIL_QUERY: &str = r#"
 query Project($id: ID!) {
   user {
     id
-    initiative(initiativeId: $id) {
+    visibleInitiative(initiativeId: $id) {
       __typename
       id
       displayName
@@ -76,7 +76,7 @@ fn mutation_updates_list_and_detail_without_losing_detail_fields() {
         let detail_response = json!({
             "user": {
                 "id": "user-1",
-                "initiative": {
+                "visibleInitiative": {
                     "__typename": "GraphqlSoupInitiative",
                     "id": "initiative-1",
                     "displayName": "Original name",
@@ -143,7 +143,7 @@ fn mutation_updates_list_and_detail_without_losing_detail_fields() {
         let mut expected_soup = soup_response;
         expected_soup["user"]["soup"]["items"][0]["displayName"] = json!("Renamed project");
         let mut expected_detail = detail_response;
-        expected_detail["user"]["initiative"]["displayName"] = json!("Renamed project");
+        expected_detail["user"]["visibleInitiative"]["displayName"] = json!("Renamed project");
 
         for (op_id, query, operation_name, variables, expected) in [
             (1, SOUP_QUERY, "Projects", &soup_variables, expected_soup),

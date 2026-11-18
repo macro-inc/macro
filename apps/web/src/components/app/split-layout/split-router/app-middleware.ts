@@ -21,7 +21,6 @@ import {
   driveDocumentFromContent,
   drivePath,
 } from '@app/features/drive-view/primitives/drive-route';
-import { driveDocumentBlockType } from '@app/features/drive-view/primitives/drive-route-schema';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import { composeDraftSearch } from '@app/features/email-compose/compose-route-draft';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
@@ -47,6 +46,8 @@ import { decodeLegacyPair } from './legacy-route';
 
 type AppMiddlewareState = {
   isTouchDevice: () => boolean;
+  /** Phone layout; defaults to touch, which shows one pane. */
+  isMobile?: () => boolean;
 };
 
 function crmPipelinePath(pipelineId: string): string {
@@ -84,8 +85,8 @@ function redirectRetiredCrmDatabases({
   return destination ? redirect(destination) : undefined;
 }
 
-/** Upgrade legacy component and block URLs when supported; on touch, keep
- * document details in their full-block routes instead of inline Drive views. */
+/** Upgrade legacy component and block URLs when supported. Drive's host
+ * decides whether selections open inline using its measured pane width. */
 function redirectLegacyRoutes(
   { routes, to, redirect }: SplitRouterMiddlewareContext,
   options: AppMiddlewareState
@@ -94,15 +95,7 @@ function redirectLegacyRoutes(
   const rootId = paneRootMatch(route)?.id;
 
   const isTouch = options.isTouchDevice();
-
-  if (rootId === 'drive' && isTouch) {
-    const { documentType, documentId } = routeParams(route);
-    if (typeof documentType === 'string' && typeof documentId === 'string') {
-      return redirect(
-        `/${driveDocumentBlockType(documentType)}/${encodeURIComponent(documentId)}`
-      );
-    }
-  }
+  const isPhone = options.isMobile?.() ?? isTouch;
 
   // Touch shows records on their own pages, as the Customers lists open them.
   if (rootId === 'view-companies' && isTouch) {
@@ -143,10 +136,10 @@ function redirectLegacyRoutes(
     .with({ type: 'component', id: CALENDAR_VIEW_ID }, () =>
       calendarPath(getPreferredCalendarPeriodView())
     )
-    // Desktop writes a new email beside the Email list; touch keeps the
-    // full-screen composer.
+    // A new email is written beside the Email list, as a selected thread is
+    // read there; phones keep the full-screen composer.
     .with({ type: 'component', id: 'email-compose' }, () =>
-      isTouch ? undefined : '/mail/new'
+      isPhone ? undefined : '/mail/new'
     )
     .with({ type: 'component' }, ({ id }) =>
       routes.byId.has(`view-${id}`) ? `/${id}` : undefined

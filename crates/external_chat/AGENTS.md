@@ -52,6 +52,13 @@ files, notification effects and the `/external-chats` routes, over the
 - View access is `external_chat_access_level` (see
   `docs/architecture/external-chats.md`); bot view receipts read but never
   borrow a person's account, sends or unread cursor (`view_scope`).
+- The send route refuses an agent's program (`macro_authorization::is_agent_run`)
+  unless `SendReply.user_confirmation` quotes the user's approval
+  (`refuse_unconfirmed_program_send`, 403 `confirmation_required`), as email
+  send does; owner routines and the person's own credentials send as before.
+  The quote is dropped (`send_intent`) before the idempotency digest and the
+  stored send. Uploads only stage a file, so they are not checked: nothing
+  leaves until a confirmed send names it.
 
 ## Related
 

@@ -46,6 +46,8 @@ pub enum InboxRowType {
     CalendarEvent,
     /// A request to join a calendar event the viewer shared.
     CalendarJoinRequest,
+    /// An agent's request for access to a vault item the viewer manages.
+    PasswordAccessRequested,
     /// A request for access to something the viewer can share.
     AccessRequested,
     /// Access the viewer requested was granted.
@@ -169,6 +171,12 @@ pub struct InboxRow {
     pub id: InboxRowId,
     /// The row's kind.
     pub row_type: InboxRowType,
+    /// Other kinds a scope lists the row under, because what the row shows
+    /// is that too: a thread whose reply mentions the viewer is also a
+    /// mention, a mention's thread with replies also a thread, comments that
+    /// mention the viewer are still comments, and a pull request or agent
+    /// session that mentions the viewer is also a discussion mention.
+    pub also_listed_as: Vec<InboxRowType>,
     /// For a thread row, the channel root message or discussion root comment.
     pub thread_id: Option<String>,
     /// Who the row is from, per its newest shown notification; `None` when
@@ -239,10 +247,14 @@ pub struct InboxScope {
 }
 
 impl InboxScope {
-    /// Whether the scope lists `row`.
+    /// Whether the scope lists `row`: one of its kinds, its own or another
+    /// it is listed as, is in the scope.
     pub fn admits(&self, row: &InboxRow) -> bool {
-        (self.row_types.is_empty() || self.row_types.contains(&row.row_type))
-            && (!self.unread_only || row.unseen)
+        let listed = self.row_types.is_empty()
+            || std::iter::once(&row.row_type)
+                .chain(&row.also_listed_as)
+                .any(|row_type| self.row_types.contains(row_type));
+        listed && (!self.unread_only || row.unseen)
     }
 }
 

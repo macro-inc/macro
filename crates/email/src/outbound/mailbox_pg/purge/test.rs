@@ -479,6 +479,73 @@ async fn purge_of_a_missing_link_is_a_no_op(pool: Pool<Postgres>) -> anyhow::Res
     Ok(())
 }
 
+/// Drive lists an owned document as a plain file when it has no `document_email`
+/// row; this is the predicate the Soup document query uses for `iea = false`.
+async fn plain_owned_documents(pool: &Pool<Postgres>, owner: &str) -> anyhow::Result<i64> {
+    Ok(sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*) FROM "Document" d
+        WHERE d.owner = $1
+          AND d."deletedAt" IS NULL
+          AND NOT EXISTS (SELECT 1 FROM document_email WHERE document_id = d.id)
+        "#,
+    )
+    .bind(owner)
+    .fetch_one(pool)
+    .await?)
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("purge_link")
+    )
+)]
+async fn purge_queues_its_attachment_documents_for_the_trash(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let owner: String = sqlx::query_scalar("SELECT macro_id FROM email_links WHERE id = $1")
+        .bind(PURGED)
+        .fetch_one(&pool)
+        .await?;
+    let attachment_id: Uuid = sqlx::query_scalar(
+        "SELECT a.id FROM email_attachments a JOIN email_messages m ON m.id = a.message_id
+         WHERE m.link_id = $1 ORDER BY a.id LIMIT 1",
+    )
+    .bind(PURGED)
+    .fetch_one(&pool)
+    .await?;
+    let document_id = macro_uuid::generate_uuid_v7().to_string();
+    sqlx::query(
+        r#"INSERT INTO "Document" (id, name, owner, "fileType", uploaded)
+           VALUES ($1, 'invoice', $2, 'pdf', true)"#,
+    )
+    .bind(&document_id)
+    .bind(&owner)
+    .execute(&pool)
+    .await?;
+    sqlx::query("INSERT INTO document_email (document_id, email_attachment_id) VALUES ($1, $2)")
+        .bind(&document_id)
+        .bind(attachment_id)
+        .execute(&pool)
+        .await?;
+    assert_eq!(plain_owned_documents(&pool, &owner).await?, 0);
+
+    purge_link(&pool, PURGED, tiny_batches()).await?;
+
+    // Without its link the document lists in My Files as a plain file, so the
+    // purge hands it to document storage, which moves it to the Trash.
+    assert_eq!(plain_owned_documents(&pool, &owner).await?, 1);
+    let queued: Vec<String> =
+        sqlx::query_scalar("SELECT document_id FROM released_email_attachment_documents")
+            .fetch_all(&pool)
+            .await?;
+    assert_eq!(queued, vec![document_id]);
+
+    Ok(())
+}
+
 async fn purge_link(
     pool: &Pool<Postgres>,
     link_id: Uuid,

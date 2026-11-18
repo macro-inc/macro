@@ -7,12 +7,8 @@ import {
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import {
-  enableCalendarUi,
-  enableSnippets,
-  enableSupportedSoupForeignEntities,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
+import { enableSupportedSoupForeignEntities } from '@core/constant/featureFlags';
+import type { EntityData, WithNotification } from '@entity';
 import { revalidateNotificationReaders } from '@queries/notification/revalidation';
 import {
   getGraphqlCacheHost,
@@ -51,6 +47,8 @@ const EMPTY_SCOPE: WorkFeedScope = {
 };
 
 export type WorkFeedHomeDataSource = HomeDataSource & {
+  /** The feed's rows under Home's facets, in Home's order. */
+  entities: Accessor<WithNotification<EntityData>[]>;
   /** Completes Home rows as work feed items. */
   markDoneDelegate: Accessor<MarkDoneDelegate | undefined>;
 };
@@ -71,9 +69,7 @@ export function useWorkFeedHomeDataSource(
 
   const scope = createMemo(() =>
     homeWorkFeedScope(state.facets.type, {
-      calendar: isFeatureEnabled(enableCalendarUi),
       foreignEntities: foreignEntities().enabled,
-      snippets: isFeatureEnabled(enableSnippets),
     })
   );
   const hasScope = () => scope() !== undefined;
@@ -142,6 +138,7 @@ export function useWorkFeedHomeDataSource(
 
   return {
     items,
+    entities: () => entities().items,
     // A filter change keeps the previous pages until the new ones arrive;
     // while none of their rows pass the new filter, the list is loading,
     // not empty.

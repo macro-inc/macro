@@ -1,4 +1,4 @@
-// GraphQL soup rollout (PostHog flag `enable-graphql-soup`).
+// GraphQL soup monitors, added for its rollout.
 //
 // New monitors, not adopted from the UI, so they are not `protect`ed — tune or
 // remove them freely once the rollout settles.
@@ -34,8 +34,8 @@ const DSS_TARGET_GROUP =
   'targetgroup:targetgroup/prod-cloud-storage-service-tg/efcc30d4d72a4d50';
 const GATEWAY_ALB = 'loadbalancer:app/prod-gateway-alb/8e99d35bdc70b1c9';
 
-const ROLLOUT_CONTEXT = `Rollout: \`enable-graphql-soup\` (https://us.posthog.com/project/299018/feature_flags/738783).
-Client-side view: https://us.posthog.com/project/299018/dashboard/2198651`;
+const CLIENT_CONTEXT =
+  'Client-side view: https://us.posthog.com/project/299018/dashboard/2198651';
 
 function rolloutMonitor(
   name: string,
@@ -60,7 +60,7 @@ function rolloutMonitor(
       query: args.query,
       message: `${args.description}
 
-${ROLLOUT_CONTEXT}
+${CLIENT_CONTEXT}
 
 ${notify({ pages: args.severe ?? false })}`,
       tags: ['env:prod', `service:${args.service}`, 'rollout:graphql-soup'],

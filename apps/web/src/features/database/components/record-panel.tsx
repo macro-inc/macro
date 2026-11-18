@@ -276,6 +276,8 @@ function RecordFields(
                 <PropertyIcon
                   type={column().dataType}
                   relation={!!column().relation}
+                  formula={!!column().formula}
+                  percentage={!!column().percentage}
                   entityType={column().specificEntityType}
                 />
                 <span class="truncate">{column().name}</span>

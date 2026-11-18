@@ -544,6 +544,33 @@ describe('sending', () => {
     expectQuiet();
   });
 
+  it('keeps text typed after another device sent the draft as a new draft', async () => {
+    const composer = world.page.compose();
+    composer.type('Sent from another device');
+    await world.advance(2_000);
+    const draftId = composer.draftId()!;
+    world.server.sendElsewhere(draftId);
+
+    composer.type('Sent from another device, and more');
+    await world.advance(30_000);
+
+    expect(sent()).toEqual(['Sent from another device']);
+    const keptId = composer.draftId()!;
+    expect(world.server.row(keptId)?.id).not.toBe(
+      world.server.row(draftId)?.id
+    );
+    await expectSynced(keptId, 'Sent from another device, and more');
+    expect(
+      world.events.flatMap((event) =>
+        event.kind === 'notice' ? [event.message] : []
+      )
+    ).toEqual([
+      'This scheduled email was sent. Your composer has been updated.',
+      'This email was already sent. Your newer text was kept as a new draft and was not sent.',
+    ]);
+    expectQuiet();
+  });
+
   it('sends a message that was never saved as a draft', async () => {
     const composer = world.page.compose();
     composer.type('Straight to send');

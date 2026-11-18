@@ -53,10 +53,12 @@ export function MeetingCopyButton(props: {
           disabled={props.disabled || copying()}
           aria-busy={copying()}
           onClick={copy}
+          icon={
+            <Show when={props.compact} fallback={<Copy class="size-4" />}>
+              <LinkIcon class="size-4" />
+            </Show>
+          }
         >
-          <Show when={props.compact} fallback={<Copy class="size-4" />}>
-            <LinkIcon class="size-4" />
-          </Show>
           <Show when={!props.compact}>
             <span class="hidden @3xl/call-stage:inline">Copy Meeting Url</span>
           </Show>

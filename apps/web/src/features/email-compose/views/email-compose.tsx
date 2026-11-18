@@ -182,13 +182,7 @@ function LoadedEmailComposeView(
     onUpgrade: composeContext.presentation.onUpgrade,
     viewerLoading: composeContext.presentation.viewerLoading,
     signaturePreview: () => (
-      <Show
-        when={
-          composeContext.presentation.signaturesEnabled() &&
-          includeSignature() &&
-          signature()
-        }
-      >
+      <Show when={includeSignature() && signature()}>
         {(html) => (
           <SignaturePreview
             mobile={composeContext.presentation.isMobile()}

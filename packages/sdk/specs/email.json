@@ -440,7 +440,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "The inbox holding the copy cannot send for the viewer",
+            "description": "The inbox holding the copy cannot send for the viewer, or an agent's program asked to forward",
             "content": {
               "application/json": {
                 "schema": {
@@ -6724,7 +6724,8 @@
           "not_found",
           "invalid_recipients",
           "inbox_unavailable",
-          "send_failed"
+          "send_failed",
+          "confirmation_required"
         ]
       },
       "ForwardCalendarEventRecipient": {

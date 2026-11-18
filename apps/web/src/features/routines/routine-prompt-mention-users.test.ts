@@ -1,4 +1,4 @@
-import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
+import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useRoutinePromptMentionUsers } from './routine-prompt-mention-users';
@@ -18,9 +18,6 @@ vi.mock('@core/cursor/flag', () => ({
 }));
 vi.mock('@core/codex/flag', () => ({
   useCodexAgentsAccess: () => () => false,
-}));
-vi.mock('@channel/use-chat-v3-agents-flag', () => ({
-  useChatV3AgentsFlag: () => () => false,
 }));
 vi.mock('@queries/agents/agents', () => ({
   useAgentsQuery: () => ({
@@ -65,13 +62,13 @@ describe('useRoutinePromptMentionUsers', () => {
       const users = useRoutinePromptMentionUsers();
       expect(users().map((user) => user.id)).toEqual([
         'macro|person@example.com',
-        MACRO_AGENT_PRINCIPAL_ID,
+        MACRO_NEW_PRINCIPAL_ID,
       ]);
 
       state.agents = [savedAgent('saved-agent', 'Saved', 'none')];
       expect(users().map((user) => user.id)).toEqual([
         'macro|person@example.com',
-        MACRO_AGENT_PRINCIPAL_ID,
+        MACRO_NEW_PRINCIPAL_ID,
         'bot|saved-agent',
       ]);
       dispose();

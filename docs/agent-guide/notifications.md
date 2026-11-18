@@ -2,7 +2,7 @@
 
 ## Notifications view — `/app/notifications`
 
-Behind `enable-unified-notifications` (with GraphQL Soup), the bell below Home
+Behind `enable-unified-notifications`, the bell below Home
 on the outer rail (`g i`) opens one list of everything that needs you, newest
 first. The flag is on in dev and comes from PostHog elsewhere;
 `VITE_ENABLE_UNIFIED_NOTIFICATIONS` overrides it locally. With the flag off the
@@ -117,7 +117,12 @@ nothing.
 checked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
 Calendar, Access requests, and Agents. Unchecking a type hides its rows (Mentions
 covers both channel and comment mentions, Replies both channel and comment
-threads). The trigger counts hidden types, and **Reset filters** shows them all
+threads). A row that is two kinds shows while either is checked, once: a thread
+whose reply mentions you is under Mentions and Replies, a top-level message that
+mentions you and has replies likewise, an entity's comments that mention you
+under Mentions and Comments, and a pull request or agent session that mentions
+you under Mentions and Pull requests or Agents. Clearing either kind takes such
+a row whole. The trigger counts hidden types, and **Reset filters** shows them all
 again without changing All or Unread. Choices persist per user across reloads.
 Hiding every type shows **Every kind of notification is hidden** with Reset
 filters; types that hide every row show **No notifications match these filters**. The gear beside
@@ -169,7 +174,7 @@ marking it read. Local-only drafts must not issue a mailbox read.
 Channel/thread rows retain their scoped reads, and message readers still require
 actual visibility; opening another entity must not mark hidden replies seen.
 
-With GraphQL Soup enabled, modern project **Mark read** and **Mark done** actions
+Modern project **Mark read** and **Mark done** actions
 target all of the project's notifications, including notifications absent from
 the loaded feed. The target is `INITIATIVE`; legacy Drive folders retain the
 separate `PROJECT` target.
@@ -255,6 +260,14 @@ normal navigation without resetting the current page to the app root. Check
 both listener attachment and pending-intent reads, including a tap delivered
 before the pending read stalls. Receiving a push without tapping it must not
 navigate.
+
+On iOS, Macro stays visible whenever it leaves the foreground without a tap:
+opening the app switcher, Control Center, or Notification Center over it keeps
+its content on screen, including on its switcher card. A tap on a banner over
+the open app navigates in place. A tap that opens the app from the background
+or the Lock Screen goes from the system's blank launch screen to the
+destination, never through the previous page. A tap in Notification Center
+pulled down over Macro reveals the same blank cover, then the destination.
 
 For an iOS warm resume, leave the app running past its startup timeout before
 backgrounding it. Tap an uncached notification without a direct channel target
@@ -398,7 +411,7 @@ computer id, name, and outcome; opening one reopens that computer's setup
 dialog on Bring your AI (see the Macro computers walkthrough in
 [settings.md](settings.md)). An agent teammate's computer notifies its
 inviter with the agent instead (`agent { userId, name }`): "<name> is ready",
-with **Message <name>** and, for owners and admins, **Bring your AI**, or
+with **Message <name>** and, for owners and admins, **Connect Claude plan**, or
 "<name> couldn't be set up" with **Retry**; opening it goes to the DM or to
 Team → Members (see Agent teammates in [settings.md](settings.md)).
 
@@ -455,3 +468,11 @@ persistence, previews, and delivery through a stand-in notification feed:
 (from `apps/web`). To check real delivery, turn sounds on, click anywhere in
 Macro, and trigger a mention from another session; then turn Mentions off and
 check that the next mention is quiet.
+
+
+Password access requests can be grouped under the current team. These are
+notification-only groups: a card or stack notification opens its requested
+item in Passwords, with no separate Team page or generic preview. The group
+is hidden while Passwords or the current team is unavailable, when Passwords
+is disabled, or when its request does not belong to the current team. Other
+notification groups keep their existing navigation.

@@ -17,6 +17,8 @@ use sqlx::{Pool, Postgres, Row};
 /// we also upload attachments for any threads where at least one participant is someone the user has
 /// sent a message to in the past. but those attachments are fetched once backfill is complete, in
 /// a different call.
+///
+/// drafts' attachments are left out, as in [`new_email_document_atts`].
 #[tracing::instrument(skip(db), err)]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn thread_document_atts_for_backfill(
@@ -51,6 +53,7 @@ pub async fn thread_document_atts_for_backfill(
         JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         JOIN thread_info ti ON m.thread_id = ti.thread_id
         WHERE m.thread_id = $1
+            AND NOT m.is_draft
             AND a.filename IS NOT NULL
             -- attachment mime type filters injected below
             {}
@@ -150,7 +153,7 @@ pub async fn thread_media_atts_for_backfill(
 /// Attachments that already have a live document are left out, using the same check the
 /// BackfillAttachment job runs before importing. Imports from
 /// fetch_attachment_threads_for_backfill that are still in flight can still overlap; the job's
-/// check skips those.
+/// check skips those. Drafts' attachments are left out, as in [`new_email_document_atts`].
 ///
 /// This reads the whole mailbox once per backfill, so it starts from the mailbox's document
 /// attachments and only reads the threads that hold them, instead of every message in every
@@ -183,6 +186,7 @@ pub async fn fetch_job_attachments_for_backfill(
             JOIN public.email_attachments a ON a.message_id = m.id
             WHERE m.link_id = $1
                 AND m.has_attachments = true
+                AND NOT m.is_draft
                 AND a.filename IS NOT NULL
                 AND NOT EXISTS (
                     SELECT 1
@@ -294,6 +298,7 @@ async fn message_has_unclaimed_document_attachment(
             LEFT JOIN document_email de ON de.email_attachment_id = a.id
             WHERE m.link_id = $2
                 AND m.provider_id = $1
+                AND NOT m.is_draft
                 AND a.reference_url IS NULL
                 AND de.email_attachment_id IS NULL
                 AND a.upload_claimed_at IS NULL
@@ -334,6 +339,11 @@ async fn message_has_unclaimed_document_attachment(
 /// is evaluated in a separate query. These queries are very similar to fetch_thread_attachments_for_backfill
 /// and fetch_job_attachments_for_backfill respectively, except they also verify the attachment
 /// doesn't already exist in document_email table.
+///
+/// A draft's attachments are never claimed. Saving a draft again, sending it or discarding it
+/// deletes its message row, which would leave the imported document without its link and
+/// listed in Drive as an ordinary file. The sent message's own attachments are imported when
+/// it arrives, and opening a draft attachment still creates its document on demand.
 #[tracing::instrument(skip(db), err)]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn new_email_document_atts(
@@ -371,6 +381,7 @@ pub async fn new_email_document_atts(
                 LEFT JOIN document_email de ON de.email_attachment_id = a.id
                 WHERE m.link_id = $2
                     AND m.provider_id = $1
+                    AND NOT m.is_draft
                     AND a.filename IS NOT NULL
                     {}
                     AND de.email_attachment_id IS NULL
@@ -418,7 +429,7 @@ pub async fn new_email_document_atts(
             m.subject as subject
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
-        -- A draft can have no sender; every claimed row must come back or its
+        -- A message can arrive without a sender; every claimed row must come back or its
         -- claim is never released.
         LEFT JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         WHERE a.id IN (SELECT id FROM claimed)
@@ -482,6 +493,7 @@ pub async fn new_email_document_atts(
                 LEFT JOIN document_email de ON de.email_attachment_id = a.id
                 WHERE m.link_id = $2
                     AND m.provider_id = $1
+                    AND NOT m.is_draft
                     AND de.email_attachment_id IS NULL
                     AND a.upload_claimed_at IS NULL
                     AND a.filename IS NOT NULL
@@ -519,7 +531,7 @@ pub async fn new_email_document_atts(
             m.subject as subject
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
-        -- A draft can have no sender; every claimed row must come back or its
+        -- A message can arrive without a sender; every claimed row must come back or its
         -- claim is never released.
         LEFT JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         WHERE a.id IN (SELECT id FROM claimed)

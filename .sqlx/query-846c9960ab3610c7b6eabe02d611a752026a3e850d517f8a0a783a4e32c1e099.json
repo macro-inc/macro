@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM password_item_entities WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_write_intents WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_folders WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_team_lifecycle WHERE team_id=$1) OR (SELECT id FROM password_import_activity WHERE team_id=$1 ORDER BY id LIMIT 1) IS NOT NULL AS \"present!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "present!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "846c9960ab3610c7b6eabe02d611a752026a3e850d517f8a0a783a4e32c1e099"
+}

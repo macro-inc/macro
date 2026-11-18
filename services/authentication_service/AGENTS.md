@@ -87,7 +87,10 @@ access, webhook reconciliation and billing workers remain independent of attachm
   `ComputerBillingObserver` (`ComputerService::observe_subscription`), which
   decides per computer by computer id, never by price or count. A snapshot
   with more than ten items is completed by paging the items once.
-- Computer billing work (effects and purchase confirmation) runs on its own
+- Computer billing work (effects, purchase refunds and purchase confirmation)
+  and taking back the agent teammates of computers released after a failed
+  first start (`run_computer_agent_effects`,
+  with the team_agents service as `AgentInvites`) run on their own
   `TaskTracker` (`computer_billing`), drained at shutdown.
 - Team deletion releases the team's computers first through
   `TeamOwnedEntityCleanupAdapter::release_computers`, backed by
@@ -212,6 +215,19 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 ## Gotchas
 
+- The email sign-in (`POST /login/passwordless`, `GET /oauth/passwordless/{code}`) refuses an agent's program (`middleware::refuse_program_sign_in`, 403): one that reads the code from the user's inbox would hold the session. These routes take no credential: inside the sandbox every request carries `x-macro-code-execution`, which is the guard; a sent credential signed for an agent or routine refuses too, though a program outside the sandbox can send none. A credential that does not verify counts as none, so a person with a stale session still signs in.
+- `POST /login/passwordless` creates an unknown address's account before anyone
+  has used a code, and FusionAuth calls it verified. Its FusionAuth user data
+  carries `emailCodeSignup`, so the `user.create` webhook records the address
+  unverified and skips the domain team; the request's referral code rides in
+  the code's state. The first code used (`GET /oauth/passwordless/{code}`)
+  marks the address verified and, only for that call, joins the domain team and
+  tracks the referral before the session starts
+  (`src/service/user/email_code_signup.rs`). Never grant anything on the code
+  request alone.
+- `POST /user/agent_setup` refuses an agent's program or a bot (`middleware::refuse_program_agent_setup`, 403): it returns the agent account's lasting API key and replaces the old one. The operator finishes setup in the browser, signed in as the agent.
+- `POST /link/gmail` and `POST /link/github` refuse an agent's program or a bot (`middleware::refuse_program_link`, 403): the consent URL they return works in any browser, and whoever finishes it gets a sign-in on this account. A person links in Settings. The callback is not bound to the browser that started the link; binding it is the deeper fix.
+- `GET /jwt/macro_api_token` refuses a program (`macro_authorization::is_program_run`, 403): it would turn a run's minute-long credential into an hour-long token the model can read. A person's session or API key still exchanges.
 - Match Google link email display names without ASCII case sensitivity: FusionAuth preserves Google's capitalization, while Macro normalizes email addresses. Keep refresh, token lookup, removal, and grant relocation consistent.
 - `/mobile-welcome-email` copies allowlisted ad parameters from the capture
   request onto the desktop signup link and always sets

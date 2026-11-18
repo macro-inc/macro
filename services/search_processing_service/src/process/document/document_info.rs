@@ -1,17 +1,28 @@
+use anyhow::Context;
 use model::document::DocumentMetadata;
 
 use super::SearchExtractorMessage;
+use crate::outbound::document_email::is_email_attachment;
 
 /// Result of looking up a document for indexing.
 pub enum DocumentInfo {
     /// Active document — proceed with indexing.
-    Active(Box<DocumentMetadata>),
+    Active(Box<IndexableDocument>),
     /// Document has been soft-deleted or no longer exists in the DB. The
     /// caller should remove any matching entry from the search index.
     Removable,
     /// Lookup hit an unexpected absence (e.g. version metadata missing). The
     /// caller should leave the search index untouched.
     Skip,
+}
+
+/// An active document with the facts its parent search doc carries.
+pub struct IndexableDocument {
+    /// The latest version's metadata.
+    pub metadata: DocumentMetadata,
+    /// Whether a `document_email` row links the document to an email
+    /// attachment.
+    pub is_email_attachment: bool,
 }
 
 /// Gets the document metadata (latest version of the document) from the database.
@@ -35,19 +46,33 @@ pub async fn get_document_info(
         return Ok(DocumentInfo::Removable);
     }
 
-    match macro_db_client::document::get_document(db, search_extractor_message.document_id.as_str())
-        .await
+    let metadata = match macro_db_client::document::get_document(
+        db,
+        search_extractor_message.document_id.as_str(),
+    )
+    .await
     {
-        Ok(document) => Ok(DocumentInfo::Active(Box::new(document))),
+        Ok(document) => document,
         Err(e) => {
             if e.to_string()
                 .contains("no rows returned by a query that expected to return at least one")
             {
                 tracing::debug!("document version not found");
-                Ok(DocumentInfo::Skip)
+                return Ok(DocumentInfo::Skip);
             } else {
-                Err(e)
+                return Err(e);
             }
         }
-    }
+    };
+
+    // A full index overwrites the parent doc, so a failed read must not be
+    // written as "not an attachment"; the error retries the message instead.
+    let is_email_attachment = is_email_attachment(db, &search_extractor_message.document_id)
+        .await
+        .context("failed to read whether the document is an email attachment")?;
+
+    Ok(DocumentInfo::Active(Box::new(IndexableDocument {
+        metadata,
+        is_email_attachment,
+    })))
 }

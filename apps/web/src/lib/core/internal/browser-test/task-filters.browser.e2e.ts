@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { scrollList } from './scroll-gesture';
 
 test('Tasks people filters page lazily and keep semantic Me, fixed self and unknown selections', async ({
   page,
@@ -32,19 +33,18 @@ test('Tasks people filters page lazily and keep semantic Me, fixed self and unkn
   else await me.locator('[data-multiselect-checkbox]').click();
   await expect(page.getByTestId('task-facets')).toContainText('@viewer');
   await expect(page.getByTestId('task-lookup')).not.toContainText('@viewer');
-  if (!phone)
-    await page.getByRole('listbox').evaluate((node) => {
-      node.scrollTop = node.scrollHeight;
-    });
-  await page
-    .getByRole(phone ? 'button' : 'option', {
-      name: 'Next options',
-      exact: true,
-    })
-    .click();
-  await expect(
-    page.getByRole(role, { name: /Person 50/ }).first()
-  ).toBeInViewport();
+  // Reaching the end of the list lists the next page below the first.
+  if (phone)
+    await page
+      .getByRole(role, { name: /Person 49/ })
+      .first()
+      .scrollIntoViewIfNeeded();
+  else await scrollList(page.getByRole('listbox'));
+  const nextPage = page.getByRole(role, { name: /Person 50/ }).first();
+  await expect(nextPage).toBeAttached();
+  if (phone) await nextPage.scrollIntoViewIfNeeded();
+  else await scrollList(page.getByRole('listbox'), 150);
+  await expect(nextPage).toBeInViewport();
   await input.fill('zxq');
   const found = page.getByRole(role, { name: 'Broader match', exact: true });
   await expect(found).toBeVisible();

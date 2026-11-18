@@ -5,15 +5,13 @@ import {
   type TasksViewProviderProps,
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
-import { isMobile } from '@core/mobile/isMobile';
-import PlusIcon from '@icon/system/regular/plus.svg';
-import { Button } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { ProjectTaskSearch } from '../components/project-task-search';
 import {
   type ProjectSource,
   useProjectsContext,
 } from '../context/projects-context';
+import { NewProjectTask } from '../new-project-task';
 import { createProjectTasksDataSource } from '../queries/project-tasks';
 
 export type ProjectTasksProviderProps = ParentProps<{
@@ -79,7 +77,7 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
 function ProjectTasksListBody(props: ProjectTasksListProps) {
   const { state, setState } = useTasksView();
   return (
-    <div class="flex size-full min-h-0 flex-col">
+    <div class="flex size-full min-h-0 flex-col touch:pt-(--mobile-content-inset-top) touch:[&>*]:[--mobile-content-inset-top:0px]">
       <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2">
         <ProjectTaskSearch
           projectName={props.projectName}
@@ -87,19 +85,9 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           onValueChange={(search) => setState('search', search)}
         />
         <div class="ml-auto flex shrink-0 items-center gap-2">
-          <TasksControls />
+          <TasksControls inline />
           {props.addTasksAction}
-          <Show when={props.onCreateTask}>
-            <Button
-              variant="secondary"
-              size={isMobile() ? 'icon-md' : 'md'}
-              aria-label={isMobile() ? 'New task' : undefined}
-              onClick={() => props.onCreateTask?.()}
-            >
-              <PlusIcon class={isMobile() ? 'size-6' : 'size-4'} />
-              {isMobile() ? null : 'New task'}
-            </Button>
-          </Show>
+          <NewProjectTask onCreateTask={props.onCreateTask} />
         </div>
       </div>
       <TasksContent />

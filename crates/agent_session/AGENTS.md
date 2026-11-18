@@ -63,7 +63,7 @@ consumer talks to.
 
 ## Tool contracts
 
-- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. `link_task` returns a `mention` chip to paste when naming the task.
+- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. Only directly authenticated users with edit access may answer permissions or elicitations; agent programs and runtimes cannot answer. `link_task` returns a `mention` chip to paste when naming the task.
 
 `release_session` stops an idle actor silently (`CloseReason::Released`): the
 actor refuses with `SessionRelease::Busy` unless its machine is live with no
@@ -88,6 +88,15 @@ before the next real prompt attempts to attach quiet events.
 Discovery uses bounded cursor pages so callers can
 advance past unavailable sessions. Quiet batches bind to the actual prompt action ID;
 notification-only turns record `PrompterKind::System` and no human authority.
+A prompt from a program (`ControlPrincipal::Program`, including a session
+created with a first prompt) or a routine's agent step, and a queued prompt a
+program rewrote, record `PrompterKind::Program`: the user's access, never the
+user's decision. The kind rides `ControlEvent` and three decoded paths: the
+`turn_prompter_kind` column, `StoredQueuedAction.prompter`, and the harness
+command's `prompter` (`DeliverAction`, `EditQueued`). All three decode through
+`PrompterKind::from_stored`: an unknown kind reads as `System`, with no acting
+user and so no owner access, and logs a warning; a missing one reads as
+`user`. An edit keeps the less trusted of the prompt's and the editor's kinds.
 Never expose notification metadata through public session controls. Notification
 sessions read original log frames across load boundaries to retain trusted event
 provenance when runtimes echo their prompt history. A log trigger records this
@@ -219,6 +228,11 @@ skips the turn before any model call; unset or unreadable, summaries run.
 - The row's fenced log writer and the Cursor projection both lock the
   session row `FOR UPDATE`; never add a second `NOWAIT` locker without
   checking both paths (see git history on `src/domain/control.rs`).
+- The search indexing lease (`SearchIndexingRepo::lock`) returns
+  `GrantedLease::granted_at`, read from the database clock in the locking
+  statement itself. search-processing sends it as the version of every write
+  and delete it makes in the index, so it must stay one clock for all workers,
+  never a process clock.
 - `modified_at` is Agents/Home list recency. Bump it for user-visible work
   (`moves_session_list`: starting/running/stopping/blocked) and metadata
   the viewer asked to change. Do not bump it for claim, release, recovery,
@@ -232,6 +246,5 @@ skips the turn before any model call; unset or unreadable, summaries run.
 - No session opens for a bot bound to an agent teammate's computer
   (`BotFacts::on_team_agent_computer`): `persona_for_owner` and a runtime's
   external create refuse it with `TeamAgentComputer` (409).
-- `RuntimeSessionLookup` resolves ACP ids for a supplied bot set; runtime wiring obtains assignments through the bots port.
-
+- `RuntimeSessionLookup` resolves ACP ids for a supplied bot set, skipping archived sessions and flagging dormant ones; runtime wiring obtains assignments through the bots port.
 - Structured session activity additionally requires current access for CRM records, including acting-user bot credentials. Preserve the raw cursor when filtering denied rows; saved transcript text remains a received snapshot.

@@ -24,7 +24,8 @@ Outlook (Microsoft Graph) outbound adapters.
   `outlook.graph_admission` child for the per-mailbox gate wait).
 - `src/outbound/microsoft_gate.rs`: the Redis admission every Graph request
   passes (window, concurrency, cooldown), which also counts admitted requests
-  per sync generation.
+  per sync generation. Each gate is built with a `RequestBudget`: `Live` for
+  calendar, commands and live sync, `Import` for an Outlook import's reads.
 
 ## Scope
 
@@ -58,6 +59,15 @@ Outlook (Microsoft Graph) outbound adapters.
 
 ## Gotchas
 
+- The Microsoft gate's `Import` budget stops below the shared limits (two of
+  the three slots, 7,500 of the 9,000 window), so an import never takes the
+  last slot or the window's tail from calendar and live sync. A refused import
+  request waits in the gate for room (two waiters per mailbox, up to 20 s)
+  before it defers. It defers at once when both waiters' places are taken or
+  its refusal lasts longer than the wait (a full window, a cooldown); `Live`
+  requests never wait. A full window is reported before busy slots. A mailbox
+  with every slot busy asks for a retry in a second: the 90-second permit
+  lease only frees a crashed caller's slot and is never a retry delay.
 - Undated provider drafts use creation time for All Mail eligibility; spam/junk
   and trash remain excluded. Keep ingestion, recomputation, and cached projections aligned.
 

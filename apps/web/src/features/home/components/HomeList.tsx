@@ -1,3 +1,4 @@
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { usePending } from '@app/observability/flow';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
@@ -115,6 +116,7 @@ function HomeTutorial() {
 
 /** Compact notification list used by the Notifications workspace. */
 export function HomeList(props: HomeListProps) {
+  const inlinePreviewLayout = useInlinePreviewLayout();
   const channels = useChannelsContext();
   const channelName = (entity: WithNotification<EntityData>) =>
     entity.type === 'channel_thread'
@@ -193,7 +195,7 @@ export function HomeList(props: HomeListProps) {
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    if (!isTouchDevice() && !newSplit) {
+    if (inlinePreviewLayout() && !newSplit) {
       if (!isNonMemberChannelEntity(sourceRow.entity)) {
         markChannelNotificationsSeenOnOpen(
           sourceRow.entity,
@@ -232,7 +234,9 @@ export function HomeList(props: HomeListProps) {
     if (entity) markRowNotificationsSeenOnOpen(entity, notificationSource);
     // A runtime opens in Settings → Machines; it has no preview.
     props.onPreviewEntityChange(
-      entity?.type === 'harness' ? undefined : entity,
+      entity?.type === 'harness' || entity?.type === 'team'
+        ? undefined
+        : entity,
       options
     );
   }
@@ -275,6 +279,9 @@ export function HomeList(props: HomeListProps) {
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
+
+  // The tutorial introduces Home; search results are not Home's list.
+  const showsTutorial = () => state.tab === 'signal' && !state.search.trim();
 
   let scrollOffset = DEFAULT_HOME_LIST_STATE.scrollOffset;
   const readListState = (): HomeListStateSnapshot => ({
@@ -388,7 +395,7 @@ export function HomeList(props: HomeListProps) {
         previewAfterNavigation.clear();
 
         const row = event.result?.item;
-        if (!isTouchDevice() && row?.kind === 'entity') {
+        if (inlinePreviewLayout() && row?.kind === 'entity') {
           previewAfterNavigation(row.entity);
         }
 
@@ -661,7 +668,7 @@ export function HomeList(props: HomeListProps) {
                   {/* A new account's Home starts empty, when the tutorial
                       matters most. Touch devices show no tutorial, so there
                       the empty state keeps its own top inset. */}
-                  <Show when={state.tab === 'signal'}>
+                  <Show when={showsTutorial()}>
                     <HomeTutorial />
                   </Show>
                   <HomeEmptyState />
@@ -684,7 +691,7 @@ export function HomeList(props: HomeListProps) {
                       aria-hidden="true"
                       class="h-0 touch:h-(--mobile-content-inset-top)"
                     />
-                    <Show when={state.tab === 'signal'}>
+                    <Show when={showsTutorial()}>
                       <HomeTutorial />
                     </Show>
                   </div>

@@ -115,7 +115,7 @@ pub const DOCUMENT_MIME_PREFIXES: &[&str] = &[
 ];
 
 /// `LIKE` patterns matching any of `prefixes` as a literal prefix.
-fn like_prefixes(prefixes: &[&str]) -> Vec<String> {
+pub(crate) fn like_prefixes(prefixes: &[&str]) -> Vec<String> {
     prefixes
         .iter()
         .map(|prefix| {

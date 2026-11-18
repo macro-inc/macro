@@ -134,31 +134,18 @@ fn run_local_and_stack_up_parse_the_computers_flags() {
     );
     assert_eq!(
         fleet(
-            &["cargo-x", "run-local", "--computers-incus"],
-            Fleet::Docker
-        ),
-        Fleet::Incus
-    );
-    assert_eq!(
-        fleet(
             &["cargo-x", "stack", "up", "--computers", "docker"],
             Fleet::Off
         ),
         Fleet::Docker
-    );
-    assert_eq!(
-        fleet(
-            &["cargo-x", "validate-local-compose", "--computers-incus"],
-            Fleet::Docker
-        ),
-        Fleet::Incus
     );
     assert!(
         Cli::try_parse_from([
             "cargo-x",
             "run-local",
             "--no-computers",
-            "--computers-incus"
+            "--computers",
+            "docker"
         ])
         .is_err()
     );

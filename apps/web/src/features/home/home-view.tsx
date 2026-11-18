@@ -1,5 +1,6 @@
-import { useViewShell, ViewShell } from '@app/components/view-shell';
+import { useViewShell } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { calendarSearch } from '@app/features/calendar-view/calendar-url';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { createSearchParams, SplitRouter } from '@app/lib/split-router';
@@ -23,6 +24,7 @@ import { HomeListSkeleton } from './components/HomeListSkeleton';
 import { HomeReturnBreadcrumb } from './components/HomeReturnBreadcrumb';
 import { HomeSetupPromotion } from './components/HomeSetupPromotion';
 import { HomeTabs } from './components/HomeTabs';
+import { HomeViewLayout } from './components/HomeViewLayout';
 import { HomeViewProvider, useHomeView } from './home-view-context';
 import { homeTour } from './tour';
 import type { HomeViewStateOptions } from './types';
@@ -95,6 +97,7 @@ function HomeListPane(props: {
 }
 
 function HomeViewRoot() {
+  const inlinePreviewLayout = useInlinePreviewLayout();
   const panel = useSplitPanelOrThrow();
   const { previewTarget, calendarOpen, openPreview, closePreview } =
     useHomeView();
@@ -118,58 +121,30 @@ function HomeViewRoot() {
       <StaticMarkdownContext>
         <SplitPanel.Root>
           <SplitPanel.Body>
-            <Show
-              when={isTouchDevice()}
-              fallback={
-                <div class="size-full min-h-0 bg-panel">
-                  <ViewShell.Root
-                    asidePreferenceKey="home"
-                    aside={{ preserveDuringResize: false }}
-                    main={{ preferredWidth: 640 }}
-                    resizable
-                  >
-                    <ViewShell.Aside class="flex flex-col bg-panel">
-                      <DebugSuspense name="HomeView.list-pane">
-                        <HomeListPane
-                          hasPreview={
-                            previewTarget() !== undefined || calendarOpen()
-                          }
-                          onPreviewEntityChange={onPreviewEntityChange}
-                          onNewChat={newChat}
-                        />
-                      </DebugSuspense>
-                    </ViewShell.Aside>
-                    <ViewShell.Main class="overflow-hidden">
-                      {/* Detail routes load lazily. Suspend only this area, so
-                          the list stays mounted and a pending detail's effects
-                          wait until it resolves. */}
-                      <DebugSuspense
-                        name="HomeView.outlet"
-                        fallback={<HomeFallback />}
-                      >
-                        <SplitRouter.Outlet
-                          fallback={() => <HomeChatStart />}
-                        />
-                      </DebugSuspense>
-                    </ViewShell.Main>
-                  </ViewShell.Root>
-                </div>
+            <HomeViewLayout
+              inlinePreview={inlinePreviewLayout()}
+              list={
+                <DebugSuspense name="HomeView.list-pane">
+                  <HomeListPane
+                    hasPreview={previewTarget() !== undefined || calendarOpen()}
+                    onPreviewEntityChange={onPreviewEntityChange}
+                    onNewChat={newChat}
+                  />
+                </DebugSuspense>
               }
             >
-              <ViewShell.Root aside={false} main={{ min: 224 }}>
-                <ViewShell.Main>
-                  <DebugSuspense name="HomeView.list-pane">
-                    <HomeListPane
-                      hasPreview={
-                        previewTarget() !== undefined || calendarOpen()
-                      }
-                      onPreviewEntityChange={onPreviewEntityChange}
-                      onNewChat={newChat}
-                    />
-                  </DebugSuspense>
-                </ViewShell.Main>
-              </ViewShell.Root>
-            </Show>
+              <DebugSuspense name="HomeView.outlet" fallback={<HomeFallback />}>
+                <SplitRouter.Outlet
+                  fallback={() => (
+                    <Show when={isTouchDevice()} fallback={<HomeChatStart />}>
+                      <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-ink-muted">
+                        Select a notification to open it here.
+                      </div>
+                    </Show>
+                  )}
+                />
+              </DebugSuspense>
+            </HomeViewLayout>
           </SplitPanel.Body>
         </SplitPanel.Root>
       </StaticMarkdownContext>
@@ -183,40 +158,30 @@ function HomeViewRoot() {
  * itself waits for identity; the frame keeps the screen from going blank.
  */
 export function HomePendingView() {
+  const inlinePreviewLayout = useInlinePreviewLayout();
   const listSkeleton = (
-    <div class="mt-3 min-h-0 min-w-0 flex-1 overflow-hidden touch:mt-0 touch:pt-(--mobile-content-inset-top)">
-      <HomeListSkeleton grouped />
+    <div class="flex size-full min-h-0 flex-col">
+      <Show when={!isTouchDevice()}>
+        <SidebarCreateHeader
+          title="Home"
+          label="New chat"
+          onCreate={() => {}}
+        />
+      </Show>
+      <div class="mt-3 min-h-0 min-w-0 flex-1 overflow-hidden touch:mt-0 touch:pt-(--mobile-content-inset-top)">
+        <HomeListSkeleton grouped />
+      </div>
     </div>
   );
-
   return (
     <SplitPanel.Root>
       <SplitPanel.Body>
-        <Show
-          when={isTouchDevice()}
-          fallback={
-            <div class="size-full min-h-0 bg-panel">
-              <ViewShell.Root
-                asidePreferenceKey="home"
-                aside={{ preserveDuringResize: false }}
-                main={{ preferredWidth: 640 }}
-                resizable
-              >
-                <ViewShell.Aside class="flex flex-col bg-panel">
-                  <SidebarCreateHeader
-                    title="Home"
-                    label="New chat"
-                    onCreate={() => {}}
-                  />
-                  {listSkeleton}
-                </ViewShell.Aside>
-                <ViewShell.Main class="overflow-hidden" />
-              </ViewShell.Root>
-            </div>
-          }
+        <HomeViewLayout
+          inlinePreview={inlinePreviewLayout()}
+          list={listSkeleton}
         >
-          {listSkeleton}
-        </Show>
+          <div class="size-full" />
+        </HomeViewLayout>
       </SplitPanel.Body>
     </SplitPanel.Root>
   );

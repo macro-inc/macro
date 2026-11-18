@@ -27,6 +27,7 @@ export function toViewColumn(column: FormColumn): DatabaseViewColumn {
       ...base,
       dataType: 'NUMBER',
       isMultiSelect: false,
+      percentage: column.percentage,
     }))
     .with({ type: 'boolean' }, () => ({
       ...base,

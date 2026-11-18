@@ -4852,7 +4852,7 @@ export type AnswerAgentSessionToolApprovalData = {
 export type AnswerAgentSessionToolApprovalErrors = {
     401: string;
     /**
-     * Not the owner, for approve or deny; or no edit access
+     * Agent run approving, not the owner for approve or deny, or no edit access
      */
     403: string;
     404: string;
@@ -5058,6 +5058,7 @@ export type StartClaudeSignInErrors = {
     403: unknown;
     404: unknown;
     409: unknown;
+    410: unknown;
     422: unknown;
     503: unknown;
     504: unknown;
@@ -5086,6 +5087,7 @@ export type CompleteClaudeSignInErrors = {
     403: unknown;
     404: unknown;
     409: unknown;
+    410: unknown;
     422: unknown;
     503: unknown;
     504: unknown;

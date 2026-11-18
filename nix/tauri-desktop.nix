@@ -29,6 +29,10 @@
         };
       };
       gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
+      # The embedded bundle's commit, so the updater can tell the server it
+      # already runs the bundle deployed from it. `desktop-release.mjs prepare`
+      # records it, because the file it rewrites leaves the flake without a rev.
+      bundleGitSha = desktopRelease.gitSha or "";
 
       # Vite inlines `import.meta.env.VITE_*` at build time, so the desktop
       # bundle only reaches PostHog — and therefore only resolves feature
@@ -241,6 +245,11 @@
           simd = true;
           profile = "ai-engine-wasm";
         }
+        {
+          name = "password_import_wasm";
+          crate = "crates/password_import_wasm";
+          dir = "password-import";
+        }
       ];
 
       # A binary of the root workspace (not the nested Tauri one), built
@@ -304,6 +313,22 @@
         package = "harnessd";
       };
 
+      # The agent of Firecracker hosts (nix/hosts/_nixos/firecracker-host.nix).
+      # GET /v1/host reports the commit it was built from (`agentVersion`).
+      firecrackerHostBinary =
+        (workspaceBinary {
+          pname = "firecracker-host";
+          package = "firecracker_host";
+        }).overrideAttrs
+          { FIRECRACKER_HOST_COMMIT = gitRev; };
+
+      # The vsock agent the Firecracker host runs programs through, baked into
+      # the Firecracker computer image (nix/macro-box/_firecracker.nix).
+      firecrackerGuestAgentBinary = workspaceBinary {
+        pname = "firecracker-guest-agent";
+        package = "firecracker_guest_agent";
+      };
+
       # Tauri sidecar sources carry the target triple in the file name; the
       # bundler strips it when placing the binary next to the app executable.
       rustHostTriple = pkgs.stdenv.hostPlatform.rust.rustcTarget;
@@ -356,7 +381,7 @@
             cd apps/web
             MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
             printf '${appVersion}+${gitRev}\n' > dist/semver.txt
-            BUNDLE_BUILD_NUMBER=${toString desktopRelease.bundleBuild} MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
+            GIT_SHA='${bundleGitSha}' BUNDLE_BUILD_NUMBER=${toString desktopRelease.bundleBuild} MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
           )
 
           # A supplied key that never reaches the bundle means PostHog — and
@@ -385,9 +410,12 @@
           runHook postCheck
         '';
 
+        # The app streams web-hosted/ (videos) from the web deploy, like the
+        # mobile apps (`build-tauri`), so the desktop bundle leaves it out.
         installPhase = ''
           runHook preInstall
           cp -r apps/web/dist "$out"
+          rm -rf "$out/web-hosted"
           runHook postInstall
         '';
       };
@@ -1497,6 +1525,8 @@
         js-node-modules = nodeModules;
         macrod = macrodBinary;
         harnessd = harnessdBinary;
+        firecracker-host = firecrackerHostBinary;
+        firecracker-guest-agent = firecrackerGuestAgentBinary;
       }
       // lib.optionalAttrs isLinux {
         tauri-frontend = frontend;

@@ -1,3 +1,5 @@
+import { PASSWORD_KINDS } from './kinds';
+
 export type PasswordKind =
   | 'login'
   | 'card'
@@ -86,7 +88,8 @@ export function filterItems(
   items: PasswordItem[],
   filter: PasswordFilter,
   search: string,
-  folders: readonly PasswordFolder[] = []
+  folders: readonly PasswordFolder[] = [],
+  kinds: readonly PasswordKind[] = []
 ) {
   const scope = filter.startsWith('folder:')
     ? folderSubtree(folders, filter.slice(7))
@@ -97,6 +100,7 @@ export function filterItems(
     if (filter === 'recent' && !item.lastUsedAt) return false;
     if (filter === 'shared' && !item.shared) return false;
     if (scope && !(item.folderId && scope.has(item.folderId))) return false;
+    if (kinds.length > 0 && !kinds.includes(item.kind)) return false;
     return `${item.name} ${item.url ?? ''}`.toLocaleLowerCase().includes(query);
   });
   if (filter === 'recent')
@@ -104,6 +108,19 @@ export function filterItems(
       (right.lastUsedAt ?? '').localeCompare(left.lastUsedAt ?? '')
     );
   return filtered;
+}
+
+/** How the item list is sectioned. */
+export type PasswordGroupBy = 'none' | 'kind';
+
+/** Items by type, in the New menu's order; a type with no items is left out. */
+export function groupByKind(
+  items: readonly PasswordItem[]
+): { kind: PasswordKind; items: PasswordItem[] }[] {
+  return PASSWORD_KINDS.map((kind) => ({
+    kind,
+    items: items.filter((item) => item.kind === kind),
+  })).filter((group) => group.items.length > 0);
 }
 
 export function validateDraft(
@@ -164,3 +181,6 @@ export function folderPath(
   }
   return path;
 }
+
+/** A reviewer's answer to an agent's access request. */
+export type AgentRequestDecision = 'view' | 'edit' | 'deny';

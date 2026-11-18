@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM \"UserHistory\" h\n        USING unnest($1::text[]) AS trashed(id)\n        WHERE h.\"itemId\" = trashed.id AND h.\"itemType\" = 'document'\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b443f4b5fc791190e73f1136e9c2da12017b6050ff9ee67675af70682b511a27"
+}

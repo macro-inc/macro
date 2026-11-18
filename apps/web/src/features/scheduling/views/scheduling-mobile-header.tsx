@@ -1,8 +1,7 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import CaretLeft from '@icon/system/regular/caret-left.svg';
 import Check from '@icon/system/regular/check.svg';
@@ -33,7 +32,6 @@ export function SchedulingMobileHeader(props: {
   onBack: () => void;
   onCreate: (opener: HTMLElement) => void;
 }) {
-  const panel = useSplitPanel();
   const [ownerTrigger, setOwnerTrigger] = createSignal<HTMLButtonElement>();
   const tab = () => props.tabs.find((item) => item.value === props.tab);
   const owner = () => props.scopes.find((scope) => scope.id === props.ownerId);
@@ -82,104 +80,100 @@ export function SchedulingMobileHeader(props: {
             if (!props.disabled) props.onTab(value);
           }}
           leading={
-            <HeaderIsland class="gap-0 px-1">
-              <MobileDrawer
-                side="bottom"
-                restoreFocus
-                finalFocusEl={ownerTrigger()}
-              >
-                <MobileDrawer.Trigger
-                  aria-label={`Calendar owner: ${ownerName()}`}
-                  tooltip={`Calendar owner: ${ownerName()}`}
-                  ref={setOwnerTrigger}
-                  as={Button}
-                  variant="ghost"
-                  size="sm"
-                  class="h-10 min-w-0 rounded-full px-2"
-                  disabled={props.disabled}
+            <>
+              <ViewSidebar.Toggle action="expand" presentation="pill" />
+              <HeaderIsland class="gap-0 px-1">
+                <MobileDrawer
+                  side="bottom"
+                  restoreFocus
+                  finalFocusEl={ownerTrigger()}
                 >
-                  <Show
-                    when={owner()?.teamId}
-                    fallback={<User class="size-4 shrink-0" />}
+                  <MobileDrawer.Trigger
+                    aria-label={`Calendar owner: ${ownerName()}`}
+                    tooltip={`Calendar owner: ${ownerName()}`}
+                    ref={setOwnerTrigger}
+                    as={Button}
+                    variant="ghost"
+                    size="sm"
+                    class="h-10 min-w-0 rounded-full px-2"
+                    disabled={props.disabled}
                   >
-                    <Users class="size-4 shrink-0" />
-                  </Show>
-                  <span class="max-w-28 truncate">{ownerName()}</span>
-                  <CaretDown class="size-3.5 shrink-0" />
-                </MobileDrawer.Trigger>
-                <MobileDrawer.Portal>
-                  <MobileDrawer.Overlay />
-                  <MobileDrawer.Content aria-label="Calendar owner">
-                    <MobileDrawer.Handle />
-                    <MobileDrawer.Title class="px-6 pb-3 text-base font-semibold">
-                      Calendar owner
-                    </MobileDrawer.Title>
-                    <MobileDrawer.ScrollBody>
-                      <div class="mx-3 flex flex-col gap-1">
-                        <For each={props.scopes}>
-                          {(scope) => (
-                            <MobileDrawer.Close
-                              as={MobileDrawer.Item}
-                              aria-label={
-                                scope.teamId ? scope.name : 'Personal'
-                              }
-                              aria-pressed={props.ownerId === scope.id}
-                              disabled={props.disabled}
-                              onClick={() => props.onOwner(scope.id)}
-                            >
-                              <Show
-                                when={scope.teamId}
-                                fallback={<User class="size-4 shrink-0" />}
+                    <Show
+                      when={owner()?.teamId}
+                      fallback={<User class="size-4 shrink-0" />}
+                    >
+                      <Users class="size-4 shrink-0" />
+                    </Show>
+                    <span class="max-w-28 truncate">{ownerName()}</span>
+                    <CaretDown class="size-3.5 shrink-0" />
+                  </MobileDrawer.Trigger>
+                  <MobileDrawer.Portal>
+                    <MobileDrawer.Overlay />
+                    <MobileDrawer.Content aria-label="Calendar owner">
+                      <MobileDrawer.Handle />
+                      <MobileDrawer.Title class="px-6 pb-3 text-base font-semibold">
+                        Calendar owner
+                      </MobileDrawer.Title>
+                      <MobileDrawer.ScrollBody>
+                        <div class="mx-3 flex flex-col gap-1">
+                          <For each={props.scopes}>
+                            {(scope) => (
+                              <MobileDrawer.Close
+                                as={MobileDrawer.Item}
+                                aria-label={
+                                  scope.teamId ? scope.name : 'Personal'
+                                }
+                                aria-pressed={props.ownerId === scope.id}
+                                disabled={props.disabled}
+                                onClick={() => props.onOwner(scope.id)}
                               >
-                                <Users class="size-4 shrink-0" />
-                              </Show>
-                              <span class="min-w-0 flex-1 break-words">
-                                {scope.teamId ? scope.name : 'Personal'}
-                              </span>
-                              <Show when={props.ownerId === scope.id}>
-                                <Check class="size-4 text-accent" />
-                              </Show>
-                            </MobileDrawer.Close>
-                          )}
-                        </For>
-                      </div>
-                    </MobileDrawer.ScrollBody>
-                  </MobileDrawer.Content>
-                </MobileDrawer.Portal>
-              </MobileDrawer>
-              <Show when={props.createLabel}>
-                <Button
-                  aria-label={props.createLabel}
-                  tooltip={props.createLabel}
-                  variant="ghost"
-                  size="icon-md"
-                  class="size-10 rounded-full"
-                  disabled={props.createDisabled}
-                  onClick={(event) => props.onCreate(event.currentTarget)}
-                >
-                  <Plus class="size-5" />
-                </Button>
-              </Show>
-              {props.createAgentAction}
-            </HeaderIsland>
+                                <Show
+                                  when={scope.teamId}
+                                  fallback={<User class="size-4 shrink-0" />}
+                                >
+                                  <Users class="size-4 shrink-0" />
+                                </Show>
+                                <span class="min-w-0 flex-1 break-words">
+                                  {scope.teamId ? scope.name : 'Personal'}
+                                </span>
+                                <Show when={props.ownerId === scope.id}>
+                                  <Check class="size-4 text-accent" />
+                                </Show>
+                              </MobileDrawer.Close>
+                            )}
+                          </For>
+                        </div>
+                      </MobileDrawer.ScrollBody>
+                    </MobileDrawer.Content>
+                  </MobileDrawer.Portal>
+                </MobileDrawer>
+                <Show when={props.createLabel}>
+                  <Button
+                    aria-label={props.createLabel}
+                    tooltip={props.createLabel}
+                    variant="ghost"
+                    size="icon-md"
+                    class="size-10 rounded-full"
+                    disabled={props.createDisabled}
+                    onClick={(event) => props.onCreate(event.currentTarget)}
+                  >
+                    <Plus class="size-5" />
+                  </Button>
+                </Show>
+                {props.createAgentAction}
+              </HeaderIsland>
+            </>
           }
         />
       </fieldset>
     </div>
   );
   return (
-    <Show
-      when={panel}
-      fallback={
-        <header
-          aria-label="Scheduling controls"
-          class="@container/split-header pointer-events-none absolute inset-x-0 top-[calc(var(--safe-top,0px)+0.5rem)] z-split-panel-chrome flex h-10 min-w-0 items-center gap-2 px-(--mobile-chrome-gutter)"
-        >
-          {navigation()}
-        </header>
-      }
+    <header
+      aria-label="Scheduling controls"
+      class="@container/split-header pointer-events-none absolute inset-x-0 top-[calc(var(--safe-top,0px)+0.5rem)] z-split-panel-chrome flex h-10 min-w-0 items-center gap-2 px-(--mobile-chrome-gutter)"
     >
-      <SplitHeaderLeft>{navigation()}</SplitHeaderLeft>
-    </Show>
+      {navigation()}
+    </header>
   );
 }

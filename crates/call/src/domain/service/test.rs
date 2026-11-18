@@ -668,19 +668,14 @@ async fn get_or_create_call(
     result
 }
 
-/// Answers the flag with `enabled`, and records and answers root requests.
+/// Records and answers root requests.
 struct FakeChannelThreads {
-    enabled: bool,
     root_fails: bool,
     roots: Arc<Mutex<Vec<Uuid>>>,
 }
 
 #[async_trait::async_trait]
 impl crate::domain::ports::ChannelThreads for FakeChannelThreads {
-    async fn enabled_for(&self, _: MacroUserIdStr<'_>) -> bool {
-        self.enabled
-    }
-
     async fn ensure_root(&self, call_id: Uuid) -> Result<(), rootcause::Report> {
         self.roots.lock().unwrap().push(call_id);
         if self.root_fails {
@@ -691,7 +686,7 @@ impl crate::domain::ports::ChannelThreads for FakeChannelThreads {
 }
 
 /// Start a call as the race winner and report what the repository was asked to store.
-async fn start_flagged_call(enabled: bool, root_fails: bool) -> (Vec<Uuid>, bool) {
+async fn start_channel_call(threads: bool, root_fails: bool) -> (Vec<Uuid>, bool) {
     let stored = Arc::new(Mutex::new(None));
     let repo = mock_get_or_create_repo_storing(
         GetOrCreateScenario::CreatorWins,
@@ -704,12 +699,15 @@ async fn start_flagged_call(enabled: bool, root_fails: bool) -> (Vec<Uuid>, bool
         StubConnectionService,
         RecordingEventBroker::default(),
         false,
-    )
-    .with_channel_threads(Arc::new(FakeChannelThreads {
-        enabled,
-        root_fails,
-        roots: roots.clone(),
-    }));
+    );
+    let service = if threads {
+        service.with_channel_threads(Arc::new(FakeChannelThreads {
+            root_fails,
+            roots: roots.clone(),
+        }))
+    } else {
+        service
+    };
 
     service
         .get_or_create_call(&STARTED_EVENT_CHANNEL_ID, user("requester@example.com"))
@@ -722,16 +720,16 @@ async fn start_flagged_call(enabled: bool, root_fails: bool) -> (Vec<Uuid>, bool
 }
 
 #[tokio::test]
-async fn a_flagged_caller_gets_a_channel_thread_with_its_root() {
-    let (roots, stored) = start_flagged_call(true, false).await;
+async fn a_channel_call_gets_a_thread_with_its_root() {
+    let (roots, stored) = start_channel_call(true, false).await;
 
     assert!(stored);
     assert_eq!(roots, [STARTED_EVENT_CALL_ID]);
 }
 
 #[tokio::test]
-async fn an_unflagged_caller_keeps_the_calls_own_chat() {
-    let (roots, stored) = start_flagged_call(false, false).await;
+async fn a_service_without_channel_threads_keeps_the_calls_own_chat() {
+    let (roots, stored) = start_channel_call(false, false).await;
 
     assert!(!stored);
     assert!(roots.is_empty());
@@ -739,7 +737,7 @@ async fn an_unflagged_caller_keeps_the_calls_own_chat() {
 
 #[tokio::test]
 async fn a_failed_root_never_stops_the_call() {
-    let (roots, stored) = start_flagged_call(true, true).await;
+    let (roots, stored) = start_channel_call(true, true).await;
 
     assert!(stored);
     assert_eq!(roots, [STARTED_EVENT_CALL_ID]);

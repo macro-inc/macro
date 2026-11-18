@@ -5,11 +5,11 @@ import {
   loadResult,
 } from '@core/block';
 import { blockAcceptedFileExtensionToMimeType } from '@core/constant/allBlocks';
+import { lazy } from '@core/util/lazy';
 import { catchToResult } from '@core/util/result';
 import { fetchFileDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 import type { CanvasFile } from './core/document-format';
 import { loadCanvasDocument } from './queries/document';
 
