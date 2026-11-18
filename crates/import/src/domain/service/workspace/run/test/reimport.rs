@@ -3,7 +3,7 @@
 use super::*;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn deleting_a_team_copy_after_link_resolution_writes_a_fresh_document(pool: PgPool) {
+async fn a_personal_replacement_never_claims_or_shares_the_deleted_team_copy(pool: PgPool) {
     let team = Uuid::now_v7();
     let owner = teammate(&pool, "snapshot-owner", team).await;
     let importer = teammate(&pool, "snapshot-importer", team).await;
@@ -75,14 +75,15 @@ async fn deleting_a_team_copy_after_link_resolution_writes_a_fresh_document(pool
     let imported = repo.get(&importer, imports[0]).await.unwrap().unwrap();
     assert_eq!(imported.status, ImportStatus::Imported);
     assert_eq!(imported.entity_id, Some(expected.to_string()));
-    assert_eq!(imported.team_id, Some(team));
+    assert_eq!(imported.team_id, None);
+    assert!(writer.shares.lock().unwrap().is_empty());
     let metadata: NotionDocMeta = serde_json::from_value(imported.metadata).unwrap();
     let plan = metadata.plan.unwrap();
     assert_eq!(
         plan.already_imported, None,
         "the review must stop linking the deleted copy"
     );
-    assert!(plan.shared);
+    assert!(!plan.shared);
     assert!(
         sqlx::query_scalar!(
             r#"SELECT "deletedAt" IS NOT NULL AS "trashed!" FROM "Document" WHERE id = $1"#,
@@ -292,4 +293,135 @@ async fn a_deleted_linked_task_folder_requires_a_fresh_plan_instead_of_a_databas
     assert_eq!(plan.decision, Some(NotionDecision::Hand));
     assert_eq!(plan.already_imported, None);
     assert!(writer.documents.lock().unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn one_deleted_finished_page_is_reported_without_stopping_other_pages(pool: PgPool) {
+    let owner = teammate(&pool, "resume-deleted", Uuid::now_v7()).await;
+    let repo = PgImportRepo::new(pool.clone());
+    let (review, imports) = approved(
+        &pool,
+        &owner,
+        &[
+            planned_page('e', "Deleted page", false),
+            planned_page('f', "Remaining page", false),
+        ],
+    )
+    .await;
+    let deleted = Uuid::now_v7();
+    sqlx::query!(r#"INSERT INTO "Document" (id,name,owner,"fileType","deletedAt") VALUES ($1,'Deleted page',$2,'md',NOW())"#,
+        deleted.to_string(), owner.as_ref()).execute(&pool).await.unwrap();
+    repo.claim_importing(&owner, &[imports[0]], &[], None)
+        .await
+        .unwrap();
+    repo.mark_imported(&owner, imports[0], &deleted.to_string(), "md", None)
+        .await
+        .unwrap();
+    planned(&repo, &owner).await;
+    let tracker = TaskTracker::new();
+    let writer = Arc::new(Writer {
+        target_pool: Some(pool.clone()),
+        ..Default::default()
+    });
+    let service = ImportServiceImpl::new(
+        repo.clone(),
+        Arc::new(NoConnector),
+        Arc::clone(&writer),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(Connected))
+    .with_job_shutdown(CancellationToken::new(), tracker.clone());
+    service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+    let report = service.notion_import_report(&owner).await.unwrap();
+    assert_eq!(report.status, Some(RunStatus::Completed));
+    assert_eq!(report.failures.len(), 1);
+    let remaining = repo.get(&owner, imports[1]).await.unwrap().unwrap();
+    assert_eq!(remaining.status, ImportStatus::Imported);
+    assert_eq!(writer.documents.lock().unwrap().len(), 1);
+    assert!(
+        !writer.documents.lock().unwrap()[0]
+            .2
+            .pages
+            .contains_key(&page_id('e'))
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_deleted_finished_link_is_reported_instead_of_staying_already_imported(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "finished-link-owner", team).await;
+    let importer = teammate(&pool, "finished-link-importer", team).await;
+    let repo = PgImportRepo::new(pool.clone());
+    let (review, imports) = approved(
+        &pool,
+        &importer,
+        &[
+            planned_page('e', "Deleted shared link", false),
+            planned_page('f', "Remaining page", false),
+        ],
+    )
+    .await;
+    let deleted = Uuid::now_v7();
+    sqlx::query!(r#"INSERT INTO "Document" (id,name,owner,"fileType","deletedAt") VALUES ($1,'Deleted shared copy',$2,'md',NOW())"#,
+        deleted.to_string(), owner.as_ref()).execute(&pool).await.unwrap();
+    let row = repo.get(&importer, imports[0]).await.unwrap().unwrap();
+    let mut meta: NotionDocMeta = serde_json::from_value(row.metadata).unwrap();
+    meta.plan.as_mut().unwrap().already_imported =
+        Some(crate::domain::models::NotionAlreadyImported {
+            by: "finished-link-owner@example.com".to_string(),
+            entity_id: deleted.to_string(),
+            entity_type: "md".to_string(),
+        });
+    sqlx::query!(
+        "UPDATE import_entity SET metadata=$2 WHERE id=$1",
+        imports[0],
+        serde_json::to_value(meta).unwrap()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    repo.claim_importing(&importer, &[imports[0]], &[], None)
+        .await
+        .unwrap();
+    repo.mark_imported(&importer, imports[0], &deleted.to_string(), "md", None)
+        .await
+        .unwrap();
+    planned(&repo, &importer).await;
+    let tracker = TaskTracker::new();
+    let writer = Arc::new(Writer {
+        target_pool: Some(pool.clone()),
+        ..Default::default()
+    });
+    let service = ImportServiceImpl::new(
+        repo.clone(),
+        Arc::new(NoConnector),
+        Arc::clone(&writer),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(Connected))
+    .with_job_shutdown(CancellationToken::new(), tracker.clone());
+    service
+        .start_notion_write(&importer, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+    let report = service.notion_import_report(&importer).await.unwrap();
+    assert_eq!(report.status, Some(RunStatus::Completed));
+    assert_eq!(report.failures.len(), 1);
+    assert_eq!(report.already_in_macro, 0);
+    assert_eq!(
+        repo.get(&importer, imports[1])
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        ImportStatus::Imported
+    );
+    assert_eq!(writer.documents.lock().unwrap().len(), 1);
 }

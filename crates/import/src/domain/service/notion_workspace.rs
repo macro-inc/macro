@@ -599,8 +599,7 @@ where
             Ok(failed) => (
                 RunStatus::Completed,
                 Some(format!(
-                    "{failed} of {} objects could not be imported",
-                    set.pending.len()
+                    "{failed} objects could not be imported. Plan again to retry them."
                 )),
             ),
             Err(error) => {
@@ -656,7 +655,8 @@ where
         let people = self.people(&api, user).await;
         let ids: Vec<Uuid> = set.all.iter().map(|item| item.import_id).collect();
         let written = self.repo.written(user, &ids).await?;
-        let links = tokio::sync::RwLock::new(self.links(user, &set.all, &people).await?);
+        let (links, unavailable) = self.links(user, &set.all, &people).await?;
+        let links = tokio::sync::RwLock::new(links);
         let root = self.root_folder(user).await?;
 
         // Folders first, parents before children. A folder is shared only
@@ -741,7 +741,7 @@ where
 
         // Objects a teammate was writing: link to what they finished, take
         // over what they gave up, and wait on the rest.
-        let mut failed = 0;
+        let mut failed = unavailable;
         let mut waiting = Vec::new();
         for (item, outcome) in set.pending.iter().zip(outcomes) {
             match outcome {

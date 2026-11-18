@@ -592,13 +592,40 @@ pub struct TeamMember {
     pub email: String,
 }
 
+/// The physical app entity recorded by an import generation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportedTarget {
+    /// A folder outside trash.
+    Folder(Uuid),
+    /// A document or task outside trash.
+    Document(Uuid),
+    /// A database app entity outside trash.
+    Database(Uuid),
+    /// A tracker project; initiatives support permanent deletion.
+    Initiative(Uuid),
+}
+
+impl ImportedTarget {
+    /// Interpret a recognized ledger entity type and validated UUID.
+    pub fn from_entity(id: &str, kind: &str) -> Option<Self> {
+        let id = id.parse().ok()?;
+        match kind {
+            "md" | "task" => Some(Self::Document(id)),
+            "project" => Some(Self::Folder(id)),
+            "database" => Some(Self::Database(id)),
+            "initiative" => Some(Self::Initiative(id)),
+            _ => None,
+        }
+    }
+}
+
 /// Reads lifecycle state through the imported entity's owning domain.
 pub trait ImportedTargetReader: Send + Sync + 'static {
     /// Whether an imported target exists outside trash, independently of
     /// viewer permissions. Transient read failures must be returned.
     fn target_exists(
         &self,
-        target: SharedEntity,
+        target: ImportedTarget,
     ) -> impl Future<Output = anyhow::Result<bool>> + Send;
 }
 
@@ -771,14 +798,23 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
 
     /// Replace a finished, deleted target's ledger generation after the domain
     /// checked its liveness. CAS on the row and target id; never reset an
-    /// importing row. Preserve children, clear old written markers and claims.
-    /// The caller must own the row or belong to the holder's team.
-    fn renew_deleted_copy(
+    /// importing row. Preserve children; clear old written markers, claims
+    /// and obsolete reviewed link pointers.
+    /// The caller must own the row or belong to the holder's team. Recheck
+    /// physical deletion through `still_deleted` after locking that generation.
+    /// A restored target or transient read error preserves it. `reason` reports
+    /// a deleted finished object skipped while the rest of a write continues.
+    fn renew_deleted_copy<F, Fut>(
         &self,
         user: &MacroUserIdStr<'static>,
         import_id: Uuid,
         entity_id: &str,
-    ) -> impl Future<Output = Result<bool>> + Send;
+        reason: Option<&str>,
+        still_deleted: F,
+    ) -> impl Future<Output = Result<bool>> + Send
+    where
+        F: FnOnce() -> Fut + Send,
+        Fut: Future<Output = Result<bool>> + Send;
 
     /// Replace `user`'s current plan for `source`: drop the staged rows of the
     /// previous plan, then stage `rows` in order (parents before children),

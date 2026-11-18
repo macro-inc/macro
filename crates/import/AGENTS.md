@@ -158,12 +158,20 @@ from this import's other databases into it are not linked.
   and shared as `alreadyImported` (no decision-model call, not counted as
   copies); the write links them. `service/lifecycle.rs` checks finished targets
   through `ImportedTargetReader` during planning and immediately before linking.
+  Reviewed Notion, Linear and Jira all use that policy, including tracker tasks
+  and initiative project identities. `ImportedTarget` maps ledger types once.
+  Inventory reads run with at most eight concurrent requests; generation
+  renewals stay sequential so parent and child locks keep a stable order.
   Liveness is independent of viewer permissions: losing access alone never
   renews a still-active target's generation.
   Missing or trashed documents, folders and database entities get a fresh ledger
   generation and write ids on explicit re-import; the old trash copy stays
-  untouched. Renewal clears that generation's written markers and team claim,
-  preserves child rows, and never resets an `importing` row. Delete handlers
+  untouched. Renewal clears that generation's written markers, team claim and
+  obsolete plan link/rationale fields,
+  preserves child rows, and never resets an `importing` row. Under the ledger
+  row lock the domain rechecks physical liveness, preserving a target restored
+  while that lock was pending. A later restore is a separate lifecycle action
+  and may coexist with the explicitly requested new copy. Delete handlers
   do not release claims eagerly: liveness checks repair stale claims, including
   deletion between planning and writing. A replacement write uses its own
   generation's document id even if the link snapshot still names the old team
@@ -172,7 +180,10 @@ from this import's other databases into it are not linked.
   creation, so later writes use a replacement's id while live team ids stay put.
   A missing linked data source requires a fresh plan instead of guessing between
   a database and tasks folder without its original task mapping. Transient
-  read errors preserve claims. At write time `claim_team_object` decides per
+  read errors preserve claims. A finished object deleted during a resumed write
+  is staged and reported individually; unrelated objects still finish. Its
+  target is omitted from new links. Personal verdicts never acquire the team
+  slot when replacing a deleted linked copy. At write time `claim_team_object` decides per
   shared object: hold the claim and write, link to a finished copy, take over a
   claim whose holder's run has no live lease, or wait. A waiting row is
   checked again after the rest is written, then parks with `waiting_on` the

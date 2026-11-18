@@ -1,5 +1,7 @@
 //! Replace an imported ledger generation without cascading through its children.
 
+use std::future::Future;
+
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -65,13 +67,19 @@ impl PgImportRepo {
         Ok(changed.rows_affected() > 0)
     }
 
-    #[tracing::instrument(skip(self, user), err)]
-    pub(super) async fn renew_deleted_target(
+    #[tracing::instrument(skip(self, user, still_deleted), err)]
+    pub(super) async fn renew_deleted_target<F, Fut>(
         &self,
         user: &MacroUserIdStr<'static>,
         import_id: Uuid,
         entity_id: &str,
-    ) -> Result<bool> {
+        reason: Option<&str>,
+        still_deleted: F,
+    ) -> Result<bool>
+    where
+        F: FnOnce() -> Fut + Send,
+        Fut: Future<Output = Result<bool>> + Send,
+    {
         let mut transaction = self.pool.begin().await?;
         sqlx::query!("SET LOCAL statement_timeout = '15s'")
             .execute(&mut *transaction)
@@ -91,6 +99,11 @@ impl PgImportRepo {
         .fetch_optional(&mut *transaction)
         .await?;
         if row.is_none() {
+            return Ok(false);
+        }
+        // A restore can finish while this transaction waits for the ledger.
+        // The owning domain rechecks physical state after FOR UPDATE.
+        if !still_deleted().await? {
             return Ok(false);
         }
 
@@ -120,12 +133,16 @@ impl PgImportRepo {
             r#"
             UPDATE import_entity
             SET id = $2, status = 'staged', entity_id = NULL, entity_type = NULL,
-                team_id = NULL, waiting_on = NULL, review_id = NULL, last_error = NULL,
+                team_id = NULL, waiting_on = NULL, review_id = NULL, last_error = $3,
+                metadata = CASE WHEN jsonb_typeof(metadata->'plan') = 'object'
+                    THEN metadata #- '{plan,alreadyImported}' #- '{plan,reason}' #- '{plan,sharedReason}'
+                    ELSE metadata END,
                 updated_at = NOW()
             WHERE id = $1
             "#,
             import_id,
             generation,
+            reason,
         )
         .execute(&mut *transaction)
         .await?;

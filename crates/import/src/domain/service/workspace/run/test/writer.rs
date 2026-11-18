@@ -29,24 +29,25 @@ pub(super) struct Writer {
 impl crate::domain::ports::ImportedTargetReader for Writer {
     async fn target_exists(
         &self,
-        target: crate::domain::ports::SharedEntity,
+        target: crate::domain::ports::ImportedTarget,
     ) -> anyhow::Result<bool> {
         if let Some(pool) = &self.target_pool {
             let live = match target {
-                SharedEntity::Document(id) => sqlx::query_scalar!(
+                crate::domain::ports::ImportedTarget::Document(id) => sqlx::query_scalar!(
                     r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL) AS "live!""#,
                     id.to_string(),
                 ).fetch_one(pool).await?,
-                SharedEntity::Folder(id) => sqlx::query_scalar!(
+                crate::domain::ports::ImportedTarget::Folder(id) => sqlx::query_scalar!(
                     r#"SELECT EXISTS(SELECT 1 FROM "Project" WHERE id = $1 AND "deletedAt" IS NULL) AS "live!""#,
                     id.to_string(),
                 ).fetch_one(pool).await?,
-                SharedEntity::Database(id) => sqlx::query_scalar!(
+                crate::domain::ports::ImportedTarget::Database(id) => sqlx::query_scalar!(
                     r#"SELECT EXISTS(SELECT 1 FROM database_entities WHERE database_id = $1 AND trashed_at IS NULL) AS "live!""#,
                     id,
                 ).fetch_one(pool).await?,
+                crate::domain::ports::ImportedTarget::Initiative(id) => sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM initiative WHERE id = $1)", id).fetch_one(pool).await?.unwrap_or(false),
             };
-            if let SharedEntity::Document(id) = target
+            if let crate::domain::ports::ImportedTarget::Document(id) = target
                 && self.delete_target.is_none_or(|target| target == id)
                 && self
                     .delete_on_first_read

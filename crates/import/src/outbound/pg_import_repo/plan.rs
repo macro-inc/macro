@@ -44,13 +44,20 @@ impl NotionPlanRepo for PgImportRepo {
         self.clear_stale_team_link(user, import_id, shared).await
     }
 
-    async fn renew_deleted_copy(
+    async fn renew_deleted_copy<F, Fut>(
         &self,
         user: &MacroUserIdStr<'static>,
         import_id: Uuid,
         entity_id: &str,
-    ) -> Result<bool> {
-        self.renew_deleted_target(user, import_id, entity_id).await
+        reason: Option<&str>,
+        still_deleted: F,
+    ) -> Result<bool>
+    where
+        F: FnOnce() -> Fut + Send,
+        Fut: Future<Output = Result<bool>> + Send,
+    {
+        self.renew_deleted_target(user, import_id, entity_id, reason, still_deleted)
+            .await
     }
 
     #[tracing::instrument(skip(self, rows), fields(rows = rows.len()), err)]
@@ -307,28 +314,53 @@ impl NotionPlanRepo for PgImportRepo {
         user: &MacroUserIdStr<'static>,
         foreign_ids: &[String],
     ) -> Result<Vec<ImportEntity>> {
-        if foreign_ids.is_empty() {
+        if foreign_ids.is_empty() || self.workspace_source == ImportSource::Slack {
             return Ok(Vec::new());
         }
-        let rows = sqlx::query_as!(
-            ImportEntityDbRow,
-            r#"
-            SELECT id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,
-                   initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,
-                   updated_at
-            FROM import_entity
-            WHERE source = $3 AND foreign_id = ANY($2::text[])
-              AND status IN ('importing', 'imported')
-              AND user_id <> $1
-              AND team_id IS NOT NULL
-              AND team_id = (SELECT team_id FROM team_user WHERE user_id = $1)
-            "#,
-            user.as_ref(),
-            foreign_ids,
-            self.workspace_source.as_ref(),
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *transaction)
+            .await?;
+        // Spell out each partial-index predicate: PostgreSQL 14 cannot
+        // infer a source-specific index from an unknown generic-plan bind.
+        let rows = match self.workspace_source {
+            ImportSource::Jira => sqlx::query_as!(
+                ImportEntityDbRow,
+                r#"
+                    SELECT id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,
+                           initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,
+                           updated_at
+                    FROM import_entity
+                    WHERE source = 'jira'
+                      -- PG14 leading-key bound: 2,505 -> 11 buffers for two rows.
+                      -- Proof log: https://github.com/macro-inc/macro/pull/11172#issuecomment-6967226786
+                      AND source = ANY(ARRAY(SELECT 'jira'::text))
+                      AND foreign_id = ANY($2::text[])
+                      AND status IN ('importing', 'imported')
+                      AND user_id <> $1
+                      AND team_id IS NOT NULL
+                      AND team_id = (SELECT team_id FROM team_user WHERE user_id = $1)
+                "#,
+                user.as_ref(), foreign_ids,
+            ).fetch_all(&mut *transaction).await?,
+            ImportSource::Notion | ImportSource::Linear => sqlx::query_as!(
+                ImportEntityDbRow,
+                r#"
+                    SELECT id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,
+                           initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,
+                           updated_at
+                    FROM import_entity
+                    WHERE source = $3 AND source IN ('notion', 'linear') AND foreign_id = ANY($2::text[])
+                      AND status IN ('importing', 'imported')
+                      AND user_id <> $1
+                      AND team_id IS NOT NULL
+                      AND team_id = (SELECT team_id FROM team_user WHERE user_id = $1)
+                "#,
+                user.as_ref(), foreign_ids, self.workspace_source.as_ref(),
+            ).fetch_all(&mut *transaction).await?,
+            ImportSource::Slack => return Ok(Vec::new()),
+        };
+        transaction.commit().await?;
         rows.into_iter().map(ImportEntity::try_from).collect()
     }
 

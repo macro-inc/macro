@@ -4,24 +4,26 @@
 use crate::ToolEntityCreator;
 use crate::tool_context::ImportedContent;
 use databases::domain::models::{CreateDatabase, DatabaseDetail, DatabaseId, OpBatch, Viewer};
-use databases::domain::ports::{DatabaseLifecycleReads as _, DatabasesService as _};
+use databases::domain::ports::DatabasesService as _;
 use databases::domain::receipt::database_receipt;
 use databases::domain::sharing::DatabaseSharingService as _;
 use documents::domain::models::DocumentError;
 use documents::domain::notion_markdown::{NotionMarkdown, NotionPageLink, NotionUserLink};
-use documents::domain::ports::{DocumentRepo as _, DocumentService as _};
+use documents::domain::ports::DocumentService as _;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService as _;
 use import::domain::ports::{
-    ImportedDocumentProperties, ImportedTaskProperties, NewDatabase, NotionLinks, SharedEntity,
-    SourceDates, TeamMember,
+    ImportedDocumentProperties, ImportedTarget, ImportedTaskProperties, NewDatabase, NotionLinks,
+    SharedEntity, SourceDates, TeamMember,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
-use projects::domain::ports::{ProjectRepo as _, ProjectService as _};
+use projects::domain::ports::ProjectService as _;
 use uuid::Uuid;
+
+mod lifecycle;
 
 #[cfg(test)]
 mod test;
@@ -110,31 +112,15 @@ fn new_database(detail: &DatabaseDetail) -> anyhow::Result<NewDatabase> {
 
 impl import::domain::ports::ImportedTargetReader for ToolEntityCreator {
     #[tracing::instrument(skip(self), err)]
-    async fn target_exists(&self, target: SharedEntity) -> anyhow::Result<bool> {
-        match target {
-            SharedEntity::Document(id) => match self
-                .document_service
-                .repo
-                .get_basic_document(&id.to_string())
-                .await
-            {
-                Ok(document) => Ok(document.deleted_at.is_none()),
-                Err(sqlx::Error::RowNotFound) => Ok(false),
-                Err(error) => Err(error.into()),
-            },
-            SharedEntity::Folder(id) => {
-                let project = self
-                    .project_service
-                    .repo
-                    .get_basic_project(&id.to_string())
-                    .await?;
-                Ok(project.is_some_and(|project| project.deleted_at.is_none()))
-            }
-            SharedEntity::Database(id) => Ok(self
-                .databases_service
-                .database_is_live(DatabaseId::from_uuid(id))
-                .await?),
-        }
+    async fn target_exists(&self, target: ImportedTarget) -> anyhow::Result<bool> {
+        lifecycle::exists(
+            self.document_service.as_ref(),
+            self.project_service.as_ref(),
+            self.databases_service.as_ref(),
+            self.initiative_service.as_ref(),
+            target,
+        )
+        .await
     }
 }
 
@@ -270,7 +256,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
             Ok(_) => {
                 import::domain::ports::ImportedTargetReader::target_exists(
                     self,
-                    SharedEntity::Folder(folder),
+                    ImportedTarget::Folder(folder),
                 )
                 .await
             }

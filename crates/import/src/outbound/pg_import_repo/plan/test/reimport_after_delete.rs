@@ -3,7 +3,7 @@
 mod facts;
 
 use super::*;
-use crate::domain::ports::{ImportedTargetReader, SharedEntity};
+use crate::domain::ports::{ImportedTarget, ImportedTargetReader};
 use crate::domain::service::lifecycle;
 
 // Test adapter for the host's owning-domain lifecycle reads. The production
@@ -11,20 +11,21 @@ use crate::domain::service::lifecycle;
 struct Targets(PgPool);
 
 impl ImportedTargetReader for Targets {
-    async fn target_exists(&self, target: SharedEntity) -> anyhow::Result<bool> {
+    async fn target_exists(&self, target: ImportedTarget) -> anyhow::Result<bool> {
         let live = match target {
-            SharedEntity::Document(id) => sqlx::query_scalar!(
+            ImportedTarget::Document(id) => sqlx::query_scalar!(
                 r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL) AS "live!""#,
                 id.to_string(),
             ).fetch_one(&self.0).await?,
-            SharedEntity::Folder(id) => sqlx::query_scalar!(
+            ImportedTarget::Folder(id) => sqlx::query_scalar!(
                 r#"SELECT EXISTS(SELECT 1 FROM "Project" WHERE id = $1 AND "deletedAt" IS NULL) AS "live!""#,
                 id.to_string(),
             ).fetch_one(&self.0).await?,
-            SharedEntity::Database(id) => sqlx::query_scalar!(
+            ImportedTarget::Database(id) => sqlx::query_scalar!(
                 r#"SELECT EXISTS(SELECT 1 FROM database_entities WHERE database_id = $1 AND trashed_at IS NULL) AS "live!""#,
                 id,
             ).fetch_one(&self.0).await?,
+            ImportedTarget::Initiative(id) => sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM initiative WHERE id = $1)", id).fetch_one(&self.0).await?.unwrap_or(false),
         };
         Ok(live)
     }
@@ -797,7 +798,9 @@ async fn reimport_after_deletion_preserves_a_live_writers_lease_and_claim(pool: 
     );
     assert!(
         !repo
-            .renew_deleted_copy(&teammate, owners[0].id, "unwritten")
+            .renew_deleted_copy(&teammate, owners[0].id, "unwritten", None, || async {
+                panic!("active claims must not read targets")
+            })
             .await
             .unwrap()
     );
@@ -862,8 +865,12 @@ async fn reimport_after_deletion_renews_once_and_preserves_children_without_old_
     .unwrap();
 
     let (first, second) = tokio::join!(
-        repo.renew_deleted_copy(&owner, parent, "deleted-parent"),
-        repo.renew_deleted_copy(&owner, parent, "deleted-parent"),
+        repo.renew_deleted_copy(&owner, parent, "deleted-parent", None, || async {
+            Ok(true)
+        }),
+        repo.renew_deleted_copy(&owner, parent, "deleted-parent", None, || async {
+            Ok(true)
+        }),
     );
     assert_ne!(
         first.unwrap(),
@@ -910,7 +917,7 @@ async fn reimport_after_deletion_renews_once_and_preserves_children_without_old_
 struct UnavailableTargets;
 
 impl ImportedTargetReader for UnavailableTargets {
-    async fn target_exists(&self, _: SharedEntity) -> anyhow::Result<bool> {
+    async fn target_exists(&self, _: ImportedTarget) -> anyhow::Result<bool> {
         anyhow::bail!("temporary lifecycle read failure")
     }
 }

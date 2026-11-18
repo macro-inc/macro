@@ -25,12 +25,18 @@ impl NotionPlanRepo for Recorder {
         unreachable!("recording a scan never replaces links")
     }
 
-    async fn renew_deleted_copy(
+    async fn renew_deleted_copy<F, Fut>(
         &self,
         _: &MacroUserIdStr<'static>,
         _: Uuid,
         _: &str,
-    ) -> Result<bool> {
+        _: Option<&str>,
+        _: F,
+    ) -> Result<bool>
+    where
+        F: FnOnce() -> Fut + Send,
+        Fut: Future<Output = Result<bool>> + Send,
+    {
         unreachable!("recording a scan never renews copies")
     }
 

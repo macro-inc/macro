@@ -118,7 +118,7 @@ where
                     user,
                     item.import_id,
                     team_id,
-                    item.shared || item.already_imported,
+                    item.shared,
                 )
                 .await?
             }
@@ -268,7 +268,7 @@ where
         user: &MacroUserIdStr<'static>,
         items: &[write::WriteItem],
         people: &PeopleMap,
-    ) -> Result<NotionLinks> {
+    ) -> Result<(NotionLinks, usize)> {
         let pages: Vec<&write::WriteItem> = items
             .iter()
             .filter(|item| item.kind != ImportKind::DataSource)
@@ -289,6 +289,7 @@ where
         .map(|copy| (copy.foreign_id.clone(), copy))
         .collect();
         let mut imported = HashMap::new();
+        let mut unavailable = std::collections::HashSet::new();
         for item in pages {
             let own = self
                 .repo
@@ -296,12 +297,16 @@ where
                 .await?
                 .filter(|row| row.status == ImportStatus::Imported);
             if let Some(row) = &own
-                && !super::super::lifecycle::live(&self.repo, self.creator.as_ref(), user, row)
-                    .await?
+                && !super::super::lifecycle::live_for_write(
+                    &self.repo,
+                    self.creator.as_ref(),
+                    user,
+                    row,
+                )
+                .await?
             {
-                return Err(ImportError::NotReady(
-                    "A copied page was deleted during the write. Plan the import again.",
-                ));
+                unavailable.insert(item.notion_id.clone());
+                continue;
             }
             let document = match (own, copies.get(item.notion_id.as_str())) {
                 (Some(row), _) => imported_document(&row),
@@ -315,7 +320,9 @@ where
                 imported.insert(item.notion_id.clone(), document);
             }
         }
-        Ok(write::notion_links(items, &imported, people))
+        let mut links = write::notion_links(items, &imported, people);
+        links.pages.retain(|id, _| !unavailable.contains(id));
+        Ok((links, unavailable.len()))
     }
 
     /// Teammates' copies shared with the team of the planned objects, by
