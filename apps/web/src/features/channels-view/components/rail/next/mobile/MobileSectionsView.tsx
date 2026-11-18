@@ -7,6 +7,7 @@ import { enableChannelTags } from '@core/constant/featureFlags';
 import type { ChannelEntity } from '@entity';
 import FunnelIcon from '@icon/system/regular/funnel.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
+import { createChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
 import { useCachedChannelsByIds } from '@queries/channel/by-ids';
 import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
@@ -17,6 +18,7 @@ import { useChannelsView } from '../../../../channels-view-context';
 import type { ChannelsDataSource, ChannelsSources } from '../../../../queries';
 import { deduplicateChannels } from '../../../../queries';
 import { ChannelsMobileView } from '../../../ChannelsMobileView';
+import { sectionNotificationMenus } from '../../hooks/section-notification-menus';
 import { SectionChannelsPicker } from '../SectionChannelsDialog';
 import { MobileSectionOptions } from './MobileSectionOptions';
 import {
@@ -137,6 +139,16 @@ export function MobileSectionsView(props: {
     labels().find((label) => label.id === optionsFor());
   const team = useCurrentTeamQuery();
   const favorites = useFavoritesData({ entityType: ['channel'] });
+  const channelNotifications = createChannelNotificationSettings({
+    labels,
+    favoriteChannelIds: () =>
+      new Set(
+        (favorites()?.favorites ?? [])
+          .filter((favorite) => favorite.entityType === 'channel')
+          .map((favorite) => favorite.entityId)
+      ),
+  });
+  const sectionNotifications = sectionNotificationMenus(channelNotifications);
   const actions = useMobileSectionActions({
     enabled: () => sectionsEnabled() && channelTags().enabled,
     labels,
@@ -227,6 +239,10 @@ export function MobileSectionsView(props: {
         {(label) => (
           <MobileSectionOptions
             label={label()}
+            notifications={sectionNotifications(
+              `label:${label().id}`,
+              label().name
+            )}
             teamName={queryReadyGate(team) ? team.data?.team.name : undefined}
             canShare={queryReadyGate(shared) && Boolean(shared.data?.teamId)}
             canEdit={actions.canEditSection(label())}

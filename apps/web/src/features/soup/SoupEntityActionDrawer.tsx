@@ -5,6 +5,10 @@ import {
   type NotificationMuteMenuProps,
   NotificationMutePage,
 } from '@notifications/components/NotificationMuteMenu';
+import {
+  type NotificationSettingsMenuProps,
+  NotificationSettingsPage,
+} from '@notifications/components/NotificationSettingsMenu';
 import { CopyButton, cn } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -18,6 +22,7 @@ export type SoupEntityDrawerAction = {
   copy?: boolean;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   muteMenu?: NotificationMuteMenuProps;
+  notificationSettingsMenu?: NotificationSettingsMenuProps;
 };
 
 export type SoupEntityDrawerActionGroup = {
@@ -39,13 +44,16 @@ type SoupEntityActionDrawerProps = {
 
 /** Mobile drawer presentation shared by Soup-backed entity lists. */
 export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
-  const [muteActionId, setMuteActionId] = createSignal<string>();
-  const muteMenu = () =>
+  // The action whose choices replace the list: a mute or settings drill-in.
+  const [pageActionId, setPageActionId] = createSignal<string>();
+  const pageAction = () =>
     props.groups
       .flatMap((group) => group.items)
-      .find((action) => action.id === muteActionId())?.muteMenu;
+      .find((action) => action.id === pageActionId());
+  const muteMenu = () => pageAction()?.muteMenu;
+  const settingsMenu = () => pageAction()?.notificationSettingsMenu;
   const close = () => {
-    setMuteActionId(undefined);
+    setPageActionId(undefined);
     props.onOpenChange(false);
   };
   return (
@@ -54,7 +62,7 @@ export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
       open={props.open}
       closeOnOutsidePointerStrategy="pointerdown"
       onOpenChange={(open) => {
-        if (!open) setMuteActionId(undefined);
+        if (!open) setPageActionId(undefined);
         props.onOpenChange(open);
       }}
       preventScroll={false}
@@ -77,7 +85,7 @@ export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
 
           <MobileDrawer.ScrollBody>
             <Show
-              when={muteMenu()}
+              when={pageAction()}
               fallback={
                 <>
                   {props.leading}
@@ -124,11 +132,15 @@ export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
                                     action.disabled && 'opacity-50'
                                   )}
                                   onClick={async (event) => {
+                                    if (action.notificationSettingsMenu) {
+                                      setPageActionId(action.id);
+                                      return;
+                                    }
                                     if (action.muteMenu) {
                                       if (action.muteMenu.muted) {
                                         action.muteMenu.onMute(false);
                                         close();
-                                      } else setMuteActionId(action.id);
+                                      } else setPageActionId(action.id);
                                       return;
                                     }
                                     props.beforeAction?.(
@@ -159,13 +171,28 @@ export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
                 </>
               }
             >
-              {(menu) => (
-                <NotificationMutePage
-                  {...menu()}
-                  onBack={() => setMuteActionId(undefined)}
-                  onActionComplete={close}
-                />
-              )}
+              <Show
+                when={settingsMenu()}
+                fallback={
+                  <Show when={muteMenu()}>
+                    {(menu) => (
+                      <NotificationMutePage
+                        {...menu()}
+                        onBack={() => setPageActionId(undefined)}
+                        onActionComplete={close}
+                      />
+                    )}
+                  </Show>
+                }
+              >
+                {(menu) => (
+                  <NotificationSettingsPage
+                    {...menu()}
+                    onBack={() => setPageActionId(undefined)}
+                    onActionComplete={close}
+                  />
+                )}
+              </Show>
             </Show>
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>

@@ -1,4 +1,4 @@
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -10,6 +10,8 @@ import {
 } from '@entity/utils/notification';
 import type { NotificationSource } from '@notifications';
 import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
+import { formatSnoozeDeadline } from '@notifications/core/snooze';
+import type { ChannelNotificationSettingsState } from '@notifications/primitives/create-channel-notification-settings';
 import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
 import {
   useBulkNotificationPreferencesMutation,
@@ -20,6 +22,12 @@ import type { EntityActionListState } from './entity-action-context';
 
 type MakeMuteActionOptions = {
   notificationSource: () => NotificationSource;
+  /**
+   * With the channel Notification Settings rollout, Mute also covers a
+   * channel its sections mute, and Only @mentions becomes one of those
+   * settings instead of a mute choice.
+   */
+  channelSettings?: ChannelNotificationSettingsState;
 };
 
 /**
@@ -74,8 +82,36 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
   const canExecute = (entity: EntityData): boolean =>
     muteItemForEntity(entity) !== undefined;
 
-  const isMuted = (entity: EntityData): boolean =>
+  const settingsEnabled = () => options.channelSettings?.enabled() === true;
+
+  const isOwnMuted = (entity: EntityData): boolean =>
     entityIsMuted(options.notificationSource().mutedEntities(), entity);
+
+  /** Muted by the channel's sections, and not kept notifying by the channel. */
+  const isSectionMuted = (entity: EntityData): boolean => {
+    const settings = options.channelSettings;
+    if (!settings?.enabled() || entity.type !== 'channel') return false;
+    return settings.channel(entity.id, entity.channelType).mutedBySections;
+  };
+
+  const isMuted = (entity: EntityData): boolean =>
+    isOwnMuted(entity) || isSectionMuted(entity);
+
+  /**
+   * Unmuting a channel its sections mute keeps that channel notifying inside
+   * them; its own mute, if any, is removed separately. Returns how many.
+   */
+  const keepNotifyingInMutedSections = async (targets: EntityData[]) => {
+    const settings = options.channelSettings;
+    const sectionMuted = targets.filter(isSectionMuted);
+    if (!settings || sectionMuted.length === 0) return 0;
+    await Promise.all(
+      sectionMuted.map((entity) =>
+        settings.setOverridesSectionMute(entity.id, true)
+      )
+    );
+    return sectionMuted.length;
+  };
 
   const setMuted = async (
     entities: EntityData[],
@@ -98,8 +134,17 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
       shouldUnmute || !skipMuted
         ? muteable
         : muteable.filter((entity) => !isMuted(entity));
-    const items = itemsFor(targets);
-    if (items.length === 0) return;
+    const sectionMuted = shouldUnmute
+      ? await keepNotifyingInMutedSections(targets)
+      : 0;
+
+    const items = itemsFor(
+      shouldUnmute && settingsEnabled() ? targets.filter(isOwnMuted) : targets
+    );
+    if (items.length === 0) {
+      if (sectionMuted > 0) toast.success(t('entityActions.toastUnmuted'));
+      return;
+    }
 
     const mutation = shouldUnmute ? unmuteMutation : muteMutation;
     const results = await Promise.allSettled(
@@ -186,9 +231,45 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
     await setMuted(muteable, !muteable.every(isMuted), true);
   };
 
+  /** "Until 3:00 PM" for a snooze, "Muted by Work" for section mute. */
+  const mutedHint = (entities: EntityData[]): string | undefined => {
+    const [entity] = entities;
+    if (!settingsEnabled() || entities.length !== 1 || !entity)
+      return undefined;
+
+    if (isOwnMuted(entity)) {
+      const item = muteItemForEntity(entity);
+      const until = options
+        .notificationSource()
+        .mutedEntities()
+        .find(
+          (entry) =>
+            entry.item_id === item?.item_id &&
+            entry.item_type === item?.item_type
+        )?.snoozed_until;
+      return until
+        ? t('channelSections.mutedUntil', {
+            time: formatSnoozeDeadline(new Date(until), formatLocale()),
+          })
+        : undefined;
+    }
+
+    const settings = options.channelSettings;
+    if (settings && entity.type === 'channel' && isSectionMuted(entity)) {
+      const view = settings.channel(entity.id, entity.channelType);
+      return t('channelSections.mutedBySection', { name: view.sectionNames });
+    }
+    return undefined;
+  };
+
   const menu = (entities: EntityData[]): NotificationMuteMenuProps => ({
-    label: t('entityActions.muteNotifications'),
-    unmuteLabel: t('entityActions.unmuteNotifications'),
+    label: settingsEnabled()
+      ? t('channelSections.mute')
+      : t('entityActions.muteNotifications'),
+    unmuteLabel: settingsEnabled()
+      ? t('channelSections.unmute')
+      : t('entityActions.unmuteNotifications'),
+    mutedHint: mutedHint(entities),
     muted: entities.length > 0 && entities.every(isMuted),
     disabled:
       muteMutation.isPending ||
@@ -198,7 +279,9 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
       fireAndForget(setMuted(entities, muted), 'entity-actions'),
     onSnooze: (until) => snooze(entities, until),
     mentionsOnly:
-      entities.length > 0 && entities.every(supportsMentionsOnly)
+      !settingsEnabled() &&
+      entities.length > 0 &&
+      entities.every(supportsMentionsOnly)
         ? {
             active: entities.every(isMentionsOnly),
             onChange: (active) =>

@@ -51,7 +51,12 @@ vi.mock('@app/features/next-soup/actions', () => ({
   makeRemoveFromProjectAction: mocks.action,
   makeRenameAction: mocks.action,
   makeShareAction: mocks.action,
+  notificationSettingsMenuFor: () => undefined,
 }));
+vi.mock(
+  '@notifications/primitives/create-channel-notification-settings',
+  () => ({ useChannelNotificationSettings: () => ({ enabled: () => false }) })
+);
 vi.mock('@app/features/projects/project-entity-actions', () => ({
   openProjectEntityAction: mocks.openProjectAction,
 }));

@@ -1,12 +1,18 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { enableChannelNotificationSettings } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isMutedItem } from '@entity/utils/notification';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
+import { NotificationSettingsMenu } from '@notifications/components/NotificationSettingsMenu';
 import { useAvailableSectionChannelsQuery } from '@queries/channel-labels/channel-labels';
 import { queryReadyGate } from '@queries/gate';
 import { useMutedEntitiesQuery } from '@queries/notification/unsubscribes';
+import { Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { ChannelSectionKey } from '../../../types';
 import { useChannelsRail } from '../ChannelsRailContext';
+import { sectionNotificationMenus } from '../hooks/section-notification-menus';
 export function SectionMuteMenu(props: { section: ChannelSectionKey }) {
   const rail = useChannelsRail();
   const muted = useMutedEntitiesQuery();
@@ -56,5 +62,45 @@ export function SectionMuteMenu(props: { section: ChannelSectionKey }) {
         fireAndForget(rail.snoozeSection(props.section, until), 'channels-view')
       }
     />
+  );
+}
+
+/**
+ * A section's notification controls: with the settings rollout, its own Mute
+ * and Notification Settings ("All channels" has none); otherwise muting its
+ * current channels.
+ */
+export function SectionNotificationControls(props: {
+  section: ChannelSectionKey;
+}) {
+  const flag = useFeatureFlag(enableChannelNotificationSettings);
+  const rail = useChannelsRail();
+  const menusFor = sectionNotificationMenus(rail.channelNotifications);
+  const name = () =>
+    match(props.section)
+      .with('favorites', () => t('channelSections.favorites'))
+      .with('direct_messages', () => t('channelSections.direct_messages'))
+      .with('team_channels', () => t('channelSections.team_channels'))
+      .with('channels', () => t('channelSections.allChannels'))
+      .otherwise(
+        (section) =>
+          rail.labels().find((label) => `label:${label.id}` === section)
+            ?.name ?? t('channelSections.channels')
+      );
+
+  return (
+    <Show
+      when={flag().enabled}
+      fallback={<SectionMuteMenu section={props.section} />}
+    >
+      <Show when={menusFor(props.section, name())}>
+        {(menus) => (
+          <>
+            <NotificationMuteMenu {...menus().mute} />
+            <NotificationSettingsMenu {...menus().settings} />
+          </>
+        )}
+      </Show>
+    </Show>
   );
 }

@@ -20,7 +20,7 @@ import type {
   ChannelSectionPreferences,
 } from '../../../types';
 import { useChannelsRail } from '../ChannelsRailContext';
-import { SectionMuteMenu } from './ChannelMuteMenu';
+import { SectionNotificationControls } from './ChannelMuteMenu';
 
 export function ChannelSectionDropdown(props: {
   section: ChannelSectionKey;
@@ -224,7 +224,7 @@ export function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
             fireAndForget(rail.markSectionRead(props.section), 'channels-view')
           }
         />
-        <SectionMuteMenu section={props.section} />
+        <SectionNotificationControls section={props.section} />
       </MenuGroup>
     </>
   );
