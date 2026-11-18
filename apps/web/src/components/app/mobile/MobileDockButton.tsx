@@ -1,4 +1,5 @@
 import { unreadLabel } from '@app/features/notifications-inbox/core/inbox-unread';
+import { t } from '@app/lib/i18n';
 import { UnreadCount } from '@entity/components/UnreadCount';
 import { UnreadIndicator } from '@entity/components/UnreadIndicator';
 import { cn } from '@ui';
@@ -51,7 +52,7 @@ export function MobileDockButton(props: MobileDockButtonProps) {
       aria-label={local.ariaLabel}
       aria-description={
         local.unread
-          ? (unreadDescription(local.unreadCount) ?? 'Unread items')
+          ? (unreadDescription(local.unreadCount) ?? t('nav.unreadItems'))
           : undefined
       }
       data-unread={local.unread ? '' : undefined}
