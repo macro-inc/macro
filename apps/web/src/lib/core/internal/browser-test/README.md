@@ -129,6 +129,33 @@ New message/channel, call, routine-template and sharing pickers use this source;
 main email fields also use it, with composition coverage in
 `features/email-compose/browser-test/recipient-directory.app.e2e.ts`.
 
+### Share recipient typing
+
+`/?share-recipients` mounts the Share menu's real To field (`ShareRecipientField`,
+`RecipientSelector`, `useCombinedRecipientSource`) over an account sized by the
+URL: `groups` (named channels and group DMs), `dms`, `people` in the contact
+cache and its read `latency` in milliseconds. `share-recipient-adapters.ts`
+builds them from a fixed seed. The page shows the selected recipients
+(`data-testid="recipients"`) and counts contact reads (`data-testid="reads"`).
+
+`share-recipients.measure.mjs` times typing there over production builds of
+this fixture. Build each version you compare, then run it:
+
+```sh
+bunx vite build --config src/lib/core/internal/browser-test/vite.config.ts --outDir /tmp/after
+BUILDS=before=/tmp/before,after=/tmp/after OUT=/tmp/share-timing \
+  PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/google-chrome \
+  node src/lib/core/internal/browser-test/share-recipients.measure.mjs
+```
+
+It types each query in `QUERIES` at `CADENCE_MS` per key, for every size in
+`SIZES` and CPU slowdown in `THROTTLES`, `REPS` times, alternating the builds.
+Each keystroke is timed from its keydown to the next paint; settled is the
+time from the last keystroke to the final list. `emptyKeys` counts keystrokes
+that painted an empty list although results followed. It prints one summary
+row per build and configuration, and writes per-keystroke runs and a CPU
+profile of the first query at the largest slowdown to `OUT`.
+
 `/?sql-people` mounts the real SQL compiler/controller over the production worker
 host and Turso/WASM/OPFS, with 1,001 synthetically hydrated contacts. Desktop/phone
 tests run fresh queries offline, reject writes/missing local capability, and fence

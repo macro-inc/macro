@@ -113,7 +113,7 @@ A window key names the page or growing list on screen, never a refresh of it. Re
 virtual focus/scroll only on window replacement, not label updates or refreshes.
 Menus hold the row the user moved to by identity (`createSelectionAnchor`) while
 results arrive; the highlight resets only when the query or category changes.
-The person list keeps its still-matching rows while the next read is pending, so the contact
+The person list and recipient sources (`recipient-window.ts`) keep their still-matching rows while the next read is pending, so the contact
 window's `loading()` must have no gap between its text settling and its query fetching (a memo
 can still see the disabled query of the unsettled text then). Keep explicit participant/team pools scoped and
 selected IDs/self independent of suggestion pages. Discussion mentions on documents,
@@ -126,7 +126,8 @@ Keep native row timestamps and forwarding through both editor configuration and
 `RecipientSelector.createSource`
 constructs a per-picker source from live query/open/self/domain inputs; use
 `useContactRecipientSource` or `useCombinedRecipientSource` for personal suggestions
-and keep `options` for explicit scoped extras. Closing releases the page and reopening
+and keep `options` for explicit scoped extras. The selector reads each option's text, address and
+key once per list (`recipient-search.ts`), never per keystroke: groups can number in the thousands. Closing releases the page and reopening
 starts at the first page. Selected chips remain caller-owned; PageDown loads the
 next page from the keyboard. Main email To/Cc/Bcc inputs receive the factory through
 `EmailComposeContext.createRecipientSource`; scoped hosts opt out explicitly with
