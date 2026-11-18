@@ -122,7 +122,7 @@ For each suggestion:
 - meets: ids of the answer key's needs it meets, only when switching it on would get the person the outcome the need describes. A catalog routine meets a need only through the catalog keys the need lists; a drafted routine meets a need when it does what the need's "drafted" says, or close enough that the person gets the same result.
 - decoys: ids of the answer key's decoys it falls for.
 - keep: 1 to 5, the chance they still have it on a month after switching it on. 5 = it handles a steady stream of their mail or work; 3 = useful now and then; 1 = noise they would switch off.
-- misfit: true when it doesn't fit this person's work at all.
+- misfit: true when it doesn't fit this person's work at all. They signed up a minute ago, so they have used nothing in the app but their mail: a routine for a part of the app they haven't used yet (calls, chat, documents, tasks, agents) is not a misfit for that reason alone. It is a misfit when that part would do nothing for how this person works (a deal pipeline for someone with no deals, call recaps for someone whose work never happens on calls).
 - broken: true for a drafted routine whose trigger or steps would not do what its reason says (wrong event, a condition that never holds, steps that can't work, instructions that miss the point), or a catalog routine whose knobs make it do something else.
 - bad_knob: true when a knob is set to a value that is wrong or meaningless for this person (a label they don't use, a question about the wrong kind of mail).
 - wrong_surface: true when its first sidebar is not where this person would look for it.
