@@ -654,10 +654,10 @@ export function NewChatPage(props: {
           {modeSwitch()}
           <Show when={coding()}>
             <div
-              class="min-w-0 flex-1"
+              class="min-w-0"
               classList={{
-                'touch:flex-none touch:max-w-[calc(100%_-_96px)]':
-                  phoneComposer(),
+                'flex-1': !phoneComposer(),
+                'w-fit max-w-[calc(100%_-_96px)]': phoneComposer(),
               }}
             >
               {repositoryPicker()}

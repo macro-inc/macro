@@ -185,11 +185,11 @@ export function RepositoryPicker(props: {
     !branchSearch().trim();
   return (
     <div
-      class="flex min-w-0 w-full items-center gap-2"
-      classList={{
-        'w-fit max-w-full gap-0 rounded-full border border-edge bg-chrome px-1':
-          props.compactPhone,
-      }}
+      class={
+        props.compactPhone
+          ? 'flex min-w-0 w-fit max-w-full items-center gap-0 rounded-full border border-edge bg-chrome px-1'
+          : 'flex min-w-0 w-full items-center gap-2'
+      }
     >
       <RepositoryPickerMenu
         open={repoOpen()}
@@ -204,7 +204,7 @@ export function RepositoryPicker(props: {
         label="Repository"
         triggerClass={
           props.compactPhone
-            ? 'pill min-w-0 max-w-[70%] shrink-0 h-9 px-2 gap-2 text-ink'
+            ? `pill min-w-0 shrink-0 h-9 px-2 gap-2 text-ink ${props.repoUrl ? 'max-w-[70%]' : 'max-w-full'}`
             : 'pill min-w-0 max-w-full text-ink'
         }
         trigger={

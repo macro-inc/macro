@@ -42,12 +42,21 @@ export function AgentComposerAddMenu(props: {
   getEditor: () => HTMLElement | null | undefined;
   session?: boolean;
   disabled?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const connections = useConnectionsModel();
   const settings = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
-  const [drawerOpen, setDrawerOpen] = createSignal(false);
-  const [target, setTarget] = createSignal<Target>();
+  const [drawerOpen, updateDrawerOpen] = createSignal(false);
+  const [target, updateTarget] = createSignal<Target>();
+  const setDrawerOpen = (open: boolean) => {
+    updateDrawerOpen(open);
+    props.onOpenChange?.(open || !!target());
+  };
+  const setTarget = (next: Target | undefined) => {
+    updateTarget(next);
+    props.onOpenChange?.(drawerOpen() || !!next);
+  };
   const openTarget = (next: Target) => {
     // Release the mobile add sheet before opening the next focus trap.
     if (isMobile()) queueMicrotask(() => setTarget(next));

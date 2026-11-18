@@ -103,6 +103,7 @@ export function ChatComposer(props: {
   const [content, setContent] = createSignal<HTMLDivElement>();
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [height, setHeight] = createSignal<number>();
+  const [addMenuOpen, setAddMenuOpen] = createSignal(false);
   createResizeObserver(content, (_, element) => {
     // Content held offscreen by a pending Suspense reports 0; pinning that
     // would animate the surface up from nothing once it attaches.
@@ -113,7 +114,7 @@ export function ChatComposer(props: {
   const { focused, hasFocused, collapsed, focus, blur } =
     createComposerExpansion(
       () => props.collapseOnBlur,
-      () => props.controlsOpen
+      () => props.controlsOpen || addMenuOpen()
     );
   const drawerOpen = () => props.drawerOpen && !collapsed();
   useTouchOutsideToDismissKeyboard(() => container);
@@ -353,6 +354,7 @@ export function ChatComposer(props: {
           getEditor={() => editor.lexical.getRootElement()}
           session={!!props.session}
           disabled={disabled()}
+          onOpenChange={setAddMenuOpen}
         />
       )}
     />
@@ -559,11 +561,12 @@ export function ChatComposer(props: {
             </MobileComposerAttachments>
             <MobileComposerEditor>{editorRow()}</MobileComposerEditor>
             <MobileComposerControls>
-              <Show when={!collapsed()}>
+              {/* File pickers and portaled menus must survive focus leaving the editor. */}
+              <div class={collapsed() ? 'hidden' : 'contents'}>
                 <Show when={props.onAttachFiles}>{attachControl()}</Show>
                 <div class="min-w-0 flex-1">{props.selector}</div>
                 <DictationButton dictation={dictation} disabled={disabled()} />
-              </Show>
+              </div>
               {sendControl()}
             </MobileComposerControls>
           </MobileComposerRoot>
