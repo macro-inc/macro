@@ -10,6 +10,7 @@ async fn matching_thread_fetches_stay_bounded_with_stale_statistics(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let link = Uuid::parse_str("00000000-0000-4000-8000-000000000011")?;
+    let foreign_thread = Uuid::parse_str("00000000-0000-4000-8000-000000000022")?;
     let mut connection = pool.acquire().await?;
     sqlx::raw_sql(
         "ALTER TABLE email_threads SET (autovacuum_enabled = false); \
@@ -29,6 +30,16 @@ async fn matching_thread_fetches_stay_bounded_with_stale_statistics(
     )
     .execute(&mut *connection)
     .await?;
+    // This row passes Signal and the cursor; only the contributing-inbox
+    // predicate must keep it out of the result.
+    let foreign = sqlx::query!(
+        "UPDATE email_threads SET is_signal = TRUE, latest_non_spam_message_ts = '2026-01-01' \
+         WHERE id = $1",
+        foreign_thread,
+    )
+    .execute(&mut *connection)
+    .await?;
+    assert_eq!(foreign.rows_affected(), 1);
     let mut matches = sqlx::query_scalar!(
         r#"SELECT md5('stream-plan-' || i)::uuid AS "id!" FROM generate_series(100, 20000, 100) i"#
     )
@@ -38,17 +49,17 @@ async fn matching_thread_fetches_stay_bounded_with_stale_statistics(
     // Preserve one row per thread, including after the cursor.
     matches.push(matches[51]);
     // A missing ID and another inbox's ID must not leak into this stream.
-    matches.extend([
-        Uuid::nil(),
-        Uuid::parse_str("00000000-0000-4000-8000-000000000022")?,
-    ]);
+    matches.extend([Uuid::nil(), foreign_thread]);
     let expected = sqlx::query_scalar!(
         r#"SELECT md5('stream-plan-' || i)::uuid AS "id!" FROM generate_series(5200, 20000, 200) i ORDER BY i"#
     )
     .fetch_all(&mut *connection)
     .await?;
     let view = all_mail();
-    let filter = signal_and_me(link);
+    let filter = Expr::And(
+        Box::new(any_direction("example.test")),
+        Box::new(Expr::Literal(EmailLiteral::Importance(true))),
+    );
     let mut params = params(SimpleSortMethod::UpdatedAt);
     params.link_ids = vec![link];
     params.resolved = ResolvedFilters::empty().with_contributing_links(vec![link]);
@@ -65,14 +76,18 @@ async fn matching_thread_fetches_stay_bounded_with_stale_statistics(
                 .await?;
         }
         for stream in [Stream::Superset, Stream::SparseSuperset, Stream::Selection] {
-            let mut builder = QueryBuilder::<Postgres>::new(
-                "WITH matching_threads AS MATERIALIZED (SELECT unnest(",
-            );
-            builder.push_bind(matches.clone());
-            builder.push("::uuid[]) AS thread_id) ");
-            read.push_stream(&mut builder, stream, get_sort_timestamp_field(&view));
+            let build_stream = || {
+                let mut builder = QueryBuilder::<Postgres>::new(
+                    "WITH matching_threads AS MATERIALIZED (SELECT unnest(",
+                );
+                builder.push_bind(matches.clone());
+                builder.push("::uuid[]) AS thread_id) ");
+                read.push_stream(&mut builder, stream, get_sort_timestamp_field(&view));
+                builder
+            };
+            let builder = build_stream();
             sqlx::raw_sql(&format!(
-                "PREPARE matching_thread_stream(uuid[], uuid[], uuid, timestamptz, text) AS {}",
+                "PREPARE matching_thread_stream(uuid[], uuid[], timestamptz, text) AS {}",
                 builder.sql()
             ))
             .execute(&mut *connection)
@@ -87,17 +102,23 @@ async fn matching_thread_fetches_stay_bounded_with_stale_statistics(
                 .join(",");
             let execute = format!(
                 "EXECUTE matching_thread_stream('{{{ids_literal}}}', '{{{link}}}', \
-                 '{link}', '{}', '{cursor_id}')",
+                 '{}', '{cursor_id}')",
                 cursor_timestamp.to_rfc3339(),
             );
             for mode in ["force_custom_plan", "force_generic_plan"] {
                 sqlx::query!("SELECT set_config('plan_cache_mode', $1, false)", mode)
                     .fetch_one(&mut *connection)
                     .await?;
+                let mut bound_query = build_stream();
+                let bound_ids: Vec<Uuid> = bound_query
+                    .build_query_scalar()
+                    .fetch_all(&mut *connection)
+                    .await?;
+                assert_eq!(bound_ids, expected, "bound: {fresh} {mode} {stream:?}");
                 let ids: Vec<Uuid> = sqlx::query_scalar(&execute)
                     .fetch_all(&mut *connection)
                     .await?;
-                assert_eq!(ids, expected, "{fresh} {mode} {stream:?}");
+                assert_eq!(ids, expected, "prepared: {fresh} {mode} {stream:?}");
 
                 // Explain the prepared SELECT itself: preparing an EXPLAIN
                 // statement does not exercise its SELECT's generic plan.
