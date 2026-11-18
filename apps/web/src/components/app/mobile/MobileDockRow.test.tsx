@@ -52,7 +52,10 @@ vi.mock('@ui', async () => ({
 }));
 const [unreadIds, setUnreadIds] = createSignal<string[]>([]);
 vi.mock('../use-navigation-unread', () => ({
-  useNavigationUnread: () => (id: string) => unreadIds().includes(id),
+  useNavigationUnread: () => ({
+    has: (id: string) => unreadIds().includes(id),
+    count: () => undefined,
+  }),
 }));
 const [islandWidth, setIslandWidth] = createSignal(80);
 const [islandHeight, setIslandHeight] = createSignal(40);

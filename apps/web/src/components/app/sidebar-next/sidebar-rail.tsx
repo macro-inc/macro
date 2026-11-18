@@ -41,7 +41,7 @@ export const SidebarRail = () => {
   const gates = useNavItemGates();
   const analytics = useAnalytics();
   const layout = useSplitLayout();
-  const hasUnread = useNavigationUnread();
+  const unread = useNavigationUnread();
   const [calendarPreferences] = useCalendarPreferences();
 
   const _openHome = (event: MouseEvent) => {
@@ -72,17 +72,28 @@ export const SidebarRail = () => {
             {(item) => (
               <li class="flex">
                 <Switch
-                  fallback={<ListNav item={item} unread={hasUnread(item.id)} />}
+                  fallback={
+                    <ListNav
+                      item={item}
+                      unread={unread.has(item.id)}
+                      unreadCount={unread.count(item.id)}
+                    />
+                  }
                 >
                   <Match when={item.id === 'channels'}>
                     <Suspense
                       fallback={
-                        <ListNav item={item} unread={hasUnread(item.id)} />
+                        <ListNav
+                          item={item}
+                          unread={unread.has(item.id)}
+                          unreadCount={unread.count(item.id)}
+                        />
                       }
                     >
                       <ChannelsListNav
                         item={item}
-                        unread={hasUnread(item.id)}
+                        unread={unread.has(item.id)}
+                        unreadCount={unread.count(item.id)}
                       />
                     </Suspense>
                   </Match>

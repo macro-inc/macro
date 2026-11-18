@@ -37,6 +37,13 @@ export default {
   // Rail buttons
   hideFromSidebar: 'Hide from sidebar',
   unreadItems: 'Unread items',
+  unreadNotifications: {
+    one: '{{count}} unread notification',
+    other: '{{count}} unread notifications',
+  },
+  manyUnreadNotifications: {
+    other: 'More than {{count}} unread notifications',
+  },
   unseenItems: {
     one: '{{count}} unseen item',
     other: '{{count}} unseen items',

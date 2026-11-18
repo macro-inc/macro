@@ -1,3 +1,5 @@
+import { unreadLabel } from '@app/features/notifications-inbox/core/inbox-unread';
+import { UnreadCount } from '@entity/components/UnreadCount';
 import { UnreadIndicator } from '@entity/components/UnreadIndicator';
 import { cn } from '@ui';
 import {
@@ -7,6 +9,7 @@ import {
   splitProps,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { unreadDescription } from '../unread-description';
 
 export type MobileDockIcon = Component<{ class?: string }>;
 
@@ -22,6 +25,8 @@ type MobileDockButtonProps = Omit<ComponentProps<'button'>, 'children'> & {
    */
   active?: boolean;
   unread?: boolean;
+  /** How many unread notifications the view holds, shown in place of the dot. */
+  unreadCount?: number;
   iconClass?: string;
 };
 
@@ -35,6 +40,7 @@ export function MobileDockButton(props: MobileDockButtonProps) {
     'ariaLabel',
     'active',
     'unread',
+    'unreadCount',
     'class',
     'iconClass',
   ]);
@@ -43,8 +49,13 @@ export function MobileDockButton(props: MobileDockButtonProps) {
     <button
       type="button"
       aria-label={local.ariaLabel}
-      aria-description={local.unread ? 'Unread items' : undefined}
+      aria-description={
+        local.unread
+          ? (unreadDescription(local.unreadCount) ?? 'Unread items')
+          : undefined
+      }
       data-unread={local.unread ? '' : undefined}
+      data-unread-count={unreadLabel(local.unreadCount)}
       class={cn(
         'relative flex size-(--mobile-chrome-button-size) shrink-0 items-center justify-center rounded-full',
         local.active === false && 'text-ink-extra-muted',
@@ -60,12 +71,26 @@ export function MobileDockButton(props: MobileDockButtonProps) {
       >
         <Dynamic component={local.icon} />
         <Show when={local.unread}>
-          <span
-            aria-hidden="true"
-            class="pointer-events-none absolute -right-1 -top-1 rounded-full ring-2 ring-chrome"
+          <Show
+            when={unreadLabel(local.unreadCount)}
+            fallback={
+              <span
+                aria-hidden="true"
+                class="pointer-events-none absolute -right-1 -top-1 rounded-full ring-2 ring-chrome"
+              >
+                <UnreadIndicator active class="size-1.5" />
+              </span>
+            }
           >
-            <UnreadIndicator active class="size-1.5" />
-          </span>
+            {(count) => (
+              // Anchored by its left edge, so a longer count grows away
+              // from the glyph.
+              <UnreadCount
+                label={count()}
+                class="absolute -top-1.5 left-[calc(100%-6px)] ring-chrome"
+              />
+            )}
+          </Show>
         </Show>
       </div>
     </button>
