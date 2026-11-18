@@ -572,7 +572,10 @@ local search has text. Its cache rows (`SearchProvider`'s `entityPool`) are
 read only while a caller passes a `searching` accessor that is true
 (`readsCache` on the list), because a pool reading the cache rereads it on every
 change and queues behind every other read; its in-memory rows stay listed, so
-the first keystroke does not rebuild them. Measure Quick Access ranking at scale with the
+the first keystroke does not rebuild them. Quick Access's history and recent
+channel sources follow cache changes the same way: only while one of its lists
+reads the cache (`subscribeToVisibleCacheChanges`'s `live`), catching up once
+when one starts. Measure Quick Access ranking at scale with the
 [scale fixture](src/features/command/browser-test/README.md).
 Ordinary DM entity matching in Cmd+K and mobile name search treats the first
 name as exact, so it reaches a full-name DM; personal contact windows count an
