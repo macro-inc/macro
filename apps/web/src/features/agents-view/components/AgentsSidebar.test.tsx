@@ -1,5 +1,11 @@
 import { HomeListEntity } from '@app/features/home/components/HomeListEntity';
 import {
+  attachGlobalDOMScope,
+  useHotKeyRoot,
+  useHotkeyDOMScope,
+} from '@core/hotkey/hotkeys';
+import { setActiveScope } from '@core/hotkey/state';
+import {
   cleanup,
   fireEvent,
   render,
@@ -95,20 +101,25 @@ afterEach(() => {
 vi.mock('@solid-primitives/resize-observer', () => ({
   createResizeObserver: () => {},
 }));
+const splitPanel = vi.hoisted(() => ({
+  splitHotkeyScope: 'test',
+  isPanelActive: () => true,
+}));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
-  useSplitPanelOrThrow: () => ({
-    splitHotkeyScope: 'test',
-    isPanelActive: () => true,
-  }),
+  useSplitPanelOrThrow: () => splitPanel,
+  useSplitPanel: () => splitPanel,
 }));
 vi.mock('@app/features/next-soup/actions', () => ({
   toEntityActionListState: (options: {
-    controller: { items: { all: () => { id: string }[] } };
+    controller: {
+      items: { all: () => unknown[]; keyOf: (item: unknown) => string };
+    };
   }) => ({
     focus: {
-      set: (id: string) => {
-        if (!options.controller.items.all().some((item) => item.id === id)) {
-          throw new Error(`Missing action row: ${id}`);
+      set: (key: string) => {
+        const { items } = options.controller;
+        if (!items.all().some((item) => items.keyOf(item) === key)) {
+          throw new Error(`Missing action row: ${key}`);
         }
       },
     },
@@ -242,10 +253,7 @@ describe('mixed Agents sidebar', () => {
     expect(screen.queryByRole('button', { name: /Plan launch/ })).toBeNull();
     expect(screen.getByRole('button', { name: /Old spike/ })).toBeTruthy();
     fireEvent.click(code, { shiftKey: true });
-    expect(open).toHaveBeenLastCalledWith(
-      conversations[0],
-      expect.objectContaining({ shiftKey: true })
-    );
+    expect(open).toHaveBeenLastCalledWith(conversations[0], true);
 
     setFilters({ ...EMPTY_CONVERSATION_FILTERS, status: ['waiting'] });
     expect(screen.getByRole('button', { name: /Fix build/ })).toBeTruthy();
@@ -713,8 +721,11 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     expect(open).not.toHaveBeenCalled();
     fireEvent.click(session, { shiftKey: true });
     expect(open).toHaveBeenCalledOnce();
-    const event = open.mock.calls[0][surface === 'home' ? 0 : 1];
-    expect(event.shiftKey).toBe(true);
+    const newSplit =
+      surface === 'home'
+        ? open.mock.calls[0][0].shiftKey
+        : open.mock.calls[0][1];
+    expect(newSplit).toBe(true);
     setEntity({
       ...conversation,
       pullRequestUrl: 'https://github.com/macro-inc/macro/pull/42',
@@ -878,5 +889,176 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
       'https://github.com/macro-inc/macro/pull/42'
     );
     expect(openWithSplit).not.toHaveBeenCalled();
+  });
+});
+
+describe('Agents sidebar keyboard list', () => {
+  const conversations: AgentConversationEntity[] = [
+    {
+      type: 'agent_session',
+      id: 'build',
+      name: 'Fix build',
+      ownerId: 'me',
+      archivedBy: null,
+      botId: 'macro',
+      status: 'acp_ready',
+    },
+    { type: 'chat', id: 'launch', name: 'Plan launch', ownerId: 'me' },
+    {
+      type: 'agent_session',
+      id: 'notes',
+      name: 'Summarize notes',
+      ownerId: 'me',
+      archivedBy: null,
+      botId: 'macro',
+      status: 'acp_ready',
+    },
+  ];
+
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    setActiveScope('global');
+    splitPanel.splitHotkeyScope = 'test';
+  });
+
+  // The hotkey engine tracks held keys, so every press is released, where
+  // focus went: an emptied field closes as the keyboard leaves it.
+  function press(target: Element, key: string, init: KeyboardEventInit = {}) {
+    fireEvent.keyDown(target, { key, ...init });
+    fireEvent.keyUp(document.activeElement ?? document, { key, ...init });
+  }
+
+  function setup() {
+    const [search, setSearch] = createSignal('');
+    const open = vi.fn();
+    let detail!: HTMLDivElement;
+
+    // The split holds the sidebar and, beside it, the conversation it opened.
+    function Harness() {
+      useHotKeyRoot();
+      const [attachSplit, scopeId] = useHotkeyDOMScope('agents-split');
+      splitPanel.splitHotkeyScope = scopeId;
+      return (
+        <div ref={(element) => attachGlobalDOMScope(element)}>
+          <div ref={attachSplit}>
+            <div data-view-shell-aside="">
+              <AgentsSidebar
+                onCreateAgent={vi.fn()}
+                onCreateRoutine={vi.fn()}
+                filters={EMPTY_CONVERSATION_FILTERS}
+                grouping="none"
+                onFilterChange={vi.fn()}
+                onClearFilters={vi.fn()}
+                onGroupingChange={vi.fn()}
+                activePage="new"
+                onOpenPage={vi.fn()}
+                conversations={conversations}
+                archived={[]}
+                modeForConversation={() => 'chat'}
+                activeConversationId={undefined}
+                search={search()}
+                loading={false}
+                error={false}
+                hasNextPage={false}
+                loadingNextPage={false}
+                onSearchChange={setSearch}
+                showUnlistedRuns={false}
+                onShowUnlistedRunsChange={vi.fn()}
+                onOpenConversation={open}
+                onRetry={vi.fn()}
+                onLoadMore={vi.fn()}
+              />
+            </div>
+            <div ref={detail} tabIndex={0} />
+          </div>
+        </div>
+      );
+    }
+
+    render(() => <Harness />);
+    const list = () =>
+      document.querySelector<HTMLElement>('[aria-activedescendant]') ??
+      screen.getByRole('group');
+    const focusedRow = () => {
+      const id = list().getAttribute('aria-activedescendant');
+      return id ? document.getElementById(id)?.textContent : undefined;
+    };
+    return { search, setSearch, open, list, focusedRow, detail: () => detail };
+  }
+
+  it('moves from the search field into the results and keeps the search on Escape', async () => {
+    const { search, setSearch, list, focusedRow } = setup();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search conversations' })
+    );
+    const field = await screen.findByRole('searchbox', {
+      name: 'Search conversations',
+    });
+    setSearch('fix');
+    field.focus();
+
+    press(field, 'ArrowDown');
+    expect(document.activeElement).toBe(list());
+    expect(focusedRow()).toContain('Fix build');
+
+    field.focus();
+    press(field, 'Escape');
+    expect(document.activeElement).toBe(list());
+    expect(search()).toBe('fix');
+
+    press(list(), 'Escape');
+    expect(search()).toBe('');
+  });
+
+  it('walks the rows with j, k and the arrows, and opens the focused one with Enter', async () => {
+    const { open, list, focusedRow } = setup();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search conversations' })
+    );
+    const field = await screen.findByRole('searchbox', {
+      name: 'Search conversations',
+    });
+    field.focus();
+    press(field, 'ArrowDown');
+    expect(focusedRow()).toContain('Fix build');
+
+    press(list(), 'j');
+    expect(focusedRow()).toContain('Plan launch');
+    press(list(), 'ArrowDown');
+    expect(focusedRow()).toContain('Summarize notes');
+    press(list(), 'k');
+    expect(focusedRow()).toContain('Plan launch');
+
+    press(list(), 'Enter');
+    expect(open).toHaveBeenLastCalledWith(conversations[1], false);
+    press(list(), 'Enter', { shiftKey: true });
+    expect(open).toHaveBeenLastCalledWith(conversations[1], true);
+
+    press(list(), 'ArrowUp');
+    expect(focusedRow()).toContain('Fix build');
+  });
+
+  it('leaves keys pressed in the conversation beside it alone', async () => {
+    const { open, list, focusedRow, detail } = setup();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search conversations' })
+    );
+    const field = await screen.findByRole('searchbox', {
+      name: 'Search conversations',
+    });
+    field.focus();
+    press(field, 'ArrowDown');
+    expect(focusedRow()).toContain('Fix build');
+
+    detail().focus();
+    press(detail(), 'j');
+    press(detail(), 'Enter');
+    expect(focusedRow()).toContain('Fix build');
+    expect(open).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(detail());
+    expect(list()).toBeTruthy();
   });
 });

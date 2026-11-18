@@ -9,6 +9,7 @@ import {
 /** Shared row geometry; the host supplies the Home icon or Agents status. */
 export function AgentSessionRow(props: {
   id: string;
+  domId?: string;
   title: string;
   kind: 'chat' | 'code';
   state: ConversationState;
@@ -18,6 +19,8 @@ export function AgentSessionRow(props: {
   unread?: boolean;
   failed?: boolean;
   active?: boolean;
+  /** The list's keyboard focus, which is not DOM focus. */
+  focused?: boolean;
   /** When true, hides the leading icon slot to save horizontal space. */
   hideLeading?: boolean;
   children?: JSX.Element;
@@ -27,9 +30,11 @@ export function AgentSessionRow(props: {
   return (
     <ViewSidebar.Item
       as="div"
+      id={props.domId}
       active={props.active}
       class={cn(
         'relative text-ink',
+        props.focused && !props.active && 'not-touch:bg-hover',
         metadata.toArray().length > 0 &&
           'h-auto min-h-12 items-start py-1.5 touch:h-auto',
         props.hideLeading && 'pl-3'
