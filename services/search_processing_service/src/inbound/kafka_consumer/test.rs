@@ -127,7 +127,7 @@ fn channel_sender() -> ChannelSender<'static> {
 /// Builds a [`WorkerPool`] whose worker channels are captured as receivers.
 fn test_pool(workers: usize, capacity: usize) -> (WorkerPool, Vec<mpsc::Receiver<ReceivedEvent>>) {
     let (senders, receivers) = (0..workers).map(|_| mpsc::channel(capacity)).unzip();
-    (WorkerPool::new(senders), receivers)
+    (WorkerPool::new(senders, Arc::default()), receivers)
 }
 
 fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEvent {
@@ -2379,21 +2379,43 @@ async fn agent_session_flood_does_not_delay_email_events_on_other_partitions() {
 }
 
 #[tokio::test]
-async fn hint_after_its_reread_starts_queues_the_next_reread() {
-    let (pool, mut receivers) = test_pool(1, 4);
-    let first = received_agent_session_event(AGENT_SESSION_ID, 1);
-    let key = coalescible_reread_key(&first.event)
-        .expect("agent-session events reread")
-        .to_owned();
-    assert!(matches!(
-        pool.handoff(Ok::<_, EventBrokerError>(first)).await,
-        HandoffOutcome::HandedOff
+async fn hint_arriving_mid_reread_queues_the_next_reread() {
+    let (sender, receiver) = mpsc::channel(WORKER_CHANNEL_CAPACITY);
+    let pending_rereads = Arc::new(PendingRereads::default());
+    let pool = WorkerPool::new(vec![sender], Arc::clone(&pending_rereads));
+    let (started_sender, mut started) = mpsc::channel(4);
+    let resume = Arc::new(tokio::sync::Notify::new());
+    let worker_resume = Arc::clone(&resume);
+    let worker = tokio::spawn(drain_worker_events(
+        receiver,
+        pending_rereads,
+        move |received| {
+            let started_sender = started_sender.clone();
+            let resume = Arc::clone(&worker_resume);
+            async move {
+                started_sender
+                    .send(received.offset)
+                    .await
+                    .expect("test observes every reread");
+                if received.offset == 1 {
+                    resume.notified().await;
+                }
+            }
+        },
     ));
 
-    // The worker clears the session as it dequeues, before the reread reads.
-    assert_eq!(receivers[0].recv().await.expect("first reread").offset, 1);
-    pool.pending_rereads.release(&key);
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+            AGENT_SESSION_ID,
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    assert_eq!(started.recv().await, Some(1), "first reread is running");
 
+    // The running reread may already have read the session, so this hint
+    // needs a reread of its own.
     assert!(matches!(
         pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
             AGENT_SESSION_ID,
@@ -2402,7 +2424,35 @@ async fn hint_after_its_reread_starts_queues_the_next_reread() {
         .await,
         HandoffOutcome::HandedOff
     ));
-    assert_eq!(receivers[0].recv().await.expect("next reread").offset, 2);
+    resume.notify_one();
+    assert_eq!(started.recv().await, Some(2), "next reread runs");
+
+    drop(pool);
+    worker.await.expect("worker drained without panicking");
+}
+
+#[tokio::test]
+async fn dead_worker_holding_a_claim_leaves_later_hints_uncommitted() {
+    let (pool, receivers) = test_pool(1, 4);
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+            AGENT_SESSION_ID,
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    // The worker dies with the reread still queued.
+    drop(receivers);
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_agent_session_event(
+            AGENT_SESSION_ID,
+            2
+        )))
+        .await,
+        HandoffOutcome::WorkerClosed
+    ));
 }
 
 #[tokio::test]

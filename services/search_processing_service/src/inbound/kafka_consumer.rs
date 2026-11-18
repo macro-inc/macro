@@ -114,8 +114,9 @@ macro_event_broker::declare_topics!(
 const WORKER_COUNT: usize = 10;
 /// Maximum number of decoded events waiting for each sequential worker.
 ///
-/// Offsets are committed at handoff, so `WORKER_COUNT * WORKER_CHANNEL_CAPACITY`
-/// also bounds how many committed-but-unprocessed events a crash can drop.
+/// Offsets are committed at handoff, so a crash can drop up to
+/// `WORKER_COUNT * WORKER_CHANNEL_CAPACITY` queued events, plus the
+/// agent-session events each queued reread absorbed.
 const WORKER_CHANNEL_CAPACITY: usize = 16;
 /// Delay before polling Kafka again after a receive error.
 const RECEIVE_ERROR_RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -212,12 +213,11 @@ fn ordering_key(event: &DeclaredMacroEvent) -> Cow<'_, str> {
 
 /// Key of an event whose processing only rereads its entity's current state,
 /// so a queued reread already covers it.
-///
-/// Agent-session lifecycle events are hints: each one reconciles the session's
-/// whole projection from the owning service, whatever the event says.
-fn coalescible_reread_key(event: &DeclaredMacroEvent) -> Option<&str> {
+fn coalescible_reread_key(event: &DeclaredMacroEvent) -> Option<String> {
     match event {
-        DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => Some(event.key()),
+        DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => {
+            Some(agent_session::reread_key(event))
+        }
         DeclaredMacroEvent::CalendarMacroEvent(_)
         | DeclaredMacroEvent::CallMacroEvent(_)
         | DeclaredMacroEvent::ChannelMacroEvent(_)
@@ -241,9 +241,11 @@ struct PendingRereads(Mutex<HashSet<String>>);
 
 impl PendingRereads {
     /// Marks `key` queued; returns false when a reread for it already waits.
-    fn claim(&self, key: &str) -> bool {
-        let mut pending = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-        !pending.contains(key) && pending.insert(key.to_owned())
+    fn claim(&self, key: String) -> bool {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(key)
     }
 
     /// Clears `key` before its reread starts, so a hint arriving during the
@@ -267,11 +269,8 @@ struct WorkerPool {
 }
 
 impl WorkerPool {
-    fn new(senders: Vec<mpsc::Sender<ReceivedEvent>>) -> Self {
-        Self::with_pending_rereads(senders, Arc::default())
-    }
-
-    fn with_pending_rereads(
+    /// `pending_rereads` must be the set the workers draining `senders` release.
+    fn new(
         senders: Vec<mpsc::Sender<ReceivedEvent>>,
         pending_rereads: Arc<PendingRereads>,
     ) -> Self {
@@ -303,7 +302,7 @@ impl WorkerPool {
                 )
             })
             .unzip();
-        (Self::with_pending_rereads(senders, pending_rereads), workers)
+        (Self::new(senders, pending_rereads), workers)
     }
 
     fn shard_index(&self, key: &str) -> usize {
@@ -318,17 +317,24 @@ impl WorkerPool {
             Err(error) => return HandoffOutcome::MalformedRecord(error),
         };
 
-        if let Some(key) = coalescible_reread_key(&event.event)
-            && !self.pending_rereads.claim(key)
+        let shard = self.shard_index(ordering_key(&event.event).as_ref());
+        let sender = &self.senders[shard];
+        // A dead worker may still hold a claim for a reread it will never run;
+        // leave the record uncommitted so a restart redelivers it.
+        if sender.is_closed() {
+            return HandoffOutcome::WorkerClosed;
+        }
+        let reread_key = coalescible_reread_key(&event.event);
+        if let Some(key) = &reread_key
+            && !self.pending_rereads.claim(key.clone())
         {
             return HandoffOutcome::Coalesced;
         }
 
-        let shard = self.shard_index(ordering_key(&event.event).as_ref());
-        match self.senders[shard].send(event).await {
+        match sender.send(event).await {
             Ok(()) => HandoffOutcome::HandedOff,
-            Err(mpsc::error::SendError(event)) => {
-                if let Some(key) = coalescible_reread_key(&event.event) {
+            Err(_) => {
+                if let Some(key) = &reread_key {
                     self.pending_rereads.release(key);
                 }
                 HandoffOutcome::WorkerClosed
@@ -406,22 +412,41 @@ async fn process_event(
 
 async fn run_event_worker(
     context: KafkaProcessingContext,
-    mut events: mpsc::Receiver<ReceivedEvent>,
+    events: mpsc::Receiver<ReceivedEvent>,
     pending_rereads: Arc<PendingRereads>,
 ) {
-    while let Some(received) = events.recv().await {
-        if let Some(key) = coalescible_reread_key(&received.event) {
-            pending_rereads.release(key);
-        }
+    let context = &context;
+    drain_worker_events(events, pending_rereads, |received| async move {
         let _ = process_event(
-            &context,
+            context,
             &received.event,
             received.partition,
             received.offset,
         )
         .await;
-    }
+    })
+    .await;
     tracing::trace!("search processing event worker drained");
+}
+
+/// Processes one worker's events in order until its channel closes.
+///
+/// A reread's claim is released as it is dequeued, before `process` reads
+/// anything, so an event that arrives mid-reread queues the next one.
+async fn drain_worker_events<F, Fut>(
+    mut events: mpsc::Receiver<ReceivedEvent>,
+    pending_rereads: Arc<PendingRereads>,
+    mut process: F,
+) where
+    F: FnMut(ReceivedEvent) -> Fut,
+    Fut: Future<Output = ()>,
+{
+    while let Some(received) = events.recv().await {
+        if let Some(key) = coalescible_reread_key(&received.event) {
+            pending_rereads.release(&key);
+        }
+        process(received).await;
+    }
 }
 
 fn commit_logged(consumer: &SearchProcessingKafkaConsumer, message: &BorrowedMessage<'_>) {
