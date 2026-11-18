@@ -129,6 +129,56 @@ afterEach(() => {
 });
 
 describe('CRM HTTP response admission', () => {
+  it.each(['pending', 'unavailable', 'denied'] as const)(
+    'keeps personal mailbox reads and writes independent while CRM proof is %s',
+    async (state) => {
+      const current = owner('viewer');
+      crmAccessAuthority.setSession('viewer');
+      if (state === 'denied') {
+        mocks.proof.mockResolvedValue(proof(false));
+        await crmAccessAuthority.refresh();
+      } else if (state === 'unavailable') {
+        mocks.proof.mockResolvedValue(
+          err([{ code: 'SERVER_ERROR', message: 'Unavailable' }])
+        );
+        await expect(crmAccessAuthority.refresh()).rejects.toThrow();
+      }
+      const readAuthority = vi.spyOn(current.authority, 'current');
+      mocks.proof.mockClear();
+      for (const [url, init] of [
+        [
+          'http://localhost/email/email/settings',
+          { method: 'PATCH', body: '{"signature":"test"}' },
+        ],
+        [
+          'http://localhost/email/email/messages/batch',
+          { method: 'POST', body: '{"ids":["message"]}' },
+        ],
+        ['http://localhost/email/email/threads/thread/messages', {}],
+        [
+          'http://localhost/dss/graphql',
+          queuedSettlementRequest({
+            method: 'POST',
+            body: JSON.stringify({
+              query:
+                'mutation { markEmailThreadSeen(input: {threadId: "thread"}) { ...State } } fragment State on GraphqlSoupEmailThread { id isRead }',
+            }),
+          }),
+        ],
+      ] satisfies [string, RequestInit][]) {
+        const observe = prepareResponseObservers(url, init);
+        expect(observe).toBe(passResponse);
+        const response = Response.json({ saved: true });
+        expect(await (await (await observe)(response)).json()).toEqual({
+          saved: true,
+        });
+      }
+      expect(readAuthority).not.toHaveBeenCalled();
+      expect(mocks.proof).not.toHaveBeenCalled();
+      readAuthority.mockRestore();
+    }
+  );
+
   it('rejects a null proof as a terminal error without a network retry', async () => {
     owner('viewer');
     crmAccessAuthority.setSession('viewer');

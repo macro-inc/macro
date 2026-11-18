@@ -69,17 +69,28 @@ skip it. A changed, missing, or invalid hint triggers a fresh
 authority read; it never changes the policy directly. The response keeps its
 pre-request generation even when that fresh read changes authority, so a late
 response cannot be relabeled and admitted after retirement. Protected local reads,
-email/agent responses, and subscription frames reuse a verified proof for the
+CRM-bearing email/agent responses, and subscription frames reuse a verified proof for the
 current account and owner generation. Only stale authority or explicit signals
 trigger another primary proof; transient failures preserve the last proven state.
 Network failures back off once before a short second attempt; stale generations
 retry once, while terminal errors do not retry automatically. Initial CRM routes
 show loading, then the existing retry state if proof fails. Manual retry and
 reconnect both restart verification without reporting a denial.
-Email and Soup snapshots remain persisted for allowed members and are retired on
-a proven denial or account replacement. The first native or wasm proof preserves
+Email and Soup snapshots remain persisted; CRM-bearing snapshots require proof
+before restoration and are retired on a proven denial or account replacement.
+Legacy persisted thread pages use the entity-granted thread endpoint and remain
+protected unless a current ownership witness identifies the thread as personal.
+Shared or expired-witness snapshots cannot restore after a proven denial.
+Inbox-authorized thread messages remain available independently of CRM access. The first native or wasm proof preserves
 legacy offline snapshots when it is allowed or team-less; regrants also preserve
-content already admitted after denial. Personal Soup mail, Work Feed, bookmark metadata
+content already admitted after denial. Inbox-authorized settings, labels, message
+batches, thread messages, drafts and mailbox mutation results never wait for CRM
+proof or lose their successful outcomes when that endpoint is unavailable.
+Folder moves are independent for supported non-CRM entity kinds: their effects
+contain only the moved entity and its folders, and the email domain requires
+Owner access before moving a thread or returning its updated snapshot.
+Arbitrary thread, attachment and EML reads can use CRM grants and retain proof checks.
+Personal Soup mail, Work Feed, bookmark metadata
 and independently scoped database views retain their cached offline reads when
 the permission endpoint is unavailable. Thread-by-ID reads first select only
 cached identity and ownership metadata: the current account's own thread can be
@@ -124,7 +135,10 @@ login cannot receive an earlier login's write outcome.
 
 Subscription frames reserve their order before permission lookups and retain
 their arrival generation through queued writes and deletions. An authority-only
-change retries an initial cache read instead of leaving it pending. Protected
+change invalidates only protected query registrations and reads; independent
+queries retain their live cursors. A personal response rejected by the account
+fence during first identity binding gets one fresh cache/network read to register
+its dependencies, without reusing the old payload or retrying account replacement. Protected
 queries rejected while the first proof completes recover from current cached
 data or a fresh network request, without replaying the rejected response or
 replacing their mounted observer. Visible

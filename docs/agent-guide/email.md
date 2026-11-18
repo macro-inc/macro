@@ -597,6 +597,13 @@ write after closing the connection, then clear/logout during recovery: old-accou
 entries must not return. These caches retry only transaction creation; persistent
 storage failures still follow the existing cache fallback behavior.
 
+Hold or fail `/crm/member-access` during sign-in, then save an inbox signature,
+mark a thread read and unread, toggle its star, move it to a folder, and move
+another thread to Trash. Notices, row state, folder contents, and provider labels
+must update, and cached personal thread messages must remain readable. These
+inbox-authorized operations do not depend on CRM access; CRM-shared thread and
+attachment reads still require their access proof.
+
 Performance check: switch Signal → All twice against a large synchronized cache.
 Dense local pages use bounded sort-index candidates rather than sorting the entire
 mailbox. Sparse filters and large timestamp ties retain the exact fallback plan.

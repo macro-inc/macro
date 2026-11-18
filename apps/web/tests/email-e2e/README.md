@@ -27,6 +27,12 @@ many tests run at once (4); each runs three services and a browser, and half
 as many stacks again wait started for the next tests (about 0.5 GB, 40
 Postgres connections and one Redis database each).
 
+On a shared host, run builds and suites under `ionice -c3 nice -n10` with
+`CARGO_BUILD_JOBS=2`, `EMAIL_E2E_BROWSER_WORKERS=1` and `EMAIL_E2E_STACK_POOL=0`.
+Compare bundles sequentially, keep stack data on disk, and cap service logs at
+info level with bounded rotation. For long comparisons, `--trace=off` avoids
+recording every asset for every page; rerun failures with tracing enabled.
+
 ## How it works
 
 - `global-setup.ts` starts `email_e2e_stacks` (`crates/email_e2e/src/stack_server.rs`),

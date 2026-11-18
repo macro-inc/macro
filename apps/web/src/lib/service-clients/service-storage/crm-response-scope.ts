@@ -1,4 +1,5 @@
 import {
+  hasOwnedEmailWitness,
   queryNeedsCrmProof,
   queryOperationKind,
 } from '@graphql-cache/authority-scope';
@@ -59,6 +60,39 @@ const emailPostWrites = [
   /^\/threads\/[^/]+\/messages\/[^/]+\/calendar-invitations\/[^/]+\/copy$/,
   /^\/calendar-events\/[^/]+\/forward$/,
 ];
+
+// These handlers resolve an owned/delegated inbox, rather than an entity grant.
+// A thread or attachment by ID can instead be shared through CRM and stays gated.
+const independentEmailResources = new Set([
+  'init',
+  'labels',
+  'contacts',
+  'filters',
+  'links',
+  'settings',
+  'sync',
+  'backfill',
+  'drafts',
+  'draft-transfers',
+]);
+
+function independentEmailRequest(path: string, method: string): boolean {
+  if (independentEmailResources.has(path.split('/')[1])) return true;
+  if (/^\/messages(?:\/batch|\/labels|\/[^/]+)?$/.test(path)) return true;
+  if (/^\/threads\/previews\/cursor\/[^/]+$/.test(path)) return true;
+  if (/^\/threads\/[^/]+\/(?:messages|operations|read-receipts)$/.test(path))
+    return true;
+  if (
+    ['POST', 'PATCH', 'PUT', 'DELETE'].includes(method) &&
+    /^\/threads\/(?:archived|[^/]+\/(?:seen|archived|labels|state))$/.test(path)
+  )
+    return true;
+  // The domain service requires Owner even though its route extracts Edit.
+  if (method === 'PATCH' && /^\/threads\/[^/]+\/project$/.test(path))
+    return true;
+  const thread = /^\/threads\/([^/]+)$/.exec(path);
+  return !!thread && hasOwnedEmailWitness(thread[1]);
+}
 
 /** Unknown requests stay read-like and fail closed; selected GraphQL operations own their kind. */
 export function crmResponseScope(
@@ -137,7 +171,8 @@ export function crmResponseScope(
     service === 'email' ? path.replace(/^\/email(?=\/)/, '') : path;
   const writes = service === 'email' ? emailPostWrites : storagePostWrites;
   return {
-    protected: true,
+    protected:
+      service !== 'email' || !independentEmailRequest(relative, method),
     write:
       ['PUT', 'PATCH', 'DELETE'].includes(method) ||
       (method === 'POST' && writes.some((pattern) => pattern.test(relative))),

@@ -1,4 +1,7 @@
-import { excludesCrmContent } from '@graphql-cache/authority-scope';
+import {
+  excludesCrmContent,
+  hasOwnedEmailWitness,
+} from '@graphql-cache/authority-scope';
 import { makeGraphqlSoupInput } from './soup/graphql/ast';
 import type { SoupAstBody, SoupParams } from './soup/items';
 
@@ -30,16 +33,29 @@ export function crmProtectedQueryKey(key: readonly unknown[]): boolean {
       return true;
     }
   }
-  if (kind === 'email')
+  if (kind === 'email') {
+    // Legacy thread pages use the entity-granted thread endpoint, which can
+    // include CRM-shared mail. Only a current ownership witness exempts them.
+    if (scope === 'threadMessages')
+      return !(
+        key.length === 4 &&
+        key[2] === 'messages' &&
+        hasOwnedEmailWitness(key[3])
+      );
     return ![
       'links',
       'linksHealthProbe',
       'labels',
       'settingsOperations',
+      'threadOperations',
+      'messageOperation',
+      'threadReadReceipts',
+      'messageInbox',
       'scheduledMessages',
       'composeDraftState',
       'previews',
     ].includes(String(scope));
+  }
   if (kind === 'properties') {
     if (scope === 'definitions')
       return !['SYSTEM', 'USER', 'TEAM'].includes(String(key[3]));

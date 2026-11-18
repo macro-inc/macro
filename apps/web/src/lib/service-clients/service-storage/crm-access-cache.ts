@@ -181,7 +181,7 @@ function install() {
       scope: Awaited<ReturnType<typeof crmResponseScope>>
     ): ResponseGuard | undefined | Promise<ResponseGuard> => {
       const queuedMutation = isQueuedSettlementRequest(init);
-      if (!scope.protected && !queuedMutation) return;
+      if (!scope.protected) return;
       assertSession();
       return (async () => {
         if (storage) {

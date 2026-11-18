@@ -1,3 +1,4 @@
+import { rememberOwnedEmail } from '@graphql-cache/authority-scope';
 import { describe, expect, it } from 'vitest';
 import { crmResponseScope } from './crm-response-scope';
 
@@ -91,7 +92,7 @@ describe('CRM response content scope', () => {
     }
   );
 
-  it('retains proof for POST email reads and preserves actual email writes', async () => {
+  it('keeps mailbox-scoped POST reads and writes independent of CRM proof', async () => {
     expect(
       await crmResponseScope(
         'email',
@@ -99,7 +100,7 @@ describe('CRM response content scope', () => {
         'http://localhost/email/messages/batch',
         { method: 'POST' }
       )
-    ).toEqual({ protected: true, write: false });
+    ).toEqual({ protected: false, write: false });
     expect(
       await crmResponseScope(
         'email',
@@ -107,6 +108,44 @@ describe('CRM response content scope', () => {
         'http://localhost/email/drafts',
         { method: 'POST' }
       )
-    ).toEqual({ protected: true, write: true });
+    ).toEqual({ protected: false, write: true });
+  });
+
+  it.each([
+    ['/email/settings', 'PATCH', false],
+    ['/email/threads/thread/seen', 'POST', false],
+    ['/email/threads/thread/messages', 'GET', false],
+    ['/email/threads/thread/operations', 'GET', false],
+    ['/email/threads/thread/read-receipts', 'GET', false],
+    ['/email/threads/thread/state', 'PATCH', false],
+    ['/email/threads/thread/project', 'PATCH', false],
+    ['/email/threads/previews/cursor/inbox', 'GET', false],
+    ['/email/threads/thread', 'GET', true],
+    ['/email/attachments/attachment', 'GET', true],
+    ['/email/attachments/attachment/document_id', 'GET', true],
+    ['/email/messages/message/eml', 'GET', true],
+    ['/email/unknown', 'GET', true],
+  ])(
+    'classifies %s by its inbox or entity grant',
+    async (path, method, protectedContent) => {
+      expect(
+        await crmResponseScope('email', path, `http://localhost${path}`, {
+          method,
+        })
+      ).toHaveProperty('protected', protectedContent);
+    }
+  );
+
+  it('uses a current ownership witness for a thread read without opening shared threads', async () => {
+    let current = true;
+    const path = '/email/threads/owned-rest-thread';
+    rememberOwnedEmail('owned-rest-thread', () => current);
+    expect(
+      await crmResponseScope('email', path, `http://localhost${path}`, {})
+    ).toEqual({ protected: false, write: false });
+    current = false;
+    expect(
+      await crmResponseScope('email', path, `http://localhost${path}`, {})
+    ).toEqual({ protected: true, write: false });
   });
 });

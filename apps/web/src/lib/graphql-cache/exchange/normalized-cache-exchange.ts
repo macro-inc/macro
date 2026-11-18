@@ -137,6 +137,9 @@ import { runSubscriptionCacheEffects } from './subscription-cache-trace';
 /** Server writes acknowledged since this query left for the network. */
 const QUERY_MUTATION_VERSION_CONTEXT_KEY =
   'normalizedCacheQueryMutationVersion';
+/** Identifies requests dispatched before first binding, including before init. */
+const QUERY_IDENTITY_VERSION_CONTEXT_KEY =
+  'normalizedCacheQueryIdentityVersion';
 /** Marks dependency-pushed reads as latency-sensitive worker work. */
 const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
 
@@ -532,6 +535,11 @@ export function normalizedCacheExchange(
         options.onCacheError?.(error, op);
     };
     let cacheGeneration = 0;
+    let observedAuthority = host.authority?.snapshot();
+    let identityVersion = 0;
+    let firstIdentityBinding:
+      | { requestVersion: number; account: string }
+      | undefined;
     let mutationVersion = 0;
     const currentMutationVersion = () =>
       mutationVersion + (options.externalMutationVersion?.() ?? 0);
@@ -896,6 +904,7 @@ export function normalizedCacheExchange(
         makeOperation('query', op, {
           ...op.context,
           cacheAuthorityGeneration: host.authority?.snapshot()?.generation,
+          [QUERY_IDENTITY_VERSION_CONTEXT_KEY]: identityVersion,
           [QUERY_MUTATION_VERSION_CONTEXT_KEY]: currentMutationVersion(),
           externalCacheWriteVersion: externalWriteVersion(host),
           externalCacheWriteTypes:
@@ -1564,6 +1573,40 @@ export function normalizedCacheExchange(
             return deletion?.revision ?? write.revision;
           } catch (error) {
             reportError(error);
+            // First identity binding fences the unbound response even for a
+            // personal query. Fetch fresh data once so that its live cache
+            // dependencies register; never restamp or replay the old payload.
+            // A fresh request captures the bound identity version and cannot retry
+            // through this path, nor can a response from another account.
+            if (
+              error instanceof StaleCacheAuthorityError &&
+              isActive() &&
+              !queryNeedsCrmProof(
+                queryText(op),
+                op.variables as Record<string, unknown>,
+                operationName(op)
+              )
+            ) {
+              const requestVersion =
+                op.context[QUERY_IDENTITY_VERSION_CONTEXT_KEY];
+              if (
+                !firstIdentityBinding &&
+                requestVersion === identityVersion &&
+                observedAuthority?.account == null
+              ) {
+                // The rejected write can beat the binding notification. This
+                // is one local owner read, not a network permission proof.
+                await host.authority?.current();
+              }
+              if (
+                firstIdentityBinding &&
+                requestVersion === firstIdentityBinding.requestVersion &&
+                host.authority?.snapshot()?.account ===
+                  firstIdentityBinding.account
+              ) {
+                state.deferredAuthorityRead = true;
+              }
+            }
             // An old-owner failure can arrive after this write started. Retain
             // only the latest successful response for replacement registration.
             if (
@@ -1621,10 +1664,14 @@ export function normalizedCacheExchange(
         // the original subscription and cache generation through every await.
         const generation = subscriptionGenerations.get(op.key);
         const cacheGenerationAtArrival = cacheGeneration;
+        const authorityGenerationAtArrival =
+          host.authority?.snapshot()?.generation;
         const isCurrent = () =>
           generation !== undefined &&
           subscriptionGenerations.get(op.key) === generation &&
-          cacheGeneration === cacheGenerationAtArrival;
+          cacheGeneration === cacheGenerationAtArrival &&
+          host.authority?.snapshot()?.generation ===
+            authorityGenerationAtArrival;
         let output: OperationResult | undefined;
         const effects = runSubscriptionCacheEffects(
           result,
@@ -1973,15 +2020,16 @@ export function normalizedCacheExchange(
       if (!host.disabled) {
         mutationQueue.start();
         host.authority?.onChanged((authority) => {
-          cacheGeneration += 1;
-          liveQueries.clear();
-          documentReader.clear();
-          for (const state of queryStates.values()) {
-            if (state.retainedReplacementFallback)
-              state.retainedReplacementFallback.invalidated = true;
-            state.retainedReplacementFallback = undefined;
+          const previousAccount = observedAuthority?.account ?? null;
+          const nextAccount = authority.account ?? null;
+          if (previousAccount !== nextAccount) {
+            firstIdentityBinding =
+              previousAccount === null && nextAccount !== null
+                ? { requestVersion: identityVersion, account: nextAccount }
+                : undefined;
+            identityVersion += 1;
           }
-          if (!authority.ready) return;
+          observedAuthority = authority;
           for (const [key, operation] of activeOps) {
             const state = queryStates.get(key);
             if (
@@ -1992,6 +2040,15 @@ export function normalizedCacheExchange(
                 operationName(operation)
               )
             ) {
+              // Authority changes affect CRM projections, not personal-mail
+              // registrations or in-flight independent cache reads.
+              state.cacheReadVersion += 1;
+              liveQueries.delete(key);
+              documentReader.forget(key);
+              if (state.retainedReplacementFallback)
+                state.retainedReplacementFallback.invalidated = true;
+              state.retainedReplacementFallback = undefined;
+              if (!authority.ready) continue;
               if (state.networkBoundQueries > 0) {
                 state.deferredAuthorityRead = true;
               } else {
@@ -2005,7 +2062,11 @@ export function normalizedCacheExchange(
         // which head is runnable after reconnecting.
         host.onCacheGenerationChanged((change) => {
           cacheGeneration += 1;
-          if (change.storage === 'reset') mutationQueue.resetStorage();
+          if (change.storage === 'reset') {
+            identityVersion += 1;
+            firstIdentityBinding = undefined;
+            mutationQueue.resetStorage();
+          }
           liveQueries.clear();
           documentReader.clear();
           mutationQueue.wake();

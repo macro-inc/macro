@@ -510,8 +510,11 @@ function makeFakeHost(): FakeHost {
   return host;
 }
 
-function installAuthority(host: CacheHost) {
-  let state = testAuthority('test-viewer');
+function installAuthority(
+  host: CacheHost,
+  initial: Partial<CacheAuthority> = {}
+) {
+  let state = { ...testAuthority('test-viewer'), ...initial };
   const listeners = new Set<(next: CacheAuthority) => void>();
   const authority = {
     snapshot: () => state,
@@ -531,11 +534,37 @@ function installAuthority(host: CacheHost) {
   Object.defineProperty(host, 'authority', { value: authority });
   return {
     authority,
-    change(ready = true) {
-      state = { ...state, generation: crypto.randomUUID(), ready };
+    change(ready = true, update: Partial<CacheAuthority> = {}) {
+      state = { ...state, generation: crypto.randomUUID(), ready, ...update };
       for (const listener of listeners) listener(state);
     },
   };
+}
+
+function personalMailOp(
+  key: number,
+  requestPolicy: 'cache-only' | 'network-only'
+) {
+  const op = makeOp(key, requestPolicy);
+  return makeOperation(
+    'query',
+    {
+      ...op,
+      query: gql`query PersonalMail($input: SoupInput!) { user { soup(input: $input) { items { ... on GraphqlSoupEmailThread { id isRead } } } } }`,
+      variables: {
+        input: {
+          initial: {
+            filters: {
+              crmCompanyFilter: {
+                literal: { id: '00000000-0000-0000-0000-000000000000' },
+              },
+            },
+          },
+        },
+      },
+    },
+    op.context
+  );
 }
 
 function makeOp(
@@ -1541,6 +1570,156 @@ describe('normalizedCacheExchange', () => {
       authorityGeneration: authority.snapshot().generation,
       data: { from: 'current-response' },
     });
+  });
+
+  it('keeps independent live-query cursors through CRM authority changes', async () => {
+    const { change } = installAuthority(host);
+    host.watchQuery = vi
+      .fn()
+      .mockResolvedValueOnce({
+        kind: 'hit',
+        revision: parseCacheRevision('1'),
+        data: { user: { soup: { items: [{ id: 'thread', isRead: false }] } } },
+      })
+      .mockResolvedValueOnce({
+        kind: 'patch',
+        revision: parseCacheRevision('2'),
+        patches: [
+          { path: ['user', 'soup', 'items', 0, 'isRead'], value: true },
+        ],
+      });
+    const { ops, results, forwarded } = controlledQueryHarness(host);
+    ops.next(personalMailOp(47, 'cache-only'));
+    await vi.waitFor(() => expect(results).toHaveLength(1));
+    change(false);
+    await tick();
+    expect(host.watchQuery).toHaveBeenCalledOnce();
+    host.pushAffected([47]);
+    await vi.waitFor(() => expect(host.watchQuery).toHaveBeenCalledTimes(2));
+    expect(host.watchQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ since: parseCacheRevision('1') })
+    );
+    await vi.waitFor(() =>
+      expect(results.at(-1)?.data).toEqual({
+        user: { soup: { items: [{ id: 'thread', isRead: true }] } },
+      })
+    );
+    expect(forwarded).toHaveLength(0);
+  });
+
+  it.each([false, true])(
+    'recovers an independent write rejected across first identity binding, with second write rejected=%s',
+    async (rejectAgain) => {
+      const { change, authority } = installAuthority(host, {
+        account: null,
+        policy: null,
+        ready: false,
+      });
+      const write = vi
+        .spyOn(host, 'writeQuery')
+        .mockRejectedValueOnce(new StaleCacheAuthorityError());
+      if (rejectAgain)
+        write.mockRejectedValueOnce(new StaleCacheAuthorityError());
+      const { ops, network, forwarded } = controlledQueryHarness(host);
+      ops.next(personalMailOp(47, 'network-only'));
+      await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+      change(false, { account: 'test-viewer' });
+      network.next(
+        queryResult(forwarded[0]!, { user: { soup: { items: [] } } })
+      );
+      await vi.waitFor(() => expect(forwarded).toHaveLength(2));
+      expect(forwarded[1]?.context.cacheAuthorityGeneration).toBe(
+        authority.snapshot().generation
+      );
+      const fresh = {
+        user: { soup: { items: [{ id: 'thread', isRead: true }] } },
+      };
+      network.next(queryResult(forwarded[1]!, fresh));
+      await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+      expect(write.mock.calls[1]?.[0]).toMatchObject({
+        data: fresh,
+        registerDependencies: true,
+        authorityGeneration: authority.snapshot().generation,
+      });
+      await tick();
+      expect(forwarded).toHaveLength(2);
+    }
+  );
+
+  it.each([false, true])(
+    'does not recover an independent stale response across account replacement, initially unbound=%s',
+    async (unbound) => {
+      const { change } = installAuthority(host, {
+        account: unbound ? null : 'test-viewer',
+      });
+      const write = vi
+        .spyOn(host, 'writeQuery')
+        .mockRejectedValueOnce(new StaleCacheAuthorityError());
+      const { ops, network, forwarded } = controlledQueryHarness(host);
+      ops.next(personalMailOp(47, 'network-only'));
+      await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+      if (unbound) change(false, { account: 'test-viewer' });
+      change(false, { account: 'another-viewer' });
+      network.next(
+        queryResult(forwarded[0]!, { user: { soup: { items: [] } } })
+      );
+      await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
+      await tick();
+      expect(forwarded).toHaveLength(1);
+    }
+  );
+
+  it('recovers an independent request dispatched before the cache owner initializes', async () => {
+    const { change, authority } = installAuthority(host, {
+      ready: false,
+      policy: null,
+    });
+    const snapshot = vi
+      .spyOn(host.authority!, 'snapshot')
+      .mockReturnValue(undefined);
+    const write = vi
+      .spyOn(host, 'writeQuery')
+      .mockRejectedValueOnce(new StaleCacheAuthorityError());
+    const { ops, network, forwarded } = controlledQueryHarness(host);
+    ops.next(personalMailOp(47, 'network-only'));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+    expect(forwarded[0]?.context.cacheAuthorityGeneration).toBeUndefined();
+    snapshot.mockRestore();
+    change(false, { account: null });
+    change(false, { account: 'test-viewer' });
+    network.next(queryResult(forwarded[0]!, { user: { soup: { items: [] } } }));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
+    network.next(queryResult(forwarded[1]!, { user: { soup: { items: [] } } }));
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+    expect(write.mock.calls[1]?.[0]).toMatchObject({
+      registerDependencies: true,
+      authorityGeneration: authority.snapshot().generation,
+    });
+  });
+
+  it('refreshes the local owner once when a rejected independent write precedes the binding notification', async () => {
+    const { change, authority } = installAuthority(host, {
+      ready: false,
+      policy: null,
+    });
+    const current = vi
+      .spyOn(authority, 'current')
+      .mockImplementation(async () => {
+        change(false, { account: 'test-viewer' });
+        return authority.snapshot();
+      });
+    const write = vi
+      .spyOn(host, 'writeQuery')
+      .mockRejectedValueOnce(new StaleCacheAuthorityError());
+    const { ops, network, forwarded } = controlledQueryHarness(host);
+    ops.next(personalMailOp(47, 'network-only'));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+    network.next(queryResult(forwarded[0]!, { user: { soup: { items: [] } } }));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
+    expect(current).toHaveBeenCalledOnce();
+    network.next(queryResult(forwarded[1]!, { user: { soup: { items: [] } } }));
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+    expect(current).toHaveBeenCalledOnce();
   });
 
   it.each([false, true])(

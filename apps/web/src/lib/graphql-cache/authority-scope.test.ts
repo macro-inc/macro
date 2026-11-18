@@ -1,5 +1,8 @@
-import type { GraphqlSoupEntityType } from '@service-storage/graphql/generated/graphql';
-import { parse } from 'graphql';
+import {
+  type GraphqlSoupEntityType,
+  MoveEntitiesDocument,
+} from '@service-storage/graphql/generated/graphql';
+import { parse, print } from 'graphql';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('graphql', async (importOriginal) => {
@@ -70,6 +73,64 @@ describe('CRM cache admission classification', () => {
         '{ user { emailFocus { id } favorites { id } databaseViewRows { items { id } } } }'
       )
     ).toBe(false);
+  });
+  it('admits owned mailbox mutation results while checking other root selections', () => {
+    const personal =
+      'changed: markEmailThreadSeen(input:{threadId:"owned"}) { ...Thread }';
+    const fragment = 'fragment Thread on GraphqlSoupEmailThread { id isRead }';
+    expect(queryNeedsCrmProof(`mutation { ${personal} } ${fragment}`)).toBe(
+      false
+    );
+    expect(
+      queryNeedsCrmProof(
+        `mutation { ${personal} private: setEntityProperty(input:{entityType:CRM_CONTACT}) { id } } ${fragment}`
+      )
+    ).toBe(true);
+    // The same result type reached through an entity grant still needs proof.
+    expect(
+      queryNeedsCrmProof(
+        `query { user { emailThread(input:{threadId:"shared"}) { ...Thread } } } ${fragment}`
+      )
+    ).toBe(true);
+  });
+  it('admits folder moves whose server effects contain only independent entities', () => {
+    const query = print(MoveEntitiesDocument);
+    const owned = {
+      entity: { type: 'EMAIL_THREAD', id: 'owned-move-thread' },
+      projectId: 'folder',
+    };
+    expect(queryNeedsCrmProof(query, { inputs: [owned] })).toBe(false);
+    expect(queryNeedsCrmProof(query, { inputs: owned })).toBe(false);
+    expect(
+      queryNeedsCrmProof(query, {
+        inputs: [
+          { entity: { type: 'DOCUMENT', id: 'doc' }, projectId: 'folder' },
+        ],
+      })
+    ).toBe(false);
+    expect(
+      queryNeedsCrmProof(query, {
+        inputs: [
+          owned,
+          {
+            entity: { type: 'CRM_COMPANY', id: 'company' },
+            projectId: 'folder',
+          },
+        ],
+      })
+    ).toBe(true);
+    // A move cannot return an email solely via CRM: the server requires Owner.
+    expect(
+      queryNeedsCrmProof(query, {
+        inputs: [
+          {
+            entity: { type: 'EMAIL_THREAD', id: 'unknown-thread' },
+            projectId: 'folder',
+          },
+        ],
+      })
+    ).toBe(false);
+    expect(queryNeedsCrmProof(query, {})).toBe(true);
   });
   it('allows only minimal mail ownership metadata before an ownership witness', () => {
     const request = {

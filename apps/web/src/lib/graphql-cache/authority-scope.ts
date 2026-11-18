@@ -79,6 +79,23 @@ const independentFields = new Set([
   'databaseViewRows',
 ]);
 
+// EmailMutationThreadLoader reloads only the writer's owned/delegated inboxes.
+// These commands cannot return a thread solely through a CRM grant.
+const independentEmailMutations = new Set([
+  'markEmailThreadSeen',
+  'markEmailThreadUnread',
+  'setEmailThreadState',
+  'resolveEmailMessageOperation',
+  'setEmailThreadArchived',
+  'setEmailThreadsArchived',
+  'updateEmailThreadLabel',
+  'sendEmailMessage',
+  'saveEmailDraft',
+  'deleteEmailDraft',
+  'sendEmailAttempt',
+  'cancelEmailSend',
+]);
+
 // These are short-lived ownership witnesses, not cached record content. Each
 // check retains its source account, owner and generation; replacement closes it.
 const ownedEmails = new Map<string, () => boolean>();
@@ -275,6 +292,12 @@ function compiledScope(query: string, operationName?: string): CompiledScope {
       }
       const name = selection.name.value;
       if (independentFields.has(name)) return () => false;
+      if (
+        operation.operation === 'mutation' &&
+        path.length === 0 &&
+        independentEmailMutations.has(name)
+      )
+        return () => false;
       const args = (variables: Record<string, unknown>) =>
         Object.fromEntries(
           (selection.arguments ?? []).map((arg) => [
@@ -282,6 +305,29 @@ function compiledScope(query: string, operationName?: string): CompiledScope {
             valueFromASTUntyped(arg.value, variables),
           ])
         );
+      if (
+        operation.operation === 'mutation' &&
+        path.length === 0 &&
+        name === 'moveEntities'
+      )
+        return (variables) => {
+          const inputs = args(variables).inputs;
+          const moves = Array.isArray(inputs) ? inputs : [inputs];
+          // Moves return only the moved entity and its old/new folders. Email
+          // moves additionally require Owner in update_thread_project, so a
+          // CRM-only grant cannot produce an email snapshot here.
+          return moves.some(
+            (input) =>
+              ![
+                'DOCUMENT',
+                'PROJECT',
+                'CHAT',
+                'DATABASE',
+                'FORM',
+                'EMAIL_THREAD',
+              ].includes(String(object(object(input).entity).type))
+          );
+        };
       if (name === 'soupEntity')
         return (variables, allowWitnesses = true) => {
           const input = object(args(variables).input);
