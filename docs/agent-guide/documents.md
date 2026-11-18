@@ -102,8 +102,10 @@ A document title saves 400ms after the last keystroke, and at once when the
 document closes. Create a document, type part of its title, pause, type the
 rest quickly, press Enter and type into the body: the whole title stays and
 survives a reload. The saved name never replaces a title with a save waiting
-or in flight, so delay GraphQL responses by about 1.5s to check it; a rename
-made elsewhere shows once the title has none.
+or in flight, so delay GraphQL responses by about 1.5s to check it. After the
+title's save succeeds, a rename made elsewhere during it can show once the
+title has no newer edits; if the save reports a failure, the typed title stays
+on screen.
 
 Editable documents show matching **Add tags** and **Add property** pills below
 the title. Once tags are applied, **Add tags** becomes the existing tag name or
