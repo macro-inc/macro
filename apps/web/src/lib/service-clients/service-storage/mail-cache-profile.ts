@@ -52,7 +52,7 @@ async function installedNativeProfile(): Promise<MailCacheProfile> {
     }
     return { profile: LEGACY_PROFILE, outcome: 'native_unsupported' };
   } catch {
-    // Older engines may not expose build information. Never infer support from JS.
+    // The binary did not answer with its build. Never infer support from JS.
     return { profile: LEGACY_PROFILE, outcome: 'native_lookup_failed' };
   } finally {
     clearTimeout(timeout);

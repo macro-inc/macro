@@ -7,7 +7,9 @@ import {
   type ResourceAttributes,
   Telemetry,
 } from '@macro-inc/observability';
+import { raceTimeout } from '@solid-primitives/promise';
 import { invoke } from '@tauri-apps/api/core';
+import { ResultAsync } from 'neverthrow';
 import type {
   BundleReloadDiagnostics,
   BundleStartup,
@@ -247,21 +249,11 @@ export function nativeBuildAttribute(build: unknown): number | undefined {
  * deadline as the diagnostics snapshot.
  */
 export async function readNativeBuildAttribute(): Promise<number | undefined> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return nativeBuildAttribute(
-      await Promise.race([
-        installedNativeBuild(),
-        new Promise<undefined>((resolve) => {
-          timeout = setTimeout(() => resolve(undefined), 3000);
-        }),
-      ])
-    );
-  } catch {
-    return undefined;
-  } finally {
-    clearTimeout(timeout);
-  }
+  const build = await ResultAsync.fromPromise(
+    raceTimeout(installedNativeBuild(), 3000),
+    () => undefined
+  );
+  return build.isOk() ? nativeBuildAttribute(build.value) : undefined;
 }
 
 export async function readDesktopDiagnostics(): Promise<

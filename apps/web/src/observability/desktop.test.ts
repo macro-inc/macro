@@ -199,6 +199,10 @@ describe('native build', () => {
     vi.mocked(invoke).mockReset().mockRejectedValue(new Error('not found'));
     let { readNativeBuildAttribute } = await import('./desktop');
     expect(await readNativeBuildAttribute()).toBeUndefined();
+    // A failed call is not kept: the next reader asks the binary again.
+    vi.mocked(invoke).mockResolvedValue({ nativeBuild: 24 });
+    expect(await readNativeBuildAttribute()).toBe(24);
+    expect(invoke).toHaveBeenCalledTimes(2);
 
     vi.resetModules();
     vi.useFakeTimers();
