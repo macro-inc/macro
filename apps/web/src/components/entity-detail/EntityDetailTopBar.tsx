@@ -38,8 +38,10 @@ export function EntityDetailTopBar(
       )}
     >
       <ViewShell.TopBarTitle>
+        {/* A crumb that narrows to a back arrow needs no separator after it. */}
         <ViewBreadcrumbs.Outlet
           aria-label="Task location"
+          class="@max-[480px]/split-header:[&>:has([data-narrow-back])~svg:first-of-type]:hidden"
           fallback={<EntityDetailBreadcrumbSkeleton />}
         >
           {props.titleMenu}

@@ -275,12 +275,16 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       >
         <Show when={source.project()}>
           {(project) => (
-            <ShareTrigger
-              onClick={openShare}
-              id={project().id}
-              blockType="initiative"
-              hotkeyScope={panel.splitHotkeyScope}
-            />
+            // A phone-narrow bar keeps its room for the name; Share and Copy
+            // link stay in the project's menu, as on other phone headers.
+            <div class="contents @max-[480px]/split-header:hidden">
+              <ShareTrigger
+                onClick={openShare}
+                id={project().id}
+                blockType="initiative"
+                hotkeyScope={panel.splitHotkeyScope}
+              />
+            </div>
           )}
         </Show>
       </EntityDetailTopBar>
