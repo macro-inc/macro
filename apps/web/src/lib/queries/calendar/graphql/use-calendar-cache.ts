@@ -28,9 +28,10 @@ const DAY_MS = 86_400_000;
 
 /**
  * Reads the server's viewer-wide ingestion state. Viewports already in the
- * cache fetch nothing, so they never report it themselves.
+ * cache fetch nothing, so they never report it themselves. A read that ends
+ * after its controller was retired (sign-out, another account) is dropped.
  */
-async function refreshSyncStatus(): Promise<void> {
+async function refreshSyncStatus(owner: CalendarSyncController): Promise<void> {
   const now = Date.now();
   const range = createCalendarOccurrenceQueryRange(
     new Date(now),
@@ -39,6 +40,7 @@ async function refreshSyncStatus(): Promise<void> {
   const sample = beginCalendarSyncStatusSample();
   const page = await fetchCalendarOccurrencePage({ ...range, first: 1 });
   const status = mapCalendarSyncStatus(page.syncStatus);
+  if (activeCalendarSyncController() !== owner) return;
   const previous = latestCalendarSyncStatus();
   if (!recordCalendarSyncStatus(status, sample) || status === previous) return;
   await queryClient.invalidateQueries({
@@ -46,8 +48,8 @@ async function refreshSyncStatus(): Promise<void> {
   });
 }
 
-function startSyncStatusRefresh(): void {
-  refreshSyncStatus().catch((error) => {
+function startSyncStatusRefresh(owner: CalendarSyncController): void {
+  refreshSyncStatus(owner).catch((error) => {
     console.warn('Calendar sync status refresh failed', error);
   });
 }
@@ -74,7 +76,7 @@ export function useCalendarCache(active: Accessor<boolean>): void {
     setActiveCalendarSyncController(controller);
     const resync = (reason: CalendarStaleReason) => {
       controller.markStale(reason);
-      startSyncStatusRefresh();
+      startSyncStatusRefresh(controller);
     };
     resync('start');
     const unsubscribeReconnect = subscribeGraphqlSoupReconnected(() =>

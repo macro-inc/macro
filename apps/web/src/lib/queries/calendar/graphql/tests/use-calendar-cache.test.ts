@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   fetchPage: vi.fn(),
   invalidateQueries: vi.fn(async () => {}),
   markStale: vi.fn(),
+  activeController: undefined as unknown,
 }));
 
 vi.mock('../range', async (importOriginal) => ({
@@ -33,8 +34,10 @@ vi.mock('../sync-controller', () => ({
     markStale = mocks.markStale;
     dispose() {}
   },
-  activeCalendarSyncController: () => undefined,
-  setActiveCalendarSyncController: () => {},
+  activeCalendarSyncController: () => mocks.activeController,
+  setActiveCalendarSyncController: (controller: unknown) => {
+    mocks.activeController = controller;
+  },
 }));
 vi.mock('../mutations', () => ({
   trackCalendarCreateSettlements: () => () => {},
@@ -80,6 +83,7 @@ beforeEach(() => {
 afterEach(() => {
   dispose?.();
   dispose = undefined;
+  mocks.activeController = undefined;
   vi.useRealTimers();
   vi.clearAllMocks();
 });
@@ -121,6 +125,24 @@ describe('useCalendarCache sync status', () => {
 
     await vi.advanceTimersByTimeAsync(POLL_MS * 3);
     expect(mocks.fetchPage).toHaveBeenCalledTimes(3);
+  });
+
+  it('drops a status read that ends after its controller is retired', async () => {
+    let answer: (value: CalendarOccurrencePage) => void = () => {};
+    mocks.fetchPage.mockReturnValueOnce(
+      new Promise<CalendarOccurrencePage>((resolve) => {
+        answer = resolve;
+      })
+    );
+    mount();
+    await vi.advanceTimersByTimeAsync(0);
+    dispose?.();
+    dispose = undefined;
+
+    answer(page('SYNCING'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(latestCalendarSyncStatus()).toBe(CalendarSyncStatus.ready);
+    expect(mocks.invalidateQueries).not.toHaveBeenCalled();
   });
 
   it('reads it again on coming back online', async () => {
