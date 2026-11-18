@@ -25,22 +25,17 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import {
+  type MessageMenuActionId,
+  messageMenuGroups,
+} from '../core/message-menu';
 import { renderIcon } from '../Message/render-icon';
 import { useMessageActionDrawer } from './message-action-drawer-context';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '👎', '😂', '😡'] as const;
 
-type ActionId =
-  | 'reply'
-  | 'copy-link'
-  | 'copy-message-text'
-  | 'edit'
-  | 'delete'
-  | 'create-task'
-  | 'ask-macro';
-
 type ActionItem = {
-  id: ActionId;
+  id: MessageMenuActionId;
   label: string;
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | string;
   onClick?: MessageActionHandler;
@@ -196,10 +191,7 @@ export function ActionDrawer() {
   };
 
   const actionItems = () => buildActionItems(actions(), message());
-  const nonDestructiveActions = () =>
-    actionItems().filter((item) => item.onClick && !item.destructive);
-  const destructiveActions = () =>
-    actionItems().filter((item) => item.onClick && item.destructive);
+  const groupedActions = () => messageMenuGroups(actionItems());
   const hasReactAction = () => actions()?.onReact !== undefined;
 
   return (
@@ -268,86 +260,73 @@ export function ActionDrawer() {
 
             {/* Action sections scroll; the handle and reaction row stay pinned */}
             <MobileDrawer.ScrollBody>
-              {/* Non-destructive actions */}
-              <Show when={nonDestructiveActions().length > 0}>
-                <MobileDrawer.Section class="flex flex-col shrink-0">
-                  <For each={nonDestructiveActions()}>
-                    {(action) => (
-                      <Show
-                        when={
-                          action.id !== 'copy-link' &&
-                          action.id !== 'copy-message-text'
-                        }
-                        fallback={
-                          <CopyButton
-                            as={MobileDrawer.Item}
-                            data-message-action={action.id}
-                            onClick={async (event) => {
-                              const msg = message();
-                              if (!msg || !action.onClick) return false;
-                              return action.onClick({
-                                message: msg,
-                                event,
-                                silent: true,
-                              });
-                            }}
-                            icon={
-                              <span class="size-5 flex items-center justify-center shrink-0">
-                                {renderIcon(action.icon)}
-                              </span>
-                            }
-                          >
-                            {action.label}
-                          </CopyButton>
-                        }
-                      >
-                        <MobileDrawer.Item
-                          type="button"
-                          data-message-action={action.id}
-                          ref={(el) => {
-                            const getTarget = action.getFocusTarget;
-                            if (getTarget)
-                              focusInput(el, () => ({ getTarget }));
-                          }}
-                          onClick={(event) =>
-                            handleAction(action.onClick, event)
+              <For each={groupedActions()}>
+                {(group, index) => (
+                  <MobileDrawer.Section
+                    class={
+                      index() > 0
+                        ? 'mt-3 flex flex-col shrink-0'
+                        : 'flex flex-col shrink-0'
+                    }
+                  >
+                    <For each={group.items}>
+                      {(action) => (
+                        <Show
+                          when={
+                            action.id !== 'copy-link' &&
+                            action.id !== 'copy-message-text'
+                          }
+                          fallback={
+                            <CopyButton
+                              as={MobileDrawer.Item}
+                              data-message-action={action.id}
+                              onClick={async (event) => {
+                                const msg = message();
+                                if (!msg || !action.onClick) return false;
+                                return action.onClick({
+                                  message: msg,
+                                  event,
+                                  silent: true,
+                                });
+                              }}
+                              icon={
+                                <span class="size-5 flex items-center justify-center shrink-0">
+                                  {renderIcon(action.icon)}
+                                </span>
+                              }
+                            >
+                              {action.label}
+                            </CopyButton>
                           }
                         >
-                          <span class="size-5 flex items-center justify-center shrink-0">
-                            {renderIcon(action.icon)}
-                          </span>
-                          {action.label}
-                        </MobileDrawer.Item>
-                      </Show>
-                    )}
-                  </For>
-                </MobileDrawer.Section>
-              </Show>
-
-              {/* Destructive actions */}
-              <Show when={destructiveActions().length > 0}>
-                <MobileDrawer.Section class="flex flex-col shrink-0 mt-3">
-                  <For each={destructiveActions()}>
-                    {(action) => (
-                      <MobileDrawer.Item
-                        type="button"
-                        data-message-action={action.id}
-                        class="text-failure-ink"
-                        ref={(el) => {
-                          const getTarget = action.getFocusTarget;
-                          if (getTarget) focusInput(el, () => ({ getTarget }));
-                        }}
-                        onClick={(event) => handleAction(action.onClick, event)}
-                      >
-                        <span class="size-5 flex items-center justify-center shrink-0">
-                          {renderIcon(action.icon)}
-                        </span>
-                        {action.label}
-                      </MobileDrawer.Item>
-                    )}
-                  </For>
-                </MobileDrawer.Section>
-              </Show>
+                          <MobileDrawer.Item
+                            type="button"
+                            class={
+                              action.destructive
+                                ? 'text-failure-ink'
+                                : undefined
+                            }
+                            data-message-action={action.id}
+                            ref={(el) => {
+                              const getTarget = action.getFocusTarget;
+                              if (getTarget)
+                                focusInput(el, () => ({ getTarget }));
+                            }}
+                            onClick={(event) =>
+                              handleAction(action.onClick, event)
+                            }
+                          >
+                            <span class="size-5 flex items-center justify-center shrink-0">
+                              {renderIcon(action.icon)}
+                            </span>
+                            {action.label}
+                          </MobileDrawer.Item>
+                        </Show>
+                      )}
+                    </For>
+                  </MobileDrawer.Section>
+                )}
+              </For>
             </MobileDrawer.ScrollBody>
           </Show>
         </MobileDrawer.Content>
