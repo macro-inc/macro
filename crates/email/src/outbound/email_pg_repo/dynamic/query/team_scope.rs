@@ -8,10 +8,10 @@
 //! every page. [`TeamRead`] reads the same page in page order and stops when
 //! it is full:
 //!
-//! - A *stream* lists threads in `(effective_ts, id)` order with only the
-//!   conditions an index serves: the inbox, the filter's thread-level terms
-//!   and the cursor. The *superset* stream sorts the threads the address
-//!   indexes list for the record (`matching_threads`, without mailbox facts),
+//! - A *stream* lists threads in `(effective_ts, id)` order after applying
+//!   the inbox, the filter's thread-level terms and the cursor. The *superset*
+//!   stream fetches each distinct address-index match by primary key, then
+//!   filters and sorts those rows (`matching_threads`, without mailbox facts),
 //!   which is cheap when the record is rare in the team's mail. The *inbox*
 //!   stream merges each inbox's newest threads from
 //!   `idx_email_threads_non_spam_link_ts_id`, up to a window of
@@ -652,13 +652,18 @@ impl<'a> TeamRead<'a> {
     ) {
         match stream {
             Stream::Superset | Stream::SparseSuperset | Stream::Selection => {
-                // Each superset thread by its id: as a semi-join the planner
-                // hashes the superset against every thread of the inboxes,
-                // which reads all of them before the sort.
-                self.push_stream_select(builder, sort_ts_field);
+                // A single address branch can list a thread once per message;
+                // preserve ANY's set semantics before fetching by primary key.
+                // The fence keeps stale statistics from turning the IDs
+                // into a filter over every thread in the contributing inboxes.
+                self.push_stream_columns(builder, sort_ts_field);
                 builder.push(
-                    "t.id = ANY(ARRAY(SELECT thread_id FROM matching_threads)) \
-                     AND t.link_id = ANY(",
+                    r#"
+                    FROM (SELECT DISTINCT thread_id FROM matching_threads) matched
+                    CROSS JOIN LATERAL (
+                        SELECT * FROM email_threads WHERE id = matched.thread_id OFFSET 0
+                    ) AS t
+                    WHERE t.link_id = ANY("#,
                 );
                 builder.push_bind(self.inboxes.clone());
                 builder.push(")");
@@ -683,8 +688,12 @@ impl<'a> TeamRead<'a> {
                         builder.push("\n                        UNION ALL");
                     }
                     builder.push("\n                        (");
-                    self.push_stream_select(builder, sort_ts_field);
-                    builder.push("t.link_id = ");
+                    self.push_stream_columns(builder, sort_ts_field);
+                    builder.push(
+                        r#"
+                    FROM email_threads t
+                    WHERE t.link_id = "#,
+                    );
                     builder.push_bind(*inbox);
                     self.push_stream_filters(builder, sort_ts_field);
                     builder.push(" ORDER BY effective_ts DESC, id DESC LIMIT ");
@@ -702,20 +711,18 @@ impl<'a> TeamRead<'a> {
         }
     }
 
-    /// A stream's columns, up to its `WHERE`.
-    fn push_stream_select(&self, builder: &mut QueryBuilder<'static, Postgres>, ts: &str) {
+    /// A stream's projected columns, before its source.
+    fn push_stream_columns(&self, builder: &mut QueryBuilder<'static, Postgres>, ts: &str) {
         builder.push(format!(
             r#"
                     SELECT t.id, t.provider_id, t.link_id, t.inbox_visible, t.is_read,
                            t.is_signal, t.project_id,
-                           {ts} AS created_at, {ts} AS updated_at, {ts} AS effective_ts
-                    FROM email_threads t
-                    WHERE "#
+                           {ts} AS created_at, {ts} AS updated_at, {ts} AS effective_ts"#
         ));
     }
 
-    /// The thread-level terms and, after the first page, the cursor: both
-    /// index conditions of the stream's walk.
+    /// The thread-level terms and, after the first page, the cursor. Inbox
+    /// walks can use their index; matched threads apply them after the ID lookup.
     fn push_stream_filters(&self, builder: &mut QueryBuilder<'static, Postgres>, ts: &str) {
         self.thread_terms
             .clone()
