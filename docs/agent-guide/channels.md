@@ -130,6 +130,14 @@ that leaving without sending creates nothing, that the other person's list gains
 the DM only after the send, and that reloading a `pending-dm-` URL opens the
 Chat list on desktop and closes the pane on touch.
 
+The first message of a new DM or group chat notifies registered members as
+every later message does (an unread dot on the row, the Chat badge, and the
+message text in the push); people without an account get the invitation email
+instead, and named channels still send an invite. The recipient's open Chat list
+shows the new conversation without a reload: the push brings it from the
+primary, and a list whose first read comes from a lagging replica reads its
+first page again, for up to a minute, until the conversation is there.
+
 Sending a human
 message queues an immediate email for nonusers, including follow-up messages,
 replies, and mentions; registered users retain their notification preferences.
