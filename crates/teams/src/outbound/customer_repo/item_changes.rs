@@ -64,9 +64,11 @@ impl CustomerRepositoryImpl {
             .as_ref()
             .clone()
             .with_strategy(stripe::RequestStrategy::Idempotent(key.to_owned()));
-        let result = client
-            .post_form::<serde_json::Value, _>(&change.path, &change.request)
-            .await;
+        let result = traced(
+            stripe_span!("stripe.subscription.update", subscription_id = %change.subscription_id),
+            client.post_form::<serde_json::Value, _>(&change.path, &change.request),
+        )
+        .await;
         match result {
             Ok(_) => {
                 self.finish_item_change(key, ItemChangeOutcome::Succeeded)
@@ -99,11 +101,12 @@ impl CustomerRepositoryImpl {
         if change.outcome != ItemChangeOutcome::Pending {
             return self.submit_item_change(key, change).await;
         }
-        let current = self
-            .client
-            .get::<serde_json::Value>(&change.path)
-            .await
-            .map_err(storage)?;
+        let current = traced(
+            stripe_span!("stripe.subscription.retrieve", subscription_id = %change.subscription_id),
+            self.client.get::<serde_json::Value>(&change.path),
+        )
+        .await
+        .map_err(storage)?;
         if current
             .get("metadata")
             .and_then(|metadata| metadata.get(ITEM_CHANGE_KEY))
@@ -195,11 +198,12 @@ impl CustomerRepositoryImpl {
         if change.outcome != ItemChangeOutcome::Pending {
             return Ok(change.outcome);
         }
-        let current = self
-            .client
-            .get::<serde_json::Value>(&change.path)
-            .await
-            .map_err(storage)?;
+        let current = traced(
+            stripe_span!("stripe.subscription.retrieve", subscription_id = %change.subscription_id),
+            self.client.get::<serde_json::Value>(&change.path),
+        )
+        .await
+        .map_err(storage)?;
         let applied = current
             .get("metadata")
             .and_then(|metadata| metadata.get(ITEM_CHANGE_KEY))

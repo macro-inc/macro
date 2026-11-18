@@ -318,6 +318,13 @@ describe('database page actions', () => {
       await openMenu();
       selectItem(item);
       expect(handler).toHaveBeenCalledOnce();
+      if (item === 'Copy Link' || item === 'Copy ID') {
+        expect(screen.getByRole('menu')).toBeTruthy();
+        expect(document.activeElement).toBe(
+          screen.getByRole('menuitem', { name: item })
+        );
+        fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+      }
       await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     }
   });

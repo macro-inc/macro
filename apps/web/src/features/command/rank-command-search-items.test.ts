@@ -1,4 +1,4 @@
-import type { EntityItem } from '@core/context/quickAccess';
+import type { EntityItem, UserItem } from '@core/context/quickAccess';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   rankCommandSearchItems,
@@ -96,7 +96,7 @@ function contact(
   };
 }
 
-function person(id: string, name: string): CommandMenuItem {
+function person(id: string, name: string): UserItem {
   return {
     id,
     kind: 'user',
@@ -105,6 +105,15 @@ function person(id: string, name: string): CommandMenuItem {
     sortTimestamp: 0,
     timestamps: {},
     data: { id, name, email: `${id}@macro.com` },
+  };
+}
+
+/** A person the viewer has a direct message with: the people window gives them
+ * an interaction time. */
+function messagedPerson(id: string, name: string): UserItem {
+  return {
+    ...person(id, name),
+    timestamps: { lastInteraction: new Date(NOW - 3 * DAY) },
   };
 }
 
@@ -201,11 +210,11 @@ describe('command menu search ranking', () => {
     const items = [
       note('notes', 'Avery Morgan notes'),
       {
-        ...contact('contact', 'Avery Morgan'),
+        ...messagedPerson('person', 'Avery Morgan'),
         searchText: 'Avery Morgan | avery.morgan@example.com',
       },
     ];
-    expect(ids(items, 'avery morgan')[0]).toBe('contact');
+    expect(ids(items, 'avery morgan')[0]).toBe('person');
 
     const create = {
       ...command('create', 'Create', NOW - DAY),
@@ -390,7 +399,7 @@ describe('command menu search ranking', () => {
   });
 
   it.each([false, true])(
-    'keeps old DMs and people without activity ahead of recent CRM contacts with GraphQL %s',
+    'keeps an old DM, then people without activity, ahead of recent CRM contacts with GraphQL %s',
     (cacheEnabled) => {
       const items = [
         contact('crm', 'Jack Healey'),
@@ -398,10 +407,10 @@ describe('command menu search ranking', () => {
         channel('dm', 'Jackson Kustec', NOW - 60 * DAY, 'dm'),
       ];
 
-      expect(ids(items, 'jack', cacheEnabled)).toEqual(['jack', 'dm', 'crm']);
+      expect(ids(items, 'jack', cacheEnabled)).toEqual(['dm', 'jack', 'crm']);
       expect(ids([...items].reverse(), 'jack', cacheEnabled)).toEqual([
-        'jack',
         'dm',
+        'jack',
         'crm',
       ]);
     }
@@ -421,25 +430,25 @@ describe('command menu search ranking', () => {
     expect(ids(items, 'jack')).toEqual([
       'recent-dm',
       'old-dm',
-      'jack',
       'channel-slot',
-      'recent-crm',
       'command',
+      'jack',
+      'recent-crm',
       'older-crm',
     ]);
   });
 
-  it('prioritizes a broader cached DM match over a directly matched CRM contact', () => {
+  it('keeps a CRM contact named with the query above a DM that only holds its letters in order', () => {
     const items = [
       contact('crm', 'Qtr plan'),
       channel('dm', 'Quarterly plan', NOW - 60 * DAY, 'dm'),
     ];
 
-    expect(ids(items, 'qtr')).toEqual(['dm', 'crm']);
-    expect(ids(items, 'qtr', false)).toEqual(['dm', 'crm']);
+    expect(ids(items, 'qtr')).toEqual(['crm', 'dm']);
+    expect(ids(items, 'qtr', false)).toEqual(['crm', 'dm']);
   });
 
-  it('prioritizes a preserved server-matched person over a directly matched CRM contact', () => {
+  it('keeps a CRM contact named with the query above a server-matched person that only holds its letters in order', () => {
     const items = [
       contact('crm', 'Qtr plan'),
       person('jack', 'Quarterly plan'),
@@ -450,7 +459,22 @@ describe('command menu search ranking', () => {
         preserveAdditionalEntityMatches: false,
         preservedIds: new Set(['jack']),
       }).map((item) => item.id)
-    ).toEqual(['jack', 'crm']);
+    ).toEqual(['crm', 'jack']);
+  });
+
+  it('lists a Macro user ahead of an equally matched CRM contact, never a weaker match ahead of a stronger one', () => {
+    expect(
+      ids(
+        [contact('crm', 'Rand Paulson'), person('miranda', 'mirandahaymon')],
+        'rand'
+      )
+    ).toEqual(['crm', 'miranda']);
+    expect(
+      ids(
+        [contact('crm', 'Rand Paulson'), person('randall', 'Randall Moss')],
+        'rand'
+      )
+    ).toEqual(['randall', 'crm']);
   });
 
   describe('participant names in any order', () => {
@@ -540,7 +564,7 @@ describe('command menu search ranking', () => {
     const fullNameDm = channel('full-name-dm', 'Avery Morgan', NOW, 'dm');
 
     it.each([false, true])(
-      'puts the recent full-name DM above an older DM and a person named only the query with GraphQL %s',
+      'puts the recent full-name DM above an older DM, and DMs above a never-messaged person named only the query with GraphQL %s',
       (cacheEnabled) => {
         const items = [
           shortDm,
@@ -548,9 +572,10 @@ describe('command menu search ranking', () => {
           fullNameDm,
           channel('longer-handle', 'avery+1', NOW - 40 * DAY, 'dm'),
         ];
-        expect(ids(items, 'avery', cacheEnabled).slice(0, 3)).toEqual([
+        expect(ids(items, 'avery', cacheEnabled)).toEqual([
           'full-name-dm',
           'short-dm',
+          'longer-handle',
           'person',
         ]);
       }
@@ -628,11 +653,11 @@ describe('command menu search ranking', () => {
     expect(order.indexOf('exact-channel')).toBeLessThan(order.indexOf('major'));
     expect(order.indexOf('exact-note')).toBeLessThan(order.indexOf('major'));
   });
-  it('lists a person before documents and channels that match equally well, and never above a better match', () => {
+  it('lists a person the viewer messages before documents and channels that match equally well, and never above a better match', () => {
     const items = [
       channel('prefix-channel', 'jacob-team', NOW),
       note('prefix-note', 'Jacob onboarding', NOW),
-      { ...person('prefix-person', 'Jacobson Amy'), personOrder: 0 },
+      { ...messagedPerson('prefix-person', 'Jacobson Amy'), personOrder: 0 },
       note('exact-note', 'Jacob', NOW - 90 * DAY),
     ];
 
@@ -667,12 +692,146 @@ describe('command menu search ranking', () => {
       viewerId: 'viewer',
     }).map((item) => item.id);
 
+    expect(order.slice(0, 3)).toEqual(
+      expect.arrayContaining(['teammate', 'teammate-dm', 'exact-note'])
+    );
     expect(order.slice(0, 2).sort()).toEqual(['teammate', 'teammate-dm']);
-    expect(order.indexOf('outside')).toBe(2);
     // A teammate who matches less well stays below better matches.
     expect(order.indexOf('weak-teammate')).toBeGreaterThan(
       order.indexOf('exact-note')
     );
+    // Someone outside the team the viewer never messaged follows every
+    // result with a word starting with the query, however exactly they match.
+    expect(order.at(-1)).toBe('outside');
+  });
+
+  it.each([false, true])(
+    'lists people the viewer never messaged after their own results and the people they know with GraphQL %s',
+    (cacheEnabled) => {
+      const windowed = (item: UserItem, personOrder: number): UserItem => ({
+        ...item,
+        personOrder,
+      });
+      const items = [
+        // The people window lists the never-messaged exact name first.
+        windowed(person('stranger-exact', 'macro'), 0),
+        windowed(person('stranger-prefix', 'macro.acct1'), 1),
+        windowed(messagedPerson('messaged', 'Macro Lee'), 2),
+        windowed(person('stranger-later-word', 'Jo Macropoulos'), 3),
+        windowed(person('teammate', 'Macroeconomics Club'), 4),
+        windowed(person('stranger-contains', 'Bigmacro Fan'), 5),
+        project('project', 'Macro roadmap', NOW - 20 * DAY),
+        channel('channel', 'macro-eng', NOW - 20 * DAY),
+        note('later-word-note', 'Notes on macro', NOW),
+        note('contains-note', 'Nanomacros', NOW),
+      ];
+      const order = rankCommandSearchItems(items, 'macro', {
+        preserveAdditionalEntityMatches: cacheEnabled,
+        teammateIds: new Set(['teammate']),
+      }).map((item) => item.id);
+
+      expect(order).toEqual([
+        'messaged',
+        'teammate',
+        'channel',
+        'project',
+        'later-word-note',
+        'stranger-exact',
+        'stranger-prefix',
+        'stranger-later-word',
+        'contains-note',
+        'stranger-contains',
+      ]);
+    }
+  );
+
+  it('keeps email-only contacts below a channel and never lifts a person past another result', () => {
+    const emailOnly = (id: string, name: string, personOrder: number) => ({
+      ...person(id, name),
+      data: { id, name, email: `${id}@example.com` },
+      personOrder,
+    });
+    const items = [
+      emailOnly('randall', 'Randall Malcom', 0),
+      contact('crm', 'Randall Stillwell'),
+      emailOnly('miranda', 'mirandahaymon', 1),
+      note('script', 'get-random-doc.sh', NOW),
+      channel('random', 'random', NOW - 30 * DAY),
+    ];
+
+    expect(ids(items, 'rand')).toEqual([
+      'random',
+      'script',
+      'randall',
+      'crm',
+      'miranda',
+    ]);
+  });
+
+  it('lists a person the viewer messages, matched by a later word, above a stranger whose name starts with the query', () => {
+    const items = [
+      person('stranger', 'Leela Okafor'),
+      messagedPerson('known', 'Jordan Lee'),
+    ];
+
+    expect(ids(items, 'lee')).toEqual(['known', 'stranger']);
+  });
+
+  it.each([
+    {
+      language: 'Japanese',
+      label: 'テーマを変更',
+      other: 'タスクに移動',
+      query: 'テーマ',
+    },
+    {
+      language: 'Simplified Chinese',
+      label: '显示/隐藏设置',
+      other: '更改主题',
+      query: '设置',
+    },
+    {
+      language: 'Traditional Chinese',
+      label: '顯示/隱藏設定',
+      other: '變更主題',
+      query: '設定',
+    },
+    {
+      language: 'Korean',
+      label: '테마 변경',
+      other: '설정 열기/닫기',
+      query: '테마 변경',
+    },
+    {
+      language: 'Russian',
+      label: 'Сменить тему',
+      other: 'Показать/скрыть настройки',
+      query: 'сменить тему',
+    },
+    {
+      language: 'Hindi',
+      label: 'थीम बदलें',
+      other: 'सेटिंग खोलें/बंद करें',
+      query: 'थीम बदलें',
+    },
+    { language: 'Thai', label: 'เปลี่ยนธีม', other: 'เปิด/ปิดการตั้งค่า', query: 'ธีม' },
+  ])(
+    'finds a command by its $language name and only that command',
+    ({ label, other, query }) => {
+      const items = [
+        command('other', other, NOW),
+        command('command', label, 0),
+      ];
+      expect(ids(items, query)).toEqual(['command']);
+    }
+  );
+
+  it('finds a document by several words of a Cyrillic name', () => {
+    const items = [
+      note('report', 'Отчёт за квартал'),
+      note('other', 'План запуска'),
+    ];
+    expect(ids(items, 'отчёт квартал', false)).toEqual(['report']);
   });
 });
 

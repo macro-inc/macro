@@ -11,7 +11,7 @@ use axum::{
 };
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
-    is_agent_run,
+    is_program_run,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -189,7 +189,7 @@ type Caller<Auth> = MacroAuthorizationExtractor<Auth, UserOnly>;
 const AGENT_REFUSAL: &str = "An agent's program cannot create, change or add people to a sequence: an active sequence emails people with no further review. Ask the user to do it in Customers > Sequences.";
 
 /// The caller of a route that changes a sequence: a person in the app. An
-/// agent's program (see [`is_agent_run`]) is refused, because a sequence sends
+/// agent's program (see [`is_program_run`]) is refused, because a sequence sends
 /// email nobody reviews again. Reads take a [`Caller`].
 pub struct Person<Auth>(Caller<Auth>);
 
@@ -205,7 +205,7 @@ where
         let caller = Caller::<Auth>::from_request_parts(parts, state)
             .await
             .map_err(IntoResponse::into_response)?;
-        if is_agent_run(caller.authorization.agent_id.is_some(), &parts.headers) {
+        if is_program_run(caller.authorization.attribution(), &parts.headers) {
             return Err((
                 StatusCode::FORBIDDEN,
                 Json(SequenceErrorResponse {

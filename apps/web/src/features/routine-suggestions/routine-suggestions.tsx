@@ -12,11 +12,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useHasPaidAccess } from '@core/auth/license';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableRoutineCodeSteps,
-  enableRoutineConditions,
-  enableRoutineStarterTemplates,
-} from '@core/constant/featureFlags';
+import { enableRoutineStarterTemplates } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
@@ -80,17 +76,15 @@ function useSuggestionItems() {
   const source = useRoutineSuggestions();
   const catalog = useLoadedRoutineCatalog();
   const hasPaidAccess = useHasPaidAccess();
-  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
   const starterTemplates = useFeatureFlag(enableRoutineStarterTemplates);
-  const decisions = useFeatureFlag(enableRoutineConditions);
   const context = createMemo((): SuggestionContext => {
     const model = defaultModelForPlan(hasPaidAccess());
     return {
       target: { kind: 'model', model },
-      codeSteps: codeSteps().enabled,
+      codeSteps: true,
       base: newRoutineDraft(undefined, {
         defaultModel: model,
-        codeSteps: codeSteps().enabled,
+        codeSteps: true,
       }),
     };
   });
@@ -119,7 +113,7 @@ function useSuggestionItems() {
     const entries = catalog();
     if (!entries) return undefined;
     if (!starterTemplates().enabled) return [];
-    return availableTemplates(entries, decisions().enabled).map((entry) =>
+    return availableTemplates(entries, true).map((entry) =>
       templateItem(entry, context())
     );
   });

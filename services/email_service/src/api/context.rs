@@ -223,7 +223,7 @@ pub(crate) struct ApiContext {
     pub message_sources: Arc<MessageSourceSvc>,
     pub message_labels: Arc<
         email::domain::message_labels::MessageLabelService<
-            crate::outbound::message_labels::PgMessageLabels,
+            crate::outbound::message_labels::PgMessageLabels<email::outbound::EmailPgRepo>,
             sqs_client::SQS,
             EmailEventBroker,
         >,

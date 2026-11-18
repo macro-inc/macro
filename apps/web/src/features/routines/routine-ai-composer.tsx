@@ -1,5 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableRoutineCodeSteps } from '@core/constant/featureFlags';
 import { getDefaultTimezone } from '@core/util/cron';
 import { type Accessor, onCleanup } from 'solid-js';
 import { RoutineDescribe } from './components/routine-describe';
@@ -14,12 +12,11 @@ export function useComposerContext(options: {
   defaultModel: Accessor<string>;
   decisionsEnabled: Accessor<boolean>;
 }): () => ComposerContext {
-  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
   return () => ({
     timezone: getDefaultTimezone(),
     defaultModel: options.defaultModel(),
     decisions: options.decisionsEnabled(),
-    codeSteps: codeSteps().enabled,
+    codeSteps: true,
   });
 }
 

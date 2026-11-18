@@ -169,8 +169,17 @@ impl Column {
     /// A derived column's formula.
     pub fn formula(&self) -> Option<&models_databases::Formula> {
         match &self.config {
-            Some(ColumnConfig::Derived { formula }) => Some(formula),
+            Some(ColumnConfig::Derived { formula, .. }) => Some(formula),
             _ => None,
+        }
+    }
+
+    /// Whether the placement shows a number as a percent: 0.25 displays as 25%.
+    pub fn is_percentage(&self) -> bool {
+        match &self.config {
+            Some(ColumnConfig::Percentage) => true,
+            Some(ColumnConfig::Derived { percentage, .. }) => *percentage,
+            _ => false,
         }
     }
 }
@@ -188,6 +197,9 @@ pub struct ColumnCast {
     pub specific_entity_type: Option<models_properties::EntityType>,
     /// Whether the target is a relation to another table's rows.
     pub relation: bool,
+    /// Whether the target shows a number as a percent.
+    #[serde(default)]
+    pub percentage: bool,
     /// Whether the values convert.
     pub cast: CastVerdict,
     /// Why nothing converts, for a `never` cast.
@@ -274,7 +286,12 @@ pub enum ColumnConfig {
     Derived {
         /// How its cells are computed.
         formula: models_databases::Formula,
+        /// Whether a number formula is shown as a percent.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        percentage: bool,
     },
+    /// A number shown as a percent: 0.25 displays as 25%.
+    Percentage,
 }
 
 /// A row's identity and place in its table. Cells are not here: they are

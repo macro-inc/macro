@@ -11,7 +11,6 @@ import { lazyNamed } from '@core/util/lazyNamed';
 import { Show } from 'solid-js';
 import { HomeAgentComposer } from '../home-agent-composer';
 import { HomeSectionBoundary } from '../home-section-boundary';
-import { HomeRecommendedActions } from './home-recommended-actions';
 
 // Loaded only for people with suggestions on.
 const HomePriorities = lazyNamed(
@@ -19,7 +18,7 @@ const HomePriorities = lazyNamed(
   'HomePriorities'
 );
 
-/** Desktop Home's idle pane: the agent composer and suggested actions. */
+/** Desktop Home's idle pane: the agent composer, and the priorities when suggestions are on. */
 export function HomeChatStart() {
   const shell = useViewShell();
   const suggestions = useSuggestionsFlag();
@@ -65,8 +64,8 @@ export function HomeChatStart() {
               </DebugSuspense>
             </div>
             <div class="min-h-0 min-w-0 pb-8">
-              {/* With suggestions on, today and the top priorities take this place. */}
-              <Show when={suggestions()} fallback={<HomeRecommendedActions />}>
+              {/* With suggestions on, today and the top priorities sit below the composer. */}
+              <Show when={suggestions()}>
                 <HomeSectionBoundary title="priorities" fallback={null}>
                   <HomePriorities />
                 </HomeSectionBoundary>

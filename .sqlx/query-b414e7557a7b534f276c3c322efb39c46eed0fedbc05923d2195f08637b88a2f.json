@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT NOT EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1 AND key_id=$3) AND NOT EXISTS(SELECT 1 FROM password_activity WHERE team_id=$1 AND item_id=$2 AND id=$3 AND NOT (action IN ('create','update') AND user_id=$4 AND agent_user_id IS NULL)) AS \"identity_free!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "identity_free!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b414e7557a7b534f276c3c322efb39c46eed0fedbc05923d2195f08637b88a2f"
+}

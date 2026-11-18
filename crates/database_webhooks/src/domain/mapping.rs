@@ -171,7 +171,11 @@ fn cell(column: &WebhookColumn, value: &Value) -> Result<Option<CellValue>, &'st
     };
     let value = match kind {
         ColumnKind::Text => CellValue::Text(text(value).ok_or("expected text")?),
-        ColumnKind::Number => CellValue::Number(number(value).ok_or("expected a number")?),
+        // Percentage stores a fraction, like SQL and CSV: 0.25 is 25%. A
+        // trailing % is not a webhook value; send the number the cell holds.
+        ColumnKind::Number | ColumnKind::Percentage => {
+            CellValue::Number(number(value).ok_or("expected a number")?)
+        }
         ColumnKind::Boolean => CellValue::Boolean(boolean(value).ok_or("expected true or false")?),
         ColumnKind::Date => CellValue::Date(
             date(value)

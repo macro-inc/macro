@@ -341,7 +341,7 @@ describe('buildEmailQuery', () => {
         makeGraphqlSoupInput(args).initial?.filters?.emailFilter
       );
 
-      expect(args.transport).toBe('graphql');
+      expect(args.transport).toBeUndefined();
       expect(args.body.emailView).toBe('all');
       for (const direction of ['recipient', 'cc']) {
         expect(tree).toContain(
@@ -513,21 +513,30 @@ describe('buildEmailSearchRequest', () => {
     expect(filtersFor('all')).toEqual({});
   });
 
-  it('leaves Drafts and Sent search unscoped', () => {
+  it('scopes Drafts and Sent search to their views, like the list', () => {
     const filtersFor = (tab: EmailTab) =>
       requestFor({ tab }).filters.email_filters;
 
-    // Macro-composed drafts are unindexed and unlabeled; the client trims
-    // both tabs' results instead (see tabFilters).
-    expect(filtersFor('drafts')).toEqual({});
-    expect(filtersFor('sent')).toEqual({});
+    expect(filtersFor('drafts')).toEqual({ view: 'drafts' });
+    expect(filtersFor('sent')).toEqual({ view: 'sent' });
   });
 
-  it('excludes shared threads from archived search', () => {
+  it('searches archived mail as done and unshared, like the list', () => {
     const filtersFor = (tab: EmailTab) =>
       requestFor({ tab }).filters.email_filters;
 
-    expect(filtersFor('archived')).toEqual({ shared: 'exclude' });
+    expect(filtersFor('archived')).toEqual({ shared: 'exclude', done: true });
+  });
+
+  it('matches nothing when Archived is narrowed to mail not done', () => {
+    expect(
+      requestFor({ tab: 'archived', facets: { done: ['not-done'] } }).filters
+        .email_filters?.email_thread_ids
+    ).toEqual([NIL]);
+    expect(
+      requestFor({ tab: 'archived', facets: { done: ['done'] } }).filters
+        .email_filters
+    ).toEqual({ shared: 'exclude', done: true });
   });
 
   it('restricts to the selected inboxes', () => {
@@ -538,36 +547,37 @@ describe('buildEmailSearchRequest', () => {
     expect(none).toEqual({ link_ids: [NIL] });
   });
 
-  it('maps email read independently of notification state selections', () => {
+  it('maps read status and done to the thread states the list filters by', () => {
     const filters = requestFor({
       facets: { read: ['unread'], done: ['not-done'] },
     }).filters.email_filters;
 
-    expect(filters).toEqual({
-      is_read: false,
-      notification_filters: { states: ['unseen', 'seen'] },
-    });
+    expect(filters).toEqual({ is_read: false, done: false });
     expect(
       requestFor({ facets: { read: ['read'] } }).filters.email_filters
     ).toEqual({ is_read: true });
     expect(
       requestFor({ facets: { read: ['read'], done: ['done'] } }).filters
         .email_filters
-    ).toEqual({
-      is_read: true,
-      notification_filters: { states: ['done'] },
-    });
+    ).toEqual({ is_read: true, done: true });
   });
 
-  it('maps the calendar facet and ignores attachment facets', () => {
+  it('maps the calendar facet and the attachment kinds', () => {
     const filters = requestFor({
       facets: {
         calendar: ['has-calendar-invite'],
-        attachments: ['attachment-pdf'],
+        attachments: ['attachment-pdf', 'attachment-image', 'attachment-pdf'],
       },
     }).filters.email_filters;
 
-    expect(filters).toEqual({ calendar_only: true });
+    expect(filters).toEqual({
+      calendar_only: true,
+      attachments: ['pdf', 'image'],
+    });
+    expect(
+      requestFor({ facets: { attachments: ['attachment-document'] } }).filters
+        .email_filters
+    ).toEqual({ attachments: ['document'] });
   });
 
   it('sends selected tags as an entity-wide filter', () => {

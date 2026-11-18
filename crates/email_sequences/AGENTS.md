@@ -16,10 +16,16 @@ people. The server owns all state; the browser only calls the API.
   rows are keyed by the step's stable `id`; the next step is the one after the
   last step reached that is still in the sequence.
 - One inbox's sequence emails are at least 3 minutes apart (`SPACING`), read
-  from step history under the inbox's send-slot lock, so the gap holds after
-  an email is sent.
-- Routes that change a sequence refuse an agent's program (`Person` in
-  `inbound/axum_router.rs`): a sequence emails people with no further review.
+  from the inbox's scheduled sends under its send-slot lock, so the gap holds
+  after an email is sent or its sequence is deleted.
+- Routes that change a sequence refuse any program, routines included (`Person`
+  in `inbound/axum_router.rs`): a sequence emails people with no further review.
+- The `enable-sequences` rollout is checked per owner
+  (`OwnerAccess::rollout_includes`), evaluated locally from PostHog's polled
+  definitions. Outside it, or when it can't be read, nothing new starts and the
+  sweep holds steps; pausing, stopping, deleting and unsubscribing always work.
+- Before each step the enrolled address must still be one of the CRM person's;
+  otherwise the enrollment stops as `contact_removed`.
 - Steps are scheduled sends (`source = 'sequence'`) that stay out of Mail until
   they are sent or fail, created and withdrawn through the email crate's
   `SequenceStepStore` port on the sweep's own connection. One the owner

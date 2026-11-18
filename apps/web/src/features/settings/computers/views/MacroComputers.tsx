@@ -1,7 +1,5 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import { enableMacroComputers } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
@@ -11,6 +9,7 @@ import {
 } from '@queries/computers/claude';
 import {
   useCancelComputerMutation,
+  useMacroComputersRollout,
   useReleaseComputerMutation,
   useRestoreComputerMutation,
   useRetryComputerMutation,
@@ -47,7 +46,7 @@ import {
 } from '../primitives/setup-request';
 import { useTeamComputers } from '../primitives/team-computers';
 import { ClaudeSignInDialog } from './claude-sign-in-dialog';
-import { ComputerBuyFlow } from './computer-buy-flow';
+import { type AfterPurchase, ComputerBuyFlow } from './computer-buy-flow';
 import type { SetupStepId } from './computer-setup-dialog';
 
 /**
@@ -134,7 +133,7 @@ function ManagedComputerRow(props: {
   onSignIn: () => void;
   onRelease: () => void;
 }) {
-  const rollout = useFeatureFlag(enableMacroComputers);
+  const rollout = useMacroComputersRollout();
   const mode = useClaudeModeQuery(() =>
     rollout().enabled && props.canManageClaude
       ? (props.computer.harnessId ?? undefined)
@@ -403,6 +402,8 @@ export function MacroComputers(props: {
   /** Get a computer, at the top of Machines, opened the buy flow. */
   buying: boolean;
   onBuyingChange: (buying: boolean) => void;
+  /** Where Buy goes once the computer is up; `close` unless given. */
+  afterPurchase?: AfterPurchase;
 }) {
   const isAdmin = useIsTeamAdmin();
   const { enabled, computers, failed } = useTeamComputers();
@@ -508,6 +509,7 @@ export function MacroComputers(props: {
           here reopens where its setup left off. */}
       <ComputerBuyFlow
         open={buying() || !!settingUp()}
+        afterPurchase={props.afterPurchase}
         computerId={settingUp()}
         resumeStep={resumeAt()}
         onClose={() => {

@@ -50,11 +50,11 @@ even if the viewer switches boards while saving. The adapter supplies the select
 view ID so switching boards also retires unfinished visual moves and sort prompts.
 `browser-test/board.tsx` exercises shared cards, lane composition, and saved ordering with synthetic data.
 
-Successful domain block and unblock mutations evict indexed company rows and
-contact suggestions from the GraphQL cache before refreshing CRM and Soup
-queries. Refresh mounted GraphQL lists that can contain CRM records too: the
-REST mutation returns no changed rows, and hidden records are absent from the
-search index. Failed mutations leave those cached records intact.
+Successful domain block and unblock mutations refresh CRM and Soup email
+readers without archiving or restoring records. Failed mutations leave cached
+records intact. Privacy settings show the server's mailbox-domain refusal
+beside its input and existing-entry warning categories as row descriptions;
+company-domain and personal-provider explanations remain distinct.
 Company selection snapshots and deduplicates the company's domains, waits for
 every domain request, and retains failed domains for retry after the company
 disappears from suggestions. Keep successful blocks when another domain fails.
@@ -167,13 +167,9 @@ The selected-record fallback survives detail query errors until the record close
 Global task creation snapshots the focused pane's getter before opening, without
 fetching details or capturing navigation history. Record contexts isolate drafts.
 
-`enable-crm-activity` gates workspace activity tabs (labelled Sales Tasks, Sales Email,
-Sales Notes and Sales Calls), whether CRM supplies its
-composer context, and, with `enable-crm`, the Customer / Contact pill in the task
-composer and Universal Input's task mode. Those two read both flags through
-`customerContactEnabled`. It defaults off everywhere and can be overridden locally with
-`VITE_ENABLE_CRM_ACTIVITY=true`. Off hides activity navigation and skips activity
-queries; saved activity links wait for flag loading, then fall back to Companies.
+The workspace activity tabs are labelled Sales Tasks, Sales Email, Sales Notes and
+Sales Calls. CRM supplies its composer context, and the task composer and Universal
+Input's task mode show the Customer / Contact pill.
 The standard record task action still associates the task with its record.
 The registry and launcher never read this flag. With no supplied context, the
 standard composer opens immediately. Each opening snapshots its
@@ -292,3 +288,21 @@ use the host composer so stage and date-range defaults reach Add deal. CSV write
 commit valid entries, and show record-specific failures; option labels enter the
 local cache only after their batch commits. The backend-free regression is
 `bunx playwright test --config src/features/crm/browser-test/playwright.config.ts stage-requirements.browser.e2e.ts`.
+
+A record page's **Add to pipeline** menu (`add-to-pipeline.tsx`, the device
+entry; `views/add-to-pipeline.tsx` and `views/mobile/add-to-pipeline.tsx`)
+reads nothing until it first opens: `add-to-pipeline-adapter.tsx` then reads
+the team's pipelines and the record's rows through the Pipelines card's own
+`CrmRecordPipelineEntries` query, cache-first (same document and variables, so
+on Overview the normalized cache answers from the card's request), and a
+pipeline's table and stage requirements once its stages or add form show; the
+menu's requirements read does not poll (a refused add reads them again), and the Add deal form it opens reads no
+Quick Access list because its record is fixed. Rows are created with `writeDatabaseRow`
+through the pipeline write path the table uses, so the server's stage guard
+applies; `core/add-to-pipeline.ts` decides which pipelines a record can join and
+whether a stage needs the Add deal form. `ADD_TO_PIPELINE_FLOW` switches between
+choosing a stage and always opening the form; `ADDS_AGAIN` says which record
+types may join a pipeline twice (companies, as separate deals). An add whose
+answer was lost refetches the rows and warns instead of retrying. The
+backend-free desktop/phone regression is
+`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts add-to-pipeline.browser.e2e.ts`.

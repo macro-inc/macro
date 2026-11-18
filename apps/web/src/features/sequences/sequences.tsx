@@ -6,11 +6,13 @@ import {
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 import { type ComponentProps, type ParentProps, Show } from 'solid-js';
 import { addToSequenceDialog } from './add-to-sequence';
+import { SectionHeader } from './components/section-header';
 import {
   type SendersSource,
   SequencesProvider,
@@ -25,6 +27,7 @@ import {
 } from './queries/sources';
 import { ContactSequencesView } from './views/contact-sequences';
 import { EnrollView } from './views/enroll';
+import { MobileSectionHeader } from './views/mobile/section-header';
 import { SequencesNavView } from './views/sequences-nav';
 import { SequencesPane as SequencesPaneView } from './views/sequences-pane';
 
@@ -59,6 +62,7 @@ function AppSequences(props: ParentProps) {
         userId,
         userName: (id) => getDisplayName(tryMacroId(id)),
         feedback: toast,
+        SectionHeader: isTouchDevice() ? MobileSectionHeader : SectionHeader,
       }}
     >
       {props.children}

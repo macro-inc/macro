@@ -29,7 +29,9 @@ struct Access {
     member: Arc<AtomicBool>,
     crm_on: Arc<AtomicBool>,
     bob_in_crm: Arc<AtomicBool>,
+    in_rollout: Arc<AtomicBool>,
     ada_name: Arc<Mutex<&'static str>>,
+    ada_email: Arc<Mutex<&'static str>>,
 }
 
 impl OwnerAccess for Access {
@@ -40,22 +42,27 @@ impl OwnerAccess for Access {
         Ok(usable.then_some(TEAM))
     }
 
+    async fn rollout_includes(&self, _: &str) -> bool {
+        self.in_rollout.load(Ordering::SeqCst)
+    }
+
     async fn people(&self, _: &str, ids: &[Uuid]) -> Result<Vec<CrmPerson>, Self::Err> {
         let ada_name = *self.ada_name.lock().unwrap();
-        Ok([
-            (ADA, "Ada@Example.com", ada_name),
-            (BOB, "bob@example.com", "Bob"),
-        ]
-        .into_iter()
-        .filter(|(id, _, _)| ids.contains(id))
-        .filter(|(id, _, _)| *id != BOB || self.bob_in_crm.load(Ordering::SeqCst))
-        .map(|(id, email, name)| CrmPerson {
-            id,
-            team_id: TEAM,
-            email: Some(email.to_owned()),
-            name: Some(name.to_owned()),
-        })
-        .collect())
+        let ada_email = *self.ada_email.lock().unwrap();
+        Ok(
+            [(ADA, ada_email, ada_name), (BOB, "bob@example.com", "Bob")]
+                .into_iter()
+                .filter(|(id, _, _)| ids.contains(id))
+                .filter(|(id, _, _)| *id != BOB || self.bob_in_crm.load(Ordering::SeqCst))
+                .map(|(id, email, name)| CrmPerson {
+                    id,
+                    team_id: TEAM,
+                    email: Some(email.to_owned()),
+                    emails: vec![email.to_lowercase()],
+                    name: Some(name.to_owned()),
+                })
+                .collect(),
+        )
     }
 }
 
@@ -66,7 +73,9 @@ fn service(pool: &PgPool) -> (Svc, Access) {
         member: Arc::new(AtomicBool::new(true)),
         crm_on: Arc::new(AtomicBool::new(true)),
         bob_in_crm: Arc::new(AtomicBool::new(true)),
+        in_rollout: Arc::new(AtomicBool::new(true)),
         ada_name: Arc::new(Mutex::new("Ada Lovelace")),
+        ada_email: Arc::new(Mutex::new("Ada@Example.com")),
     };
     let service = Sequences::new(
         PgSequenceRepo::new(pool.clone()),
@@ -282,7 +291,7 @@ async fn first_step_sent(svc: &Svc, pool: &PgPool, enrollment: Uuid) -> Uuid {
 /// Free the inbox's send slot, as a few minutes passing would.
 async fn free_slot(pool: &PgPool, message: Uuid) {
     sqlx::query!(
-        "UPDATE email_sequence_steps SET scheduled_at = now() - interval '4 minutes' WHERE message_id = $1",
+        "UPDATE email_scheduled_messages SET send_time = now() - interval '4 minutes' WHERE message_id = $1",
         message
     )
     .execute(pool)
@@ -1017,22 +1026,25 @@ async fn edits_reach_every_email_not_yet_created(pool: PgPool) {
 async fn an_inbox_sends_at_most_its_daily_limit(pool: PgPool) {
     let (svc, _) = service(&pool);
     let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
-    // Bob's finished enrollment stands in for a day of sends from the inbox.
-    let bob = enroll(&svc, OWNER, sequence, BOB).await;
+    // A day of sends from the inbox, whatever became of their sequences.
+    let mut sent = Vec::new();
+    for _ in 0..DAILY_LIMIT {
+        sent.push(
+            incoming(
+                &pool,
+                OWNER_LINK,
+                "sent@example.com",
+                serde_json::json!([]),
+                None,
+            )
+            .await,
+        );
+    }
     sqlx::query!(
-        "UPDATE email_sequence_enrollments SET status = 'completed', due_at = NULL, link_id = $2 WHERE id = $1",
-        bob,
-        OWNER_LINK,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let sent: Vec<Uuid> = (0..DAILY_LIMIT).map(|_| Uuid::now_v7()).collect();
-    sqlx::query!(
-        r#"INSERT INTO email_sequence_steps (enrollment_id, step_id, message_id, status, scheduled_at, sent_at)
-           SELECT $1, id, id, 'sent', now() - interval '23 hours', now() - interval '23 hours'
+        r#"INSERT INTO email_scheduled_messages (link_id, message_id, send_time, sent, processing, source)
+           SELECT $1, id, now() - interval '23 hours', true, false, 'sequence'
            FROM unnest($2::uuid[]) AS t(id)"#,
-        bob,
+        OWNER_LINK,
         &sent,
     )
     .execute(&pool)
@@ -1047,7 +1059,7 @@ async fn an_inbox_sends_at_most_its_daily_limit(pool: PgPool) {
 
     // Once the earliest of them is a day old, Ada's step goes.
     sqlx::query!(
-        "UPDATE email_sequence_steps SET scheduled_at = now() - interval '25 hours' WHERE message_id = $1",
+        "UPDATE email_scheduled_messages SET send_time = now() - interval '25 hours' WHERE message_id = $1",
         sent[0]
     )
     .execute(&pool)
@@ -1206,4 +1218,165 @@ async fn a_full_sequence_takes_no_more_people(pool: PgPool) {
         .unwrap();
     assert!(results[0].enrollment_id.is_some());
     assert_eq!(results[1].skipped, Some(EnrollSkip::SequenceFull));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn deleting_a_sequence_does_not_free_its_send_slot(pool: PgPool) {
+    let (svc, _) = service(&pool);
+    let deleted = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let ada = enroll(&svc, OWNER, deleted, ADA).await;
+    make_due(&pool, ada).await;
+    svc.sweep(Utc::now()).await;
+    deliver(&pool, in_flight(&pool, ada).await.unwrap()).await;
+    svc.sweep(Utc::now()).await;
+    svc.delete(OWNER, deleted).await.unwrap();
+
+    let next = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let bob = enroll(&svc, OWNER, next, BOB).await;
+    make_due(&pool, bob).await;
+    svc.sweep(Utc::now()).await;
+    assert_eq!(in_flight(&pool, bob).await, None);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn a_person_who_left_the_address_gets_no_more_email(pool: PgPool) {
+    let (svc, access) = service(&pool);
+    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let ada = enroll(&svc, OWNER, sequence, ADA).await;
+    *access.ada_email.lock().unwrap() = "ada@elsewhere.example";
+    make_due(&pool, ada).await;
+    svc.sweep(Utc::now()).await;
+    assert_eq!(in_flight(&pool, ada).await, None);
+    assert_eq!(
+        status(&pool, ada).await,
+        ("stopped".into(), Some("contact_removed".into()), 0)
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn a_late_delivery_still_waits_the_delay_before_the_next_email(pool: PgPool) {
+    let (svc, _) = service(&pool);
+    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let ada = enroll(&svc, OWNER, sequence, ADA).await;
+    make_due(&pool, ada).await;
+    svc.sweep(Utc::now()).await;
+    let message = in_flight(&pool, ada).await.unwrap();
+    sqlx::query!(
+        "UPDATE email_sequence_steps SET scheduled_at = now() - interval '3 days' WHERE message_id = $1",
+        message
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    deliver(&pool, message).await;
+    svc.sweep(Utc::now()).await;
+    let due_at = sqlx::query_scalar!(
+        "SELECT due_at FROM email_sequence_enrollments WHERE id = $1",
+        ada
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(due_at > Utc::now() + chrono::Duration::hours(1));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn concurrent_batches_share_the_room_left_in_a_sequence(pool: PgPool) {
+    let (svc, _) = service(&pool);
+    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let filled = i32::try_from(crate::domain::service::MAX_PEOPLE - 1).unwrap();
+    sqlx::query!(
+        r#"INSERT INTO email_sequence_enrollments (id, sequence_id, team_id, email, status, timezone, send_time)
+           SELECT gen_random_uuid(), $1, $2, 'person' || n || '@example.com', 'completed', 'UTC', '09:00'
+           FROM generate_series(1, $3::int) AS n"#,
+        sequence,
+        TEAM,
+        filled,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let batch = |contact| {
+        svc.enroll(
+            OWNER,
+            sequence,
+            EnrollRequest {
+                crm_contact_ids: vec![contact],
+                start: Utc::now(),
+                timezone: "America/New_York".to_owned(),
+            },
+        )
+    };
+    let (ada, bob) = tokio::join!(batch(ADA), batch(BOB));
+    let added = [ada.unwrap(), bob.unwrap()]
+        .iter()
+        .filter(|results| results[0].enrollment_id.is_some())
+        .count();
+    assert_eq!(added, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn outside_the_rollout_nothing_starts_but_everything_can_stop(pool: PgPool) {
+    let (svc, access) = service(&pool);
+    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let ada = enroll(&svc, OWNER, sequence, ADA).await;
+    make_due(&pool, ada).await;
+    access.in_rollout.store(false, Ordering::SeqCst);
+
+    svc.sweep(Utc::now()).await;
+    assert_eq!(in_flight(&pool, ada).await, None, "the sweep holds it");
+    assert_eq!(status(&pool, ada).await.0, "active");
+    assert!(matches!(
+        svc.enroll(
+            OWNER,
+            sequence,
+            EnrollRequest {
+                crm_contact_ids: vec![BOB],
+                start: Utc::now(),
+                timezone: "America/New_York".to_owned(),
+            },
+        )
+        .await,
+        Err(SequenceError::ActionUnavailable)
+    ));
+
+    svc.act(OWNER, ada, EnrollmentAction::Stop).await.unwrap();
+    assert_eq!(status(&pool, ada).await.0, "stopped");
+    assert!(matches!(
+        svc.act(OWNER, ada, EnrollmentAction::Resume).await,
+        Err(SequenceError::ActionUnavailable)
+    ));
+}
+
+/// A constraint failure's detail quotes the row; none of it reaches a log.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_database_error_keeps_no_row_values(pool: PgPool) {
+    let error = sqlx::query!(
+        "INSERT INTO email_sequence_recipients (team_id, email, token) VALUES ($1, $2, $3)",
+        TEAM,
+        "secret-person@example.com",
+        "secret-token",
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    let logged = format!("{:?}", PgSequenceError::from(error));
+    assert!(logged.contains("23503"), "{logged}");
+    assert!(!logged.contains("secret-"), "{logged}");
 }

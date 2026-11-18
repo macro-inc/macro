@@ -142,7 +142,11 @@ So the flow for a new field is:
    data and gain only the fields they're missing, via `_mapping` PUT.
 3. Backfill the affected entity through `search_processing_service`
    (`POST /internal/backfill/<entity>`) so documents indexed before the
-   mapping existed pick the field up.
+   mapping existed pick the field up. A field with its own partial-update
+   backfill uses that instead of re-extracting every document:
+   `is_email_attachment` on `documents` uses
+   `POST /internal/backfill/email-attachment-status` (see that service's
+   README).
 4. Confirm with `bun scripts/verify_mappings.ts`.
 
 Convergence is additive only. A field whose live `type` disagrees with the

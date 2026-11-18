@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { RescheduleRefusedError } from '../core/booking-error';
 import { RescheduleForm } from './reschedule-form';
 
 vi.mock('./TimezoneSelect', () => ({
@@ -102,3 +103,21 @@ it.each(['success', 'error'])(
     expect(submit).not.toHaveBeenCalled();
   }
 );
+
+it('says the booking kept its time when the host’s calendar refuses the move', async () => {
+  const user = userEvent.setup();
+  const load = vi.fn(async () => [
+    { startsAt: '2026-10-19T16:00:00Z', endsAt: '2026-10-19T16:30:00Z' },
+  ]);
+  const submit = vi.fn(async () => {
+    throw new RescheduleRefusedError();
+  });
+  render(() => (
+    <RescheduleForm load={load} submit={submit} onCancel={() => {}} />
+  ));
+  await user.click(screen.getByRole('button', { name: 'Date' }));
+  await user.click(screen.getByRole('gridcell', { name: '19' }));
+  await user.click(screen.getByRole('button', { name: 'Confirm new time' }));
+  expect(await screen.findByText(/stays at its original time/)).toBeTruthy();
+  expect(screen.queryByText(/Refresh before trying again/)).toBeNull();
+});

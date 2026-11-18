@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO password_agent_access(team_id,item_id,agent_user_id,approved_by,permission_revision)\n            VALUES($1,$2,$3,CASE WHEN $4 THEN $5 END,CASE WHEN $6 THEN 1 ELSE 0 END)\n            ON CONFLICT(team_id,item_id,agent_user_id) DO UPDATE SET\n                approved_by=CASE WHEN $4 THEN COALESCE(password_agent_access.approved_by,$5) END,\n                permission_revision=password_agent_access.permission_revision+CASE WHEN $6 THEN 1 ELSE 0 END,\n                request_status=COALESCE($7,password_agent_access.request_status),\n                request_revision=password_agent_access.request_revision+CASE WHEN $7::text IS NULL THEN 0 ELSE 1 END,\n                request_updated_at=CASE WHEN $7::text IS NULL THEN password_agent_access.request_updated_at ELSE now() END\n            RETURNING approved_by IS NOT NULL AS \"approved!\",permission_revision,request_id,request_permission,request_status,request_revision,request_updated_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "approved!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "permission_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "request_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "request_permission",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "request_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "request_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "request_updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool",
+        "Text",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "132f1d4619f80291b5e3fa4b022ba8e403864d4aad2ec5f13dc02abc8c06060a"
+}

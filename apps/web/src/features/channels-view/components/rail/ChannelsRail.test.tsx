@@ -51,40 +51,13 @@ const mocks = vi.hoisted(() => ({
         | Promise<WithNotification<ChannelEntity>>
     >(),
   markRead: vi.fn(),
+  markChannelsAsRead: vi.fn(async () => {}),
   navigate: vi.fn(async () => {}),
   openSplit: vi.fn(async () => {}),
   select: vi.fn((_channel: ChannelPreviewSelection) => true),
   selected: undefined as ChannelPreviewSelection | undefined,
   userId: 'viewer',
   source: {
-    notifications: vi.fn(() => [
-      {
-        id: 'loaded',
-        entity_type: 'channel',
-        entity_id: 'one',
-        state: 'unseen',
-      },
-      {
-        id: 'off-page',
-        entity_type: 'channel',
-        entity_id: 'unloaded',
-        state: 'unseen',
-      },
-      { id: 'read', entity_type: 'channel', entity_id: 'one', state: 'seen' },
-      {
-        id: 'outside',
-        entity_type: 'channel',
-        entity_id: 'outside',
-        state: 'unseen',
-      },
-      {
-        id: 'document',
-        entity_type: 'document',
-        entity_id: 'one',
-        state: 'unseen',
-      },
-    ]),
-    bulkMarkAsRead: vi.fn(async () => {}),
     muteEntity:
       vi.fn<(entity: { type: string; id: string }) => Promise<void>>(),
     unmuteEntity:
@@ -263,7 +236,7 @@ vi.mock('@entity/utils/notification', () => ({
     notification.state !== 'unseen',
 }));
 vi.mock('@notifications/notification-helpers', () => ({
-  ensureNotificationSourceLoaded: vi.fn(),
+  markChannelsAsRead: mocks.markChannelsAsRead,
 }));
 vi.mock('@notifications/SnoozeNotificationsDialog', () => ({
   openSnoozeNotifications: mocks.snooze,
@@ -1417,22 +1390,12 @@ describe('section notification actions', () => {
     return actions;
   };
 
-  it('marks only unread channel notifications in the complete section membership', async () => {
+  it('marks the complete section membership read', async () => {
     const actions = mountActions();
     await actions.markSectionRead('label:section');
-    expect(mocks.source.bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([
-      {
-        id: 'loaded',
-        entity_type: 'channel',
-        entity_id: 'one',
-        state: 'unseen',
-      },
-      {
-        id: 'off-page',
-        entity_type: 'channel',
-        entity_id: 'unloaded',
-        state: 'unseen',
-      },
+    expect(mocks.markChannelsAsRead).toHaveBeenCalledExactlyOnceWith([
+      'one',
+      'unloaded',
     ]);
     expect(mocks.bulkPreferences).not.toHaveBeenCalled();
   });
@@ -1450,7 +1413,7 @@ describe('section notification actions', () => {
     mocks.userId = 'another-viewer';
     finish(['one']);
     await pending;
-    expect(mocks.source.bulkMarkAsRead).not.toHaveBeenCalled();
+    expect(mocks.markChannelsAsRead).not.toHaveBeenCalled();
   });
   it('submits all section members through one bulk operation', async () => {
     const current = {

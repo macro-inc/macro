@@ -5,7 +5,7 @@ import TagIcon from '@icon/system/regular/tag-simple.svg';
 import { navigateToTag } from '@property/tags/tagNavigation';
 import { queryReadyGate } from '@queries/gate';
 import { useTagsQuery } from '@queries/properties/tags';
-import { badgeClasses, cn, TagDot } from '@ui';
+import { badgeClasses, cn, Item, TagDot, Card as UiCard } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import {
   type KnownTag,
@@ -13,14 +13,8 @@ import {
   type TagRowView,
 } from '../core/tag-ontology';
 import type { OntologyTag } from '../core/types';
-import {
-  Card,
-  CardBody,
-  CardFooter,
-  CardHeader,
-  CardHiddenCount,
-} from './kit/card';
-import { CardRow, Tile } from './kit/parts';
+import { Card, CardBody, CardFooter, CardHiddenCount } from './kit/card';
+import { CardRow } from './kit/parts';
 
 /** Past this many tags the card holds a fixed height and says what is below. */
 const TAG_ROWS = 8;
@@ -43,35 +37,35 @@ export function TagsCardView(props: {
     <Card
       width="standard"
       height={count() > TAG_ROWS ? 320 : 'auto'}
+      region={title()}
       data-agent-card="tags"
     >
-      <section aria-label={title()} class="flex min-h-0 flex-1 flex-col">
-        <CardHeader
-          center
-          tile={
-            <Tile size={32}>
-              <TagIcon />
-            </Tile>
-          }
-          title={title()}
-          subtitle={`${count()} ${count() === 1 ? 'tag' : 'tags'}`}
-        />
-        <CardBody tight>
-          <Show
-            when={count() > 0}
-            fallback={
-              <p class="px-1.5 py-2 text-xs text-ink-muted">No tags.</p>
-            }
-          >
-            <TagList rows={props.rows} />
-          </Show>
-        </CardBody>
-        <Show when={count() > TAG_ROWS}>
-          <CardFooter small>
-            <CardHiddenCount total={count()} noun="tags" />
-          </CardFooter>
+      <UiCard.Header>
+        <Item class="gap-3 border-0 p-0">
+          <Item.Media class="self-center">
+            <TagIcon aria-hidden="true" />
+          </Item.Media>
+          <Item.Content class="gap-0">
+            <UiCard.Title class="truncate">{title()}</UiCard.Title>
+            <UiCard.Description>
+              {count()} {count() === 1 ? 'tag' : 'tags'}
+            </UiCard.Description>
+          </Item.Content>
+        </Item>
+      </UiCard.Header>
+      <CardBody tight>
+        <Show
+          when={count() > 0}
+          fallback={<p class="px-2 py-2 text-xs text-ink-muted">No tags.</p>}
+        >
+          <TagList rows={props.rows} />
         </Show>
-      </section>
+      </CardBody>
+      <Show when={count() > TAG_ROWS}>
+        <CardFooter small>
+          <CardHiddenCount total={count()} noun="tags" />
+        </CardFooter>
+      </Show>
     </Card>
   );
 }
@@ -90,7 +84,7 @@ function TagList(props: { rows: readonly TagRowView[]; nested?: boolean }) {
             <CardRow top onClick={row.onOpen} class="py-1">
               <span
                 class={badgeClasses({
-                  variant: 'outline',
+                  variant: 'secondary',
                   size: 'xs',
                   class: 'max-w-[60%] min-w-0 shrink text-ink',
                 })}

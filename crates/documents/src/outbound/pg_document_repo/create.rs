@@ -354,6 +354,35 @@ pub async fn link_document_email(
     Ok(())
 }
 
+/// Links an email attachment to an existing document only while that document
+/// is outside the Trash, and returns whether it did. The key-share lock waits
+/// for a trash in progress: the released-attachment drain holds `FOR UPDATE` on
+/// the documents it trashes, so one it trashed after a reuse lookup is never
+/// linked, and one linked first is seen as relinked and kept.
+pub async fn link_live_document_email(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    document_id: &str,
+    email_attachment_id: uuid::Uuid,
+) -> Result<bool, sqlx::Error> {
+    let live = sqlx::query_scalar!(
+        r#"
+        SELECT 1 AS "live!"
+        FROM "Document"
+        WHERE id = $1 AND "deletedAt" IS NULL
+        FOR KEY SHARE
+        "#,
+        document_id,
+    )
+    .fetch_optional(transaction.as_mut())
+    .await?;
+    if live.is_none() {
+        return Ok(false);
+    }
+
+    link_document_email(transaction, document_id, email_attachment_id).await?;
+    Ok(true)
+}
+
 /// Maps a failed [`link_document_email`]. An attachment row deleted before the
 /// link commits, e.g. by its message's delete cascade, is not found rather
 /// than an internal error.
@@ -394,8 +423,9 @@ pub async fn reuse_email_document(
         return Ok(Some(document_id));
     }
 
-    if let Some(document_id) = find_live_email_document_id_by_sha(transaction, owner, sha).await? {
-        link_document_email(transaction, &document_id, email_attachment_id).await?;
+    if let Some(document_id) = find_live_email_document_id_by_sha(transaction, owner, sha).await?
+        && link_live_document_email(transaction, &document_id, email_attachment_id).await?
+    {
         return Ok(Some(document_id));
     }
 

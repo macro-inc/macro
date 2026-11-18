@@ -28,10 +28,14 @@ export function prodMonitor(
     type?: string;
     /** Attach matching event samples. Needed for Database Monitoring attributes. */
     enableLogsSample?: boolean;
+    /** Evaluate a group only once it has data for the whole window. */
+    requireFullWindow?: boolean;
     /** Overrides for the state-line value text in `alertMessage`. */
     alertDetail?: string;
     warningDetail?: string;
     recoveryDetail?: string;
+    /** Heartbeats only: alert if a previously reporting group stops reporting. */
+    noDataTimeframe?: number;
   }
 ): datadog.Monitor {
   return new datadog.Monitor(
@@ -54,10 +58,13 @@ export function prodMonitor(
       monitorThresholds: args.monitorThresholds,
       monitorThresholdWindows: args.monitorThresholdWindows,
       renotifyInterval: RENOTIFY_MINUTES,
-      requireFullWindow: false,
+      requireFullWindow: args.requireFullWindow ?? false,
       onMissingData: 'default',
       includeTags: true,
       notifyAudit: false,
+      ...(args.noDataTimeframe === undefined
+        ? {}
+        : { notifyNoData: true, noDataTimeframe: args.noDataTimeframe }),
       ...(args.enableLogsSample === undefined
         ? {}
         : { enableLogsSample: args.enableLogsSample }),

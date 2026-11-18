@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT domain AS \"domain!\" FROM crm_blocked_domains WHERE team_id = $1\n               UNION SELECT lower(d.domain) FROM crm_domains d JOIN crm_companies c ON c.id = d.company_id\n               WHERE d.team_id = $1 AND c.team_id = $1 AND NOT c.email_sync ORDER BY 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "domain!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "17eb106542562e54d7a85d3ff6984e11b3dae348aa5d1ec71bc2ccf38e9aff62"
+}

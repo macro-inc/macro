@@ -10,8 +10,8 @@ use super::{
     retry_processing,
 };
 use crate::process::document::{
-    process_extract_sync_message, process_extract_text_message, process_remove_message,
-    process_update_name_message,
+    process_extract_sync_message, process_extract_text_message, process_release_email_attachments,
+    process_remove_message, process_update_name_message,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +27,10 @@ pub(super) enum DocumentIndexAction {
     },
     RefreshName,
     Remove,
+    /// The documents stopped being email attachments.
+    ReleaseEmailAttachments {
+        document_ids: Vec<String>,
+    },
     Ignore,
 }
 
@@ -89,6 +93,25 @@ pub(super) fn describe_document_event(event: &DocumentTopicEvent) -> DocumentEve
             action: DocumentIndexAction::Ignore,
             document_id: metadata.document_id.clone(),
             event_type: "document.interaction",
+        },
+        // Trashed and kept documents alike lost their last email link; the
+        // trash itself leaves the index alone, as document.deleted does.
+        DocumentTopicEvent::EmailAttachmentsReleased(metadata) => DocumentEventDescription {
+            action: DocumentIndexAction::ReleaseEmailAttachments {
+                document_ids: metadata
+                    .trashed_document_ids
+                    .iter()
+                    .chain(&metadata.kept_document_ids)
+                    .cloned()
+                    .collect(),
+            },
+            document_id: metadata
+                .trashed_document_ids
+                .first()
+                .or(metadata.kept_document_ids.first())
+                .cloned()
+                .unwrap_or_default(),
+            event_type: "document.email_attachments_released",
         },
     }
 }
@@ -165,6 +188,9 @@ async fn process_document_index_action(
             process_update_name_message(opensearch_client, &context.db, document_id).await
         }
         DocumentIndexAction::Remove => process_remove_message(opensearch_client, document_id).await,
+        DocumentIndexAction::ReleaseEmailAttachments { document_ids } => {
+            process_release_email_attachments(opensearch_client, &document_ids).await
+        }
         DocumentIndexAction::Ignore => Ok(()),
     }
 }

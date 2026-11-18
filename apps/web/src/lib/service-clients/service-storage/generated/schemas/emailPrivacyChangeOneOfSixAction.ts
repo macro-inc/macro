@@ -10,5 +10,5 @@ export type EmailPrivacyChangeOneOfSixAction =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const EmailPrivacyChangeOneOfSixAction = {
-  remove_domain: 'remove_domain',
+  add_domain: 'add_domain',
 } as const;

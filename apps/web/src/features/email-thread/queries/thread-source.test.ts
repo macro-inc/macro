@@ -8,6 +8,9 @@ const invalidateInvitations = vi.hoisted(() => vi.fn());
 vi.mock('@queries/calendar/invitations', () => ({
   invalidateInvitationScheduling: invalidateInvitations,
 }));
+vi.mock('@queries/email/local-draft-source', () => ({
+  createLocalDraftSource: () => ({ drafts: () => [], ready: () => true }),
+}));
 
 function message(id: string, overrides: Partial<ApiMessage> = {}): ApiMessage {
   return {

@@ -1,7 +1,7 @@
 use anyhow::Context;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
-use macro_env_var::env_vars;
+use macro_env_var::{env_vars, maybe_env_vars};
 use secretsmanager_client::LocalOrRemoteSecret;
 
 env_vars! {
@@ -18,9 +18,25 @@ env_vars! {
     pub struct EmailServiceCloudfrontSignerPublicKeyId;
 }
 
+maybe_env_vars! {
+    /// PostHog project key: names the project whose flags are read.
+    pub struct PosthogApiKey;
+    /// PostHog feature flags secure API key: reads the flag definitions.
+    pub struct PosthogFeatureFlagsSecureApiKey;
+    /// PostHog host; defaults to the project's US region.
+    pub struct PosthogHost;
+}
+
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// With the secure key, reads the `enable-sequences` rollout. Without
+    /// both, sequences start nothing for anyone.
+    pub posthog_api_key: PosthogApiKey,
+    /// See `posthog_api_key`.
+    pub posthog_feature_flags_secure_api_key: PosthogFeatureFlagsSecureApiKey,
+    /// PostHog host (optional).
+    pub posthog_host: PosthogHost,
     /// Admit new Outlook mailboxes; reconnects remain available while paused.
     #[macro_config_default(false)]
     pub outlook_connections_enabled: bool,

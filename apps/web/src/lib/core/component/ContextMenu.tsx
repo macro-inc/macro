@@ -2,6 +2,7 @@ import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import CaretRight from '@icon/system/regular/caret-right.svg?component-solid';
 import CheckIcon from '@icon/system/regular/check.svg?component-solid';
+import CopyIcon from '@icon/system/regular/copy.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   addCtrlJKMenuNavigation,
@@ -9,7 +10,9 @@ import {
   highlightFirstMenuItemOnOpen,
   Layer,
 } from '@ui';
+import { CopyFeedback } from '@ui/components/CopyButton';
 import { Hotkey } from '@ui/components/Hotkey';
+import { createCopyState } from '@ui/utils/create-copy-state';
 import {
   type Component,
   type ComponentProps,
@@ -139,6 +142,25 @@ type MenuItemProps =
 
 export const MENU_ITEM_CLASS = `group rounded-lg w-full flex items-center gap-1.5 text-left text-ink font-normal cursor-default outline-none data-[highlighted]:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed ${isMobile() ? 'py-2 px-1.5 text-base' : 'p-1.5 px-2 text-sm'}`;
 
+function MenuItemIcon(props: Pick<BaseMenuItemProps, 'icon' | 'iconClass'>) {
+  return (
+    <Show when={props.icon}>
+      {typeof props.icon === 'function' ? (
+        <Dynamic
+          component={props.icon}
+          class={cn(
+            'shrink-0',
+            isMobile() ? 'size-5' : 'size-4',
+            props.iconClass
+          )}
+        />
+      ) : (
+        props.icon
+      )}
+    </Show>
+  );
+}
+
 /**
  * A context-menu item with consistent styling.
  *
@@ -198,23 +220,7 @@ export function MenuItem(props: MenuItemProps) {
           />
         </div>
       </Show>
-      <Show when={props.icon}>
-        <Show when={typeof props.icon === 'function'}>
-          <Dynamic
-            component={
-              props.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
-            }
-            class={cn(
-              'shrink-0',
-              isMobile() ? 'size-5' : 'size-4',
-              props.iconClass
-            )}
-          />
-        </Show>
-        <Show when={typeof props.icon === 'object'}>
-          {props.icon as JSX.Element}
-        </Show>
-      </Show>
+      <MenuItemIcon icon={props.icon} iconClass={props.iconClass} />
       <Show when={props.text}>
         <div class="flex-1 truncate pr-[2em]">{props.text}</div>
       </Show>
@@ -231,11 +237,36 @@ export function MenuItem(props: MenuItemProps) {
   );
 }
 
+/** Context-menu copy action with unchanged label and persistent focus. */
+export type CopyMenuItemProps = Omit<GenericMenuItemProps, 'onClick'> & {
+  onCopy: () => void | boolean | Promise<void | boolean>;
+};
+
+export function CopyMenuItem(props: CopyMenuItemProps) {
+  const { copy, copied } = createCopyState();
+  return (
+    <MenuItem
+      {...props}
+      icon={
+        <CopyFeedback copied={copied()}>
+          <MenuItemIcon
+            icon={props.icon ?? CopyIcon}
+            iconClass={props.iconClass}
+          />
+        </CopyFeedback>
+      }
+      closeOnSelect={false}
+      onClick={() => copy(props.onCopy)}
+    />
+  );
+}
+
 export function SubTrigger(props: {
   text: string | JSX.Element;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | JSX.Element;
   iconClass?: string;
   disabled?: boolean;
+  ref?: (element: HTMLDivElement) => void;
 }) {
   return (
     <ContextMenu.SubTrigger
@@ -244,6 +275,7 @@ export function SubTrigger(props: {
         props.disabled && 'opacity-50 cursor-not-allowed'
       )}
       disabled={props.disabled}
+      ref={props.ref}
     >
       <Show when={props.icon}>
         <Show when={typeof props.icon === 'function'}>
@@ -312,6 +344,17 @@ export function ContextMenuTrigger(
 export function MenuSeparator() {
   return (
     <ContextMenu.Separator class="my-1.5 -mx-1.5 w-[calc(100%+0.75rem)] border-t border-edge-divider" />
+  );
+}
+
+/** Kobalte context-menu roots are uncontrolled; use their native Escape dismissal. */
+export function dismissContextMenu() {
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    })
   );
 }
 

@@ -7,7 +7,6 @@ import FlowArrowIcon from '@icon/system/regular/tree-structure.svg';
 import { Badge, EmptyStatePanel } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { failureMessage } from '../components/failure';
-import { SectionHeader } from '../components/section-header';
 import { SequenceStatusBadge } from '../components/status';
 import { useSequences } from '../context/sequences-context';
 import { isRetryable } from '../core/errors';
@@ -49,7 +48,7 @@ export function SequenceListView(props: {
   const retry = () => fireAndForget(source.refresh(), SURFACE);
   return (
     <>
-      <SectionHeader
+      <context.SectionHeader
         title={
           <div class="flex min-w-0 items-center gap-3">
             {props.navigation}

@@ -1495,6 +1495,38 @@ expression: schema
           "type": "object"
         },
         {
+          "description": "A card on which the user mints a new token for a bot they manage and\nsees its secret, which never reaches you. Present it whenever the user\nasks for a bot token or credential.",
+          "properties": {
+            "botId": {
+              "description": "The bot's id.",
+              "type": "string"
+            },
+            "expiresAt": {
+              "description": "RFC 3339 expiry; omit for a token that does not expire.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "label": {
+              "description": "Where the token will be used, such as \"github-webhook\".",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "botCredential",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "botId"
+          ],
+          "type": "object"
+        },
+        {
           "description": "A nestable flex container of widgets.",
           "properties": {
             "align": {

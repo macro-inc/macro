@@ -68,6 +68,10 @@ function Title(props: {
   iconType?: EntityIconSelector;
   /** Replaces the entity icon when it renders something, e.g. the session's model. */
   icon?: JSX.Element;
+  /** Shown between the icon and the label, such as the file type. */
+  badges?: JSX.Element;
+  /** Shown after the label, such as a Beta badge. */
+  trailingBadges?: JSX.Element;
   colorIcon?: boolean;
   class?: string;
 }) {
@@ -107,6 +111,7 @@ function Title(props: {
         >
           <div class="flex shrink-0 items-center justify-center">{icon()}</div>
         </Show>
+        {props.badges}
         <span class="inline-flex min-w-0 items-center gap-1">
           <span class="inline-block truncate text-sm font-semibold">
             {props.label}
@@ -115,6 +120,7 @@ function Title(props: {
             <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
           </Show>
         </span>
+        {props.trailingBadges}
       </div>
     </MobileHeaderIsland>
   );

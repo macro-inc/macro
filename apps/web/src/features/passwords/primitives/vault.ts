@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { makePersistedState } from '@app/lib/persistence';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { type Span, Telemetry } from '@macro-inc/observability';
@@ -10,7 +11,7 @@ import {
   type PasswordFailure,
   usePasswords,
 } from '../context/passwords-context';
-import { KIND_LAYOUTS } from '../core/kinds';
+import { KIND_LAYOUTS, PASSWORD_KINDS } from '../core/kinds';
 import {
   filterItems,
   folderSubtree,
@@ -18,13 +19,21 @@ import {
   type PasswordDraft,
   type PasswordFilter,
   type PasswordGrant,
+  type PasswordGroupBy,
   type PasswordItem,
   type PasswordKind,
   type PasswordValues,
   type PasswordVersion,
   validateDraft,
 } from '../core/types';
+import {
+  createPasswordListViewStorage,
+  defaultPasswordListView,
+  type PasswordListView,
+  type PasswordListViewEntry,
+} from '../persistence';
 import { passwordKeys } from '../queries/keys';
+import { isUnreachable } from '../queries/source';
 
 /**
  * An unsaved new item or an in-place edit of an existing one. Drafts live only
@@ -64,7 +73,8 @@ const REVEAL_WINDOW_MS = 60_000;
 
 const editKey = (itemId: string) => `edit:${itemId}`;
 
-export function createVault() {
+/** `entry` keeps the list's type filter and grouping with a split history entry. */
+export function createVault(options: { entry?: PasswordListViewEntry } = {}) {
   const { scope, source, writeClipboard } = usePasswords();
   /** False once the viewer's account or session changed under this vault. */
   const stale = () => !scope.isCurrent();
@@ -79,11 +89,32 @@ export function createVault() {
     reconcile: 'id',
   }));
   const loadedItems = () => (items.isPending ? [] : (items.data ?? []));
+  /** The vault list, or undefined while it loads or after it failed without data. */
+  const availableItems = () => (items.isPending ? undefined : items.data);
   const loadedFolders = () => (folders.isPending ? [] : (folders.data ?? []));
 
   const [selection, setSelection] = createSignal<VaultSelection>();
   const [filter, setFilter] = createSignal<PasswordFilter>('all');
   const [search, setSearch] = createSignal('');
+  const [listView, setListView] = makePersistedState(
+    createStore<PasswordListView>(defaultPasswordListView()),
+    {
+      storages: options.entry
+        ? [createPasswordListViewStorage(options.entry)]
+        : [],
+    }
+  );
+  /** Add or remove one type from the list's type filter. */
+  const setKindSelected = (kind: PasswordKind, selected: boolean) =>
+    setListView('kinds', (kinds) =>
+      selected
+        ? kinds.includes(kind)
+          ? kinds
+          : PASSWORD_KINDS.filter(
+              (each) => each === kind || kinds.includes(each)
+            )
+        : kinds.filter((each) => each !== kind)
+    );
   const [state, setState] = createStore<DraftState>({ drafts: {}, order: [] });
   const bookkeeping = new Map<string, DraftBookkeeping>();
   const [values, setValues] = createSignal<PasswordValues>();
@@ -166,6 +197,20 @@ export function createVault() {
     setSelection(item ? { kind: 'item', id: item.id } : undefined);
     if (item?.kind !== 'note' && item)
       fireAndForget(loadUsername(item), 'passwords');
+  }
+  /**
+   * No answer from Macro: the last request for the selected item, or the
+   * latest list reload. The list on screen may be out of date until it answers.
+   */
+  const unreachable = () =>
+    failure() === 'unreachable' ||
+    (items.isError && isUnreachable(items.error));
+  /** Ask again: reload the list and folders, and the selected item's username. */
+  function retryConnection() {
+    fireAndForget(items.refetch(), 'passwords');
+    fireAndForget(folders.refetch(), 'passwords');
+    const current = selection();
+    if (current?.kind === 'item') select(selected());
   }
   function selectDraft(key: string) {
     resetDetail();
@@ -650,6 +695,7 @@ export function createVault() {
     items,
     folders,
     loadedItems,
+    availableItems,
     loadedFolders,
     selection,
     selected,
@@ -659,6 +705,11 @@ export function createVault() {
     setFilter,
     search,
     setSearch,
+    kinds: () => listView.kinds,
+    setKindSelected,
+    clearKinds: () => setListView('kinds', []),
+    groupBy: () => listView.groupBy,
+    setGroupBy: (groupBy: PasswordGroupBy) => setListView('groupBy', groupBy),
     drafts: () => state.order.map((key) => state.drafts[key]),
     draft: (key: string): VaultDraft | undefined => state.drafts[key],
     activeDraft,
@@ -675,6 +726,8 @@ export function createVault() {
     usernameLoading,
     usernameCopied,
     failure,
+    unreachable,
+    retryConnection,
     reveal,
     copy: copyPassword,
     copyUsername,
@@ -700,7 +753,13 @@ export function createVault() {
     loadCode,
     setTotp,
     visibleItems: () =>
-      filterItems(loadedItems(), filter(), search(), loadedFolders()),
+      filterItems(
+        loadedItems(),
+        filter(),
+        search(),
+        loadedFolders(),
+        listView.kinds
+      ),
   };
 }
 export type VaultController = ReturnType<typeof createVault>;

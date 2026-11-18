@@ -70,6 +70,7 @@ function toMenuCast(cast: ServerColumnCast) {
       isMultiSelect: cast.is_multi_select,
       specificEntityType: cast.specific_entity_type ?? undefined,
       relation: cast.relation,
+      ...(cast.percentage ? { percentage: true } : {}),
     },
     cast: match(cast.cast)
       .returnType<DatabaseColumnCast>()

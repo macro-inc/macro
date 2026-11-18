@@ -103,6 +103,7 @@ async fn messages_and_send_outcomes_signal_their_group(pool: PgPool) {
                     mentions: vec![],
                 },
                 reply_to: None,
+                user_confirmation: None,
             },
             SendAuthority::Human,
         )
@@ -141,6 +142,7 @@ async fn a_retried_send_returns_the_original_whatever_happened_since(pool: PgPoo
             mentions: vec![],
         },
         reply_to: None,
+        user_confirmation: None,
     };
     let access = receipt::<MessageWrite>(ALICE, binding.id);
     let original = linked

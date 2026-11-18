@@ -583,6 +583,7 @@ async fn can_edit_reflects_current_grants_without_grant_management() {
                         id: match kind {
                             GranteeKind::User => recipient.user_id.to_string(),
                             GranteeKind::Team => team.0.to_string(),
+                            GranteeKind::Agent => unreachable!("human sharing cases only"),
                         },
                         kind: kind.clone(),
                         permission,

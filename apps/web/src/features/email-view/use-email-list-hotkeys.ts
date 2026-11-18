@@ -2,6 +2,7 @@ import { CommandState } from '@app/features/command/state';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
 import type { EntityData } from '@entity';
 import { onCleanup } from 'solid-js';
 
@@ -60,8 +61,10 @@ export function useEmailListHotkeys(options: UseEmailListHotkeysOptions) {
       options.clearSelection();
       return true;
     },
-    // Without a selection, Escape returns the view to Signal (email-view).
+    // Without a selection, Escape clears a search, then returns the view to
+    // Signal (email-view).
     registrationType: 'add',
+    handlerPriority: HOTKEY_PRIORITY_HIGH,
   }).withGroup(group);
 
   onCleanup(() => group.dispose());

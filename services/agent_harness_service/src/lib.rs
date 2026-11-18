@@ -202,6 +202,8 @@ const RUNTIME_COMMAND_CONSUMER_ATTEMPTS: usize = 5;
 /// Routine code programs the harness runs at once. Steps beyond it wait for a
 /// slot before their credential is minted, so they never queue in the executor.
 const ROUTINE_CODE_SLOTS: usize = 4;
+/// Calls of one SDK operation a routine code step may make; sessions get 200.
+const ROUTINE_CALLS_PER_OPERATION: u32 = 1000;
 
 impl GroupName for AgentHarnessConsumerGroup {
     const GROUP_NAME: &'static str = "agent-harness-service";
@@ -629,8 +631,17 @@ pub async fn run() -> anyhow::Result<()> {
             matches!(config.environment, Environment::Local),
         )?
         .with_owner_approvals(Arc::clone(&tool_approvals))
+        // Each account's MCP exchanges are paced per upstream, after
+        // approvals, and a 429 is retried after its Retry-After.
         .with_actor_mcp(Arc::new(
-            agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new(mcp_address_policy)?,
+            agent_egress::outbound::budgeted_mcp::BudgetedMcpTransport::new(
+                Arc::new(
+                    agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new(
+                        mcp_address_policy,
+                    )?,
+                ),
+                agent_egress::outbound::budgeted_mcp::BudgetPolicy::DEFAULT,
+            ),
         )),
     );
 
@@ -701,6 +712,10 @@ pub async fn run() -> anyhow::Result<()> {
                     max_queued: 16,
                     max_cpu: Some(std::time::Duration::from_secs(10)),
                     background: true,
+                    // A routine step is reviewed code that may update every
+                    // row it was given, one call each; only a runaway loop
+                    // gets this far.
+                    max_calls_per_operation: ROUTINE_CALLS_PER_OPERATION,
                     ..Default::default()
                 },
             )?;
@@ -724,6 +739,23 @@ pub async fn run() -> anyhow::Result<()> {
         }
         None => None,
     };
+    // One flag client for every per-user agent rollout.
+    let feature_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+                key.to_owned(),
+                std::time::Duration::from_secs(3),
+                config.environment,
+            )
+            .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
+        })
+        .transpose()?;
+    // Code runs reach the SDK hosts through the host's forwarder where the
+    // egress flag is on for the user they act as.
+    let code_egress = code_mode::EgressRollout::new(feature_flags.clone());
     // Routine code steps run as their owner on the routines' executor.
     let routine_code = match &code_runner {
         Some((_, _, routines, checker)) => Some(
@@ -742,6 +774,7 @@ pub async fn run() -> anyhow::Result<()> {
                     &tool_context.calendar_tool_context.occurrences,
                 ))),
             )
+            .with_egress(code_egress.clone())
             .with_slots(ROUTINE_CODE_SLOTS),
         ),
         None => None,
@@ -774,20 +807,6 @@ pub async fn run() -> anyhow::Result<()> {
     )
     .await
     .map_err(|error| anyhow::anyhow!("{error}"))?;
-    // One flag client for every per-user agent rollout.
-    let feature_flags = config
-        .posthog_api_key
-        .value()
-        .map(|key| {
-            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
-                key.to_owned(),
-                std::time::Duration::from_secs(3),
-                config.environment,
-            )
-            .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
-        })
-        .transpose()?;
     // Suggestion generation sessions' code and tools are limited to reads
     // and their own writes, and background runs that send nothing to what
     // reaches nobody, wherever their credential is used.
@@ -806,6 +825,7 @@ pub async fn run() -> anyhow::Result<()> {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
+                    egress: code_egress.clone(),
                     correlations: agent_correlation::outbound::PgCorrelationRepository(
                         pool.clone(),
                     ),
@@ -900,9 +920,6 @@ pub async fn run() -> anyhow::Result<()> {
             store: Arc::clone(&execution_store),
             active: Arc::clone(&execution_turns),
             turns: Arc::new(code_mode::ui_commands::SessionUiTurns(session_repo.clone())),
-            flag: Arc::new(code_mode::ui_commands::NavigationFlag(
-                feature_flags.clone(),
-            )),
             budgets: Arc::new(code_mode::ui_commands::RedisUiBudgets(
                 rate_limit::RateLimitServiceImpl {
                     repo: rate_limit::RedisRateLimitAdapter {
@@ -921,6 +938,7 @@ pub async fn run() -> anyhow::Result<()> {
         Arc::new(agent_code_mode::domain::CodeModeService::new(
             code_executor,
             Arc::new(code_mode::RunCredentials {
+                egress: code_egress.clone(),
                 correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
                 signer: MacroApiTokenSigner::new(
                     pool.clone(),
@@ -1413,6 +1431,7 @@ pub async fn run() -> anyhow::Result<()> {
             pool.clone(),
         )),
         Arc::clone(&notifications),
+        redis.clone(),
     )
     .await?;
     let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> = Arc::new(
@@ -1491,6 +1510,12 @@ pub async fn run() -> anyhow::Result<()> {
                 ),
                 harnessd: harnessd.clone(),
             },
+            hosted_runtimes::outbound::pg::PgEffectSignals::listen(
+                pool.clone(),
+                &computer_tasks,
+                service_shutdown.clone(),
+            )
+            .await,
             &computer_tasks,
             service_shutdown.clone(),
         );
@@ -1582,9 +1607,12 @@ pub async fn run() -> anyhow::Result<()> {
             sessions,
             containers,
             announcer,
-            HarnessKeyedConnections::new(
-                PgHarnessBindings::new(pool.clone()),
-                Arc::clone(&runtimes),
+            computers::wake::WakingConnections::new(
+                HarnessKeyedConnections::new(
+                    PgHarnessBindings::new(pool.clone()),
+                    Arc::clone(&runtimes),
+                ),
+                computer_operator.clone(),
             ),
             prompt_context,
             prompt_composer,
@@ -1745,6 +1773,13 @@ pub async fn run() -> anyhow::Result<()> {
     let runtime_command_redis = redis.clone();
     let runtime_command_harness = harness.clone();
     let runtime_command_runtimes = Arc::clone(&runtimes);
+    // The replica holding an agent computer's socket issues its agent's
+    // environment; it never crosses the runtime bus. The authentication
+    // service checks its own internal key, not ours.
+    let runtime_command_agents: Arc<dyn hosted_runtimes::domain::agent::AgentEnrollmentSource> =
+        Arc::new(computers::agent_enrollment::AuthAgentEnrollment::new(
+            config.authentication_service_secret_key.as_ref(),
+        )?);
     let (runtime_commands_ready, mut runtime_commands_readiness) =
         tokio::sync::watch::channel(false);
     let runtime_commands = tokio::spawn(async move {
@@ -1763,6 +1798,31 @@ pub async fn run() -> anyhow::Result<()> {
                     runtime_command_harness.clone(),
                     runtime_commands_ready.clone(),
                     runtime_command_models.clone(),
+                    {
+                        let runtimes = Arc::clone(&runtime_command_runtimes);
+                        let agents = Arc::clone(&runtime_command_agents);
+                        Arc::new(move |request| {
+                            let connected = {
+                                let runtimes = Arc::clone(&runtimes);
+                                Arc::new(move |harness| runtimes.is_connected(harness))
+                            };
+                            let send: runtime_commands::SendAgent = {
+                                let runtimes = Arc::clone(&runtimes);
+                                Arc::new(move |harness, environment| {
+                                    let runtimes = Arc::clone(&runtimes);
+                                    Box::pin(async move {
+                                        runtimes.apply_agent(harness, environment).await
+                                    })
+                                })
+                            };
+                            Box::pin(runtime_commands::deliver_agent_to_runtime(
+                                request,
+                                Arc::clone(&agents),
+                                connected,
+                                send,
+                            ))
+                        })
+                    },
                 )
             },
         )
@@ -1930,7 +1990,8 @@ pub async fn run() -> anyhow::Result<()> {
         feature_flags
             .clone()
             .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
-            .unwrap_or_default(),
+            .unwrap_or_default()
+            .with_allowlist(config.computer_rollout_allowlist()?),
         hosted_runtimes::domain::models::FleetAttachment::from_operator_present(
             computer_operator.is_some(),
         ),
@@ -2146,7 +2207,13 @@ pub async fn run() -> anyhow::Result<()> {
             .with_routine_sessions(routine_sessions)
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
-            .with_claude_access(computer_claude)
+            .with_claude_access(match &computer_operator {
+                Some(operator) => computer_claude.merge(computers::moves::router(
+                    Arc::clone(operator),
+                    MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                )),
+                None => computer_claude,
+            })
             .with_capabilities(capabilities)
             .with_voices(voices)
             .with_mode_choice(mode_choice)

@@ -24,6 +24,8 @@ use std::sync::{Arc, Mutex};
 struct FakeRepo {
     team_ooo_changed: bool,
     calendar_ooo_changed: bool,
+    /// Every upsert finds the row already as the write has it.
+    unchanged_upserts: bool,
     upserts: Arc<Mutex<Vec<CalendarEventUpsert>>>,
     stored_synced_at: Option<chrono::DateTime<Utc>>,
     sync_snapshots: Arc<Mutex<Vec<GoogleCalendarSyncSnapshot>>>,
@@ -80,7 +82,11 @@ impl CalendarRepository for FakeRepo {
         Ok(CalendarEventWriteOutcome {
             event_id: id,
             owner_id,
-            change: CalendarEventChange::Created,
+            change: if self.unchanged_upserts {
+                CalendarEventChange::Unchanged
+            } else {
+                CalendarEventChange::Created
+            },
             team_ooo_changed,
             aligned_copies: Vec::new(),
         })
@@ -551,6 +557,7 @@ impl GoogleCalendarProvider for FakeGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
+        _calendar_id: Uuid,
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
@@ -586,6 +593,7 @@ impl GoogleCalendarProvider for ReauthGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
+        _calendar_id: Uuid,
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
@@ -725,6 +733,7 @@ impl GoogleCalendarProvider for PartialFailureGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
+        _calendar_id: Uuid,
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
@@ -766,6 +775,7 @@ impl GoogleCalendarProvider for ChangedCalendarProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
+        _calendar_id: Uuid,
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
@@ -841,6 +851,7 @@ impl GoogleCalendarProvider for TotalFailureGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
+        _calendar_id: Uuid,
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
@@ -891,6 +902,7 @@ impl GoogleCalendarProvider for ReauthOnColleagueCalendarProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
+        _calendar_id: Uuid,
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
@@ -936,6 +948,7 @@ impl GoogleCalendarProvider for MixedTotalFailureGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
+        _calendar_id: Uuid,
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
@@ -971,6 +984,7 @@ impl GoogleCalendarProvider for PushUnsupportedGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
+        _calendar_id: Uuid,
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
@@ -1322,6 +1336,7 @@ impl GoogleCalendarProvider for CancellingCalendarProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
+        _calendar_id: Uuid,
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
@@ -1344,6 +1359,7 @@ async fn retiring_a_regular_meeting_leaves_team_ooo_rows_alone() {
         // A tombstone for something Macro never stored changes nothing.
         Vec::new(),
     ] {
+        let retires = !sync_retirements.is_empty();
         let coordinator = GoogleCalendarBackfillCoordinator::new(
             FakeRepo {
                 sync_retirements,
@@ -1369,8 +1385,46 @@ async fn retiring_a_regular_meeting_leaves_team_ooo_rows_alone() {
             .await
             .unwrap();
 
-        assert!(report.changed());
+        // The sync after a delete through Macro reads back a tombstone for a
+        // source the delete already removed; viewers have nothing to refetch.
+        assert_eq!(report.changed(), retires);
         assert!(!report.team_ooo_changed);
+    }
+}
+
+/// The sync after a write through Macro reads back the event that write
+/// stored. Every viewer of the inbox and every teammate was told when the
+/// write landed, so an echo that changes nothing tells no one again.
+#[tokio::test]
+async fn a_sync_that_reads_back_what_macro_stored_reports_no_change() {
+    for unchanged_upserts in [false, true] {
+        let coordinator = GoogleCalendarBackfillCoordinator::new(
+            FakeRepo {
+                unchanged_upserts,
+                ..FakeRepo::default()
+            },
+            ChangedCalendarProvider { with_event: true },
+            FakeLifecycle::claimed(),
+            NoopMacroEventBroker,
+            None,
+        );
+        let mut report = GoogleBackfillRunReport::default();
+        coordinator
+            .run(
+                CalendarBackfillJobKey {
+                    job_id: Uuid::now_v7(),
+                    email_link_id: Uuid::now_v7(),
+                },
+                "macro|calendar@example.com",
+                "secret",
+                OccurrenceRange::maintenance_horizon(Utc::now()),
+                &mut report,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(report.events_upserted, 1);
+        assert_eq!(report.changed(), !unchanged_upserts);
     }
 }
 
@@ -1485,6 +1539,7 @@ impl GoogleCalendarProvider for SystemCalendarProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
+        _calendar_id: Uuid,
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
@@ -1562,6 +1617,7 @@ impl GoogleCalendarProvider for FailingPrimaryBesideSystemCalendarProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
+        _calendar_id: Uuid,
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
@@ -1640,6 +1696,7 @@ impl GoogleCalendarProvider for HangingGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
+        _calendar_id: Uuid,
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
@@ -1890,6 +1947,7 @@ impl GoogleCalendarProvider for InvalidNormalizedGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
+        _calendar_id: Uuid,
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,

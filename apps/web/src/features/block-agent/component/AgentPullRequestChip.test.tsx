@@ -20,7 +20,7 @@ vi.mock('@queries/agent-session/list-sync', () => ({
   refreshAgentSessionLists: vi.fn(async () => {}),
 }));
 
-const { openWithSplit } = vi.hoisted(() => {
+const { openWithSplit, openExternalUrl } = vi.hoisted(() => {
   class FakeWebSocket {
     url: string;
     readyState = 1;
@@ -33,7 +33,7 @@ const { openWithSplit } = vi.hoisted(() => {
     send() {}
   }
   vi.stubGlobal('WebSocket', FakeWebSocket);
-  return { openWithSplit: vi.fn() };
+  return { openWithSplit: vi.fn(), openExternalUrl: vi.fn() };
 });
 
 vi.mock('@queries/client', async () => {
@@ -56,6 +56,7 @@ vi.mock('@service-connection/websocket', () => ({
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit }),
 }));
+vi.mock('@core/util/url', () => ({ openExternalUrl }));
 vi.mock('@core/util/useSplitNavigationHandler', () => ({
   useSplitNavigationHandler: (onClick: (event: MouseEvent) => void) => ({
     onClick,
@@ -127,7 +128,7 @@ it('shows a GitHub fallback without suspending while the webhook mapping is pend
   client.clear();
 });
 
-it('opens the PR entity once synced and follows later status changes', async () => {
+it('opens the synced PR on GitHub and follows later status changes', async () => {
   vi.useFakeTimers();
   const lookup = vi.mocked(storageServiceClient.getForeignEntityBySource);
   type Lookup = ReturnType<
@@ -149,10 +150,8 @@ it('opens the PR entity once synced and follows later status changes', async () 
   expect(screen.getByRole('button').textContent).toContain('#6303');
   expect(screen.getByRole('button').textContent).toContain('Open');
   fireEvent.click(screen.getByRole('button'));
-  expect(openWithSplit).toHaveBeenCalledWith(
-    { type: 'pr', id: entity('open').id },
-    { preferNewSplit: true }
-  );
+  expect(openExternalUrl).toHaveBeenCalledWith(url);
+  expect(openWithSplit).not.toHaveBeenCalled();
   await handlePullRequestUpdated({
     ...entity('merged'),
     metadata: { status: 'merged', name: 'Add the header chip', number: 6303 },

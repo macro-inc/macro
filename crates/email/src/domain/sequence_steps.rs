@@ -138,6 +138,16 @@ pub trait SequenceStepStore: Send + Sync + 'static {
     /// Adapter error.
     type Err: std::error::Error + Send + Sync + 'static;
 
+    /// The inbox's steps scheduled after `since`, sent or not: how many, and
+    /// the latest send time among them. Read from the schedule, which outlives
+    /// the sequence, so deleting one frees neither its slots nor its quota.
+    fn slots_since(
+        &self,
+        conn: &mut Self::Conn,
+        link_id: Uuid,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(u32, Option<DateTime<Utc>>), Self::Err>> + Send;
+
     /// The inbox, if it exists.
     fn sending_inbox(
         &self,

@@ -5,16 +5,20 @@ import {
 import { shareEntity } from '@app/features/access-requests/core/types';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFlow, usePending } from '@app/observability/flow';
+import { useSplitHeaderScope } from '@components/app/SplitHeaderScope';
 import {
   DocumentFileSidePanelSections,
   SidePanel,
 } from '@components/app/side-panel';
+import type { BlockName } from '@core/block';
 import { toEntityLoadError } from '@core/component/EntityLoadGate';
 import {
   getPermissions,
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
+import { useIsAuthenticated } from '@core/context/user';
+import { trackOpen } from '@core/internal/track-open';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { Span } from '@macro-inc/observability';
@@ -41,6 +45,8 @@ export type FileDetailLayoutProps = ParentProps<{
 }>;
 
 export function FileDetailLayout(props: FileDetailLayoutProps) {
+  // A hosted split header carries the details toggle, as the block's does.
+  const hostedHeader = useSplitHeaderScope();
   const permissions = () => getPermissions(props.userAccessLevel);
   const canEdit = () => hasPermissions(permissions(), Permissions.CAN_EDIT);
 
@@ -49,7 +55,7 @@ export function FileDetailLayout(props: FileDetailLayoutProps) {
       floating
       defaultOpen={props.defaultSidePanelOpen ?? false}
       persistKey={`file:${props.documentId}`}
-      headerToggle={false}
+      headerToggle={!!hostedHeader}
     >
       <DocumentFileSidePanelSections
         documentId={props.documentId}
@@ -104,7 +110,7 @@ export function FileDetailLoadGate<
 >(props: {
   documentId: string;
   /** The block the document opens as, reported on `open_entity`. */
-  entityType: string;
+  entityType: BlockName;
   label: string;
   load: (documentId: string, parentSpan?: Span) => Promise<T>;
   /**
@@ -117,6 +123,7 @@ export function FileDetailLoadGate<
   children: (data: T) => JSX.Element;
 }) {
   const analytics = useAnalytics();
+  const authenticated = useIsAuthenticated();
   const flow = useFlow();
   // Shown results are released when their content is disposed (after the
   // editor it rendered); the rest here. Each result is released once.
@@ -162,14 +169,16 @@ export function FileDetailLoadGate<
     load
   );
   usePending('document.resource', () => document.loading);
-  // Counts the open once per document, as BlockLoader does for blocks; access
-  // changes and retries reload the same document without reopening it.
+  // Counts and records the open once per loaded document; access changes and
+  // retries reload the same document without reopening it. A load cut short by
+  // revoked access is ready without a document and is not an open.
   let trackedDocumentId: string | undefined;
   createEffect(() => {
-    if (document.state !== 'ready') return;
+    if (document.state !== 'ready' || document.latest === undefined) return;
     const documentId = props.documentId;
     if (trackedDocumentId === documentId) return;
     trackedDocumentId = documentId;
+    trackOpen(documentId, props.entityType, authenticated);
     analytics.pageView(props.entityType);
     analytics.track('open_entity', {
       entityType: props.entityType,

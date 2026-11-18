@@ -141,8 +141,9 @@ enforced by the ordinary backend APIs.
 - `src/entities/bots/`: `macro.bots` manages bots (`Bot`: profile, channel
   grants, webhook URLs, `BotToken`s) with user auth, and reads the
   authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
-  bot-management tools in its favour; `IssueBotCredential` stays, because its
-  chat card mints a token the model never reads.
+  bot-management tools in its favour, `IssueBotCredential` too: a program
+  presents a `botCredential` view, whose card mints a token the model never
+  reads.
 - `src/entities/imports/`: `macro.imports`, the import ledger (cognition
   `/import/entities`, `/import/notion/pages`): `list`, `track`,
   `recordImported`, `importNotionPage` and `ImportEntry.decline()`; code mode
@@ -162,8 +163,20 @@ enforced by the ordinary backend APIs.
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
-- Keep the human-session-only Passwords vault endpoints in coverage exclusions;
-  normal human-session authorization and secret disclosure are outside v1 agent capabilities.
+- A fix to the generated client's runtime (`generated/*/core/`) is a patch of
+  `@hey-api/openapi-ts`'s template in `apps/web/patches/` (root
+  `patchedDependencies`; the Nix node_modules build reads patches only there),
+  then `bun run generate`. `hey-api-openapi-ts-0.99.0.patch` makes stopping an
+  SSE stream quiet; carry it forward on a generator upgrade.
+- Keep the human-session-only Passwords vault endpoints, including batch import
+  and name matching and the human review of agent access requests, in coverage
+  exclusions; normal human-session authorization and secret disclosure are
+  outside v1 agent capabilities.
+- `src/entities/passwords/`: `macro.passwords.forAgent(team, { wake })` is the
+  agent vault for the agent's own API key; every call sends that wake's
+  `X-Macro-Agent-Session-Id`. Its classes are `@mcp-exclude` and stay out of the
+  code-mode catalog: disclosed values and codes go to the agent's secrets
+  capability, never to model context.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
 - Keep hosted-computer management, Claude sign-in and internal provisioning
   routes in app-only coverage exclusions.
@@ -235,6 +248,10 @@ the existing gateway prefixes.
   in step.
 - Regenerate Rust OpenAPI and web service clients before `bun run sync-specs &&
   bun run generate`; do not copy deployed schemas over a local API change.
+  When a merge conflicts in `generated/`, first run them on the merged specs,
+  since `code_mode_assets` (built by the OpenAPI exporters) type-checks the
+  handwritten SDK against these clients; then regenerate the clients, and run
+  them again on the exported specs.
 - Run `bun run generate` to regenerate SDK clients and normalize whitespace-only
   lines; do not hand-edit generated output to satisfy whitespace checks.
 - The SDK reference (`../sdk-docs`) and the code-mode bundle and documentation
@@ -252,10 +269,16 @@ the existing gateway prefixes.
 - Code-mode programs are untyped JavaScript, so a mistyped option key is
   dropped silently. Create-style methods call `rejectUnknownOptions`
   (`src/utils/options.ts`) so it throws instead; the documents and tasks namespaces do.
-- Async iterators are lazy; `limit` is page size. Preserve filters on every page
-  and do not fetch another page after the caller breaks the loop.
+- Async iterators are lazy; `pageSize` (or `limit`, where an iterator already
+  named it so) is page size. Build every public auto-paginating iterator with
+  `iterate` (`src/utils/pagination.ts`): it rejects unknown options and caps
+  the total at `maxItems` without fetching past it. Say "`maxItems` caps the
+  total" in the doc's first sentence, which is all the code-mode index shows.
+  Preserve filters on every page and do not fetch another page after the
+  caller breaks the loop.
 - Handles must serialize identity or loaded detail, never authenticated clients.
 - Lazy detail invalidation fences in-flight reads so a pre-write response cannot restore stale cached fields.
+- Listings seed handles with `withListed` (`Channel.fromListing`, `EmailThread.fromPreview`, `Document.recent`), so `field()` reads skip the detail request. Seed only fields whose listing value means the same as the detail's; empty values still load, and any write or load drops the seed. Seeds never serialize.
 - Draft writes must select the draft's inbox with `X-Email-Link-Id`; callers
   supply plain HTML and the SDK encodes it for the draft wire contract.
 - Read many task or initiative names with `tasks.summaries` (`/documents/preview`)
@@ -265,8 +288,11 @@ the existing gateway prefixes.
   with `system_properties`' `StatusOption` and `PriorityOption`. Task create
   `propertyValues` replace the service defaults (creator assigned, Not
   started), so `Task.create` spells them out when it sends any.
+- `crm.emailPrivacy` (`src/entities/crm-email-privacy/`, the `crmEmailPrivacy` code-mode category) wraps own-member policy and existing privacy endpoints; preserve exact observed tokens, caller-supplied idempotency keys, preview slot identities and explicit partial counts. Never refresh a token or retry a sharing decision after a conflict. Rule target handles do not fetch content on inspection.
 - CRM records and initiatives share `messages/discussion.ts`: their comments are
   messages under a `crm_company`, `crm_contact` or `initiative` parent.
+- `crm.blockDomain` refuses domains covering a team member's connected primary
+  mailbox; preserve the server's validation message through `MacroApiError`.
 - Meeting list lookup only covers the owner's newest 100 standalone meetings;
   handles seeded from invitations retain their token for refetching after writes.
 - Team routes act on the caller's current team, which the auth service

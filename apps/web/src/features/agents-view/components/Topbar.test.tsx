@@ -6,6 +6,8 @@ import { Topbar } from './Topbar';
 vi.mock('@app/components/view-shell/ViewShell', () => ({
   ViewShell: {
     TopBar: (props: ParentProps) => <div>{props.children}</div>,
+    TopBarTitle: (props: ParentProps) => props.children,
+    TopBarActions: (props: ParentProps) => <div>{props.children}</div>,
   },
 }));
 vi.mock('@app/components/view-shell/ViewSidebar', () => ({

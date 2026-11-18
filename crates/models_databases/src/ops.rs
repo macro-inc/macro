@@ -528,6 +528,8 @@ pub enum ColumnKind {
     Text,
     /// A number.
     Number,
+    /// A number shown as a percent: 0.25 displays as 25%.
+    Percentage,
     /// A checkbox.
     Boolean,
     /// A date-time.

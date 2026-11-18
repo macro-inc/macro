@@ -35,12 +35,26 @@ impl PgSequenceRepo {
 /// A database failure, or a stored value this code can't read.
 #[derive(Debug, thiserror::Error)]
 pub enum PgSequenceError {
-    /// The query failed.
-    #[error(transparent)]
-    Database(#[from] sqlx::Error),
+    /// The query failed. Only what is safe to log is kept: a database error's
+    /// detail can quote the failing row, addresses and tokens included.
+    #[error("query failed: {0}")]
+    Database(String),
     /// A stored value is out of range.
     #[error("unreadable stored value: {0}")]
     Decode(&'static str),
+}
+
+impl From<sqlx::Error> for PgSequenceError {
+    fn from(error: sqlx::Error) -> Self {
+        Self::Database(match error.as_database_error() {
+            Some(database) => format!(
+                "SQLSTATE {}, constraint {}",
+                database.code().as_deref().unwrap_or("unknown"),
+                database.constraint().unwrap_or("none"),
+            ),
+            None => error.to_string(),
+        })
+    }
 }
 
 fn parse<T: std::str::FromStr>(value: &str, what: &'static str) -> Result<T, PgSequenceError> {
@@ -358,31 +372,17 @@ impl SequenceRepo for PgSequenceRepo {
         tx: &mut Self::Tx,
         owner: &Owner,
         id: Uuid,
-        share: bool,
     ) -> Result<Option<Sequence>, PgSequenceError> {
-        let record = if share {
-            sqlx::query_as!(
-                SequenceRecord,
-                r#"SELECT id, name, link_id, footer, weekdays_only, status, steps AS "steps: Json<Vec<Step>>", created_at, updated_at
-                   FROM email_sequences WHERE id = $1 AND user_id = $2 AND team_id = $3 FOR SHARE"#,
-                id,
-                owner.user_id,
-                owner.team_id,
-            )
-            .fetch_optional(&mut **tx)
-            .await?
-        } else {
-            sqlx::query_as!(
-                SequenceRecord,
-                r#"SELECT id, name, link_id, footer, weekdays_only, status, steps AS "steps: Json<Vec<Step>>", created_at, updated_at
-                   FROM email_sequences WHERE id = $1 AND user_id = $2 AND team_id = $3 FOR UPDATE"#,
-                id,
-                owner.user_id,
-                owner.team_id,
-            )
-            .fetch_optional(&mut **tx)
-            .await?
-        };
+        let record = sqlx::query_as!(
+            SequenceRecord,
+            r#"SELECT id, name, link_id, footer, weekdays_only, status, steps AS "steps: Json<Vec<Step>>", created_at, updated_at
+               FROM email_sequences WHERE id = $1 AND user_id = $2 AND team_id = $3 FOR UPDATE"#,
+            id,
+            owner.user_id,
+            owner.team_id,
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
         record.map(Sequence::try_from).transpose()
     }
 
@@ -865,25 +865,6 @@ impl SequenceRepo for PgSequenceRepo {
         .execute(&mut **tx)
         .await?;
         Ok(())
-    }
-
-    async fn slots_since(
-        &self,
-        tx: &mut Self::Tx,
-        link_id: Uuid,
-        since: DateTime<Utc>,
-    ) -> Result<(u32, Option<DateTime<Utc>>), PgSequenceError> {
-        let row = sqlx::query!(
-            r#"SELECT count(*) AS "count!", max(h.scheduled_at) AS latest
-               FROM email_sequence_steps h
-               JOIN email_sequence_enrollments e ON e.id = h.enrollment_id
-               WHERE e.link_id = $1 AND h.scheduled_at > $2"#,
-            link_id,
-            since,
-        )
-        .fetch_one(&mut **tx)
-        .await?;
-        Ok((u32::try_from(row.count).unwrap_or(u32::MAX), row.latest))
     }
 
     async fn has_live_enrollments(&self, link_id: Uuid) -> Result<bool, PgSequenceError> {

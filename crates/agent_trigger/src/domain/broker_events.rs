@@ -419,6 +419,9 @@ pub enum TriggerDecision {
         session_id: AgentSessionId,
         /// How the message was attributed to the session.
         kind: ThreadMessageKind,
+        /// For an inferred message, the judge's confidence, as a whole
+        /// percentage, that it is addressed to this agent; `None` otherwise.
+        confidence: Option<u8>,
         /// The message.
         message: MessagePostedMetadata,
     },
@@ -524,6 +527,7 @@ impl AgentSessionMacroEvent {
                 session_id,
                 kind,
                 message,
+                confidence: _,
             } => match channel {
                 Some((channel_id, channel_type)) => Self::existing_event(
                     ExistingAgentSessionEvent::Channel(ChannelEventMetadata {

@@ -5,6 +5,9 @@ export function toViewColumn(column: ColumnDetail): DatabaseViewColumn {
   const config = column.column.config;
   const relation = config?.kind === 'link' ? config : undefined;
   const formula = config?.kind === 'derived' ? config.formula : undefined;
+  const percentage =
+    (config?.kind === 'derived' && !!config.percentage) ||
+    config?.kind === 'percentage';
   return {
     id: column.column.id,
     name:
@@ -19,6 +22,7 @@ export function toViewColumn(column: ColumnDetail): DatabaseViewColumn {
     writable: column.writable && !formula,
     sharedOutsideDatabase: column.shared_outside_database,
     ...(formula ? { formula } : {}),
+    ...(percentage ? { percentage: true } : {}),
     ...(relation
       ? {
           relation: {

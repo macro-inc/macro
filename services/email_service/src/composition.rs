@@ -103,8 +103,39 @@ pub type Sequences<C> = email_sequences::domain::service::Sequences<
             entity_access::outbound::PgAccessRepository,
         >,
         C,
+        SequenceFlags,
     >,
 >;
+
+/// Where the sequences rollout is read: evaluated locally from polled
+/// definitions, so a check costs no PostHog request.
+pub type SequenceFlags = feature_flags::outbound::posthog_local::PostHogLocalFeatureFlags;
+
+/// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
+const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
+/// A poll holds up the checks waiting on it, some of them API requests.
+const FLAG_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// The rollout reader, when PostHog is configured. Without it sequences start
+/// nothing, which keeps a deployment missing the keys safe.
+pub fn sequence_flags(config: &crate::config::Config) -> anyhow::Result<Option<SequenceFlags>> {
+    let (Some(project_key), Some(secret_key)) = (
+        config.posthog_api_key.value(),
+        config.posthog_feature_flags_secure_api_key.value(),
+    ) else {
+        return Ok(None);
+    };
+    SequenceFlags::new(
+        config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+        project_key,
+        secret_key.to_owned(),
+        &[email_sequences::outbound::SEQUENCES_FLAG],
+        FLAG_TIMEOUT,
+        config.environment,
+    )
+    .map(Some)
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
+}
 
 /// Unsubscribe links point at this service's public URL, which serves
 /// `/public/sequences/unsubscribe/{token}`.
@@ -112,6 +143,7 @@ pub fn sequences<C: crm::domain::service::CrmService>(
     db: sqlx::PgPool,
     crm: C,
     environment: macro_env::Environment,
+    flags: Option<SequenceFlags>,
 ) -> anyhow::Result<Sequences<C>> {
     let base = macro_service_urls::EmailServiceUrl::new_for_environment(environment)?;
     Ok(email_sequences::domain::service::Sequences::new(
@@ -122,6 +154,7 @@ pub fn sequences<C: crm::domain::service::CrmService>(
                 entity_access::outbound::PgAccessRepository::new(db),
             ),
             crm,
+            flags,
         ),
         base.as_str(),
     ))

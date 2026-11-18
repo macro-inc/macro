@@ -3,7 +3,6 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { DatabaseCard } from './DatabaseCard';
 
 const mocks = vi.hoisted(() => ({ enabled: false, mounted: 0 }));
-vi.mock('@core/constant/featureFlags', () => ({ enableDatabases: {} }));
 vi.mock('../../context/LexicalWrapperContext', async () => {
   const { createContext } = await import('solid-js');
   return { LexicalWrapperContext: createContext() };

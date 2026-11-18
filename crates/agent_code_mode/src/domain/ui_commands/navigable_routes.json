@@ -66,6 +66,7 @@
     {"route":"external-chat","navigable":true,"segments":["external","chat",":"]},
     {"route":"calls-call","navigable":true,"segments":["calls","call",":"]},
     {"route":"companies-pipeline","navigable":true,"segments":["companies","pipeline",":"]},
+    {"route":"companies-sequence","navigable":false,"segments":["companies","sequence",":"]},
     {"route":"companies-retired-database","navigable":false,"segments":["companies","database",":"]},
     {"route":"drive-document","navigable":true,"segments":["drive",":",":"]},
     {"route":"home-document","navigable":true,"segments":["home",":",":"]},

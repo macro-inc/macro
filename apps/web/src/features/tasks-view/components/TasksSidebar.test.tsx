@@ -59,7 +59,6 @@ vi.mock('../tasks-view-context', () => ({
   useTasksView: () => ({
     state: { tab: 'my-tasks', search: '' },
     setState: vi.fn(),
-    projectsEnabled: () => true,
     setTab: fixtures.setTab,
     selectedTask: () => fixtures.selectedTask(),
     isSidebarSectionOpen: () => true,

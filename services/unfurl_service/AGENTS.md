@@ -35,6 +35,8 @@ responses, with SSRF protections since both accept user-supplied URLs.
 - `MAX_REDIRECTS` (5) and response size limits are enforced per-request, not
   globally; a new endpoint that fetches external content needs to apply them
   itself.
+- Every response of the `/proxy` route, errors included, gets `nosniff`
+  and the image proxy's CSP from `sandbox_headers`. Keep both.
 
 ## Related
 

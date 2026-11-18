@@ -1,6 +1,7 @@
 //! Authorization, retry recovery and product policy independent of either persistence adapter.
 use super::{models::*, ports::*};
 use chrono::Utc;
+use password_import::vault;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -20,6 +21,7 @@ impl PasswordService {
         record.metadata.share_count = record
             .grants
             .iter()
+            .filter(|grant| !matches!(grant.kind, GranteeKind::Agent))
             .map(|grant| (matches!(grant.kind, GranteeKind::Team), grant.id.as_str()))
             .collect::<std::collections::HashSet<_>>()
             .len();
@@ -49,7 +51,7 @@ impl PasswordService {
         }
         self.repository.teams(actor).await
     }
-    async fn membership(&self, actor: &Actor, team: TeamId) -> Result<(), Error> {
+    pub(crate) async fn membership(&self, actor: &Actor, team: TeamId) -> Result<(), Error> {
         self.availability.require_enabled(actor).await?;
         if !self.repository.is_human(&actor.user_id).await? {
             return Err(Error::Forbidden);
@@ -73,19 +75,32 @@ impl PasswordService {
         self.membership(actor, team).await?;
         Ok(lock)
     }
+    /// [`Self::admit`] for a caller whose membership was just checked: only
+    /// the recheck after the lease, which a lifecycle change can still fail.
+    async fn admit_member(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+    ) -> Result<Box<dyn ItemLock>, Error> {
+        let lock = self.repository.lock(team, item).await?;
+        self.membership(actor, team).await?;
+        Ok(lock)
+    }
     fn permission(actor: &Actor, team: TeamId, record: &Record, edit: bool) -> bool {
         record.user_id == actor.user_id
             || record.grants.iter().any(|grant| {
                 let matches = match grant.kind {
                     GranteeKind::User => grant.id == actor.user_id.as_ref(),
                     GranteeKind::Team => grant.id == team.0.to_string(),
+                    GranteeKind::Agent => false,
                 };
                 matches && (!edit || grant.permission == Permission::Edit)
             })
     }
     /// A lost provider response can be reconciled from its operation UUID and durable metadata intent.
     /// Every caller holds the same distributed item lock throughout this and the protected action.
-    async fn reconcile(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
+    pub(crate) async fn reconcile(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
         let current = self.repository.get(team, item).await;
         let current_record = current.as_ref().ok().cloned();
         if matches!(&current,Ok(record) if record.deleting) {
@@ -128,18 +143,25 @@ impl PasswordService {
                 Err(error) => return Err(error),
             }
         }
-        record.metadata.shared = !record.grants.is_empty();
-        match self.repository.save(&record, expected).await {
+        record.metadata.shared = Self::human_shared(&record.grants);
+        // Metadata, the intent's retained agent audit and its completion commit
+        // together, so no reconciler can save metadata and lose the audit.
+        match self
+            .repository
+            .save_reconciled(&record, expected, operation)
+            .await
+        {
             // The folder was deleted after validation; land the write unfiled.
             Err(Error::FolderMissing) => {
                 record.metadata.folder_id = None;
-                self.repository.save(&record, expected).await?;
+                self.repository
+                    .save_reconciled(&record, expected, operation)
+                    .await
             }
-            result => result?,
+            result => result,
         }
-        self.repository.finish(operation).await
     }
-    async fn access(
+    pub(crate) async fn access(
         &self,
         actor: &Actor,
         team: TeamId,
@@ -225,7 +247,7 @@ impl PasswordService {
             .await
     }
     /// Resolve the current account identifier after normal human view authorization.
-    #[tracing::instrument(skip_all,err,name="passwords.username",fields(team_id=%team.0,item_id=%item.0,copy))]
+    #[tracing::instrument(skip_all,err,name="passwords.username",fields(team_id=%team.0,item_id=%item.0,copy,outcome=tracing::field::Empty))]
     pub async fn username(
         &self,
         actor: &Actor,
@@ -233,6 +255,7 @@ impl PasswordService {
         item: ItemId,
         copy: bool,
     ) -> Result<Username, Error> {
+        tracing::Span::current().record("outcome", "failed");
         let _lock = if copy {
             Some(self.admit(actor, team, item).await?)
         } else {
@@ -254,6 +277,14 @@ impl PasswordService {
                 .audit(team, item, actor, Action::Copy, Uuid::now_v7())
                 .await?;
         }
+        tracing::Span::current().record(
+            "outcome",
+            if username.0.is_empty() {
+                "empty"
+            } else {
+                "present"
+            },
+        );
         Ok(Username {
             username,
             version: record.metadata.version,
@@ -267,8 +298,22 @@ impl PasswordService {
         team: TeamId,
         command: WriteItem,
     ) -> Result<ItemView, Error> {
+        let _lock = self
+            .admit(actor, team, ItemId(command.operation_id))
+            .await?;
+        self.create_under_lease(actor, team, command, _lock.as_ref())
+            .await
+            .map(|(item, _)| item)
+    }
+    #[tracing::instrument(skip_all,err,name="passwords.create.commit",fields(team_id=%team.0))]
+    async fn create_under_lease(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        command: WriteItem,
+        _lease: &dyn ItemLock,
+    ) -> Result<(ItemView, bool), Error> {
         let id = ItemId(command.operation_id);
-        let _lock = self.admit(actor, team, id).await?;
         command.validate()?;
         if command.expected_version.is_some() || command.operation_id.get_version_num() != 7 {
             return Err(Error::Invalid);
@@ -290,7 +335,7 @@ impl PasswordService {
                 self.repository
                     .audit(team, id, actor, Action::Create, command.operation_id)
                     .await?;
-                return self.metadata(actor, record).await;
+                return Ok((self.metadata(actor, record).await?, false));
             }
             Ok(_) => return Err(Error::Conflict),
             Err(Error::NotFound) => {}
@@ -338,7 +383,7 @@ impl PasswordService {
         self.repository
             .audit(team, id, actor, Action::Create, command.operation_id)
             .await?;
-        self.metadata(actor, record).await
+        Ok((self.metadata(actor, record).await?, true))
     }
     #[tracing::instrument(skip_all,err,name="passwords.update",fields(team_id=%team.0,item_id=%item.0))]
     /// Update an editable credential with provider CAS and retry recovery.
@@ -359,6 +404,15 @@ impl PasswordService {
                 && operation == command.operation_id
                 && version == record.metadata.version
             {
+                // Never an agent's write. A human intent names no publisher, so a
+                // replay of another human's id keeps the legacy behavior.
+                if let Some(IntentOrigin::Agent { .. }) = self
+                    .repository
+                    .intent_origin(team, item, command.operation_id)
+                    .await?
+                {
+                    return Err(Error::Conflict);
+                }
                 self.repository
                     .audit(team, item, actor, Action::Update, command.operation_id)
                     .await?;
@@ -401,7 +455,7 @@ impl PasswordService {
         if command.expected_version != record.metadata.version {
             return Err(Error::Conflict);
         }
-        if command.name.trim().is_empty() || command.name.len() > 200 {
+        if command.name.trim().is_empty() || command.name.len() > vault::MAX_NAME_BYTES {
             return Err(Error::Invalid);
         }
         self.validate_folder(team, command.folder_id).await?;
@@ -559,9 +613,19 @@ impl PasswordService {
                     grant.id = recipient.user_id.to_string();
                 }
                 GranteeKind::Team => {}
+                GranteeKind::Agent => return Err(Error::Invalid),
             }
         }
-        record.metadata.shared = !grants.is_empty();
+        // Agent grants change only through the agent access routes, which keep
+        // their approvals and revisions consistent; human sharing preserves them.
+        grants.extend(
+            record
+                .grants
+                .iter()
+                .filter(|grant| matches!(grant.kind, GranteeKind::Agent))
+                .cloned(),
+        );
+        record.metadata.shared = Self::human_shared(&grants);
         record.grants = grants;
         self.repository
             .save(&record, Some(record.metadata.version))
@@ -583,7 +647,17 @@ impl PasswordService {
         {
             return Err(Error::Forbidden);
         }
-        Ok(record.grants)
+        Ok(record
+            .grants
+            .into_iter()
+            .filter(|grant| !matches!(grant.kind, GranteeKind::Agent))
+            .collect())
+    }
+    /// Whether any human-visible grant exists; Agent grants are not sharing.
+    pub(crate) fn human_shared(grants: &[Grant]) -> bool {
+        grants
+            .iter()
+            .any(|grant| !matches!(grant.kind, GranteeKind::Agent))
     }
     /// List the current team vault folders.
     pub async fn folders(&self, actor: &Actor, team: TeamId) -> Result<Vec<Folder>, Error> {
@@ -637,7 +711,7 @@ impl PasswordService {
         self.repository.move_folder(team, id, parent_id).await
     }
     fn folder_name(name: String) -> Result<String, Error> {
-        if name.trim().is_empty() || name.len() > 200 {
+        if name.trim().is_empty() || name.len() > vault::MAX_FOLDER_NAME_BYTES {
             return Err(Error::Invalid);
         }
         Ok(name)
@@ -658,9 +732,27 @@ impl PasswordService {
         key: Option<SecretString>,
     ) -> Result<(), Error> {
         let _lock = self.admit(actor, team, item).await?;
+        self.configure_totp_under_lease(actor, team, item, key, false, _lock.as_ref())
+            .await
+    }
+    #[tracing::instrument(skip_all,err,name="passwords.totp.configure.commit",fields(team_id=%team.0,item_id=%item.0))]
+    async fn configure_totp_under_lease(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+        key: Option<SecretString>,
+        only_if_missing: bool,
+        _lease: &dyn ItemLock,
+    ) -> Result<(), Error> {
         let record = self.access(actor, team, item, true).await?;
+        if only_if_missing && record.totp_key_id.is_some() {
+            return Ok(());
+        }
         let action = if let Some(key) = key {
-            if key.0.len() > 1024 || !lazy_regex::regex_is_match!(r"^[A-Z2-7]+=*$", &key.0) {
+            if key.0.len() > vault::MAX_TOTP_SEED_BYTES
+                || !lazy_regex::regex_is_match!(r"^[A-Z2-7]+=*$", &key.0)
+            {
                 return Err(Error::Invalid);
             }
             let key_id = TotpKeyId(Uuid::now_v7());
@@ -734,3 +826,5 @@ pub(crate) mod test;
 mod review_test;
 
 mod lifecycle;
+
+mod import;
