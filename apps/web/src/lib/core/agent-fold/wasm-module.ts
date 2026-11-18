@@ -1,13 +1,9 @@
 /**
- * Typed surface of the generated wasm package (`agent_fold`), loaded
- * dynamically so the repo type-checks without the generated artifacts.
- *
- * Build the package with:
- *   just build-wasm agent-fold
- * which runs wasm-pack over crates/folds/agent_fold into
- * src/lib/core/agent-fold/wasm/ (gitignored).
+ * The `agent_fold` wasm module with its values typed by the specta types: the
+ * generated declarations type them `any`.
  */
 
+import agentFoldWasm from 'wasm:agent-fold';
 import type {
   FoldedMessage,
   FoldedStreamEvent,
@@ -42,39 +38,16 @@ export interface FoldStream {
   free: () => void;
 }
 
-interface AgentFoldWasmModule {
-  default: (input?: { module_or_path?: unknown }) => Promise<unknown>;
+export interface AgentFoldWasmModule {
   /** Opens a fold for one session. Throws when the id is not a UUID. */
   FoldStream: new (
     sessionId: string
   ) => FoldStream;
 }
 
-let modulePromise: Promise<AgentFoldWasmModule> | undefined;
-
-/** Shares WASM initialization per worker, allowing failed attempts to retry. */
-export function loadAgentFoldWasm(): Promise<AgentFoldWasmModule> {
-  if (!modulePromise) {
-    modulePromise = (async () => {
-      try {
-        const url = new URL('./wasm/agent_fold.js', import.meta.url).href;
-        const mod = (await import(
-          /* @vite-ignore */ url
-        )) as AgentFoldWasmModule;
-        // Resolve the wasm binary explicitly: vite copies the generated JS as an
-        // opaque asset, so its internal relative `agent_fold_bg.wasm` URL would
-        // 404 in production. This `new URL` pattern is statically analyzable, so
-        // vite emits the binary as an asset and rewrites it.
-        const wasmUrl = new URL('./wasm/agent_fold_bg.wasm', import.meta.url);
-        await mod.default({ module_or_path: wasmUrl });
-        return mod;
-      } catch (error) {
-        // An optional preload can fail while offline. Let the next real load
-        // retry instead of retaining that rejected promise for the whole tab.
-        modulePromise = undefined;
-        throw error;
-      }
-    })();
-  }
-  return modulePromise;
+/** Loads the module once per worker; a failed load, such as an offline preload, is tried again. */
+export async function loadAgentFoldWasm(): Promise<AgentFoldWasmModule> {
+  // Checked against the generated declarations.
+  const fold: AgentFoldWasmModule = await agentFoldWasm.load();
+  return fold;
 }

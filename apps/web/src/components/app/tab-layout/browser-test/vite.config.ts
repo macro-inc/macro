@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import solid from 'vite-plugin-solid';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { wasmModules } from '../../../../../scripts/wasm-modules.ts';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const webDirectory = fileURLToPath(new URL('../../../../../', import.meta.url));
@@ -43,6 +44,7 @@ function standIns(): Plugin {
 export default defineConfig({
   root: directory,
   plugins: [
+    wasmModules(),
     standIns(),
     solid(),
     tsconfigPaths({ projects: [`${webDirectory}/tsconfig.json`] }),

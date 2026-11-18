@@ -13,16 +13,14 @@ import type {
   PeopleSqlResult,
 } from '../people/generated';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
+
 /**
- * Typed surface of the generated wasm package (`cache-wasm`), loaded
- * dynamically so the repo type-checks without the generated artifacts.
- *
- * Build the package with:
- *   just build-wasm cache-wasm
- * which runs wasm-pack over crates/client/cache-wasm into
- * src/lib/graphql-cache/wasm/ (gitignored).
+ * The `cache-wasm` module with its values typed: the generated declarations
+ * type them `any`. The optional members cover compatibility engines.
  */
 
+import cacheWasm from 'wasm:cache-wasm';
+import type { WasmLoadPhase } from '@core/wasm/define-wasm-module';
 import type { EntityResolverWire } from '../exchange/entity-resolvers';
 import type {
   AffectedOperationsResult,
@@ -225,7 +223,6 @@ export interface CacheEngine {
 }
 
 export interface CacheWasmModule {
-  default: (input?: { module_or_path?: unknown }) => Promise<unknown>;
   openCache(scope: string, hotCapacity?: number): Promise<CacheEngine>;
   /**
    * Additive open API with a coarse, payload-free recovery outcome. When
@@ -285,9 +282,6 @@ let modulePromise: Promise<CacheWasmModule> | undefined;
 let compiledEngineExchange: CompiledEngineExchange | undefined;
 let wasmMemory: WebAssembly.Memory | undefined;
 
-/** Returns the combined module's current unshared linear-memory allocation. */
-type EngineExports = { memory?: WebAssembly.Memory };
-
 /** Set before the first load; the worker then reuses and reports through it. */
 export function setCompiledEngineExchange(
   exchange: CompiledEngineExchange
@@ -303,160 +297,139 @@ export function cacheWasmLinearMemoryBytes(): number {
 /** Loads and initializes the wasm module exactly once per worker context. */
 export function loadCacheWasm(): Promise<CacheWasmModule> {
   if (!modulePromise) {
-    const initialization = (async () => {
-      const telemetry = workerCacheTelemetry();
-      const now = (): number => globalThis.performance?.now() ?? Date.now();
-      const url = new URL('../wasm/cache_wasm.js', import.meta.url).href;
-      const mod = (await import(/* @vite-ignore */ url)) as CacheWasmModule;
-      // Resolve the wasm binary explicitly: vite copies the generated JS as
-      // an opaque asset, so its internal relative `cache_wasm_bg.wasm` URL
-      // would 404 in production. This `new URL` pattern is statically
-      // analyzable, so vite emits exactly one lazy hashed binary. Explicit
-      // fetch/compile keeps download, compile, and instantiate separately observable.
-      const wasmUrl = new URL('../wasm/cache_wasm_bg.wasm', import.meta.url);
-      const compileFresh = async (): Promise<WebAssembly.Module> => {
-        const downloadStartedAt = now();
-        let bytes: ArrayBuffer;
-        try {
-          const response = await fetch(wasmUrl);
-          if (!response.ok) {
-            throw new Error(
-              `cache WASM download returned HTTP ${response.status}`
-            );
-          }
-          bytes = await response.arrayBuffer();
-          telemetry.record({
-            name: 'graphql_cache.wasm_download',
-            operationCategory: 'initialization',
-            outcome: 'success',
-            errorCode: 'none',
-            durationMs: now() - downloadStartedAt,
-            bytes: bytes.byteLength,
-          });
-        } catch (error) {
-          telemetry.record({
-            name: 'graphql_cache.wasm_download',
-            operationCategory: 'initialization',
-            outcome: 'error',
-            errorCode: 'wasm-download',
-            durationMs: now() - downloadStartedAt,
-          });
-          throw error;
-        }
-
-        const compileStartedAt = now();
-        try {
-          const compiled = await WebAssembly.compile(bytes);
-          telemetry.record({
-            name: 'graphql_cache.wasm_compile',
-            operationCategory: 'initialization',
-            outcome: 'success',
-            errorCode: 'none',
-            durationMs: now() - compileStartedAt,
-          });
-          return compiled;
-        } catch (error) {
-          telemetry.record({
-            name: 'graphql_cache.wasm_compile',
-            operationCategory: 'initialization',
-            outcome: 'error',
-            errorCode: 'wasm-compile',
-            durationMs: now() - compileStartedAt,
-          });
-          throw error;
-        }
-      };
-
-      const start = (compiled: WebAssembly.Module): Promise<EngineExports> =>
-        mod.default({ module_or_path: compiled }) as Promise<EngineExports>;
-
-      const finish = async (
-        started: Promise<EngineExports>,
-        instantiateStartedAt: number
-      ): Promise<CacheWasmModule> => {
-        try {
-          const exports = await started;
-          if (!(exports.memory instanceof WebAssembly.Memory)) {
-            throw new Error('cache WASM did not export its linear memory');
-          }
-          const { default: schemaSdl } = await import(
-            '../../../../../../static_assets/schema.graphql?raw'
-          );
-          mod.configureCacheSchema(schemaSdl);
-          wasmMemory = exports.memory;
-          mod.setSlowQueryCallback?.(
-            (queryFingerprint, durationMs, success) => {
-              telemetry.record({
-                name: 'graphql_cache.slow_query',
-                operationCategory: 'storage',
-                queryFingerprint,
-                durationMs,
-                outcome: success ? 'success' : 'error',
-              });
-            }
-          );
-          telemetry.record({
-            name: 'graphql_cache.wasm_instantiate',
-            operationCategory: 'initialization',
-            outcome: 'success',
-            errorCode: 'none',
-            durationMs: now() - instantiateStartedAt,
-          });
-          return mod;
-        } catch (error) {
-          telemetry.record({
-            name: 'graphql_cache.wasm_instantiate',
-            operationCategory: 'initialization',
-            outcome: 'error',
-            errorCode: 'wasm-instantiate',
-            durationMs: now() - instantiateStartedAt,
-          });
-          throw error;
-        }
-      };
-
-      // A module the owner page kept from an earlier engine worker skips
-      // the download and arrives with its functions already compiled. It
-      // only counts for the asset this worker would have loaded itself, and
-      // not under the dev server, whose asset URL survives a rebuilt engine.
-      const reuseStartedAt = now();
-      const offered = import.meta.env.DEV
-        ? undefined
-        : await compiledEngineExchange?.offered;
-      if (offered?.assetUrl === wasmUrl.href) {
-        let started: EngineExports | undefined;
-        try {
-          started = await start(offered.module);
-        } catch {
-          // The engine could not start from it: load it the ordinary way.
-        }
-        if (started) {
-          // Nothing was downloaded or compiled; traces tell reuse by this.
-          telemetry.record({
-            name: 'graphql_cache.wasm_download',
-            operationCategory: 'initialization',
-            outcome: 'success',
-            errorCode: 'none',
-            durationMs: now() - reuseStartedAt,
-            bytes: 0,
-          });
-          // Past this point a failure would repeat with a fresh copy of
-          // the same asset, so it is reported rather than retried.
-          return finish(Promise.resolve(started), reuseStartedAt);
-        }
+    // Nothing replaces `modulePromise` while it is in flight.
+    modulePromise = (async () => {
+      try {
+        return await initialize();
+      } catch (error) {
+        modulePromise = undefined;
+        throw error;
       }
-
-      const compiled = await compileFresh();
-      compiledEngineExchange?.report({
-        assetUrl: wasmUrl.href,
-        module: compiled,
-      });
-      return finish(start(compiled), now());
     })();
-    modulePromise = initialization;
-    void initialization.catch(() => {
-      if (modulePromise === initialization) modulePromise = undefined;
-    });
   }
   return modulePromise;
+}
+
+async function initialize(): Promise<CacheWasmModule> {
+  const telemetry = workerCacheTelemetry();
+  const now = (): number => globalThis.performance?.now() ?? Date.now();
+  // The key the owner page keeps a compiled module under.
+  const assetUrl = new URL(cacheWasm.binaryUrl, globalThis.location.href).href;
+
+  // Configures a started instance; reported with its start as one
+  // instantiate phase.
+  const configure = async (
+    mod: CacheWasmModule,
+    instantiateStartedAt: number
+  ): Promise<CacheWasmModule> => {
+    try {
+      const memory = cacheWasm.memory();
+      if (!memory) {
+        throw new Error('cache WASM did not export its linear memory');
+      }
+      const { default: schemaSdl } = await import(
+        '../../../../../../static_assets/schema.graphql?raw'
+      );
+      mod.configureCacheSchema(schemaSdl);
+      wasmMemory = memory;
+      mod.setSlowQueryCallback?.((queryFingerprint, durationMs, success) => {
+        telemetry.record({
+          name: 'graphql_cache.slow_query',
+          operationCategory: 'storage',
+          queryFingerprint,
+          durationMs,
+          outcome: success ? 'success' : 'error',
+        });
+      });
+      telemetry.record({
+        name: 'graphql_cache.wasm_instantiate',
+        operationCategory: 'initialization',
+        outcome: 'success',
+        errorCode: 'none',
+        durationMs: now() - instantiateStartedAt,
+      });
+      return mod;
+    } catch (error) {
+      instantiateFailed(instantiateStartedAt);
+      throw error;
+    }
+  };
+
+  const instantiateFailed = (instantiateStartedAt: number) => {
+    telemetry.record({
+      name: 'graphql_cache.wasm_instantiate',
+      operationCategory: 'initialization',
+      outcome: 'error',
+      errorCode: 'wasm-instantiate',
+      durationMs: now() - instantiateStartedAt,
+    });
+  };
+
+  // A module the owner page kept from an earlier engine worker skips the
+  // download and arrives with its functions already compiled. It only counts
+  // for the asset this worker would have loaded itself, and not under the dev
+  // server, whose asset URL survives a rebuilt engine.
+  const reuseStartedAt = now();
+  const offered = import.meta.env.DEV
+    ? undefined
+    : await compiledEngineExchange?.offered;
+  if (offered?.assetUrl === assetUrl) {
+    let started: CacheWasmModule | undefined;
+    try {
+      started = await cacheWasm.load({ module: offered.module });
+    } catch {
+      // The engine could not start from it: load it the ordinary way.
+    }
+    if (started) {
+      // Nothing was downloaded or compiled; traces tell reuse by this.
+      telemetry.record({
+        name: 'graphql_cache.wasm_download',
+        operationCategory: 'initialization',
+        outcome: 'success',
+        errorCode: 'none',
+        durationMs: now() - reuseStartedAt,
+        bytes: 0,
+      });
+      // Past this point a failure would repeat with a fresh copy of the
+      // same asset, so it is reported rather than retried.
+      return configure(started, reuseStartedAt);
+    }
+  }
+
+  const compiled = await cacheWasm.compiled({
+    onPhase: (phase) => telemetry.record(loadObservation(phase)),
+  });
+  compiledEngineExchange?.report({ assetUrl, module: compiled });
+  const instantiateStartedAt = now();
+  let started: CacheWasmModule;
+  try {
+    // Checked against the generated declarations.
+    started = await cacheWasm.load({ module: compiled });
+  } catch (error) {
+    instantiateFailed(instantiateStartedAt);
+    throw error;
+  }
+  return configure(started, instantiateStartedAt);
+}
+
+/** A shared-loader phase as the cache's own load observation. */
+function loadObservation(phase: WasmLoadPhase) {
+  const succeeded = phase.outcome === 'success';
+  if (phase.phase === 'download') {
+    return {
+      name: 'graphql_cache.wasm_download' as const,
+      operationCategory: 'initialization' as const,
+      outcome: phase.outcome,
+      errorCode: succeeded ? ('none' as const) : ('wasm-download' as const),
+      durationMs: phase.durationMs,
+      ...(phase.bytes === undefined ? {} : { bytes: phase.bytes }),
+    };
+  }
+  return {
+    name: 'graphql_cache.wasm_compile' as const,
+    operationCategory: 'initialization' as const,
+    outcome: phase.outcome,
+    errorCode: succeeded ? ('none' as const) : ('wasm-compile' as const),
+    durationMs: phase.durationMs,
+  };
 }

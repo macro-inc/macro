@@ -10,6 +10,9 @@
  * keeps edits, renders and saves consistent.
  */
 
+import docxEngineWasm from 'wasm:docx-engine';
+import type { DocxDocument } from '@core/wasm/generated/docx-engine';
+import { isWasmTrap } from '@core/wasm/is-wasm-trap';
 import { match } from 'ts-pattern';
 import type { DocxRequest, DocxResponse } from './protocol';
 import type {
@@ -24,12 +27,6 @@ import type {
   Pos,
   StyleInfo,
 } from './types';
-import {
-  discardDocxEngineWasm,
-  isWasmTrap,
-  loadDocxEngineWasm,
-  type WasmDocxDocument,
-} from './wasm-module';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -51,7 +48,7 @@ type Source =
   | { kind: 'v1'; state: string };
 
 interface OpenDocument {
-  doc: WasmDocxDocument;
+  doc: DocxDocument;
   source: Source;
   /** Every change since opening, in order. */
   log: LogEntry[];
@@ -67,7 +64,7 @@ function entryFor(docKey: string): OpenDocument {
   return entry;
 }
 
-function documentFor(docKey: string): WasmDocxDocument {
+function documentFor(docKey: string): DocxDocument {
   return entryFor(docKey).doc;
 }
 
@@ -75,7 +72,7 @@ function documentFor(docKey: string): WasmDocxDocument {
 function record<T>(
   docKey: string,
   entry: LogEntry,
-  run: (doc: WasmDocxDocument) => T
+  run: (doc: DocxDocument) => T
 ): T {
   const open = entryFor(docKey);
   const result = run(open.doc);
@@ -83,9 +80,9 @@ function record<T>(
   return result;
 }
 
-type WasmModule = Awaited<ReturnType<typeof loadDocxEngineWasm>>;
+type DocxEngine = Awaited<ReturnType<typeof docxEngineWasm.load>>;
 
-function openSource(wasm: WasmModule, source: Source): WasmDocxDocument {
+function openSource(wasm: DocxEngine, source: Source): DocxDocument {
   return match(source)
     .with({ kind: 'bytes' }, ({ bytes }) => new wasm.DocxDocument(bytes))
     .with({ kind: 'collab' }, ({ state, seed }) =>
@@ -103,8 +100,8 @@ function openSource(wasm: WasmModule, source: Source): WasmDocxDocument {
  * and change log, so no edit is lost.
  */
 async function recover() {
-  discardDocxEngineWasm();
-  const wasm = await loadDocxEngineWasm();
+  docxEngineWasm.discard();
+  const wasm = await docxEngineWasm.load();
   for (const [key, open] of [...documents]) {
     try {
       const doc = openSource(wasm, open.source);
@@ -161,7 +158,7 @@ function edit(id: number, json: string | undefined): Served {
   ];
 }
 
-function opened(id: number, doc: WasmDocxDocument): Served {
+function opened(id: number, doc: DocxDocument): Served {
   return [
     {
       id,
@@ -174,13 +171,13 @@ function opened(id: number, doc: WasmDocxDocument): Served {
   ];
 }
 
-function install(docKey: string, doc: WasmDocxDocument, source: Source) {
+function install(docKey: string, doc: DocxDocument, source: Source) {
   documents.get(docKey)?.doc.free();
   documents.set(docKey, { doc, source, log: [] });
 }
 
 async function serve(request: DocxRequest): Promise<Served> {
-  const wasm = await loadDocxEngineWasm();
+  const wasm = await docxEngineWasm.load();
   const { id } = request;
   return match(request)
     .with({ kind: 'open' }, ({ docKey, bytes }): Served => {

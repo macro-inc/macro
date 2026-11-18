@@ -8,8 +8,8 @@
  * memory never shrinks while a worker lives).
  */
 
+import figEngineWasm from 'wasm:fig-engine';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { compiledFigModule } from './compiled-module';
 import type { CollectionInfo, DesignInfo, StyleInfo } from './design-types';
 import type {
   Exportable,
@@ -194,7 +194,7 @@ export class FigEngine {
   static async blank(name: string): Promise<Uint8Array<ArrayBuffer>> {
     const worker = new EngineWorker(() => {});
     try {
-      const module = await compiledFigModule();
+      const module = await figEngineWasm.compiled();
       const r = await worker.request({ kind: 'blank', name, module });
       if (r.kind !== 'saved') throw new Error('unexpected response');
       return new Uint8Array(r.bytes);
@@ -211,7 +211,7 @@ export class FigEngine {
     let engine: FigEngine | undefined;
     const primary = new EngineWorker((e) => engine?.onFailure?.(e));
     try {
-      const module = await compiledFigModule();
+      const module = await figEngineWasm.compiled();
       const copy = bytes.slice(0);
       const response = await primary.request(
         { kind: 'open', bytes: copy, module },

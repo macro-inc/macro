@@ -5,6 +5,7 @@ import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import wasm from 'vite-plugin-wasm';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { wasmModules } from '../../../../scripts/wasm-modules.ts';
 import { shellStubs } from './stub-plugin';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
@@ -96,6 +97,7 @@ export default defineConfig({
       stubs: STUBS,
       emptyComponents: EMPTY_COMPONENTS,
     }),
+    wasmModules(),
     tailwindcss(),
     wasm(),
     solid(),

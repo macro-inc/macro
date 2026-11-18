@@ -13,6 +13,7 @@ import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { configDefaults, defineConfig } from 'vitest/config';
+import { wasmModules } from './scripts/wasm-modules.ts';
 
 const MODULE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -55,6 +56,7 @@ function moduleCachePath(): string {
 
 export default defineConfig({
   plugins: [
+    wasmModules(),
     tsconfigPaths(),
     solidPlugin(),
     solidSvg({ defaultAsComponent: true }),
@@ -126,7 +128,7 @@ export default defineConfig({
         extends: false,
         // Resolve solid-js to its reactive browser build (the default
         // server-side build is inert), needed by the solid/ bindings.
-        plugins: [tsconfigPaths(), solidPlugin()],
+        plugins: [wasmModules(), tsconfigPaths(), solidPlugin()],
         ssr: {
           resolve: {
             conditions: ['browser', 'development'],
@@ -140,7 +142,7 @@ export default defineConfig({
       },
       {
         extends: false,
-        plugins: [tsconfigPaths(), solidPlugin()],
+        plugins: [wasmModules(), tsconfigPaths(), solidPlugin()],
         ssr: {
           resolve: {
             conditions: ['browser', 'development'],
@@ -154,6 +156,7 @@ export default defineConfig({
       },
       {
         extends: false,
+        plugins: [wasmModules()],
         test: {
           include: ['scripts/**/*.{test,spec}.{ts,tsx}'],
           name: 'scripts',
@@ -179,7 +182,7 @@ export default defineConfig({
       },
       {
         extends: false,
-        plugins: [tsconfigPaths()],
+        plugins: [wasmModules(), tsconfigPaths()],
         test: {
           environment: 'jsdom',
           globals: true,

@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { wasmModules } from '../../../../../../scripts/wasm-modules.ts';
 
 const DIRECTORY = fileURLToPath(new URL('.', import.meta.url));
 const WEB = fileURLToPath(new URL('../../../../../../', import.meta.url));
@@ -10,6 +11,7 @@ const RUNTIME = fileURLToPath(new URL('./runtime.ts', import.meta.url));
 export default defineConfig({
   root: DIRECTORY,
   plugins: [
+    wasmModules(),
     {
       name: 'mail-flicker-composition',
       enforce: 'pre',
