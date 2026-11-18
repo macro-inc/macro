@@ -25,6 +25,7 @@
 #![allow(clippy::enum_variant_names)]
 
 mod agent_session;
+mod backlog;
 mod calendar_event;
 mod call;
 mod channel;
@@ -32,7 +33,9 @@ mod chat;
 mod context;
 mod document;
 mod email;
+mod entity_type;
 mod message;
+mod metrics;
 mod offsets;
 mod project;
 mod property;
@@ -70,12 +73,13 @@ use rdkafka::{
     message::{BorrowedMessage, Message as _},
 };
 use rootcause::prelude::{Report, ResultExt as _};
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{sync::mpsc, task::JoinHandle, time::MissedTickBehavior};
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 use tracing::{Instrument as _, field};
 use uuid::Uuid;
 
 use self::{
+    backlog::{BacklogSampler, SAMPLE_INTERVAL},
     calendar_event::process_calendar_event,
     call::{describe_call_event, process_call_event},
     channel::{describe_channel_event, process_channel_event},
@@ -88,7 +92,7 @@ use self::{
     property::{describe_property_event, process_property_event},
 };
 
-pub(crate) use self::context::KafkaProcessingContext;
+pub(crate) use self::{context::KafkaProcessingContext, metrics::IndexMetrics};
 
 /// Consumer group used for live search-index event offsets.
 pub(crate) struct SearchProcessingConsumerGroup;
@@ -338,6 +342,7 @@ impl PendingRereads {
 struct WorkerPool {
     senders: Vec<mpsc::Sender<ReceivedEvent>>,
     pending_rereads: Arc<PendingRereads>,
+    metrics: IndexMetrics,
 }
 
 impl WorkerPool {
@@ -345,6 +350,7 @@ impl WorkerPool {
     fn new(
         senders: Vec<mpsc::Sender<ReceivedEvent>>,
         pending_rereads: Arc<PendingRereads>,
+        metrics: IndexMetrics,
     ) -> Self {
         assert!(
             !senders.is_empty(),
@@ -353,6 +359,7 @@ impl WorkerPool {
         Self {
             senders,
             pending_rereads,
+            metrics,
         }
     }
 
@@ -379,7 +386,10 @@ impl WorkerPool {
                 )
             })
             .unzip();
-        (Self::new(senders, pending_rereads), workers)
+        (
+            Self::new(senders, pending_rereads, context.metrics.clone()),
+            workers,
+        )
     }
 
     fn shard_index(&self, key: &str) -> usize {
@@ -396,7 +406,12 @@ impl WorkerPool {
         // Before any reread claim: an event that changes nothing must not hold
         // one and absorb a later event that does.
         if !changes_search_index(&event.event) {
-            record_outcome(&processing_span(&event), EventOutcome::NoIndexChange);
+            record_outcome(
+                &self.metrics,
+                &processing_span(&event),
+                &event,
+                EventOutcome::NoIndexChange,
+            );
             return HandoffOutcome::NoIndexChange;
         }
 
@@ -411,7 +426,12 @@ impl WorkerPool {
         if let Some(key) = &reread_key
             && !self.pending_rereads.claim(key.clone())
         {
-            record_outcome(&processing_span(&event), EventOutcome::Coalesced);
+            record_outcome(
+                &self.metrics,
+                &processing_span(&event),
+                &event,
+                EventOutcome::Coalesced,
+            );
             return HandoffOutcome::Coalesced;
         }
 
@@ -584,18 +604,28 @@ fn processing_span(received: &ReceivedEvent) -> tracing::Span {
     )
 }
 
-fn record_outcome(span: &tracing::Span, outcome: EventOutcome) {
+/// Records how `received` ended on its `process_event` span and in `metrics`.
+fn record_outcome(
+    metrics: &IndexMetrics,
+    span: &tracing::Span,
+    received: &ReceivedEvent,
+    outcome: EventOutcome,
+) {
     span.record("outcome", <&'static str>::from(outcome));
     if outcome == EventOutcome::Dropped {
         span.record("otel.status_code", "ERROR");
     }
+    metrics.record_processed(received, outcome);
 }
 
 /// Runs one record's processing inside its spans and records the outcome. A
 /// dropped event also fails the record's span, the consumer's top-level span,
 /// so drops count in the service's error rate.
-async fn process_received<'a, F, Fut>(received: &'a ReceivedEvent, process: F)
-where
+async fn process_received<'a, F, Fut>(
+    metrics: &IndexMetrics,
+    received: &'a ReceivedEvent,
+    process: F,
+) where
     F: FnOnce(&'a ReceivedEvent) -> Fut,
     Fut: Future<Output = EventOutcome>,
 {
@@ -606,7 +636,7 @@ where
         .instrument(span.clone())
         .instrument(received.span.clone())
         .await;
-    record_outcome(&span, outcome);
+    record_outcome(metrics, &span, received, outcome);
     if outcome == EventOutcome::Dropped {
         record_span_error(&received.span, "event dropped after its processing retries");
     }
@@ -682,7 +712,7 @@ async fn run_event_worker(
 ) {
     let context = &context;
     drain_worker_events(events, pending_rereads, reports, |received| async move {
-        process_received(&received, |received| {
+        process_received(&context.metrics, &received, |received| {
             process_event(
                 context,
                 &received.event,
@@ -766,13 +796,17 @@ async fn poll_events(
     shutdown: impl Future<Output = ()> + Send,
 ) -> Result<(), Report> {
     let mut shutdown = std::pin::pin!(shutdown);
-    loop {
+    let mut sampler = BacklogSampler::new(workers.metrics.pending_ages().clone());
+    let mut sample_tick = tokio::time::interval(SAMPLE_INTERVAL);
+    sample_tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    'poll: loop {
         tokio::select! {
             biased;
             _ = &mut shutdown => {
                 tracing::info!("search processing event consumer shutting down");
                 break;
             }
+            _ = sample_tick.tick() => sampler.sample_consumer(consumer, ledger),
             Some(report) = reports.recv() => {
                 ledger.report(report);
                 while let Ok(report) = reports.try_recv() {
@@ -803,18 +837,26 @@ async fn poll_events(
                     }
                 });
                 if let Some(position) = position {
-                    ledger.received(position);
+                    ledger.received(position, kafka_message.timestamp().to_millis());
                 }
 
                 // A full worker channel holds the handoff. Shutdown does not
                 // wait for it: the record was never committed and stays open.
-                let outcome = tokio::select! {
-                    biased;
-                    _ = &mut shutdown => {
-                        tracing::info!("search processing event consumer shutting down");
-                        break;
+                // Meanwhile the ledger and the pending ages stay current, since
+                // the wait is a stall.
+                let mut handoff =
+                    std::pin::pin!(workers.handoff(decoded).instrument(span.clone()));
+                let outcome = loop {
+                    tokio::select! {
+                        biased;
+                        _ = &mut shutdown => {
+                            tracing::info!("search processing event consumer shutting down");
+                            break 'poll;
+                        }
+                        outcome = &mut handoff => break outcome,
+                        _ = sample_tick.tick() => sampler.sample_consumer(consumer, ledger),
+                        Some(report) = reports.recv() => ledger.report(report),
                     }
-                    outcome = workers.handoff(decoded).instrument(span.clone()) => outcome,
                 };
                 if let Some(position) = position {
                     track_handoff(ledger, position, &outcome);
@@ -825,6 +867,9 @@ async fn poll_events(
                     | HandoffOutcome::NoIndexChange => {}
                     HandoffOutcome::MalformedRecord(error) => {
                         record_span_error(&span, &error);
+                        workers
+                            .metrics
+                            .record_undecodable(rdkafka::Message::topic(kafka_message));
                         tracing::error!(
                             parent: &span,
                             error = %error,

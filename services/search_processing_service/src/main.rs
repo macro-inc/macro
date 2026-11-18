@@ -2,7 +2,7 @@
 use std::{sync::Arc, time::Duration};
 
 #[cfg(feature = "processing")]
-use crate::inbound::kafka_consumer::{KafkaProcessingContext, run_event_consumer};
+use crate::inbound::kafka_consumer::{IndexMetrics, KafkaProcessingContext, run_event_consumer};
 use crate::{
     api::context::{ApiContext, AuthorizationService},
     config::DatabaseUrlReadonly,
@@ -328,6 +328,7 @@ async fn main() -> anyhow::Result<()> {
                 mailbox_delete_tracker.clone(),
                 shutdown_token.clone(),
             ),
+            metrics: IndexMetrics::global(),
         };
         tokio::spawn(supervise_event_consumer(
             config.kafka_brokers.as_ref().to_owned(),

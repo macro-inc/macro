@@ -124,10 +124,19 @@ fn channel_sender() -> ChannelSender<'static> {
     ChannelSender::try_from("macro|owner@example.com".to_string()).expect("valid channel sender")
 }
 
+/// Instruments whose measurements go nowhere.
+fn unread_metrics() -> IndexMetrics {
+    use opentelemetry::metrics::MeterProvider as _;
+    IndexMetrics::new(&opentelemetry_sdk::metrics::SdkMeterProvider::default().meter("test"))
+}
+
 /// Builds a [`WorkerPool`] whose worker channels are captured as receivers.
 fn test_pool(workers: usize, capacity: usize) -> (WorkerPool, Vec<mpsc::Receiver<ReceivedEvent>>) {
     let (senders, receivers) = (0..workers).map(|_| mpsc::channel(capacity)).unzip();
-    (WorkerPool::new(senders, Arc::default()), receivers)
+    (
+        WorkerPool::new(senders, Arc::default(), unread_metrics()),
+        receivers,
+    )
 }
 
 fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEvent {
@@ -2500,7 +2509,7 @@ async fn agent_session_flood_does_not_delay_email_events_on_other_partitions() {
 async fn hint_arriving_mid_reread_queues_the_next_reread() {
     let (sender, receiver) = mpsc::channel(WORKER_CHANNEL_CAPACITY);
     let pending_rereads = Arc::new(PendingRereads::default());
-    let pool = WorkerPool::new(vec![sender], Arc::clone(&pending_rereads));
+    let pool = WorkerPool::new(vec![sender], Arc::clone(&pending_rereads), unread_metrics());
     let (started_sender, mut started) = mpsc::channel(4);
     let resume = Arc::new(tokio::sync::Notify::new());
     let worker_resume = Arc::clone(&resume);
@@ -2983,7 +2992,7 @@ async fn record_span_covers_processing_and_fails_with_a_dropped_event() {
         async {}.instrument(span.clone()).await;
         drop(span);
 
-        process_received(&received, |_| async {
+        process_received(&unread_metrics(), &received, |_| async {
             tokio::time::sleep(Duration::from_millis(20)).await;
             EventOutcome::Dropped
         })
@@ -3052,7 +3061,7 @@ fn a_record_keeps_one_ledger_key_from_receipt_to_completion() {
 fn a_handed_off_record_stays_queued_and_a_skipped_one_finishes() {
     let mut ledger = OffsetLedger::default();
     for offset in 1..=4 {
-        ledger.received(email_position(offset));
+        ledger.received(email_position(offset), None);
     }
 
     track_handoff::<EventBrokerError>(&mut ledger, email_position(1), &HandoffOutcome::HandedOff);
@@ -3067,7 +3076,7 @@ fn a_handed_off_record_stays_queued_and_a_skipped_one_finishes() {
         email_position(4),
         &HandoffOutcome::WorkerClosed,
     );
-    ledger.received(email_position(5));
+    ledger.received(email_position(5), None);
     track_handoff::<EventBrokerError>(
         &mut ledger,
         email_position(5),
@@ -3113,7 +3122,7 @@ async fn a_worker_reports_a_record_as_started_then_done() {
 async fn a_stop_rewinds_to_queued_records_and_not_to_one_a_worker_was_stuck_on() {
     let mut ledger = OffsetLedger::default();
     for offset in [10, 11, 12] {
-        ledger.received(email_position(offset));
+        ledger.received(email_position(offset), None);
     }
     let (report_sender, mut reports) = mpsc::unbounded_channel();
     let (aborted_sender, aborted) = tokio::sync::oneshot::channel::<()>();
@@ -3147,7 +3156,7 @@ async fn a_stop_rewinds_to_queued_records_and_not_to_one_a_worker_was_stuck_on()
 #[tokio::test(start_paused = true)]
 async fn after_an_error_the_drain_waits_for_the_workers_without_a_deadline() {
     let mut ledger = OffsetLedger::default();
-    ledger.received(email_position(3));
+    ledger.received(email_position(3), None);
     let (report_sender, mut reports) = mpsc::unbounded_channel();
     let worker = tokio::spawn(async move {
         tokio::time::sleep(SHUTDOWN_DRAIN_DEADLINE * 4).await;
@@ -3178,4 +3187,105 @@ async fn a_worker_that_panicked_before_the_stop_is_reported() {
 
     assert!(drained.panic.is_some_and(|error| error.is_panic()));
     assert_eq!(drained.aborted, 1);
+}
+
+#[tokio::test]
+async fn processing_records_its_lag_and_counts_a_drop() {
+    use super::metrics::{
+        DROPPED, LAG,
+        test::{Recorded, tags},
+    };
+
+    let recorded = Recorded::new();
+    let mut received = received_thread_backfilled_event(EMAIL_THREAD_ID, 7);
+    received.produced_at_ms = Some(Utc::now().timestamp_millis() - 90_000);
+
+    process_received(&recorded.metrics, &received, |_| async {
+        EventOutcome::Dropped
+    })
+    .await;
+
+    let lag = recorded.points(LAG);
+    let [lag] = lag.as_slice() else {
+        panic!("one lag point: {lag:?}");
+    };
+    assert_eq!(
+        lag.tags,
+        tags(&[
+            ("entity_type", "email"),
+            ("event_type", "email.thread_backfilled"),
+            ("outcome", "dropped"),
+        ])
+    );
+    assert_eq!(lag.value, 1);
+    assert!(
+        lag.min.is_some_and(|lag_ms| lag_ms >= 90_000),
+        "lag runs from the broker timestamp to the end of processing: {lag:?}"
+    );
+    let dropped = recorded.points(DROPPED);
+    assert_eq!(
+        dropped
+            .iter()
+            .map(|point| (point.tags.clone(), point.value))
+            .collect::<Vec<_>>(),
+        [(
+            tags(&[
+                ("entity_type", "email"),
+                ("event_type", "email.thread_backfilled")
+            ]),
+            1
+        )]
+    );
+}
+
+#[tokio::test]
+async fn an_indexed_event_is_not_counted_as_dropped() {
+    use super::metrics::{DROPPED, LAG, test::Recorded};
+
+    let recorded = Recorded::new();
+    let mut received = received_thread_backfilled_event(EMAIL_THREAD_ID, 7);
+    received.produced_at_ms = Some(Utc::now().timestamp_millis());
+
+    process_received(&recorded.metrics, &received, |_| async {
+        EventOutcome::Indexed
+    })
+    .await;
+
+    assert_eq!(
+        recorded
+            .points(LAG)
+            .iter()
+            .map(|point| point.tags["outcome"].as_str())
+            .collect::<Vec<_>>(),
+        ["indexed"]
+    );
+    assert!(recorded.points(DROPPED).is_empty());
+}
+
+#[tokio::test]
+async fn an_event_committed_at_handoff_records_its_lag_there() {
+    use super::metrics::{LAG, test::Recorded};
+
+    let recorded = Recorded::new();
+    let (sender, _receiver) = mpsc::channel(4);
+    let pool = WorkerPool::new(vec![sender], Arc::default(), recorded.metrics.clone());
+    for offset in [1, 2] {
+        let mut received = received_agent_session_event(AGENT_SESSION_ID, offset);
+        received.produced_at_ms = Some(Utc::now().timestamp_millis());
+        pool.handoff(Ok::<_, EventBrokerError>(received)).await;
+    }
+
+    assert_eq!(
+        recorded
+            .points(LAG)
+            .iter()
+            .map(|point| (
+                point.tags["entity_type"].as_str(),
+                point.tags["outcome"].as_str(),
+                point.value
+            ))
+            .collect::<Vec<_>>(),
+        [("agent_session", "coalesced", 1)],
+        "the first reread is handed off; the second is coalesced into it"
+    );
 }

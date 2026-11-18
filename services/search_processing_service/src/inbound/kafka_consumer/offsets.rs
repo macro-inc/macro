@@ -38,6 +38,15 @@ pub(super) enum WorkerReport {
 struct OpenRecord {
     deliveries: u32,
     started: u32,
+    /// When the broker recorded it, in Unix milliseconds, if it did.
+    produced_at_ms: Option<i64>,
+}
+
+/// A partition's lowest open record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct OldestOpen {
+    pub(super) offset: i64,
+    pub(super) produced_at_ms: Option<i64>,
 }
 
 /// Unfinished records per partition. A partition leaves the ledger once its
@@ -53,13 +62,15 @@ pub(super) struct OffsetLedger {
 impl OffsetLedger {
     /// Marks a record taken; it stays open until a worker finishes it or its
     /// handoff skips it.
-    pub(super) fn received(&mut self, position: RecordPosition) {
-        self.open
+    pub(super) fn received(&mut self, position: RecordPosition, produced_at_ms: Option<i64>) {
+        let record = self
+            .open
             .entry((position.topic, position.partition))
             .or_default()
             .entry(position.offset)
-            .or_default()
-            .deliveries += 1;
+            .or_default();
+        record.deliveries += 1;
+        record.produced_at_ms = record.produced_at_ms.or(produced_at_ms);
     }
 
     /// Applies a worker's report.
@@ -139,6 +150,15 @@ impl OffsetLedger {
             .collect();
         points.sort_by_key(|point| (point.topic, point.partition));
         points
+    }
+
+    /// The partition's lowest record not finished yet, started or not.
+    pub(super) fn oldest_open(&self, topic: &'static str, partition: i32) -> Option<OldestOpen> {
+        let (&offset, record) = self.open.get(&(topic, partition))?.first_key_value()?;
+        Some(OldestOpen {
+            offset,
+            produced_at_ms: record.produced_at_ms,
+        })
     }
 
     /// Records a worker started and did not finish: a stop does not
