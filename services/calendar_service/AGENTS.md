@@ -93,6 +93,11 @@ gateway `/calendar` prefix.
   shows teammates nothing, so their inbox's changes refresh none of that
   viewer's teammates; a sharing change reaches every teammate whatever the
   new setting is.
+- A Google sync nudges viewers only when it changed something
+  (`GoogleBackfillRunReport::changed`): an upsert that created or rewrote a
+  row, a source retired, or a possible out-of-office change. The sync that
+  reads back a write made through Macro finds the row as the write left it
+  and stays quiet, since the write already told everyone.
 
 ## Related
 
