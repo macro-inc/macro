@@ -52,9 +52,11 @@ async fn matching_thread_fetches_stay_bounded_with_stale_statistics(
     let mut params = params(SimpleSortMethod::UpdatedAt);
     params.link_ids = vec![link];
     params.resolved = ResolvedFilters::empty().with_contributing_links(vec![link]);
-    params.cursor_timestamp =
-        Some(Utc.with_ymd_and_hms(2026, 2, 1, 0, 0, 0).unwrap() - chrono::Duration::minutes(5100));
-    params.cursor_id_str = Some(Uuid::nil().to_string());
+    let cursor_timestamp =
+        Utc.with_ymd_and_hms(2026, 2, 1, 0, 0, 0).unwrap() - chrono::Duration::minutes(5100);
+    let cursor_id = Uuid::nil();
+    params.cursor_timestamp = Some(cursor_timestamp);
+    params.cursor_id_str = Some(cursor_id.to_string());
     let read = team_read(&view, &filter, params).unwrap();
     for fresh in [false, true] {
         if fresh {
@@ -62,59 +64,104 @@ async fn matching_thread_fetches_stay_bounded_with_stale_statistics(
                 .execute(&mut *connection)
                 .await?;
         }
-        for mode in ["force_custom_plan", "force_generic_plan"] {
-            sqlx::query!("SELECT set_config('plan_cache_mode', $1, false)", mode)
+        for stream in [Stream::Superset, Stream::SparseSuperset, Stream::Selection] {
+            let mut builder = QueryBuilder::<Postgres>::new(
+                "WITH matching_threads AS MATERIALIZED (SELECT unnest(",
+            );
+            builder.push_bind(matches.clone());
+            builder.push("::uuid[]) AS thread_id) ");
+            read.push_stream(&mut builder, stream, get_sort_timestamp_field(&view));
+            sqlx::raw_sql(&format!(
+                "PREPARE matching_thread_stream(uuid[], uuid[], uuid, timestamptz, text) AS {}",
+                builder.sql()
+            ))
+            .execute(&mut *connection)
+            .await?;
+
+            // EXECUTE cannot bind its arguments. Only typed fixture UUIDs and
+            // a timestamp enter these literals, in the builder's bind order.
+            let ids_literal = matches
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(",");
+            let execute = format!(
+                "EXECUTE matching_thread_stream('{{{ids_literal}}}', '{{{link}}}', \
+                 '{link}', '{}', '{cursor_id}')",
+                cursor_timestamp.to_rfc3339(),
+            );
+            for mode in ["force_custom_plan", "force_generic_plan"] {
+                sqlx::query!("SELECT set_config('plan_cache_mode', $1, false)", mode)
+                    .fetch_one(&mut *connection)
+                    .await?;
+                let ids: Vec<Uuid> = sqlx::query_scalar(&execute)
+                    .fetch_all(&mut *connection)
+                    .await?;
+                assert_eq!(ids, expected, "{fresh} {mode} {stream:?}");
+
+                // Explain the prepared SELECT itself: preparing an EXPLAIN
+                // statement does not exercise its SELECT's generic plan.
+                let plan: serde_json::Value = sqlx::query_scalar(&format!(
+                    "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {execute}"
+                ))
                 .fetch_one(&mut *connection)
                 .await?;
-            for stream in [Stream::Superset, Stream::SparseSuperset, Stream::Selection] {
-                for explain in [false, true] {
-                    let mut builder = QueryBuilder::<Postgres>::new(if explain {
-                        "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "
-                    } else {
-                        ""
-                    });
-                    builder.push("WITH matching_threads AS MATERIALIZED (SELECT unnest(");
-                    builder.push_bind(matches.clone());
-                    builder.push("::uuid[]) AS thread_id) ");
-                    read.push_stream(&mut builder, stream, get_sort_timestamp_field(&view));
-                    if explain {
-                        let plan: serde_json::Value = builder
-                            .build_query_scalar()
-                            .fetch_one(&mut *connection)
-                            .await?;
-                        let visited = thread_rows_visited(&plan[0]["Plan"]);
-                        assert!(
-                            visited > 0.0 && visited <= matches.len() as f64,
-                            "{fresh} {mode} {stream:?}: visited {visited} rows for {} IDs: {plan}",
-                            matches.len(),
-                        );
-                    } else {
-                        let ids: Vec<Uuid> = builder
-                            .build_query_scalar()
-                            .fetch_all(&mut *connection)
-                            .await?;
-                        assert_eq!(ids, expected, "{fresh} {mode} {stream:?}");
-                    }
+                let scans = thread_scans(&plan[0]["Plan"]);
+                assert_eq!(scans.len(), 1, "{fresh} {mode} {stream:?}: {plan}");
+                let scan = scans[0];
+                assert!(
+                    matches!(
+                        scan["Node Type"].as_str(),
+                        Some("Index Scan" | "Index Only Scan")
+                    ),
+                    "{fresh} {mode} {stream:?}: {plan}",
+                );
+                assert_eq!(scan["Index Name"], "email_threads_pkey", "{plan}");
+                assert!(
+                    matches!(
+                        scan["Index Cond"].as_str(),
+                        Some("(id = matched.thread_id)" | "(id = matching_threads.thread_id)")
+                    ),
+                    "{plan}",
+                );
+                let distinct_ids = matches
+                    .iter()
+                    .collect::<std::collections::HashSet<_>>()
+                    .len();
+                // The unique-key equality can fetch at most one row per loop,
+                // including a missing ID. EXPLAIN's row counters are rounded.
+                assert!(
+                    scan["Actual Loops"].as_u64().unwrap() <= distinct_ids as u64,
+                    "{fresh} {mode} {stream:?}: {plan}",
+                );
+                let plans = sqlx::query!(
+                    "SELECT generic_plans, custom_plans FROM pg_prepared_statements \
+                     WHERE name = 'matching_thread_stream'"
+                )
+                .fetch_one(&mut *connection)
+                .await?;
+                if mode == "force_custom_plan" {
+                    assert!(plans.custom_plans.unwrap() >= 2);
+                    assert_eq!(plans.generic_plans, Some(0));
+                } else {
+                    assert!(plans.generic_plans.unwrap() >= 2);
                 }
             }
+            sqlx::raw_sql("DEALLOCATE matching_thread_stream")
+                .execute(&mut *connection)
+                .await?;
         }
     }
     Ok(())
 }
 
-fn thread_rows_visited(plan: &serde_json::Value) -> f64 {
-    let own = if plan["Relation Name"] == "email_threads" {
-        (plan["Actual Rows"].as_f64().unwrap_or_default()
-            + plan["Rows Removed by Filter"].as_f64().unwrap_or_default()
-            + plan["Rows Removed by Index Recheck"]
-                .as_f64()
-                .unwrap_or_default())
-            * plan["Actual Loops"].as_f64().unwrap_or_default()
-    } else {
-        0.0
-    };
-    own + plan["Plans"]
-        .as_array()
-        .map(|children| children.iter().map(thread_rows_visited).sum::<f64>())
-        .unwrap_or_default()
+fn thread_scans(plan: &serde_json::Value) -> Vec<&serde_json::Value> {
+    let mut scans = Vec::new();
+    if plan["Relation Name"] == "email_threads" && plan["Actual Loops"].as_u64().unwrap() > 0 {
+        scans.push(plan);
+    }
+    if let Some(children) = plan["Plans"].as_array() {
+        scans.extend(children.iter().flat_map(thread_scans));
+    }
+    scans
 }
