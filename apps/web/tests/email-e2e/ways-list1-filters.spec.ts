@@ -115,12 +115,23 @@ for (const provider of PROVIDERS) {
       await deliverInvitation(mailbox, 'Invitation: Planning review');
       const plain = (await mailbox.synced('Plain')).id;
       const invite = (await mailbox.synced('Invitation: Planning review')).id;
+      await inFocus(mailbox, plain, 'none');
+      await inFocus(mailbox, invite, 'none');
 
       await mailbox.open();
       await expectRows(page, [plain, invite]);
 
       await pickFilter(page, 'Has', 'menuitemcheckbox', 'Calendar invite');
       did('AL-022');
+      await expectRows(page, [invite]);
+      await clearFilters(page);
+      await expectRows(page, [plain, invite]);
+
+      const views = page.getByRole('radiogroup', { name: 'Inbox view' });
+      await views.getByText('Focus', { exact: true }).click();
+      await expect(views.getByRole('radio', { name: 'Focus' })).toBeChecked();
+      await expectRows(page, [plain, invite]);
+      await pickFilter(page, 'Has', 'menuitemcheckbox', 'Calendar invite');
       await expectRows(page, [invite]);
       await clearFilters(page);
       await expectRows(page, [plain, invite]);
