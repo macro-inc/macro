@@ -38,6 +38,8 @@ async function quietly(work: Promise<unknown>) {
 
 export type WorldEvent =
   | { kind: 'toast'; at: number; message: string }
+  /** A composer notice that says what happened, not that something failed. */
+  | { kind: 'notice'; at: number; message: string }
   | { kind: 'banner'; at: number; draftId?: string; state: DraftSyncViewState }
   | { kind: 'sync-failed'; at: number; attributes: Record<string, unknown> }
   | { kind: 'error'; at: number; message: string };
@@ -208,8 +210,14 @@ async function boot(world: WorldCore) {
   const { createDraftSession } = await import(
     '@app/features/email-compose/primitives/draft-session'
   );
-  const { createDraftPersistence, deleteDraftForDiscard } = await import(
-    '@app/features/email-compose/primitives/draft-persistence'
+  const {
+    createAlreadySentSettlement,
+    createDraftPersistence,
+    deleteDraftForDiscard,
+    isAlreadySentRejection,
+  } = await import('@app/features/email-compose/primitives/draft-persistence');
+  const { observeDraftIdentity } = await import(
+    '@app/features/email-compose/primitives/draft-identity'
   );
   const { createDraftAutosave } = await import(
     '@app/features/email-compose/primitives/draft-autosave'
@@ -427,6 +435,51 @@ async function boot(world: WorldCore) {
           draft_generation: serverGeneration,
         },
       });
+      const notices = {
+        feedback: {
+          success: () => undefined,
+          failure: (message: string) => {
+            failure(message);
+            return undefined;
+          },
+          alert: (message: string) => {
+            record({ kind: 'notice', at: Date.now(), message });
+            return undefined;
+          },
+          dismiss: () => {},
+        },
+        reportError: (error: unknown) =>
+          record({
+            kind: 'error',
+            at: Date.now(),
+            message: `composer: ${error instanceof Error ? error.message : String(error)}`,
+          }),
+      };
+      // The server refused a save because the draft was sent elsewhere: the
+      // composers keep the text it lacks as a new draft, or drop the draft.
+      const settleAlreadySent = createAlreadySentSettlement({
+        session,
+        read: undefined,
+        notices,
+        settle: (sent) => {
+          const unsavedEdits = persistence.unsavedEdits(edit, sent.sentCopy);
+          serverGeneration = 0;
+          session.dispatch({ type: 'reset' });
+          if (unsavedEdits > 0) {
+            notices.feedback.alert(
+              'This email was already sent. Your newer text was kept as a new draft and was not sent.'
+            );
+            fireAndForget(quietly(autosave.save()), 'draft-sync-world');
+            return true;
+          }
+          text = '';
+          return false;
+        },
+      });
+      const onAlreadySent = () => {
+        autosave.cancel();
+        fireAndForget(settleAlreadySent(), 'draft-sync-world');
+      };
       const persistence = createDraftPersistence({
         session,
         draftGeneration: () => serverGeneration,
@@ -434,7 +487,14 @@ async function boot(world: WorldCore) {
         attachments: { upload: async () => {} },
         mintThreadHandle: !seed.reply,
         localDraft: seed.draft?.local,
-        onAlreadySent: () => {},
+        onAlreadySent,
+      });
+      observeDraftIdentity({
+        storage: storageCapabilities as EmailDraftStorage,
+        session,
+        notices,
+        recover: () => {},
+        onAlreadySent,
       });
       const autosave = createDraftAutosave({
         capture: snapshot,
@@ -447,9 +507,11 @@ async function boot(world: WorldCore) {
             attachments: [],
             edit: captured.edit,
           }),
-        paused: () => busy,
+        paused: () => busy || session.alreadySent(),
         // The composers report these; a rejection also latches the session.
+        // They settle an already-sent refusal instead of reporting it.
         onError: (error) =>
+          !isAlreadySentRejection(error) &&
           record({
             kind: 'error',
             at: Date.now(),
