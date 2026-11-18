@@ -1,4 +1,5 @@
 // Usage:
+//
 // bun run scripts/generate-api-schema.ts <service-name> // generate for specific service
 // bun run scripts/generate-api-schema.ts               // generate for all services
 // bun run scripts/generate-api-schema.ts --check       // verify types are up to date (for CI)
