@@ -1,0 +1,38 @@
+apps/web/src/features/block-agent/browser-test/permissions-settings.ts
+  s_661bd9a2a08729::t_572ad4f902a019 1-8
+apps/web/src/features/block-agent/browser-test/playwright.config.ts
+  s_661bd9a2a08729::t_572ad4f902a019 10
+apps/web/src/features/block-agent/browser-test/permissions.html
+  s_661bd9a2a08729::t_572ad4f902a019 1-2
+apps/web/src/features/block-agent/browser-test/permissions.tsx
+  s_661bd9a2a08729::t_4ca3527cc4846c 1-320,326-366
+  s_661bd9a2a08729::t_d640fb84e52e97 321-325
+  s_661bd9a2a08729::t_71d35b7bd2a236 367-409
+apps/web/src/features/block-agent/browser-test/permissions.vite.config.ts
+  s_661bd9a2a08729::t_572ad4f902a019 1-12,14-42
+  s_661bd9a2a08729::t_465b1a03436ce5 13
+apps/web/src/features/block-agent/browser-test/permissions-session.ts
+  s_661bd9a2a08729::t_572ad4f902a019 1-89
+apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
+  s_661bd9a2a08729::t_7cf129969083b0 42-44
+  s_661bd9a2a08729::t_d640fb84e52e97 13-28,46,63,105
+  s_661bd9a2a08729::t_add19bed33496a 1-12,29-41,45,47-62,64-104,106-116
+apps/web/src/features/block-agent/browser-test/permissions.playwright.config.ts
+  s_661bd9a2a08729::t_572ad4f902a019 1-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "715eca94cd7e5116ee697773ac0fbf6f8c692b25",
+  "prompts": {},
+  "sessions": {
+    "s_661bd9a2a08729": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d2d88736-ecda-463f-806d-69cacb50e672",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
