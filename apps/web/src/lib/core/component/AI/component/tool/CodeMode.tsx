@@ -26,7 +26,7 @@ export const executeCodeHandler = createToolRenderer({
     // program that threw or timed out returns a receipt that says so.
     const label = () => {
       const error = useToolError();
-      const status = ctx.response?.status;
+      const status = ctx.response?.data.status;
       if (
         error?.kind === 'failed' ||
         status === 'failed' ||
