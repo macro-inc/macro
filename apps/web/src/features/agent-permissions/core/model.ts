@@ -198,7 +198,7 @@ export function restrictions(
   });
 }
 
-/** Restrictions plus individual tools that differ from their action. */
+/** Restricted group actions plus individual tools restricted on their own. */
 export function restrictionCount(view: AgentToolPermissions): number {
   return view.groups.reduce(
     (count, group) =>
@@ -207,7 +207,9 @@ export function restrictionCount(view: AgentToolPermissions): number {
         (actionCount, action) =>
           actionCount +
           (action.state === 'always' ? 0 : 1) +
-          action.overrides.length,
+          // A tool allowed under a stricter action loosens, not restricts.
+          action.overrides.filter((override) => override.state !== 'always')
+            .length,
         0
       ),
     0

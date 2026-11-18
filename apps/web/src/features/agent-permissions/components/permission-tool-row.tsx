@@ -81,7 +81,9 @@ export function PermissionToolRow(props: {
       }
       controls={
         <>
-          <span class="flex size-7 shrink-0 items-center justify-center touch:order-last">
+          {/* Desktop keeps the empty slot so every control lines up; on
+              touch the control is full width and the slot follows it. */}
+          <span class="flex size-7 shrink-0 items-center justify-center touch:order-last touch:empty:hidden">
             <Show when={props.onClear}>
               {(onClear) => (
                 <Button

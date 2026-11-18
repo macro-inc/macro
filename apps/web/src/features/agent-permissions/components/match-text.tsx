@@ -9,9 +9,10 @@ export function MatchText(props: { text: string; query?: string }) {
       {(match) => (
         <>
           {props.text.slice(0, match().start)}
-          <mark class="rounded-sm bg-accent-bg text-ink">
+          {/* A span: the editor stylesheet unsets every <mark>'s background. */}
+          <span class="rounded-sm bg-accent/20 text-ink">
             {props.text.slice(match().start, match().end)}
-          </mark>
+          </span>
           {props.text.slice(match().end)}
         </>
       )}

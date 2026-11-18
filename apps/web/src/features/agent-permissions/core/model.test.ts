@@ -96,7 +96,8 @@ describe('counts', () => {
   });
 
   it('counts restricted actions and differing tools', () => {
-    expect(restrictionCount(VIEW)).toBe(2);
+    // Forward calendar event is allowed under Send's Ask: not a restriction.
+    expect(restrictionCount(VIEW)).toBe(1);
     expect(restrictions(CATALOG, VIEW)).toEqual([
       { group: 'email', action: 'send', state: 'ask' },
     ]);

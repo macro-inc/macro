@@ -187,9 +187,7 @@ describe('AgentPermissionsPage', () => {
     fireEvent.click(pageButton);
     const confirm = (await screen.findAllByRole('dialog')).at(-1);
     if (!confirm) throw new Error('the confirmation reopened');
-    fireEvent.click(
-      within(confirm).getByRole('button', { name: 'Reset permissions' })
-    );
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Reset' }));
     await waitFor(() =>
       expect(toasts.success).toHaveBeenCalledWith('Permissions reset')
     );
