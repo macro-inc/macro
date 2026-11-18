@@ -33,27 +33,35 @@ pub(crate) async fn ensure_topics(brokers: &str) -> Result<(), Report> {
     create_topics(brokers).await?;
 
     let reader = std::sync::Arc::new(reader(brokers)?);
-    let mut unserved = Vec::new();
+    // What the broker last answered when it was not ready.
+    let mut not_yet = None;
     crate::wait::eventually(
         "the Kafka broker to serve every event topic",
         crate::wait::DEFAULT_TIMEOUT,
         async || {
             let reader = reader.clone();
-            unserved = tokio::task::spawn_blocking(move || unserved_topics(&reader))
+            let checked = tokio::task::spawn_blocking(move || unserved_topics(&reader))
                 .await
-                .context("the Kafka metadata task did not finish")??;
-            Ok(unserved.is_empty().then_some(()))
+                .context("the Kafka metadata task did not finish")?;
+            match checked {
+                Ok(unserved) if unserved.is_empty() => return Ok(Some(())),
+                Ok(unserved) => {
+                    not_yet = Some(format!(
+                        "the topics it did not serve: {}",
+                        unserved.join(", ")
+                    ));
+                }
+                // A broker too busy to answer now may answer before the wait
+                // ends.
+                Err(error) => not_yet = Some(format!("its last answer: {error}")),
+            }
+            Ok(None)
         },
     )
     .await
-    .map_err(|report| {
-        if unserved.is_empty() {
-            return report;
-        }
-        report.attach(format!(
-            "the topics it did not serve: {}",
-            unserved.join(", ")
-        ))
+    .map_err(|report| match not_yet {
+        Some(not_yet) => report.attach(not_yet),
+        None => report,
     })
 }
 

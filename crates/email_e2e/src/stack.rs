@@ -192,8 +192,14 @@ impl Stack {
         let log_dir = log_dir(&id)?;
         crate::process::ensure_built(&[API, WORKERS])?;
         // Before any service starts: document storage exits when a topic it
-        // reads is missing.
-        crate::infra::kafka::ensure_topics(&servers.kafka).await?;
+        // reads is missing. On the broker the services are given, which a
+        // scenario's environment may replace.
+        let brokers = options
+            .env
+            .iter()
+            .rfind(|(name, _)| name == KAFKA_BROKERS)
+            .map_or(servers.kafka.as_str(), |(_, brokers)| brokers.as_str());
+        crate::infra::kafka::ensure_topics(brokers).await?;
         if options.calendar {
             crate::process::ensure_built(&[CALENDAR])?;
         }
