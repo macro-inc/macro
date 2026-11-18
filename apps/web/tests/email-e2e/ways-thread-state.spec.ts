@@ -6,7 +6,7 @@
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { trashFolder } from './harness/journeys';
-import { rowIds, rowIdsFor, seenRequestsInFlight } from './harness/list';
+import { focusRow, rowIds, watchRowIds } from './harness/list';
 import { followup } from './harness/organise';
 import { anInbox, PROVIDERS } from './harness/providers';
 import { notice } from './harness/send';
@@ -123,7 +123,6 @@ for (const provider of PROVIDERS) {
     }) => {
       const ids = await deliverEach(mailbox, ['Bin', 'Stays']);
       await mailbox.open();
-      const inFlight = seenRequestsInFlight(page);
       const marks = await holdOperation(page, 'MarkEmailThreadSeen', (body) =>
         body.includes(ids.Bin)
       );
@@ -139,11 +138,20 @@ for (const provider of PROVIDERS) {
       await expect.poll(() => rowIds(page)).toEqual([ids.Stays]);
       saw('STL-990');
 
-      // The mark read landing late does not bring it back.
+      // The mark read landing late does not bring it back. The star of the
+      // other row waits in the queue behind the mark reads: once it reaches
+      // the service, the cache has settled them.
+      const shown = await watchRowIds(page);
       await marks.release();
       await allRead(mailbox, ids.Bin);
-      await expect.poll(inFlight).toBe(0);
-      expect(await rowIdsFor(page, 3_000)).toEqual([[ids.Stays]]);
+      await focusRow(page, ids.Stays);
+      await page.keyboard.press('s');
+      did('AL-061', 'F-073');
+      await expect.poll(() => favorites(mailbox)).toEqual([ids.Stays]);
+      expect((await shown()).filter((rows) => rows.includes(ids.Bin))).toEqual(
+        []
+      );
+      expect(await rowIds(page)).toEqual([ids.Stays]);
     });
 
     // When this fails, u in an open thread is not the thread's own mark

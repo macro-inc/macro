@@ -72,19 +72,33 @@ export function rowIds(page: Page): Promise<string[]> {
 }
 
 /**
- * Each set of rows the list shows for `ms`, read every 100 ms, a set
- * repeated in a row once: a list that stays put gives one. A single read
- * can come before a late write reaches the list.
+ * Records each set of rows the list shows from now on, at every change of
+ * the page, and returns a reader of the sets so far. A row listed only for
+ * a moment is in them, where reads of the list can miss it.
  */
-export async function rowIdsFor(page: Page, ms: number): Promise<string[][]> {
-  const shown: string[][] = [];
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    const rows = await rowIds(page);
-    if (rows.join() !== shown.at(-1)?.join()) shown.push(rows);
-    await page.waitForTimeout(100);
-  }
-  return shown;
+export async function watchRowIds(
+  page: Page
+): Promise<() => Promise<string[][]>> {
+  await page.evaluate(() => {
+    const read = () =>
+      [...document.querySelectorAll('[data-soup-entity] [data-entity-id]')].map(
+        (row) => row.getAttribute('data-entity-id') ?? ''
+      );
+    const shown = [read()];
+    (window as unknown as { shownRows: string[][] }).shownRows = shown;
+    new MutationObserver(() => {
+      const rows = read();
+      if (rows.join() !== shown.at(-1)?.join()) shown.push(rows);
+    }).observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributeFilter: ['data-entity-id'],
+    });
+  });
+  return () =>
+    page.evaluate(
+      () => (window as unknown as { shownRows: string[][] }).shownRows
+    );
 }
 
 /** The thread id of the row the list's cursor is on. */
