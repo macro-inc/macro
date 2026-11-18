@@ -27,7 +27,9 @@ import type { Ask } from '../people/appraise.ts';
 import { type PeopleClaude, sdkAsk } from '../people/ask.ts';
 import type { Vault } from '../secrets/vault.ts';
 import {
+  calendar,
   computer,
+  email,
   failuresFile,
   greetedFile,
   greetingModel,
@@ -78,7 +80,7 @@ const ownMachinery = [
   'DescribeCodeTools',
   'ReadCodeDocs',
 ];
-/** How long the vault may take to say whether it is on: the owner is waiting on the hello. */
+/** How long the vault, the inbox or the calendar may take to say whether it is there: the owner is waiting on the hello. */
 const vaultProbeMs = 2_500;
 const greetingLog = 'greeting';
 const noFailures: Failures = { paid: 0, unpaid: 0 };
@@ -125,11 +127,22 @@ export const greeterOf = ({
     },
     // The vault capability is always listed, but the vault is on only for
     // some teams: it is mentioned only once it answers.
-    have: async () => [
-      ...Object.keys(catalog).filter((name) => name !== vaultCapability),
-      ...((await vaultOn()) ? [vaultCapability] : []),
-      ...(hosted ? [computer] : []),
-    ],
+    // So are an inbox and a calendar: an agent has them only once they are
+    // connected or delegated, so they are mentioned only when Macro says so.
+    have: async () => {
+      const [vaultIsOn, inbox, calendarSeen] = await Promise.all([
+        vaultOn(),
+        answersWithin(macro.hasInbox, sleep),
+        answersWithin(macro.hasCalendar, sleep),
+      ]);
+      return [
+        ...Object.keys(catalog).filter((name) => name !== vaultCapability),
+        ...(vaultIsOn ? [vaultCapability] : []),
+        ...(inbox ? [email] : []),
+        ...(calendarSeen ? [calendar] : []),
+        ...(hosted ? [computer] : []),
+      ];
+    },
     unsayable: unsayable(catalog, ownMachinery),
     // Claude Code started when asked: nothing to warm up, so nothing to drop.
     model: () => ({
@@ -169,28 +182,43 @@ export const greeterOf = ({
 };
 
 /**
- * Whether the team's vault is on for the agent: one search of one item. The
- * vault answers not_found when it is off for the team, and a vault that
- * can't be reached isn't promised to the owner either.
+ * Whether `probe` says yes within `probeMs`: something slow (busy,
+ * retrying) holds the hello no longer than that, and something that can't
+ * be reached isn't promised to the owner.
  */
-export const vaultAnswers = async (
-  vault: Pick<Vault, 'team' | 'search'>,
+export const answersWithin = async (
+  probe: () => Promise<boolean>,
   sleep: (ms: number) => Promise<void>
 ): Promise<boolean> => {
-  const probe = async (): Promise<boolean> => {
+  const asked = async (): Promise<boolean> => {
     try {
-      const answer = await vault.search(await vault.team(), {
-        query: '',
-        limit: 1,
-      });
-      return answer.kind === 'ok';
+      return await probe();
     } catch {
       return false;
     }
   };
-  // A vault that is slow (busy, retrying) holds the hello no longer than this.
-  return Promise.race([probe(), sleep(vaultProbeMs).then(() => false)]);
+  const late = async (): Promise<boolean> => {
+    await sleep(vaultProbeMs);
+    return false;
+  };
+  return Promise.race([asked(), late()]);
 };
+
+/**
+ * Whether the team's vault is on for the agent: one search of one item. The
+ * vault answers not_found when it is off for the team.
+ */
+export const vaultAnswers = (
+  vault: Pick<Vault, 'team' | 'search'>,
+  sleep: (ms: number) => Promise<void>
+): Promise<boolean> =>
+  answersWithin(async () => {
+    const answer = await vault.search(await vault.team(), {
+      query: '',
+      limit: 1,
+    });
+    return answer.kind === 'ok';
+  }, sleep);
 
 /**
  * Where the greeting's span goes: under the agent's start span when the

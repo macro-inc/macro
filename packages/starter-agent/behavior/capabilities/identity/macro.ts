@@ -8,6 +8,10 @@ export type GreetingMacro = {
   readonly ownerDm: () => Promise<string>;
   /** Whether anyone has written in a channel: one message read, no authors resolved. */
   readonly hasMessages: (channelId: string) => Promise<boolean>;
+  /** Whether the agent has an email inbox connected (an email link). */
+  readonly hasInbox: () => Promise<boolean>;
+  /** Whether the agent can see any calendar. */
+  readonly hasCalendar: () => Promise<boolean>;
 };
 
 export const sdkGreetingMacro = (
@@ -31,5 +35,13 @@ export const sdkGreetingMacro = (
       .messages({ pageSize: 1 }))
       return true;
     return false;
+  },
+  hasInbox: async () => {
+    const macro = await connect();
+    return (await macro.email.links()).length > 0;
+  },
+  hasCalendar: async () => {
+    const macro = await connect();
+    return (await macro.calendar.calendars()).length > 0;
   },
 });

@@ -14,8 +14,19 @@ import {
 } from '@macro-inc/muppet/utilities/macro/chat';
 import { passthrough } from '../../../agent/claude.ts';
 import { capabilityModules } from '../../../index.ts';
-import { computer, failuresFile, greetedFile } from '../config.ts';
-import { greeterOf, greetingParent, vaultAnswers } from '../context.ts';
+import {
+  calendar,
+  computer,
+  email,
+  failuresFile,
+  greetedFile,
+} from '../config.ts';
+import {
+  answersWithin,
+  greeterOf,
+  greetingParent,
+  vaultAnswers,
+} from '../context.ts';
 
 const markdown = await Bun.file(
   join(import.meta.dir, '..', 'greeting.md')
@@ -25,7 +36,7 @@ const markdown = await Bun.file(
 const catalog: Catalog = Object.fromEntries(
   capabilityModules.map((module) => [module.name, module])
 );
-const everything = [...Object.keys(catalog), computer];
+const everything = [...Object.keys(catalog), computer, email, calendar];
 
 test('the greeting prompt never names how the agent is built', () => {
   // The words the agent's own wiring bans: the library's, its tools', its catalog's.
@@ -49,7 +60,7 @@ test('the greeting prompt never names how the agent is built', () => {
 test('the prompt has a section for each thing the starter agent may have, and says only what it has', () => {
   const prompt = parseGreeting(markdown);
   expect(Object.keys(prompt.haves).sort()).toEqual(
-    ['calls', 'chat', computer, 'secrets'].sort()
+    ['calls', 'chat', computer, 'secrets', email, calendar].sort()
   );
   for (const name of Object.keys(prompt.haves))
     expect(everything).toContain(name);
@@ -65,6 +76,8 @@ test('the prompt has a section for each thing the starter agent may have, and sa
   expect(all).toContain('join a Macro call');
   expect(all).toContain("anything else Macro's API can do");
   expect(all).toContain('mention each thing');
+  expect(all).toContain('An email inbox of your own');
+  expect(all).toContain('A calendar in Macro');
 
   const some = greetingRequest(prompt, {
     have: ['chat'],
@@ -81,7 +94,14 @@ test('the prompt has a section for each thing the starter agent may have, and sa
 const hello =
   "Hi Maya, I just came online. I don't have a name yet.\n\nWhat can I help with first?";
 
-const wiring = (hosted: boolean, vault = true) => {
+const wiring = (
+  hosted: boolean,
+  vault = true,
+  macroHas: { readonly inbox: boolean; readonly calendar: boolean } = {
+    inbox: false,
+    calendar: false,
+  }
+) => {
   // The prompt is where the wiring looks for it, beside the identity area's config.
   const files = new Map<string, string>([
     [join(import.meta.dir, '..', 'greeting.md'), markdown],
@@ -116,6 +136,8 @@ const wiring = (hosted: boolean, vault = true) => {
       ownerName: async () => 'Maya',
       ownerDm: async () => 'dm-1',
       hasMessages: async () => false,
+      hasInbox: async () => macroHas.inbox,
+      hasCalendar: async () => macroHas.calendar,
     },
     chat: {
       send: async (channelId, text) => {
@@ -272,4 +294,49 @@ test('the greeting introduces the agent by the name its owner gave, and asks onl
   const { greeter } = wiring(true);
   expect(await greeter.identity()).toContain('Your name is Wren');
   expect(markdown).toContain('Never ask for a name you were given.');
+});
+
+test('the greeting mentions email and a calendar only when the agent has them', async () => {
+  const neither = await wiring(true).greeter.have();
+  expect(neither).not.toContain(email);
+  expect(neither).not.toContain(calendar);
+  const both = await wiring(true, true, {
+    inbox: true,
+    calendar: true,
+  }).greeter.have();
+  expect(both).toContain(email);
+  expect(both).toContain(calendar);
+  // Without them, nothing in the request promises either.
+  const request = greetingRequest(parseGreeting(markdown), {
+    have: neither,
+    ownerName: 'Maya',
+    identity: undefined,
+  });
+  expect(request.toLowerCase()).not.toContain('email');
+  expect(request.toLowerCase()).not.toContain('calendar');
+});
+
+test('a probe that is slow or fails is a no, held to its wait', async () => {
+  const waited: number[] = [];
+  const wait = async (ms: number) => {
+    waited.push(ms);
+  };
+  expect(await answersWithin(() => new Promise<boolean>(() => {}), wait)).toBe(
+    false
+  );
+  expect(waited).toEqual([2_500]);
+  expect(
+    await answersWithin(
+      async () => {
+        throw new Error('Macro is unreachable');
+      },
+      async () => new Promise<void>(() => {})
+    )
+  ).toBe(false);
+  expect(
+    await answersWithin(
+      async () => true,
+      async () => new Promise<void>(() => {})
+    )
+  ).toBe(true);
 });

@@ -32,7 +32,15 @@ Your team's password manager. When you need a login, you ask your owner for that
 
 ## Have: chat
 
-Macro itself, as your own user: documents, channels, email, tasks, calendar, databases and routines, and anything else Macro's API can do, within the access you've been given.
+Macro itself, as your own user: documents, channels, tasks, databases and routines, and anything else Macro's API can do, within the access you've been given.
+
+## Have: email
+
+An email inbox of your own in Macro: you can read, write and send email from it.
+
+## Have: calendar
+
+A calendar in Macro: you can see it and put events on it.
 
 ## Have: calls
 

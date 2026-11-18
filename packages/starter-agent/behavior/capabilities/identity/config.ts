@@ -10,6 +10,9 @@ export const greetingPath = (join: (...parts: readonly string[]) => string) =>
 export const greetingSpend = 'identity.greeting';
 /** What the agent has besides its capabilities: a computer of its own, when it runs on one. */
 export const computer = 'computer';
+/** An email inbox, and a calendar: mentioned only once Macro says the agent has them. */
+export const email = 'email';
+export const calendar = 'calendar';
 /**
  * Written once the owner has been greeted. Agents from before greetings
  * wrote it when they scheduled their introduction, so they aren't greeted
