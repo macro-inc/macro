@@ -74,17 +74,18 @@ export function ruleFor(
 }
 
 /**
- * The change that sets a tool to `state`. Setting it to its action's state
+ * The change that sets a tool to `state`, given its action's state (the one
+ * being saved, if the action is changing too). Setting it to that state
  * clears its own rule (`null`), so a saved tool rule always means "differs".
  */
 export function changeForTool(
-  action: ToolPermissionAction,
+  actionState: ToolPermissionState,
   tool: ToolRef,
   state: ToolPermissionState
 ): ToolPermissionChange {
   return {
     target: toolTarget(tool),
-    state: state === action.state ? null : state,
+    state: state === actionState ? null : state,
   };
 }
 

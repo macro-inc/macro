@@ -349,32 +349,37 @@ export function Agents(props: {
   // A permissions link: wait for the list, then open the page for Macro or
   // an agent the viewer manages; anything else stays on the list.
   createEffect(
-    on([agentSettingsRequest, () => agentsQuery.isPending], ([request]) => {
-      if (request?.type !== 'permissions' || agentsQuery.isPending) return;
-      consumeAgentSettingsRequest(request.id);
-      setCreating(false);
-      setEditingAgent(undefined);
-      if (
-        request.agentId === MACRO_NEW_BOT_ID ||
-        request.agentId === MACRO_AGENT_BOT_ID
-      ) {
-        openMacroPermissions(request.focus);
-        return;
+    on(
+      [agentSettingsRequest, () => agentsQuery.isPending, permissionsFlag],
+      ([request]) => {
+        // Waits for the flag too: still loading is not off.
+        if (request?.type !== 'permissions' || agentsQuery.isPending) return;
+        if (!permissionsFlag()) return;
+        consumeAgentSettingsRequest(request.id);
+        setCreating(false);
+        setEditingAgent(undefined);
+        if (
+          request.agentId === MACRO_NEW_BOT_ID ||
+          request.agentId === MACRO_AGENT_BOT_ID
+        ) {
+          openMacroPermissions(request.focus);
+          return;
+        }
+        const agent = agents().find(
+          (candidate) => candidate.id === request.agentId
+        );
+        setPermissionsFor(
+          agent?.editable
+            ? {
+                agentId: agent.id,
+                name: agent.name,
+                persona: false,
+                focus: request.focus,
+              }
+            : undefined
+        );
       }
-      const agent = agents().find(
-        (candidate) => candidate.id === request.agentId
-      );
-      setPermissionsFor(
-        agent?.editable
-          ? {
-              agentId: agent.id,
-              name: agent.name,
-              persona: false,
-              focus: request.focus,
-            }
-          : undefined
-      );
-    })
+    )
   );
 
   const createAgent = async (agent: CreateAgentParams) => {
@@ -553,7 +558,7 @@ export function Agents(props: {
             agentId={target.agentId}
             agentName={target.name}
             persona={target.persona}
-            backLabel="Agents"
+            backLabel={t('nav.agents')}
             focus={target.focus}
             onBack={() => setPermissionsFor(undefined)}
           />

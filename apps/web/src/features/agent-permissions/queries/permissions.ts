@@ -34,8 +34,10 @@ export function toolPermissionCatalogQueryOptions(enabled: boolean) {
     queryKey: agentToolPermissionKeys.catalog.queryKey,
     queryFn: fetchCatalog,
     enabled,
-    // The catalog only changes with a deploy.
+    // The catalog only changes with a deploy; refetching it would hand the
+    // tool rows new objects and remount them.
     staleTime: 60 * 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -90,6 +92,11 @@ function setPermissionsMutationOptions(agentId: string) {
   return {
     // One queue per agent, so clicks reach the server in the order made.
     scope: { id: `agent-tool-permissions:${agentId}` },
+    // A focus refetch started before this save must not land after it.
+    onMutate: () =>
+      queryClient.cancelQueries({
+        queryKey: agentToolPermissionKeys.agent(agentId).queryKey,
+      }),
     mutationFn: (variables: SetPermissionsVariables) =>
       throwOnErr(() =>
         toolPermissionsClient.set(
@@ -105,6 +112,11 @@ function setPermissionsMutationOptions(agentId: string) {
 function resetPermissionsMutationOptions(agentId: string) {
   return {
     scope: { id: `agent-tool-permissions:${agentId}` },
+    // A focus refetch started before this save must not land after it.
+    onMutate: () =>
+      queryClient.cancelQueries({
+        queryKey: agentToolPermissionKeys.agent(agentId).queryKey,
+      }),
     mutationFn: (variables: ResetPermissionsVariables) =>
       throwOnErr(() =>
         toolPermissionsClient.reset(variables.agentId, variables.trace)

@@ -3,14 +3,20 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   AgentToolPermissions,
   PermissionAction,
-  ToolPermissionAction,
   ToolPermissionCatalog,
   ToolPermissionCatalogGroup,
   ToolPermissionCatalogTool,
   ToolPermissionChange,
   ToolPermissionState,
 } from '@service-agent-harness/generated/schemas';
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { stateLabel } from '../components/labels';
 import { MatchText } from '../components/match-text';
@@ -89,13 +95,17 @@ export function AgentPermissionsList(props: {
   }>({
     expanded: props.focus ? [props.focus.group] : [],
     filters: props.focus?.tool ? { [props.focus.group]: 'all' } : {},
-    limits: {},
+    // A linked tool may sit past the first page of its group.
+    limits: props.focus?.tool
+      ? { [props.focus.group]: Number.MAX_SAFE_INTEGER }
+      : {},
   });
   const [flashKey, setFlashKey] = createSignal<string>();
 
   const searching = () => props.query.trim().length > 0;
-  const search = (): PermissionSearch | undefined =>
-    searching() ? searchPermissions(props.catalog, props.query) : undefined;
+  const search = createMemo((): PermissionSearch | undefined =>
+    searching() ? searchPermissions(props.catalog, props.query) : undefined
+  );
   const groupMatch = (groupId: string): GroupMatch | undefined =>
     search()?.groups[groupId];
   // A search narrows a group unless the group's own name matched.
@@ -151,7 +161,7 @@ export function AgentPermissionsList(props: {
 
   // The tools listed under "Individual tools", per action, plus how many
   // more Show more would add.
-  const toolSections = (
+  const computeToolSections = (
     group: ToolPermissionCatalogGroup
   ): { sections: ToolSection[]; hidden: number } => {
     const match = groupMatch(group.id);
@@ -183,6 +193,15 @@ export function AgentPermissionsList(props: {
     };
   };
 
+  // Computed once per change of the view, search or filters, not per read.
+  const sectionsByGroup = createMemo(() =>
+    Object.fromEntries(
+      visibleGroups().map((group) => [group.id, computeToolSections(group)])
+    )
+  );
+  const toolSections = (group: ToolPermissionCatalogGroup) =>
+    sectionsByGroup()[group.id] ?? computeToolSections(group);
+
   const agentHint = (groupId: string, action: PermissionAction) => {
     const rule = ruleFor(props.view.rules, groupActionTarget(groupId, action));
     if (!rule?.viaAgent) return undefined;
@@ -205,16 +224,26 @@ export function AgentPermissionsList(props: {
     state: ToolPermissionState
   ) => apply(changeForAction(groupId, action, state), state);
 
+  // Tools compare with the action's state as shown, so a tool set right
+  // after its action still saves against the action's new state.
   const setTool = (
-    action: ToolPermissionAction,
+    group: ToolPermissionCatalogGroup,
     tool: ToolPermissionCatalogTool,
     state: ToolPermissionState
-  ) => apply(changeForTool(action, tool, state), state);
+  ) =>
+    apply(
+      changeForTool(shownActionState(group.id, tool.action), tool, state),
+      state
+    );
 
   const clearTool = (
-    action: ToolPermissionAction,
+    group: ToolPermissionCatalogGroup,
     tool: ToolPermissionCatalogTool
-  ) => apply({ target: toolTarget(tool), state: null }, action.state);
+  ) =>
+    apply(
+      { target: toolTarget(tool), state: null },
+      shownActionState(group.id, tool.action)
+    );
 
   const toolActions = (group: ToolPermissionCatalogGroup) =>
     toolSections(group).sections.map((section) => section.action);
@@ -257,11 +286,6 @@ export function AgentPermissionsList(props: {
       return shownActionState(group.id, tool.action);
     };
 
-    const clear = () => {
-      const current = action();
-      if (current) clearTool(current, tool);
-    };
-
     return (
       <PermissionToolRow
         rowKey={key}
@@ -275,12 +299,11 @@ export function AgentPermissionsList(props: {
         clearLabel={t('agentPermissions.useActionSetting', {
           action: actionName(tool.action),
         })}
-        onClear={rule() && action() && props.canEdit ? clear : undefined}
+        onClear={
+          rule() && props.canEdit ? () => clearTool(group, tool) : undefined
+        }
         disabled={!props.canEdit || !action()}
-        onChange={(state) => {
-          const current = action();
-          if (current) setTool(current, tool, state);
-        }}
+        onChange={(state) => setTool(group, tool, state)}
       />
     );
   };
