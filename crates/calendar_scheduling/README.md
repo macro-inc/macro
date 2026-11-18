@@ -77,8 +77,9 @@ with reservations retained to avoid duplicate meetings. Durable operation intent
 provider creation IDs, pinned calendars, and version-fenced retries recover these states after
 five minutes. The calendar-service worker runs every 15 seconds and failures back off to an hour.
 A refusal decided before anything reaches the provider (no writable calendar, a read-only calendar,
-an event the host can no longer see) or 24 failed recovery attempts abandon the operation: the
-booking stays `failed` with its reservations and is never retried again. Cancelling it releases
+an event the host can no longer see) abandons the operation at once; any other failure is retried
+hourly until the meeting's start time has passed, then abandoned. An abandoned booking stays
+`failed` with its reservations and is never retried again. Cancelling it releases
 them once the calendar accepts the cancellation; a calendar that refuses that too keeps them, as
 lost access always has. An abandoned move stays at the requested time with both intervals held. Keyed deletion works even after local calendar projection
 retirement. Completion-persistence failures still return the durable private receipt. Rescheduling reserves the old and new intervals until the provider

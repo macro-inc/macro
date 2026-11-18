@@ -104,15 +104,16 @@ five-minute lease, an incremented operation attempt, and a booking revision. All
 revision, protecting against confirmed → processing → confirmed races. Provider errors back off
 from five minutes to one hour. A refusal decided before anything reaches the provider (no writable
 calendar, a read-only calendar, an event the host can no longer see) abandons the operation at once.
-Anything else, including a provider rejection, which also reports a write that landed but could not
-be read back, abandons it after 24 recovery attempts (`MAX_RECOVERY_ATTEMPTS`, about a day). The
-booking stays failed, its due timestamp is cleared, and it is never claimed again. Completed claims
+Anything else, including a reauthorization failure and a provider rejection (which also reports a
+write that landed but could not be read back), keeps retrying, at most hourly, until the booking's
+start time has passed, since an event in the past is not worth creating or moving; then it is
+abandoned. The booking stays failed, its due timestamp is cleared, and it is never claimed again. Completed claims
 clear their due timestamp. An abandoned booking keeps its reservations; recovery never interprets
 lost permission as a successful deletion. Cancelling it, which a failed booking otherwise refuses
 while recovery owns it, releases them once the calendar accepts the cancellation. An abandoned move
 stays at the requested time with both intervals held. Its calendar event may be at either time: a
-refusal leaves the original, but a move that ran out of attempts may have landed before its response
-was lost, so reconcile it against the host's calendar.
+refusal leaves the original, but a move retried until its start time may have landed before its
+response was lost, so reconcile it against the host's calendar.
 
 Use the calendar-service logs for `scheduling operation queued for recovery`, `scheduling operation
 recovered`, `scheduling operation abandoned; booking left failed`, and `scheduling completion

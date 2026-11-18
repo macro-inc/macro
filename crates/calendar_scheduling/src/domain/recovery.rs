@@ -3,11 +3,6 @@ use super::{models::*, ports::*, service::Service};
 use chrono::{Duration, Utc};
 use uuid::Uuid;
 
-/// Recovery claims an operation gets before a calendar that keeps failing
-/// leaves its booking failed. Retries back off to an hour, so this is about a
-/// day of attempts.
-pub const MAX_RECOVERY_ATTEMPTS: u32 = 24;
-
 impl CalendarOperation {
     /// Start a recoverable operation; the grace period exceeds provider request timeouts.
     pub fn new(kind: CalendarOperationKind) -> Self {
@@ -73,9 +68,9 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         };
         if let Err(error) = result {
             record.booking.status = BookingStatus::Failed;
-            if matches!(error, Error::CalendarRejected)
-                || operation.attempt >= MAX_RECOVERY_ATTEMPTS
-            {
+            // A failure that may still clear is retried until the meeting
+            // starts: an event in the past is not worth creating or moving.
+            if matches!(error, Error::CalendarRejected) || record.booking.starts_at <= Utc::now() {
                 if let Some(op) = &mut record.operation {
                     op.abandoned_at = Some(Utc::now());
                 }

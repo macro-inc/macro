@@ -1,5 +1,4 @@
 use super::*;
-use crate::domain::recovery::MAX_RECOVERY_ATTEMPTS;
 use std::{
     collections::HashMap,
     sync::{
@@ -1039,10 +1038,12 @@ async fn a_refused_create_leaves_the_booking_failed_and_never_retries() {
     );
 }
 
-/// A calendar that keeps failing transiently is retried, but only for
-/// `MAX_RECOVERY_ATTEMPTS` claims; then the booking stays failed.
+/// A calendar that keeps failing in a way that may clear, such as an outage
+/// or a host who must reconnect, is retried while the meeting is still ahead,
+/// however long that takes; once the meeting has started the booking stays
+/// failed.
 #[tokio::test]
-async fn a_create_that_keeps_failing_stops_after_the_recovery_attempts() {
+async fn a_create_that_keeps_failing_retries_until_the_meeting_starts() {
     let store = Arc::new(Memory::default());
     let calendars = Arc::new(Calendar {
         fail_creates: AtomicBool::new(true),
@@ -1062,21 +1063,30 @@ async fn a_create_that_keeps_failing_stops_after_the_recovery_attempts() {
             .await,
         Err(Error::Conflict)
     ));
-    let mut claims = 0;
-    loop {
+    // Far more attempts than a day of hourly retries.
+    for _ in 0..40 {
         make_due(&store, receipt.booking.id);
-        if !service.recover_once().await.unwrap() {
-            break;
-        }
-        claims += 1;
-        assert!(claims <= MAX_RECOVERY_ATTEMPTS, "recovery never stopped");
+        assert!(service.recover_once().await.unwrap());
     }
-    assert_eq!(claims, MAX_RECOVERY_ATTEMPTS);
-    // The booking request plus one provider call per claim.
-    assert_eq!(
-        calendars.create_attempts.load(Ordering::SeqCst),
-        1 + MAX_RECOVERY_ATTEMPTS as usize
+    let stored = store.booking(receipt.booking.id).await.unwrap().unwrap();
+    assert_eq!(stored.booking.status, BookingStatus::Failed);
+    assert!(
+        stored
+            .operation
+            .as_ref()
+            .is_some_and(|operation| operation.abandoned_at.is_none())
     );
+
+    store
+        .bookings
+        .lock()
+        .unwrap()
+        .get_mut(&receipt.booking.id)
+        .unwrap()
+        .booking
+        .starts_at = Utc::now() - Duration::minutes(1);
+    make_due(&store, receipt.booking.id);
+    assert!(service.recover_once().await.unwrap());
     let stored = store.booking(receipt.booking.id).await.unwrap().unwrap();
     assert_eq!(stored.booking.status, BookingStatus::Failed);
     assert!(
@@ -1085,6 +1095,10 @@ async fn a_create_that_keeps_failing_stops_after_the_recovery_attempts() {
             .as_ref()
             .is_some_and(|operation| operation.abandoned_at.is_some())
     );
+    make_due(&store, receipt.booking.id);
+    assert!(!service.recover_once().await.unwrap());
+    // The booking request plus one provider call per claim.
+    assert_eq!(calendars.create_attempts.load(Ordering::SeqCst), 1 + 41);
 }
 
 #[tokio::test]
