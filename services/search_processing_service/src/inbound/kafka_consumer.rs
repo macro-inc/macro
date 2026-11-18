@@ -49,7 +49,7 @@ use ::email::domain::events::EmailMacroEvent;
 use calendar_events::domain::events::CalendarMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
-use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection, MacroEventConsumerService,
 };
@@ -63,17 +63,19 @@ use rdkafka::{
 use rootcause::prelude::{Report, ResultExt as _};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
+use tracing::{Instrument as _, field};
+use uuid::Uuid;
 
 use self::{
     calendar_event::process_calendar_event,
-    call::process_call_event,
-    channel::process_channel_event,
-    chat::process_chat_event,
-    document::process_document_event,
-    email::{email_ordering_key, process_email_event},
-    message::process_message_event,
-    project::process_project_event,
-    property::process_property_event,
+    call::{describe_call_event, process_call_event},
+    channel::{describe_channel_event, process_channel_event},
+    chat::{describe_chat_event, process_chat_event},
+    document::{describe_document_event, process_document_event},
+    email::{describe_email_event, email_ordering_key, process_email_event},
+    message::{describe_message_event, process_message_event},
+    project::{describe_project_event, process_project_event},
+    property::{describe_property_event, process_property_event},
 };
 
 pub(crate) use self::context::KafkaProcessingContext;
@@ -130,10 +132,15 @@ struct ReceivedEvent {
     event: DeclaredMacroEvent,
     partition: i32,
     offset: i64,
+    /// The record's `kafka.process` span, from receipt until processing ends,
+    /// so its duration includes the wait in the worker channel.
+    span: tracing::Span,
 }
 
-/// Outcome after the worker handles one decoded broker event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Outcome of one decoded broker event, recorded as the `outcome` field of
+/// its `process_event` span.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 enum EventOutcome {
     /// The corresponding search-index operation succeeded.
     Indexed,
@@ -141,6 +148,8 @@ enum EventOutcome {
     Ignored,
     /// Processing failed after all retries and the already-committed event was dropped.
     Dropped,
+    /// Committed without processing: a reread for the same entity was queued.
+    Coalesced,
 }
 
 /// Result of decoding and attempting a channel handoff.
@@ -328,6 +337,7 @@ impl WorkerPool {
         if let Some(key) = &reread_key
             && !self.pending_rereads.claim(key.clone())
         {
+            record_outcome(&processing_span(&event), EventOutcome::Coalesced);
             return HandoffOutcome::Coalesced;
         }
 
@@ -347,15 +357,98 @@ fn attach_event_coordinates<E>(
     decoded: Result<DeclaredMacroEvent, E>,
     partition: i32,
     offset: i64,
+    span: tracing::Span,
 ) -> Result<ReceivedEvent, E> {
     decoded.map(|event| ReceivedEvent {
         event,
         partition,
         offset,
+        span,
     })
 }
 
-#[tracing::instrument(skip(context, event), fields(partition, offset))]
+/// The event's wire type, e.g. `email.thread_backfilled`.
+fn event_type(event: &DeclaredMacroEvent) -> &'static str {
+    match event {
+        DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => event.event().event.name(),
+        DeclaredMacroEvent::CalendarMacroEvent(event) => {
+            calendar_event::index_action(&event.event().event).1
+        }
+        DeclaredMacroEvent::CallMacroEvent(event) => {
+            describe_call_event(&event.event().event).event_type
+        }
+        DeclaredMacroEvent::ChannelMacroEvent(event) => {
+            describe_channel_event(&event.event().event).event_type
+        }
+        DeclaredMacroEvent::ChatMacroEvent(event) => {
+            describe_chat_event(&event.event().event).event_type
+        }
+        DeclaredMacroEvent::DocumentMacroEvent(event) => {
+            describe_document_event(&event.event().event).event_type
+        }
+        DeclaredMacroEvent::EmailMacroEvent(event) => {
+            describe_email_event(&event.event().event).event_type
+        }
+        DeclaredMacroEvent::MessageMacroEvent(event) => {
+            describe_message_event(&event.event().event).event_type
+        }
+        DeclaredMacroEvent::ProjectMacroEvent(event) => {
+            describe_project_event(&event.event().event).event_type
+        }
+        DeclaredMacroEvent::PropertyMacroEvent(event) => {
+            describe_property_event(&event.event().event).event_type
+        }
+    }
+}
+
+fn event_id(event: &DeclaredMacroEvent) -> Uuid {
+    match event {
+        DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => event.event().event_id,
+        DeclaredMacroEvent::CalendarMacroEvent(event) => event.event().event_id,
+        DeclaredMacroEvent::CallMacroEvent(event) => event.event().event_id,
+        DeclaredMacroEvent::ChannelMacroEvent(event) => event.event().event_id,
+        DeclaredMacroEvent::ChatMacroEvent(event) => event.event().event_id,
+        DeclaredMacroEvent::DocumentMacroEvent(event) => event.event().event_id,
+        DeclaredMacroEvent::EmailMacroEvent(event) => event.event().event_id,
+        DeclaredMacroEvent::MessageMacroEvent(event) => event.event().event_id,
+        DeclaredMacroEvent::ProjectMacroEvent(event) => event.event().event_id,
+        DeclaredMacroEvent::PropertyMacroEvent(event) => event.event().event_id,
+    }
+}
+
+/// Records which event a record's `kafka.process` span carries.
+fn record_event_identity(span: &tracing::Span, event: &DeclaredMacroEvent) {
+    span.record("macro.event.id", field::display(event_id(event)));
+    span.record("macro.event.type", event_type(event));
+    if let DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) = event {
+        span.record(
+            "agent.session.id",
+            field::display(event.event().event.session_id()),
+        );
+    }
+}
+
+/// The `process_event` span for one record: the processing phase under its
+/// `kafka.process` span, with the event type and, once known, the outcome.
+fn processing_span(received: &ReceivedEvent) -> tracing::Span {
+    tracing::info_span!(
+        parent: &received.span,
+        "process_event",
+        partition = received.partition,
+        offset = received.offset,
+        event_type = event_type(&received.event),
+        outcome = field::Empty,
+        otel.status_code = field::Empty,
+    )
+}
+
+fn record_outcome(span: &tracing::Span, outcome: EventOutcome) {
+    span.record("outcome", <&'static str>::from(outcome));
+    if outcome == EventOutcome::Dropped {
+        span.record("otel.status_code", "ERROR");
+    }
+}
+
 async fn process_event(
     context: &KafkaProcessingContext,
     event: &DeclaredMacroEvent,
@@ -417,13 +510,16 @@ async fn run_event_worker(
 ) {
     let context = &context;
     drain_worker_events(events, pending_rereads, |received| async move {
-        let _ = process_event(
+        let span = processing_span(&received);
+        let outcome = process_event(
             context,
             &received.event,
             received.partition,
             received.offset,
         )
+        .instrument(span.clone())
         .await;
+        record_outcome(&span, outcome);
     })
     .await;
     tracing::trace!("search processing event worker drained");
@@ -488,29 +584,34 @@ async fn poll_events(
                     }
                 };
                 let kafka_message = message.inner();
+                let span = consumer_span(kafka_message, SearchProcessingConsumerGroup::GROUP_NAME);
                 let decoded = attach_event_coordinates(
                     message.decode_payload(),
                     kafka_message.partition(),
                     kafka_message.offset(),
+                    span.clone(),
                 );
+                if let Ok(received) = &decoded {
+                    record_event_identity(&span, &received.event);
+                }
 
-                match workers.handoff(decoded).await {
-                    HandoffOutcome::HandedOff => {}
-                    HandoffOutcome::Coalesced => tracing::trace!(
-                        topic = rdkafka::Message::topic(kafka_message),
-                        partition = kafka_message.partition(),
-                        offset = kafka_message.offset(),
-                        "skipping search processing event covered by a queued reread"
-                    ),
-                    HandoffOutcome::MalformedRecord(error) => tracing::error!(
-                        error = ?error,
-                        topic = rdkafka::Message::topic(kafka_message),
-                        partition = kafka_message.partition(),
-                        offset = kafka_message.offset(),
-                        "dropping undecodable search processing event"
-                    ),
-                    HandoffOutcome::WorkerClosed => {
+                match workers.handoff(decoded).instrument(span.clone()).await {
+                    HandoffOutcome::HandedOff | HandoffOutcome::Coalesced => {}
+                    HandoffOutcome::MalformedRecord(error) => {
+                        record_span_error(&span, &error);
                         tracing::error!(
+                            parent: &span,
+                            error = ?error,
+                            topic = rdkafka::Message::topic(kafka_message),
+                            partition = kafka_message.partition(),
+                            offset = kafka_message.offset(),
+                            "dropping undecodable search processing event"
+                        );
+                    }
+                    HandoffOutcome::WorkerClosed => {
+                        record_span_error(&span, "worker channel closed before handoff");
+                        tracing::error!(
+                            parent: &span,
                             topic = rdkafka::Message::topic(kafka_message),
                             partition = kafka_message.partition(),
                             offset = kafka_message.offset(),

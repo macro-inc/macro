@@ -142,6 +142,7 @@ fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEve
         )),
         partition: 0,
         offset,
+        span: tracing::Span::none(),
     }
 }
 
@@ -170,8 +171,13 @@ fn received_agent_session_event(session: Uuid, offset: i64) -> ReceivedEvent {
         id,
         Event::new(event),
     );
-    attach_event_coordinates(DeclaredMacroEvent::decode(&message), 0, offset)
-        .expect("decodable agent-session event")
+    attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        0,
+        offset,
+        tracing::Span::none(),
+    )
+    .expect("decodable agent-session event")
 }
 
 const AGENT_SESSION_ID: Uuid = Uuid::from_u128(10);
@@ -1950,7 +1956,12 @@ async fn malformed_missing_key_and_unsupported_email_messages_are_commit_safe() 
         key: Some(EMAIL_LINK_ID.to_string()),
         payload: Some(b"not json".to_vec()),
     };
-    let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 7, 60);
+    let malformed = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&malformed),
+        7,
+        60,
+        tracing::Span::none(),
+    );
 
     let missing_key = TestMessage {
         topic: MacroEmailTopic::TOPIC_STR,
@@ -1962,14 +1973,24 @@ async fn malformed_missing_key_and_unsupported_email_messages_are_commit_safe() 
         )
         .payload,
     };
-    let missing_key = attach_event_coordinates(DeclaredMacroEvent::decode(&missing_key), 7, 61);
+    let missing_key = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&missing_key),
+        7,
+        61,
+        tracing::Span::none(),
+    );
 
     let unsupported = encoded_message(
         MacroEmailTopic::TOPIC_STR,
         EMAIL_LINK_ID,
         Event::with_schema_version(draft_email_event(false), 2),
     );
-    let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 7, 62);
+    let unsupported = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&unsupported),
+        7,
+        62,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     assert!(matches!(
@@ -2005,7 +2026,12 @@ async fn malformed_and_unsupported_chat_messages_are_commit_safe() {
         key: Some(CHAT_ID.to_string()),
         payload: Some(b"not json".to_vec()),
     };
-    let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 5, 40);
+    let malformed = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&malformed),
+        5,
+        40,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     assert!(matches!(
@@ -2022,7 +2048,12 @@ async fn malformed_and_unsupported_chat_messages_are_commit_safe() {
         CHAT_ID,
         Event::with_schema_version(unsupported_event, 2),
     );
-    let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 5, 41);
+    let unsupported = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&unsupported),
+        5,
+        41,
+        tracing::Span::none(),
+    );
     match pool.handoff(unsupported).await {
         HandoffOutcome::MalformedRecord(EventBrokerError::UnsupportedSchemaVersion {
             topic,
@@ -2056,7 +2087,12 @@ async fn unsupported_project_schema_message_is_commit_safe() {
         PROJECT_ID,
         Event::with_schema_version(event, 2),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 4, 30);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        4,
+        30,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     match pool.handoff(decoded).await {
@@ -2091,7 +2127,12 @@ async fn unsupported_property_schema_message_is_commit_safe() {
         PROPERTY_ENTITY_ID,
         Event::with_schema_version(event, 2),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 6, 50);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        6,
+        50,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     match pool.handoff(decoded).await {
@@ -2123,7 +2164,12 @@ async fn unsupported_channel_schema_message_is_commit_safe() {
         CHANNEL_ID,
         Event::with_schema_version(event, 2),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 2, 20);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        2,
+        20,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     match pool.handoff(decoded).await {
@@ -2151,7 +2197,12 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         key: Some(CALL_ID.to_string()),
         payload: Some(b"not json".to_vec()),
     };
-    let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 1, 10);
+    let malformed = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&malformed),
+        1,
+        10,
+        tracing::Span::none(),
+    );
     assert!(matches!(malformed, Err(EventBrokerError::Serialization(_))));
 
     let missing_key = TestMessage {
@@ -2164,7 +2215,12 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         )
         .payload,
     };
-    let missing_key = attach_event_coordinates(DeclaredMacroEvent::decode(&missing_key), 1, 11);
+    let missing_key = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&missing_key),
+        1,
+        11,
+        tracing::Span::none(),
+    );
     assert!(matches!(
         missing_key,
         Err(EventBrokerError::MissingMessageKey)
@@ -2175,7 +2231,12 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         CALL_ID,
         Event::with_schema_version(archived_event(), 2),
     );
-    let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 1, 12);
+    let unsupported = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&unsupported),
+        1,
+        12,
+        tracing::Span::none(),
+    );
     assert!(matches!(
         unsupported,
         Err(EventBrokerError::UnsupportedSchemaVersion {
@@ -2206,7 +2267,12 @@ async fn successful_handoff_carries_event_partition_and_offset() {
         CALL_ID,
         Event::new(event.clone()),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 3, 42);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        3,
+        42,
+        tracing::Span::none(),
+    );
     let (pool, mut receivers) = test_pool(1, 1);
 
     assert!(matches!(
@@ -2230,7 +2296,12 @@ async fn closed_worker_channel_leaves_the_current_message_uncommitted() {
         CALL_ID,
         Event::new(archived_event()),
     );
-    let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 3, 42);
+    let decoded = attach_event_coordinates(
+        DeclaredMacroEvent::decode(&message),
+        3,
+        42,
+        tracing::Span::none(),
+    );
     let (pool, receivers) = test_pool(1, 1);
     drop(receivers);
 
@@ -2666,4 +2737,167 @@ fn standalone_call_deletion_indexes_by_call_without_channel_context() {
             channel_id: None,
         }
     );
+}
+
+/// Closed spans by name with their recorded fields, for asserting telemetry.
+#[derive(Clone, Default)]
+struct SpanCapture(Arc<std::sync::Mutex<Vec<CapturedSpan>>>);
+
+#[derive(Debug, Clone)]
+struct CapturedSpan {
+    name: &'static str,
+    fields: std::collections::HashMap<String, String>,
+}
+
+struct FieldRecorder<'a>(&'a mut std::collections::HashMap<String, String>);
+
+impl tracing::field::Visit for FieldRecorder<'_> {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0.insert(field.name().to_owned(), format!("{value:?}"));
+    }
+
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        self.0.insert(field.name().to_owned(), value.to_owned());
+    }
+}
+
+impl<S> tracing_subscriber::Layer<S> for SpanCapture
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    fn on_new_span(
+        &self,
+        attrs: &tracing::span::Attributes<'_>,
+        id: &tracing::span::Id,
+        ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut fields = std::collections::HashMap::new();
+        attrs.record(&mut FieldRecorder(&mut fields));
+        if let Some(span) = ctx.span(id) {
+            span.extensions_mut().insert(fields);
+        }
+    }
+
+    fn on_record(
+        &self,
+        id: &tracing::span::Id,
+        values: &tracing::span::Record<'_>,
+        ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        if let Some(span) = ctx.span(id)
+            && let Some(fields) = span
+                .extensions_mut()
+                .get_mut::<std::collections::HashMap<String, String>>()
+        {
+            values.record(&mut FieldRecorder(fields));
+        }
+    }
+
+    fn on_close(&self, id: tracing::span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        if let Some(span) = ctx.span(&id) {
+            let fields = span
+                .extensions()
+                .get::<std::collections::HashMap<String, String>>()
+                .cloned()
+                .unwrap_or_default();
+            self.0.lock().expect("capture lock").push(CapturedSpan {
+                name: span.name(),
+                fields,
+            });
+        }
+    }
+}
+
+impl SpanCapture {
+    fn install(&self) -> tracing::subscriber::DefaultGuard {
+        use tracing_subscriber::layer::SubscriberExt as _;
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(self.clone()))
+    }
+
+    fn named(&self, name: &str) -> Vec<CapturedSpan> {
+        self.0
+            .lock()
+            .expect("capture lock")
+            .iter()
+            .filter(|span| span.name == name)
+            .cloned()
+            .collect()
+    }
+}
+
+#[tokio::test]
+async fn coalesced_event_records_a_process_event_span_with_its_outcome() {
+    let capture = SpanCapture::default();
+    let _guard = capture.install();
+    let (pool, _receivers) = test_pool(1, 4);
+
+    for offset in [1, 2] {
+        let mut event = received_agent_session_event(AGENT_SESSION_ID, offset);
+        event.partition = 3;
+        let _ = pool.handoff(Ok::<_, EventBrokerError>(event)).await;
+    }
+
+    let spans = capture.named("process_event");
+    assert_eq!(
+        spans.len(),
+        1,
+        "only the coalesced event has finished: {spans:?}"
+    );
+    let fields = &spans[0].fields;
+    assert_eq!(fields["outcome"], "coalesced");
+    assert_eq!(fields["event_type"], "agent_session.renamed");
+    assert_eq!(fields["partition"], "3");
+    assert_eq!(fields["offset"], "2");
+}
+
+#[test]
+fn dropped_outcome_marks_the_processing_span_failed() {
+    let capture = SpanCapture::default();
+    let _guard = capture.install();
+    let received = received_thread_backfilled_event(EMAIL_THREAD_ID, 9);
+
+    for outcome in [EventOutcome::Indexed, EventOutcome::Dropped] {
+        record_outcome(&processing_span(&received), outcome);
+    }
+
+    let spans = capture.named("process_event");
+    assert_eq!(spans.len(), 2);
+    assert_eq!(spans[0].fields["outcome"], "indexed");
+    assert!(!spans[0].fields.contains_key("otel.status_code"));
+    assert_eq!(spans[1].fields["outcome"], "dropped");
+    assert_eq!(spans[1].fields["otel.status_code"], "ERROR");
+    assert_eq!(spans[1].fields["event_type"], "email.thread_backfilled");
+}
+
+#[test]
+fn received_record_span_names_its_event() {
+    use rdkafka::message::{OwnedMessage, Timestamp};
+
+    let capture = SpanCapture::default();
+    let _guard = capture.install();
+    let received = received_agent_session_event(AGENT_SESSION_ID, 4);
+    let record = OwnedMessage::new(
+        None,
+        Some(AGENT_SESSION_ID.to_string().into_bytes()),
+        macro_event_topics::MacroAgentSessionLifecycleTopic::TOPIC_STR.to_owned(),
+        Timestamp::NotAvailable,
+        1,
+        4,
+        None,
+    );
+
+    let span = consumer_span(&record, SearchProcessingConsumerGroup::GROUP_NAME);
+    record_event_identity(&span, &received.event);
+    drop(span);
+
+    let spans = capture.named("kafka.process");
+    assert_eq!(spans.len(), 1);
+    let fields = &spans[0].fields;
+    assert_eq!(fields["macro.event.type"], "agent_session.renamed");
+    assert_eq!(
+        fields["macro.event.id"],
+        event_id(&received.event).to_string()
+    );
+    assert_eq!(fields["agent.session.id"], AGENT_SESSION_ID.to_string());
+    assert_eq!(fields["messaging.kafka.offset"], "4");
 }
