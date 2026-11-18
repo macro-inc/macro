@@ -742,9 +742,20 @@ async fn has_unreadable_events(
     account_id: Uuid,
     calendar_id: Uuid,
 ) -> Result<bool, Report> {
+    // The read costs one probe of the source key per listed event: about
+    // 40 ms for 20,000 events. `OFFSET 0` keeps the probe a per-event
+    // subplan, since the planner underestimates one calendar's sources and,
+    // given an anti join, compares every member with every source instead.
+    // The timeout lasts for the rest of the transaction, whose other
+    // statements each touch one calendar's rows at most.
+    sqlx::query!("SET LOCAL statement_timeout = '60s'")
+        .execute(&mut **tx)
+        .await
+        .map_err(report)?;
     sqlx::query_scalar!(
-        r#"SELECT EXISTS(SELECT 1 FROM calendar_outlook_members m WHERE m.work_id=$1 AND NOT EXISTS(
-            SELECT 1 FROM calendar_event_sources s WHERE s.source_kind='outlook' AND s.account_id=$2 AND s.calendar_id=$3 AND s.provider_event_id=m.master_id)) AS "unreadable!""#,
+        r#"SELECT EXISTS(SELECT 1 FROM (SELECT DISTINCT m.master_id FROM calendar_outlook_members m WHERE m.work_id=$1) listed
+            WHERE NOT EXISTS(SELECT 1 FROM calendar_event_sources s
+                WHERE s.account_id=$2 AND s.calendar_id=$3 AND s.provider_event_id=listed.master_id AND s.source_kind='outlook' OFFSET 0)) AS "unreadable!""#,
         work_id,
         account_id,
         calendar_id
