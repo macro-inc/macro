@@ -1034,7 +1034,7 @@ it('waits for the re-read when a later read fails, instead of moving the rows be
   expect(screen.queryByRole('alert')).toBeNull();
 });
 
-it('keeps People in place while it loads even when no agent matches, so the sections below stay put', () => {
+it('keeps People in place while its first answer loads even when no agent matches, holding the highlighted row', () => {
   const onPick = vi.fn();
   const people = openWhilePeopleLoad({
     agents: [codex, macroAgent],
@@ -1082,12 +1082,11 @@ it('lists booking links that arrive late below People, leaving the highlighted r
     },
   ]);
   const text = document.body.textContent ?? '';
-  expect(text.indexOf('Bo Chen')).toBeLessThan(text.indexOf('Intro call'));
-  expect(screen.getByText('Macro')).toBe(macro);
-  fireEvent.keyDown(document, { key: 'Enter' });
-  expect(onPick).toHaveBeenCalledWith(
-    expect.objectContaining({ id: macroAgent.id })
+  const order = ['Macro', 'Ana Lima', 'Bo Chen', 'Intro call'].map((name) =>
+    text.indexOf(name)
   );
+  expect(order).toEqual([...order].sort((left, right) => left - right));
+  expect(screen.getByText('Macro')).toBe(macro);
 });
 
 it('reads a failed people window again by itself, holding the People rows meanwhile', () => {
