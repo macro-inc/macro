@@ -1383,6 +1383,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   flags alongside fallback previews; retained rows and legacy hosts still need
   mutation revalidation. Merge continuation pages through the indexed cursor.
   Never restore explicitly invalidated membership from an older view's snapshot.
+- Project calendar invitations from GraphQL Mail aggregate facts into the
+  shared row flag so the Calendar invite facet also matches inline invitations.
 - Render user-visible text in new UI, and every menu and navigation label,
   with `t()` from `@app/lib/i18n`, adding only the English to
   `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills

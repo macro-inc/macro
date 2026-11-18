@@ -105,14 +105,12 @@ for (const provider of PROVIDERS) {
       await expectRows(page, open);
     });
 
-    // When this fails, Has › Calendar invite does not list the invitation.
-    // Class web-outlook-invite-filter-misses-invitations: on Outlook the
-    // invitation is the message's calendar part, not an attachment, and the
-    // list's own filter (hasCalendarInviteFilter, predicates.ts) reads only
-    // attachments, so it drops the thread.
-    test(`${provider === 'OUTLOOK' ? 'known bug: web-outlook-invite-filter-misses-invitations: ' : ''}Has Calendar invite lists the invitation and nothing else`, {
-      tag: provider === 'OUTLOOK' ? '@known-bug' : [],
-    }, async ({ page, mailbox }) => {
+    // When this fails, Has › Calendar invite drops the thread that carries
+    // a calendar part or admits an ordinary message.
+    test('Has Calendar invite lists the invitation and nothing else', async ({
+      page,
+      mailbox,
+    }) => {
       await mailbox.deliver({ from: GRACE, subject: 'Plain', text: 'Hello.' });
       await deliverInvitation(mailbox, 'Invitation: Planning review');
       const plain = (await mailbox.synced('Plain')).id;

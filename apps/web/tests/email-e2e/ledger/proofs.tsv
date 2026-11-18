@@ -158,7 +158,7 @@ AL-018	The desktop Filter email menu in EmailControls.tsx drops its request to o
 AL-019	pressing f does not open the filter menu
 AL-020	The desktop Filter email menu in EmailControls.tsx ignores a choice in its Read status group instead of calling filters.setSelected; other groups still apply.
 AL-021	a Done choice in the filter menu does not narrow the list (the same wiring serves AL-023, AL-024, AL-410)
-AL-022	picking Starred under Has in the filter menu does not narrow the list to starred threads
+AL-022	Picking Starred under Has fails to narrow the list to starred threads, or Calendar invite drops invitations that arrive as calendar parts without file attachments.
 AL-023	The Attachments choice in the filter menu does not narrow the list: the facet writer in use-email-filters.tsx, the one AL-021 goes through, drops the choice when the facet is attachments.
 AL-024	The same break as AL-021: the Tags choice is written by the facet writer in use-email-filters.tsx, which drops it, so the list is not narrowed.
 AL-025	picking a person in the filter menu does not narrow the list to that person's threads
