@@ -62,7 +62,7 @@ struct FakeStore {
 }
 
 impl FakeStore {
-    fn write(&self, key: Key, changes: &[Change], via_agent: bool) {
+    fn save(&self, key: Key, changes: &[Change], via_agent: bool) {
         let mut rules = self.rules.lock().unwrap();
         let current = rules.entry(key).or_default();
         for change in changes {
@@ -99,25 +99,28 @@ impl PermissionStore for Arc<FakeStore> {
         Ok(self.read(&Key::Session(session)))
     }
 
-    async fn apply(
+    async fn write<Plan>(
         &self,
-        owner: &PolicyOwner,
-        changes: &[Change],
-        _by: &MacroUserIdStr<'static>,
-        via_agent: bool,
-    ) -> Result<(), Infallible> {
-        self.write(key(owner), changes, via_agent);
-        Ok(())
-    }
-
-    async fn apply_session(
-        &self,
-        session: AgentSessionId,
-        changes: &[Change],
-        _by: &MacroUserIdStr<'static>,
-    ) -> Result<(), Infallible> {
-        self.write(Key::Session(session), changes, true);
-        Ok(())
+        write: Write<'_>,
+        plan: Plan,
+    ) -> Result<Result<(), PermissionError>, Infallible>
+    where
+        Plan: FnOnce(&[Rule], &[Rule]) -> Result<Vec<Change>, PermissionError> + Send,
+    {
+        let saved = self.read(&key(write.owner));
+        let overlay = write
+            .session
+            .map(|session| self.read(&Key::Session(session)))
+            .unwrap_or_default();
+        let changes = match plan(&saved, &overlay) {
+            Ok(changes) => changes,
+            Err(refused) => return Ok(Err(refused)),
+        };
+        match write.to {
+            WriteTo::Saved => self.save(key(write.owner), &changes, write.via_agent),
+            WriteTo::Session(session) => self.save(Key::Session(session), &changes, true),
+        }
+        Ok(Ok(()))
     }
 
     async fn reset(&self, owner: &PolicyOwner) -> Result<(), Infallible> {
@@ -598,4 +601,76 @@ async fn resolve_calls_reads_the_policy_and_overlay_and_refuses_unknown_operatio
             (PermissionState::Never, Origin::Default, false),
         ]
     );
+}
+
+#[tokio::test]
+async fn tightening_never_stores_an_exemption_from_a_later_group_setting() {
+    let fixture = fixture();
+    let delete_document = Target::Tool {
+        service: "storage".to_owned(),
+        operation: "delete_document".to_owned(),
+    };
+    fixture
+        .service
+        .tighten(
+            &agent_caller(OWNER, BotId::TEST_A, None),
+            BotId::TEST_A,
+            vec![Change {
+                target: delete_document.clone(),
+                state: Some(PermissionState::Always),
+            }],
+        )
+        .await
+        .unwrap();
+    assert!(fixture.store.read(&Key::Agent(BotId::TEST_A)).is_empty());
+
+    let view = fixture
+        .service
+        .set(
+            &person(OWNER),
+            BotId::TEST_A,
+            vec![Change {
+                target: Target::GroupAction {
+                    group: "documents".to_owned(),
+                    action: Action::Destroy,
+                },
+                state: Some(PermissionState::Never),
+            }],
+        )
+        .await
+        .unwrap();
+    assert_eq!(view.restricted, 1);
+}
+
+#[tokio::test]
+async fn the_saved_policy_cannot_loosen_behind_a_session_restriction() {
+    let fixture = fixture();
+    // The agent restricted its session while its person could not edit it.
+    fixture
+        .service
+        .tighten(
+            &agent_caller(TEAMMATE, BotId::TEST_A, Some(AgentSessionId::TEST_A)),
+            BotId::TEST_A,
+            never_send(),
+        )
+        .await
+        .unwrap();
+    fixture
+        .service
+        .set(&person(OWNER), BotId::TEST_A, never_send())
+        .await
+        .unwrap();
+
+    // Acting for someone who may edit, in the same session, it may not
+    // clear the saved `never` though the overlay still holds one.
+    let result = fixture
+        .service
+        .tighten(
+            &agent_caller(OWNER, BotId::TEST_A, Some(AgentSessionId::TEST_A)),
+            BotId::TEST_A,
+            allow_send(),
+        )
+        .await;
+    assert!(matches!(result, Err(PermissionError::WouldLoosen(_))));
+    assert_eq!(fixture.store.read(&Key::Agent(BotId::TEST_A)).len(), 1);
 }
