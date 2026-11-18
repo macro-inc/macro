@@ -1,5 +1,6 @@
 import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { type EmailEntity, isEmailEntity } from '@entity';
+import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
 import { WebsocketEvent } from '@macro-inc/collaboration/websocket';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
@@ -58,12 +59,14 @@ export function mapEmailFocus(data: EmailFocusQuery): EmailEntity[] {
 
 /**
  * The answer from the server to the read a tab makes as it opens. Refreshes
- * read `network-only`, and the cache re-reads `cache-first` when what it
- * holds changes; a cached answer comes first, marked stale.
+ * read `network-only`; answers from the normalized cache (shown first while
+ * the server is asked, or again when what it holds changes) don't count.
  */
 export function isOpenRead(result: OperationResult): boolean {
+  const source = normalizedCacheResultMetadata(result)?.source;
   return (
     result.operation.context.requestPolicy === 'cache-and-network' &&
+    (source === undefined || source === 'live-network') &&
     !result.stale &&
     !result.error &&
     result.data != null

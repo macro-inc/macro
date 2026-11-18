@@ -248,18 +248,28 @@ describe('onOpenRead', () => {
 describe('isOpenRead', () => {
   const read = (
     requestPolicy: 'cache-and-network' | 'network-only' | 'cache-first',
-    result: { stale?: boolean; error?: boolean; data?: unknown } = {}
+    result: {
+      stale?: boolean;
+      error?: boolean;
+      data?: unknown;
+      /** Where the normalized cache says the answer came from. */
+      source?: string;
+    } = {}
   ) =>
     isOpenRead({
       operation: { context: { requestPolicy } } as Operation,
       data: 'data' in result ? result.data : { user: { emailFocus: [] } },
       error: result.error ? new CombinedError({}) : undefined,
+      extensions: result.source
+        ? { __macroNormalizedCache: { source: result.source } }
+        : undefined,
       stale: result.stale ?? false,
       hasNext: false,
     });
 
   it('is the server answer to the opening read', () => {
     expect(read('cache-and-network')).toBe(true);
+    expect(read('cache-and-network', { source: 'live-network' })).toBe(true);
   });
 
   it('is not the cached answer shown first, a failure, or a refresh', () => {
@@ -269,5 +279,11 @@ describe('isOpenRead', () => {
     expect(read('network-only')).toBe(false);
     // The cache reading again after a write it holds.
     expect(read('cache-first')).toBe(false);
+    expect(read('cache-and-network', { source: 'affected-cache-reread' })).toBe(
+      false
+    );
+    expect(read('cache-and-network', { source: 'normalized-cache-hit' })).toBe(
+      false
+    );
   });
 });
