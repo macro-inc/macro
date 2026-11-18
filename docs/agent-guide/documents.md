@@ -98,6 +98,13 @@ labeled rather than inferred. Canvas and file breadcrumb names follow live
 renames, including the tab title and title menu. Rename an open canvas and confirm
 its header updates immediately without reloading or remounting the editor.
 
+A document title saves 400ms after the last keystroke, and at once when the
+document closes. Create a document, type part of its title, pause, type the
+rest quickly, press Enter and type into the body: the whole title stays and
+survives a reload. The saved name never replaces a title with a save waiting
+or in flight, so delay GraphQL responses by about 1.5s to check it; a rename
+made elsewhere shows once the title has none.
+
 Editable documents show matching **Add tags** and **Add property** pills below
 the title. Once tags are applied, **Add tags** becomes the existing tag name or
 count pill; clicking it reopens the picker. **Add property** opens the shared
