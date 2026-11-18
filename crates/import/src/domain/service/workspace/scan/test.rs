@@ -12,6 +12,10 @@ use crate::domain::ports::{PlanRow, Result};
 struct Recorder(mpsc::UnboundedSender<(Instant, ScanCounts)>);
 
 impl NotionPlanRepo for Recorder {
+    async fn require_replan(&self, _: &MacroUserIdStr<'static>, _: Uuid, _: &str) -> Result<bool> {
+        unreachable!("recording a scan never defers objects")
+    }
+
     async fn clear_stale_link(
         &self,
         _: &MacroUserIdStr<'static>,

@@ -8,6 +8,38 @@ use crate::domain::ports::Result;
 
 impl PgImportRepo {
     #[tracing::instrument(skip(self, user), err)]
+    pub(super) async fn defer_linked_object(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        reason: &str,
+    ) -> Result<bool> {
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *transaction)
+            .await?;
+        let changed = sqlx::query_scalar!(
+            r#"
+            UPDATE import_entity
+            SET metadata = jsonb_set(
+                    jsonb_set(metadata #- '{plan,alreadyImported}', '{plan,decision}', '"hand"'::jsonb),
+                    '{plan,reason}', to_jsonb($3::text)
+                ), status = 'staged', team_id = NULL, waiting_on = NULL,
+                last_error = $3, updated_at = NOW()
+            WHERE user_id = $1 AND id = $2 AND status = 'importing'
+              AND metadata->'plan' IS NOT NULL
+            RETURNING id
+            "#,
+            user.as_ref(), import_id, reason,
+        ).fetch_optional(&mut *transaction).await?;
+        if changed.is_some() {
+            super::release_waiters(&mut transaction, &[import_id]).await?;
+        }
+        transaction.commit().await?;
+        Ok(changed.is_some())
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
     pub(super) async fn clear_stale_team_link(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -18,7 +50,7 @@ impl PgImportRepo {
             r#"
             UPDATE import_entity
             SET metadata = jsonb_set(
-                    metadata #- '{plan,alreadyImported}' #- '{plan,reason}',
+                    metadata #- '{plan,alreadyImported}' #- '{plan,reason}' #- '{plan,sharedReason}',
                     '{plan,shared}', to_jsonb($3::bool)
                 ), updated_at = NOW()
             WHERE user_id = $1 AND id = $2 AND status = 'importing'

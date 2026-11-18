@@ -54,7 +54,10 @@ fn page_times(id: &NotionId) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
 }
 
 /// A workspace of plain pages, each with a body.
-struct Pages;
+#[derive(Default)]
+struct Pages {
+    after_replacement: Option<Arc<Notify>>,
+}
 
 impl NotionApi for Pages {
     async fn search(
@@ -80,6 +83,19 @@ impl NotionApi for Pages {
     }
 
     async fn page_markdown(&self, id: &NotionId) -> std::result::Result<PageMarkdown, NotionError> {
+        if *id == page_id('f')
+            && let Some(ready) = &self.after_replacement
+        {
+            ready.notified().await;
+            return Ok(PageMarkdown {
+                markdown: format!(
+                    "See [Wiki]({}) and [Live]({})",
+                    page_id('e').url(),
+                    page_id('a').url()
+                ),
+                unknown_block_ids: Vec::new(),
+            });
+        }
         Ok(PageMarkdown {
             markdown: format!("Body of {id}"),
             unknown_block_ids: Vec::new(),
@@ -128,7 +144,22 @@ impl NotionConnections for Connected {
         &self,
         _: &MacroUserIdStr<'static>,
     ) -> std::result::Result<Option<Pages>, NotionError> {
-        Ok(Some(Pages))
+        Ok(Some(Pages::default()))
+    }
+}
+
+struct AfterReplacement(Arc<Notify>);
+
+impl NotionConnections for AfterReplacement {
+    type Api = Pages;
+
+    async fn for_user(
+        &self,
+        _: &MacroUserIdStr<'static>,
+    ) -> std::result::Result<Option<Pages>, NotionError> {
+        Ok(Some(Pages {
+            after_replacement: Some(Arc::clone(&self.0)),
+        }))
     }
 }
 

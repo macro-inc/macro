@@ -9,6 +9,8 @@ use super::*;
 pub(super) struct Writer {
     pub(super) target_pool: Option<PgPool>,
     pub(super) delete_on_first_read: std::sync::atomic::AtomicBool,
+    pub(super) delete_target: Option<Uuid>,
+    pub(super) notify_on_document: Option<(Uuid, Arc<Notify>)>,
     pub(super) folder_pool: Option<PgPool>,
     pub(super) folders: Mutex<Vec<String>>,
     pub(super) documents: Mutex<Vec<(Uuid, String, NotionLinks)>>,
@@ -27,19 +29,28 @@ pub(super) struct Writer {
 impl crate::domain::ports::ImportedTargetReader for Writer {
     async fn target_exists(
         &self,
-        _: &MacroUserIdStr<'static>,
         target: crate::domain::ports::SharedEntity,
     ) -> anyhow::Result<bool> {
-        if let Some(pool) = &self.target_pool
-            && let SharedEntity::Document(id) = target
-        {
-            let live = sqlx::query_scalar!(
-                r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL) AS "live!""#,
-                id.to_string(),
-            ).fetch_one(pool).await?;
-            if self
-                .delete_on_first_read
-                .swap(false, std::sync::atomic::Ordering::SeqCst)
+        if let Some(pool) = &self.target_pool {
+            let live = match target {
+                SharedEntity::Document(id) => sqlx::query_scalar!(
+                    r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL) AS "live!""#,
+                    id.to_string(),
+                ).fetch_one(pool).await?,
+                SharedEntity::Folder(id) => sqlx::query_scalar!(
+                    r#"SELECT EXISTS(SELECT 1 FROM "Project" WHERE id = $1 AND "deletedAt" IS NULL) AS "live!""#,
+                    id.to_string(),
+                ).fetch_one(pool).await?,
+                SharedEntity::Database(id) => sqlx::query_scalar!(
+                    r#"SELECT EXISTS(SELECT 1 FROM database_entities WHERE database_id = $1 AND trashed_at IS NULL) AS "live!""#,
+                    id,
+                ).fetch_one(pool).await?,
+            };
+            if let SharedEntity::Document(id) = target
+                && self.delete_target.is_none_or(|target| target == id)
+                && self
+                    .delete_on_first_read
+                    .swap(false, std::sync::atomic::Ordering::SeqCst)
             {
                 sqlx::query!(
                     r#"UPDATE "Document" SET "deletedAt" = NOW() WHERE id = $1"#,
@@ -168,6 +179,11 @@ impl WorkspaceWriter for Writer {
             .lock()
             .unwrap()
             .push((id, name.to_string(), links.clone()));
+        if let Some((expected, ready)) = &self.notify_on_document
+            && *expected == id
+        {
+            ready.notify_one();
+        }
         Ok(id.to_string())
     }
 

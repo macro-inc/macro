@@ -34,7 +34,7 @@ pub(crate) async fn live<R: NotionPlanRepo, T: ImportedTargetReader>(
         // Unknown historical entity kinds are outside workspace re-import policy.
         return Ok(true);
     };
-    if reader.target_exists(user, target).await? {
+    if reader.target_exists(target).await? {
         return Ok(true);
     }
     if let Some(entity_id) = &row.entity_id {
@@ -107,7 +107,7 @@ pub(crate) async fn claim_team_object<R: ImportRepo + NotionPlanRepo, T: Importe
             _ => None,
         };
         if let Some(target) = target
-            && !reader.target_exists(user, target).await?
+            && !reader.target_exists(target).await?
         {
             let Some(own) = repo.get(user, import_id).await? else {
                 return Ok(TeamClaim::Free);

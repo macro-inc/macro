@@ -158,6 +158,8 @@ from this import's other databases into it are not linked.
   and shared as `alreadyImported` (no decision-model call, not counted as
   copies); the write links them. `service/lifecycle.rs` checks finished targets
   through `ImportedTargetReader` during planning and immediately before linking.
+  Liveness is independent of viewer permissions: losing access alone never
+  renews a still-active target's generation.
   Missing or trashed documents, folders and database entities get a fresh ledger
   generation and write ids on explicit re-import; the old trash copy stays
   untouched. Renewal clears that generation's written markers and team claim,
@@ -165,7 +167,11 @@ from this import's other databases into it are not linked.
   do not release claims eagerly: liveness checks repair stale claims, including
   deletion between planning and writing. A replacement write uses its own
   generation's document id even if the link snapshot still names the old team
-  copy, and clears the review's obsolete `alreadyImported` target. Transient
+  copy, and clears the review's obsolete `alreadyImported` target. Page, task
+  and database-body writes read the run's shared destinations immediately before
+  creation, so later writes use a replacement's id while live team ids stay put.
+  A missing linked data source requires a fresh plan instead of guessing between
+  a database and tasks folder without its original task mapping. Transient
   read errors preserve claims. At write time `claim_team_object` decides per
   shared object: hold the claim and write, link to a finished copy, take over a
   claim whose holder's run has no live lease, or wait. A waiting row is

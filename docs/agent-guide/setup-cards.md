@@ -36,6 +36,8 @@ Every other app opens Pipedream's Connect UI inside the dialog. A connected row
   teammate's shared copy, and a personal copy. Deleting the Notion root folder
   permits its deleted contents to be imported into a fresh root; re-importing
   an active copy still reuses it. A teammate's active write keeps its claim.
+  If a linked data source disappears after planning, plan and approve again to
+  choose its database or task-list format; the old review cannot guess a new shape.
 - Files also offers **Upload files** and **Upload a folder** (Drive's own
   uploads), and Customers offers **Upload a CSV** (the existing CSV import).
   Each closes the dialog first.

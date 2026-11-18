@@ -26,6 +26,15 @@ fn is_unique_violation(error: &sqlx::Error) -> bool {
 }
 
 impl NotionPlanRepo for PgImportRepo {
+    async fn require_replan(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        reason: &str,
+    ) -> Result<bool> {
+        self.defer_linked_object(user, import_id, reason).await
+    }
+
     async fn clear_stale_link(
         &self,
         user: &MacroUserIdStr<'static>,

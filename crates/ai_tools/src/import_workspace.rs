@@ -4,7 +4,7 @@
 use crate::ToolEntityCreator;
 use crate::tool_context::ImportedContent;
 use databases::domain::models::{CreateDatabase, DatabaseDetail, DatabaseId, OpBatch, Viewer};
-use databases::domain::ports::DatabasesService as _;
+use databases::domain::ports::{DatabaseLifecycleReads as _, DatabasesService as _};
 use databases::domain::receipt::database_receipt;
 use databases::domain::sharing::DatabaseSharingService as _;
 use documents::domain::models::DocumentError;
@@ -20,7 +20,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
-use projects::domain::ports::ProjectService as _;
+use projects::domain::ports::{ProjectRepo as _, ProjectService as _};
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -109,28 +109,10 @@ fn new_database(detail: &DatabaseDetail) -> anyhow::Result<NewDatabase> {
 }
 
 impl import::domain::ports::ImportedTargetReader for ToolEntityCreator {
-    #[tracing::instrument(skip(self, user), err)]
-    async fn target_exists(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        target: SharedEntity,
-    ) -> anyhow::Result<bool> {
-        let (id, kind) = match target {
-            SharedEntity::Document(id) => (id, model_entity::EntityType::Document),
-            SharedEntity::Folder(id) => (id, model_entity::EntityType::Project),
-            SharedEntity::Database(id) => (id, model_entity::EntityType::Database),
-        };
-        let receipt = match self
-            .entity_access_service
-            .generate_entity_access_receipt::<ViewAccessLevel>(user, None, &id.to_string(), kind)
-            .await
-        {
-            Ok(receipt) => receipt,
-            Err(error) if crate::tool_context::refuses_view(&error) => return Ok(false),
-            Err(error) => return Err(anyhow::Error::new(error)),
-        };
+    #[tracing::instrument(skip(self), err)]
+    async fn target_exists(&self, target: SharedEntity) -> anyhow::Result<bool> {
         match target {
-            SharedEntity::Document(_) => match self
+            SharedEntity::Document(id) => match self
                 .document_service
                 .repo
                 .get_basic_document(&id.to_string())
@@ -140,16 +122,18 @@ impl import::domain::ports::ImportedTargetReader for ToolEntityCreator {
                 Err(sqlx::Error::RowNotFound) => Ok(false),
                 Err(error) => Err(error.into()),
             },
-            SharedEntity::Folder(_) => match self.project_service.get_project(receipt).await {
-                Ok(project) => Ok(project.project_metadata.deleted_at.is_none()),
-                Err(projects::domain::models::ProjectError::NotFound(_)) => Ok(false),
-                Err(error) => Err(error.into()),
-            },
-            SharedEntity::Database(_) => match self.databases_service.get_database(receipt).await {
-                Ok(database) => Ok(database.database.trashed_at.is_none()),
-                Err(databases::domain::models::DatabaseError::NotFound) => Ok(false),
-                Err(error) => Err(error.into()),
-            },
+            SharedEntity::Folder(id) => {
+                let project = self
+                    .project_service
+                    .repo
+                    .get_basic_project(&id.to_string())
+                    .await?;
+                Ok(project.is_some_and(|project| project.deleted_at.is_none()))
+            }
+            SharedEntity::Database(id) => Ok(self
+                .databases_service
+                .database_is_live(DatabaseId::from_uuid(id))
+                .await?),
         }
     }
 }
@@ -273,12 +257,26 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         user: &MacroUserIdStr<'static>,
         folder: Uuid,
     ) -> anyhow::Result<bool> {
-        import::domain::ports::ImportedTargetReader::target_exists(
-            self,
-            user,
-            SharedEntity::Folder(folder),
-        )
-        .await
+        match self
+            .entity_access_service
+            .generate_entity_access_receipt::<ViewAccessLevel>(
+                user,
+                None,
+                &folder.to_string(),
+                model_entity::EntityType::Project,
+            )
+            .await
+        {
+            Ok(_) => {
+                import::domain::ports::ImportedTargetReader::target_exists(
+                    self,
+                    SharedEntity::Folder(folder),
+                )
+                .await
+            }
+            Err(error) if crate::tool_context::refuses_view(&error) => Ok(false),
+            Err(error) => Err(anyhow::Error::new(error)),
+        }
     }
 
     #[tracing::instrument(skip(self, user, name), err)]

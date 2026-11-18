@@ -94,3 +94,202 @@ async fn deleting_a_team_copy_after_link_resolution_writes_a_fresh_document(pool
         "the deleted copy is not restored"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn later_page_writes_use_the_replacement_and_preserve_live_team_destinations(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "references-owner", team).await;
+    let importer = teammate(&pool, "references-importer", team).await;
+    let repo = PgImportRepo::new(pool.clone());
+    let (_, owners) = approved(
+        &pool,
+        &owner,
+        &[
+            planned_page('e', "Wiki", true),
+            planned_page('a', "Live", true),
+        ],
+    )
+    .await;
+    let old_wiki = Uuid::now_v7();
+    let live_document = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO "Document" (id, name, owner, "fileType") VALUES ($1, 'Wiki', $3, 'md'), ($2, 'Live', $3, 'md')"#,
+        old_wiki.to_string(), live_document.to_string(), owner.as_ref(),
+    ).execute(&pool).await.unwrap();
+    repo.claim_importing(&owner, &owners, &owners, Some(team))
+        .await
+        .unwrap();
+    repo.mark_imported(&owner, owners[0], &old_wiki.to_string(), "md", None)
+        .await
+        .unwrap();
+    repo.mark_imported(&owner, owners[1], &live_document.to_string(), "md", None)
+        .await
+        .unwrap();
+    let (review, imports) = approved(
+        &pool,
+        &importer,
+        &[
+            planned_page('e', "Wiki", false),
+            planned_page('a', "Live", false),
+            planned_page('f', "Spec", false),
+        ],
+    )
+    .await;
+    let row = repo.get(&importer, imports[0]).await.unwrap().unwrap();
+    let mut wiki: NotionDocMeta = serde_json::from_value(row.metadata).unwrap();
+    wiki.plan.as_mut().unwrap().already_imported =
+        Some(crate::domain::models::NotionAlreadyImported {
+            by: "references-owner@example.com".to_string(),
+            entity_id: old_wiki.to_string(),
+            entity_type: "md".to_string(),
+        });
+    sqlx::query!(
+        "UPDATE import_entity SET metadata = $2 WHERE id = $1",
+        imports[0],
+        serde_json::to_value(wiki).unwrap()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let row = repo.get(&importer, imports[1]).await.unwrap().unwrap();
+    let mut live: NotionDocMeta = serde_json::from_value(row.metadata).unwrap();
+    live.plan.as_mut().unwrap().already_imported =
+        Some(crate::domain::models::NotionAlreadyImported {
+            by: "references-owner@example.com".to_string(),
+            entity_id: live_document.to_string(),
+            entity_type: "md".to_string(),
+        });
+    sqlx::query!(
+        "UPDATE import_entity SET metadata = $2 WHERE id = $1",
+        imports[1],
+        serde_json::to_value(live).unwrap()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    planned(&repo, &importer).await;
+    let ready = Arc::new(Notify::new());
+    let expected_wiki = write::document_id(imports[0]);
+    let expected_spec = write::document_id(imports[2]);
+    let tracker = TaskTracker::new();
+    let writer = Arc::new(Writer {
+        target_pool: Some(pool.clone()),
+        delete_target: Some(old_wiki),
+        delete_on_first_read: std::sync::atomic::AtomicBool::new(true),
+        notify_on_document: Some((expected_wiki, Arc::clone(&ready))),
+        ..Default::default()
+    });
+    let service = ImportServiceImpl::new(
+        repo.clone(),
+        Arc::new(NoConnector),
+        Arc::clone(&writer),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(AfterReplacement(ready)))
+    .with_job_shutdown(tokio_util::sync::CancellationToken::new(), tracker.clone());
+
+    service
+        .start_notion_write(&importer, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tokio::time::timeout(std::time::Duration::from_secs(10), tracker.wait())
+        .await
+        .unwrap();
+
+    {
+        let documents = writer.documents.lock().unwrap();
+        assert_eq!(documents.len(), 2);
+        let spec = documents
+            .iter()
+            .find(|(id, _, _)| *id == expected_spec)
+            .unwrap();
+        assert_eq!(spec.2.pages[&page_id('e')].document_id, expected_wiki);
+        assert_ne!(spec.2.pages[&page_id('e')].document_id, old_wiki);
+        assert_eq!(spec.2.pages[&page_id('a')].document_id, live_document);
+    }
+    let live = repo.get(&owner, owners[1]).await.unwrap().unwrap();
+    assert_eq!(live.status, ImportStatus::Imported);
+    assert_eq!(live.entity_id, Some(live_document.to_string()));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_deleted_linked_task_folder_requires_a_fresh_plan_instead_of_a_database(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "shape-owner", team).await;
+    let importer = teammate(&pool, "shape-importer", team).await;
+    let repo = PgImportRepo::new(pool.clone());
+    let mut source = planned_page('e', "Tasks", true);
+    source.kind = ImportKind::DataSource;
+    let mut metadata: NotionDocMeta = serde_json::from_value(source.metadata).unwrap();
+    metadata.plan.as_mut().unwrap().decision = Some(NotionDecision::Tasks);
+    metadata.plan.as_mut().unwrap().task_fields = Some(Default::default());
+    source.metadata = serde_json::to_value(metadata).unwrap();
+    let (_, owners) = approved(&pool, &owner, &[source]).await;
+    let folder = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, 'Tasks', $2)"#,
+        folder.to_string(),
+        owner.as_ref()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    repo.claim_importing(&owner, &owners, &owners, Some(team))
+        .await
+        .unwrap();
+    repo.mark_imported(&owner, owners[0], &folder.to_string(), "project", None)
+        .await
+        .unwrap();
+    let mut linked = planned_page('e', "Tasks", false);
+    linked.kind = ImportKind::DataSource;
+    let mut metadata: NotionDocMeta = serde_json::from_value(linked.metadata).unwrap();
+    metadata.plan.as_mut().unwrap().already_imported =
+        Some(crate::domain::models::NotionAlreadyImported {
+            by: "shape-owner@example.com".to_string(),
+            entity_id: folder.to_string(),
+            entity_type: "project".to_string(),
+        });
+    linked.metadata = serde_json::to_value(metadata).unwrap();
+    let (review, imports) = approved(&pool, &importer, &[linked]).await;
+    planned(&repo, &importer).await;
+    sqlx::query!(
+        r#"UPDATE "Project" SET "deletedAt" = NOW() WHERE id = $1"#,
+        folder.to_string()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let tracker = TaskTracker::new();
+    let writer = Arc::new(Writer {
+        target_pool: Some(pool.clone()),
+        ..Default::default()
+    });
+    let service = ImportServiceImpl::new(
+        repo.clone(),
+        Arc::new(NoConnector),
+        Arc::clone(&writer),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(Connected))
+    .with_job_shutdown(tokio_util::sync::CancellationToken::new(), tracker.clone());
+
+    service
+        .start_notion_write(&importer, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tokio::time::timeout(std::time::Duration::from_secs(10), tracker.wait())
+        .await
+        .unwrap();
+
+    let deferred = repo.get(&importer, imports[0]).await.unwrap().unwrap();
+    assert_eq!(deferred.status, ImportStatus::Staged);
+    assert_eq!(deferred.team_id, None);
+    assert!(deferred.last_error.is_some());
+    let metadata: NotionDocMeta = serde_json::from_value(deferred.metadata).unwrap();
+    let plan = metadata.plan.unwrap();
+    assert_eq!(plan.decision, Some(NotionDecision::Hand));
+    assert_eq!(plan.already_imported, None);
+    assert!(writer.documents.lock().unwrap().is_empty());
+}

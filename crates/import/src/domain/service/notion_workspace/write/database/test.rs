@@ -176,11 +176,7 @@ const TABLE: Uuid = Uuid::from_u128(501);
 const TITLE_COLUMN: Uuid = Uuid::from_u128(502);
 
 impl crate::domain::ports::ImportedTargetReader for FakeWriter {
-    async fn target_exists(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: crate::domain::ports::SharedEntity,
-    ) -> anyhow::Result<bool> {
+    async fn target_exists(&self, _: crate::domain::ports::SharedEntity) -> anyhow::Result<bool> {
         Ok(true)
     }
 }
@@ -437,7 +433,7 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
         folder,
         false,
         &PeopleMap::new(),
-        &links,
+        &tokio::sync::RwLock::new(links.clone()),
         &progress,
         &Cancel::default(),
     )
@@ -618,7 +614,7 @@ async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
         Uuid::from_u128(42),
         true,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &progress,
         &Cancel::default(),
     )
@@ -669,7 +665,7 @@ async fn a_cancelled_import_stops_before_writing_rows() {
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &progress,
         &cancel,
     )
@@ -729,7 +725,7 @@ async fn a_database_whose_rows_have_no_content_gets_no_page_column() {
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &progress,
         &Cancel::default(),
     )
@@ -802,7 +798,7 @@ async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &[]),
         &Cancel::default(),
     )
@@ -821,7 +817,7 @@ async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &recorded),
         &Cancel::default(),
     )
@@ -890,7 +886,7 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &[]),
         &Cancel::default(),
     )
@@ -909,7 +905,7 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &recorded),
         &Cancel::default(),
     )

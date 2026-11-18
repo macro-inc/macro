@@ -1,5 +1,7 @@
 //! Re-importing an object must not reuse an imported ledger entry whose copy was deleted.
 
+mod facts;
+
 use super::*;
 use crate::domain::ports::{ImportedTargetReader, SharedEntity};
 use crate::domain::service::lifecycle;
@@ -9,11 +11,7 @@ use crate::domain::service::lifecycle;
 struct Targets(PgPool);
 
 impl ImportedTargetReader for Targets {
-    async fn target_exists(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        target: SharedEntity,
-    ) -> anyhow::Result<bool> {
+    async fn target_exists(&self, target: SharedEntity) -> anyhow::Result<bool> {
         let live = match target {
             SharedEntity::Document(id) => sqlx::query_scalar!(
                 r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL) AS "live!""#,
@@ -912,11 +910,7 @@ async fn reimport_after_deletion_renews_once_and_preserves_children_without_old_
 struct UnavailableTargets;
 
 impl ImportedTargetReader for UnavailableTargets {
-    async fn target_exists(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: SharedEntity,
-    ) -> anyhow::Result<bool> {
+    async fn target_exists(&self, _: SharedEntity) -> anyhow::Result<bool> {
         anyhow::bail!("temporary lifecycle read failure")
     }
 }

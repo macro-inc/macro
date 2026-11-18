@@ -1,7 +1,6 @@
 //! Writing one object of a plan: claiming it for the team, linking it to a
 //! teammate's copy, or writing it and sharing what it became.
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 
 use import_notion::domain::inventory::full_markdown;
@@ -28,6 +27,9 @@ use crate::domain::ports::{
 /// Times a waiting object is checked again before it is given up on: each
 /// check finds the teammate's copy finished, taken over, or still writing.
 const WAIT_CHECKS: u8 = 3;
+/// A linked source no longer carries the mapping needed to choose its shape.
+const REPLAN_DATA_SOURCE: &str =
+    "A linked data source was deleted. Plan this import again to choose how to copy it.";
 /// What an object says when its team copy kept changing hands.
 const KEPT_MOVING: &str =
     "A teammate's import of this kept stopping and starting. Import it again.";
@@ -122,6 +124,24 @@ where
             }
             _ => TeamClaim::Free,
         };
+        let destination = match &claim {
+            TeamClaim::Linked {
+                entity_id,
+                entity_type,
+            } if matches!(entity_type.as_str(), "md" | "task") => Uuid::parse_str(entity_id).ok(),
+            TeamClaim::Waiting { holder } if item.kind != ImportKind::DataSource => {
+                Some(write::document_id(*holder))
+            }
+            TeamClaim::Held | TeamClaim::Free if item.kind != ImportKind::DataSource => {
+                Some(write::document_id(item.import_id))
+            }
+            _ => None,
+        };
+        if let Some(document) = destination
+            && let Some(page) = target.links.write().await.pages.get_mut(&item.notion_id)
+        {
+            page.document_id = document;
+        }
         let share = match claim {
             TeamClaim::Linked {
                 entity_id,
@@ -136,6 +156,12 @@ where
             TeamClaim::Held => true,
             TeamClaim::Free => false,
         };
+        if item.already_imported && item.kind == ImportKind::DataSource {
+            self.repo
+                .require_replan(user, item.import_id, REPLAN_DATA_SOURCE)
+                .await?;
+            return Err(ImportError::NotReady(REPLAN_DATA_SOURCE));
+        }
         if item.already_imported
             && !self
                 .repo
@@ -194,17 +220,6 @@ where
                 // A teammate's copy can disappear after the link snapshot.
                 // Once this row writes, its identity belongs to this generation.
                 let id = write::document_id(item.import_id);
-                let page = target.links.pages.get(&item.notion_id).ok_or_else(|| {
-                    ImportError::Other(anyhow::anyhow!("page {} has no id", item.notion_id))
-                })?;
-                let mut links = Cow::Borrowed(target.links);
-                if page.document_id != id {
-                    links
-                        .to_mut()
-                        .pages
-                        .entry(item.notion_id.clone())
-                        .and_modify(|page| page.document_id = id);
-                }
                 let (properties, dates) = match api.page(&item.notion_id).await {
                     Ok(page) => (
                         values::document_properties(&page),
@@ -215,6 +230,7 @@ where
                         (Default::default(), None)
                     }
                 };
+                let links = target.links.read().await.clone();
                 let document = self
                     .creator
                     .create_document(
@@ -222,7 +238,7 @@ where
                         id,
                         &item.title,
                         &markdown,
-                        links.as_ref(),
+                        &links,
                         &properties,
                         Some(folder),
                         dates,
@@ -375,7 +391,7 @@ pub(super) struct Target<'a, Api> {
     pub team_id: Option<Uuid>,
     pub place: Place<'a>,
     pub people: &'a PeopleMap,
-    pub links: &'a NotionLinks,
+    pub links: &'a tokio::sync::RwLock<NotionLinks>,
     pub databases: &'a tokio::sync::Mutex<HashMap<NotionId, write::WrittenDatabase>>,
     pub written: &'a [WrittenObject],
     pub cancel: &'a write::Cancel,

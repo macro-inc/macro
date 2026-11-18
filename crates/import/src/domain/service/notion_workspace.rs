@@ -656,7 +656,7 @@ where
         let people = self.people(&api, user).await;
         let ids: Vec<Uuid> = set.all.iter().map(|item| item.import_id).collect();
         let written = self.repo.written(user, &ids).await?;
-        let links = self.links(user, &set.all, &people).await?;
+        let links = tokio::sync::RwLock::new(self.links(user, &set.all, &people).await?);
         let root = self.root_folder(user).await?;
 
         // Folders first, parents before children. A folder is shared only

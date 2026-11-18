@@ -594,11 +594,10 @@ pub struct TeamMember {
 
 /// Reads lifecycle state through the imported entity's owning domain.
 pub trait ImportedTargetReader: Send + Sync + 'static {
-    /// Whether an imported target exists, is outside trash, and remains
-    /// readable by the caller. Transient read failures must be returned.
+    /// Whether an imported target exists outside trash, independently of
+    /// viewer permissions. Transient read failures must be returned.
     fn target_exists(
         &self,
-        user: &MacroUserIdStr<'static>,
         target: SharedEntity,
     ) -> impl Future<Output = anyhow::Result<bool>> + Send;
 }
@@ -752,6 +751,15 @@ pub struct PlanRow {
 
 /// Ledger operations a workspace import needs beyond single-row staging.
 pub trait NotionPlanRepo: Send + Sync + 'static {
+    /// Stop a writing object whose reviewed link no longer determines its
+    /// shape. Leave it staged for a fresh plan, releasing its claim/waiters.
+    fn require_replan(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        reason: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
     /// Before writing a replacement, remove a reviewed link's obsolete target
     /// and record the replacement's actual sharing. CAS on the writing row.
     fn clear_stale_link(
