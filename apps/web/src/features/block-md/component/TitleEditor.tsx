@@ -40,6 +40,7 @@ import {
   KEY_TAB_COMMAND,
   type LexicalEditor,
 } from 'lexical';
+import { ResultAsync } from 'neverthrow';
 import {
   type Accessor,
   createEffect,
@@ -53,6 +54,11 @@ import {
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useMarkdownName } from './MarkdownNameProvider';
 import { shouldAutofocusDocument } from './should-autofocus-document';
+
+type TitleRename = {
+  newName: string;
+  oldName: string;
+};
 
 /**
  * Use the plugin architecture to set up command handlers on both the
@@ -168,7 +174,6 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const [showFallback, setShowFallback] = createSignal(true);
   const [titlePlaceholder] = createSignal<string>();
-  const [titleFocused, setTitleFocused] = createSignal(false);
 
   const blockId = documentId();
   const documentKind = kind();
@@ -179,25 +184,34 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   );
   const titlePlaceholderFallback = blockNameToDefaultFile(entityBlockName);
 
-  let pendingRename:
-    | {
-        newName: string;
-        oldName: string;
-      }
-    | undefined;
+  let pendingRename: TitleRename | undefined;
+  // Renames sent and not yet settled. Until they settle, the saved name can
+  // lag behind the title, so it must not replace the title.
+  let renamesInFlight = 0;
+
+  const saveTitle = async (next: TitleRename) => {
+    renamesInFlight += 1;
+    const saved = await ResultAsync.fromPromise(
+      renameDocumentMutation.mutateAsync({
+        entity: {
+          type: 'document',
+          id: blockId,
+          name: next.oldName,
+        },
+        newName: next.newName,
+      }),
+      (error) => error
+    );
+    renamesInFlight -= 1;
+    // The mutation reports the failure; show the name that is still saved.
+    if (saved.isErr() || !saved.value.success) showSavedName();
+  };
 
   const flushPendingRename = () => {
     const next = pendingRename;
     pendingRename = undefined;
     if (!next || !canEdit()) return;
-    renameDocumentMutation.mutate({
-      entity: {
-        type: 'document',
-        id: blockId,
-        name: next.oldName,
-      },
-      newName: next.newName,
-    });
+    fireAndForget(saveTitle(next), 'block-md-title');
   };
 
   const scheduleRename = (newName: string, oldName: string) => {
@@ -267,8 +281,6 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     setShowFallback(isEmpty);
   });
 
-  let selfChangedTitle = false;
-
   // Wait for the main editor to be mounted, then register the navigate plugin.
   createEffect(() => {
     const mainDocumentEditor = mdData.editor;
@@ -277,7 +289,6 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   });
 
   function onBlur() {
-    setTitleFocused(false);
     trimWhitespace(editor, { trailing: true });
   }
 
@@ -285,12 +296,9 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const onConnect = (el: HTMLDivElement) => {
     editor.setRootElement(el);
-    const onFocus = () => setTitleFocused(true);
-    el.addEventListener('focus', onFocus);
     el.addEventListener('blur', onBlur);
     setRootConnected(true);
     onCleanup(() => {
-      el.removeEventListener('focus', onFocus);
       el.removeEventListener('blur', onBlur);
     });
   };
@@ -301,29 +309,30 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const dataReady = () => documentSource().type !== 'loading';
 
-  const hasLocalTitleEdit = createMemo(() => {
-    if (!titleFocused()) return false;
-    return state().trim() !== (mdDocumentName() ?? '');
-  });
-
-  createEffect(
-    on(
-      () => ({ docName: persistedDocumentName(), ready: dataReady() }),
-      ({ docName, ready }) => {
-        const currentState = untrack(state);
-        if (
-          ready &&
-          docName !== undefined &&
-          docName !== currentState.trim() &&
-          !selfChangedTitle &&
-          !untrack(hasLocalTitleEdit)
-        ) {
-          forceSetTextContent(editor, docName);
-        }
-        selfChangedTitle = false;
-      }
-    )
+  // The document's preview republishes whenever anything in its batch
+  // changes, so compare the saved name by value: an unchanged name is not a
+  // rename.
+  const savedName = createMemo(() =>
+    dataReady() ? persistedDocumentName() : undefined
   );
+
+  /** Whether the title holds edits that are not saved yet: text typed into an
+   * open emoji or tag menu, which is not saved while the menu is open, a rename
+   * waiting for its debounce, or one in flight. */
+  const hasUnsavedEdits = () =>
+    untrack(inlineMenuOpen) ||
+    pendingRename !== undefined ||
+    renamesInFlight > 0;
+
+  /** Puts the saved name in the title unless the title has edits of its own. */
+  function showSavedName() {
+    const name = untrack(savedName);
+    if (name === undefined || name === untrack(state).trim()) return;
+    if (hasUnsavedEdits()) return;
+    forceSetTextContent(editor, name);
+  }
+
+  createEffect(on(savedName, showSavedName));
 
   createEffect(() => {
     const currentState = state();
@@ -337,12 +346,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
       setOptimisticName(nextName);
     }
     const persistedName = untrack(persistedDocumentName) ?? '';
-    if (nextName !== persistedName) {
-      selfChangedTitle = true;
-      if (canEdit()) {
-        scheduleRename(nextName, persistedName);
-      }
-    } else {
+    if (nextName === persistedName || canEdit()) {
       scheduleRename(nextName, persistedName);
     }
   });
