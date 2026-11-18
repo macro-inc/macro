@@ -8,10 +8,13 @@ import { showTeamAgentSetupNotice } from '@app/features/settings/primitives/team
 import { retryTeamAgentComputer } from '@app/features/settings/primitives/team-agent-status';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openDirectMessage } from '@core/util/open-direct-message';
+import { Telemetry } from '@macro-inc/observability';
 import { cachedUserId } from '@queries/auth/cached-user-id';
+import { getOrCreateDirectMessageChannel } from '@queries/channel/get-or-create-dm';
 import { fetchHarnesses } from '@queries/harnesses/harnesses';
 import {
   openBillingSettings,
@@ -29,13 +32,28 @@ export function openComputerSetup(computerId: string) {
   if (layout) openRuntimesSettings(layout, {});
 }
 
-/** The DM with an agent teammate, from wherever the app is. */
+/**
+ * The DM with an agent teammate, from wherever the app is. An agent says hi
+ * first, so this opens the real DM (creating it if needed) rather than a DM
+ * that only the viewer's first message would create: that one would never
+ * show the greeting, and a reload would lose it.
+ */
 export function openAgentDirectMessage(agentUserId: string) {
   const layout = globalSplitManager();
   if (!layout) return;
+  const open = (content: SplitContent) =>
+    layout.openWithSplit(content, { activate: true, referredFrom: null });
   fireAndForget(
-    openDirectMessage(cachedUserId(), agentUserId, (content) => {
-      layout.openWithSplit(content, { activate: true, referredFrom: null });
+    Telemetry.span('team-agent.open_dm', async (span) => {
+      const channel = await getOrCreateDirectMessageChannel(agentUserId);
+      if (channel.isOk()) {
+        span.setAttr('channel.id', channel.value);
+        open({ type: 'channel', id: channel.value });
+        return;
+      }
+      // Still open the conversation; the viewer's first message creates it.
+      span.error(channel.error);
+      await openDirectMessage(cachedUserId(), agentUserId, open);
     }),
     'notifications'
   );

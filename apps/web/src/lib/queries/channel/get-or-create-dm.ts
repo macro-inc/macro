@@ -81,6 +81,27 @@ function findDirectMessage(
 }
 
 /**
+ * The DM with `recipientId`, created if there is none yet. For a recipient
+ * that writes first (an agent teammate's greeting), so the conversation shown
+ * is the real one its message lands in. Refreshes the channel list after.
+ */
+export function getOrCreateDirectMessageChannel(
+  recipientId: string
+): ResultAsync<string, unknown> {
+  return ResultAsync.fromPromise(
+    throwOnErr(() =>
+      storageServiceClient.getOrCreateDirectMessage({
+        recipient_id: recipientId,
+      })
+    ),
+    (error) => error
+  ).map((response) => {
+    fireAndForget(invalidateListChannels(), 'channel-list');
+    return response.channel_id;
+  });
+}
+
+/**
  * The viewer's existing DM with a recipient, without creating one. Reads the
  * channel list the app already keeps, fetching it only when it isn't loaded.
  */
