@@ -139,8 +139,8 @@ bun $B/bench.ts run routines --set h1 --label mine
 bun $B/bench.ts heldout list            # how often each set was read
 ```
 
-Writing a set takes about 15 minutes a person, in many short model calls
-(the stack gives one 90 seconds). If one still times out, `heldout make`
+Writing a set takes about 15 minutes and $3 a person (Opus 5.5, about 22
+short model calls each, since the stack gives one 90 seconds). If one still times out, `heldout make`
 says which people are missing; run the same command again to write just
 those.
 
