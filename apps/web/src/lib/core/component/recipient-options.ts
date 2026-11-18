@@ -19,8 +19,7 @@ const userName = (user: IUser) =>
 const personText = (
   name: string | null | undefined,
   email: string | undefined
-) =>
-  name ? `${name} ${email}` : (email ?? '');
+) => (name ? `${name} ${email}` : (email ?? ''));
 
 /** Reads an option's fields in one pass. A picker over thousands of channels
  * reads them once per list instead of once per field on every keystroke. */
