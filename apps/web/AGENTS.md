@@ -258,7 +258,10 @@ list controller: ArrowDown and Enter move to the first result, and Escape keeps
 the search in the field and clears it from the list after a selection. In a real
 `ListHeader` (`?surface=header&width=<px>`) the open field narrows, down to its
 96px minimum, before the header's other actions would push its end out of view,
-and keeps its full width when there is room.
+and keeps its full width when there is room. Inside an `@container/split-header`
+600px or narrower, the toolbar New (`ViewCreateButton`) drops its label, keeping
+its icon, its caret when it opens a menu, its name and its tooltip, as header
+actions do.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
