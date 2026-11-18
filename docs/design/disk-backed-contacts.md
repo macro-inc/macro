@@ -182,7 +182,7 @@ to 559–563 ms. Retained JS remains about 57.4 MiB after sync and 70.1 MiB afte
 expanded workflows. Disk and write costs are measured, not assumed free.
 
 **Name-policy cutover:** the approved [name-focused search design](contact-name-search-proposal.md)
-is now the active local-only suggestion path: people the viewer has a direct message with first (policy 6), then exact full or first names, all-word prefixes,
+is now the active local-only suggestion path: among exact full or first names and all-word prefixes, people the viewer has a direct message with come first (policy 6), each group by name tier;
 then literal contains, recent-first with identity ties. Consumers preserve that
 order; server suggestion fallback and old person scoring are removed. Partial
 hydration stays explicit, and refresh schedules background sync. Fresh regular-profile

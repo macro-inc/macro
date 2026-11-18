@@ -239,8 +239,8 @@ async function readLocalWindow(
   signal.throwIfAborted();
   await assertContactCacheScope(host, viewer, generation, signal);
 
-  // Desktop and iOS hosts keep an older policy until their next app release;
-  // its windows differ only in order, so they stay local.
+  // Native hosts (desktop, iOS, Android) keep an older policy until their next
+  // app release; its windows differ only in order, so they stay local.
   if (
     result.kind !== 'page' ||
     result.policyVersion < PEOPLE_MIN_POLICY_VERSION ||

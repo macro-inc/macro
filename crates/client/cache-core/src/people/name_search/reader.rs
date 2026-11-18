@@ -50,10 +50,11 @@ fn text<'a>(record: &'a Record, field: &str) -> Option<&'a str> {
         _ => None,
     }
 }
-/// Among names matching at a word start, people the viewer has messaged (a
-/// positive interaction time, which only direct messages publish) rank above
-/// everyone else, however exactly a stranger's name matches; the name tier then
-/// orders each group. Contains-only matches stay below both groups.
+/// Among names matching at a word start, people with a positive interaction
+/// time rank above everyone else, however exactly a stranger's name matches; the
+/// name tier then orders each group. Contains-only matches stay below both
+/// groups. The frontend publishes that time from direct-message channels: the
+/// first other participant of each, including group and never-written DMs.
 fn priority(stage: NameStage, messaged: bool) -> u8 {
     match (stage, messaged) {
         (NameStage::Browse, _) => 0,

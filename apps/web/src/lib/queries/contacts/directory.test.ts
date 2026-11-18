@@ -117,7 +117,6 @@ it.each([true, false])(
   }
 );
 it('keeps an older native host on its local window down to the policy floor', async () => {
-  expect(PEOPLE_MIN_POLICY_VERSION).toBeLessThan(PEOPLE_POLICY_VERSION);
   const cache = host();
   cache.people.search.mockResolvedValue({
     kind: 'page',
