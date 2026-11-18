@@ -22,8 +22,9 @@ Per run (one JSON line in <out>/e2e-<label>.jsonl, devbox epoch seconds):
 With --agent it invites an agent teammate instead (see agent_run). Against a
 deployed environment, pass the service URLs instead of --stack (--auth-url
 and --storage-url with --agent, --auth-url and --harness-url without);
---host-cmd and Tempo are optional with --agent (--tempo-url none skips the
-span lookup).
+--host-cmd and Tempo are optional with --agent (spans are skipped without
+--stack unless --tempo-url is given). Its t_*_created fields are the server's
+clock, not this machine's.
 """
 
 import argparse
@@ -348,10 +349,12 @@ def agent_run(args, auth: "Api", storage: "Api", run: int) -> dict:
         timeline = f"/messages/channel/{channel}?selection=" + urllib.parse.quote(json.dumps({"limit": 20}))
         while time.time() < deadline:
             _, page = storage.call("GET", timeline)
-            greetings = messages_from(page, agent_id, record["t_buy"])
+            # The agent is new, so anything it sent is the greeting.
+            greetings = messages_from(page, agent_id, 0)
             if greetings:
                 record["t_greeting_seen"] = time.time()
                 record["t_greeting_created"] = greetings[0]["created"]
+                greeting_ids = {message["id"] for message in greetings}
                 break
             time.sleep(POLL)
         if "t_greeting_seen" not in record:
@@ -364,7 +367,12 @@ def agent_run(args, auth: "Api", storage: "Api", run: int) -> dict:
         )
         while time.time() < deadline:
             _, page = storage.call("GET", timeline)
-            replies = messages_from(page, agent_id, record["t_prompt"])
+            # Server time and ids, not this machine's clock, which may be skewed.
+            replies = [
+                message
+                for message in messages_from(page, agent_id, record["t_greeting_created"])
+                if message["id"] not in greeting_ids
+            ]
             if replies:
                 record["t_reply"] = time.time()
                 record["t_reply_created"] = replies[0]["created"]
@@ -400,7 +408,10 @@ def main():
     parser.add_argument("--token-file", required=True)
     parser.add_argument("--auth-url", help="authentication_service base; default from portmap")
     parser.add_argument("--harness-url", help="agent_harness_service base; default from portmap")
-    parser.add_argument("--tempo-url", default="http://localhost:3200", help="'none' skips span lookups (--agent only)")
+    parser.add_argument(
+        "--tempo-url",
+        help="default http://localhost:3200 with --stack, else none; 'none' skips span lookups (--agent only)",
+    )
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--size", default="standard")
     parser.add_argument("--label", required=True)
@@ -430,8 +441,10 @@ def main():
     args = parser.parse_args()
     if not args.host_cmd and not args.agent:
         parser.error("--host-cmd is required without --agent")
+    if args.tempo_url is None:
+        args.tempo_url = "http://localhost:3200" if args.stack else "none"
     if args.tempo_url == "none" and not args.agent:
-        parser.error("--tempo-url none needs --agent")
+        parser.error("a computer run needs Tempo: pass --tempo-url")
     if not args.stack:
         needed = ["--auth-url", "--storage-url"] if args.agent else ["--auth-url", "--harness-url"]
         missing = [flag for flag in needed if not getattr(args, flag[2:].replace("-", "_"))]
