@@ -30,7 +30,12 @@ import type {
   PasswordVersion,
 } from '../core/types';
 
-export type PasswordFailure = 'forbidden' | 'folderMissing' | 'failed';
+/** `unreachable`: no answer from Macro (offline, or a gateway that could not reach it). */
+export type PasswordFailure =
+  | 'forbidden'
+  | 'folderMissing'
+  | 'unreachable'
+  | 'failed';
 export type PasswordResult<T> = Promise<Result<T, PasswordFailure>>;
 export type PasswordSource = {
   list(): Promise<PasswordItem[]>;

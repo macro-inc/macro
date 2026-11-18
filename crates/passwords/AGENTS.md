@@ -36,6 +36,13 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   verifies real OpenBao namespaces/JWT/CAS/TOTP; see its README for local settings.
 - Drain pool connections between independent lease assertions in database tests:
   SQLx queues rollback on transaction drop. Use a completion barrier, never sleeps.
+- Run the opt-in `import_performance` test with `PWCONC_MODE=after`, explicit
+  disposable OpenBao settings, and `DATABASE_URL` pointing to the local
+  `macrodb_pwconc` scratch database. It exports to the existing local collector
+  and prints timing, pool pressure, token retry counts and trace IDs. Use a
+  JSON-file Docker log driver for the fixture: journald can rate-limit its
+  redacted audit events during the sweep. Reproduction and audit summarization:
+  `src/outbound/postgres/import/test/benchmark.md`.
 
 ## Gotchas
 
@@ -241,9 +248,14 @@ and opaque source keys derive stable item, folder and target ids. Retries use th
 ordinary create recovery path; existing folders retain their current name and
 parent, and an existing TOTP enrollment is never replaced by an import.
 Per-item failures use fixed codes (`busy` for lease contention, `folder_missing`
-when a folder was deleted after the batch ensured it); a failed TOTP setup
-returns the created item id so retrying can finish enrollment. Items recheck
-membership once, after their lease (`admit_member`); the batch checked it first.
+when a folder was deleted before that item's create validation); a failed TOTP setup
+returns the created item id so retrying can finish enrollment. Admit one team
+lease for folder setup and all item futures; recheck membership for each item
+when it starts. Validate distinct derived item IDs before sharing that lease.
+Keep create and TOTP ordered within each item. Bound concurrency
+by `IMPORT_CONCURRENCY` and `Repository::import_capacity` (pool size minus its
+lease connection), and return results in input order. Other writers remain
+excluded for the whole batch; do not replace the team fence with item locks.
 `POST /teams/{team}/items/match` takes up to 500 names in the body (never a
 URL), already trimmed and lower-cased by the client, and returns visible
 metadata whose `lower(name)` equals one, for the client's duplicate check. Both routes answer a malformed JSON body with the fixed
@@ -252,6 +264,9 @@ match) are `password_import::vault` constants; don't write them out here.
 `password_import_activity` records one counts-and-format entry per completed
 batch attempt, including empty and fully failed batches; team purge removes it.
 Audit failure preserves per-item results and records `audit_failed` on the batch
-span. Import steps await `ItemLock::release` so a new step cannot contend with
-asynchronous rollback of its own previous lease.
+span. Await `ItemLock::release` after every item future drains; dropping the
+batch cancels its futures and drops the lease. `passwords.import.item` spans
+parent to the batch, which records effective concurrency. The
+`passwords.lease.hold` span records guard lifetime: normal completion includes
+awaited rollback; drop queues SQLx rollback.
 The 20,000-item import limit belongs to the browser parser/client.

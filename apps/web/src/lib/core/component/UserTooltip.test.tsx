@@ -11,7 +11,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserTooltip } from './UserTooltip';
 
 const mocks = vi.hoisted(() => ({
-  crmFlagEnabled: true,
   teamCrmEnabled: true as boolean | null,
   contact: { id: 'contact-1' } as { id: string } | null | undefined,
   openWithSplit: vi.fn(),
@@ -35,8 +34,8 @@ vi.mock('@app/features/runtime-sharing/views/AgentRuntime', () => ({
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: (flag: { key: string }) => () => ({
-    enabled: flag.key === 'enable-crm' ? mocks.crmFlagEnabled : true,
+  useFeatureFlag: () => () => ({
+    enabled: true,
     payload: undefined,
   }),
 }));
@@ -111,7 +110,6 @@ vi.mock('./UserIcon', () => ({
 }));
 
 beforeEach(() => {
-  mocks.crmFlagEnabled = true;
   mocks.teamCrmEnabled = true;
   mocks.contact = { id: 'contact-1' };
   mocks.openWithSplit.mockReset();
@@ -223,16 +221,6 @@ describe('UserTooltip CRM contact action', () => {
       { preferNewSplit: false, reopen: 'latest' }
     );
     expect(mocks.onClose).toHaveBeenCalledOnce();
-  });
-
-  it('hides the contact action when the CRM feature flag is off', () => {
-    mocks.crmFlagEnabled = false;
-
-    render(() => (
-      <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
-    ));
-
-    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
   });
 
   it('shows the contact action without legacy team email enrollment', () => {

@@ -247,11 +247,24 @@ that preserves an already enrolled seed. A TOTP failure retains the created item
 retrying with the same source key finishes enrollment without writing the item
 again. Other item failures do not abort the batch.
 
+One admitted team lease covers folder setup and the bounded item futures. Each
+item checks current membership when it starts, then completes create and TOTP in
+order. Concurrency is capped by the measured `IMPORT_CONCURRENCY` and the
+repository's pool capacity minus the lease connection. Completed results are
+restored to input order before counts and audit are recorded. The futures are
+not detached: cancellation or panic drops them and the guard. Normal completion
+awaits lease release before the counts-only audit. Other writers receive `busy`
+for this continuous batch window; the measured concurrent window is shorter
+than the sequential batch's total lease hold time. The team lock still protects
+the same team-wide invariants.
+
 `password_import_activity` stores counts and format for each completed batch
 attempt, including attempts without successful items. Its team foreign key
 cascades on deletion, and explicit vault purge removes its rows after namespace
 erasure. No item names, URLs, source keys or secret values enter this audit.
 The `passwords.import.batch` span records team/import ids, item, folder and
-outcome counts, and an `audit_failed` boolean. Batch audit failure preserves the
+outcome counts, effective concurrency, and an `audit_failed` boolean. Item spans
+are direct children of the batch; `passwords.lease.hold` records the actual
+guard lifetime. Batch audit failure preserves the
 per-item results; the team foreign key removes audit rows racing team deletion.
 Import request types have no Debug implementation, and all errors have fixed text.

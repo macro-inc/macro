@@ -10880,7 +10880,12 @@ type GraphqlUser {
 	"""
 	One initiative accessible to the authenticated viewer.
 	"""
-	initiative(initiativeId: ID!): GraphqlSoupInitiative!
+	initiative(initiativeId: ID!): GraphqlSoupInitiative! @deprecated(reason: "Use visibleInitiative, which answers a missing or hidden project with null instead of NOT_FOUND. Remove after 2026-12-31.")
+	"""
+	One initiative accessible to the authenticated viewer, or null when it
+	is missing or not visible to them.
+	"""
+	visibleInitiative(initiativeId: ID!): GraphqlSoupInitiative
 	"""
 	A permission-filtered page of task identifiers within an initiative.
 	"""
@@ -11007,6 +11012,13 @@ type GraphqlUser {
 	top level, email thread, task, request or agent session.
 	"""
 	notificationInbox(input: NotificationInboxInput): NotificationInboxPage!
+	"""
+	Ids of the authenticated user's active (unseen or seen) notifications
+	whose event type is one of `eventTypes`, newest first: at most `limit`,
+	100 by default and 500 at most. For acting on every notification of a
+	type without reading a notification list.
+	"""
+	activeNotificationIds(eventTypes: [String!]!, limit: Int): [ID!]!
 	"""
 	The authenticated user's clears of their notifications inbox: the
 	one named by `clearId` when given (none once it is forgotten, a day
@@ -11746,6 +11758,12 @@ type NotificationInboxRow {
 	The row's kind.
 	"""
 	rowType: NotificationInboxRowType!
+	"""
+	Other kinds an inbox scope lists the row under, because what it shows
+	is that too: a thread whose reply mentions the viewer is listed under
+	mentions as well. A clear of any of these kinds takes the row.
+	"""
+	alsoListedAs: [NotificationInboxRowType!]!
 	"""
 	For a thread row, the channel root message or discussion root
 	comment it is about.

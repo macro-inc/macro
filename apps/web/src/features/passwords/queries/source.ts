@@ -1,6 +1,6 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { statusError } from '@core/util/safeFetch';
 import { sleep } from '@core/util/sleep';
 import { Telemetry } from '@macro-inc/observability';
@@ -47,6 +47,10 @@ function metadata(item: PasswordItemMetadata): PasswordItem {
   };
 }
 
+/** List and folder reads: an unreachable gateway reads as offline. */
+const readError = async (response: Response) =>
+  gatewayError(response.status) ?? statusError(response.status);
+
 /** A read that finished after the viewer's account or session changed. */
 class PasswordScopeChangedError extends Error {
   constructor() {
@@ -71,7 +75,20 @@ export function busyDelay(retries: number): number {
 
 function failure(codes: readonly string[]): PasswordFailure {
   if (codes.includes(PasswordErrorCode.folder_missing)) return 'folderMissing';
+  if (codes.includes('NETWORK_ERROR')) return 'unreachable';
   return 'failed';
+}
+
+/** A gateway that could not reach the service: no answer, as offline. */
+function gatewayError(status: number) {
+  return [502, 503, 504].includes(status)
+    ? { code: 'NETWORK_ERROR' as const, message: 'Unreachable' }
+    : undefined;
+}
+
+/** A thrown list or folder read that got no answer from Macro. */
+export function isUnreachable(error: unknown): boolean {
+  return thrownResultErrorHasCode(error, 'NETWORK_ERROR');
 }
 
 /** The viewer changed: the request was dropped and must not be retried. */
@@ -144,9 +161,8 @@ export function createPasswordSource(
             retry: { maxTries: 1 },
             trace: { parentSpan: span },
             errorResponseHandler: async (response) => {
-              // A gateway that could not reach the service: no answer, as offline.
-              if ([502, 503, 504].includes(response.status))
-                return { code: 'NETWORK_ERROR', message: 'Unreachable' };
+              const gateway = gatewayError(response.status);
+              if (gateway) return gateway;
               if (response.status >= 500)
                 return { code: 'SERVER_ERROR', message: 'Server error' };
               const fallback = statusError(response.status);
@@ -228,6 +244,7 @@ export function createPasswordSource(
       const items = await throwOnErr(() =>
         fetchWithToken<PasswordItemMetadata[]>(`${root}/items`, {
           signal: scope.signal,
+          errorResponseHandler: readError,
         })
       );
       if (!isCurrent()) throw new PasswordScopeChangedError();
@@ -246,6 +263,7 @@ export function createPasswordSource(
       const folders = await throwOnErr(() =>
         fetchWithToken<FolderDto[]>(`${root}/folders`, {
           signal: scope.signal,
+          errorResponseHandler: readError,
         })
       );
       if (!isCurrent()) throw new PasswordScopeChangedError();

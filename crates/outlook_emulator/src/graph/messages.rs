@@ -15,6 +15,8 @@ use crate::{mime, render};
 
 const MESSAGE_ENTITY: &str = "users('me')/messages";
 const DEFAULT_DELTA_PAGE_SIZE: usize = 10;
+/// How much of a subject Exchange stores.
+const MAX_SUBJECT_CHARS: usize = 255;
 
 fn matches(message: &Message, filter: &Filter) -> Result<bool, GraphError> {
     let unsupported = |name: &str| {
@@ -203,6 +205,12 @@ fn recipients(value: &Value) -> Result<Vec<Address>, GraphError> {
         .collect()
 }
 
+/// The subject Exchange keeps: its first 255 characters. The rest is dropped
+/// without an error.
+fn stored_subject(subject: &str) -> String {
+    subject.chars().take(MAX_SUBJECT_CHARS).collect()
+}
+
 /// Writes the properties of a JSON message onto a stored one.
 pub(crate) fn apply_fields(message: &mut Message, fields: &Value) -> Result<(), GraphError> {
     let Some(fields) = fields.as_object() else {
@@ -212,7 +220,7 @@ pub(crate) fn apply_fields(message: &mut Message, fields: &Value) -> Result<(), 
     };
     for (name, value) in fields {
         match name.as_str() {
-            "subject" => message.subject = value.as_str().unwrap_or_default().to_string(),
+            "subject" => message.subject = stored_subject(value.as_str().unwrap_or_default()),
             "body" => {
                 let content = value["content"].as_str().unwrap_or_default();
                 let html = value["contentType"]

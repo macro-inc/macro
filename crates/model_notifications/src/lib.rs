@@ -109,8 +109,9 @@ impl DeviceEndpoint {
 /// If those two strings ever diverge, deserialization fails at runtime.
 /// This macro prevents that by asserting the invariant at compile time.
 ///
-/// Accepts a standard enum definition and emits it unchanged, then generates
-/// `const` assertions that verify two properties for every `Variant(MetadataType)`:
+/// Accepts a standard enum definition and emits it unchanged with an
+/// `EVENT_TYPES` list of every variant's `TYPE_NAME`, then generates `const`
+/// assertions that verify two properties for every `Variant(MetadataType)`:
 ///
 /// 1. `MetadataType` implements [`Notification`](::notification::domain::models::Notification).
 /// 2. `MetadataType::TYPE_NAME` equals the variant name converted to `snake_case`
@@ -135,6 +136,13 @@ macro_rules! define_notif_event {
                 $(#[$variant_meta])*
                 $Variant($(#[$field_meta])* $Ty),
             )+
+        }
+
+        impl $Name {
+            /// The event type name of every variant, as stored on its notifications.
+            pub const EVENT_TYPES: &'static [&'static str] = &[
+                $(<$Ty as ::notification::domain::models::Notification>::TYPE_NAME,)+
+            ];
         }
 
         // Compile-time assertions:

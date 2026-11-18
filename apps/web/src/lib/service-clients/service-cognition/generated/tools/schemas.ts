@@ -19128,6 +19128,7 @@ export const SendChannelMessage = z.object({
       })
     )
     .optional(),
+  silent: z.boolean().optional(),
 });
 
 export const SendChannelMessageResponse = z.object({

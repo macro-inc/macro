@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM \"Pin\" p\n        USING (\n            SELECT pin.ctid AS pin_ctid\n            FROM unnest($1::text[]) AS trashed(id)\n            CROSS JOIN LATERAL (\n                SELECT ctid\n                FROM \"Pin\"\n                WHERE \"pinnedItemId\" = trashed.id AND \"pinnedItemType\" = 'document'\n                OFFSET 0\n            ) pin\n        ) found\n        WHERE p.ctid = found.pin_ctid\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4467ecc8fbbdb8eb73cadeeca6bdf26750b69d36c9b283b395fe200cfacbf392"
+}

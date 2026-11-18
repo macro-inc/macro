@@ -120,6 +120,15 @@ async fn a_saved_rewrite_replaces_the_task_unless_the_owner_changed_it(pool: PgP
         .await
         .unwrap();
     assert_eq!(stored(&pool, &action).await.task, edited.task);
+    // The rewrite that was never applied leaves no record of one.
+    let history = upgrades.list_upgrades(action.id.unwrap()).await.unwrap();
+    assert_eq!(
+        history
+            .iter()
+            .map(|upgrade| (upgrade.to_sdk.as_str(), upgrade.outcome))
+            .collect::<Vec<_>>(),
+        [("0.3.0+new", UpgradeOutcome::Rewritten)]
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

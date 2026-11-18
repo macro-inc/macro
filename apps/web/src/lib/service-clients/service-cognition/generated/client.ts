@@ -2869,6 +2869,11 @@ export type editExplicitMemoryResponse500 = {
   status: 500;
 };
 
+export type editExplicitMemoryResponse503 = {
+  data: MemoryErrorBody;
+  status: 503;
+};
+
 export type editExplicitMemoryResponseSuccess =
   editExplicitMemoryResponse200 & {
     headers: Headers;
@@ -2878,6 +2883,7 @@ export type editExplicitMemoryResponseError = (
   | editExplicitMemoryResponse409
   | editExplicitMemoryResponse422
   | editExplicitMemoryResponse500
+  | editExplicitMemoryResponse503
 ) & {
   headers: Headers;
 };

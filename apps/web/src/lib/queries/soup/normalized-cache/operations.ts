@@ -1,8 +1,4 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
@@ -479,18 +475,6 @@ export function removeSoupEntitiesFromQueriesReferencing(
 }
 
 /**
- * Remove entities from soup queries that filter out done content, leaving
- * them in place everywhere else (e.g. mail "All", which shows done threads).
- * Use with an entity-level done patch so the remaining rows reflect the new
- * state.
- */
-export function removeSoupEntitiesFromDoneFilteredQueries(
-  entityIds: Set<string>
-): SoupTransaction {
-  return removeSoupEntitiesWhere(entityIds, soupQueryExcludesDone);
-}
-
-/**
  * Prepend a cached entity to the done-excluding soup queries (see
  * `soupQueryExcludesDone`) whose pages don't contain it. A fresh notification
  * puts its entity back into those feeds server-side, but the client row may
@@ -774,7 +758,6 @@ export async function refetchSoupEntity(
     !options?.ownTouch &&
     !options?.created &&
     !(options?.notified && mountedNotifiedLists().length > 0) &&
-    isFeatureEnabled(enableGraphqlSoup) &&
     !hasSoupEntity(entityId)
   ) {
     return;

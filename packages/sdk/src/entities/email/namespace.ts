@@ -311,7 +311,7 @@ export class EmailNamespace {
         }),
       );
       return {
-        items: page.items.map((t) => EmailThread.byId(this.client, t.id)),
+        items: page.items.map((t) => EmailThread.fromPreview(this.client, t)),
         nextCursor: page.next_cursor,
       };
     });

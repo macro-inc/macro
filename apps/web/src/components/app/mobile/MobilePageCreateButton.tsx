@@ -1,4 +1,3 @@
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import {
@@ -6,8 +5,9 @@ import {
   useCreateMenuBlocks,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
-import { raiseKeyboardForNewTaskTitle } from '@app/features/task-composer/new-task-title-focus';
+import { NEW_TASK_TITLE_SELECTOR } from '@app/features/task-composer/new-task-title-focus';
 import { type TranslationKey, t } from '@app/lib/i18n';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
@@ -25,7 +25,10 @@ import {
 } from './MobileCreateMenu';
 import type { MobileNavViewId } from './mobile-nav-views';
 import { mobilePageCreateBlock } from './mobile-page-create-action';
-import { useForegroundMobileView } from './use-mobile-nav';
+import {
+  useForegroundMobileView,
+  useForegroundProject,
+} from './use-mobile-nav';
 
 const QUICK_CREATE_VIEWS = [
   { view: 'mail', icon: EmailIcon },
@@ -56,8 +59,8 @@ type PageCreateAction = Pick<
 /** The current non-AI view's New action above the navigation dock. */
 export function MobilePageCreateButton() {
   const foregroundView = useForegroundMobileView();
+  const foregroundProject = useForegroundProject();
   const createBlocks = useCreateMenuBlocks();
-  const calendarEnabled = useCalendarUiFlag();
   const openEventComposer = useOpenEventComposer();
   const openCreateMenu = () => setCreateMenuOpen(true);
 
@@ -68,20 +71,15 @@ export function MobilePageCreateButton() {
       return { label: t('mobile.company'), onSelect: openCreateCompanyModal };
     }
     if (view === 'calendar') {
-      return calendarEnabled()
-        ? {
-            label: t('mobile.event'),
-            // Created away from the calendar, the event shows there next.
-            onSelect: () =>
-              openEventComposer({
-                onCreated: (created) =>
-                  fireAndForget(
-                    openCalendarEventSplit(created),
-                    'mobile-create'
-                  ),
-              }),
-          }
-        : undefined;
+      return {
+        label: t('mobile.event'),
+        // Created away from the calendar, the event shows there next.
+        onSelect: () =>
+          openEventComposer({
+            onCreated: (created) =>
+              fireAndForget(openCalendarEventSplit(created), 'mobile-create'),
+          }),
+      };
     }
     const block = mobilePageCreateBlock(view, createBlocks());
     return (
@@ -89,7 +87,12 @@ export function MobilePageCreateButton() {
         label: block.label,
         onSelect: block.keyDownHandler,
         ...(block.blockName === 'task'
-          ? { raiseKeyboard: raiseKeyboardForNewTaskTitle }
+          ? {
+              raiseKeyboard: () =>
+                triggerFocusNewElement(NEW_TASK_TITLE_SELECTOR, {
+                  touchOnly: true,
+                }),
+            }
           : {}),
       }
     );
@@ -133,13 +136,20 @@ export function MobilePageCreateButton() {
     return viewAction() && key ? t(key) : t('mobile.new');
   };
 
+  // A project's own pill creates its tasks in the project; this one would not,
+  // so it stays out of the slot while the project's tabs load.
+  const shown = () =>
+    foregroundView() !== 'agents' &&
+    !foregroundProject() &&
+    !virtualKeyboardVisible();
+
   return (
-    <Show when={foregroundView() !== 'agents' && !virtualKeyboardVisible()}>
+    <Show when={shown()}>
       <Show
         when={foregroundView() === 'home'}
         fallback={
           <Show
-            when={foregroundView() === 'calendar' && calendarEnabled()}
+            when={foregroundView() === 'calendar'}
             fallback={
               <MobileCreateButton
                 ariaLabel={actionAriaLabel()}

@@ -8,10 +8,11 @@
   display: flex; flex-wrap: wrap; justify-content: center; gap: 16px;
   padding: 20px 0 0; border: 0; background: transparent;
 }
-.email-keyboard-stage .email-shortcut-dock kbd { box-shadow: none; }
+.email-keyboard-stage .email-shortcut-dock > button { border-radius: 999px; font-size: 11px; }
+.email-keyboard-stage .email-shortcut-dock kbd { border-radius: 999px; font-size: 11px; box-shadow: none; }
 @media (max-width: 699px) {
   .email-keyboard-stage .email-shortcut-dock {
     display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px;
   }
-  .email-keyboard-stage .email-shortcut-dock > button { flex-direction: column; padding-inline: 0; font-size: 10px; }
+  .email-keyboard-stage .email-shortcut-dock > button { flex-direction: column; padding-inline: 0; font-size: 9.5px; }
 }

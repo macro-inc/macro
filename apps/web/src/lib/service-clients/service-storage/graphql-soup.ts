@@ -4,11 +4,7 @@ import {
   traceParentExchange,
 } from '@app/lib/urql-solid/trace-parent-exchange';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_BEARER_TOKEN_AUTH,
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
+import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { requireNativeUpdate } from '@core/mobile/nativeUpdateRequired';
 import { hasLoginCookie } from '@core/util/cookies';
@@ -17,6 +13,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import { reloadForNewerBuild } from '@core/util/reloadForNewerBuild';
+import { timeResponseBody } from '@core/util/responseBodyTiming';
 import { ThrownResultError } from '@core/util/result';
 import {
   createMutationQueueTelemetry,
@@ -370,62 +367,100 @@ async function sendDssGraphqlRequest(
       }
     }
   }
-  return Telemetry.span('graphql.transport', async (span) => {
-    const started = performance.now();
+  const span = Telemetry.span('graphql.transport');
+  return span.run(async () => {
+    let sent: GraphqlTransportResponse;
     try {
-      const traceHeaders: Record<string, string> = {};
-      span.injectTraceHeaders(traceHeaders);
-      const requestInit = graphqlSoupTransportRequest(init);
-      const mail = await mailCacheProfile();
-      span.setAttr('mail.cache_profile', mail.profile);
-      span.setAttr('mail.cache_profile_outcome', mail.outcome);
-      // Links this request, and a queued mutation attempt above it, to the
-      // server's request and `graphql.execute` spans.
-      const transportInit: RequestInit = {
-        ...requestInit,
-        headers: mergeHeaders(requestInit?.headers, traceHeaders, {
-          'x-macro-mail-cache-profile': mail.profile,
-        }),
-      };
-      span.event('request_dispatch');
-      const response = await span.run(() =>
-        authorizedDssGraphqlFetch(input, transportInit)
-      );
-      span.setAttr('graphql.response_headers_ms', performance.now() - started);
-      span.setAttr('http.response.status_code', response.status);
-      span.event('response_headers');
-      if (
-        typeof transportInit?.body !== 'string' ||
-        !transportInit.body.includes('cacheProjection')
-      ) {
-        return response;
-      }
-
-      // This includes body delivery and the text scan, not just validation CPU.
-      const inspectStarted = performance.now();
-      const legacy = await isLegacyProjectionValidationError(response);
-      span.setAttr(
-        'graphql.response_inspection_ms',
-        performance.now() - inspectStarted
-      );
-      span.event('response_inspected');
-      const legacyInit = legacy
-        ? legacyProjectionRequest(transportInit)
-        : undefined;
-      span.setAttr('graphql.legacy_retry', legacyInit !== undefined);
-      if (legacyInit === undefined) return response;
-
-      // A mixed deployment remains network-correct: retry without the additive
-      // metadata field and suppress v2 local authority for this session. Backfill
-      // still refuses to checkpoint missing required Document supplements.
-      soupProjectionServerSupported = false;
-      return await span.run(() => authorizedDssGraphqlFetch(input, legacyInit));
+      sent = await sendGraphqlTransportRequest(span, input, init);
     } catch (error) {
-      // Transport errors may contain query URLs; record a category only.
-      span.setAttr('graphql.transport_failed', true);
+      span.end();
       throw error;
     }
+
+    // The span keeps ending where it always has, at the returned response's
+    // headers or after the projection check; it is exported once urql has
+    // read the body, with `graphql.body_ms`. The end stays a
+    // `performance.now()` value so the SDK maps it onto the span's start clock.
+    const endedAt = performance.now();
+    timeResponseBody(sent.response, span, {
+      prefix: 'graphql',
+      headersAt: sent.headersAt,
+      signal: init?.signal,
+      onSettled: () => span.end(endedAt),
+    });
+    return sent.response;
   });
+}
+
+type GraphqlTransportResponse = {
+  response: Response;
+  /** `performance.now()` when the returned response's headers arrived. */
+  headersAt: number;
+};
+
+async function sendGraphqlTransportRequest(
+  span: Span,
+  input: RequestInfo | URL,
+  init: RequestInit | undefined
+): Promise<GraphqlTransportResponse> {
+  const started = performance.now();
+  try {
+    const traceHeaders: Record<string, string> = {};
+    span.injectTraceHeaders(traceHeaders);
+    const requestInit = graphqlSoupTransportRequest(init);
+    const mail = await mailCacheProfile();
+    span.setAttr('mail.cache_profile', mail.profile);
+    span.setAttr('mail.cache_profile_outcome', mail.outcome);
+    // Links this request, and a queued mutation attempt above it, to the
+    // server's request and `graphql.execute` spans.
+    const transportInit: RequestInit = {
+      ...requestInit,
+      headers: mergeHeaders(requestInit?.headers, traceHeaders, {
+        'x-macro-mail-cache-profile': mail.profile,
+      }),
+    };
+    span.event('request_dispatch');
+    const response = await span.run(() =>
+      authorizedDssGraphqlFetch(input, transportInit)
+    );
+    const headersAt = performance.now();
+    span.setAttr('graphql.response_headers_ms', headersAt - started);
+    span.setAttr('http.response.status_code', response.status);
+    span.event('response_headers');
+    if (
+      typeof transportInit?.body !== 'string' ||
+      !transportInit.body.includes('cacheProjection')
+    ) {
+      return { response, headersAt };
+    }
+
+    // This includes body delivery and the text scan, not just validation CPU.
+    const inspectStarted = performance.now();
+    const legacy = await isLegacyProjectionValidationError(response);
+    span.setAttr(
+      'graphql.response_inspection_ms',
+      performance.now() - inspectStarted
+    );
+    span.event('response_inspected');
+    const legacyInit = legacy
+      ? legacyProjectionRequest(transportInit)
+      : undefined;
+    span.setAttr('graphql.legacy_retry', legacyInit !== undefined);
+    if (legacyInit === undefined) return { response, headersAt };
+
+    // A mixed deployment remains network-correct: retry without the additive
+    // metadata field and suppress v2 local authority for this session. Backfill
+    // still refuses to checkpoint missing required Document supplements.
+    soupProjectionServerSupported = false;
+    const retried = await span.run(() =>
+      authorizedDssGraphqlFetch(input, legacyInit)
+    );
+    return { response: retried, headersAt: performance.now() };
+  } catch (error) {
+    // Transport errors may contain query URLs; record a category only.
+    span.setAttr('graphql.transport_failed', true);
+    throw error;
+  }
 }
 
 const graphqlSoupClient = createClient({
@@ -753,9 +788,7 @@ function fallbackAfterInitializationFailure(error: unknown): void {
   cachedCacheCleanup = undefined;
   cachedCacheHost = undefined;
   cacheInitializationFailed = true;
-  cachedClient = isFeatureEnabled(enableGraphqlSoup)
-    ? getUncachedRealtimeClient()
-    : graphqlSoupClient;
+  cachedClient = getUncachedRealtimeClient();
   browserCacheClientActivated = false;
   try {
     cleanup?.();
@@ -808,17 +841,14 @@ export const hasGraphqlCacheHost = (): boolean =>
 export function getGraphqlSoupClient(): Client {
   if (!sessionActive()) return graphqlSoupClient;
   const native = isTauri();
-  // Only the browser Turso client is session-latched. Tauri keeps the prior
-  // dynamic GraphQL transport behavior and can return to the plain client when
-  // ENABLE_GRAPHQL_SOUP changes without constructing a browser resource.
+  // Only the browser Turso client is session-latched, so a later emergency
+  // kill applies on the next navigation rather than mid-page. A browser with
+  // no stored PostHog flags (first visit, cleared site data) decides before
+  // `/flags` answers, so it sees the kill switch only from its next load.
   if (!native && browserCacheClientActivated && cachedClient)
     return cachedClient;
   const rollout = getBrowserTursoCacheRolloutDecision();
-  if (!rollout.enabled) {
-    return isFeatureEnabled(enableGraphqlSoup)
-      ? getUncachedRealtimeClient()
-      : graphqlSoupClient;
-  }
+  if (!rollout.enabled) return getUncachedRealtimeClient();
   if (cachedClient) return cachedClient;
   disposeUncachedRealtimeClient();
   cachedClient = (() => {
@@ -974,7 +1004,7 @@ export function getGraphqlSoupClient(): Client {
                   'input',
                   'threadId',
                 ]),
-                initiative: entityFromArgument('GraphqlSoupInitiative', [
+                visibleInitiative: entityFromArgument('GraphqlSoupInitiative', [
                   'initiativeId',
                 ]),
               },
@@ -1019,15 +1049,13 @@ export function getGraphqlSoupClient(): Client {
       cacheRecovery.failed(error);
       setCacheAvailability((version) => version + 1);
       console.warn('graphql cache init failed; using uncached client', error);
-      return isFeatureEnabled(enableGraphqlSoup)
-        ? getUncachedRealtimeClient()
-        : graphqlSoupClient;
+      return getUncachedRealtimeClient();
     }
   })();
   return cachedClient;
 }
 
-/** Returns the cache host backing the flagged GraphQL Soup client, or
+/** Returns the cache host backing the GraphQL Soup client, or
  * undefined while that host is retired or unusable. */
 export function getGraphqlSoupCacheHost(): CacheHost | undefined {
   if (!graphqlCacheEnabled()) return undefined;

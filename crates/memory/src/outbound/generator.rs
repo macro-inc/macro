@@ -8,9 +8,6 @@ use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
-#[cfg(test)]
-mod test;
-
 /// Research and summaries run on Sonnet 5.5: Opus 4.8 cost about 2.7x as much
 /// for the same tokens.
 const GENERATION_MODEL: PredefinedModel = PredefinedModel::Sonnet5_5;
@@ -104,55 +101,4 @@ impl<C: Clone + Send + Sync + 'static> MemoryGenerator for AgentMemoryGenerator<
         .await
         .map_err(|e| MemoryError::Other(anyhow::anyhow!(e)))
     }
-
-    #[tracing::instrument(skip_all, err)]
-    async fn judge(&self, user: MacroUserIdStr<'static>, content: &str) -> Result<()> {
-        let instructions = include_str!("generator/judge.md");
-        let system = prompt::compose(&[&prompt::privacy::PROMPT, &instructions]);
-        let response = agent::complete(
-            PredefinedModel::Sonnet4_6,
-            &system,
-            content,
-            self.recorder.as_ref(),
-            ai_usage::UsageContext::new(ai_usage::AiFeature::Memory, user),
-        )
-        .await
-        .map_err(|e| MemoryError::Other(anyhow::anyhow!(e)))?;
-        let accepted = judge_decision(&response)
-            .ok_or_else(|| MemoryError::Rejected("judge did not return a valid decision".into()))?;
-        if !accepted {
-            return Err(MemoryError::Rejected(
-                "content did not pass privacy and quality review".into(),
-            ));
-        }
-        Ok(())
-    }
-}
-
-/// The judge's `{"accepted": bool}` decision, wherever it sits in the reply: a
-/// code fence or surrounding prose must not turn an answer into a failure.
-/// Conflicting decisions are no decision, and so is any `"accepted"` key that
-/// does not parse: a malformed rejection must not yield the approval it quotes.
-fn judge_decision(response: &str) -> Option<bool> {
-    #[derive(serde::Deserialize)]
-    struct Judgement {
-        accepted: bool,
-    }
-    let decisions: Vec<bool> = response
-        .match_indices('{')
-        .filter_map(|(start, _)| {
-            serde_json::Deserializer::from_str(response.get(start..)?)
-                .into_iter::<Judgement>()
-                .next()?
-                .ok()
-                .map(|judgement| judgement.accepted)
-        })
-        .collect();
-    if decisions.len() != response.matches(r#""accepted""#).count() {
-        return None;
-    }
-    let (&first, rest) = decisions.split_first()?;
-    rest.iter()
-        .all(|&accepted| accepted == first)
-        .then_some(first)
 }

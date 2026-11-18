@@ -23,7 +23,7 @@ import { TaskBoardView } from './views/task-board-view';
 /** Connects the task view to query adapters and app navigation. */
 export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
   const context = useTasksView();
-  const { state, source, openTask, projectsEnabled, calendar } = context;
+  const { state, source, openTask, calendar } = context;
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const layout = useSplitLayout();
@@ -33,7 +33,6 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
     grouping: () => toTaskBoardGrouping(state.groupBy),
     searching: source.boardSearching ?? (() => !!state.search.trim()),
     userId: useUserId(),
-    projectsEnabled,
     facets: () => state.facets,
     sort: () => state.sort,
     calendar,

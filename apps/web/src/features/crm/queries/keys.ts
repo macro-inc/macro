@@ -9,8 +9,14 @@ export const crmKeys = createQueryKeys('crm', {
     teamId: string | undefined,
     userId: string | undefined,
     session: number | undefined,
-    after: string | undefined
-  ) => [teamId, userId, session, after],
+    after: string | undefined,
+    threadId?: string
+  ) => [teamId, userId, session, after, threadId],
+  emailConsent: (
+    teamId: string | undefined,
+    userId: string | undefined,
+    session: number | undefined
+  ) => [teamId, userId, session],
   // One `/saved_views` read serves CRM lists and personal views.
   savedViews: null,
   pipelines: (teamId: string | undefined) => [teamId],

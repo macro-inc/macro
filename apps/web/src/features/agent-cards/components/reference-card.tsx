@@ -7,11 +7,11 @@ import { formatDate } from '@core/util/date';
 import ArrowUpRight from '@icon/system/regular/arrow-up-right.svg';
 import { isAccessiblePreviewItem } from '@queries/preview/types';
 import type { ItemType } from '@service-storage/client';
+import { Item } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { itemKind } from '../core/labels';
 import type { CardItemType } from '../core/types';
 import { Card, CardSingle } from './kit/card';
-import { Tile } from './kit/parts';
 
 /** The card types the preview service loads by id, and as what. */
 export type LoadableType = Exclude<CardItemType, 'calendar_event'>;
@@ -59,12 +59,12 @@ export function OpenArrow() {
 }
 
 /**
- * One item as a card, from values already worked out: its tile, its name
+ * One item as a card, from values already worked out: its media, its name
  * and a line about it. Always 72 tall; the whole card opens the item when it
  * can be opened.
  */
 export function ReferenceCardView(props: {
-  tile: JSX.Element;
+  media: JSX.Element;
   title: string;
   meta: string;
   onOpen?: (event: MouseEvent) => void;
@@ -83,10 +83,10 @@ export function ReferenceCardView(props: {
       data-agent-card="reference"
     >
       <CardSingle
-        tile={props.tile}
+        media={props.media}
         title={props.title}
         struck={props.deleted}
-        meta={props.meta}
+        description={props.meta}
         trailing={
           <Show when={props.onOpen}>
             <OpenArrow />
@@ -173,10 +173,10 @@ export function ReferenceCard(props: {
   const item = useReferenceItem(() => props);
   return (
     <ReferenceCardView
-      tile={
-        <Tile>
+      media={
+        <Item.Media class="self-center">
           <EntityIcon targetType={item.icon()} size="sm" />
-        </Tile>
+        </Item.Media>
       }
       title={item.title()}
       meta={item.meta()}

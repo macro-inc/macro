@@ -107,7 +107,7 @@ pub async fn handler(
     Json(request): Json<UpsertScheduledRequest>,
 ) -> Result<Json<UpsertScheduledResponse>, UpsertScheduledError> {
     refuse_program_send(
-        authorization.authorization.user.agent_id.is_some(),
+        authorization.authorization.user.attribution(),
         &headers,
         request.user_confirmation.as_deref(),
     )?;

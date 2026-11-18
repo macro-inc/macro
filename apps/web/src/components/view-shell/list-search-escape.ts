@@ -1,6 +1,6 @@
 /**
- * The search each split's list header has on screen, keyed by the split's
- * hotkey scope. A split can have more than one Escape owner: the header's
+ * The search each split's list header (or list sidebar) has on screen, keyed
+ * by the split's hotkey scope. A split can have more than one Escape owner: the header's
  * search field registers one, and a list that takes over the split's Escape
  * (the unified list view) reads the search from here to clear it too.
  */

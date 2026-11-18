@@ -12,6 +12,8 @@ export type BlockTool = {
   action: () => void;
   children?: SplitFileMenuAction[];
   condition?: () => boolean;
+  /** Visible explanation for an action that cannot currently run. */
+  disabledReason?: string;
   isActive?: () => boolean;
   buttonComponent?: Component<{ grouped?: boolean }>;
   focusTarget?: () => HTMLElement | null;

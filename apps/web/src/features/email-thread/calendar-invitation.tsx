@@ -11,10 +11,7 @@ import type { EventTime } from '@service-email/generated/schemas/eventTime';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { EventRsvpScopeDialog } from '../calendar/components/EventRsvpScopeDialog';
 import { createCalendarRsvpController } from '../calendar/hooks/create-calendar-rsvp-controller';
-import {
-  useCalendarAddSharedEventFlag,
-  useCalendarUiFlag,
-} from '../calendar/hooks/use-calendar-ui-flag';
+import { useCalendarAddSharedEventFlag } from '../calendar/hooks/use-calendar-ui-flag';
 import {
   AddToCalendarButton,
   toastAddToCalendarFailure,
@@ -48,7 +45,6 @@ export function EmailCalendarInvitation(props: {
   /** The card is shown inside the calendar file it came from. */
   inCalendarFile?: boolean;
 }) {
-  const calendarEnabled = useCalendarUiFlag();
   const saved = () => (
     <CalendarInviteCard
       invitation={props.invitation}
@@ -56,13 +52,10 @@ export function EmailCalendarInvitation(props: {
       inCalendarFile={props.inCalendarFile}
     />
   );
-  // Without the calendar UI, the saved invitation renders with no calendar lookup.
   return (
-    <Show when={calendarEnabled()} fallback={saved()}>
-      <Suspense fallback={saved()}>
-        <ConnectedInvitation {...props} />
-      </Suspense>
-    </Show>
+    <Suspense fallback={saved()}>
+      <ConnectedInvitation {...props} />
+    </Suspense>
   );
 }
 function ConnectedInvitation(

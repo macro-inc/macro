@@ -90,6 +90,7 @@ export function rankMentions<T extends MentionItem>(
     getName: getMentionName,
     getDisplayName: getMentionDisplayName,
     isDmItem: (item) => item.kind === 'entity' && item.bucket === 'dm',
+    isPersonItem: (item) => item.kind === 'user',
     getTimestamp: getMentionTimestamps,
   });
   const ranked = search(items, query.trim()).map(({ item }) => item);

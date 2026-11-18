@@ -113,12 +113,18 @@ test('manual assignee selection pages, searches, keeps the chosen name and remai
   await expect(
     page.locator('[data-entity-index]').filter({ hasText: 'Person 000010' })
   ).toBeVisible();
+  // Reaching the end of the list lists the next page below; PageDown does
+  // the same from the keyboard.
   if (info.project.name === 'phone')
-    await page.getByRole('button', { name: 'Next options', exact: true }).tap();
+    await page
+      .locator('[data-entity-index]')
+      .filter({ hasText: 'Person 000049' })
+      .scrollIntoViewIfNeeded();
   else await search.press('PageDown');
   const next = page
     .locator('[data-entity-index]')
     .filter({ hasText: 'Person 000050' });
+  await next.scrollIntoViewIfNeeded();
   await expect(next).toBeInViewport();
   await next.click();
   await expect(mapping).toContainText('Person 000050');

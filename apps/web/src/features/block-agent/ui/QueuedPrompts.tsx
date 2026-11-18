@@ -266,7 +266,10 @@ function QueuedRow(props: QueuedRowProps) {
           <Tooltip
             label={isPrompt() ? 'Edit queued message' : 'Open queued action'}
             as="div"
-            class="min-w-0"
+            // A block-level trigger: the default inline-flex one sizes to the
+            // unbroken preview text, so the preview never truncates and runs
+            // under the row's controls.
+            class="flex w-full min-w-0"
             disabled={props.expanded}
           >
             <button

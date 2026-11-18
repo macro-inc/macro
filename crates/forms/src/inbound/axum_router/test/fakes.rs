@@ -58,6 +58,7 @@ impl JwtValidator for Tokens {
             identity: ValidatedIdentity {
                 agent_id,
                 agent_via: None,
+                routine_id: None,
                 user_id: user_id.to_string(),
                 fusion_user_id: format!("fusion-{jwt}"),
                 organization_id: None,

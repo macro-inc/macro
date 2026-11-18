@@ -12,6 +12,7 @@ const host = vi.hoisted(() => ({
       }[]
     | undefined,
   startAddInbox: vi.fn(),
+  outlookOffered: false,
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -31,6 +32,10 @@ vi.mock('@app/features/calendar/hooks/use-calendar-accounts', () => ({
 vi.mock('@core/email-link', () => ({
   useAddInboxFlow: () => host.startAddInbox,
 }));
+vi.mock('@queries/auth/outlook-link', () => ({
+  useOutlookAvailable: (enabled: () => boolean) => () =>
+    enabled() && host.outlookOffered,
+}));
 
 const account = (
   emailAddress: string,
@@ -46,17 +51,41 @@ afterEach(() => {
   cleanup();
   host.accounts = [];
   host.startAddInbox.mockReset();
+  host.outlookOffered = false;
   localStorage.clear();
 });
 
 describe('ConnectCalendarsPromotion', () => {
-  it('connects a new Google account with mail and calendar scopes', () => {
+  it('connects a new account with mail and calendar scopes', () => {
     host.accounts = [account('me@example.com', 'turnOff')];
     render(() => <ConnectCalendarsPromotion />);
     fireEvent.click(screen.getByRole('button', { name: 'Connect a calendar' }));
     expect(host.startAddInbox).toHaveBeenCalledWith({
       scopes: 'gmail_and_calendar',
     });
+  });
+
+  it('invites another account without naming a provider', () => {
+    host.accounts = [account('me@example.com', 'turnOff')];
+    const view = render(() => <ConnectCalendarsPromotion />);
+    expect(
+      screen.getByText(
+        'Add another account to see your work and personal calendars together.'
+      )
+    ).toBeTruthy();
+    expect(view.container.textContent).not.toMatch(/Google|Outlook|Microsoft/);
+  });
+
+  it('shows the Outlook logo only while Outlook is offered', () => {
+    host.accounts = [account('me@example.com', 'turnOff')];
+    const view = render(() => <ConnectCalendarsPromotion />);
+    expect(screen.getByRole('list', { name: 'Google Calendar' })).toBeTruthy();
+    view.unmount();
+    host.outlookOffered = true;
+    render(() => <ConnectCalendarsPromotion />);
+    expect(
+      screen.getByRole('list', { name: 'Google Calendar, Outlook' })
+    ).toBeTruthy();
   });
 
   it('turns on calendar for a connected account before adding another', () => {

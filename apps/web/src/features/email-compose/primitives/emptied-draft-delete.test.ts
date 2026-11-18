@@ -35,10 +35,6 @@ vi.mock('@queries/client', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn() },
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: 'graphql-soup',
-  isFeatureEnabled: () => true,
-}));
 vi.mock('@macro-inc/observability', () => ({
   NOOP_SPAN: {},
   Telemetry: { error: vi.fn() },
@@ -58,9 +54,6 @@ vi.mock('@queries/soup/cache', () => ({
   invalidateAllSoup: vi.fn(),
   invalidateSoupEntity: vi.fn(),
   refetchSoupEntity: vi.fn(async () => {}),
-}));
-vi.mock('@queries/email/draft-cache', () => ({
-  markThreadDraftSaved: vi.fn(),
 }));
 vi.mock('@queries/email/thread', () => ({ fetchAndCacheThread: vi.fn() }));
 

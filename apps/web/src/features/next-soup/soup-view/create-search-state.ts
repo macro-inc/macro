@@ -72,11 +72,19 @@ export const createSearchState = ({
     assignees: assignees(),
   });
 
-  const { entityPool, routinePool } = useSearchContext();
+  const hideLocalResults = () =>
+    hidesLocalSearchResults(filters().include, surface());
+  const searchContext = useSearchContext();
+  const entityPool = searchContext.entityPool(
+    () =>
+      !disableLocalSearch?.() &&
+      !hideLocalResults() &&
+      Boolean(searchText().trim())
+  );
   const localPool = createLazyMemo(() => {
     const pool =
       surface() === 'search'
-        ? [...entityPool(), ...routinePool()]
+        ? [...entityPool(), ...searchContext.routinePool()]
         : entityPool();
     const activeIds = soup.predicates
       .activeIds()
@@ -99,9 +107,6 @@ export const createSearchState = ({
     const matchingIds = new Set(matches.map((entity) => entity.id));
     return pool.filter((item) => matchingIds.has(item.data.id));
   });
-
-  const hideLocalResults = () =>
-    hidesLocalSearchResults(filters().include, surface());
 
   const search = createSharedSearchState({
     surface,

@@ -76,9 +76,15 @@ export const TUTORIAL_VIDEOS = {
     length: '1:05',
   },
   macrod: {
-    feature: 'Snippets',
+    feature: 'MacroD',
     title: 'Learn how to use MacroD',
     length: '1:17',
+  },
+  'teams-admin': {
+    feature: 'Teams & Admin',
+    title: 'Learn how to use Macro Teams & Admin',
+    length: '3:40',
+    captions: true,
   },
   github: {
     feature: 'GitHub',

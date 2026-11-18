@@ -95,7 +95,7 @@ export interface InboxCardLayoutProps {
 
 /** Glyph size inside the card's avatar bubble — grows with the circle on
  * mobile, matching the narrow rows' icon factor (see InboxCard.Icon). */
-const AVATAR_GLYPH_CLASS = 'size-4 mobile:size-6';
+const AVATAR_GLYPH_CLASS = 'size-4 touch:size-6';
 
 type NotificationTag = ReturnType<typeof getNotificationTag>;
 
@@ -572,7 +572,7 @@ function BaseCard(props: {
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
           <Show when={props.showUnreadIndicator && props.item.unread}>
-            <UnreadIndicator active class="mobile:hidden" />
+            <UnreadIndicator active class="touch:hidden" />
           </Show>
           <InboxCard.Title class="flex items-center gap-1">
             {props.titleLeading}
@@ -949,7 +949,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
         <div class={cn('col-start-2 row-start-2')}>
           <InboxCard.Header class="self-center">
             <Show when={props.showUnreadIndicator && props.item.unread}>
-              <UnreadIndicator active class="mobile:hidden" />
+              <UnreadIndicator active class="touch:hidden" />
             </Show>
             <InboxCard.Title class="flex items-center gap-1">
               <span class="truncate">{text().title}</span>

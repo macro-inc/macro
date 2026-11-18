@@ -30,6 +30,7 @@ import type {
 } from '../core/email-privacy';
 import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
+import type { PipelineEntryRecord } from '../core/pipeline-entry';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
   BlockedDomainsSource,
@@ -56,6 +57,7 @@ import type {
   TeamViewsSource,
 } from './crm-sources';
 import type {
+  AddToPipelineSource,
   PipelineEditor,
   PipelineEntriesView,
   PipelineSharing,
@@ -64,6 +66,11 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  EmailThreadMention: Component<{
+    threadId: string;
+    subject: string;
+    onOpened?: () => void;
+  }>;
   createEmailPrivacy(): {
     createExcludedThreads(
       after: Accessor<string | undefined>
@@ -74,6 +81,10 @@ export type CrmContext = {
   createPipelines(teamId: Accessor<string | undefined>): PipelinesSource;
   PipelineEditor: PipelineEditor;
   PipelineEntries: PipelineEntriesView;
+  /** Call when the record page's Add to pipeline menu first opens. */
+  createAddToPipeline(
+    record: Accessor<PipelineEntryRecord>
+  ): AddToPipelineSource;
   PipelineSharing: PipelineSharing;
   createPipelineTransfer(pipeline: Pipeline): PipelineTransfer;
   downloadCsv(content: string, filename: string): Promise<{ saved: boolean }>;
@@ -93,7 +104,7 @@ export type CrmContext = {
   createNavigation(): {
     splitId: string | undefined;
     openWithSplit(
-      target: { type: 'company' | 'contact'; id: string },
+      target: { type: 'company' | 'contact' | 'email'; id: string },
       options?: { activate?: boolean; preferNewSplit?: boolean }
     ): void;
     showCompanies(): void;
@@ -101,7 +112,6 @@ export type CrmContext = {
     openEntity(entity: import('@entity').EntityData): void;
   };
   listsEnabled(): Accessor<boolean>;
-  pipelinesEnabled(): Accessor<boolean>;
 
   feedback: { success(message: string): void; failure(message: string): void };
   createCompanyEmails(

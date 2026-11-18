@@ -75,6 +75,7 @@ members = [
   "crates/web_search",
   "crates/dictation",
   "crates/email_api_client",
+  "crates/email_e2e",
   "crates/entity_mutation",
   "crates/entity_registry/entity_registry",
   "crates/entity_registry/entity_registry_db_utils",
@@ -147,6 +148,7 @@ members = [
   "crates/granola_sync",
   "crates/onboarding",
   "crates/outlook_emulator",
+  "crates/model_emulator",
   "crates/ai_engine",
   "crates/docx_engine",
   "crates/fig_engine",
@@ -262,6 +264,7 @@ arboard = { version = "3.6.1", default-features = false, features = ["wayland-da
 # Templates use built-in defaults; omit the unused config parser and basic-toml.
 askama = { version = "0.14", default-features = false, features = ["derive", "std", "urlencode"] }
 async-graphql = "7.2.1"
+async-graphql-parser = "7.2.1"
 async-lock = "3"
 async-openai = { version = "0.36.1", features = [
   "byot",
@@ -328,6 +331,7 @@ glob = "0.3.3"
 # hakari release is built against.
 guppy = "0.17.24"
 h2 = "0.4"
+heck = "0.5"
 hex = "0.4.3"
 hkdf = "0.12.4"
 hmac = "0.12.1"
@@ -377,7 +381,7 @@ livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
-loro = "1.16.2"
+loro = "=1.17.1"
 lru = "0.16"
 md-5 = "0.10.6"
 mimalloc = { version = "0.1", default-features = false }
@@ -411,8 +415,10 @@ postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
 progenitor-client = "0.15.1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
+proc-macro2 = "1"
 prost = "0.14"
 prost-build = "0.14"
+psl = "2.1"
 protox = "0.10"
 quote = "1"
 rand = "0.9.0"
@@ -460,6 +466,7 @@ shell-words = "1.1.1"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-serde = "=0.0.12"
 specta-typescript = "=0.0.12"
+sha1 = "0.10.6"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.6", features = [
   "chrono",
@@ -471,6 +478,7 @@ sqlx-core = { version = "0.8.6" }
 sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
 strsim = "0.11"
 strum = { version = "0.27.1", features = ["derive"] }
+syn = { version = "2", features = ["full"] }
 symphonia = { version = "0.6.1", default-features = false, features = [
   "isomp4",
   "mkv",

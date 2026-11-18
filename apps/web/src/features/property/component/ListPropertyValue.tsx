@@ -7,12 +7,15 @@ import { type Accessor, Match, Show, Switch } from 'solid-js';
 import { SYSTEM_PROPERTY_IDS } from '../constants';
 import { PropertyEmptyIcon } from '../extractors/PropertyEmpty';
 import { formatDate } from '../utils/formatting';
+import { UserFilterActions } from './UserFilterActions';
 
 /** Shared property cell for unified task and native project lists. */
 export function ListPropertyValue(props: {
   property: PropertyType;
   entityId: string;
   class?: string;
+  /** Offers "Filter by <name>" for each person in the value's hover card. */
+  onFilterByUser?: (userId: string) => void;
 }) {
   const context = usePropertiesContext();
   const isInlineType = () =>
@@ -58,6 +61,7 @@ export function ListPropertyValue(props: {
           property={property}
           entityId={props.entityId}
           class={props.class}
+          onFilterByUser={props.onFilterByUser}
         />
       )}
     </Property.Root>
@@ -68,6 +72,7 @@ function ListPropertyCell(props: {
   property: Accessor<PropertyType>;
   entityId: string;
   class?: string;
+  onFilterByUser?: (userId: string) => void;
 }) {
   const context = usePropertiesContext();
   const isUserEntity = () =>
@@ -88,7 +93,19 @@ function ListPropertyCell(props: {
 
   return (
     <>
-      <Property.Tooltip property={props.property()}>
+      <Property.Tooltip
+        property={props.property()}
+        actions={
+          <Show when={props.onFilterByUser}>
+            {(onFilter) => (
+              <UserFilterActions
+                property={props.property()}
+                onFilter={onFilter()}
+              />
+            )}
+          </Show>
+        }
+      >
         <Layer depth={2}>
           <Property.Pill
             aria-label={label()}

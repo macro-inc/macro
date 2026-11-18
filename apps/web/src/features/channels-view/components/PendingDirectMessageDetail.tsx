@@ -1,4 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
+import { ChannelDetailLayout } from '@channel/Channel/ChannelDetailLayout';
 import { pendingDirectMessageRecipient } from '@channel/primitives/pending-direct-messages';
 import {
   PendingDirectMessage,
@@ -26,18 +27,24 @@ export function PendingDirectMessageDetail(props: { pendingId: string }) {
       }
     >
       {(recipient) => (
-        <div class="flex size-full min-h-0 flex-col">
-          <ViewShell.TopBar class="gap-3 py-0">
-            <PendingDirectMessageTitle
-              pendingId={props.pendingId}
-              recipientId={recipient}
-            />
-          </ViewShell.TopBar>
+        <ChannelDetailLayout
+          scrollBehindHeader
+          header={
+            <ViewShell.TopBar class="gap-3 py-0 touch:flex touch:h-10 touch:px-0 touch:py-0">
+              <ViewShell.TopBarTitle class="px-3">
+                <PendingDirectMessageTitle
+                  pendingId={props.pendingId}
+                  recipientId={recipient}
+                />
+              </ViewShell.TopBarTitle>
+            </ViewShell.TopBar>
+          }
+        >
           <PendingDirectMessage
             pendingId={props.pendingId}
             recipientId={recipient}
           />
-        </div>
+        </ChannelDetailLayout>
       )}
     </Show>
   );

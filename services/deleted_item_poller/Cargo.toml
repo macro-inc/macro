@@ -31,3 +31,6 @@ sqs_client = { path = "../../crates/sqs_client", default-features = false, featu
 tokio = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }

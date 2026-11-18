@@ -214,6 +214,56 @@ it('creates, renames, nests and deletes folders, unfiling items without deleting
   expect(vault.draft(draft)?.draft.folderId).toBeNull();
 });
 
+it('narrows the list to the chosen types within the search, and clears back to every type', async () => {
+  const source = createFakePasswordSource();
+  const card = await source.save(
+    undefined,
+    undefined,
+    { ...LOGIN, name: 'Account card', kind: 'card' },
+    '019a0000-0000-7000-8000-000000000013'
+  );
+  const login = await source.save(
+    undefined,
+    undefined,
+    LOGIN,
+    '019a0000-0000-7000-8000-000000000014'
+  );
+  const note = await source.save(
+    undefined,
+    undefined,
+    { ...LOGIN, name: 'Recovery', kind: 'note' },
+    '019a0000-0000-7000-8000-000000000015'
+  );
+  if (card.isErr() || login.isErr() || note.isErr())
+    throw new Error('Fixture save failed');
+  const vault = mountVault(source);
+  await waitFor(() => expect(vault.loadedItems()).toHaveLength(3));
+  const visible = () =>
+    vault
+      .visibleItems()
+      .map((item) => item.id)
+      .sort();
+
+  vault.setKindSelected('card', true);
+  vault.setKindSelected('note', true);
+  expect(vault.kinds()).toEqual(['card', 'note']);
+  expect(visible()).toEqual([card.value.id, note.value.id].sort());
+
+  vault.setSearch('account');
+  expect(visible()).toEqual([card.value.id]);
+
+  vault.setKindSelected('card', false);
+  expect(visible()).toEqual([]);
+
+  vault.setSearch('');
+  vault.clearKinds();
+  expect(vault.kinds()).toEqual([]);
+  expect(visible()).toHaveLength(3);
+
+  vault.setGroupBy('kind');
+  expect(vault.groupBy()).toBe('kind');
+});
+
 it('generates uniformly over the selected classes and always includes each one', () => {
   for (const classes of [
     ['uppercase', 'lowercase', 'digits', 'symbols'],
