@@ -7,6 +7,7 @@ Copy turn_id from the current prompt’s hidden invocation context into ExecuteC
 ## Program shape
 
 ```javascript
+// Read the start of the five most recent documents.
 import Handlebars from 'handlebars';
 export async function main({macro, session, execution}) {
   const documents = [];
@@ -29,6 +30,7 @@ macro, session and execution are real SDK handles. You can instead import {Macro
 Every execution costs a model turn. Write the whole job as one program when its steps need no judgment from the user in between: put conditionals, loops and dependent reads and writes in code, rather than checking in one execution and acting in the next. Return what the answer needs (IDs, names, outcomes, failures), so no follow-up execution is required. This program checks for a duplicate and creates the task only when there is none:
 
 ```javascript
+// Create the login-redirect task unless a similar task already exists.
 export async function main({macro}) {
   const title = 'Fix login redirect loop';
   const body = 'Signing in from a deep link returns to the login page.';

@@ -163,6 +163,8 @@ fn indexed_stages_match_complete_scan_across_sparse_prefixes_overflow_and_contin
             "missing",
             "p004999@",
             "p004999@example.com",
+            "p004999",
+            "example.com",
         ] {
             for mode in [
                 PeopleMode::Command,
@@ -371,6 +373,84 @@ fn messaged_word_prefixes_page_ahead_of_unmessaged_exact_names_at_scale() {
     });
 }
 #[test]
+fn address_terms_match_below_names_on_sparse_and_broad_reads() {
+    block_on(async {
+        let (engine, scope) = seed(5000).await;
+        let mut storage = engine.into_storage();
+        storage
+            .put_batch(vec![
+                (
+                    key("macro|jdoe1@example.org"),
+                    record("macro|jdoe1@example.org", "Jane Doe"),
+                ),
+                (
+                    key("macro|ann@example.net"),
+                    record("macro|ann@example.net", "Test name"),
+                ),
+                (
+                    key("macro|asmith@example.net"),
+                    record("macro|asmith@example.net", "Ann Smith"),
+                ),
+                // Mid-word name and address matches: equally recent, and the
+                // address match's id sorts first, so only the tier orders them.
+                (
+                    key("macro|zsmith@example.net"),
+                    record("macro|zsmith@example.net", "John Smith"),
+                ),
+                (
+                    key("macro|ajohnson@example.net"),
+                    record("macro|ajohnson@example.net", "Pat Lee"),
+                ),
+            ])
+            .await
+            .unwrap();
+        let mut engine = Engine::new(storage);
+        let users = |result: PeopleSearchResult| {
+            let PeopleSearchResult::Page { people, .. } = result else {
+                panic!("page");
+            };
+            people
+                .into_iter()
+                .map(|p| p.user_id.as_ref().to_owned())
+                .collect::<Vec<_>>()
+        };
+
+        // A local part that differs from the name, and a domain.
+        for (query, expected) in [
+            ("jdoe", vec!["macro|jdoe1@example.org"]),
+            ("example.org", vec!["macro|jdoe1@example.org"]),
+            ("jdoe org", vec!["macro|jdoe1@example.org"]),
+            (
+                "ann",
+                vec!["macro|asmith@example.net", "macro|ann@example.net"],
+            ),
+            (
+                "ohn",
+                vec!["macro|zsmith@example.net", "macro|ajohnson@example.net"],
+            ),
+        ] {
+            let result = parity(
+                &mut engine,
+                &request(&scope, query, PeopleMode::Recipient),
+                EPOCH,
+            )
+            .await;
+            assert_eq!(users(result), expected, "{query}");
+        }
+
+        // More address matches than one probe holds read in rank order.
+        let result = parity(
+            &mut engine,
+            &request(&scope, "example.com", PeopleMode::Recipient),
+            EPOCH,
+        )
+        .await;
+        let people = users(result);
+        assert_eq!(people.len(), 50);
+        assert!(people.iter().all(|user| user.ends_with("@example.com")));
+    });
+}
+#[test]
 fn current_epoch_overrides_inboxes_and_dm_aliases_do_not_weaken_membership() {
     block_on(async {
         let (mut engine, scope) = seed(5000).await;
@@ -482,6 +562,8 @@ fn indexed_name_search_100k() {
             "ther",
             "Late",
             "missing",
+            "example.com",
+            "p099999",
             "",
         ] {
             let request = request(&scope, query, PeopleMode::Recipient);

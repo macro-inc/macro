@@ -42,7 +42,7 @@ current-period bookings and escapes spreadsheet formulas.
 - Provider writes have durable, version-fenced recovery. Create uses a stable organizer-scoped
   provider ID; cancellation can replay after the canonical calendar record disappears.
   Uncertain writes retain reservations, return a private receipt, and retry automatically.
-  Repeated failures require operator attention; see the release checklist below.
+  A calendar refusal or exhausted retries leave the booking failed; see recovery below.
 - Hosted activation still requires both scheduling migrations and the updated calendar
   service. The isolated browser fixture uses explicitly labelled sample data and
   the real UI components; its mutations do not send invitations or change Cal.com.
@@ -102,13 +102,33 @@ tests do not verify real invitations, OAuth, or Meet creation.
 The calendar service polls every 15 seconds, at most 25 operations per pass. Each claim has a
 five-minute lease, an incremented operation attempt, and a booking revision. All edits use the
 revision, protecting against confirmed → processing → confirmed races. Provider errors back off
-from five minutes to one hour; the third recovery attempt emits an operator-attention error.
-Completed claims clear their due timestamp. Disconnected/inaccessible calendars keep reservations
-until access is restored; recovery never interprets lost permission as a successful deletion.
+from five minutes to one hour. A refusal decided before anything reaches the provider (no writable
+calendar, a read-only calendar, an event the host can no longer see) abandons the operation at once.
+Anything else, including a reauthorization failure and a provider rejection (which also reports a
+write that landed but could not be read back), keeps retrying, at most hourly, until the booking's
+start time has passed, since an event in the past is not worth creating or moving; then it is
+abandoned. The booking stays failed, its due timestamp is cleared, and it is never claimed again. Completed claims
+clear their due timestamp. An abandoned booking keeps its reservations; recovery never interprets
+lost permission as a successful deletion. The booking's `abandonedAt` tells the booker and host
+views it is no longer retrying, so both offer Cancel. A booking abandoned by a release that recorded
+the time only on its operation gets it when it is read, and a create abandoned on its first attempt
+before its start reads back unsent. Cancelling it, which a failed booking
+otherwise refuses while recovery owns it, releases them once the calendar accepts the
+cancellation, except for a create refused on its first attempt: that never reached the calendar,
+so the cancellation releases them without a calendar change. A refused cancellation leaves the
+booking abandoned, and both views say it did not reach the host's calendar. A move the calendar refuses
+on its first attempt never reached it, so the booking returns to its original time and status, its host
+reservation shrinks back to the original interval, and the reschedule request answers 422 once that is
+saved. A move refused after an earlier attempt that left no recorded outcome, or that keeps failing until
+its new start time, is abandoned at the requested time with both intervals held; its calendar event may
+be at either time, since an earlier attempt may have landed before its response was lost, so reconcile
+it against the host's calendar.
 
 Use the calendar-service logs for `scheduling operation queued for recovery`, `scheduling operation
-recovered`, `scheduling recovery requires operator attention`, and `scheduling completion persistence
-unavailable`. Alert on operator-attention/persistence errors and sustained scheduling 5xx. During
+recovered`, `scheduling operation abandoned; booking left failed`, `scheduling move refused; booking
+kept at its original time`, `scheduling booking cancelled; its calendar never received it`, and
+`scheduling completion persistence unavailable`. Alert on abandoned operations, persistence errors and sustained scheduling
+5xx. During
 rollout, also check overdue rows so a stopped worker cannot hide behind missing logs:
 
 ```sql

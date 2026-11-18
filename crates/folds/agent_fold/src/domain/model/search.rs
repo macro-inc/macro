@@ -1,22 +1,33 @@
-//! Searchable text derived from the same vocabulary a transcript renders.
+//! Text derived from the same vocabulary a transcript renders: everything a
+//! reader can open, and the part of it search indexes.
 //!
 //! This module deliberately starts from [`FoldedMessage`], never from ACP
 //! frames. The fold is the boundary that decides which protocol material is
-//! user-visible; search merely flattens that already-decided representation.
+//! user-visible; these functions merely flatten that already-decided
+//! representation.
 
+use dynamic_ui::{TagNode, View, Widget};
+use nom::{
+    IResult, Parser,
+    branch::alt,
+    bytes::complete::{tag, take_until},
+    combinator::opt,
+    sequence::{delimited, pair},
+};
 use serde_json::Value;
 
 use super::{
-    AnsweredField, AnsweredValue, Control, ControlOutcome, ElicitationOutcome,
+    AnsweredField, AnsweredValue, Author, Control, ControlOutcome, ElicitationOutcome,
     ElicitationPropertySchema, ElicitationRequest, ElicitationSchema, FoldedMessage, MessagePart,
-    PermissionOutcome, StopReason, SubagentResult, ToolDetail, UserToolOutcome,
+    PermissionOutcome, StopReason, SubagentResult, ToolDetail, ToolStatus, UserToolOutcome,
 };
 
 #[cfg(test)]
 mod test;
 
 impl FoldedMessage {
-    /// Flatten the content a transcript exposes into text suitable for full-text search.
+    /// Flatten everything a reader can open in the transcript: prose,
+    /// thoughts, and every tool call's paths, commands, outputs and errors.
     ///
     /// Stable UI labels such as "Permission requested" are omitted because they
     /// would make every message match the same boilerplate. Variable content—the
@@ -24,21 +35,107 @@ impl FoldedMessage {
     /// actually recognize—is retained in render order. Nested subagent parts are
     /// traversed recursively.
     #[must_use]
+    pub fn readable_text(&self) -> String {
+        self.text(TextScope::Readable)
+    }
+
+    /// Flatten what the transcript shows without expanding anything, for the
+    /// search index.
+    ///
+    /// Thoughts, the work inside tool calls, answered questions' forms, and an
+    /// error's own text stay collapsed in the transcript, so a match there
+    /// would land on text the reader cannot see. What remains is the
+    /// conversation itself, plus the few tool-derived texts shown by default:
+    /// a subagent's title and type, a user tool's subject or title, a
+    /// presented view's own text, the server an approval names, and a failure
+    /// notice.
+    #[must_use]
     pub fn searchable_text(&self) -> String {
-        let mut text = SearchText::default();
+        self.text(TextScope::Shown)
+    }
+
+    fn text(&self, scope: TextScope) -> String {
+        let mut text = SearchText {
+            value: String::new(),
+            scope,
+            hides_agent_context: scope == TextScope::Shown
+                && matches!(self.author, Author::User { .. }),
+        };
         for part in self.parts.iter() {
             text.part(part);
         }
-        if let Some(StopReason::Failed { message, .. }) = &self.stop {
-            text.push(message);
+        if let Some(StopReason::Failed { message, notice }) = &self.stop {
+            match scope {
+                TextScope::Readable => text.push(message),
+                // An opaque failure shows its message only behind the failed
+                // line's disclosure; a classified one shows its notice card.
+                TextScope::Shown => {
+                    if let Some(notice) = notice {
+                        text.push(&notice.title);
+                        text.push(&notice.body);
+                    }
+                }
+            }
         }
         text.finish()
     }
 }
 
-#[derive(Default)]
+/// How much of a message to flatten.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TextScope {
+    /// Everything a reader can open.
+    Readable,
+    /// Only what the transcript shows without expanding.
+    Shown,
+}
+
 struct SearchText {
     value: String,
+    scope: TextScope,
+    /// A prompt's text parts drop the agent-context block the transcript hides.
+    hides_agent_context: bool,
+}
+
+const AGENT_CONTEXT_OPEN: &str = "<m-agent-context>";
+const AGENT_CONTEXT_CLOSE: &str = "</m-agent-context>";
+
+/// A prompt's text without the leading `<m-agent-context>` block: the context
+/// the harness composes into every prompt it delivers (the time, the agent's
+/// identity, who is asking, a thread's private context). The transcript hides
+/// exactly such a block (`stripAgentContext` in `@macro-inc/lexical-core`): one
+/// at the start, holding a version 1 payload and nothing else, with the blank
+/// line after it. Any other text is returned whole.
+fn without_agent_context(text: &str) -> &str {
+    fn line_break(input: &str) -> IResult<&str, &str> {
+        alt((tag("\r\n"), tag("\n"))).parse(input)
+    }
+
+    fn block(input: &str) -> IResult<&str, &str> {
+        let (rest, payload) = delimited(
+            tag(AGENT_CONTEXT_OPEN),
+            take_until(AGENT_CONTEXT_CLOSE),
+            tag(AGENT_CONTEXT_CLOSE),
+        )
+        .parse(input)?;
+        let (rest, _) = opt(pair(line_break, line_break)).parse(rest)?;
+        Ok((rest, payload))
+    }
+
+    match block(text) {
+        Ok((rest, payload)) if is_agent_context(payload) => rest,
+        _ => text,
+    }
+}
+
+fn is_agent_context(payload: &str) -> bool {
+    let Ok(Value::Object(fields)) = serde_json::from_str::<Value>(payload) else {
+        return false;
+    };
+    // JavaScript's `version === 1` also takes `1.0`.
+    fields.len() == 2
+        && fields.get("version").and_then(Value::as_f64) == Some(1.0)
+        && fields.get("text").is_some_and(Value::is_string)
 }
 
 impl SearchText {
@@ -64,14 +161,36 @@ impl SearchText {
 
     fn part(&mut self, part: &MessagePart) {
         match part {
-            MessagePart::Text { text } | MessagePart::Thought { text } => self.push(text),
+            MessagePart::Text { text } => {
+                if self.hides_agent_context {
+                    self.push(without_agent_context(text));
+                } else {
+                    self.push(text);
+                }
+            }
+            MessagePart::Thought { text } => {
+                if self.scope == TextScope::Readable {
+                    self.push(text);
+                }
+            }
             // The file's name is what a person would recognize and search
             // for; its static file URL is opaque and would only add noise.
             MessagePart::Attachment { name, .. } => self.push(name),
-            MessagePart::ToolUse { name, detail, .. } => {
-                self.push(name.display());
-                self.tool(detail);
-            }
+            MessagePart::ToolUse {
+                name,
+                detail,
+                status,
+                ..
+            } => match self.scope {
+                TextScope::Readable => {
+                    self.push(name.display());
+                    self.tool(detail);
+                }
+                TextScope::Shown => self.shown_tool(detail, *status),
+            },
+            // The resolved row words the outcome from the option's kind, never
+            // its name, so the name is not shown.
+            MessagePart::Permission { .. } if self.scope == TextScope::Shown => {}
             MessagePart::Permission {
                 options, outcome, ..
             } => {
@@ -87,7 +206,10 @@ impl SearchText {
                 ..
             } => {
                 self.push(server_name);
-                self.push(tool_name);
+                // The transcript words the tool for a person, never by name.
+                if self.scope == TextScope::Readable {
+                    self.push(tool_name);
+                }
             }
             MessagePart::Control { control, outcome } => {
                 match control {
@@ -98,7 +220,9 @@ impl SearchText {
                     }
                     Control::Compact | Control::Stop => {}
                 }
-                if let ControlOutcome::Rejected { message } = outcome {
+                if let ControlOutcome::Rejected { message } = outcome
+                    && self.scope == TextScope::Readable
+                {
                     self.push(message);
                 }
             }
@@ -112,6 +236,16 @@ impl SearchText {
                 if let Some(event) = event {
                     self.push(event);
                 }
+            }
+            // A reviewed user tool's card shows the draft's subject or title;
+            // any other question shows its message. Forms and answers sit
+            // behind the card's disclosure.
+            MessagePart::Elicitation {
+                request: ElicitationRequest::UserTool { draft, .. },
+                ..
+            } if self.scope == TextScope::Shown => self.draft_heading(draft),
+            MessagePart::Elicitation { message, .. } if self.scope == TextScope::Shown => {
+                self.push(message);
             }
             MessagePart::Elicitation {
                 message,
@@ -130,6 +264,119 @@ impl SearchText {
                 if let Some(outcome) = tool_outcome {
                     self.user_tool_outcome(outcome);
                 }
+            }
+        }
+    }
+
+    /// The text a collapsed transcript shows for a tool call. Calls grouped
+    /// under "Used N tools" show none; the ungrouped kinds show their title,
+    /// subject, or view.
+    fn shown_tool(&mut self, detail: &ToolDetail, status: ToolStatus) {
+        match detail {
+            ToolDetail::Subagent {
+                title, agent_type, ..
+            } => {
+                self.push(title);
+                if let Some(agent_type) = agent_type {
+                    self.push(agent_type);
+                }
+            }
+            ToolDetail::UserTool { input, .. } => self.draft_heading(input),
+            // A failed view, by status or by an error beside a decoded view,
+            // shows only that it failed.
+            ToolDetail::View { view, error } => {
+                if let Some(view) = view
+                    && error.is_none()
+                    && status != ToolStatus::Failed
+                {
+                    self.view(view);
+                }
+            }
+            ToolDetail::Terminal { .. }
+            | ToolDetail::Edit { .. }
+            | ToolDetail::Read { .. }
+            | ToolDetail::Delete { .. }
+            | ToolDetail::Move { .. }
+            | ToolDetail::Search { .. }
+            | ToolDetail::Fetch { .. }
+            | ToolDetail::Think { .. }
+            | ToolDetail::Other { .. }
+            | ToolDetail::Macro { .. } => {}
+        }
+    }
+
+    /// The one thing a user tool's card shows beside its name: an email's
+    /// subject or an event's title.
+    fn draft_heading(&mut self, draft: &Value) {
+        for field in ["subject", "title"] {
+            if let Some(text) = draft.get(field).and_then(Value::as_str) {
+                self.push(text);
+            }
+        }
+    }
+
+    /// A view's own text. Widgets that name entities by id, and agent-update
+    /// cards, show what they load live with the reader's access, which the
+    /// fold does not hold.
+    fn view(&mut self, view: &View) {
+        if let Some(title) = &view.title {
+            self.push(title);
+        }
+        for widget in &view.widgets {
+            self.widget(widget);
+        }
+    }
+
+    fn widget(&mut self, widget: &Widget) {
+        match widget {
+            Widget::Md { markdown } => self.push(markdown),
+            Widget::Timeline { title, events } => {
+                if let Some(title) = title {
+                    self.push(title);
+                }
+                for event in events {
+                    self.push(&event.title);
+                    if let Some(description) = &event.description {
+                        self.push(description);
+                    }
+                }
+            }
+            Widget::List { title, .. }
+            | Widget::Events { title, .. }
+            | Widget::Cards { title, .. } => {
+                if let Some(title) = title {
+                    self.push(title);
+                }
+            }
+            Widget::Tags { title, tags } => {
+                if let Some(title) = title {
+                    self.push(title);
+                }
+                self.tags(tags);
+            }
+            Widget::AgentUpdates { .. } | Widget::ChannelMessage { .. } => {}
+            Widget::BotCredential { label, .. } => {
+                if let Some(label) = label {
+                    self.push(label);
+                }
+            }
+            // A container lays its children out and renders no title.
+            Widget::Container { children, .. } => {
+                for child in children {
+                    self.widget(child);
+                }
+            }
+        }
+    }
+
+    fn tags(&mut self, tags: &[TagNode]) {
+        for tag in tags {
+            self.push(&tag.label);
+            if let Some(description) = &tag.description {
+                self.push(description);
+            }
+            if let Some(children) = &tag.children {
+                self.tags(children);
             }
         }
     }

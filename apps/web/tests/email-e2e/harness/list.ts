@@ -71,6 +71,36 @@ export function rowIds(page: Page): Promise<string[]> {
     .catch(() => []); // The app redirects while it starts.
 }
 
+/**
+ * Records each set of rows the list shows from now on, at every change of
+ * the page, and returns a reader of the sets so far. A row listed only for
+ * a moment is in them, where reads of the list can miss it.
+ */
+export async function watchRowIds(
+  page: Page
+): Promise<() => Promise<string[][]>> {
+  await page.evaluate(() => {
+    const read = () =>
+      [...document.querySelectorAll('[data-soup-entity] [data-entity-id]')].map(
+        (row) => row.getAttribute('data-entity-id') ?? ''
+      );
+    const shown = [read()];
+    (window as unknown as { shownRows: string[][] }).shownRows = shown;
+    new MutationObserver(() => {
+      const rows = read();
+      if (rows.join() !== shown.at(-1)?.join()) shown.push(rows);
+    }).observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributeFilter: ['data-entity-id'],
+    });
+  });
+  return () =>
+    page.evaluate(
+      () => (window as unknown as { shownRows: string[][] }).shownRows
+    );
+}
+
 /** The thread id of the row the list's cursor is on. */
 export async function focusedRowId(page: Page): Promise<string | undefined> {
   const ids = await page

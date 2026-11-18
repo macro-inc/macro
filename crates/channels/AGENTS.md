@@ -74,6 +74,7 @@ DMs, and the shared message store other domains discuss things on.
   channels. Its plan test runs custom and generic plans.
 
 - Human DM messages to nonusers use immediate email, including mentions and replies; empty DM creation, bot messages, and silent/mentions-only policies do not trigger this path. Keep registered recipients on their normal notification routes.
+- A person's first top-level message with the default notification policy invites the channel's recipients who are not mentioned in it. In a DM or unnamed group chat (`ChannelMetadata::is_dm_or_group_chat`) that message creates the conversation, so those recipients with an account get the ordinary channel message notification instead, which counts as unread; only people without an account get the invite. Bot first messages and mentions-only posts never invite.
 - Channel access requests are separate from `crates/access_requests`: access is
   membership, and every participant reviews. Each attempt is its own row so a
   timeline entry keeps its outcome. Approval adds the member in the request's

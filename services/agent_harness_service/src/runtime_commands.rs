@@ -18,9 +18,141 @@ use tracing::Instrument as _;
 #[cfg(test)]
 mod test;
 
+/// Ask whichever replica holds the harness's runtime connection to hand it
+/// the agent teammate of `computer_id`. No credential travels on the bus:
+/// that replica issues the agent's environment itself (each issue retires
+/// the agent's previous key, so no other replica may) and sends it down
+/// macrod's authenticated socket.
+#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct DeliverAgent {
+    pub(crate) deliver_agent_harness: HarnessId,
+    pub(crate) computer_id: hosted_runtimes::domain::ids::ComputerId,
+    pub(crate) generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
+    /// W3C context of the operator's hand-off, so the delivery joins its trace.
+    #[serde(default)]
+    pub(crate) trace_context: std::collections::HashMap<String, String>,
+}
+
+impl DeliverAgent {
+    /// A hand-off under the current span.
+    pub(crate) fn new(
+        harness: HarnessId,
+        computer_id: hosted_runtimes::domain::ids::ComputerId,
+        generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
+    ) -> Self {
+        use tracing_opentelemetry::OpenTelemetrySpanExt as _;
+        let context = tracing::Span::current().context();
+        let mut trace_context = std::collections::HashMap::new();
+        opentelemetry::global::get_text_map_propagator(|propagator| {
+            propagator.inject_context(&context, &mut trace_context);
+        });
+        Self {
+            deliver_agent_harness: harness,
+            computer_id,
+            generation,
+            trace_context,
+        }
+    }
+
+    fn span(&self) -> tracing::Span {
+        use tracing_opentelemetry::OpenTelemetrySpanExt as _;
+        let span = tracing::info_span!(
+            "computer.agent.deliver",
+            otel.kind = "consumer",
+            messaging.system = "redis",
+            computer_id = %self.computer_id,
+            harness_id = %self.deliver_agent_harness,
+            generation = i64::from(self.generation.get()),
+            delivered = tracing::field::Empty,
+        );
+        let parent = opentelemetry::global::get_text_map_propagator(|propagator| {
+            propagator.extract(&self.trace_context)
+        });
+        let _ = span.set_parent(parent);
+        span
+    }
+}
+
+/// The runtime bus could not carry a message.
+#[derive(Debug, thiserror::Error)]
+pub enum RuntimeBusError {
+    #[error("could not encode a runtime bus message")]
+    Encode(#[from] serde_json::Error),
+    #[error("could not publish on the runtime bus")]
+    Publish(#[from] redis::RedisError),
+}
+
+/// Broadcast a [`DeliverAgent`] to every replica.
+pub(crate) async fn publish_deliver_agent(
+    redis: &redis::Client,
+    request: &DeliverAgent,
+) -> Result<(), RuntimeBusError> {
+    let payload = serde_json::to_string(request)?;
+    redis
+        .get_multiplexed_async_connection()
+        .await?
+        .publish::<_, _, ()>(COMMAND_CHANNEL, payload)
+        .await?;
+    Ok(())
+}
+
+/// Sends an agent environment down a harness's runtime connection; whether
+/// this replica held it.
+pub(crate) type SendAgent = Arc<
+    dyn Fn(
+            HarnessId,
+            agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+        ) -> futures::future::BoxFuture<'static, bool>
+        + Send
+        + Sync,
+>;
+
+/// Carry out a [`DeliverAgent`] on this replica: only the one holding the
+/// harness's connection issues the agent's environment, then sends it down
+/// macrod's socket.
+pub(crate) async fn deliver_agent_to_runtime(
+    request: DeliverAgent,
+    agents: Arc<dyn hosted_runtimes::domain::agent::AgentEnrollmentSource>,
+    connected: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>,
+    send: SendAgent,
+) {
+    if !connected(request.deliver_agent_harness) {
+        return;
+    }
+    let span = request.span();
+    async move {
+        let enrollment = match agents.issue(request.computer_id, request.generation).await {
+            Ok(Some(enrollment)) => enrollment,
+            Ok(None) => {
+                tracing::warn!("the computer runs no agent; nothing to hand over");
+                return;
+            }
+            Err(error) => {
+                tracing::warn!(%error, "could not issue the agent's environment");
+                return;
+            }
+        };
+        let environment = agent_runtime_protocol::domain::schema::v0::AgentEnvironment(
+            enrollment
+                .env
+                .expose()
+                .iter()
+                .map(|(key, value)| (key.as_str().to_owned(), value.clone()))
+                .collect(),
+        );
+        let delivered = send(request.deliver_agent_harness, environment).await;
+        tracing::Span::current().record("delivered", delivered);
+    }
+    .instrument(span)
+    .await;
+}
+
+// Untagged: an agent hand-off's required fields appear in no other event,
+// so it is tried first.
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
 enum RuntimeBusEvent {
+    DeliverAgent(DeliverAgent),
     Models(ModelProbeEvent),
     Command(Box<RuntimeCommandRequest>),
 }
@@ -32,6 +164,9 @@ pub(crate) async fn consume_runtime_commands<Harness>(
     harness_service: Arc<Harness>,
     ready: tokio::sync::watch::Sender<bool>,
     models: MacrodModels,
+    deliver_agent: Arc<
+        dyn Fn(DeliverAgent) -> futures::future::BoxFuture<'static, ()> + Send + Sync,
+    >,
 ) -> anyhow::Result<()>
 where
     Harness: ForwardedCommands,
@@ -69,6 +204,12 @@ where
             }
         };
         let request = match event {
+            RuntimeBusEvent::DeliverAgent(request) => {
+                // Only the replica holding the connection delivers; the rest
+                // find nothing to hand it to.
+                probes.spawn(deliver_agent(request));
+                continue;
+            }
             RuntimeBusEvent::Command(request) => *request,
             RuntimeBusEvent::Models(event) => {
                 let models = models.clone();

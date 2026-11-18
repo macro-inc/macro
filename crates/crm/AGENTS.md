@@ -86,28 +86,40 @@ tools/HTTP/GraphQL surfaces over them.
   recognize `enabled OR selected_enabled` for compatible grant readers without
   bypassing legacy-write guards. Keep the scalar predicate, set-based ingestion
   and inlined Team reader in parity; live contact/company selectors follow
-  same-team role visibility and retain every exclusion veto. Activation remains
-  unavailable until the policy API and generation-safe backfill are ready.
+  same-team role visibility and retain every exclusion veto. Activation is gated by default-off
+  `enable-crm-selective-email-contribution`; inspection and withdrawal remain
+  available independently. Keep the flag off until all PR 5 gates pass.
   Private rule controls use the membership boundary of `/crm/email-privacy`,
   including after CRM viewing denial; resolving CRM details still needs record access.
 
 - Private policy storage lives in `domain/email_policy.rs` and
-  `outbound/companies_repo/email_policy/`. Initialize consent identity only via
-  `OpenEmailPolicy::Initialize`; `Existing` never creates a row and checks the
-  incarnation before idempotency lookup. The later API owns version CAS and
-  authentication. Worker checkpoints/completion must pass their captured
-  generation, never substitute the transaction's current version. Preview IDs
-  are immutable retry identities; a new ID replaces the member's slot.
+  `outbound/companies_repo/email_policy/`. Inspection must never initialize consent or move historical work. The first
+  policy mutation compares the legacy observation under locks, initializes
+  identity and transfers history atomically. `Existing` never creates a row.
+  `email_policy_api.rs` owns opaque CAS, direct activation and trusted actor audit.
+  Use empty struct variants for payload-free policy commands so serde rejects unknown fields.
+  Fingerprint explicit authority fields, never whole mailbox/member row versions
+  or sync/billing fields. A cleared same-grant reauth may preserve intent; an
+  actual revocation changes version. Recheck live eligibility before granting. Worker checkpoints/completion must pass their captured
+  generation, never substitute the transaction's current version. Preview starts
+  compare the observed policy and slot ID; exact retries reuse the retained
+  result, and replacements receive a new server-generated ID.
   Source events page raw contact/company rule references before filtering active
   revisions. Wire event insertion inside the source edit's existing transaction;
   preserve its lock order and never enqueue as a separate post-commit effect.
-  Bulk teardown must keep withdrawal available; close its first-activation race
-  with target locking/fresh reference checks before the policy API can activate.
+  Bulk teardown must keep withdrawal available: plain deletes on the no-rule
+  path, then one fresh team-reference probe/coarse event; referenced deletes
+  return IDs and recheck references in a new statement. Activation locks and
+  revalidates live targets. Never add a team privacy lock around bulk teardown.
   `domain/email_policy_work.rs` and its service own generation-bound history:
   raw contact pages of 100, sent-first passes, effect reauthorization and exact
   cursor completion. Source reconciliation uses stable retry receipts and system
   audit entries; matching edit hooks live in `email_policy/source_changes.rs`.
   Add the same transactional hook to any new address/domain/visibility writer.
+  `email_policy_preview.rs` owns count-only work: one retained owner slot,
+  stable read-only snapshot, raw pages of 100, 10,000-thread/five-minute budgets
+  and conditional completion. Previewing never initializes consent. Matching
+  edit hooks invalidate preview metadata; no mailbox index is added for counts.
   No worker initializes consent or activates selected contribution.
 
 - A generic pipeline has `record_type: None` and an unprotected primary column,

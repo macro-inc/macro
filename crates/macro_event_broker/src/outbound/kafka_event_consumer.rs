@@ -5,6 +5,7 @@ use std::{marker::PhantomData, time::Duration};
 
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, Ungrouped};
 use rdkafka::{
+    TopicPartitionList,
     consumer::CommitMode,
     message::{BorrowedMessage, Message as _},
 };
@@ -74,6 +75,20 @@ impl<T: GroupName, M> KafkaConsumerAdapter<T, M> {
         mode: CommitMode,
     ) -> Result<(), rootcause::Report> {
         Ok(self.inner.commit_message(message, mode)?)
+    }
+
+    /// Commits each listed partition's offset, the next record the group reads.
+    pub fn commit_offsets(
+        &self,
+        offsets: &TopicPartitionList,
+        mode: CommitMode,
+    ) -> Result<(), rootcause::Report> {
+        Ok(self.inner.commit_offsets(offsets, mode)?)
+    }
+
+    /// The partitions currently assigned to this group member.
+    pub fn assignment(&self) -> Result<TopicPartitionList, rootcause::Report> {
+        Ok(self.inner.assignment()?)
     }
 }
 

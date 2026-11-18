@@ -1,0 +1,52 @@
+[package]
+edition = "2024"
+name = "firecracker_host_api"
+publish = false
+version = "0.1.0"
+
+[features]
+# `utoipa::ToSchema` on the wire types, for the agent's OpenAPI document.
+schema = [
+  "dep:utoipa",
+  "computer_id/schema",
+  "computer_types/schema",
+  "pairing_id/schema",
+]
+# `HostClient::over_plain_http`, for tests against a local listener.
+test-support = ["client"]
+# `client::HostClient`: mTLS REST and exec against an agent.
+client = [
+  "dep:futures",
+  "dep:macro_tower_layers",
+  "dep:pinned_tls",
+  "dep:reqwest",
+  "dep:rustls",
+  "dep:tokio-tungstenite",
+  "dep:tracing",
+  "tokio/net",
+]
+
+[dependencies]
+chrono = { workspace = true }
+computer_id = { path = "../computer_id" }
+computer_types = { path = "../computer_types" }
+futures = { workspace = true, optional = true }
+macro_tower_layers = { path = "../macro_tower_layers", optional = true }
+pairing_id = { path = "../pairing_id" }
+pinned_tls = { path = "../pinned_tls", optional = true }
+reqwest = { workspace = true, optional = true }
+rustls = { workspace = true, features = ["std"], optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+subtle = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["io-util"] }
+tokio-tungstenite = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+zeroize = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["io-util", "macros", "rt"] }
