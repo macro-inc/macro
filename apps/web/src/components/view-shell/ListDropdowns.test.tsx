@@ -11,10 +11,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SearchableMultiSelect } from '../../features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { Dropdown } from '../ui/components/Dropdown';
 import type { AiFilterOutcome } from './AiFilterInput';
-import { ListFilterCountBadge, ListFilterDropdown } from './ListDropdowns';
+import { ListFilterDropdown } from './ListDropdowns';
 
 // Exercise the actual menus/comboboxes without initializing the app UI barrel.
 vi.mock('@ui', async () => ({
+  ...(await import('../ui/components/Badge')),
   ...(await import('../ui/components/Button')),
   ...(await import('../ui/components/ButtonGroup')),
   ...(await import('../ui/utils/classname')),
@@ -974,16 +975,25 @@ it('ties each group row to its id rather than its position', async () => {
   expect(screen.getByRole('menuitem', { name: 'Assignee' })).toBe(assigneeRow);
 });
 
-it('shows the applied filter count only while filters are active', () => {
+it('shows the applied filter count inside the trigger only while filters are active', () => {
   const [count, setCount] = createSignal(0);
-  const { container } = render(() => <ListFilterCountBadge count={count()} />);
-  expect(container.textContent).toBe('');
+  render(() => (
+    <ListFilterDropdown
+      label="Filter tasks"
+      activeCount={count()}
+      groups={[]}
+      isSelected={() => false}
+      onSelectionChange={() => {}}
+    />
+  ));
+  const trigger = screen.getByRole('button', { name: 'Filter tasks' });
+  expect(trigger.textContent).toBe('');
 
-  setCount(2);
-  expect(container.textContent).toBe('2');
+  setCount(12);
+  expect(trigger.textContent).toBe('12');
 
   setCount(0);
-  expect(container.textContent).toBe('');
+  expect(trigger.textContent).toBe('');
 });
 
 it('offers typed text no option lists and adds it to the selection', async () => {

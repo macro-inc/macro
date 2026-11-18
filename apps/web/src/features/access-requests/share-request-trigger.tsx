@@ -5,11 +5,9 @@ import {
   type Accessor,
   createEffect,
   createSignal,
-  type JSX,
   on,
   onCleanup,
   onMount,
-  Show,
 } from 'solid-js';
 import { useAccessRequestVisit } from './context/visit';
 import type { ShareEntity } from './core/types';
@@ -78,23 +76,4 @@ export function useShareRequestTrigger(props: {
       props.open();
     },
   };
-}
-
-export function ShareRequestIcon(props: {
-  count: number;
-  children: JSX.Element;
-}) {
-  return (
-    <span class="relative inline-flex">
-      {props.children}
-      <Show when={props.count > 0}>
-        <span
-          aria-label={`${props.count} pending permission requests`}
-          class="absolute -top-2 -right-2 min-w-3.5 rounded-full bg-accent px-0.5 text-center text-[9px] leading-3.5 text-page"
-        >
-          {props.count > 99 ? '99+' : props.count}
-        </span>
-      </Show>
-    </span>
-  );
 }

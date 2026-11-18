@@ -20,6 +20,7 @@ export {
   badgeClasses,
   badgeTriggerClasses,
   badgeVariants,
+  CountBadge,
 } from './components/Badge';
 export type {
   ButtonClassOptions,
