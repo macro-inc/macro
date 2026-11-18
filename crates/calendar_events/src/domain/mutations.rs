@@ -231,9 +231,9 @@ where
     ) -> Result<CalendarEvent, CalendarMutationError> {
         let source = upsert.source.details();
         let email_link_id = source.email_link_id;
-        // An Outlook copy's change reaches its viewers through the projection
-        // relay, which publishes the outbox row this write queues, so its own
-        // inbox gets no nudge from here.
+        // An Outlook copy's viewers hear of a change through the projection
+        // relay, which publishes the outbox row every change to the event's
+        // row queues, so its own inbox gets no nudge from here.
         let relayed = matches!(upsert.source, CalendarEventSource::Outlook(_));
         let outcome = self
             .repository
