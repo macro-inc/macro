@@ -45,7 +45,7 @@ pub enum CodeOutcome {
     },
     /// The provider refused the code.
     Rejected,
-    /// The CLI could not read the code.
+    /// The CLI could not read the code. It ends the sign-in all the same.
     Malformed,
 }
 
