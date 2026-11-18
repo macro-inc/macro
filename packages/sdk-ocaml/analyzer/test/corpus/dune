@@ -1,0 +1,9 @@
+; Programs the analyzer is tested on. Each starts with the answer it must
+; give; test_corpus.ml reads their .cmt files.
+
+(library
+ (name corpus)
+ (wrapped false)
+ (libraries macro_sdk macro_sdk_eio unix dynlink)
+ (flags
+  (:standard -w -a)))

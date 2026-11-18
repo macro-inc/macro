@@ -331,6 +331,71 @@ spec gives no type at all (`serde_json::Value` on the Rust side), 34 are
 free-form objects (no properties), and 1 is an object with no properties.
 Typing them needs a schema in the Rust service, not a generator change.
 
+## Which operations does a program call?
+
+`analyzer/` is a static analysis tool for programs written against this SDK.
+Given one program's typed tree (compile it with `-bin-annot` and pass the
+`.cmt`), it lists every operation the program *may* call, keyed by service
+and operationId, or says it cannot analyze the program. It evaluates
+nothing: a reference anywhere counts, including code that never runs.
+
+```sh
+ocamlfind ocamlc -bin-annot -package macro_sdk -c main.ml
+dune exec analyzer/bin/macro_sdk_calls.exe -- --json main.cmt
+```
+
+```json
+{ "status": "ok",
+  "operations": [
+    { "service": "storage", "operation": "create_task_handler",
+      "path": "Macro_sdk.Storage.create_task_handler",
+      "locations": [ { "file": "main.ml", "line": 4, "column": 10, "via": "reference" } ] } ] }
+```
+
+Without `--json` it prints the same as text. Exit codes: 0 analyzed, 1
+cannot analyze (`"status": "cannot_analyze"` with a `reasons` list of
+messages and locations, and no operations), 2 usage error. It reads the SDK's
+`.cmi` files from the load path recorded in the `.cmt` (relative entries
+from `--root DIR`, default the recorded build directory, else the current
+directory) or from `-I DIR`; they must be the ones the program was compiled
+against.
+
+How it finds operations:
+
+- An operation is a value in a service module whose result is a
+  `Request.t`. A build rule reads `generated/*.ml` and records which
+  service and operationId each one sends (the OCaml name can differ from the
+  operationId).
+- Every value the program names is identified by the uid of its
+  declaration, so `open`, `let open`, `M.(...)`, module aliases and a
+  toplevel `include` all resolve to the SDK value. Partial application,
+  passing functions around, helpers and closures are covered because the
+  operation is named somewhere.
+- A module used as a value (functor argument, first-class module,
+  signature constraint, `module rec`, an alias or `include` inside another
+  module) counts every operation visible through the signature it is used
+  at, or the whole module.
+
+It refuses (cannot analyze) what can reach an operation without naming it:
+`external` declarations, `Obj`, `Marshal`, `input_value`, `Camlinternal*`,
+`unsafe_*` functions and primitives, `%identity` externals outside the
+standard library, programs compiled with `-unsafe`, a `Request.t` built or
+updated by hand, and any value outside the table whose type can hand out a
+request. It also refuses any reference to a unit outside the standard
+library, the SDK, its transport and the libraries their interfaces expose
+(`Analyze.default_libraries`; add more with `--allow-library UNIT`): another
+unit of the program, `Dynlink` or a third-party library could call the SDK
+where the analysis cannot see. Those libraries are trusted, not analyzed.
+
+The list is the SDK operations the program may call, not a permission
+boundary: a program holds its credential (`Config.t` is readable) and can
+send raw HTTP through another client, which this tool does not report.
+
+`analyzer/test/corpus/` holds the programs it is tested on, each stating its
+expected answer on its first line; `test_coverage` checks that the table
+matches the specs and the compiled interfaces, and that a program naming
+all 913 operations is analyzed to all of them.
+
 ## Regenerate
 
 The generator is OCaml in `gen/`: it lowers each spec to a small IR, builds

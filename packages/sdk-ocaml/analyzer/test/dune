@@ -1,0 +1,33 @@
+; test_corpus: the programs in corpus/ and the answers they state.
+; test_coverage: every SDK operation is in the analyzer's table and found.
+
+(test
+ (name test_corpus)
+ (modules test_corpus)
+ (libraries macro_sdk_analyzer)
+ (deps
+  (glob_files corpus/*.ml)
+  (glob_files corpus/.corpus.objs/byte/*.cmt)))
+
+; Reads ../sdk/specs through DUNE_SOURCEROOT, outside this dune project.
+
+(test
+ (name test_coverage)
+ (modules test_coverage)
+ (libraries macro_sdk_analyzer compiler-libs.common yojson)
+ (deps
+  (universe)
+  (glob_files %{project_root}/generated/.macro_sdk.objs/byte/*.cmi)
+  (glob_files %{project_root}/runtime/.macro_sdk_runtime.objs/byte/*.cmi)
+  (glob_files %{project_root}/eio/.macro_sdk_eio.objs/byte/*.cmi)
+  (glob_files all/.all_operations.objs/byte/*.cmt)))
+
+(test
+ (name test_cli)
+ (modules test_cli)
+ (libraries yojson)
+ (deps
+  %{exe:../bin/macro_sdk_calls.exe}
+  (glob_files corpus/.corpus.objs/byte/*.cmt))
+ (action
+  (run %{test} %{exe:../bin/macro_sdk_calls.exe})))

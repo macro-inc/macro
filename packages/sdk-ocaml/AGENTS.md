@@ -8,7 +8,9 @@ request builders for every operation in `../sdk/specs`), `macro_sdk_eio`
 WebAssembly transport over JavaScript's `fetch`, for code mode) and
 `code_mode` (`code_mode/`, the code-mode program contract and the prebuilt
 Wasm bundle programs compile against). The OCaml counterpart of
-`../sdk/generated`.
+`../sdk/generated`. Also `analyzer/`: a static analysis tool that lists the
+operations a compiled program may call (`macro_sdk_calls`), not wired into
+anything yet.
 
 ## How it works
 
@@ -28,6 +30,8 @@ encoding) and hands the reply to `interpret`.
 - `code_mode/code_mode.mli`: the program contract and the bootstrap's side.
 - `code_mode/bundle/build.sh`, `compile.sh`: code mode's bundle and the
   per-program compile (README "Code mode bundle").
+- `analyzer/lib/analyze.ml`: the call analysis over a program's `.cmt`;
+  `analyzer/index/index.ml` builds its operation table from `generated/`.
 
 ## Scope
 
@@ -35,7 +39,7 @@ encoding) and hands the reply to `interpret`.
   `code_mode`, the code-mode bundle's build (`code_mode/bundle/`; the nix
   derivation is `codeModeOcaml` in `nix/cloud-storage.nix`), code mode's
   policy check (`code_mode/policy/`, a native tool the bundle ships),
-  `generated/`.
+  `generated/`, the call analyzer.
 - Not here: the specs (`../sdk/specs`, synced by `../sdk`); hand-written
   entity APIs like the TypeScript SDK's `src/` (none yet); code mode's
   OCaml compile step and bootstrap (`crates/code_execution`).
@@ -48,6 +52,10 @@ encoding) and hands the reply to `interpret`.
   `test/test_kinds.ml`.
 - New service: add its hosts to `runtime/config.ml` (`test_config` compares
   them with `../sdk/src/config.ts`).
+- New way for a program to reach an operation without naming it (an SDK
+  value that returns requests, a new escape hatch): handle it in
+  `analyzer/lib/analyze.ml` and add a program to `analyzer/test/corpus/`
+  whose first line states the expected answer.
 
 ## Checks
 
@@ -65,6 +73,11 @@ encoding) and hands the reply to `interpret`.
 ## Gotchas
 
 - Never edit `generated/`; the `drift` test regenerates it and diffs.
+- The analyzer's soundness rests on `analyzer/test/test_coverage.ml`: an SDK
+  value that can return a `Request.t` but is not an operation in the table
+  fails it. Fix the analyzer, never the test.
+- Corpus programs state expected line numbers; `dune fmt` can move lines,
+  so rerun `dune test` after formatting them.
 - Generated code must not use string templates or regexes: build Parsetree
   nodes. Docs travel as `ocaml.doc` attributes; `gen/print.ml` turns them
   into `(** *)` comments.
