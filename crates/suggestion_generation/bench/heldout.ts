@@ -300,7 +300,7 @@ Write the transcript of call ${c.key} ("${c.name}"): 8 to 16 turns, speakers are
     writeFileSync(join(dir, 'workspace.json'), `${JSON.stringify(workspace, null, 1)}\n`);
     const feedTruth = await write(
       at,
-      `Write the answer key for judging the suggestions feed of ${owner.name}. It is now ${anchor}. List the planted opportunities (ids p1, p2, …: what, evidence as "document:<key>", "task:<key>", "channel:<key>", "call:<key>" or "inbox subject: <subject>", and the ideal suggestion) and the decoys (ids d1, …: what, and why it is stale), exactly as the workspace and mail below show them.
+      `Write the answer key for judging the suggestions feed of ${owner.name}. It is now ${anchor}. List the planted opportunities (ids p1, p2, …: what, evidence as "document:<key>", "task:<key>", "channel:<key>", "call:<key>" or "inbox subject: <subject>", and the ideal suggestion) and the decoys (ids d1, …: what, and why it is stale), exactly as the workspace and mail below show them. The planted opportunities are these and no others, one entry each: ${plan.opportunities.join(' | ')}. The decoys are these and no others: ${plan.decoys.join(' | ')}.
 <workspace>${JSON.stringify(workspace)}</workspace>
 <mail>${digest}</mail>`,
       FEED_TRUTH,
