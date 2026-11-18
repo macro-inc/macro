@@ -1,29 +1,5 @@
 {
   "schemas": {
-    "AuthorityAdmission": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "additionalProperties": false,
-      "description": "Captured permission scope for one cache operation.",
-      "properties": {
-        "generation": {
-          "description": "Missing generations never authorize content from an older client.",
-          "format": "uuid",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "requireProof": {
-          "description": "Unrelated offline work can proceed before the first server proof.",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "requireProof"
-      ],
-      "title": "AuthorityAdmission",
-      "type": "object"
-    },
     "AuthorityTransition": {
       "$defs": {
         "CacheAuthority": {

@@ -46,8 +46,6 @@ import type {
 } from '../protocol';
 
 export interface CacheReadArgs {
-  /** Capture before acquiring source content; never infer from a late write. */
-  authorityGeneration?: string;
   /** urql operation key; registers the op for re-execution when set. */
   opKey?: number;
   query: string;
@@ -80,6 +78,8 @@ export type InspectQueryVariantsArgs = Omit<
 >;
 
 export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
+  /** Capture before dispatch; the shared owner compares it before publication. */
+  generation?: string;
   data: unknown;
   /** Installs this active query's dependencies from the normalized response. */
   registerDependencies?: boolean;
@@ -174,7 +174,10 @@ export interface CacheHost {
     args: CalendarRangeCacheArgs
   ): Promise<CalendarRangeCacheResult>;
   /** Atomically applies calendar coverage, deletions, and sync state. */
-  calendarCommit(args: CalendarCommitArgs): Promise<CalendarCommitCacheResult>;
+  calendarCommit(
+    args: CalendarCommitArgs,
+    generation?: string
+  ): Promise<CalendarCommitCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /**
    * Stores a background query response and returns only fields not marked

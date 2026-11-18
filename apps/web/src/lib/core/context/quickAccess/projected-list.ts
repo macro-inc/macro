@@ -1,4 +1,3 @@
-import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   CacheHost,
@@ -58,7 +57,6 @@ export const UNANSWERED_SEARCH_LIMIT_MS = 12_000;
 
 type Request = {
   buckets: Bucket[];
-  authorityEpoch: number;
   query: string;
   pages: number;
   cursor?: SearchCursor;
@@ -325,19 +323,10 @@ export function createProjectedList<T extends { id: string }>(options: {
     options.revision();
     const query = options.searchTerm?.().trim() ?? '';
     const activeBuckets = buckets();
-    const protectedBuckets = activeBuckets.some((bucket) =>
-      ['email', 'crm_company', 'crm_contact'].includes(bucket)
-    );
-    const authority = crmSnapshotAuthorization();
-    const authorityEpoch = protectedBuckets ? authority.epoch : 0;
-    const enabled =
-      options.enabled?.() !== false &&
-      activeBuckets.length > 0 &&
-      !(protectedBuckets && authority.paused);
+    const enabled = options.enabled?.() !== false && activeBuckets.length > 0;
     const previous = current;
     if (
       enabled &&
-      previous?.authorityEpoch === authorityEpoch &&
       previous?.query === query &&
       previous.buckets.length === activeBuckets.length &&
       previous.buckets.every((bucket, index) => bucket === activeBuckets[index])
@@ -360,7 +349,6 @@ export function createProjectedList<T extends { id: string }>(options: {
     setError(undefined);
     setHasMore(false);
     const sameBuckets =
-      previous?.authorityEpoch === authorityEpoch &&
       previous?.buckets.length === activeBuckets.length &&
       previous.buckets.every(
         (bucket, index) => bucket === activeBuckets[index]
@@ -376,7 +364,6 @@ export function createProjectedList<T extends { id: string }>(options: {
       return;
     }
     const request: Request = {
-      authorityEpoch,
       buckets: activeBuckets,
       query,
       pages: 1,

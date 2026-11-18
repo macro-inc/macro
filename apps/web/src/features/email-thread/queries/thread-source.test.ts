@@ -1,5 +1,3 @@
-import { beginQueryAuthorizationReset } from '@app/lib/urql-solid/authorization';
-import { rememberOwnedEmail } from '@graphql-cache/authority-scope';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
 import type { ApiMessage, ApiThread } from '@service-email/generated/schemas';
 import { batch, createRoot, createSignal } from 'solid-js';
@@ -129,47 +127,6 @@ it('keeps a reopened local draft through server identity adoption and rejects an
   }));
 
 describe('thread query adaptation', () => {
-  it.each([false, true])(
-    'publishes an offline thread while CRM proof is paused only with current ownership (owned: %s)',
-    (owned) =>
-      createRoot((dispose) => {
-        const resume = beginQueryAuthorizationReset();
-        const [ready, setReady] = createSignal(false);
-        let current = true;
-        const id = crypto.randomUUID();
-        try {
-          const source = createEmailThreadSource(() => id, {
-            resolvedThreadId: id,
-            get isSuccess() {
-              return ready();
-            },
-            isError: false,
-            get data() {
-              return ready()
-                ? {
-                    thread: {
-                      ...thread([message('cached-message')]),
-                      db_id: id,
-                    },
-                    hasMore: false,
-                  }
-                : undefined;
-            },
-          } as ThreadQueryResult<ThreadQueryData>);
-          expect(source.thread()).toBeUndefined();
-          if (owned) rememberOwnedEmail(id, () => current);
-          setReady(true);
-          expect(source.thread()?.db_id).toBe(owned ? id : undefined);
-          current = false;
-          setReady(false);
-          expect(source.thread()).toBeUndefined();
-        } finally {
-          current = false;
-          dispose();
-          resume();
-        }
-      })
-  );
   it('preserves saved invitations through the explicit cached message projection', () => {
     const invitations = [invitationFixture];
     expect(

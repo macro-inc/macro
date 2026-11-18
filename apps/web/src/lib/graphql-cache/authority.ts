@@ -5,7 +5,6 @@ import type {
 import { CacheAuthoritySchema } from './authority.generated';
 
 export type {
-  AuthorityAdmission,
   AuthorityTransition,
   CacheAuthority,
 } from './authority.generated';
@@ -18,9 +17,6 @@ export interface CacheAuthorityHost {
   /** Compare a proof to its pre-request generation under the owner lock. */
   transition(expected: string, policy: string): Promise<AuthorityTransition>;
   onChanged(callback: (authority: CacheAuthority) => void): () => void;
-  /** The application verifies the current generation, reusing durable proof when possible. */
-  setReadGuard(guard: () => Promise<unknown>): void;
-  verifyRead(): Promise<void>;
 }
 
 export class StaleCacheAuthorityError extends Error {
@@ -38,18 +34,10 @@ export function parseCacheAuthority(value: unknown): CacheAuthority {
 export function createAuthorityObserver(identity: string) {
   let current: CacheAuthority | undefined;
   let version = 0;
-  let verified = false;
   const listeners = new Set<(authority: CacheAuthority) => void>();
   return {
     snapshot: () => current,
     version: () => version,
-    verified: () => verified,
-    verify() {
-      verified = true;
-    },
-    invalidateProof() {
-      verified = false;
-    },
     observe(value: unknown, expectedVersion = version) {
       const next = parseCacheAuthority(value);
       if (next.identity !== identity) throw new StaleCacheAuthorityError();
@@ -63,7 +51,6 @@ export function createAuthorityObserver(identity: string) {
       current = next;
       if (changed) {
         version += 1;
-        verified = false;
         for (const listener of listeners) listener(next);
       }
       return next;
@@ -77,17 +64,19 @@ export function createAuthorityObserver(identity: string) {
     reset() {
       current = undefined;
       version += 1;
-      verified = false;
     },
   };
 }
 
-/** Rust admission errors cross IPC as strings. Keep their retry semantics. */
+/** Rust generation errors cross IPC as strings. Keep their retry semantics. */
 export function cacheAuthorityError(error: unknown): Error {
   const value = error instanceof Error ? error : new Error(String(error));
   return value.message.includes(
     'cache authority changed; obtain a new permission proof'
-  )
+  ) ||
+    value.message.includes(
+      'cache response belongs to an older session generation'
+    )
     ? new StaleCacheAuthorityError()
     : value;
 }

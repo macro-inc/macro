@@ -2,6 +2,7 @@ import type {
   CalendarCommitArgs,
   CalendarRangeCacheResult,
 } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type CalendarChangesPage,
@@ -72,6 +73,27 @@ describe('CalendarSyncController', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
+  it('preserves the delta request generation through a later index commit', async () => {
+    const { host, fetchChanges, controller } = setup([]);
+    const entered = Promise.withResolvers<void>();
+    const response = Promise.withResolvers<CalendarChangesPage>();
+    fetchChanges.mockImplementationOnce(() => {
+      entered.resolve();
+      return response.promise;
+    });
+    const generation = cacheSessionGeneration.capture();
+    const syncing = controller.runDelta();
+    await entered.promise;
+    await cacheSessionGeneration.transition(async () => {});
+    response.resolve(changes());
+    await syncing;
+    expect(host.calendarCommit).toHaveBeenCalledWith(
+      expect.anything(),
+      generation
+    );
+    controller.dispose();
+  });
+
   it('replaces changed events, deletes removals, and advances the watermark', async () => {
     const { host, fetchChanges, refetchCalendars, controller } = setup([
       changes({
@@ -92,28 +114,31 @@ describe('CalendarSyncController', () => {
       { linkId: 'link-1', seq: '1' },
       { linkId: 'link-2', seq: '7' },
     ]);
-    expect(host.calendarCommit).toHaveBeenCalledWith({
-      replacedEvents: [
-        {
-          eventKey: 'GraphqlCalendarEvent:event-1',
-          occurrenceKeys: [
-            'GraphqlCalendarOccurrence:event-1:2026-10-06T09:00:00+00:00',
-          ],
-        },
-      ],
-      deletedEventKeys: ['GraphqlCalendarEvent:event-2'],
-      deletedCalendarKeys: ['GraphqlCalendar:calendar-9'],
-      removedLinkIds: ['link-2'],
-      watermark: {
-        kind: 'advance',
-        since: [
-          { linkId: 'link-1', seq: '1' },
-          { linkId: 'link-2', seq: '7' },
+    expect(host.calendarCommit).toHaveBeenCalledWith(
+      {
+        replacedEvents: [
+          {
+            eventKey: 'GraphqlCalendarEvent:event-1',
+            occurrenceKeys: [
+              'GraphqlCalendarOccurrence:event-1:2026-10-06T09:00:00+00:00',
+            ],
+          },
         ],
-        to: [{ linkId: 'link-1', seq: '5' }],
+        deletedEventKeys: ['GraphqlCalendarEvent:event-2'],
+        deletedCalendarKeys: ['GraphqlCalendar:calendar-9'],
+        removedLinkIds: ['link-2'],
+        watermark: {
+          kind: 'advance',
+          since: [
+            { linkId: 'link-1', seq: '1' },
+            { linkId: 'link-2', seq: '7' },
+          ],
+          to: [{ linkId: 'link-1', seq: '5' }],
+        },
+        freshness: 'fresh',
       },
-      freshness: 'fresh',
-    });
+      expect.any(String)
+    );
     expect(refetchCalendars).toHaveBeenCalledTimes(1);
   });
 
@@ -164,10 +189,13 @@ describe('CalendarSyncController', () => {
     await controller.runDelta();
 
     expect(host.calendarCommit).toHaveBeenCalledTimes(1);
-    expect(host.calendarCommit).toHaveBeenCalledWith({
-      reset: true,
-      watermark: { kind: 'merge', links: [{ linkId: 'link-3', seq: '40' }] },
-    });
+    expect(host.calendarCommit).toHaveBeenCalledWith(
+      {
+        reset: true,
+        watermark: { kind: 'merge', links: [{ linkId: 'link-3', seq: '40' }] },
+      },
+      expect.any(String)
+    );
     expect(refetchCalendars).toHaveBeenCalledTimes(1);
   });
 

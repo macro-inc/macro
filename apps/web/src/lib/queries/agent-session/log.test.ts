@@ -4,6 +4,7 @@
  * cached log only once the fetched one is what the cache holds.
  */
 
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import type { AgentSessionLogQuery } from '@service-storage/graphql/generated/graphql';
 import type { OperationResult } from '@urql/core';
@@ -129,6 +130,21 @@ afterEach(() => {
 const settle = () => vi.advanceTimersByTimeAsync(0);
 
 describe('watchAgentSessionLog', () => {
+  it('drops buffered log frames when their session generation retires', async () => {
+    const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
+      rows: () => undefined,
+      gap: () => undefined,
+    });
+    query.next(fromNetwork(logData([1])));
+    await watch.fetched;
+    host.readQuery.mockResolvedValue({ kind: 'hit', data: logData([1]) });
+    appended.next(fromNetwork({ agentSessionLogAppended: [entry(2)] }));
+    await cacheSessionGeneration.transition(async () => {});
+    watch.stop();
+    await settle();
+    expect(host.writeQuery).not.toHaveBeenCalled();
+  });
+
   it('loads and follows notification frames over GraphQL', async () => {
     const rows = vi.fn();
     const gap = vi.fn();

@@ -1,8 +1,4 @@
 import {
-  markSourceAuthority,
-  sourceAuthorityGeneration,
-} from '@graphql-cache/source-authority';
-import {
   ClearNotificationInboxDocument,
   type ClearNotificationInboxInput,
   MarkNotificationInboxNotificationDoneDocument,
@@ -63,7 +59,6 @@ export async function markInboxNotificationDone(
       result.error ?? new Error('Marking an inbox notification done failed')
     );
   }
-  markSourceAuthority(payload.patches, sourceAuthorityGeneration(result.data));
   return payload;
 }
 
@@ -142,10 +137,7 @@ export async function undoInboxRowsDone(
   if (result.error || !payload) {
     throw result.error ?? new Error('Undoing inbox done failed');
   }
-  return markSourceAuthority(
-    payload.patches,
-    sourceAuthorityGeneration(result.data)
-  );
+  return payload.patches;
 }
 
 /**
@@ -166,8 +158,5 @@ export async function markInboxRowsSeen(
   if (result.error || !payload) {
     throw result.error ?? new Error('Marking inbox rows seen failed');
   }
-  return markSourceAuthority(
-    payload.patches,
-    sourceAuthorityGeneration(result.data)
-  );
+  return payload.patches;
 }

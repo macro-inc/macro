@@ -63,159 +63,55 @@ time, network delivery, and client retirement work. An idle or offline client
 has no finite retirement deadline. Fresh authority reads and newly started protected requests
 still enforce revocation immediately.
 
-The client opts into the hint for storage responses that can carry CRM content;
-independent resources such as document creation and the fresh authority endpoint
-skip it. A changed, missing, or invalid hint triggers a fresh
-authority read; it never changes the policy directly. The response keeps its
-pre-request generation even when that fresh read changes authority, so a late
-response cannot be relabeled and admitted after retirement. Protected local reads,
-CRM-bearing email/agent responses, and subscription frames reuse a verified proof for the
-current account and owner generation. Only stale authority or explicit signals
-trigger another primary proof; transient failures preserve the last proven state.
-Network failures back off once before a short second attempt; stale generations
-retry once, while terminal errors do not retry automatically. Initial CRM routes
-show loading, then the existing retry state if proof fails. Manual retry and
-reconnect both restart verification without reporting a denial.
-Before HTTP dispatch, a local authority reply overtaken by a newer notification
-can be discarded and read again once. Initial and post-binding reads share that
-budget; the binding and command are not replayed. Login/host replacement and
-observed account changes, including a return to the same account, close recovery.
-The proof-refresh loop owns its own stale retry and disables the nested read retry.
-The normalized cache persists email records; native-mobile Soup query snapshots
-also remain persisted. CRM-bearing snapshots require proof before restoration
-and are retired on a proven denial or account replacement. The app no longer
-persists or restores legacy TanStack email thread pages; that scope stays listed
-only so logout can wipe earlier snapshots. Their legacy keys remain classified
-as protected unless a current ownership witness identifies the thread as personal.
-Inbox-authorized thread messages remain available independently of CRM access. The first native or wasm proof preserves
-legacy offline snapshots when it is allowed or team-less; regrants also preserve
-content already admitted after denial. Inbox-authorized settings, labels, message
-batches, thread messages, drafts and mailbox mutation results never wait for CRM
-proof or lose their successful outcomes when that endpoint is unavailable.
-Authored draft saves and deletes omit optional copied cache content when no
-current proof is available. Draft reads use their durable working copy in that
-case; without a working copy, the raw cache read still requires proof. A current
-proof retains the cached delivery-generation comparison before choosing a copy.
-Email-reminder detail GET/PUT and collection GET have the same independent
-scope: their server contracts require an owned or delegated mailbox and return
-only caller-private reminder state. Other reminder endpoints remain protected.
-They retain a synchronous login fence at response arrival and body completion.
-Successful queued responses remain decodable for identity settlement, but a
-replaced login supplies an explicitly rejected content generation before cache
-commit or publication. Independent mailbox, email-reminder detail/collection and flat Soup query metadata is retired on login
-replacement, including same-account sign-in, rather than on CRM proof changes.
-Both reminder prefixes retire together because detail reads can seed from collection snapshots.
-After that cleanup and sign-in, active independent mailbox, email-reminder and flat Soup observers restart
-without waiting for CRM proof; protected observers still require verification.
-Personal Spam and Trash lists use flat REST Soup. Their raw AST must explicitly exclude
-companies, omit or exclude contacts, and omit CRM association and email-grant expansion;
-GraphQL's folder-view translation is not used to decide this scope. Their
-response and body completion retain the login fence. Legacy and grouped REST
-Soup remain protected.
-Folder moves are independent for supported non-CRM entity kinds: their effects
-contain only the moved entity and its folders, and the email domain requires
-Owner access before moving a thread or returning its updated snapshot.
-History-item POST/DELETE commands return only success acknowledgements and do
-not wait for CRM proof, including the history write awaited by folder creation.
-Their response and body completion retain the login fence; history reads stay
-protected because they can return shared entity content.
-Saved-view reordering is independent for non-CRM kinds because the server returns
-the same definitions it authorized and filtered by the requested kind before
-writing positions. Create/update, missing or non-string kinds and unscoped
-saved-view reads remain protected.
-Committed queue writes without further repairs or effects wait only for their
-affected observers in the current client. An unrelated observer waiting for CRM
-proof cannot withhold that successful result; required repairs and postcommit
-effects retain their existing publication wait.
-Arbitrary thread, attachment and EML reads can use CRM grants and retain proof checks.
-A current read whose recovery discovers an account replacement settles without
-data or a network fallback; obsolete attempts remain discarded.
-An independent cached read rejected across an authority change gets one fresh
-local read after confirming the current owner. Account replacement fences that
-recovery; cache-only reads never reach the network, and repeated rejection does
-not restart the mounted query through an unbounded refetch loop.
-Direct contact suggestions use the same bounded local recovery: a stale identity
-or people read restarts the entire window once, without requesting CRM proof.
-Account replacement, cancellation, host retirement and storage reset stop that
-recovery; no identity or people result from the rejected attempt is reused.
-Personal Soup mail, Work Feed, bookmark metadata
-and independently scoped database views retain their cached offline reads when
-the permission endpoint is unavailable. Thread-by-ID reads first select only
-cached identity and ownership metadata: the current account's own thread can be
-read without a network proof, while a thread known only through CRM sharing
-remains gated. Ownership witnesses expire with their login, account, host, owner
-or generation, and repeated positive reads reuse them. Mail lists select ownership
-in batches of at most 500 IDs; up to 1,024 idle positive ID/alias witnesses are retained.
-Active chunks hold their witnesses until content and fallback flag reads settle,
-so concurrent lists cannot evict another reader's ownership evidence.
-Exact root THREAD property assignments and option-delta mutations require Edit
-access, beyond the Comment access CRM can grant. They remain independent when an
-ownership witness expires: their responses contain only the target's assignments,
-definitions and values, with references represented by identifiers rather than
-nested CRM records. Raw property-record reads and other entity targets remain
-protected, and retirement still removes these copied snapshots.
-Bulk property edits retain one authoring epoch across every item, so later items
-cannot revive copied inputs or grouped-page recipes after retirement.
-A missing witness never permits a thread-by-ID read. Ordinary Soup database rows require an
-independently authorized database entity; CRM pipelines use distinct contracts.
-Opaque GraphQL Soup continuation cursors inherit scope only from an independently scoped,
-owner-tagged cached parent. Witnesses retain the exact query, selected operation
-and group, and expire with the account or cache owner/generation. Flat REST
-continuations instead require a successfully decoded independent parent with
-the same serialized body and login: the server ignores a continuation request's
-replacement filters. Their witnesses survive CRM-only changes, but expire on
-login replacement, including a return to the same account. Both transports share
-a limit of 128 entries and 2 MB of query/cursor text. Unknown and CRM-associated cursors
-still require proof; cursor text itself is never treated as authorization.
-Unrelated fetch observers remain synchronous; stable native
-reads rely on the installed authority event/version fence and do not issue a
-second IPC authority request.
+The client opts into the hint for storage requests, except the fresh authority
+endpoint. A valid changed hint or a CRM 403 schedules a fresh authority read in
+the background; the hint never changes policy directly. Boot, focus and
+reconnect also refresh authority. No email response, subscription frame, cached
+read or ordinary request waits for that proof. Missing hints remain unknown and
+do not cause per-response polling.
 
-A changed permission retires normalized records,
-derived search/projection rows, protected properties, persisted query lists, and
-mounted observer snapshots. Browser and native owners serialize this work behind
-a durable closed marker. Late responses, optimistic snapshots, and subscription
-frames keep their original generation and cannot restore retired content. The
-existing native cleanup conservatively retires whole mail/database-row families
-and unowned property snapshots after a permission transition. It can remove independently accessible
-mail and database/pipeline snapshots too; those need a fresh authorized read to
-be available offline again. This transition cleanup is separate from classifying
-ordinary cold-start reads, which does not require CRM proof for personal data.
-Unrelated document/calendar data, authored draft
-content, queued command variables, UUIDs, leases, and identity bindings survive.
+One owner-issued generation fences all response content. Requests and
+subscription sources retain the generation captured before dispatch. On an
+access transition, older reads and frames are discarded and active queries
+refetch. Writes compare the same generation under the shared native owner lock
+or browser worker. There are no CRM admission classifiers or ownership witnesses
+on these paths. The existing account fence remains independent.
 
-A completed ordinary write returns its actual status and payload to the same
-login even when later permission proof or cache admission fails. Only its cache
-effects are discarded when their captured authority is stale. A proven denial
-closes protected views through the retirement path; a transient proof failure
-retains the last proven state. Company/contact creation therefore closes the form after a
-successful write instead of offering a retry that could create a duplicate.
-POST reads and GraphQL queries still require content admission, and a replaced
-login cannot receive an earlier login's write outcome.
+Before deleting snapshots, the owner durably records the new policy and marks
+retirement incomplete. Interrupted retirement resumes before returning cached
+content. Initial allowed/team-less proofs preserve legacy offline data and the
+existing generation. A proven denial or a change of team retires CRM records,
+derived mail/database-row families, protected properties, mixed query lists and
+projection-only orphans. This conservative cleanup can remove independently
+accessible mail or database data; fresh authorized reads restore it. Email
+thread and native-mobile Soup persistence remain enabled until proven denial.
 
-Subscription frames reserve their order before permission lookups and retain
-their arrival generation through queued writes and deletions. An authority-only
-change invalidates only protected query registrations and reads; independent
-queries retain their live cursors. A personal response rejected by the account
-fence during first identity binding gets one fresh cache/network read to register
-its dependencies, without reusing the old payload or retrying account replacement. Protected
-queries rejected while the first proof completes recover from current cached
-data or a fresh network request, without replaying the rejected response or
-replacing their mounted observer. Visible
-retirement closes admission immediately and waits for all overlapping cleanup
-work to settle before reopening; a replaced owner's delayed reply cannot retire
-the current owner. Function-style team-view edits obtain a network-only settings
-baseline inside the serialized mutation and stop before PUT if that read fails.
-They retain the enqueuing login and check it before the read and again before
-writing, so a queued edit cannot be applied under a replacement account.
-This adds one settings GET per such edit, not per view. Cross-client whole-list
-writes retain their existing last-write-wins behavior.
+Authored draft content, queued variables, UUIDs, leases and identity bindings
+survive retirement. Successful mutations keep their real server outcome. Stale
+queued responses settle identities without copied response content, projections
+or link recipes, then revalidate. The draft journal receives the actual result
+before that discard. A confirmed local settlement retry retains the original
+request generation; a fresh HTTP attempt captures a new one. A mutation waits
+only for its affected publications, so an unrelated read cannot hold its notice.
+
+CRM routes initially show loading. A failed initial proof ends in the existing
+retry state after at most one network/stale-generation retry; the second network
+attempt has a short timeout. Manual retry and reconnect restart verification.
+Transient failure retains the last proven allowed/denied state. Only a proven
+denial closes CRM views and dialogs. An offline device may retain allowed cached
+content after revocation until its next server contact; already-rendered content
+stays until rerender. This design introduces no offline TTL.
+
+Team-view list edits still obtain a network-only settings baseline inside their
+serialized mutation and retain the authoring account/session through the write.
+A failed baseline read prevents PUT. Cross-client edits retain their existing
+last-write-wins behavior.
 
 Coordinator protocol 18 and the native permission commands must ship with this
 web bundle. Older native binaries require an app update; there is no unguarded
 cache fallback for the new bundle. New native binaries preserve the legacy cache
-contract for older bundles that omit the whole `authority` argument; supplied
-claims with missing or stale generations still fail closed. This reverse
+contract for older bundles that omit `generation`; supplied older generations are rejected under the shared
+owner lock. This reverse
 compatibility supports native upgrades and web rollbacks, but does not add
 retirement to an older bundle. Queue inspection sanitizes copied optimistic data
 for every caller, so an older bundle with legacy queued `SaveEmailDraft` entries
@@ -227,7 +123,7 @@ content already downloaded by an older client.
 
 Deploy the server's authority endpoint and CORS allowance for
 `x-macro-crm-access-signal` before publishing this client. The client sends that
-header on CRM-bearing storage requests even while preference changes are
+header on storage requests even while preference changes are
 disabled. A server rollback must retain the header allowance and endpoint while
 opted-in clients remain active; otherwise browser preflights or fresh authority
 reads fail.

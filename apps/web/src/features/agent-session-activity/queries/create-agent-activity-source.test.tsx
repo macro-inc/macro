@@ -1,10 +1,7 @@
 /** @vitest-environment jsdom */
-import 'fake-indexeddb/auto';
 
-import { beginQueryAuthorizationReset } from '@app/lib/urql-solid/authorization';
 import { fetchWithToken } from '@core/util/fetchWithToken';
-import { queryClient, queryPersistence } from '@queries/client';
-import { crmProtectedQueryKey } from '@queries/crm-cache-scope';
+import { queryClient } from '@queries/client';
 import type { AgentActivityPage } from '@service-agent-harness/generated/schemas';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import type { Client } from '@urql/core';
@@ -74,7 +71,6 @@ function setup() {
     source,
     client,
     receive: (value: unknown) => receive(value),
-    currentReceiver: () => receive,
     dispose,
     element,
   };
@@ -88,82 +84,6 @@ afterEach(() => {
 });
 
 describe('createAgentActivitySource', () => {
-  it('retires CRM activity and late pushes while retaining a freshly authorized individual pipeline row', async () => {
-    fetchMock.mockResolvedValue(
-      ok({
-        activities: [
-          {
-            ...row('private-record'),
-            entity_type: 'crm_contact',
-            entity_id: 'contact',
-          },
-        ],
-        nextCursor: null,
-      })
-    );
-    const mounted = setup();
-    await vi.waitFor(() =>
-      expect(mounted.source.rows().map((item) => item.id)).toEqual([
-        'private-record',
-      ])
-    );
-    const staleReceiver = mounted.currentReceiver();
-    const resume = beginQueryAuthorizationReset();
-    try {
-      await queryPersistence.retire(crmProtectedQueryKey);
-      expect(mounted.source.rows()).toEqual([]);
-      staleReceiver({
-        data: {
-          agentSessionActivityAppended: [
-            {
-              id: 'late-private',
-              entityType: 'CRM_CONTACT',
-              entityId: 'contact',
-              actionTag: 'edited',
-              occurredAt,
-            },
-          ],
-        },
-      });
-      expect(mounted.source.rows()).toEqual([]);
-      fetchMock.mockResolvedValue(
-        ok({
-          activities: [
-            {
-              ...row('shared-pipeline'),
-              entity_type: 'crm_pipeline',
-              entity_id: 'pipeline',
-            },
-          ],
-          nextCursor: null,
-        })
-      );
-    } finally {
-      resume();
-    }
-    await vi.waitFor(() =>
-      expect(mounted.source.rows().map((item) => item.id)).toEqual([
-        'shared-pipeline',
-      ])
-    );
-    staleReceiver({
-      data: {
-        agentSessionActivityAppended: [
-          {
-            id: 'late-private',
-            entityType: 'CRM_CONTACT',
-            entityId: 'contact',
-            actionTag: 'edited',
-            occurredAt,
-          },
-        ],
-      },
-    });
-    expect(mounted.source.rows().map((item) => item.id)).toEqual([
-      'shared-pipeline',
-    ]);
-    mounted.dispose();
-  });
   it('pages through the REST cursor without dropping newer rows', async () => {
     fetchMock
       .mockResolvedValueOnce(

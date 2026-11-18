@@ -189,26 +189,30 @@ async function settle<TData, TVariables extends AnyVariables>(
   if (!payload && optimisticMutationDispositionOf(result)?.kind === 'committed')
     return { kind: 'committed' };
   if (!payload) throw new Error('Calendar mutation returned no data');
+  const generation = result.operation.context.cacheSessionGeneration;
   await host
-    .calendarCommit({
-      ...(payload.event
-        ? {
-            replacedEvents: [
-              {
-                eventKey: eventKey(payload.event.id),
-                occurrenceKeys: payload.occurrences
-                  .filter((occurrence) => !occurrence.isCancelled)
-                  .map(
-                    (occurrence) => `${OCCURRENCE_TYPENAME}:${occurrence.id}`
-                  ),
-              },
-            ],
-          }
-        : {}),
-      ...(payload.deletedEventId
-        ? { deletedEventKeys: [eventKey(payload.deletedEventId)] }
-        : {}),
-    })
+    .calendarCommit(
+      {
+        ...(payload.event
+          ? {
+              replacedEvents: [
+                {
+                  eventKey: eventKey(payload.event.id),
+                  occurrenceKeys: payload.occurrences
+                    .filter((occurrence) => !occurrence.isCancelled)
+                    .map(
+                      (occurrence) => `${OCCURRENCE_TYPENAME}:${occurrence.id}`
+                    ),
+                },
+              ],
+            }
+          : {}),
+        ...(payload.deletedEventId
+          ? { deletedEventKeys: [eventKey(payload.deletedEventId)] }
+          : {}),
+      },
+      typeof generation === 'string' ? generation : undefined
+    )
     .catch((error) => {
       console.warn('Calendar mutation commit failed', error);
     });

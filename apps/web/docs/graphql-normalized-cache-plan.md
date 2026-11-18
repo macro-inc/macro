@@ -923,39 +923,48 @@ deletion, metadata updates, and reconnect when the normalized cache is unavailab
 Invalidations arriving during a refresh cause a trailing authorized read instead
 of being discarded; simultaneous refresh requests share one read.
 
-CRM member-access changes use a separate durable permission generation, not a
-storage reset. The application adapter retires CRM records, derived email and
-property content, mixed viewer lists, and projection-only orphans behind a closed
-marker. Browser and native entry points check the captured generation while
-holding their owner lock. Request data retains its source generation through
-HTTP decoding, subscription reconnects, writes and final observer delivery.
-Protected local reads reuse a verified proof for the current account and cache
-generation, including offline. Stale authority or an explicit permission signal
-requires a fresh primary proof; transient failures preserve the last proven UI
-state. Network failures and stale generations retry once; network retries wait
-250 ms, and the second proof has a 3-second deadline instead of 15 seconds.
-Terminal failures and timeouts do not retry. Without a previous proof, exhausted
-verification shows the existing error state with manual retry and retries on
-reconnect. Protected queries rejected during initialization read current cached
-data or dispatch a fresh request on a miss, clearing the rejected response
-witness without replacing the mounted observer. Initial allowed/team-less proofs preserve
-legacy offline data. Proven denial or loss of the prior team scope retires it;
-an unchanged ready policy remains a metadata check.
+CRM member-access changes are rare session transitions. One primary
+`/crm/member-access` read runs on boot, focus and reconnect. A changed
+`x-macro-crm-access` response hint or a CRM 403 triggers that read in the
+background. Ordinary requests, subscription frames and local cache reads never
+wait for permission proof. There are no GraphQL-field or REST-route admission
+classifiers.
 
-Retirement preserves unrelated data and the durable command queue: variables,
-UUIDs, leases, retry state, identity bindings and authored draft recovery survive.
-Only copied optimistic response content and its derived recipes are removed.
-A successful queued response may settle canonical identities after revocation,
-but cannot publish obsolete record content. Callers retain its committed
-acknowledgement independently of optional response data. Draft saves retain accepted queued journal state until settlement confirms the
-current identity; calendar creates select only the settled identity before
-returning an event for navigation or later edits.
-If that identity is unavailable, creation remains acknowledged and the composer
-closes and refreshes without navigating or offering to create the event again.
-Permission support requires
-coordinator protocol 18 and the native permission commands; older binaries must
-update before this web bundle can use their cache. These mechanisms do not
-retroactively redact delivered notification history or authored transcripts.
+The shared owner persists the new policy and generation before selective
+retirement. The application adapter removes CRM records, derived email and
+property content, mixed viewer lists and projection-only orphans. An interrupted
+retirement resumes before cached content is returned. Initial allowed/team-less
+proofs preserve both legacy offline data and the existing generation. Denial or
+a team change retires old content; an unchanged ready policy does nothing.
+
+Every request and subscription source captures one owner-issued generation.
+The TS exchange and response observer discard older query results and frames;
+active queries refetch after transition. Cache writes compare that generation
+under the native owner lock or browser worker, so a delayed write from another
+window cannot restore retired content. Reads need no proof or readiness token.
+This fence supplements the existing account-switch wipe and queue lease fence.
+
+Retirement preserves authored commands, UUIDs, leases, retry state, identity
+bindings and draft recovery metadata. In-flight mutations retain their actual
+server outcome. A stale queued commit atomically settles canonical identities
+and removes its queue entry without publishing copied content, projections or
+link recipes, then revalidates active queries. The draft journal sees the full
+server result before content is discarded. A confirmed local settlement retry
+keeps its original generation; a new HTTP attempt captures the current one.
+
+Initial access stays pending until proof succeeds. Network failures and stale
+proof generations retry once; network retries wait 250 ms and use a 3-second
+second deadline instead of 15 seconds. Terminal failures and timeouts do not
+retry. Exhausted initial verification shows the existing retry state and retries
+on reconnect. Transient failure preserves a previously proven UI state.
+
+Coordinator protocol 18 and the native current/transition commands are required
+for this bundle. An offline or idle device can display cached CRM content until
+its next server signal, including a boot proof after a revocation while closed;
+already-rendered content remains until rerender. There is no offline TTL.
+Queue inspection on this native build omits copied optimistic data for legacy
+queued drafts, so an older OTA bundle cannot recover that data during rollback;
+authored variables and current-bundle draft recovery metadata remain intact.
 
 [Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
 47 mutation documents and fails when a document has no declared strategy.

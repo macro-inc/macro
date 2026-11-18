@@ -151,11 +151,13 @@ export async function updateGraphqlEntityPropertyOptions(
     UpdateEntityPropertyOptionsMutation,
     UpdateEntityPropertyOptionsMutationVariables
   >(result);
-  if (disposition?.kind === 'queued') return requested;
+  if (
+    disposition?.kind === 'queued' ||
+    (disposition?.kind === 'committed' && !disposition.data)
+  )
+    return requested;
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
   if (result.error) throw result.error;
-  // The command is confirmed; retain only the caller-authored selection.
-  if (disposition?.kind === 'committed' && !disposition.data) return requested;
 
   const properties =
     disposition?.kind === 'committed'

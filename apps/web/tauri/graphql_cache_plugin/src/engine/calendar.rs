@@ -25,7 +25,7 @@ impl EngineHandle {
         &self,
         request: CalendarRangeRequest,
     ) -> Result<CalendarRangeResultWire, String> {
-        self.admitted_read()
+        self.ready_read()
             .await?
             .engine
             .calendar_range(&request)
@@ -40,7 +40,7 @@ impl EngineHandle {
     /// Applies a calendar commit atomically. Callers await occurrence hydration
     /// before publishing coverage; this commit supersedes unrelated queued warming.
     pub async fn calendar_commit(&self, commit: CalendarCommit) -> Result<WriteResultWire, String> {
-        let mut state = self.admitted_write().await?;
+        let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let result = engine
             .calendar_commit(&commit)

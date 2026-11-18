@@ -1,9 +1,9 @@
 import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
-import { beginQueryAuthorizationReset } from '@app/lib/urql-solid/authorization';
 import { toast } from '@core/component/Toast/Toast';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import { optimisticContextOf } from '@graphql-cache/exchange/optimistic';
 import type { MutationSettlement } from '@graphql-cache/protocol';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import type {
   DeleteEmailDraftMutation,
@@ -202,12 +202,11 @@ it('keeps active thread messages intact after a committed draft save', async () 
 });
 
 it.each(['save', 'delete'] as const)(
-  'enqueues an authored %s without waiting for optional CRM-protected cache reads',
+  'enqueues an authored %s using the offline cache without CRM proof',
   async (operation) => {
     const { operations } = await setup();
     mocks.proofCurrent = false;
     vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('dirty'));
-    mocks.readRecordsByKeys.mockReturnValue(Promise.withResolvers().promise);
     await expect(
       operation === 'save'
         ? saveEmailDraftQueued({ args: { ...args, draftId: serverId } })
@@ -216,14 +215,14 @@ it.each(['save', 'delete'] as const)(
             threadId: 'local-thread',
           })
     ).resolves.toEqual({ kind: 'queued' });
-    expect(mocks.readRecordsByKeys).not.toHaveBeenCalled();
+    expect(mocks.readRecordsByKeys).toHaveBeenCalled();
     expect(operations).toHaveLength(1);
     expect(optimisticContextOf(operations[0])?.uuid).toBe(handle);
     expect(operations[0].variables?.input).toMatchObject({
       draftId: handle,
     });
     if (operation === 'save')
-      expect(operations[0].variables?.input.threadDbId).toBe('local-thread');
+      expect(operations[0].variables?.input.threadDbId).toBe('server-thread');
   }
 );
 
@@ -445,19 +444,18 @@ const workingCopy = (status: LocalDraft['status']): LocalDraft => ({
   updatedAt: 1,
 });
 
-it('returns the durable working copy without waiting for an unproven cache read', async () => {
+it('returns the durable working copy while CRM proof is unavailable', async () => {
   await setup();
   mocks.proofCurrent = false;
   const local = workingCopy('dirty');
   vi.mocked(readLocalDraft).mockResolvedValue(local);
-  mocks.readRecordsByKeys.mockReturnValue(Promise.withResolvers().promise);
   expect(await readEmailDraft(serverId)).toMatchObject({ local });
-  expect(mocks.readRecordsByKeys).not.toHaveBeenCalled();
+  expect(mocks.readRecordsByKeys).toHaveBeenCalled();
   expect(localDraftMessage).toHaveBeenCalledWith(local);
   expect(restoreLocalAttachments).toHaveBeenCalledWith(local);
 });
 
-it('keeps a draft without a working copy behind the protected cache read', async () => {
+it('propagates an unavailable cache when no working copy exists', async () => {
   await setup();
   mocks.proofCurrent = false;
   const denied = new StaleCacheAuthorityError();
@@ -695,7 +693,10 @@ it('discards a copied thread when a cached draft read crosses revocation', async
   );
   const read = readCachedDraftAndThread(handle, 'local-thread');
   await vi.waitFor(() => expect(releases).toHaveLength(2));
-  const resume = beginQueryAuthorizationReset();
+  const retirement = Promise.withResolvers<void>();
+  const transition = cacheSessionGeneration.transition(
+    () => retirement.promise
+  );
   try {
     releases.forEach((release) => release());
     expect(await read).toMatchObject({
@@ -703,7 +704,8 @@ it('discards a copied thread when a cached draft read crosses revocation', async
       existingDraft: undefined,
     });
   } finally {
-    resume();
+    retirement.resolve();
+    await transition;
   }
 });
 

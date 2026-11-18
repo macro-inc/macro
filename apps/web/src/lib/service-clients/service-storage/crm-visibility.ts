@@ -13,7 +13,7 @@ export function prepareCrmVisibilityWrite() {
   const canCache = captureQueryAuthorization();
   const client = getGraphqlSoupClient();
   const host = getGraphqlSoupCacheHost();
-  const authorityGeneration = host?.authority?.snapshot()?.generation;
+  const generation = host?.authority?.snapshot()?.generation;
   const isCurrent = () =>
     canCache() &&
     client === getGraphqlSoupClient() &&
@@ -52,7 +52,7 @@ export function prepareCrmVisibilityWrite() {
         });
       try {
         await host.writeQuery({
-          authorityGeneration,
+          generation,
           query: stringifyDocument(CrmVisibilityCacheWriteDocument),
           operationName: 'CrmVisibilityCacheWrite',
           data: {

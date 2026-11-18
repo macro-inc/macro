@@ -9,31 +9,12 @@ impl CacheEngine {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
+            let resumed =
+                soup_filter_cache_adapter::permissions::resume_crm_retirement(state.engine_mut()?)
+                    .await;
+            state.engine_result(resumed)?;
             let result = state.engine_mut()?.current_authority(&identity).await;
             to_js(&state.engine_result(result)?)
-        })
-    }
-
-    /// The serial owner dispatcher checks admission before executing each RPC.
-    #[wasm_bindgen(js_name = checkAuthority)]
-    pub fn check_authority(
-        &self,
-        generation: Option<String>,
-        require_proof: bool,
-    ) -> js_sys::Promise {
-        let state = self.state.clone();
-        future_to_promise(async move {
-            let mut state = state.lock().await;
-            let generation = generation
-                .map(|value| value.parse::<uuid::Uuid>())
-                .transpose()
-                .map_err(err_js)?;
-            let result = state
-                .engine_mut()?
-                .check_authority_generation(generation, require_proof)
-                .await;
-            state.engine_result(result)?;
-            Ok(JsValue::UNDEFINED)
         })
     }
 

@@ -66,8 +66,7 @@ export type GraphqlSaveEmailDraftArgs = Omit<
   existingDraft?: OptimisticDraftEntity;
   /** Complete cached conversation, when available. */
   existingThread?: DraftThread;
-  authorizationEpoch?: number;
-  authorityGeneration?: string;
+  authorizationEpoch?: string;
   /** Present only when this save creates a standalone local thread. */
   newThreadOwnerId?: string;
   /** Importance of this account's own draft sender. */
@@ -263,7 +262,6 @@ export async function executeGraphqlSaveEmailDraft(
     existingDraft: _existingDraft,
     existingThread: _existingThread,
     authorizationEpoch: _authorizationEpoch,
-    authorityGeneration: _authorityGeneration,
     newThreadOwnerId: _newThreadOwnerId,
     senderIsSignal: _senderIsSignal,
     mutationUuid: _mutationUuid,
@@ -318,7 +316,6 @@ export async function executeGraphqlSaveEmailDraft(
       uuid: args.mutationUuid ?? String(args.draftId),
       clientMetadata: args.clientMetadata,
       authorizationEpoch: args.authorizationEpoch,
-      authorityGeneration: args.authorityGeneration,
       identityBindings: [
         {
           localKey: `GraphqlSoupEmailMessage:${args.draftId}`,
@@ -401,8 +398,7 @@ export type GraphqlDeleteEmailDraftArgs = {
    * thread page's message list and the post-commit revalidation. */
   threadDbId: string;
   existingThread?: DraftThread;
-  authorizationEpoch?: number;
-  authorityGeneration?: string;
+  authorizationEpoch?: string;
   mutationUuid?: string;
   clientMetadata?: DraftAttempt;
 };
@@ -467,7 +463,6 @@ export async function executeGraphqlDeleteEmailDraft(
       uuid: args.mutationUuid ?? args.draftId,
       clientMetadata: args.clientMetadata,
       authorizationEpoch: args.authorizationEpoch,
-      authorityGeneration: args.authorityGeneration,
       identityBindings: [
         {
           localKey: `GraphqlSoupEmailMessage:${args.draftId}`,

@@ -14,7 +14,7 @@ impl EngineHandle {
         &self,
         request: cache_core::people::sync::ContactSnapshotRequest,
     ) -> Result<cache_core::people::sync::ContactSnapshot, String> {
-        self.admitted_read()
+        self.ready_read()
             .await?
             .engine
             .contact_snapshot(&request)
@@ -26,7 +26,7 @@ impl EngineHandle {
         &self,
         request: cache_core::people::sync::ContactReconcile,
     ) -> Result<WriteResultWire, String> {
-        let mut state = self.admitted_read().await?;
+        let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let result = engine
             .reconcile_contacts(&request)
@@ -39,7 +39,7 @@ impl EngineHandle {
         &self,
         request: cache_core::people::sql::PeopleSqlRequest,
     ) -> Result<cache_core::people::sql::PeopleSqlResult, String> {
-        self.admitted_read()
+        self.ready_read()
             .await?
             .engine
             .read_people_sql(&request)
@@ -52,7 +52,7 @@ impl EngineHandle {
         &self,
         request: PeopleReferenceRequest,
     ) -> Result<PeopleReferenceResult, String> {
-        self.admitted_read()
+        self.ready_read()
             .await?
             .engine
             .resolve_people_references(&request)
@@ -62,7 +62,7 @@ impl EngineHandle {
 
     /// Inspect the local context publication state without materializing people.
     pub async fn people_context(&self, scope: HydrationScope) -> Result<ContextState, String> {
-        self.admitted_read()
+        self.ready_read()
             .await?
             .engine
             .people_context_state(&scope)
@@ -71,7 +71,7 @@ impl EngineHandle {
     }
     /// Apply one bounded context operation under the same account/generation lock.
     pub async fn people_update(&self, update: ContextUpdate) -> Result<WriteResultWire, String> {
-        let mut state = self.admitted_read().await?;
+        let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let result = engine
             .update_people_context(&update)
@@ -81,7 +81,7 @@ impl EngineHandle {
     }
     /// Stream contacts into the shared core's bounded ranked result.
     pub async fn people_search(&self, request: PeopleSearch) -> Result<PeopleSearchResult, String> {
-        self.admitted_read()
+        self.ready_read()
             .await?
             .engine
             .search_people(&request)

@@ -3,7 +3,6 @@ import {
   SaveEmailDraftDocument,
   SetEmailThreadArchivedDocument,
   SoupDocument,
-  UpdateEntityPropertyOptionsDocument,
   UpdateNotificationsDocument,
 } from '@service-storage/graphql/generated/graphql';
 import {
@@ -36,14 +35,7 @@ import {
 } from 'wonka';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
-import {
-  beginQueryAuthorizationReset,
-  crmSnapshotAuthorization,
-} from '../../urql-solid/authorization';
 import { createUrqlQuery } from '../../urql-solid/create-urql-query';
-import { type CacheAuthority, StaleCacheAuthorityError } from '../authority';
-import { testAuthority } from '../authority-fixture';
-import { rememberOwnedEmail } from '../authority-scope';
 import { CacheNavigationError } from '../host/navigation-error';
 import { createRetirableCacheHost } from '../host/retirable-host';
 import type {
@@ -65,14 +57,7 @@ import {
   type ReadResult,
   type WriteResult,
 } from '../protocol';
-import {
-  operationResponse,
-  rememberResponseAuthority,
-  rememberWriteResponse,
-  responseAuthorityGeneration,
-} from '../response-authority';
-import { sourceAuthorityGeneration } from '../source-authority';
-import { cacheAuthorityExchange } from './authority-exchange';
+import { cacheSessionGeneration } from '../session-generation';
 import { entityFromArgument } from './entity-resolvers';
 import { recordExternalWrite } from './external-writes';
 import { liveQueryData } from './live-query';
@@ -89,6 +74,7 @@ import {
   optimisticMutationDispositionOf,
 } from './optimistic';
 import { optimisticResolversExchange } from './optimistic-resolvers';
+import { cacheSessionExchange } from './session-exchange';
 
 const QUERY = gql`
   query Soup($input: SoupInput!) {
@@ -517,63 +503,6 @@ function makeFakeHost(): FakeHost {
   return host;
 }
 
-function installAuthority(
-  host: CacheHost,
-  initial: Partial<CacheAuthority> = {}
-) {
-  let state = { ...testAuthority('test-viewer'), ...initial };
-  const listeners = new Set<(next: CacheAuthority) => void>();
-  const authority = {
-    snapshot: () => state,
-    current: async () => state,
-    setReadGuard: () => {},
-    verifyRead: async () => {},
-    onChanged(callback: (next: CacheAuthority) => void) {
-      listeners.add(callback);
-      return () => {
-        listeners.delete(callback);
-      };
-    },
-    transition: async () => {
-      throw new Error('unused transition');
-    },
-  };
-  Object.defineProperty(host, 'authority', { value: authority });
-  return {
-    authority,
-    change(ready = true, update: Partial<CacheAuthority> = {}) {
-      state = { ...state, generation: crypto.randomUUID(), ready, ...update };
-      for (const listener of listeners) listener(state);
-    },
-  };
-}
-
-function personalMailOp(
-  key: number,
-  requestPolicy: 'cache-only' | 'cache-first' | 'network-only'
-) {
-  const op = makeOp(key, requestPolicy);
-  return makeOperation(
-    'query',
-    {
-      ...op,
-      query: gql`query PersonalMail($input: SoupInput!) { user { soup(input: $input) { items { ... on GraphqlSoupEmailThread { id isRead } } } } }`,
-      variables: {
-        input: {
-          initial: {
-            filters: {
-              crmCompanyFilter: {
-                literal: { id: '00000000-0000-0000-0000-000000000000' },
-              },
-            },
-          },
-        },
-      },
-    },
-    op.context
-  );
-}
-
 function makeOp(
   key: number,
   requestPolicy:
@@ -741,8 +670,7 @@ function harness(
 
 function controlledQueryHarness(
   host: CacheHost,
-  options: NormalizedCacheExchangeOptions = {},
-  onResult?: (result: OperationResult) => void
+  options: NormalizedCacheExchangeOptions = {}
 ) {
   const ops = makeSubject<Operation>();
   const network = makeSubject<OperationResult>();
@@ -767,10 +695,7 @@ function controlledQueryHarness(
       client,
       dispatchDebug: () => undefined,
     })(ops.source),
-    subscribe((result) => {
-      results.push(result);
-      onResult?.(result);
-    })
+    subscribe((result) => results.push(result))
   );
   return { ops, network, forwarded, results, client };
 }
@@ -808,121 +733,89 @@ describe('normalizedCacheExchange', () => {
     host = makeFakeHost();
   });
 
-  it.each([false, true])(
-    'preserves an ordinary mutation outcome without cache effects when admission fails (partial error=%s)',
-    async (partialError) => {
-      const data = { setEntityProperty: { id: 'created-once' } };
-      const response = Response.json({
-        data,
-        ...(partialError
-          ? {
-              errors: [
-                {
-                  message: 'One field rejected',
-                  extensions: { code: 'INVALID' },
-                },
-              ],
-            }
-          : {}),
+  it.each(['imperative', 'Solid'])(
+    'refetches a mounted %s reader once and never persists its pre-transition response',
+    async (reader) => {
+      const first = deferred<Operation>();
+      const second = deferred<Operation>();
+      const persisted = deferred<void>();
+      const network = makeSubject<OperationResult>();
+      const requests: Operation[] = [];
+      const write = host.writeQuery;
+      vi.spyOn(host, 'writeQuery').mockImplementation(async (args) => {
+        const result = await write(args);
+        persisted.resolve();
+        return result;
       });
-      rememberResponseAuthority(response, undefined, async () => {
-        throw new StaleCacheAuthorityError();
-      });
-      rememberWriteResponse(response, () => {});
-      const fetch = vi.fn(async () => response);
-      const remove = vi.spyOn(host, 'deleteRecords');
       const client = createClient({
-        url: 'http://test/graphql',
-        fetch,
+        url: '/graphql',
         exchanges: [
-          cacheAuthorityExchange,
+          cacheSessionExchange,
           normalizedCacheExchange(host),
-          fetchExchange,
+          () => (operations) => {
+            pipe(
+              operations,
+              subscribe((operation) => {
+                if (operation.kind !== 'query') return;
+                requests.push(operation);
+                if (requests.length === 1) first.resolve(operation);
+                else second.resolve(operation);
+              })
+            );
+            return network.source;
+          },
         ],
       });
-      const result = await client
-        .mutation(MUTATION, { input: { entityType: 'CRM_COMPANY' } })
-        .toPromise();
-      expect(result.data).toEqual(data);
-      expect(result.error?.networkError).toBeUndefined();
-      if (partialError)
-        expect(result.error?.graphQLErrors[0]?.extensions.code).toBe('INVALID');
-      else expect(result.error).toBeUndefined();
-      expect(sourceAuthorityGeneration(result.data)).toBe(
-        '00000000-0000-0000-0000-000000000000'
-      );
-      expect(fetch).toHaveBeenCalledOnce();
-      expect(host.writes).toHaveLength(0);
-      expect(host.cacheActions).toHaveLength(0);
-      expect(remove).not.toHaveBeenCalled();
+      const dispose =
+        reader === 'imperative'
+          ? (() => {
+              const subscription = client
+                .query(
+                  QUERY,
+                  { input: { limit: 2 } },
+                  {
+                    requestPolicy: 'network-only',
+                  }
+                )
+                .subscribe(() => {});
+              return () => subscription.unsubscribe();
+            })()
+          : createRoot((dispose) => {
+              createUrqlQuery(() => ({
+                client,
+                query: QUERY,
+                variables: { input: { limit: 2 } },
+                requestPolicy: 'network-only' as const,
+              }));
+              return dispose;
+            });
+      try {
+        const old = await first.promise;
+        const cleanup = deferred<void>();
+        const transition = cacheSessionGeneration.transition(
+          () => cleanup.promise
+        );
+        network.next(queryResult(old, { soup: { nextCursor: 'retired' } }));
+        expect(requests).toHaveLength(1);
+        cleanup.resolve();
+        await transition;
+        const current = await second.promise;
+        network.next(queryResult(current, { soup: { nextCursor: 'current' } }));
+        await persisted.promise;
+        expect(requests).toHaveLength(2);
+        expect(host.writes.map((args) => args.data)).toEqual([
+          { soup: { nextCursor: 'current' } },
+        ]);
+        expect(host.writeQuery).toHaveBeenCalledWith(
+          expect.objectContaining({
+            generation: cacheSessionGeneration.capture(),
+          })
+        );
+      } finally {
+        dispose();
+      }
     }
   );
-
-  it('rejects an ordinary mutation outcome belonging to a replaced login', async () => {
-    const response = Response.json({
-      data: { setEntityProperty: { id: 'old-login' } },
-    });
-    rememberResponseAuthority(response, undefined, async () => {
-      throw new StaleCacheAuthorityError();
-    });
-    rememberWriteResponse(response, () => {
-      throw new StaleCacheAuthorityError();
-    });
-    const client = createClient({
-      url: 'http://test/graphql',
-      fetch: async () => response,
-      exchanges: [
-        cacheAuthorityExchange,
-        normalizedCacheExchange(host),
-        fetchExchange,
-      ],
-    });
-    const result = await client
-      .mutation(MUTATION, { input: { entityType: 'CRM_COMPANY' } })
-      .toPromise();
-    expect(result.data).toBeUndefined();
-    expect(result.error?.networkError).toBeInstanceOf(StaleCacheAuthorityError);
-    expect(host.writes).toHaveLength(0);
-  });
-
-  it('finishes a rejected authority response before rereading an affected query', async () => {
-    const { ops, network, forwarded, results, client } =
-      controlledQueryHarness(host);
-    ops.next(makeOp(47));
-    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
-    const response = new Response('{}');
-    rememberResponseAuthority(response, 'retired-generation', async () => {
-      throw new StaleCacheAuthorityError();
-    });
-    const request = forwarded[0]!;
-    network.next(
-      queryResult(
-        makeOperation('query', request, {
-          ...request.context,
-          cacheAuthorityResponse: { response },
-        }),
-        { from: 'retired-response' }
-      )
-    );
-    await vi.waitFor(() => expect(results).toHaveLength(1));
-    const metadata = normalizedCacheResultMetadata(results[0]!);
-    expect(metadata?.source).toBe('live-network');
-    if (metadata?.source === 'live-network') await metadata.persistence;
-    expect(results[0]?.data).toBeUndefined();
-    expect(results[0]?.error?.networkError).toBeInstanceOf(
-      StaleCacheAuthorityError
-    );
-    expect(host.writes).toHaveLength(0);
-
-    host.scriptRead({ kind: 'hit', data: { from: 'current-cache' } });
-    host.pushAffected([47]);
-    await vi.waitFor(() =>
-      expect(results.at(-1)?.data).toEqual({ from: 'current-cache' })
-    );
-    expect(results.at(-1)?.stale).toBe(false);
-    expect(client.reexecuteOperation).toHaveBeenCalledOnce();
-    expect(forwarded).toHaveLength(1);
-  });
 
   it.each(['constructor', 'prototype', '__proto__'])(
     'updates the %s alias through the Solid query adapter without mutating snapshots',
@@ -1407,688 +1300,6 @@ describe('normalizedCacheExchange', () => {
     ]);
   });
 
-  it.each(['response', 'owner'] as const)(
-    'reserves subscription order before the %s authority await',
-    async (phase) => {
-      const { authority } = installAuthority(host);
-      const generation = authority.snapshot().generation;
-      const waiting = Promise.withResolvers<void>();
-      const entered = Promise.withResolvers<void>();
-      if (phase === 'owner') {
-        vi.spyOn(authority, 'current').mockImplementationOnce(async () => {
-          entered.resolve();
-          await waiting.promise;
-          return authority.snapshot();
-        });
-      }
-      const { ops, network, forwarded } = controlledQueryHarness(host);
-      const subscription = makeSubscriptionOp(24);
-      ops.next(
-        makeOperation(
-          'subscription',
-          {
-            ...subscription,
-            query: gql`subscription Protected { user { emailThread { id } } }`,
-          },
-          subscription.context
-        )
-      );
-      const operation = forwarded[0]!;
-      const response = Response.json({});
-      rememberResponseAuthority(response, generation, async () => {
-        if (phase === 'response') {
-          entered.resolve();
-          await waiting.promise;
-        }
-      });
-      network.next(
-        queryResult(
-          makeOperation('subscription', operation, {
-            ...operation.context,
-            cacheAuthorityResponse: { response },
-          }),
-          {
-            soupUpdates: [
-              {
-                __typename: 'SoupUpdated',
-                item: {
-                  __typename: 'GraphqlSoupDocument',
-                  id: 'one',
-                  displayName: 'Earlier update',
-                },
-              },
-            ],
-          }
-        )
-      );
-      await entered.promise;
-      network.next(
-        queryResult(operation, {
-          soupUpdates: [
-            {
-              __typename: 'GraphqlCacheDeletion',
-              graphqlTypeName: 'GraphqlSoupDocument',
-              entityId: 'one',
-            },
-          ],
-        })
-      );
-      await tick();
-      expect(host.cacheActions).toEqual([]);
-      waiting.resolve();
-      await vi.waitFor(() => expect(host.cacheActions).toHaveLength(2));
-      expect(host.cacheActions.map((effect) => effect.kind)).toEqual([
-        'write',
-        'delete',
-      ]);
-    }
-  );
-
-  it('drops queued subscription deletion when authority changes behind an earlier write', async () => {
-    const { change } = installAuthority(host);
-    const first = deferred<WriteResult>();
-    const write = vi
-      .spyOn(host, 'writeQuery')
-      .mockImplementationOnce(() => first.promise);
-    const remove = vi.spyOn(host, 'deleteRecords');
-    const { ops, network, forwarded } = controlledQueryHarness(host);
-    ops.next(makeSubscriptionOp(24));
-    const operation = forwarded[0]!;
-    network.next(
-      queryResult(operation, { soupUpdates: [{ id: 'before-change' }] })
-    );
-    await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
-    network.next(
-      queryResult(operation, {
-        soupUpdates: [
-          {
-            __typename: 'GraphqlCacheDeletion',
-            graphqlTypeName: 'GraphqlSoupDocument',
-            entityId: 'one',
-          },
-        ],
-      })
-    );
-    change();
-    first.resolve({
-      revision: INITIAL_CACHE_REVISION,
-      revisionAdvanced: true,
-      changed: [],
-      affectedOps: [],
-      reset: false,
-    });
-    await tick();
-    expect(remove).not.toHaveBeenCalled();
-  });
-
-  it.each(['cache-first', 'cache-only'] as const)(
-    'retries the initial %s read after an authority-only generation change',
-    async (policy) => {
-      const { change } = installAuthority(host);
-      const old = deferred<ReadResult>();
-      const fresh = { from: 'current-authority' };
-      const read = vi
-        .spyOn(host, 'readQuery')
-        .mockImplementationOnce(() => old.promise)
-        .mockResolvedValue({ kind: 'hit', data: fresh });
-      const { ops, results, forwarded } = controlledQueryHarness(host);
-      ops.next(makeOp(47, policy));
-      await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
-      change();
-      old.resolve({ kind: 'hit', data: { from: 'old-authority' } });
-      await vi.waitFor(() => expect(results).toHaveLength(1));
-      expect(read).toHaveBeenCalledTimes(2);
-      expect(results[0]?.data).toEqual(fresh);
-      expect(forwarded).toHaveLength(0);
-    }
-  );
-
-  it.each(['cache-only', 'cache-first'] as const)(
-    'rereads an independent %s snapshot rejected across a same-account authority change',
-    async (policy) => {
-      const { change } = installAuthority(host);
-      const old = deferred<ReadResult>();
-      const fresh = {
-        user: { soup: { items: [{ id: 'thread', isRead: true }] } },
-      };
-      const read = vi
-        .spyOn(host, 'readQuery')
-        .mockImplementationOnce(() => old.promise)
-        .mockResolvedValue({ kind: 'hit', data: fresh });
-      const { ops, results, forwarded } = controlledQueryHarness(host);
-      ops.next(personalMailOp(47, policy));
-      await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
-      change(false);
-      old.reject(new StaleCacheAuthorityError());
-      await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
-      await vi.waitFor(() => expect(results.at(-1)?.data).toEqual(fresh));
-      expect(forwarded).toHaveLength(0);
-    }
-  );
-
-  it('bounds an independent stale cache-only reread without using the network', async () => {
-    const { change } = installAuthority(host);
-    const old = deferred<ReadResult>();
-    const read = vi
-      .spyOn(host, 'readQuery')
-      .mockImplementationOnce(() => old.promise)
-      .mockRejectedValue(new StaleCacheAuthorityError());
-    const { ops, results, forwarded } = controlledQueryHarness(host);
-    ops.next(personalMailOp(47, 'cache-only'));
-    await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
-    change(false);
-    old.reject(new StaleCacheAuthorityError());
-    await vi.waitFor(() => expect(results).toHaveLength(1));
-    expect(read).toHaveBeenCalledTimes(2);
-    expect(results[0]?.data).toBeUndefined();
-    expect(forwarded).toHaveLength(0);
-  });
-
-  it.each(['cache-only', 'cache-first'] as const)(
-    'settles an independent %s miss when local authority recovery is unavailable',
-    async (policy) => {
-      const { authority } = installAuthority(host, { account: 'test-viewer' });
-      vi.spyOn(authority, 'current').mockRejectedValue(
-        new Error('Owner unavailable')
-      );
-      const read = vi
-        .spyOn(host, 'readQuery')
-        .mockRejectedValue(new StaleCacheAuthorityError());
-      const { ops, results, forwarded } = controlledQueryHarness(host);
-      ops.next(personalMailOp(47, policy));
-      if (policy === 'cache-only') {
-        await vi.waitFor(() => expect(results).toHaveLength(1));
-        expect(results[0]?.data).toBeUndefined();
-        expect(forwarded).toHaveLength(0);
-      } else await vi.waitFor(() => expect(forwarded).toHaveLength(1));
-      expect(read).toHaveBeenCalledOnce();
-      expect(authority.current).toHaveBeenCalledOnce();
-    }
-  );
-
-  it.each([
-    ['cache-only', false],
-    ['cache-only', true],
-    ['cache-first', false],
-    ['cache-first', true],
-  ] as const)(
-    'settles an independent %s read when owner recovery discovers account replacement, recovery throws=%s',
-    async (policy, rejects) => {
-      const { authority, change } = installAuthority(host, {
-        account: 'test-viewer',
-      });
-      vi.spyOn(authority, 'current').mockImplementation(async () => {
-        change(false, { account: 'replacement' });
-        if (rejects) throw new Error('Owner replaced');
-        return authority.snapshot();
-      });
-      const read = vi
-        .spyOn(host, 'readQuery')
-        .mockRejectedValue(new StaleCacheAuthorityError());
-      const settled = deferred<OperationResult>();
-      const { ops, forwarded } = controlledQueryHarness(
-        host,
-        {},
-        settled.resolve
-      );
-      ops.next(personalMailOp(47, policy));
-      const result = await settled.promise;
-      expect(result.data).toBeUndefined();
-      expect(read).toHaveBeenCalledOnce();
-      expect(authority.current).toHaveBeenCalledOnce();
-      expect(forwarded).toHaveLength(0);
-    }
-  );
-
-  it.each([
-    ['cache-only', false],
-    ['cache-only', true],
-    ['cache-first', false],
-    ['cache-first', true],
-  ] as const)(
-    'does not recover an independent %s read across account replacement, returning to prior account=%s',
-    async (policy, returning) => {
-      const { change } = installAuthority(host, { account: 'test-viewer' });
-      const old = deferred<ReadResult>();
-      const read = vi
-        .spyOn(host, 'readQuery')
-        .mockImplementationOnce(() => old.promise);
-      const { ops, results, forwarded } = controlledQueryHarness(host);
-      ops.next(personalMailOp(47, policy));
-      await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
-      change(false, { account: 'replacement' });
-      if (returning) change(false, { account: 'test-viewer' });
-      old.reject(new StaleCacheAuthorityError());
-      await vi.waitFor(() => expect(results).toHaveLength(1));
-      expect(read).toHaveBeenCalledOnce();
-      expect(results[0]?.data).toBeUndefined();
-      expect(forwarded).toHaveLength(0);
-    }
-  );
-
-  it('reissues a protected in-flight network read after the first ready proof changes its generation', async () => {
-    const { change, authority } = installAuthority(host);
-    const write = vi.spyOn(host, 'writeQuery');
-    const { ops, network, forwarded, results, client } =
-      controlledQueryHarness(host);
-    ops.next(makeOp(47, 'network-only'));
-    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
-    change();
-    const response = new Response('{}');
-    rememberResponseAuthority(response, 'old-generation', async () => {
-      throw new StaleCacheAuthorityError();
-    });
-    network.next(
-      queryResult(
-        makeOperation('query', forwarded[0]!, {
-          ...forwarded[0]!.context,
-          cacheAuthorityResponse: { response },
-        }),
-        { from: 'old-response' }
-      )
-    );
-    await vi.waitFor(() => expect(results).toHaveLength(1));
-    expect(results[0]?.data).toBeUndefined();
-    expect(host.writes).toHaveLength(0);
-    expect(client.reexecuteOperation).not.toHaveBeenCalled();
-    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
-    expect(forwarded[1]?.context.cacheAuthorityGeneration).toBe(
-      authority.snapshot().generation
-    );
-    network.next(queryResult(forwarded[1]!, { from: 'current-response' }));
-    await vi.waitFor(() =>
-      expect(results.at(-1)?.data).toEqual({ from: 'current-response' })
-    );
-    await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
-    expect(write.mock.calls[0]?.[0]).toMatchObject({
-      authorityGeneration: authority.snapshot().generation,
-      data: { from: 'current-response' },
-    });
-  });
-
-  it('keeps independent live-query cursors through CRM authority changes', async () => {
-    const { change } = installAuthority(host);
-    host.watchQuery = vi
-      .fn()
-      .mockResolvedValueOnce({
-        kind: 'hit',
-        revision: parseCacheRevision('1'),
-        data: { user: { soup: { items: [{ id: 'thread', isRead: false }] } } },
-      })
-      .mockResolvedValueOnce({
-        kind: 'patch',
-        revision: parseCacheRevision('2'),
-        patches: [
-          { path: ['user', 'soup', 'items', 0, 'isRead'], value: true },
-        ],
-      });
-    const { ops, results, forwarded } = controlledQueryHarness(host);
-    ops.next(personalMailOp(47, 'cache-only'));
-    await vi.waitFor(() => expect(results).toHaveLength(1));
-    change(false);
-    await tick();
-    expect(host.watchQuery).toHaveBeenCalledOnce();
-    host.pushAffected([47]);
-    await vi.waitFor(() => expect(host.watchQuery).toHaveBeenCalledTimes(2));
-    expect(host.watchQuery).toHaveBeenLastCalledWith(
-      expect.objectContaining({ since: parseCacheRevision('1') })
-    );
-    await vi.waitFor(() =>
-      expect(results.at(-1)?.data).toEqual({
-        user: { soup: { items: [{ id: 'thread', isRead: true }] } },
-      })
-    );
-    expect(forwarded).toHaveLength(0);
-  });
-
-  it.each([false, true])(
-    'rereads a rejected independent watched snapshot once, second read rejected=%s',
-    async (rejectAgain) => {
-      const { change } = installAuthority(host);
-      const old = deferred<QueryUpdate>();
-      const watch = vi
-        .fn()
-        .mockResolvedValueOnce({
-          kind: 'hit',
-          revision: parseCacheRevision('1'),
-          data: {
-            user: { soup: { items: [{ id: 'thread', isRead: false }] } },
-          },
-        })
-        .mockImplementationOnce(() => old.promise);
-      if (rejectAgain) watch.mockRejectedValue(new StaleCacheAuthorityError());
-      else
-        watch.mockResolvedValue({
-          kind: 'hit',
-          revision: parseCacheRevision('2'),
-          data: { user: { soup: { items: [{ id: 'thread', isRead: true }] } } },
-        });
-      host.watchQuery = watch;
-      const { ops, results, forwarded, client } = controlledQueryHarness(host);
-      ops.next(personalMailOp(47, 'cache-only'));
-      await vi.waitFor(() => expect(results).toHaveLength(1));
-      host.pushAffected([47]);
-      await vi.waitFor(() => expect(watch).toHaveBeenCalledTimes(2));
-      change(false);
-      old.reject(new StaleCacheAuthorityError());
-      await vi.waitFor(() => expect(watch).toHaveBeenCalledTimes(3));
-      expect(watch).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          since: undefined,
-        })
-      );
-      if (!rejectAgain)
-        await vi.waitFor(() =>
-          expect(results.at(-1)?.data).toEqual({
-            user: { soup: { items: [{ id: 'thread', isRead: true }] } },
-          })
-        );
-      else await tick();
-      expect(client.reexecuteOperation).not.toHaveBeenCalled();
-      expect(forwarded).toHaveLength(0);
-    }
-  );
-
-  it.each([false, true])(
-    'recovers an independent write rejected across first identity binding, with second write rejected=%s',
-    async (rejectAgain) => {
-      const { change, authority } = installAuthority(host, {
-        account: null,
-        policy: null,
-        ready: false,
-      });
-      const write = vi
-        .spyOn(host, 'writeQuery')
-        .mockRejectedValueOnce(new StaleCacheAuthorityError());
-      if (rejectAgain)
-        write.mockRejectedValueOnce(new StaleCacheAuthorityError());
-      const { ops, network, forwarded } = controlledQueryHarness(host);
-      ops.next(personalMailOp(47, 'network-only'));
-      await vi.waitFor(() => expect(forwarded).toHaveLength(1));
-      change(false, { account: 'test-viewer' });
-      network.next(
-        queryResult(forwarded[0]!, { user: { soup: { items: [] } } })
-      );
-      await vi.waitFor(() => expect(forwarded).toHaveLength(2));
-      expect(forwarded[1]?.context.cacheAuthorityGeneration).toBe(
-        authority.snapshot().generation
-      );
-      const fresh = {
-        user: { soup: { items: [{ id: 'thread', isRead: true }] } },
-      };
-      network.next(queryResult(forwarded[1]!, fresh));
-      await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
-      expect(write.mock.calls[1]?.[0]).toMatchObject({
-        data: fresh,
-        registerDependencies: true,
-        authorityGeneration: authority.snapshot().generation,
-      });
-      await tick();
-      expect(forwarded).toHaveLength(2);
-    }
-  );
-
-  it.each([false, true])(
-    'does not recover an independent stale response across account replacement, initially unbound=%s',
-    async (unbound) => {
-      const { change } = installAuthority(host, {
-        account: unbound ? null : 'test-viewer',
-      });
-      const write = vi
-        .spyOn(host, 'writeQuery')
-        .mockRejectedValueOnce(new StaleCacheAuthorityError());
-      const { ops, network, forwarded } = controlledQueryHarness(host);
-      ops.next(personalMailOp(47, 'network-only'));
-      await vi.waitFor(() => expect(forwarded).toHaveLength(1));
-      if (unbound) change(false, { account: 'test-viewer' });
-      change(false, { account: 'another-viewer' });
-      network.next(
-        queryResult(forwarded[0]!, { user: { soup: { items: [] } } })
-      );
-      await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
-      await tick();
-      expect(forwarded).toHaveLength(1);
-    }
-  );
-
-  it('recovers an independent request dispatched before the cache owner initializes', async () => {
-    const { change, authority } = installAuthority(host, {
-      ready: false,
-      policy: null,
-    });
-    const snapshot = vi
-      .spyOn(host.authority!, 'snapshot')
-      .mockReturnValue(undefined);
-    const write = vi
-      .spyOn(host, 'writeQuery')
-      .mockRejectedValueOnce(new StaleCacheAuthorityError());
-    const { ops, network, forwarded } = controlledQueryHarness(host);
-    ops.next(personalMailOp(47, 'network-only'));
-    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
-    expect(forwarded[0]?.context.cacheAuthorityGeneration).toBeUndefined();
-    snapshot.mockRestore();
-    change(false, { account: null });
-    change(false, { account: 'test-viewer' });
-    network.next(queryResult(forwarded[0]!, { user: { soup: { items: [] } } }));
-    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
-    network.next(queryResult(forwarded[1]!, { user: { soup: { items: [] } } }));
-    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
-    expect(write.mock.calls[1]?.[0]).toMatchObject({
-      registerDependencies: true,
-      authorityGeneration: authority.snapshot().generation,
-    });
-  });
-
-  it('refreshes the local owner once when a rejected independent write precedes the binding notification', async () => {
-    const { change, authority } = installAuthority(host, {
-      ready: false,
-      policy: null,
-    });
-    const current = vi
-      .spyOn(authority, 'current')
-      .mockImplementation(async () => {
-        change(false, { account: 'test-viewer' });
-        return authority.snapshot();
-      });
-    const write = vi
-      .spyOn(host, 'writeQuery')
-      .mockRejectedValueOnce(new StaleCacheAuthorityError());
-    const { ops, network, forwarded } = controlledQueryHarness(host);
-    ops.next(personalMailOp(47, 'network-only'));
-    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
-    network.next(queryResult(forwarded[0]!, { user: { soup: { items: [] } } }));
-    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
-    expect(current).toHaveBeenCalledOnce();
-    network.next(queryResult(forwarded[1]!, { user: { soup: { items: [] } } }));
-    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
-    expect(current).toHaveBeenCalledOnce();
-  });
-
-  it.each([false, true])(
-    'dispatches authority recovery through a real urql client with cached data: %s',
-    async (cached) => {
-      const { change } = installAuthority(host);
-      const first = Promise.withResolvers<Response>();
-      const fresh = { soup: { nextCursor: null } };
-      const fetch = vi.fn(async () => Response.json({ data: fresh }));
-      fetch.mockImplementationOnce(() => first.promise);
-      const client = createClient({
-        url: 'http://test/graphql',
-        fetch,
-        exchanges: [
-          cacheAuthorityExchange,
-          normalizedCacheExchange(host),
-          fetchExchange,
-        ],
-      });
-      const results: OperationResult[] = [];
-      const subscription = client
-        .query(
-          QUERY,
-          { input: { limit: 2 } },
-          { requestPolicy: 'network-only' }
-        )
-        .subscribe((result) => results.push(result));
-      try {
-        await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-        if (cached) host.scriptRead({ kind: 'hit', data: fresh });
-        change();
-        const response = Response.json({
-          data: { soup: { nextCursor: 'old' } },
-        });
-        rememberResponseAuthority(response, 'old-generation', async () => {
-          throw new StaleCacheAuthorityError();
-        });
-        first.resolve(response);
-        await vi.waitFor(() => expect(results.at(-1)?.data).toEqual(fresh));
-        expect(fetch).toHaveBeenCalledTimes(cached ? 1 : 2);
-        await vi.waitFor(() =>
-          expect(host.writes).toHaveLength(cached ? 0 : 1)
-        );
-        expect(
-          host.writes.every(
-            ({ data }) => JSON.stringify(data) === JSON.stringify(fresh)
-          )
-        ).toBe(true);
-      } finally {
-        subscription.unsubscribe();
-      }
-    }
-  );
-
-  it.each([true, false])(
-    'retains the response proof and request generation on recovered network reads: admitted=%s',
-    async (admitted) => {
-      const { change, authority } = installAuthority(host);
-      const write = vi.spyOn(host, 'writeQuery');
-      const first = Promise.withResolvers<Response>();
-      const fresh = { soup: { nextCursor: null } };
-      const recovered = Response.json({ data: fresh });
-      const proof = vi.fn(async () => {
-        if (!admitted) throw new StaleCacheAuthorityError();
-      });
-      let capturedGeneration: string | undefined;
-      const fetch = vi.fn(async () => {
-        capturedGeneration = authority.snapshot().generation;
-        rememberResponseAuthority(recovered, capturedGeneration, proof);
-        return recovered;
-      });
-      fetch.mockImplementationOnce(() => first.promise);
-      const client = createClient({
-        url: 'http://test/graphql',
-        fetch,
-        exchanges: [
-          cacheAuthorityExchange,
-          normalizedCacheExchange(host),
-          fetchExchange,
-        ],
-      });
-      const results: OperationResult[] = [];
-      const subscription = client
-        .query(
-          QUERY,
-          { input: { limit: 2 } },
-          { requestPolicy: 'network-only' }
-        )
-        .subscribe((result) => results.push(result));
-      try {
-        await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-        change();
-        const rejected = Response.json({
-          data: { soup: { nextCursor: 'old' } },
-        });
-        rememberResponseAuthority(rejected, 'old-generation', async () => {
-          throw new StaleCacheAuthorityError();
-        });
-        first.resolve(rejected);
-        await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-        await vi.waitFor(() =>
-          expect(operationResponse(results.at(-1)!.operation)).toBe(recovered)
-        );
-        expect(responseAuthorityGeneration(recovered)).toBe(capturedGeneration);
-        if (admitted) {
-          expect(proof).toHaveBeenCalledTimes(3);
-          expect(results.at(-1)?.data).toEqual(fresh);
-          await vi.waitFor(() => expect(host.writes).toHaveLength(1));
-          expect(write.mock.calls[0]?.[0].authorityGeneration).toBe(
-            capturedGeneration
-          );
-          expect(sourceAuthorityGeneration(results.at(-1)?.data)).toBe(
-            capturedGeneration
-          );
-        } else {
-          expect(proof).toHaveBeenCalledOnce();
-          expect(results.at(-1)?.data).toBeUndefined();
-          expect(results.at(-1)?.error?.networkError).toBeInstanceOf(
-            StaleCacheAuthorityError
-          );
-          expect(host.writes).toHaveLength(0);
-        }
-      } finally {
-        subscription.unsubscribe();
-      }
-    }
-  );
-
-  it('recovers from current cached data after rejecting an older authority response', async () => {
-    const { change } = installAuthority(host);
-    const { ops, network, forwarded, results } = controlledQueryHarness(host);
-    ops.next(makeOp(47, 'network-only'));
-    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
-    host.scriptRead({ kind: 'hit', data: { from: 'current-cache' } });
-    change();
-    const response = new Response('{}');
-    rememberResponseAuthority(response, 'old-generation', async () => {
-      throw new StaleCacheAuthorityError();
-    });
-    network.next(
-      queryResult(
-        makeOperation('query', forwarded[0]!, {
-          ...forwarded[0]!.context,
-          cacheAuthorityResponse: { response },
-        }),
-        { from: 'old-response' }
-      )
-    );
-    await vi.waitFor(() =>
-      expect(results.at(-1)?.data).toEqual({ from: 'current-cache' })
-    );
-    expect(forwarded).toHaveLength(1);
-    expect(host.writes).toHaveLength(0);
-  });
-
-  it('restarts a protected query when proof becomes ready after its rejected response finished', async () => {
-    const { change } = installAuthority(host);
-    change(false);
-    const { ops, network, forwarded, results } = controlledQueryHarness(host);
-    ops.next(makeOp(47, 'network-only'));
-    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
-    const response = new Response('{}');
-    rememberResponseAuthority(response, 'old-generation', async () => {
-      throw new StaleCacheAuthorityError();
-    });
-    network.next(
-      queryResult(
-        makeOperation('query', forwarded[0]!, {
-          ...forwarded[0]!.context,
-          cacheAuthorityResponse: { response },
-        }),
-        { from: 'old-response' }
-      )
-    );
-    await vi.waitFor(() => expect(results).toHaveLength(1));
-    const metadata = normalizedCacheResultMetadata(results[0]!);
-    expect(metadata?.source).toBe('live-network');
-    if (metadata?.source === 'live-network') await metadata.persistence;
-    expect(forwarded).toHaveLength(1);
-    change();
-    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
-    network.next(queryResult(forwarded[1]!, { from: 'current-response' }));
-    await vi.waitFor(() =>
-      expect(results.at(-1)?.data).toEqual({ from: 'current-response' })
-    );
-  });
-
   it('serializes cache effects across separate subscription emissions', async () => {
     const operation = makeSubscriptionOp(24);
     const networkResults = makeSubject<OperationResult>();
@@ -2176,10 +1387,9 @@ describe('normalizedCacheExchange', () => {
     releaseWrite();
     await vi.waitFor(() => expect(results).toHaveLength(2));
 
-    expect(host.deleteRecords).toHaveBeenCalledWith(
-      ['GraphqlSoupDocument:document-1'],
-      undefined
-    );
+    expect(host.deleteRecords).toHaveBeenCalledWith([
+      'GraphqlSoupDocument:document-1',
+    ]);
     expect(cacheContainsDocument).toBe(false);
   });
 
@@ -3958,7 +3168,7 @@ describe('normalizedCacheExchange', () => {
               ? () => ['GraphqlSoupDocument:removed']
               : undefined,
           });
-          ops.next(affected ? personalMailOp(11, 'cache-first') : makeOp(11));
+          ops.next(makeOp(11));
           await vi.advanceTimersByTimeAsync(10);
           host.pushAffected([11]);
           await vi.advanceTimersByTimeAsync(10);
@@ -4008,84 +3218,6 @@ describe('normalizedCacheExchange', () => {
           await vi.advanceTimersByTimeAsync(10);
           vi.useRealTimers();
         }
-      }
-    );
-
-    it.each([false, true])(
-      'keeps editable-thread tag links after an ownership witness expires only for the authoring epoch (retired=%s)',
-      async (retired) => {
-        installAuthority(host, { ready: false });
-        const authorizationEpoch = crmSnapshotAuthorization().epoch;
-        if (retired) beginQueryAuthorizationReset()();
-        // A first authority proof can expire the witness between loading the
-        // thread and editing its tags. That must not discard its parent link.
-        let current = true;
-        rememberOwnedEmail('owned-tag-edit', () => current);
-        current = false;
-        const variables = {
-          input: {
-            entityType: 'THREAD' as const,
-            entityId: 'owned-tag-edit',
-            properties: [
-              {
-                propertyDefinitionId: 'tags',
-                addOptionIds: ['urgent'],
-                removeOptionIds: [],
-              },
-            ],
-          },
-        };
-        const data = { updateEntityPropertyOptions: [{ id: 'assignment' }] };
-        const patch = {
-          recordRoot: { entityKey: 'GraphqlSoupEmailThread:owned-tag-edit' },
-          path: [{ field: 'properties' }],
-          operation: {
-            kind: 'upsertByField',
-            entityKey: 'GraphqlProperty:assignment',
-            whereField: 'propertyDefinitionId',
-            equals: 'tags',
-          },
-        };
-        const revalidation = {
-          query:
-            '{ user { soupEntity(input:{entityType:EMAIL_THREAD, id:"owned-tag-edit"}) { id } } }',
-          variablesJson: '{}',
-          onlyOnLinkFailure: true,
-        };
-        const admitted =
-          Promise.withResolvers<
-            Parameters<CacheHost['enqueueOptimisticMutation']>[0]
-          >();
-        const enqueue = host.enqueueOptimisticMutation.bind(host);
-        vi.spyOn(host, 'enqueueOptimisticMutation').mockImplementation(
-          async (args, claim) => {
-            admitted.resolve(args);
-            return enqueue(args, claim);
-          }
-        );
-        const { ops } = harness(host);
-        ops.next(
-          makeOperation(
-            'mutation',
-            createRequest(UpdateEntityPropertyOptionsDocument, variables),
-            {
-              ...makeMutationOp(1).context,
-              normalizedCacheOptimistic: {
-                uuid: crypto.randomUUID(),
-                optimisticResponse: data,
-                linkPatches: [patch],
-                revalidations: [revalidation],
-                authorizationEpoch,
-              },
-            }
-          )
-        );
-        const args = await admitted.promise;
-        expect(args.variables).toEqual(variables);
-        expect(args.data).toEqual(retired ? {} : data);
-        expect(args.linkPatches).toEqual(retired ? [] : [patch]);
-        expect(args.revalidations).toEqual(retired ? [] : [revalidation]);
-        await tick();
       }
     );
 
@@ -7538,14 +6670,8 @@ describe('normalizedCacheExchange', () => {
       await tick();
 
       expect(onCacheError.mock.calls).toEqual([
-        [
-          writeFailure,
-          expect.objectContaining({ key: op.key, query: op.query }),
-        ],
-        [
-          deleteFailure,
-          expect.objectContaining({ key: op.key, query: op.query }),
-        ],
+        [writeFailure, expect.objectContaining({ key: op.key })],
+        [deleteFailure, expect.objectContaining({ key: op.key })],
       ]);
       expect(host.writes).toHaveLength(1);
       expect(host.invalidations).toEqual([['GraphqlSoupDocument:document-4']]);

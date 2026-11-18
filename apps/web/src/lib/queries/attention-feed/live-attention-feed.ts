@@ -1,9 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
-import {
-  markSourceAuthority,
-  sourceAuthorityGeneration,
-} from '@graphql-cache/source-authority';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { Client } from '@urql/core';
 import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import {
@@ -112,11 +109,21 @@ export function createLiveAttentionFeed<
   // Batches are written in arrival order, and only between page reads, so a
   // read that started before a batch cannot land over it.
   let pending: Patch[] = [];
+  let pendingGeneration = cacheSessionGeneration.capture();
+  createEffect(
+    on(
+      () => cacheSessionGeneration.state().epoch,
+      () => {
+        pending = [];
+      }
+    )
+  );
   let writing = false;
   const writePending = async () => {
     if (writing || pending.length === 0 || query.isFetching) return;
     const host = options.cacheHost();
     const batch = pending;
+    const generation = pendingGeneration;
     pending = [];
     // Without the cache there are no pages to place changes in.
     if (!host) {
@@ -131,7 +138,8 @@ export function createLiveAttentionFeed<
         host,
         options.pages.cachedQuery,
         pages.map((cursor) => options.pages.variables(cursor)),
-        batch
+        batch,
+        generation
       );
       if (!placed) fireAndForget(refetch(), surface);
     } catch (error) {
@@ -152,13 +160,8 @@ export function createLiveAttentionFeed<
   );
 
   const applyPatches = (patches: readonly Patch[]) => {
+    pendingGeneration = cacheSessionGeneration.capture();
     options.onPatches?.(patches);
-    const incoming = sourceAuthorityGeneration(patches);
-    if (pending.length && sourceAuthorityGeneration(pending) !== incoming) {
-      pending = [];
-      fireAndForget(refetch(), surface);
-    }
-    if (!pending.length) markSourceAuthority(pending, incoming);
     pending.push(...patches);
     fireAndForget(writePending(), surface);
   };

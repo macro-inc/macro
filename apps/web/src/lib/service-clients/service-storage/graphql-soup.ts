@@ -15,7 +15,6 @@ import { platformFetch } from '@core/util/platformFetch';
 import { reloadForNewerBuild } from '@core/util/reloadForNewerBuild';
 import { timeResponseBody } from '@core/util/responseBodyTiming';
 import { ThrownResultError } from '@core/util/result';
-import { cacheAuthorityExchange } from '@graphql-cache/exchange/authority-exchange';
 import {
   createMutationQueueTelemetry,
   type MutationQueueClearCause,
@@ -28,6 +27,10 @@ import {
   normalizedCacheExchange,
 } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { optimisticResolversExchange } from '@graphql-cache/exchange/optimistic-resolvers';
+import {
+  cacheSessionExchange,
+  sessionSubscriptionExchange,
+} from '@graphql-cache/exchange/session-exchange';
 import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
 import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
 import { NativeCacheUpgradeRequiredError } from '@graphql-cache/host/tauri-host';
@@ -95,7 +98,6 @@ import {
   createCacheRecovery,
 } from './cache-recovery';
 import { installCrmCacheHost } from './crm-access-cache';
-import { graphqlSoupSubscriptionExchange } from './crm-subscription-exchange';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
 import { emailThreadSortTs } from './email-thread-sort';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
@@ -468,7 +470,7 @@ async function sendGraphqlTransportRequest(
 const graphqlSoupClient = createClient({
   url: `${dssHost}/items/soup/graphql`,
   exchanges: [
-    cacheAuthorityExchange,
+    cacheSessionExchange,
     captureTraceParentExchange,
     networkRevalidationExchange(),
     traceParentExchange,
@@ -577,11 +579,11 @@ function getUncachedRealtimeClient(): Client {
     url: `${dssHost}/items/soup/graphql`,
     preferGetMethod: false,
     exchanges: [
-      cacheAuthorityExchange,
+      cacheSessionExchange,
       captureTraceParentExchange,
       networkRevalidationExchange(),
       notificationReceiptExchange(publishNotificationPatch),
-      graphqlSoupSubscriptionExchange(
+      sessionSubscriptionExchange(
         websocketClient,
         stripGraphqlSoupClientDirectives
       ),
@@ -975,12 +977,9 @@ export function getGraphqlSoupClient(): Client {
         // See graphqlSoupClient: GET serves GraphiQL on this path.
         preferGetMethod: false,
         exchanges: [
-          cacheAuthorityExchange,
+          cacheSessionExchange,
           captureTraceParentExchange,
-          optimisticResolversExchange(
-            soupOptimisticResolvers,
-            () => host?.authority?.snapshot()?.generation
-          ),
+          optimisticResolversExchange(soupOptimisticResolvers),
           networkRevalidationExchange(() => host?.disabled === true),
           normalizedCacheExchange(host, {
             ...localDraftQueueLifecycle(host),
@@ -1019,7 +1018,7 @@ export function getGraphqlSoupClient(): Client {
             isUncachedSubscription: isActivityUpdatesSubscription,
           }),
           notificationReceiptExchange(publishNotificationPatch),
-          graphqlSoupSubscriptionExchange(
+          sessionSubscriptionExchange(
             graphqlWsClient,
             stripGraphqlSoupClientDirectives
           ),

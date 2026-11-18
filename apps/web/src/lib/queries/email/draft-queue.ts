@@ -6,9 +6,7 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/exchange/record-selection';
-import { sourceAuthorityGeneration } from '@graphql-cache/source-authority';
 import { Telemetry } from '@macro-inc/observability';
-import { crmAccessAuthority } from '@service-storage/crm-access-authority';
 import {
   EmailDraftThreadFieldsFragmentDoc,
   EmailThreadMessageFieldsFragmentDoc,
@@ -75,19 +73,16 @@ export async function readEmailDraft(
 ) {
   const local = await readLocalDraft(draftId);
   const host = getGraphqlCacheHost();
-  // The durable working copy is independently authored. Do not wait on CRM
-  // proof just to compare it with an optional protected cache snapshot.
-  const cached =
-    host && (!local || crmAccessAuthority.hasCurrentProof())
-      ? await ResultAsync.fromPromise(
-          readRecordsByKeys(
-            host,
-            selectRecords(EmailThreadMessageFieldsFragmentDoc),
-            [`GraphqlSoupEmailMessage:${local?.serverDraftId ?? draftId}`]
-          ),
-          (error: unknown) => error
-        )
-      : undefined;
+  const cached = host
+    ? await ResultAsync.fromPromise(
+        readRecordsByKeys(
+          host,
+          selectRecords(EmailThreadMessageFieldsFragmentDoc),
+          [`GraphqlSoupEmailMessage:${local?.serverDraftId ?? draftId}`]
+        ),
+        (error: unknown) => error
+      )
+    : undefined;
   // The independent working copy remains readable when cache startup fails.
   // Without one, preserve the read error rather than inventing an empty draft.
   if (cached?.isErr() && !local) throw cached.error;
@@ -248,7 +243,6 @@ export async function readCachedDraftAndThread(
     | 'existingDraft'
     | 'existingThread'
     | 'authorizationEpoch'
-    | 'authorityGeneration'
     | 'mutationUuid'
   >
 > {
@@ -260,15 +254,9 @@ export async function readCachedDraftAndThread(
     existingThread: undefined,
     mutationUuid: undefined,
     authorizationEpoch,
-    authorityGeneration: undefined,
   };
   const host = getGraphqlCacheHost();
-  if (
-    !host ||
-    crmSnapshotAuthorization().paused ||
-    !crmAccessAuthority.hasCurrentProof()
-  )
-    return empty;
+  if (!host || crmSnapshotAuthorization().paused) return empty;
   // Settlement can land between these reads. Compose from one revision so a
   // local draft is never combined with a thread already using its server ID.
   for (let attempt = 0; attempt < SNAPSHOT_READ_ATTEMPTS; attempt++) {
@@ -299,11 +287,7 @@ export async function readCachedDraftAndThread(
     )
       return empty;
     const [draft, thread] = records;
-    if (
-      draft.revision !== thread.revision ||
-      sourceAuthorityGeneration(draft) !== sourceAuthorityGeneration(thread)
-    )
-      continue;
+    if (draft.revision !== thread.revision) continue;
     const mutationUuid = draft.records[0]?.identity?.mutationUuid;
     return {
       draftId: draft.records[0]?.record.id ?? draftId,
@@ -312,7 +296,6 @@ export async function readCachedDraftAndThread(
       existingThread: thread.records[0]?.record,
       mutationUuid: mutationUuid ?? undefined,
       authorizationEpoch,
-      authorityGeneration: sourceAuthorityGeneration(draft),
     };
   }
   throw new Error('Email draft cache kept changing; retry the draft write');
@@ -499,7 +482,6 @@ export async function deleteEmailDraftQueued(input: {
     outcome = await executeGraphqlDeleteEmailDraft(client, {
       existingThread: cached.existingThread,
       authorizationEpoch: cached.authorizationEpoch,
-      authorityGeneration: cached.authorityGeneration,
       mutationUuid: cached.mutationUuid ?? local?.key ?? input.draftId,
       draftId: local?.draftId ?? String(cached.draftId),
       clientMetadata: attempt,

@@ -1,20 +1,15 @@
-import { beginQueryAuthorizationReset } from '@app/lib/urql-solid/authorization';
 import {
   type DatabaseSqlSourceFailure,
   runDatabaseSql,
 } from '@core/database-sql/driver';
 import type { Row } from '@core/database-sql/generated/types';
 import { readTranscript, replay } from '@core/database-sql/tests/transcript';
-import { requestNeedsCrmProof } from '@graphql-cache/authority-scope';
 import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
-import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
-import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
 import type { CacheHost, CacheReadArgs } from '@graphql-cache/host/types';
 import {
   INITIAL_CACHE_REVISION,
   type ReadResult,
 } from '@graphql-cache/protocol';
-import { markSourceAuthority } from '@graphql-cache/source-authority';
 import type {
   DatabaseRowFieldsFragment,
   DatabaseRowsQuery,
@@ -30,7 +25,7 @@ import {
 import { okAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import { empty, fromValue, mergeMap, pipe } from 'wonka';
-import { createGraphqlRowSource, type LocalMembership } from './graphql-source';
+import { createGraphqlRowSource } from './graphql-source';
 
 const DEALS = '01990000-0000-7000-8000-00000000d001';
 const PEOPLE = '01990000-0000-7000-8000-00000000d002';
@@ -194,163 +189,6 @@ function fakeClient(
 }
 
 describe('the GraphQL row source', () => {
-  it('reads two cached database pages without requesting an unavailable CRM proof', async () => {
-    const transcript = readTranscript('paging');
-    const first = soupPage([acme], 'second-page');
-    const last = soupPage([globex], null);
-    const state = {
-      identity: 'database-profile',
-      account: first.user.id,
-      generation: crypto.randomUUID(),
-      policy: null,
-      ready: false,
-    };
-    const proof = vi.fn(async () => {
-      throw new TypeError('CRM proof is offline');
-    });
-    const fetch = vi.fn(async () => {
-      throw new TypeError('Network is offline');
-    });
-    const read = vi.fn<CacheHost['readQuery']>(async (args) => {
-      if (requestNeedsCrmProof('read', { ...args })) await proof();
-      const input = args.variables?.input as Record<string, unknown>;
-      return markSourceAuthority(
-        { kind: 'hit', data: input.initial ? first : last } as const,
-        state.generation
-      );
-    });
-    const host = createRetirableCacheHost({
-      ...createNoopCacheHost(),
-      disabled: false,
-      authority: {
-        snapshot: () => state,
-        current: async () => state,
-        transition: vi.fn(),
-        setReadGuard: vi.fn(),
-        verifyRead: vi.fn(),
-        onChanged: () => () => {},
-      },
-      readQuery: read,
-    });
-    const resume = beginQueryAuthorizationReset();
-    try {
-      const result = await runDatabaseSql(transcript.catalog, transcript.sql, {
-        source: createGraphqlRowSource({
-          client: createClient({
-            url: 'http://test.invalid/graphql',
-            fetch,
-            exchanges: [fetchExchange],
-          }),
-          catalog: transcript.catalog,
-          requestPolicy: 'cache-only',
-          cache: host,
-        }),
-        open: replay(transcript),
-      });
-      expect(result._unsafeUnwrap()).toEqual(transcript.outcome);
-      expect(read).toHaveBeenCalledTimes(2);
-      expect(read.mock.calls[1][0].variables?.input).toMatchObject({
-        continuation: { cursor: 'second-page' },
-      });
-      expect(proof).not.toHaveBeenCalled();
-      expect(fetch).not.toHaveBeenCalled();
-    } finally {
-      resume();
-      host.dispose();
-    }
-  });
-
-  it('reads ordinary rows offline through both generated Soup queries and local reconciliation while CRM proof is unavailable', async () => {
-    const transcript = readTranscript('row-position');
-    const items = [initech, globex, acme];
-    const proof = vi.fn(async () => {
-      throw new TypeError('CRM proof is offline');
-    });
-    const fetch = vi.fn(async () => {
-      throw new TypeError('Network is offline');
-    });
-    const client = createClient({
-      url: 'http://test.invalid/graphql',
-      fetch,
-      exchanges: [fetchExchange],
-    });
-    const readQuery = vi.fn<CacheHost['readQuery']>(async (args) => {
-      if (requestNeedsCrmProof('read', { ...args })) await proof();
-      return { kind: 'hit', data: soupPage(items, null) };
-    });
-    const entityFilter = vi.fn<CacheHost['entityFilter']>(async (request) => {
-      if (requestNeedsCrmProof('entity-filter', { request })) await proof();
-      return {
-        kind: 'reconciled',
-        revision: INITIAL_CACHE_REVISION,
-        keys: items.map((item) => `GraphqlSoupDatabaseRow:${item.id}`),
-        retainedKeys: [],
-        optimistic: false,
-      };
-    });
-    const readRecordsByKeys = vi.fn<CacheHost['readRecordsByKeys']>(
-      async (args) => {
-        if (requestNeedsCrmProof('read-records-by-keys', { ...args }))
-          await proof();
-        return {
-          revision: INITIAL_CACHE_REVISION,
-          records: items.map((record) => ({
-            recordKey: `GraphqlSoupDatabaseRow:${record.id}`,
-            record,
-          })),
-        };
-      }
-    );
-    const host = { readQuery, entityFilter, readRecordsByKeys };
-    const membership: LocalMembership = {
-      host,
-      baselines: new Map(),
-      reconcile: false,
-    };
-    const resume = beginQueryAuthorizationReset();
-    try {
-      const cached = await runDatabaseSql(transcript.catalog, transcript.sql, {
-        source: createGraphqlRowSource({
-          client,
-          catalog: transcript.catalog,
-          requestPolicy: 'cache-only',
-          cache: host,
-          membership,
-        }),
-        open: replay(transcript),
-      });
-      expect(cached._unsafeUnwrap()).toEqual(transcript.outcome);
-      expect(readQuery).toHaveBeenCalledOnce();
-      const [request] = readQuery.mock.calls[0];
-      expect(request.operationName).toBe('DatabaseRows');
-      // A completed previous first page is the existing source's evidence for
-      // reconciling a whole table from its local membership index.
-      membership.baselines.set(JSON.stringify(request.variables?.input), {
-        items,
-        complete: true,
-      });
-      membership.reconcile = true;
-      const local = await runDatabaseSql(transcript.catalog, transcript.sql, {
-        source: createGraphqlRowSource({
-          client,
-          catalog: transcript.catalog,
-          requestPolicy: 'cache-only',
-          cache: host,
-          membership,
-        }),
-        open: replay(transcript),
-      });
-      expect(local._unsafeUnwrap()).toEqual(transcript.outcome);
-      expect(readQuery).toHaveBeenCalledOnce();
-      expect(entityFilter).toHaveBeenCalledOnce();
-      expect(readRecordsByKeys).toHaveBeenCalledOnce();
-      expect(proof).not.toHaveBeenCalled();
-      expect(fetch).not.toHaveBeenCalled();
-    } finally {
-      resume();
-    }
-  });
-
   it('refuses people requests instead of enumerating a browser directory', async () => {
     const server = fakeClient(() => {
       throw new Error('No network rows expected');

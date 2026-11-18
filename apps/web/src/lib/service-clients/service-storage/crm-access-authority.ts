@@ -10,12 +10,18 @@ import { createSignal } from 'solid-js';
 
 export type CrmAccessState = 'pending' | 'allowed' | 'denied' | 'error';
 export type CrmRetirementScope = 'permission' | 'session';
-
-export type CrmRequestAuthority = Readonly<{
-  owner: CacheAuthorityHost;
-  generation: string;
-  session: number;
-}>;
+type Options = {
+  fetchProof: (timeoutMs: number) => Promise<string>;
+  retire: (
+    scope: CrmRetirementScope | undefined,
+    generation: string
+  ) => Promise<void>;
+  bindAccount?: (
+    owner: CacheAuthorityHost,
+    generation: string,
+    account: string
+  ) => Promise<void>;
+};
 
 export function isCrmPolicy(value: unknown): value is string {
   return (
@@ -26,7 +32,7 @@ export function isCrmPolicy(value: unknown): value is string {
   );
 }
 
-/** Network-only clients have no shared persisted response cache. */
+/** Network-only sessions still retire their visible and persisted query results. */
 function memoryAuthority(account?: string): CacheAuthorityHost {
   let state: CacheAuthority = {
     identity: 'network-only',
@@ -39,10 +45,6 @@ function memoryAuthority(account?: string): CacheAuthorityHost {
   return {
     current: async () => state,
     snapshot: () => state,
-    setReadGuard: () => {},
-    verifyRead: async () => {
-      if (!state.ready) throw new StaleCacheAuthorityError();
-    },
     onChanged(callback) {
       listeners.add(callback);
       return () => {
@@ -51,467 +53,201 @@ function memoryAuthority(account?: string): CacheAuthorityHost {
     },
     async transition(expected, policy) {
       if (expected !== state.generation) throw new StaleCacheAuthorityError();
-      const changed = !state.ready || state.policy !== policy;
-      if (changed) {
-        state = {
-          ...state,
-          generation: crypto.randomUUID(),
-          policy,
-          ready: true,
-        };
-        for (const listener of listeners) listener(state);
-      }
+      const changed =
+        (state.policy != null && state.policy !== policy) ||
+        (policy.endsWith(':denied') && state.policy !== policy);
+      state = {
+        ...state,
+        generation: changed ? crypto.randomUUID() : state.generation,
+        policy,
+        ready: true,
+      };
+      for (const listener of listeners) listener(state);
       return { authority: state, revision: '0', affectedOps: [], changed };
     },
   };
 }
 
-/** Fresh primary proofs are ordered by the shared cache owner's generation. */
-export function createCrmAccessAuthority(options: {
-  fetchProof: (timeoutMs: number) => Promise<string>;
-  retire: (scope: CrmRetirementScope) => Promise<void>;
-  verified?: () => void;
-  bindAccount?: (
-    owner: CacheAuthorityHost,
-    generation: string,
-    account: string
-  ) => Promise<void>;
-}) {
+/** Detect rare access transitions; ordinary requests and cache reads never await this. */
+export function createCrmAccessAuthority(options: Options) {
   const [state, setState] = createSignal<CrmAccessState>('pending');
-  const allowed = () => state() === 'allowed';
-  let verifiedProof: CrmRequestAuthority | undefined;
   let account: string | undefined;
   let loginEpoch = 0;
-  let loginGeneration = 0;
-  let session = 0;
+  let session = Symbol();
   let shared: CacheAuthorityHost | undefined;
   let owner = memoryAuthority();
+  let observed: CacheAuthority | undefined;
   let stopObserving: (() => void) | undefined;
-  let observedGeneration: string | undefined;
-  let observedPolicy: string | null | undefined;
-  let observedAccount: string | null | undefined;
-  let retiredGeneration: string | undefined;
+  let pending: Promise<void> | undefined;
   let retiring = Promise.resolve();
-  let retirementFailed = false;
-  let sessionRetirementPending = false;
-  const sessionListeners = new Set<() => void>();
-  const verifiedListeners = new Set<() => void>();
-  let pending:
-    | {
-        session: number;
-        owner: CacheAuthorityHost;
-        promise: Promise<CrmRequestAuthority>;
-      }
+  let failedRetirement:
+    | { scope: CrmRetirementScope | undefined; generation: string }
     | undefined;
 
-  const retire = (
-    generation: string,
-    scope: CrmRetirementScope = 'permission'
-  ) => {
-    const replacingSession = scope === 'session' && !sessionRetirementPending;
-    if (scope === 'session') sessionRetirementPending = true;
-    if (
-      retiredGeneration === generation &&
-      !retirementFailed &&
-      !replacingSession
-    )
-      return;
-    retiredGeneration = generation;
-    retirementFailed = false;
-    // A failed or overlapping login cleanup must not be narrowed to CRM-only
-    // retirement by a later permission event.
-    const retirementScope = sessionRetirementPending ? 'session' : 'permission';
-    // The callback fences visible observers synchronously, before its disk work.
-    const previous = retiring.catch(() => {});
-    const work = Telemetry.span('crm.access.visible_retirement', async () =>
-      options.retire(retirementScope)
-    );
-    retiring = Promise.allSettled([previous, work])
-      .then(([, result]) => {
-        if (result.status === 'rejected') throw result.reason;
-        if (retirementScope === 'session' && retiredGeneration === generation)
-          sessionRetirementPending = false;
-      })
-      .catch((error: unknown) => {
-        retirementFailed = true;
-        throw error;
-      });
-    fireAndForget(
-      retiring.catch(() => {}),
-      'crm.access.retirement'
-    );
-  };
-  const observeAuthority = (next: CacheAuthority) => {
-    const denied = next.policy?.endsWith(':denied') === true;
-    const accountChanged =
-      observedAccount != null && observedAccount !== next.account;
-    const previousTeam = observedPolicy?.split(':')[0];
-    const scopeChanged =
-      previousTeam &&
-      previousTeam !== 'none' &&
-      next.policy != null &&
-      previousTeam !== next.policy.split(':')[0];
-    const mustRetire =
-      accountChanged ||
-      scopeChanged ||
-      retirementFailed ||
-      (denied && (observedPolicy !== next.policy || retirementFailed));
-    observedGeneration = next.generation;
-    observedPolicy = next.policy;
-    observedAccount = next.account;
-    if (denied || next.policy === 'none') setState('denied');
-    else if (accountChanged) setState('pending');
-    if (mustRetire)
-      retire(next.generation, accountChanged ? 'session' : 'permission');
-  };
-  const observe = () => {
-    stopObserving?.();
-    const observedOwner = owner;
-    stopObserving = owner.onChanged((next) => {
-      if (owner === observedOwner) observeAuthority(next);
-    });
-  };
-  observe();
-
-  async function prepare(retryStaleRead = true): Promise<CrmRequestAuthority> {
-    const context = Telemetry.captureContext();
-    const capturedSession = session;
-    const capturedOwner = owner;
-    const expectedAccount = account;
-    if (!expectedAccount) throw new StaleCacheAuthorityError();
-    const sameSession = () =>
-      capturedSession === session &&
-      capturedOwner === owner &&
-      expectedAccount === account;
-    let previousAccount = capturedOwner.snapshot()?.account;
-    let accountChanged =
-      previousAccount != null && previousAccount !== expectedAccount;
-    // A null -> expected account binding is recoverable. Any other observed
-    // account replacement closes recovery, including an A -> B -> A sequence.
-    const stopWatchingAccount = retryStaleRead
-      ? capturedOwner.onChanged((next) => {
-          accountChanged ||=
-            (previousAccount != null && previousAccount !== next.account) ||
-            (next.account != null && next.account !== expectedAccount);
-          previousAccount = next.account;
-        })
-      : undefined;
-    let retried = false;
-    const current = async () => {
-      try {
-        return await context.run(() => capturedOwner.current());
-      } catch (error) {
-        if (
-          !retryStaleRead ||
-          retried ||
-          accountChanged ||
-          !sameSession() ||
-          !(error instanceof StaleCacheAuthorityError)
-        )
-          throw error;
-        retried = true;
-        // An IPC reply can lose to a newer notification before any HTTP
-        // dispatch. Discard it and read once more; never replay a command.
-        return context.run(() =>
-          Telemetry.span(
-            'crm.access.owner_read_retry',
-            { sampling: 'perf' },
-            async () => {
-              const fresh = await capturedOwner.current();
-              if (
-                !sameSession() ||
-                accountChanged ||
-                (fresh.account != null && fresh.account !== expectedAccount)
-              )
-                throw new StaleCacheAuthorityError();
-              return fresh;
-            }
-          )
-        );
-      }
-    };
-    try {
-      let state = await current();
-      if (!sameSession() || (retried && accountChanged))
-        throw new StaleCacheAuthorityError();
-      const bindAccount = options.bindAccount;
-      if (state.account && state.account !== expectedAccount)
-        retire(state.generation, 'session');
-      if (state.account !== expectedAccount && bindAccount) {
-        await context.run(() =>
-          bindAccount(capturedOwner, state.generation, expectedAccount)
-        );
-        state = await current();
-      }
-      if (
-        !sameSession() ||
-        (retried && accountChanged) ||
-        (state.account && state.account !== expectedAccount)
-      )
-        throw new StaleCacheAuthorityError();
-      observeAuthority(state);
-      return {
-        owner: capturedOwner,
-        generation: state.generation,
-        session: capturedSession,
-      };
-    } finally {
-      stopWatchingAccount?.();
+  function observe(next: CacheAuthority, retryRetirement = false) {
+    const previous = observed;
+    observed = next;
+    if (next.account != null && next.account !== account) {
+      setState('pending');
+    } else if (isCrmPolicy(next.policy)) {
+      if (next.policy.endsWith(':denied') || next.policy === 'none')
+        setState('denied');
+      else if (next.ready) setState('allowed');
     }
-  }
-  async function assertCurrent(captured: CrmRequestAuthority): Promise<void> {
-    if (captured.session !== session || captured.owner !== owner || !account)
-      throw new StaleCacheAuthorityError();
-    const current =
-      captured.owner.snapshot() ?? (await captured.owner.current());
-    if (captured.session !== session || captured.owner !== owner || !account)
-      throw new StaleCacheAuthorityError();
-    observeAuthority(current);
-    if (
-      captured.session !== session ||
-      captured.owner !== owner ||
-      retirementFailed ||
-      observedGeneration !== current.generation ||
-      !current.ready ||
-      !isCrmPolicy(current.policy) ||
-      current.generation !== captured.generation ||
-      (current.account && current.account !== account)
-    )
-      throw new StaleCacheAuthorityError();
-  }
-  async function accept(
-    captured: CrmRequestAuthority,
-    policy: string
-  ): Promise<CrmRequestAuthority> {
-    return Telemetry.span(
-      'crm.access.accept',
-      { sampling: 'perf' },
-      async (span) => {
-        if (
-          !isCrmPolicy(policy) ||
-          captured.session !== session ||
-          captured.owner !== owner
-        )
-          throw new StaleCacheAuthorityError();
-        const result = await span.span(
-          'crm.access.owner_transition',
-          async () => captured.owner.transition(captured.generation, policy)
-        );
-        if (captured.session !== session || captured.owner !== owner)
-          throw new StaleCacheAuthorityError();
-        span.setAttr('crm.access.changed', result.changed);
-        span.run(() => observeAuthority(result.authority));
-        const admitted = {
-          ...captured,
-          generation: result.authority.generation,
-        };
-        await retiring;
-        await span.run(() => assertCurrent(admitted));
-        span.setAttr('crm.access.outcome', 'verified');
-        verifiedProof = admitted;
-        setState(policy.endsWith(':allowed') ? 'allowed' : 'denied');
-        options.verified?.();
-        for (const listener of verifiedListeners) listener();
-        return admitted;
+    if (previous?.generation === next.generation) {
+      if (retryRetirement && failedRetirement?.generation === next.generation) {
+        const { scope, generation } = failedRetirement;
+        failedRetirement = undefined;
+        retire(scope, generation);
       }
-    );
+      return;
+    }
+    const accountChanged =
+      previous?.account != null && previous.account !== next.account;
+    const teamChanged =
+      previous?.policy != null &&
+      previous.policy !== 'none' &&
+      previous.policy.split(':')[0] !== next.policy?.split(':')[0];
+    const scope = accountChanged
+      ? 'session'
+      : teamChanged || next.policy?.endsWith(':denied')
+        ? 'permission'
+        : undefined;
+    retire(scope, next.generation);
   }
-  function refresh(): Promise<CrmRequestAuthority> {
-    if (pending?.session === session && pending.owner === owner)
-      return pending.promise;
+  function retire(scope: CrmRetirementScope | undefined, generation: string) {
+    // Fence responses synchronously, before any local cleanup awaits.
+    const work = options.retire(scope, generation).catch((error: unknown) => {
+      if (observed?.generation === generation)
+        failedRetirement = { scope, generation };
+      throw error;
+    });
+    retiring = Promise.all([retiring.catch(() => {}), work]).then(() => {});
+    fireAndForget(retiring, 'crm.access.retirement');
+  }
+
+  function subscribe() {
+    stopObserving?.();
+    const captured = owner;
+    stopObserving = owner.onChanged((next) => {
+      if (owner === captured) observe(next);
+    });
+  }
+  subscribe();
+
+  function refresh(): Promise<void> {
+    if (pending) return pending;
+    if (!account) return Promise.resolve();
     if (state() === 'error') setState('pending');
-    const capturedSession = session;
-    const capturedOwner = owner;
-    const entry = {
-      session,
-      owner,
-      promise: Promise.resolve(undefined as unknown as CrmRequestAuthority),
-    };
-    entry.promise = Telemetry.span(
-      'crm.access.refresh',
-      { sampling: 'perf' },
-      async (span) => {
-        // A concurrent owner change can overtake preparation or win the proof
-        // CAS, or the network can fail transiently. Retry once with a shorter
-        // deadline without replacing the last proven UI state.
-        for (let attempt = 0; ; attempt++) {
-          let networkFailure = false;
-          try {
-            const captured = await span.span('crm.access.prepare', async () =>
-              // This loop already owns the single stale-generation retry.
-              prepare(false)
+    const captured = session;
+    const target = owner;
+    const expectedAccount = account;
+    const current = () =>
+      captured === session && target === owner && expectedAccount === account;
+    const work = Telemetry.span('crm.access.refresh', async () => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          let before = await target.current();
+          if (!current()) return;
+          if (before.account !== expectedAccount && options.bindAccount) {
+            await options.bindAccount(
+              target,
+              before.generation,
+              expectedAccount
             );
-            const policy = await span.span('crm.access.proof', async () => {
-              try {
-                return await options.fetchProof(attempt === 0 ? 15_000 : 3_000);
-              } catch (error) {
-                networkFailure = error instanceof TypeError;
-                throw error;
-              }
-            });
-            span.setAttr('crm.access.attempt', attempt + 1);
-            return await span.run(() => accept(captured, policy));
-          } catch (error) {
-            if (
-              retirementFailed ||
-              (!networkFailure &&
-                !(error instanceof StaleCacheAuthorityError)) ||
-              attempt === 1 ||
-              capturedSession !== session ||
-              capturedOwner !== owner
-            )
-              throw error;
-            if (networkFailure) await sleep(250);
-            if (capturedSession !== session || capturedOwner !== owner)
-              throw error;
+            before = await target.current();
           }
+          if (!current()) return;
+          observe(before, true);
+          const policy = await options.fetchProof(
+            attempt === 0 ? 15_000 : 3_000
+          );
+          if (!current()) return;
+          if (!isCrmPolicy(policy))
+            throw new Error('Invalid CRM access policy');
+          // A proven denial hides entry points even if local disk cleanup fails.
+          if (policy.endsWith(':denied') || policy === 'none')
+            setState('denied');
+          const result = await target.transition(before.generation, policy);
+          if (!current()) return;
+          observe(result.authority);
+          await retiring;
+          return;
+        } catch (error) {
+          if (!current()) return;
+          if (
+            attempt === 1 ||
+            !(
+              error instanceof TypeError ||
+              error instanceof StaleCacheAuthorityError
+            )
+          )
+            throw error;
+          if (error instanceof TypeError) await sleep(250);
+          if (!current()) return;
         }
       }
-    )
+    })
       .catch((error: unknown) => {
-        if (
-          capturedSession === session &&
-          capturedOwner === owner &&
-          state() === 'pending'
-        )
-          setState('error');
+        if (current() && state() === 'pending') setState('error');
         throw error;
       })
       .finally(() => {
-        if (pending === entry) pending = undefined;
+        if (pending === work) pending = undefined;
       });
-    pending = entry;
-    return entry.promise;
+    pending = work;
+    return work;
   }
-  async function ensureCurrent(): Promise<CrmRequestAuthority> {
-    try {
-      const captured = verifiedProof ?? (await prepare());
-      await retiring;
-      await assertCurrent(captured);
-      verifiedProof = captured;
-      const policy = owner.snapshot()?.policy;
-      if (isCrmPolicy(policy))
-        setState(policy.endsWith(':allowed') ? 'allowed' : 'denied');
-      return captured;
-    } catch (error) {
-      if (!(error instanceof StaleCacheAuthorityError)) throw error;
-      return refresh();
-    }
-  }
+
   return {
-    allowed,
     state,
-    ensureCurrent,
-    /** Optional cache enrichment must not initiate a network proof. */
-    hasCurrentProof() {
-      const captured = verifiedProof;
-      const current = owner.snapshot();
-      return (
-        captured !== undefined &&
-        current !== undefined &&
-        account !== undefined &&
-        captured.session === session &&
-        captured.owner === owner &&
-        !retirementFailed &&
-        !sessionRetirementPending &&
-        observedGeneration === current.generation &&
-        current.ready &&
-        isCrmPolicy(current.policy) &&
-        current.generation === captured.generation &&
-        (current.account == null || current.account === account)
-      );
-    },
-    captureSession() {
-      const captured = loginGeneration;
-      return () => {
-        if (!account || captured !== loginGeneration)
-          throw new StaleCacheAuthorityError();
-      };
-    },
-    prepare: () => prepare(),
-    accept,
-    refresh,
-    assertCurrent,
-    onSessionChanged(callback: () => void) {
-      sessionListeners.add(callback);
-      return () => {
-        sessionListeners.delete(callback);
-      };
-    },
-    onVerified(callback: () => void) {
-      verifiedListeners.add(callback);
-      return () => {
-        verifiedListeners.delete(callback);
-      };
-    },
+    allowed: () => state() === 'allowed',
     account: () => account,
-    snapshot: () => owner.snapshot(),
+    snapshot: () => observed ?? owner.snapshot(),
+    refresh,
     setHost(next: CacheAuthorityHost | undefined) {
       if (next === shared) return;
       shared = next;
       owner = next ?? memoryAuthority(account);
-      session += 1;
-      setState('pending');
-      verifiedProof = undefined;
-      observedGeneration = undefined;
-      observedPolicy = undefined;
-      observedAccount = undefined;
-      observe();
-      next?.setReadGuard(ensureCurrent);
-      for (const listener of sessionListeners) listener();
+      session = Symbol();
+      pending = undefined;
+      observed = undefined;
+      subscribe();
+      if (account) fireAndForget(refresh(), 'crm.access.host');
     },
     setSession(next: string | undefined, epoch = 0) {
-      if (next === account && epoch === loginEpoch) return;
-      const replacingSession = account !== undefined;
+      if (next === account && epoch === loginEpoch) return false;
+      if (account !== undefined) retire('session', crypto.randomUUID());
       account = next;
       loginEpoch = epoch;
-      loginGeneration += 1;
-      session += 1;
+      session = Symbol();
+      pending = undefined;
+      observed = undefined;
+      failedRetirement = undefined;
       setState('pending');
-      verifiedProof = undefined;
-      observedGeneration = undefined;
-      observedPolicy = undefined;
-      observedAccount = undefined;
-      if (replacingSession) retire(`session:${session}`, 'session');
       if (!shared) {
         owner = memoryAuthority(account);
-        observe();
+        subscribe();
       }
-      for (const listener of sessionListeners) listener();
+      return true;
     },
   };
 }
 
-let fetchProof: (timeoutMs: number) => Promise<string> = async () => {
-  throw new Error('CRM permission proof is unavailable');
+let configured: Options = {
+  fetchProof: async () => {
+    throw new Error('CRM permission endpoint is unavailable');
+  },
+  retire: async () => {},
 };
-let retire: (scope: CrmRetirementScope) => Promise<void> = async () => {};
-let verified = () => {};
-let bindAccount: (
-  owner: CacheAuthorityHost,
-  generation: string,
-  account: string
-) => Promise<void> = async () => {};
 export const crmAccessAuthority = createCrmAccessAuthority({
-  fetchProof: (timeoutMs) => fetchProof(timeoutMs),
-  retire: (scope) => retire(scope),
-  verified: () => verified(),
-  bindAccount: (...args) => bindAccount(...args),
+  fetchProof: (timeoutMs) => configured.fetchProof(timeoutMs),
+  retire: (scope, generation) => configured.retire(scope, generation),
+  bindAccount: (owner, generation, account) =>
+    configured.bindAccount?.(owner, generation, account) ?? Promise.resolve(),
 });
 export const crmAccessAllowed = crmAccessAuthority.allowed;
 export const crmAccessState = crmAccessAuthority.state;
-export function configureCrmAccessAuthority(options: {
-  fetchProof: (timeoutMs: number) => Promise<string>;
-  retire: (scope: CrmRetirementScope) => Promise<void>;
-  verified?: () => void;
-  bindAccount?: (
-    owner: CacheAuthorityHost,
-    generation: string,
-    account: string
-  ) => Promise<void>;
-}) {
-  fetchProof = options.fetchProof;
-  retire = options.retire;
-  verified = options.verified ?? (() => {});
-  bindAccount = options.bindAccount ?? (async () => {});
+export function configureCrmAccessAuthority(options: Options) {
+  configured = options;
 }

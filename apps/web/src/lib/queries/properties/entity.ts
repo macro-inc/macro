@@ -320,7 +320,6 @@ export function useDeleteEntityPropertyMutation(
         if (disposition?.kind === 'queued') return;
         if (disposition?.kind === 'permanently-failed') throw disposition.error;
         if (result.error) throw result.error;
-        if (disposition?.kind === 'committed') return;
         if (!result.data) throw new Error('Property removal returned no data');
         return;
       }

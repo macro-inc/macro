@@ -570,7 +570,7 @@ describe('createWorkerCacheHost', () => {
       })
     );
     expect(requests[3]).toEqual({
-      authority: { generation: TEST_AUTHORITY_GENERATION, requireProof: false },
+      generation: TEST_AUTHORITY_GENERATION,
       id: 5,
       kind: 'search',
       request: {

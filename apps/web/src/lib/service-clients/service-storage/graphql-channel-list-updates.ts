@@ -1,4 +1,5 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { cacheNewChannelUnread } from '@queries/channel/unread-cache';
 import type { Client } from '@urql/core';
 import { channelNotificationRefresh } from '../../queries/channel/notification-refresh';
@@ -33,13 +34,22 @@ export function createChannelListUpdatesHandler(
       GraphqlNotificationPatch,
       { __typename: 'GraphqlNewNotification' }
     >,
-    generation: number
+    generation: number,
+    responseGeneration: string
   ): Promise<void> => {
     await previous;
-    const isCurrent = () => !disposed && generation === cacheGeneration;
+    const isCurrent = () =>
+      !disposed &&
+      generation === cacheGeneration &&
+      cacheSessionGeneration.isCurrent(responseGeneration);
     if (!cache || !isCurrent()) return;
     try {
-      await cacheNewChannelUnread(cache, patch.notification, isCurrent);
+      await cacheNewChannelUnread(
+        cache,
+        patch.notification,
+        isCurrent,
+        responseGeneration
+      );
     } catch (error) {
       console.warn('Failed to cache channel unread notification', error);
     }
@@ -60,7 +70,8 @@ export function createChannelListUpdatesHandler(
         pendingPatch = applyNewNotification(
           pendingPatch,
           patch,
-          cacheGeneration
+          cacheGeneration,
+          cacheSessionGeneration.capture()
         );
         return pendingPatch;
       }

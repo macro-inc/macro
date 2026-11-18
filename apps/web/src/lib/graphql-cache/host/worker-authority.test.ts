@@ -1,4 +1,3 @@
-import { createCrmAccessAuthority } from '@service-storage/crm-access-authority';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { type CacheAuthority, StaleCacheAuthorityError } from '../authority';
 import type { CacheRequest, WorkerMessage } from '../protocol';
@@ -90,32 +89,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('reuses the ready durable proof after a preserved owner replacement', async () => {
+it('keeps offline reads available before any proof and across a preserved owner replacement', async () => {
   await host.authority!.current();
   const read = () =>
     host.readQuery({ query: '{ user { emailThread { id } } }' });
-  await expect(read()).rejects.toBeInstanceOf(StaleCacheAuthorityError);
-  const transitions: boolean[] = [];
-  const proof = vi.fn(async () => {
-    const result = await host.authority!.transition(
-      (await host.authority!.current()).generation,
-      'none'
-    );
-    transitions.push(result.changed);
-  });
-  host.authority!.setReadGuard(proof);
   await expect(read()).resolves.toMatchObject({ kind: 'hit' });
-  expect(proof).toHaveBeenCalledOnce();
-  const preservedGeneration = state.generation;
   options.onEngineReplaced?.(2, 'opened-existing');
-  await host.authority!.current();
-  host.authority!.setReadGuard(async () => {});
   await expect(read()).resolves.toMatchObject({ kind: 'hit' });
-  host.authority!.setReadGuard(proof);
-  await expect(read()).resolves.toMatchObject({ kind: 'hit' });
-  expect(proof).toHaveBeenCalledTimes(2);
-  expect(transitions).toEqual([true, false]);
-  expect(state.generation).toBe(preservedGeneration);
 });
 
 it('broadens unknown or stale pushes to rereads without delivering their field content', async () => {
@@ -147,7 +127,6 @@ it('accepts a current transition after cold host initialization', async () => {
   const result = await host.authority!.transition(state.generation, 'none');
   expect(result.authority).toEqual(state);
   expect(result.changed).toBe(true);
-  await expect(host.authority!.verifyRead()).resolves.toBeUndefined();
 });
 
 it('rejects a late transition reply after a newer owner event', async () => {
@@ -198,49 +177,29 @@ it('rejects a late transition reply after a newer owner event', async () => {
   );
   await rejected;
   expect(host.authority!.snapshot()).toEqual(state);
-  await expect(host.authority!.verifyRead()).rejects.toBeInstanceOf(
-    StaleCacheAuthorityError
-  );
 });
 
-it('keeps a deletion source generation after authority advances before dispatch', async () => {
+it('retains the request generation when a deletion crosses an owner transition', async () => {
   await host.authority!.current();
-  await host.authority!.transition(state.generation, 'none');
   const original = state.generation;
-  const post = vi.spyOn(adapter, 'postMessage');
-  await host.authority!.transition(state.generation, 'changed');
+  await host.authority!.transition(original, 'team:denied');
+  const post = adapter.postMessage;
+  adapter.postMessage = vi.fn((request) => {
+    if (request.kind !== 'delete-records') return post(request);
+    expect(request.generation).toBe(original);
+    queueMicrotask(() =>
+      adapter.onmessage?.(
+        new MessageEvent<WorkerMessage>('message', {
+          data: {
+            id: request.id,
+            ok: false,
+            error: 'cache response belongs to an older session generation',
+          },
+        })
+      )
+    );
+  });
   await expect(
     host.deleteRecords(['GraphqlSoupDocument:one'], original)
   ).rejects.toBeInstanceOf(StaleCacheAuthorityError);
-  expect(post).toHaveBeenCalledWith(
-    expect.objectContaining({
-      kind: 'delete-records',
-      authority: { generation: original, requireProof: false },
-    })
-  );
-});
-
-it('reuses an allowed persisted proof offline across a preserved worker replacement', async () => {
-  state = {
-    ...state,
-    ready: true,
-    policy: '00000000-0000-4000-8000-000000000001:allowed',
-  };
-  const fetchProof = vi.fn(async (): Promise<string> => {
-    throw new Error('offline');
-  });
-  const controller = createCrmAccessAuthority({
-    fetchProof,
-    retire: async () => {},
-  });
-  controller.setSession('viewer');
-  controller.setHost(host.authority);
-  const read = () =>
-    host.readQuery({ query: '{ user { emailThread { id } } }' });
-  await expect(read()).resolves.toMatchObject({ kind: 'hit' });
-  options.onEngineReplaced?.(2, 'opened-existing');
-  await host.authority!.current();
-  await expect(read()).resolves.toMatchObject({ kind: 'hit' });
-  expect(controller.state()).toBe('allowed');
-  expect(fetchProof).not.toHaveBeenCalled();
 });

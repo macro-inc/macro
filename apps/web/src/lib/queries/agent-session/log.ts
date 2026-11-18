@@ -1,3 +1,4 @@
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 /**
  * The session log over GraphQL, through the normalized cache.
  *
@@ -381,6 +382,7 @@ type Appender = {
  * row delivered twice is stored once.
  */
 function createAppender(sessionId: string): Appender {
+  let generation = cacheSessionGeneration.capture();
   let known: Set<string> | undefined;
   let pending: AgentSessionLogEntryDto[] = [];
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -389,8 +391,9 @@ function createAppender(sessionId: string): Appender {
     const rows = pending;
     if (rows.length === 0) return;
     pending = [];
+    if (!cacheSessionGeneration.isCurrent(generation)) return;
     const startedAt = performance.now();
-    void appendAgentSessionLogRows(sessionId, rows).then(
+    void appendAgentSessionLogRows(sessionId, rows, generation).then(
       () => traceCacheWrite(sessionId, startedAt, rows.length),
       (error: unknown) => {
         console.warn('[agent-session] log rows could not be cached', error);
@@ -403,6 +406,13 @@ function createAppender(sessionId: string): Appender {
       timer = undefined;
       write();
     }, CACHE_WRITE_DEBOUNCE_MS);
+  };
+  const currentBatch = () => {
+    const current = cacheSessionGeneration.capture();
+    if (current === generation) return;
+    pending = [];
+    known = undefined;
+    generation = current;
   };
   const remember = (rows: AgentSessionLogEntryDto[]) => {
     if (!known) return false;
@@ -418,12 +428,14 @@ function createAppender(sessionId: string): Appender {
 
   return {
     fetched(rows) {
+      currentBatch();
       known = new Set(rows.map((row) => row.id));
       const held = pending;
       pending = [];
       if (remember(held)) schedule();
     },
     appended(rows) {
+      currentBatch();
       if (!known) {
         pending.push(...rows);
         return;
@@ -449,7 +461,8 @@ const LOG_OPERATION = 'AgentSessionLog';
  */
 async function appendAgentSessionLogRows(
   sessionId: string,
-  rows: AgentSessionLogEntryDto[]
+  rows: AgentSessionLogEntryDto[],
+  generation: string
 ): Promise<void> {
   const host = getGraphqlCacheHost();
   if (!host || rows.length === 0) return;
@@ -477,6 +490,7 @@ async function appendAgentSessionLogRows(
   if (appended.length === 0) return;
   await host.writeQuery({
     ...args,
+    generation,
     data: {
       user: {
         id: data.user.id,

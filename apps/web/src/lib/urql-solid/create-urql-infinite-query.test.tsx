@@ -11,7 +11,6 @@ import { createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fromValue, makeSubject, onEnd, pipe } from 'wonka';
-import { beginQueryAuthorizationReset } from './authorization';
 import { createUrqlInfiniteQuery } from './create-urql-infinite-query';
 import { InfiniteQueryObserver } from './infinite-query-observer';
 
@@ -82,68 +81,6 @@ afterEach(() => {
 });
 
 describe('createUrqlInfiniteQuery', () => {
-  it.each([false, true])(
-    'does not evaluate disabled initial variables (CRM proof paused: %s)',
-    (paused) => {
-      const fake = makeFakeClient();
-      const resume = paused ? beginQueryAuthorizationReset() : () => {};
-      const variables = vi.fn((): Variables => {
-        throw new Error('disabled input is unavailable');
-      });
-      try {
-        createRoot((dispose) => {
-          disposals.push(dispose);
-          createUrqlInfiniteQuery(() => ({
-            client: fake.client,
-            query: DOCUMENT,
-            enabled: false,
-            initialPageParam: null as string | null,
-            variables,
-            getNextPageParam: (page: Page) => page.nextCursor,
-          }));
-          expect(variables).not.toHaveBeenCalled();
-          expect(fake.executions).toHaveLength(0);
-        });
-      } finally {
-        resume();
-      }
-    }
-  );
-  it.each([false, true])(
-    'resolves initial-page variables while CRM proof is paused (CRM association: %s)',
-    (crm) => {
-      const fake = makeFakeClient();
-      const resume = beginQueryAuthorizationReset();
-      try {
-        createRoot((dispose) => {
-          disposals.push(dispose);
-          createUrqlInfiniteQuery(() => ({
-            client: fake.client,
-            query: gql`query Scoped($input: SoupInput!) { user { soup(input: $input) { items { id } } } }`,
-            initialPageParam: 0,
-            variables: () => ({
-              input: {
-                initial: {
-                  filters: {
-                    crmCompanyFilter: {
-                      literal: { id: '00000000-0000-0000-0000-000000000000' },
-                    },
-                    ...(crm
-                      ? { crmAssociation: { companyId: 'company' } }
-                      : {}),
-                  },
-                },
-              },
-            }),
-            getNextPageParam: () => undefined,
-          }));
-          expect(fake.executions).toHaveLength(crm ? 0 : 1);
-        });
-      } finally {
-        resume();
-      }
-    }
-  );
   it('reselects when a live page changes without another result emission', () => {
     const fake = makeFakeClient();
     const [page, setPage] = createStore<Page>({

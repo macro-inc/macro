@@ -1,9 +1,7 @@
-import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { createUrqlMutation } from '@app/lib/urql-solid/create-urql-mutation';
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
 import type { UrqlMutationExecutor } from '@app/lib/urql-solid/types';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
-import { queryNeedsCrmProof } from '@graphql-cache/authority-scope';
 import {
   executeOptimisticMutation,
   optimisticMutationDispositionOf,
@@ -38,11 +36,7 @@ import {
   getGraphqlSoupClient,
   mapGraphqlProperties,
 } from '@service-storage/graphql-soup';
-import {
-  CombinedError,
-  type OperationResult,
-  stringifyDocument,
-} from '@urql/core';
+import { CombinedError, type OperationResult } from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import { v5 as uuidv5 } from 'uuid';
@@ -391,16 +385,10 @@ type EntityPropertyExecution = Parameters<
     SetEntityPropertyMutationVariables,
     GraphqlEntityPropertyMutationInput
   >
->[0] & { authorizationEpoch?: number };
+>[0];
 
 async function executeGraphqlEntityPropertyMutation(
-  {
-    client,
-    mutation,
-    input,
-    context,
-    authorizationEpoch = crmSnapshotAuthorization().epoch,
-  }: EntityPropertyExecution,
+  { client, mutation, input, context }: EntityPropertyExecution,
   onEnqueued?: () => void,
   prepareGrouped?: PrepareGroupedPropertyUpdates
 ) {
@@ -422,7 +410,6 @@ async function executeGraphqlEntityPropertyMutation(
         { setEntityProperty: args.optimisticProperty },
         {
           ...args.optimisticCache,
-          authorizationEpoch,
           uuid: entityPropertyOptimisticMutationUuid(args),
           onEnqueued,
         }
@@ -432,10 +419,7 @@ async function executeGraphqlEntityPropertyMutation(
   if (
     disposition.kind === 'queued' &&
     mutationResult.data == null &&
-    args.optimisticProperty &&
-    !crmSnapshotAuthorization().paused &&
-    crmSnapshotAuthorization().epoch === authorizationEpoch &&
-    !queryNeedsCrmProof(stringifyDocument(mutation), variables)
+    args.optimisticProperty
   ) {
     return {
       ...mutationResult,
@@ -560,9 +544,6 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
     mutation: SetEntityPropertyDocument,
     client: getGraphqlSoupClient(),
     execute: async ({ client, mutation, input, context }) => {
-      // Every item can reuse the submission's copied inputs and grouped pages.
-      // A later item must not relabel them after an earlier enqueue retires.
-      const authorizationEpoch = crmSnapshotAuthorization().epoch;
       let latestResult:
         | OperationResult<
             SetEntityPropertyMutation,
@@ -591,7 +572,6 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
                   mutation,
                   input: { kind: 'save', ...item },
                   context,
-                  authorizationEpoch,
                 },
                 acknowledge,
                 prepareGrouped

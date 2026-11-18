@@ -1,5 +1,4 @@
 use super::*;
-use cache_core::engine::authority::AuthorityAdmission;
 use cache_core::store::Storage;
 use cache_core::value::CacheValue;
 use serde_json::json;
@@ -32,9 +31,9 @@ fn native_legacy_wire_calls_without_authority_preserve_cache_reads_and_writes() 
             "identity": "user-1"
         });
         assert!(wire.get("authority").is_none());
-        let admission: Option<AuthorityAdmission> =
+        let generation: Option<uuid::Uuid> =
             serde_json::from_value(wire["authority"].clone()).unwrap();
-        let legacy = handle.clone().with_authority(admission);
+        let legacy = handle.clone().with_generation(generation);
         legacy
             .write(WriteRequest {
                 origin_op_id: None,
@@ -71,7 +70,7 @@ fn native_legacy_wire_calls_without_authority_preserve_cache_reads_and_writes() 
 }
 
 #[test]
-fn native_permission_boundary_rejects_old_reads_and_writes_but_settles_authored_commands() {
+fn native_generation_boundary_rejects_old_writes_but_settles_authored_commands() {
     block_on(async {
         let handle = spawn_handle();
         bind(&handle).await;
@@ -81,11 +80,7 @@ fn native_permission_boundary_rejects_old_reads_and_writes_but_settles_authored_
             .await
             .unwrap()
             .authority;
-        let old = handle
-            .clone()
-            .with_authority(Some(AuthorityAdmission::protected(Some(
-                allowed.generation,
-            ))));
+        let old = handle.clone().with_generation(Some(allowed.generation));
         let denied = handle
             .transition_authority("profile", allowed.generation, "team:denied".into())
             .await
@@ -100,7 +95,7 @@ fn native_permission_boundary_rejects_old_reads_and_writes_but_settles_authored_
                 vec![]
             )
             .await
-            .is_err()
+            .is_ok()
         );
         let query = "mutation Save($input: SaveEmailDraftInput!) { saveEmailDraft(input: $input) { thread { __typename id emailName: name } } }";
         let data = json!({"saveEmailDraft":{"thread":{"__typename":"GraphqlSoupEmailThread","id":"server-thread","emailName":"retired subject"}}});
@@ -108,15 +103,7 @@ fn native_permission_boundary_rejects_old_reads_and_writes_but_settles_authored_
             .as_object()
             .unwrap()
             .clone();
-        for (index, admitted) in [
-            old,
-            handle
-                .clone()
-                .with_authority(Some(AuthorityAdmission::protected(None))),
-        ]
-        .into_iter()
-        .enumerate()
-        {
+        for (index, admitted) in [old].into_iter().enumerate() {
             assert!(
                 admitted
                     .read(
@@ -127,7 +114,7 @@ fn native_permission_boundary_rejects_old_reads_and_writes_but_settles_authored_
                         vec![]
                     )
                     .await
-                    .is_err()
+                    .is_ok()
             );
             assert!(
                 admitted
@@ -203,9 +190,7 @@ fn native_permission_boundary_rejects_old_reads_and_writes_but_settles_authored_
                 .is_none_or(|row| !row.fields.contains_key("name"))
         );
         drop(state);
-        let current = handle
-            .clone()
-            .with_authority(Some(AuthorityAdmission::protected(Some(denied.generation))));
+        let current = handle.clone().with_generation(Some(denied.generation));
         assert!(
             current
                 .read(
@@ -255,11 +240,7 @@ fn native_authoritative_mutations_keep_unrelated_property_ownership_without_pare
             .await
             .unwrap()
             .authority;
-        let writer = handle
-            .clone()
-            .with_authority(Some(AuthorityAdmission::protected(Some(
-                allowed.generation,
-            ))));
+        let writer = handle.clone().with_generation(Some(allowed.generation));
         for (id, kind) in [
             ("doc-property", "DOCUMENT"),
             ("calendar-property", "CALENDAR_EVENT"),
@@ -316,9 +297,8 @@ fn native_first_non_denied_proof_preserves_offline_mail() {
                 .transition_authority("profile", before.generation, policy.into())
                 .await
                 .unwrap();
-            let admitted = handle.with_authority(Some(AuthorityAdmission::protected(Some(
-                allowed.authority.generation,
-            ))));
+            assert_eq!(allowed.authority.generation, before.generation);
+            let admitted = handle.with_generation(Some(allowed.authority.generation));
             assert!(
                 matches!(admitted.read(None, query.into(), None, Variables::new(), vec![]).await.unwrap(), ReadResultWire::Hit { data: cached } if cached == data)
             );

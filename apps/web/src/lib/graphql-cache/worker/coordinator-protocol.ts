@@ -517,19 +517,14 @@ const commonRequest = (record: UnknownRecord): boolean =>
 /** Strictly validates a cache RPC request nested in a coordinator envelope. */
 export function isCacheRequest(value: unknown): value is CacheRequest {
   if (!isRecord(value) || !commonRequest(value)) return false;
-  if (Object.hasOwn(value, 'authority')) {
-    const { authority, ...request } = value;
-    if (
-      authority !== undefined &&
-      (!isRecord(authority) ||
-        !hasOnlyKeys(authority, ['generation', 'requireProof']) ||
-        (authority.generation !== undefined &&
-          (typeof authority.generation !== 'string' ||
-            !/^[0-9a-f-]{36}$/.test(authority.generation))) ||
-        typeof authority.requireProof !== 'boolean')
-    )
-      return false;
-    return isCacheRequest(request);
+  if (Object.hasOwn(value, 'generation')) {
+    const { generation, ...request } = value;
+    return (
+      (generation === undefined ||
+        (typeof generation === 'string' &&
+          /^[0-9a-f-]{36}$/.test(generation))) &&
+      isCacheRequest(request)
+    );
   }
   switch (value.kind) {
     case 'current-authority':

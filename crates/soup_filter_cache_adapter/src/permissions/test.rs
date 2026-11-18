@@ -753,10 +753,12 @@ fn first_non_denied_proof_preserves_legacy_offline_snapshots() {
                 engine.storage().get_batch(&keys).await.unwrap(),
                 rows.into_iter().map(Some).collect::<Vec<_>>()
             );
-            engine
-                .check_authority_generation(Some(allowed.authority.generation), true)
-                .await
-                .unwrap();
+            assert!(
+                engine
+                    .snapshot_is_current(Some(allowed.authority.generation))
+                    .await
+                    .unwrap()
+            );
             let denied = transition_crm_authority(
                 &mut engine,
                 "profile",

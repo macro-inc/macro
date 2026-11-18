@@ -1894,7 +1894,7 @@ impl CacheEngine {
         lease_expires_at_ms: f64,
         client_metadata: JsValue,
         uncertain_calendar_event_keys: JsValue,
-        authority: JsValue,
+        generation: Option<String>,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
@@ -1905,11 +1905,10 @@ impl CacheEngine {
             let client_metadata: Option<serde_json::Value> =
                 serde_wasm_bindgen::from_value(client_metadata).map_err(err_js)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let authority = serde_wasm_bindgen::from_value::<
-                Option<cache_core::engine::authority::AuthorityAdmission>,
-            >(authority)
-            .map_err(err_js)?
-            .unwrap_or_else(|| cache_core::engine::authority::AuthorityAdmission::protected(None));
+            let generation = generation
+                .map(|value| value.parse::<uuid::Uuid>())
+                .transpose()
+                .map_err(err_js)?;
             let client_metadata = soup_filter_cache_adapter::permissions::legacy_draft_metadata(
                 client_metadata,
                 &data,
@@ -1917,9 +1916,9 @@ impl CacheEngine {
             );
             let admitted = state
                 .engine_mut()?
-                .check_authority_generation(authority.generation, authority.require_proof)
+                .snapshot_is_current(generation)
                 .await
-                .is_ok();
+                .map_err(err_js)?;
             let data = if admitted {
                 data
             } else {
@@ -2000,22 +1999,27 @@ impl CacheEngine {
                 operation_name: operation_name.as_deref(),
                 variables: &vars,
                 data: &data,
-                link_patches: &link_patches,
-                revalidations: &revalidations,
+                link_patches: if admitted { &link_patches } else { &[] },
+                revalidations: if admitted { &revalidations } else { &[] },
                 created_at_ms,
                 identity_bindings: &identity_bindings,
             };
             let result = state
                 .engine_mut()?
-                .enqueue_optimistic_mutation_in_authority(
+                .enqueue_optimistic_mutation_with_calendar(
                     origin,
                     input,
                     claim,
-                    cache_core::engine::authority::OptimisticEffects {
-                        projections: projection_mutations,
-                        uncertain_calendar_event_keys,
+                    if admitted {
+                        projection_mutations
+                    } else {
+                        Vec::new()
                     },
-                    authority,
+                    if admitted {
+                        uncertain_calendar_event_keys
+                    } else {
+                        Vec::new()
+                    },
                 )
                 .await;
             let result = state.engine_result(result)?;
@@ -2195,7 +2199,7 @@ impl CacheEngine {
         operation_name: Option<String>,
         variables: JsValue,
         data: JsValue,
-        authority: JsValue,
+        generation: Option<String>,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
@@ -2209,16 +2213,15 @@ impl CacheEngine {
             };
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let authority = serde_wasm_bindgen::from_value::<
-                Option<cache_core::engine::authority::AuthorityAdmission>,
-            >(authority)
-            .map_err(err_js)?
-            .unwrap_or_else(|| cache_core::engine::authority::AuthorityAdmission::protected(None));
+            let generation = generation
+                .map(|value| value.parse::<uuid::Uuid>())
+                .transpose()
+                .map_err(err_js)?;
             let admitted = state
                 .engine_mut()?
-                .check_authority_generation(authority.generation, authority.require_proof)
+                .snapshot_is_current(generation)
                 .await
-                .is_ok();
+                .map_err(err_js)?;
             let projection_data = if admitted {
                 data.clone()
             } else {
@@ -2270,7 +2273,7 @@ impl CacheEngine {
             .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
-                .commit_optimistic_write_in_authority(
+                .settle_optimistic_response(
                     transaction,
                     claim,
                     NetworkWrite {
@@ -2281,7 +2284,7 @@ impl CacheEngine {
                         identity: None,
                     },
                     projections,
-                    authority,
+                    admitted,
                 )
                 .await;
             let result = state.engine_result(result)?;

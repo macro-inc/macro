@@ -1,13 +1,7 @@
-import {
-  queryExposesSoupCursors,
-  rememberSoupContinuations,
-} from '../authority-scope';
 import type { PeopleCache } from '../people/host';
 import { PEOPLE_UNSUPPORTED } from '../people/protocol';
-import type { QueryUpdate, ReadResult } from '../protocol';
-import { sourceAuthorityGeneration } from '../source-authority';
 import { createNoopCacheHost } from './noop-host';
-import type { CacheHost, CacheReadArgs } from './types';
+import type { CacheHost } from './types';
 
 type RetainedCacheHost = { host: CacheHost; release: () => void };
 const retainers = new WeakMap<CacheHost, () => RetainedCacheHost | undefined>();
@@ -33,49 +27,6 @@ export function retainCacheHost(
 export function createRetirableCacheHost(inner: CacheHost): CacheHost {
   let current = inner;
   let retained = 0;
-  let generation = 0;
-  const stopGeneration = inner.onCacheGenerationChanged(() => generation++);
-  const prepareCursorRead = <Args extends CacheReadArgs>(
-    args: Args,
-    source: CacheHost
-  ) => {
-    // Match the existing worker/native JSON boundary, including proxy-backed
-    // variables. Dispatch and observation must share these exact values.
-    const request = {
-      ...args,
-      variables:
-        args.variables === undefined
-          ? undefined
-          : JSON.parse(JSON.stringify(args.variables)),
-    };
-    const owner = source.authority;
-    const readGeneration = generation;
-    const observe = <T extends ReadResult | QueryUpdate>(result: T): T => {
-      const state = owner?.snapshot();
-      if (
-        !owner ||
-        !state?.account ||
-        result.kind !== 'hit' ||
-        sourceAuthorityGeneration(result) !== state.generation
-      )
-        return result;
-      const isCurrent = () => {
-        const latest = owner.snapshot();
-        return (
-          current === source &&
-          !source.disabled &&
-          source.authority === owner &&
-          generation === readGeneration &&
-          latest?.identity === state.identity &&
-          latest.account === state.account &&
-          latest.generation === state.generation
-        );
-      };
-      rememberSoupContinuations(request, result.data, state.account, isCurrent);
-      return result;
-    };
-    return { request, observe };
-  };
   // Resolve the current host at dispatch, including for methods captured before
   // retirement. A retired publisher must never acknowledge a dropped write.
   const people: PeopleCache | undefined = inner.people
@@ -84,10 +35,10 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
           if (!current.people) return { kind: 'unsupported' };
           return current.people.snapshot(request);
         },
-        async reconcile(request) {
+        async reconcile(request, generation) {
           if (!current.people)
             throw new Error('Contact reconciliation is unsupported');
-          return current.people.reconcile(request);
+          return current.people.reconcile(request, generation);
         },
         async readSql(request) {
           if (!current.people) return { kind: 'unsupported' };
@@ -101,9 +52,9 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
           if (!current.people) return { kind: 'unsupported' };
           return current.people.context(scope);
         },
-        async update(update) {
+        async update(update, generation) {
           if (!current.people) throw new Error(PEOPLE_UNSUPPORTED);
-          return current.people.update(update);
+          return current.people.update(update, generation);
         },
         async search(request) {
           if (!current.people) return { kind: 'unsupported' };
@@ -125,40 +76,15 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
     },
     currentRevision: () => current.currentRevision(),
     currentStorageGeneration: () => current.currentStorageGeneration(),
-    readQuery: (args) => {
-      const source = current;
-      if (
-        !source.authority ||
-        !queryExposesSoupCursors(args.query, args.operationName)
-      )
-        return source.readQuery(args);
-      try {
-        const { request, observe } = prepareCursorRead(args, source);
-        return source.readQuery(request).then(observe);
-      } catch (error) {
-        return Promise.reject(error);
-      }
-    },
-    watchQuery: (args) => {
-      const source = current;
-      if (!source.watchQuery) return Promise.resolve({ kind: 'unsupported' });
-      if (
-        !source.authority ||
-        !queryExposesSoupCursors(args.query, args.operationName)
-      )
-        return source.watchQuery(args);
-      try {
-        const { request, observe } = prepareCursorRead(args, source);
-        return source.watchQuery(request).then(observe);
-      } catch (error) {
-        return Promise.reject(error);
-      }
-    },
+    readQuery: (args) => current.readQuery(args),
+    watchQuery: (args) =>
+      current.watchQuery?.(args) ?? Promise.resolve({ kind: 'unsupported' }),
     readRecordsByKeys: (args) => current.readRecordsByKeys(args),
     search: (args, options) => current.search(args, options),
     entityFilter: (args) => current.entityFilter(args),
     calendarRange: (args) => current.calendarRange(args),
-    calendarCommit: (args) => current.calendarCommit(args),
+    calendarCommit: (args, generation) =>
+      current.calendarCommit(args, generation),
     writeQuery: (args) => current.writeQuery(args),
     hydrateQuery: (args) => current.hydrateQuery(args),
     enqueueOptimisticMutation: (args, claim) =>
@@ -189,13 +115,10 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
     rollbackOptimisticWrite: (transactionId, claim, error, errorCode) =>
       current.rollbackOptimisticWrite(transactionId, claim, error, errorCode),
     invalidate: (keys) => current.invalidate(keys),
-    deleteRecords: (keys, authorityGeneration) =>
-      current.deleteRecords(keys, authorityGeneration),
+    deleteRecords: (keys, generation) =>
+      current.deleteRecords(keys, generation),
     teardown: (opKey) => current.teardown(opKey),
-    clear: () => {
-      generation++;
-      return current.clear();
-    },
+    clear: () => current.clear(),
     onOpsAffected: (cb) =>
       current.onOpsAffected((...args) => {
         if (current === inner) cb(...args);
@@ -214,7 +137,6 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
       }),
     dispose() {
       if (current !== inner) return;
-      stopGeneration();
       current = createNoopCacheHost();
       if (retained === 0) inner.dispose();
     },

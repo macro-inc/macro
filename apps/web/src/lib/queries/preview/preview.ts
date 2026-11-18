@@ -25,7 +25,6 @@ import {
   createGraphqlItemPreviewQuery,
   getGraphqlItemPreview,
   isGraphqlPreviewItem,
-  previewNeedsCrmProof,
   setGraphqlPreviewFileType,
   setGraphqlPreviewName,
   setGraphqlPreviewOnCreate,
@@ -97,7 +96,7 @@ function itemPreviewQueryOptions(
 
 function previewDenied(item: ItemEntity): boolean {
   return (
-    (crmSnapshotAuthorization().paused && previewNeedsCrmProof(item)) ||
+    crmSnapshotAuthorization().paused ||
     (!crmAccessAllowed() &&
       (item.type === 'crm_company' || item.type === 'crm_contact'))
   );

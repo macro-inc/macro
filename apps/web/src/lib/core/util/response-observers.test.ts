@@ -6,26 +6,20 @@ import {
 } from './response-observers';
 
 describe('response permission guards', () => {
-  it('awaits source capture before the caller dispatches the request', async () => {
-    let finish!: () => void;
+  it('captures a generation synchronously before the caller dispatches', () => {
     let captured = false;
-    const stop = registerResponseObserver(async () => {
-      await new Promise<void>((resolve) => {
-        finish = resolve;
-      });
+    const stop = registerResponseObserver(() => {
       captured = true;
       return (response) => response;
     });
-    const preparing = prepareResponseObservers('https://example.com');
-    expect(captured).toBe(false);
-    finish();
-    await preparing;
+    const guard = prepareResponseObservers('https://example.com');
     expect(captured).toBe(true);
+    expect(guard).not.toBeInstanceOf(Promise);
     stop();
   });
   it('rejects a response whose body finishes after revocation, including clones', async () => {
     let current = true;
-    const guard = async () => {
+    const guard = () => {
       if (!current) throw new Error('revoked');
     };
     const response = guardResponseBody(

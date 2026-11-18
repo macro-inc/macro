@@ -3,6 +3,19 @@ use crate::store::InMemoryStorage;
 use pollster::block_on;
 use serde_json::json;
 
+impl<S: Storage> Engine<S> {
+    async fn check_snapshot_generation(
+        &mut self,
+        generation: Option<Uuid>,
+    ) -> Result<(), EngineError<S::Error>> {
+        if self.snapshot_is_current(generation).await? {
+            Ok(())
+        } else {
+            Err(EngineError::StaleAuthority)
+        }
+    }
+}
+
 #[test]
 fn retirement_strips_projection_only_sources_and_preserves_other_queued_owners() {
     block_on(async {
@@ -120,7 +133,7 @@ fn stale_success_settles_the_command_and_identity_without_restoring_its_response
             revalidation_variables: vec![],
         };
         let queued = engine
-            .enqueue_optimistic_mutation_in_authority(
+            .enqueue_optimistic_mutation_in_generation(
                 None,
                 BeginOptimisticWrite {
                     client_metadata: None,
@@ -140,7 +153,7 @@ fn stale_success_settles_the_command_and_identity_without_restoring_its_response
                     lease_expires_at_ms: 100,
                 },
                 OptimisticEffects::default(),
-                AuthorityAdmission::protected(Some(allowed.authority.generation)),
+                Some(allowed.authority.generation),
             )
             .await
             .unwrap();
@@ -167,7 +180,7 @@ fn stale_success_settles_the_command_and_identity_without_restoring_its_response
             original
         );
         let result = engine
-            .commit_optimistic_write_in_authority(
+            .commit_optimistic_write_in_generation(
                 queued.transaction_id,
                 MutationClaimToken {
                     owner: "client-a".into(),
@@ -181,7 +194,7 @@ fn stale_success_settles_the_command_and_identity_without_restoring_its_response
                     identity: Some("viewer"),
                 },
                 vec![],
-                AuthorityAdmission::protected(Some(allowed.authority.generation)),
+                Some(allowed.authority.generation),
             )
             .await
             .unwrap();
@@ -214,7 +227,7 @@ fn stale_success_settles_the_command_and_identity_without_restoring_its_response
         assert!(!format!("{rows:?}").contains("private"));
         assert!(rows[2].is_none());
         engine
-            .check_authority(Some(denied.authority.generation))
+            .check_snapshot_generation(Some(denied.authority.generation))
             .await
             .unwrap();
     });
@@ -230,7 +243,7 @@ fn an_old_windows_enqueue_keeps_authored_variables_but_no_copied_snapshot() {
             .await
             .unwrap();
         let variables = json!({"input":{"threadId":"thread","bodyText":"authored reply"}});
-        engine.enqueue_optimistic_mutation_in_authority(
+        engine.enqueue_optimistic_mutation_in_generation(
             None,
             BeginOptimisticWrite {
                 client_metadata: None, identity_bindings: &[],
@@ -241,7 +254,7 @@ fn an_old_windows_enqueue_keeps_authored_variables_but_no_copied_snapshot() {
                 link_patches: &[], revalidations: &[], created_at_ms: 1,
             },
             MutationClaimRequest { owner: "client-a".into(), now_ms: 2, lease_expires_at_ms: 100 },
-            OptimisticEffects::default(), AuthorityAdmission::protected(Some(initial.generation)),
+            OptimisticEffects::default(), Some(initial.generation),
         ).await.unwrap();
         let queued = engine.storage().load_mutation_queue().await.unwrap();
         assert_eq!(queued.len(), 1);
@@ -269,9 +282,9 @@ fn another_clients_older_proof_cannot_restore_revoked_authority() {
         let initial = engine.current_authority("viewer").await.unwrap();
         assert!(
             engine
-                .check_authority(Some(initial.generation))
+                .check_snapshot_generation(Some(initial.generation))
                 .await
-                .is_err()
+                .is_ok()
         );
         let allowed = engine
             .transition_authority("viewer", initial.generation, "team:allowed".into(), &[])
@@ -288,8 +301,13 @@ fn another_clients_older_proof_cannot_restore_revoked_authority() {
             .transition_authority("viewer", earlier_request, "team:denied".into(), &[])
             .await
             .unwrap();
-        assert!(engine.check_authority(Some(earlier_request)).await.is_err());
-        assert!(engine.check_authority(None).await.is_err());
+        assert!(
+            engine
+                .check_snapshot_generation(Some(earlier_request))
+                .await
+                .is_err()
+        );
+        assert!(engine.check_snapshot_generation(None).await.is_ok());
         assert!(matches!(
             engine
                 .transition_authority("viewer", earlier_request, "team:allowed".into(), &[])
@@ -310,7 +328,7 @@ fn another_clients_older_proof_cannot_restore_revoked_authority() {
             .await
             .unwrap();
         engine
-            .check_authority(Some(granted.authority.generation))
+            .check_snapshot_generation(Some(granted.authority.generation))
             .await
             .unwrap();
         assert!(engine.current_authority("another-viewer").await.is_err());
@@ -371,7 +389,7 @@ fn retirement_removes_raw_children_and_preserves_unrelated_offline_records() {
             storage_generation
         );
         engine
-            .check_authority(Some(result.authority.generation))
+            .check_snapshot_generation(Some(result.authority.generation))
             .await
             .unwrap();
     });
@@ -407,15 +425,15 @@ fn reopening_an_interrupted_retirement_stays_closed_until_it_is_retried() {
         let mut reopened = Engine::new(engine.into_storage());
         assert!(
             reopened
-                .check_authority(Some(allowed.authority.generation))
+                .check_snapshot_generation(Some(allowed.authority.generation))
                 .await
                 .is_err()
         );
         assert!(
             reopened
-                .check_authority(Some(pending.generation))
+                .check_snapshot_generation(Some(pending.generation))
                 .await
-                .is_err()
+                .is_ok()
         );
         let observed = reopened.current_authority("viewer").await.unwrap();
         assert_eq!(observed, pending);
@@ -429,7 +447,7 @@ fn reopening_an_interrupted_retirement_stays_closed_until_it_is_retried() {
             .await
             .unwrap();
         reopened
-            .check_authority(Some(completed.authority.generation))
+            .check_snapshot_generation(Some(completed.authority.generation))
             .await
             .unwrap();
         assert!(matches!(
@@ -490,12 +508,12 @@ fn legacy_identity_hydrates_the_account_without_creating_a_permission_proof() {
         assert!(authority.policy.is_none());
         assert!(
             reopened
-                .check_authority(Some(authority.generation))
+                .check_snapshot_generation(Some(authority.generation))
                 .await
-                .is_err()
+                .is_ok()
         );
         reopened
-            .check_authority_generation(Some(authority.generation), false)
+            .check_snapshot_generation(Some(authority.generation))
             .await
             .unwrap();
         assert!(matches!(
@@ -526,7 +544,7 @@ fn an_account_witness_cannot_be_confused_with_the_physical_cache_profile() {
         engine.bind_identity("first-account").await.unwrap();
         assert!(
             engine
-                .check_authority(Some(allowed.generation))
+                .check_snapshot_generation(Some(allowed.generation))
                 .await
                 .is_err()
         );
@@ -549,9 +567,9 @@ fn an_account_witness_cannot_be_confused_with_the_physical_cache_profile() {
         let mut reopened = Engine::new(engine.into_storage());
         assert!(
             reopened
-                .check_authority(Some(accepted.generation))
+                .check_snapshot_generation(Some(accepted.generation))
                 .await
-                .is_err()
+                .is_ok()
         );
         assert_eq!(
             reopened
@@ -561,7 +579,7 @@ fn an_account_witness_cannot_be_confused_with_the_physical_cache_profile() {
             accepted
         );
         reopened
-            .check_authority(Some(accepted.generation))
+            .check_snapshot_generation(Some(accepted.generation))
             .await
             .unwrap();
         reopened
@@ -577,7 +595,7 @@ fn an_account_witness_cannot_be_confused_with_the_physical_cache_profile() {
             .unwrap();
         assert!(
             reopened
-                .check_authority(Some(accepted.generation))
+                .check_snapshot_generation(Some(accepted.generation))
                 .await
                 .is_err()
         );
@@ -615,9 +633,9 @@ fn binding_an_account_preserves_unfinished_retirement() {
         assert!(!resumed.ready);
         assert!(
             reopened
-                .check_authority_generation(Some(resumed.generation), true)
+                .check_snapshot_generation(Some(resumed.generation))
                 .await
-                .is_err()
+                .is_ok()
         );
         reopened
             .complete_authority_transition(resumed)
@@ -658,7 +676,7 @@ fn retired_calendar_create_can_select_its_committed_identity_without_response_co
             revalidation_variables: vec![],
         };
         let queued = engine
-            .enqueue_optimistic_mutation_in_authority(
+            .enqueue_optimistic_mutation_in_generation(
                 None,
                 BeginOptimisticWrite {
                     client_metadata: None,
@@ -680,7 +698,7 @@ fn retired_calendar_create_can_select_its_committed_identity_without_response_co
                     lease_expires_at_ms: 100,
                 },
                 OptimisticEffects::default(),
-                AuthorityAdmission::protected(Some(allowed.authority.generation)),
+                Some(allowed.authority.generation),
             )
             .await
             .unwrap();
@@ -692,7 +710,7 @@ fn retired_calendar_create_can_select_its_committed_identity_without_response_co
             .await
             .unwrap();
         let result = engine
-            .commit_optimistic_write_in_authority(
+            .commit_optimistic_write_in_generation(
                 queued.transaction_id,
                 MutationClaimToken {
                     owner: "client".into(),
@@ -706,7 +724,7 @@ fn retired_calendar_create_can_select_its_committed_identity_without_response_co
                     identity: Some("viewer"),
                 },
                 vec![],
-                AuthorityAdmission::protected(Some(allowed.authority.generation)),
+                Some(allowed.authority.generation),
             )
             .await
             .unwrap();

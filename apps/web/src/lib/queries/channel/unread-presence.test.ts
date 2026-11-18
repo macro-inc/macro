@@ -1,4 +1,4 @@
-import { cacheAuthorityExchange } from '@graphql-cache/exchange/authority-exchange';
+import { cacheSessionExchange } from '@graphql-cache/exchange/session-exchange';
 import { ChannelUnreadPresenceDocument } from '@service-storage/graphql/generated/graphql';
 import { createClient, type Operation, type OperationResult } from '@urql/core';
 import { createRoot } from 'solid-js';
@@ -27,7 +27,7 @@ function setup() {
   const client = createClient({
     url: 'http://test/graphql',
     exchanges: [
-      cacheAuthorityExchange,
+      cacheSessionExchange,
       () => (ops) => {
         pipe(
           ops,
@@ -75,13 +75,9 @@ describe('channel unread presence query', () => {
       );
       expect(f.operations[0].query).toEqual(ChannelUnreadPresenceDocument);
       f.respond('UNSEEN');
-      await vi.waitFor(() =>
-        expect(f.query.data).toEqual([{ id: 'one', state: 'UNSEEN' }])
-      );
+      expect(f.query.data).toEqual([{ id: 'one', state: 'UNSEEN' }]);
       f.respond('SEEN');
-      await vi.waitFor(() =>
-        expect(f.query.data).toEqual([{ id: 'one', state: 'SEEN' }])
-      );
+      expect(f.query.data).toEqual([{ id: 'one', state: 'SEEN' }]);
       expect(getChannelListRevalidations()).toEqual([
         {
           document: ChannelUnreadPresenceDocument,
@@ -117,9 +113,7 @@ describe('channel unread presence query', () => {
         { requestPolicy: 'network-only' }
       );
       f.respond('SEEN');
-      await vi.waitFor(() =>
-        expect(f.query.data).toEqual([{ id: 'one', state: 'SEEN' }])
-      );
+      expect(f.query.data).toEqual([{ id: 'one', state: 'SEEN' }]);
     } finally {
       visible.mockRestore();
       f.dispose();

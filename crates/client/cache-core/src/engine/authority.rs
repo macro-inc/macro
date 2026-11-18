@@ -1,6 +1,6 @@
 //! Durable permission generations shared by all clients of one cache owner.
 //!
-//! Hosts hold their existing engine lock across admission and execution. Policy
+//! Hosts hold their existing engine lock across snapshot writes and retirement. Policy
 //! values are opaque here; the application obtains them from its server.
 
 use super::*;
@@ -32,18 +32,6 @@ pub struct CacheAuthority {
     pub ready: bool,
 }
 
-/// Captured permission scope for one cache operation.
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-#[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AuthorityAdmission {
-    /// Missing generations never authorize content from an older client.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub generation: Option<Uuid>,
-    /// Unrelated offline work can proceed before the first server proof.
-    pub require_proof: bool,
-}
-
 /// Shared browser/native transport for a completed permission transition.
 #[derive(Debug, serde::Serialize)]
 #[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
@@ -64,19 +52,8 @@ pub struct AuthorityTransitionWire {
 pub fn transport_schemas() -> serde_json::Value {
     serde_json::json!({"schemas": {
         "CacheAuthority": schemars::schema_for!(CacheAuthority),
-        "AuthorityAdmission": schemars::schema_for!(AuthorityAdmission),
         "AuthorityTransition": schemars::schema_for!(AuthorityTransitionWire),
     }})
-}
-
-impl AuthorityAdmission {
-    /// A protected operation always requires completed permission retirement.
-    pub fn protected(generation: Option<Uuid>) -> Self {
-        Self {
-            generation,
-            require_proof: true,
-        }
-    }
 }
 
 /// A completed transition also invalidates every retained incremental view.
@@ -93,8 +70,9 @@ pub struct AuthorityTransition {
 }
 
 /// Derived optimistic state that must share the response's permission scope.
+#[cfg(test)]
 #[derive(Default)]
-pub struct OptimisticEffects {
+struct OptimisticEffects {
     /// Predicate/projection shadows derived from the optimistic response.
     pub projections: Vec<OptimisticProjectionMutation>,
     /// Calendar occurrences invalidated by that response's optimistic changes.
@@ -102,7 +80,9 @@ pub struct OptimisticEffects {
 }
 
 impl<S: Storage> Engine<S> {
-    async fn stored_authority(&self) -> Result<Option<CacheAuthority>, EngineError<S::Error>> {
+    pub(super) async fn stored_authority(
+        &self,
+    ) -> Result<Option<CacheAuthority>, EngineError<S::Error>> {
         if let Some(authority) = self.authority.get() {
             return Ok(authority.clone());
         }
@@ -119,6 +99,17 @@ impl<S: Storage> Engine<S> {
         });
         let _ = self.authority.set(authority.clone());
         Ok(authority)
+    }
+
+    /// A durable cleanup interrupted by storage or process failure.
+    /// Owners finish it before returning cached content after reopening.
+    pub async fn unfinished_retirement(
+        &self,
+    ) -> Result<Option<CacheAuthority>, EngineError<S::Error>> {
+        Ok(self
+            .stored_authority()
+            .await?
+            .filter(|state| !state.ready && state.policy.is_some()))
     }
 
     async fn store_authority(
@@ -144,7 +135,7 @@ impl<S: Storage> Engine<S> {
     }
 
     /// Capture the shared generation before requesting permission or content.
-    /// An unknown scope does not authorize protected reads. This does not bind
+    /// This does not gate reads or start a server proof, bind
     /// another account or clear any records, drafts, or queued commands.
     pub async fn current_authority(
         &mut self,
@@ -177,65 +168,34 @@ impl<S: Storage> Engine<S> {
         Ok(authority)
     }
 
-    /// Check immediately before reading or installing protected content, under
-    /// the same owner lock as the operation. A missing token never admits data.
-    #[cfg(test)]
-    async fn check_authority(&self, generation: Option<Uuid>) -> Result<(), EngineError<S::Error>> {
-        self.check_authority_generation(generation, true).await
-    }
-
-    /// Admit an operation in the captured generation. Unrelated offline reads
-    /// may use an unknown policy; protected reads require a completed proof.
-    pub async fn check_authority_generation(
-        &self,
+    /// Compare a response generation under the same owner lock as its write.
+    /// Reads and network requests never wait for permission proof or readiness.
+    pub async fn snapshot_is_current(
+        &mut self,
         generation: Option<Uuid>,
-        require_proof: bool,
-    ) -> Result<(), EngineError<S::Error>> {
-        match self.stored_authority().await? {
-            Some(authority)
-                if (!require_proof || authority.ready)
-                    && self.authority_matches_account(&authority)
-                    && Some(authority.generation) == generation =>
-            {
-                Ok(())
-            }
-            _ => Err(EngineError::StaleAuthority),
-        }
-    }
-
-    fn authority_matches_account(&self, authority: &CacheAuthority) -> bool {
-        match &self.identity {
-            IdentityState::NotHydrated => false,
-            IdentityState::Missing => authority.account.is_none(),
-            IdentityState::Bound(account) => authority.account.as_ref() == Some(account),
-        }
-    }
-
-    async fn can_publish_authority(
-        &self,
-        admission: &AuthorityAdmission,
     ) -> Result<bool, EngineError<S::Error>> {
-        match self
-            .check_authority_generation(admission.generation, admission.require_proof)
-            .await
-        {
-            Ok(()) => Ok(true),
-            Err(EngineError::StaleAuthority) => Ok(false),
-            Err(error) => Err(error),
-        }
+        let Some(generation) = generation else {
+            return Ok(true);
+        };
+        let account = self.current_identity().await?;
+        Ok(self
+            .stored_authority()
+            .await?
+            .is_some_and(|state| state.generation == generation && state.account == account))
     }
 
     /// Keep an authored command from an older window without letting its copied
     /// response, link recipes, or projection shadows restore retired content.
-    pub async fn enqueue_optimistic_mutation_in_authority(
+    #[cfg(test)]
+    async fn enqueue_optimistic_mutation_in_generation(
         &mut self,
         origin_op: Option<OpId>,
         input: BeginOptimisticWrite<'_>,
         claim: MutationClaimRequest,
         mut effects: OptimisticEffects,
-        admission: AuthorityAdmission,
+        generation: Option<Uuid>,
     ) -> Result<EnqueueOptimisticMutationResult<EngineError<S::Error>>, EngineError<S::Error>> {
-        let accepted = self.can_publish_authority(&admission).await?;
+        let accepted = self.snapshot_is_current(generation).await?;
         let empty = Json::Object(Default::default());
         let input = BeginOptimisticWrite {
             data: if accepted { input.data } else { &empty },
@@ -260,15 +220,16 @@ impl<S: Storage> Engine<S> {
     /// Settle a successful server command even if permission changed while its
     /// response was pending. Stale content is discarded; canonical identities
     /// and queue settlement remain atomic and durable.
-    pub async fn commit_optimistic_write_in_authority(
+    #[cfg(test)]
+    async fn commit_optimistic_write_in_generation(
         &mut self,
         transaction: OptimisticTransactionId,
         claim: MutationClaimToken,
         response: NetworkWrite<'_>,
         projections: Vec<ProjectionMutation>,
-        admission: AuthorityAdmission,
+        generation: Option<Uuid>,
     ) -> Result<CommitOptimisticWriteResult, EngineError<S::Error>> {
-        let publish_snapshot = self.can_publish_authority(&admission).await?;
+        let publish_snapshot = self.snapshot_is_current(generation).await?;
         self.settle_optimistic_response(transaction, claim, response, projections, publish_snapshot)
             .await
     }
@@ -292,72 +253,6 @@ impl<S: Storage> Engine<S> {
                     .any(|mutation| requested(&EntityKey(mutation.record_key().as_str().into())))
         })
         .await
-    }
-
-    /// Application-owned selection of copied optimistic content. The selector
-    /// may preserve authored recovery metadata before the response is retired.
-    /// It must not copy protected response content into that metadata.
-    pub async fn retire_optimistic_snapshots_where(
-        &mut self,
-        mut selected: impl FnMut(&QueuedMutation, &mut OptimisticSource) -> bool + maybe_send::MaybeSend,
-    ) -> Result<WriteResult, EngineError<S::Error>> {
-        self.ensure_revision_can_advance()?;
-        self.hydrate_optimistic().await?;
-        let mut queued = self
-            .storage
-            .load_mutation_queue()
-            .await
-            .map_err(EngineError::Storage)?;
-        let mut retired_projection_owners = BTreeSet::new();
-        for entry in &mut queued {
-            let mut source = decode_optimistic_source(&entry.optimistic.optimistic_data_json)
-                .map_err(|detail| EngineError::InvalidQueuedMutation {
-                    id: entry.id,
-                    detail,
-                })?;
-            if !selected(entry, &mut source) {
-                continue;
-            }
-            source.mutation_data = Json::Object(Default::default());
-            source.link_patches.clear();
-            source.revalidations.clear();
-            source.projection_mutations.clear();
-            source.uncertain_calendar_event_keys.clear();
-            entry.optimistic = PersistedOptimisticLayer {
-                optimistic_data_json: encode_optimistic_source(&source),
-                normalized_updates: RecordUpdates::new(),
-            };
-            retired_projection_owners.insert(entry.id);
-        }
-        // Even a preserved command's materialized link update can contain a
-        // retired record copied from its old base. Persist the rebuilt updates,
-        // while retaining projection shadows owned by preserved commands.
-        let persisted = queued
-            .iter()
-            .map(|entry| (entry.id, entry.optimistic.clone()))
-            .collect::<Vec<_>>();
-        let rebuilt = self.rebuild_queued_layers(queued).await?;
-        let replacements = persisted
-            .into_iter()
-            .zip(rebuilt)
-            .filter_map(|((id, mut layer), rebuilt)| {
-                if !retired_projection_owners.contains(&id)
-                    && layer.normalized_updates == rebuilt.updates
-                {
-                    return None;
-                }
-                layer.normalized_updates = rebuilt.updates;
-                Some((id, layer))
-            })
-            .collect::<Vec<_>>();
-        self.storage
-            .replace_optimistic_layers(
-                &replacements,
-                &retired_projection_owners.into_iter().collect::<Vec<_>>(),
-            )
-            .await
-            .map_err(EngineError::Storage)?;
-        self.refresh_optimistic_queue().await
     }
 }
 
@@ -389,7 +284,11 @@ impl<S: PredicateIndexStorage> Engine<S> {
         let authority = CacheAuthority {
             identity: identity.to_owned(),
             account: current.account,
-            generation: Uuid::now_v7(),
+            generation: if current.policy.is_none() && !retire_snapshots {
+                current.generation
+            } else {
+                Uuid::now_v7()
+            },
             policy: Some(policy),
             ready: !retire_snapshots,
         };
@@ -429,33 +328,6 @@ impl<S: PredicateIndexStorage> Engine<S> {
             affected_ops,
             changed: true,
         })
-    }
-
-    /// Replace already-read records during a closed permission transition.
-    /// Unlike a network merge, omitted fields are removed. Hosts supply the
-    /// matching application projection changes under the same owner lock.
-    pub async fn retire_record_fields(
-        &mut self,
-        entries: Vec<(EntityKey<'static>, Record)>,
-        projections: Vec<ProjectionMutation>,
-    ) -> Result<(), EngineError<S::Error>> {
-        if self
-            .stored_authority()
-            .await?
-            .is_none_or(|state| state.ready)
-        {
-            return Err(EngineError::StaleAuthority);
-        }
-        self.ensure_revision_can_advance()?;
-        for (key, _) in &entries {
-            self.hot.pop(key);
-        }
-        self.storage
-            .put_batch_with_projections(entries, projections)
-            .await
-            .map_err(EngineError::Storage)?;
-        self.advance_revision()?;
-        Ok(())
     }
 
     /// Apply a fresh server proof only to the generation captured before its
@@ -511,52 +383,5 @@ impl<S: PredicateIndexStorage> Engine<S> {
         }
 
         self.complete_authority_transition(authority).await
-    }
-
-    /// Retire copied content while preserving aliases, coalescing UUIDs and
-    /// deletion tombstones required by later authored command replay.
-    pub async fn preserve_identity_metadata(
-        &mut self,
-        keys: Vec<EntityKey<'static>>,
-    ) -> Result<Vec<EntityKey<'static>>, EngineError<S::Error>> {
-        let records = self
-            .storage
-            .get_batch(&keys)
-            .await
-            .map_err(EngineError::Storage)?;
-        let mut remove = Vec::new();
-        let mut retain = Vec::new();
-        for (key, record) in keys.into_iter().zip(records) {
-            let Some(mut record) = record else {
-                remove.push(key);
-                continue;
-            };
-            if ![
-                identity::ALIAS_FIELD,
-                identity::MUTATION_UUID_FIELD,
-                identity::DELETED_FIELD,
-            ]
-            .iter()
-            .any(|field| record.fields.contains_key(*field))
-            {
-                remove.push(key);
-                continue;
-            }
-            record.fields.retain(|field, _| {
-                matches!(
-                    field.as_str(),
-                    identity::ALIAS_FIELD
-                        | identity::MUTATION_UUID_FIELD
-                        | identity::DELETED_FIELD
-                        | "id"
-                        | "__typename"
-                )
-            });
-            retain.push((key, record));
-        }
-        if !retain.is_empty() {
-            self.retire_record_fields(retain, vec![]).await?;
-        }
-        Ok(remove)
     }
 }

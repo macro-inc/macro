@@ -834,7 +834,7 @@ export type MutationSettlement = { mutationUuid?: string } & (
 
 export type CacheRequest = {
   id: number;
-  authority?: import('./authority').AuthorityAdmission;
+  generation?: string;
 } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
   | { kind: 'current-revision' }

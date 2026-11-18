@@ -125,6 +125,7 @@ export class CalendarSyncController {
   }
 
   private async applyChanges(): Promise<void> {
+    const generation = cacheSessionGeneration.capture();
     const state = await this.host.calendarRange(SYNC_STATE_RANGE);
     if (state.kind === 'unsupported' || !state.watermark?.length) return;
     let since = state.watermark;
@@ -138,10 +139,13 @@ export class CalendarSyncController {
       }));
       if (changes.resetRequired) {
         // Visible ranges observe the cleared coverage and refetch.
-        await this.host.calendarCommit({
-          reset: true,
-          watermark: { kind: 'merge', links: to },
-        });
+        await this.host.calendarCommit(
+          {
+            reset: true,
+            watermark: { kind: 'merge', links: to },
+          },
+          generation
+        );
         await this.refetchCalendars();
         return;
       }
@@ -149,19 +153,22 @@ export class CalendarSyncController {
       const removedLinkIds = since
         .map((link) => link.linkId)
         .filter((linkId) => !visible.has(linkId));
-      await this.host.calendarCommit({
-        replacedEvents: changes.events.map((change) => ({
-          eventKey: eventKey(change.event.id),
-          occurrenceKeys: change.occurrences.map((occurrence) =>
-            occurrenceKey(occurrence.id)
-          ),
-        })),
-        deletedEventKeys: changes.deletedEventIds.map(eventKey),
-        deletedCalendarKeys: changes.deletedCalendarIds.map(calendarKey),
-        removedLinkIds,
-        watermark: { kind: 'advance', since, to },
-        ...(changes.hasMore ? {} : { freshness: 'fresh' as const }),
-      });
+      await this.host.calendarCommit(
+        {
+          replacedEvents: changes.events.map((change) => ({
+            eventKey: eventKey(change.event.id),
+            occurrenceKeys: change.occurrences.map((occurrence) =>
+              occurrenceKey(occurrence.id)
+            ),
+          })),
+          deletedEventKeys: changes.deletedEventIds.map(eventKey),
+          deletedCalendarKeys: changes.deletedCalendarIds.map(calendarKey),
+          removedLinkIds,
+          watermark: { kind: 'advance', since, to },
+          ...(changes.hasMore ? {} : { freshness: 'fresh' as const }),
+        },
+        generation
+      );
       calendarsChanged ||=
         changes.calendars.length > 0 ||
         changes.deletedCalendarIds.length > 0 ||
@@ -189,3 +196,5 @@ export function setActiveCalendarSyncController(
 ): void {
   activeController = controller;
 }
+
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';

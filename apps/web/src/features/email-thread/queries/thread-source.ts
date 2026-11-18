@@ -1,5 +1,3 @@
-import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
-import { hasOwnedEmailWitness } from '@graphql-cache/authority-scope';
 import { invalidateInvitationScheduling } from '@queries/calendar/invitations';
 import { isListedLocalDraft } from '@queries/email/local-draft-entities';
 import { createLocalDraftSource } from '@queries/email/local-draft-source';
@@ -116,49 +114,33 @@ export function createEmailThreadSource(
   query: ThreadQueryResult<ThreadQueryData>
 ): EmailThreadSource & { isLocalDraft: Accessor<boolean> } {
   // Status guards prevent a pending Solid resource from suspending its owner.
-  const snapshot = createMemo<{
-    requested: string;
-    epoch: number;
-    thread?: EmailThread;
-  }>((previous) => {
-    const requested = threadId();
-    const epoch = crmSnapshotAuthorization().epoch;
-    if (previous?.epoch !== epoch) previous = undefined;
-    // Read non-suspending status before the witness guard so completion of an
-    // offline ownership lookup can wake this source through its query result.
-    const succeeded = query.isSuccess;
-    const failed = query.isError;
-    const resolved = query.resolvedThreadId;
-    if (
-      crmSnapshotAuthorization().paused &&
-      !hasOwnedEmailWitness(requested) &&
-      !hasOwnedEmailWitness(resolved)
-    )
-      return { requested, epoch };
-    if (!succeeded && !failed) {
-      // Resolving a local handle changes the query key, but must not unmount
-      // an open composer while the same thread's canonical page loads.
+  const snapshot = createMemo<{ requested: string; thread?: EmailThread }>(
+    (previous) => {
+      const requested = threadId();
+      if (!query.isSuccess && !query.isError) {
+        // Resolving a local handle changes the query key, but must not unmount
+        // an open composer while the same thread's canonical page loads.
+        return {
+          requested,
+          thread:
+            previous?.requested === requested ? previous.thread : undefined,
+        };
+      }
+      const data = query.data?.thread;
+      if (!data) return { requested };
+      // Cache aliases and the async identity lookup have separate subscribers.
+      // Keep the last verified row until both observe the canonical identity.
       return {
         requested,
-        epoch,
-        thread: previous?.requested === requested ? previous.thread : undefined,
+        thread:
+          data.db_id === requested || data.db_id === query.resolvedThreadId
+            ? toEmailThread(data)
+            : previous?.requested === requested
+              ? previous.thread
+              : undefined,
       };
     }
-    const data = query.data?.thread;
-    if (!data) return { requested, epoch };
-    // Cache aliases and the async identity lookup have separate subscribers.
-    // Keep the last verified row until both observe the canonical identity.
-    return {
-      requested,
-      epoch,
-      thread:
-        data.db_id === requested || data.db_id === query.resolvedThreadId
-          ? toEmailThread(data)
-          : previous?.requested === requested
-            ? previous.thread
-            : undefined,
-    };
-  });
+  );
   const local = createLocalDraftSource(() => true);
   const discoveringDrafts = () => !local.ready();
   const thread = () => {

@@ -36,251 +36,47 @@
 
 ## Account-scoped source queries
 
-CRM-derived records, mail, search projections and mixed lists require verified
-member-access proof for the current account/owner generation. Reuse that proof
-on response, subscription and local-read hot paths; refresh on stale authority,
-a changed/missing storage hint, revocation, or login/account change. `crm-access-authority.ts` orders primary proofs against the
-browser/native owner's durable generation; `crm-access-cache.ts` retires visible
-and persisted query snapshots. Preserve source generations through HTTP decoding,
-cache writes, queued settlement and subscription reconnects; a current generation
-must never be assigned to already-fetched content. Keep authored drafts and queue
-variables independent of optional copied optimism. Skip copied draft/thread enrichment when no current proof is available, and return an existing durable working copy without waiting for that optional protected read; drafts without a local copy remain protected. Coordinator protocol 18 and
-the native permission commands must precede enabling member-access changes.
-Only CRM-bearing storage responses opt into `x-macro-crm-access-signal: 1`;
-independent resources such as document creates and `/crm/member-access` skip it.
-Treat the memoized response header only as a retirement
-hint: changed or missing hints require fresh JSON proof, and never relabel an
-in-flight response with the resulting generation.
-Keep initial access pending until proof succeeds or bounded retries fail; then show the existing retry state and retry on reconnect. Retry only stale generations or network failures, with one short second attempt, and retain the last proven state across transient failures; show denial and tear down CRM dialogs only after a proven denial.
-Retry an overtaken local authority read once before HTTP dispatch, sharing that budget across initial and post-binding reads; never replay binding or commands, and reject recovery across observed account replacement, login or host changes. Keep proof refresh's existing retry budget separate rather than multiplying it inside preparation.
-Recover protected queries rejected during initial proof with a fresh cache read and an internal network fallback on a miss; clear the old response witness and preserve the mounted observer.
-Limit authority-change invalidation to queries needing CRM proof; preserve independent live-query cursors and reads. Keep the account-generation fence, and recover an independent response rejected across first identity binding with one fresh read, never by restamping its payload.
-Retry a rejected independent local read once under the same login/account, retaining its mounted view; cache-only recovery stays local and repeated admission failure must not start a refetch loop.
-Persist email and Soup snapshots, verify the reusable proof only before restoring CRM-bearing snapshots, and retire protected snapshots on proven denial or account replacement.
-Gate the admin member-access switch with the remote `enable-crm-member-access-changes` flag used by the server; never gate denial enforcement on that rollout flag.
-Keep personal Soup mail, inbox-authorized REST reads and writes, mailbox mutation results, Work Feed, bookmark metadata and independently scoped database-view reads available without CRM proof; inspect resolver contracts and arguments rather than broad fragment type names, and retain proof checks for thread, attachment and EML reads that can use CRM grants.
-Fence mailbox, email-reminder, history-command, flat REST Soup and GraphQL response bodies by login even when CRM proof is unnecessary; successful queued responses may settle identities after a login change only with an explicitly rejected content generation. Retire independent mailbox, email-reminder detail/collection and flat Soup query snapshots on session replacement, separately from CRM permission changes; restart their mounted observers after cleanup and sign-in without waiting for CRM proof.
-Keep exact email-reminder detail reads/writes and collection reads independent of CRM proof because the server requires an owned or delegated mailbox; generic reminder endpoints remain protected.
-Keep non-CRM saved-view reordering independent: the server returns the same definitions it filtered by the requested kind before writing positions. Create/update and unscoped saved-view reads remain protected.
-Classify flat REST Soup from its raw AST so personal Spam/Trash reads remain independent; require explicit company exclusion, absent or excluded contacts, and no CRM association or email expansion. Keep legacy and grouped REST protected.
-Admit opaque GraphQL Soup continuations only from an independently scoped cached parent with the same query, operation, group and current account/owner generation. Flat REST continuations require a successfully decoded independent parent with the same body and login because the server ignores the replacement body's filters; share bounded witnesses across both transports.
-Before exempting a thread-by-ID read, select only cached id/ownerId and bind its ownership witness to the account, login, host, owner and generation; reuse valid witnesses, coalesce pending probes, and retain witnesses through active Mail chunks, complete thread reads and mounted thread routes, including canonical IDs and fallback reads, while CRM-only shared threads remain gated.
-Keep exact root `THREAD` property assignments and option-delta mutations independent: they require Edit beyond CRM's Comment grant and return assignments without expanded CRM entities; keep raw property reads, other targets and snapshot retirement protected.
-Keep exact history-item POST/DELETE acknowledgements independent of CRM proof; history reads still require proof because they can expand shared entities.
-Memoize GraphQL classification by document and selected operation with bounded retention, recheck arguments and witnesses on each call, and never evaluate disabled infinite-query variables.
-Keep unrelated response observers synchronous and stable native reads to one IPC; use the installed authority event/version fence to reject changed generations instead of polling after every command.
-Keep an ordinary write's real status and payload when later CRM proof fails;
-guard the outcome by its login and admit cache effects only under the captured
-permission generation. Parse the selected GraphQL operation and classify REST
-POST contracts explicitly because POST also serves reads. Preserve queued
-identity settlement separately; never offer a duplicate retry for a committed write.
-When a committed queued write needs no further repairs or effects, wait only for publications named by its affected operation keys in this client; unrelated proof-blocked reads must not withhold the result. Preserve deletion revisions and conservative repair/effect waits.
-Reserve subscription order before authority awaits, capture both subscription and cache generations at arrival, and carry the source generation through deletion commands and host wrappers.
-Fence visibility synchronously on retirement, wait for every overlapping cleanup to settle before reopening, and reject replaced-owner transition replies before they can retire the current owner.
-Derive whole-list team-view mutations from a successful network-only settings read inside the serialized mutation; retain the authoring account/session and recheck it after that GET, so a queued edit or skipped response admission cannot overwrite another login's settings or a newer list.
-Capture the generation before predicting optimistic results from authored
-arguments; caller-supplied copied updates must retain their original generation.
-Capture one authorization epoch for an entire bulk property submission, including later items that reuse its inputs or prepared grouped pages after earlier enqueues.
-Publish the shared client and host before installing authority callbacks, which
-can synchronously reset mounted observers and reenter client lookup.
-On native, await bounded authority listener setup before exposing cached reads;
-reset and observe the event's scoped owner generation synchronously before refresh.
-`bun run gen-cache-authority-schema --check --rust` checks the shared contract.
-Conceal protected preview snapshots while CRM proof is paused, including unwitnessed REST email previews, while independent document/task previews remain available;
-an independently shared item may stay mounted but must drop its CRM breadcrumbs and task preset.
-Bound both `init` and `current-authority` cache startup requests with the initialization deadline,
-including the existing owner-handoff pause and resume behavior.
+Treat CRM access changes as rare session transitions. Detect them from response
+hints, CRM 403s and one `/crm/member-access` read on boot, focus and reconnect;
+ordinary HTTP requests, subscriptions and local cache reads never wait for proof.
+Keep `crm-access-authority.ts` as the policy state machine and
+`crm-access-cache.ts` as detection and visible/persisted retirement glue.
 
-Shared display names and `useUserNames` participant labels use the same account/session-
-scoped QueryClient cache (`queries/auth/user-name-cache.ts`), never a second name map.
-Pin only tracked active readers; bound idle names by count/bytes and batch/pending IDs.
-Retain pins across synchronous reevaluation and drop closed-reader interests. Keep
-old names during transient refresh failures, but clear them on authority changes;
-late responses and captured mutations cannot cross account/session or entry generations.
-Cancel obsolete transports and bound request lifetime; native participant metadata
-must publish fallbacks for pending new-scope names rather than retain old labels.
-Debug name seeds require a mounted authenticated scope, not module initialization.
-Editable own-profile queries stay separate and session-keyed. Reset cached Macro
-bearer tokens on login/account replacement, including pending token responses.
+Fence all response content with one owner-issued generation. Capture it before
+HTTP or subscription dispatch and retain it through decoding and cache writes;
+never stamp already-fetched data with a newer generation. Compare it under the
+shared native owner lock or browser worker before writing. Discard old query
+results and subscription frames and refetch active queries once per transition.
+Do not classify GraphQL fields or REST routes for admission.
 
-Key channel lists/activity, cached Quick Access channels, email links and inbox
-health probes by viewer. Use `queries/auth/account-scope.ts` to fence requests
-and cache writes; mutation ownership comes from the execute-time
-`MutationFunctionContext.meta`, not a live accessor or mutable observer options.
-Login closes this source gate until a fresh auth query succeeds, without clearing
-the app shell's retained identity. Legacy unscoped channel lists are not restored.
-The settings signature browser suite also exercises real channel/link observers
-and the contact context publisher across account switches with delayed responses
-(`account-sources.browser.e2e.ts`). `queries/contacts/context-source.ts` reuses
-those keyed queries through ownership-tagged selectors; gate missing inputs rather
-than publishing an empty snapshot. Its cached-channel overlay rereads the cache only
-for `dm` changes while a contact window is enabled in any tab, and once when one
-opens after changes it missed: channel rows never reach contact facts, and every
-tab ranks from the leader's publication. `createContactDirectoryWindow` holds
-`openContactReader` while enabled, from its first settled page on, so the catch-up
-never races the picker's first rows; `queries/contacts/readers.ts` shares that
-across tabs, and a tab that vanishes stays counted as open. `context-publisher.ts` caps pending IDs and
-write batches at 500, replaces overflowing/uncertain snapshots with a new epoch,
-and never writes directory names or membership. `useContactContextPublisher`
-shares Soup's leader, rollout and generation lifecycle; do not add another leader.
-The bounded directory window accepts external search/policy inputs. Bind continuations
-to each input transition, not just equal query strings; returning to an earlier input
-must start at page one. Person hydration wakes an initially unavailable offline
-window, never an authorization error. Retry a stale direct contact window once from its identity read under the same account, discarding all intermediate results; cancellation, account replacement, host retirement and storage reset stop recovery without requesting CRM proof. Interactive contact suggestions read locally:
-partial sync returns partial local results. Only a tab with no usable local cache
-(none, retired, unsupported, unbound or older host) reads bounded server
-`ContactDirectoryPage` pages, and only online; a server continuation keeps paging the
-server until a cache change restarts the window. Refresh schedules the existing sync lane. Resolve self separately
-when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
-over a person's stored command target, then use recent conversations as fallback.
-Contact invalidations from messages, native sharing and websocket events call
-`requestContactRefresh()` in `queries/contacts/refresh`; the coalesced bounded
-runner owns the work. Full-list hooks, query keys and handwritten GET clients
-are retired; no compatibility query should be created by an invalidation.
-Ranked person
-cursors and contact reconciliation use coordinator protocol 17; native menu policy 6
-lists people the viewer has a direct message with first among matches at a word
-start, however exactly a stranger's name matches; within each group, exact names
-(full, or the first name for a one-term query) come before all-word prefixes, then
-recency and identity. Literal contains matches follow, then address-only matches (domain or local part). "Has a direct message" means a
-positive interaction time, which context facts take from direct-message channels,
-including group and never-written DMs. Native (desktop, iOS, Android) binaries released
-before policy 6 still answer with policy 5; keep accepting it (`PEOPLE_MIN_POLICY_VERSION`).
-Explicit addresses/IDs never match name aliases; empty property browsing pins self.
-Exclude automated recipient addresses before limiting unless explicitly addressed.
-Generate separate suggestion/reference policy floors from Rust; reference evidence
-stays policy 4. Preserve personal window order through command/DM merging, mentions,
-properties and recipient composition. Cursors bind scope/policy/layout and live
-membership/context tokens, not previous result IDs or a scoring clock. Contact
-changes invalidate pending replies and restart paging; honor short/empty continuations.
-Quick Access person lists are per-observer windows, never global item-cache rows.
-Forward live queries from commands, mentions and property selectors; resolve CRM
-aliases only for the listed rows. Every contact menu and picker (Cmd+K, mentions,
-mobile name search, property, recipient and filter pickers) lists further pages
-below the earlier ones as the end scrolls into view, up to 500 rows
-(`queries/contacts/directory-list.ts`); query-backed pages append to the visible
-options. A page with no matching rows reads on until one matches or the source
-ends. Never add a Next options button; a failed page offers Retry. A sentinel
-element opts out of scroll anchoring (`[overflow-anchor:none]`), or Chrome holds
-it in view and every page loads the next. Thread/generic pickers advance their browsed-email and
-server-search pages alongside Quick Access; explicit user rosters stay capped.
-A window key names the page or growing list on screen, never a refresh of it. Reset
-virtual focus/scroll only on window replacement, not label updates or refreshes.
-Menus hold the row the user moved to by identity (`createSelectionAnchor`) while
-results arrive; the highlight resets only when the query or category changes.
-The person list keeps its still-matching rows while the next read is pending, so the contact
-window's `loading()` must have no gap between its text settling and its query fetching (a memo
-can still see the disabled query of the unsettled text then). Keep explicit participant/team pools scoped and
-selected IDs/self independent of suggestion pages. Discussion mentions on documents,
-projects and calls delegate to the same bounded directory. In mention configuration,
-`users()` returning undefined selects that directory; [] remains an explicit empty
-scope, including while channel/CRM rosters load. `transformUsers` applies agent
-policy only to the current window or scoped roster, never a full personal pool.
-Keep native row timestamps and forwarding through both editor configuration and
-`MarkdownShell`; the channel mention browser suite exercises the real composition.
-`RecipientSelector.createSource`
-constructs a per-picker source from live query/open/self/domain inputs; use
-`useContactRecipientSource` or `useCombinedRecipientSource` for personal suggestions
-and keep `options` for explicit scoped extras. Closing releases the page and reopening
-starts at the first page. Selected chips remain caller-owned; PageDown loads the
-next page from the keyboard. Main email To/Cc/Bcc inputs receive the factory through
-`EmailComposeContext.createRecipientSource`; scoped hosts opt out explicitly with
-`undefined`. Thread extras and personal hits deduplicate by canonical email while
-preserving the selected representation. Keep selection/outside dismissal synchronous;
-a delayed combobox close must not cancel a new query after refocus. Keep nonmatching
-selected custom addresses out of visible suggestions during async search, so Enter
-cannot toggle an old chip while a new result window arrives. Pass supplied
-names to option/chip avatars instead of duplicating resolved names in the shared name cache. The internal
-recipient and email app-browser fixtures cover desktop/touch. Channel invitation
-and participant pickers use the same source with explicit roster exclusions; keep
-whole-team selection separate. Exclude up to the native IPC budget before ranking,
-filter any oversized roster remainder within each listed page, and retain
-empty continuations. Bind paging to the complete roster's reset key, including
-changes beyond that budget. Keep picker portals inside their owning dialog/drawer;
-cancel a recipient option's pointerup default so synchronous popup removal cannot
-be interpreted as an outside press that dismisses the containing drawer.
-Soup's Created by submenus, mobile accordion sections and consolidated chips
-use lazy contact sources. Assignee options stay team/agent-scoped and retain selected
-outsiders; do not replace an explicit roster with personal-directory suggestions. Resolve closed-chip labels with
-`useContactFilterLabels`, never by constructing a browse window or a directory map.
-Keep Unassigned outside contact lookups and restore the Owned preset when clearing
-its creator refinement. A query-driven combobox takes search edits from native input
-events; Kobalte's programmatic resets on option replacement must not clear a pending
-query. `internal/browser-test/soup-filters.browser.e2e.ts` covers both surfaces.
-CRM Owner chips use `CollectionSelectFilter.createChipSource`, with selected labels
-resolved separately; their header menu remains team-only. Keep No owner/Unassigned
-out of contact lookups through the shared empty-value adapter. Wait for the virtual
-list's initial viewport measurement before focus scrolling; otherwise the pending
-correction can snap a user's scroll back to the first selected row.
-Calendar guest editors (including event invitations and AI drafts) keep event-owned
-addresses/names as scoped extras and use bounded personal property windows.
-`PropertyEntitySelector.onUserSelected` carries UI-only chosen metadata separately
-from persisted entity-reference payloads. Preserve guest ID/address representations
-while comparing eligibility case-insensitively. A complete guest address is an
-identity, never another person's display-name alias. Do not re-cap or locally discard
-already matched person pages; expose continuation even for an empty window. Keep
-Quick Access list factory setup untracked so loading/paging cannot reconstruct its
-owner at page one. An in-flight multi-window advance stops when `inputKey` changes.
-Universal Input resolves only current person references through `useContactReferences`:
-task properties use `anyName`; recipients, guests and search use `preferFullName`.
-Keep incomplete/ambiguous evidence unresolved, preserve structured term boundaries,
-and never substitute a suggestion window for name proof. Use `recipientTerms` and
-`formatRecipientTerms` for recipient string fields so delimiter-bearing model names
-retain their boundaries while legacy manual separators remain supported. Explicit
-addresses cannot resolve through display-name aliases; channel IDs remain scoped choices.
-Picker factories and personal mentions use their own windows. Field-owned choice
-snapshots preserve selected labels without becoming inference evidence or reviving
-on a later return to the same text. Capture submission identities before async
-work and recheck the account before dependent writes. The `task-references` and
-`input-references` browser cases cover the real adapters/composers on desktop/phone.
-Tasks creator filters also use lazy desktop/mobile contact sources; Assignee keeps
-its explicit team/agent roster and selected outsiders. The planner extracts references
-without a people catalog, then resolves complete per-label evidence before applying
-any constraints. Preserve semantic Me separately from fixed self and resolve saved
-summary labels from their own IDs. Inline checklist labels resolve only referenced
-task assignees, in lookup-sized batches whose owners disappear with those references;
-never populate a personal-directory map or the shared name cache for them.
-Onboarding team prefill filters local browse windows to the server-approved domain,
-follows bounded continuations until six distinct non-self emails or exhaustion, and retains only
-that seed. No approved domain means no contact reads. Scope the source by account,
-session and cache generation; preserve the form's first settled seed through refreshes.
-Linear import resolves only current CSV assignees, serially in 500-label exact-reference
-batches, and uses the shared single-user property picker for manual mapping. Keep
-manual Unassigned distinct from no override; incomplete evidence requires retry or
-an explicit choice. Reset file-owned mappings on upload/account changes, snapshot
-assignments before creation, and use `createTaskForAccount` to fence dispatch and
-local publication. Imported-row state may scale with the file, never the directory.
-`CacheHost.people.resolveReferences` exposes the core's bounded full-directory
-ambiguity evidence. It needs a bound viewer and ready context only for inbox
-exclusions; callers must also check directory completeness. Missing reference
-support must not disable existing search. The real wrapper/worker/OPFS regression
-is `worker/browser-test/people-references.browser.e2e.ts` under `lib/graphql-cache`.
-`ContactReferencePage` provides fetch-only server fallback stages with exact/first-name
-matching before the limit. Follow empty continuations and keep the existing search
-budget; never infer uniqueness from one incomplete suggestion page.
-`useContactReferences` resolves only the current inference/import labels, with
-per-label complete/ambiguous evidence and separate exact identity lookup. Its
-reader keeps one physical read plus one replaceable pending input, samples cache
-completeness before scanning, and wakes incomplete reads only on readiness
-transitions. Source data is scoped and immediately collected, not a people pool.
+Write the durable denied policy before selective CRM retirement and resume an
+interrupted retirement before serving cached content. Preserve email thread
+persistence for allowed or pending members; exclude and retire it only on a
+proven denial. Initial allowed/team-less proofs preserve offline records and the
+existing generation. Keep the account fence independently of access policy.
 
-Execute browser `macro.people` SQL in the existing local Turso cache, including
-offline; authorized synchronization supplies records, not a server query endpoint.
-Use actual wasm compiler metadata to distinguish the built-in relation from ordinary
-tables named people. `CacheHost.people.readSql` exposes the scoped local capability;
-missing native support must not disable other person methods or trigger remote SQL.
-Serialize uninterruptible reads with one replaceable pending input. Wake incomplete
-queries on the committed contact checkpoint, not only the preceding hydration hint. Filter, aggregate and limit before materializing results; never
-enumerate contacts or fall back to remote SQL execution. Validate result metadata and
-fence account/session, storage generation, input transitions and disposal. Require
-complete synchronization before treating local results as directory-wide evidence;
-unsupported/incomplete reads stay explicit failures, not authoritative empty answers.
-Only actual people-ID join hints may enter bounded identity reads; email/name/virtual
-row keys must not masquerade as IDs. The real compiler/controller/Turso browser
-regression is `internal/browser-test/sql-people-joins.browser.e2e.ts`.
-Keep last same-owner results on ordinary failures, but clear them on account or
-authority changes. Preserve explicit post-disposal refreshes used to finish accepted
-database writes only for the original account/session.
+Keep mutation outcomes and authored queue state through retirement. Stale queued
+commits settle identities without copied content, projections or link recipes;
+the draft journal receives the actual server result before that discard. Capture
+a new generation only for a new HTTP attempt, not a confirmed local settlement
+retry. Preserve the original generation of copied optimistic input. Wait only
+for affected publications before returning a committed mutation; unrelated reads
+must not hold its notice open.
+
+Keep initial CRM access pending until proof succeeds or bounded retries fail;
+then show the existing retry state and retry on reconnect. Retry only stale
+proof generations or network failures, once, with a short second timeout.
+Preserve the last proven state across transient failure; show denial and tear
+down CRM dialogs only on proven denial. Gate the admin switch with the server's
+remote `enable-crm-member-access-changes` flag, never denial enforcement.
+
+Keep personal privacy controls available without CRM access. Preserve authored
+drafts and queue variables independently of optional cached enrichment. Derive
+whole-list team-view mutations from a fresh settings read inside the serialized
+mutation and retain its authoring account/session through the write.
+
+Offline or idle devices retain cached content until the next server signal;
+already-rendered content stays until its next render. This design has no TTL.
 
 ## Verifying a change in a real browser
 

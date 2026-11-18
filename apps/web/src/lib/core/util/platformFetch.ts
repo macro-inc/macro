@@ -112,18 +112,9 @@ export function createPlatformFetch(
 export const platformFetch: typeof fetch = (input, init) => {
   try {
     const request = { ...init };
-    const prepared = prepareResponseObservers(input, request);
-    const dispatch = (
-      observe:
-        | typeof passResponse
-        | ((response: Response) => Promise<Response> | Response)
-    ) => {
-      const response = globalThis.fetch(input, request);
-      return observe === passResponse ? response : response.then(observe);
-    };
-    return prepared instanceof Promise
-      ? prepared.then(dispatch)
-      : dispatch(prepared);
+    const observe = prepareResponseObservers(input, request);
+    const response = globalThis.fetch(input, request);
+    return observe === passResponse ? response : response.then(observe);
   } catch (error) {
     return Promise.reject(error);
   }

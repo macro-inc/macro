@@ -13,7 +13,7 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
   into `cache-core` engine calls behind an async mutex.
 - `src/shell/people.rs`: scoped person-context state/update/search, bounded label-reference reads and local Turso SQL (`peopleReadSql`) under the same engine lock; `shell/test/people.rs` exercises the real browser ABI and stale-generation rejection.
 - `src/query_telemetry.rs`: slow-query callback exposed to JS.
-- `src/shell/authority.rs`: shared permission admission and CRM retirement. Keep admission and data access under the same lock; missing tokens cannot admit copied content. `tests/authority.rs` verifies the public ABI against real OPFS, including first-proof offline preservation, stale/missing tokens and preserved queued commands. Coordinator protocol 18 carries this admission independently of hydration/person scopes.
+- `src/shell/authority.rs`: durable policy transitions and interrupted CRM retirement. The shared TS worker compares response generations before writes; queued enqueue/settlement compare under the WASM engine lock so stale commands settle without copied snapshots. Reads do not request proof. `tests/authority.rs` covers first-proof offline preservation and stale-generation settlement through real OPFS. Coordinator protocol 18 carries the generation independently of existing hydration/person scopes.
 - `apps/web/src/lib/graphql-cache/`: the JS/TS worker that owns this engine.
 
 ## Scope

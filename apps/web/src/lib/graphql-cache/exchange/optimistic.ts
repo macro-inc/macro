@@ -121,8 +121,7 @@ export type QueryRevalidation = {
 export type OptimisticMutationOptions = {
   /** Authority epoch in which cached source records were read. */
   snapshotRejected?: boolean;
-  authorizationEpoch?: number;
-  authorityGeneration?: string;
+  authorizationEpoch?: string;
   /** Required RFC UUID; reuse only when the newer intent safely replaces the older one. */
   uuid: string;
   /** Opaque durable client correlation; never included in GraphQL variables. */
@@ -155,8 +154,7 @@ export type OptimisticPatch<T> = T extends readonly (infer Item)[]
 
 export type OptimisticMutationContext<TData = unknown> = {
   snapshotRejected?: boolean;
-  authorizationEpoch?: number;
-  authorityGeneration?: string;
+  authorizationEpoch?: string;
   uuid: string;
   optimisticResponse: TData;
   /** Opaque durable client correlation; never included in GraphQL variables. */
@@ -552,7 +550,6 @@ export function optimisticMutationContext<TData>(
     optimisticResponse: optimisticData,
     authorizationEpoch:
       options.authorizationEpoch ?? crmSnapshotAuthorization().epoch,
-    authorityGeneration: options.authorityGeneration,
     identityBindings: options.identityBindings
       ? [...options.identityBindings]
       : undefined,
@@ -605,7 +602,6 @@ export function optimisticContextOf(
       clientMetadata: context.clientMetadata,
       optimisticResponse: context.optimisticResponse,
       authorizationEpoch: context.authorizationEpoch,
-      authorityGeneration: context.authorityGeneration,
       identityBindings: context.identityBindings,
       linkPatches: Array.isArray(context.linkPatches)
         ? context.linkPatches

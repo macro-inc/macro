@@ -94,10 +94,6 @@ export interface CacheEngine {
   currentAuthority(
     identity: string
   ): Promise<import('../authority').CacheAuthority>;
-  checkAuthority(
-    generation: string | undefined,
-    requireProof: boolean
-  ): Promise<void>;
   transitionAuthority(
     identity: string,
     expected: string,
@@ -188,7 +184,7 @@ export interface CacheEngine {
     leaseExpiresAtMs: number,
     clientMetadata: Record<string, unknown> | undefined,
     uncertainCalendarEventKeys: string[] | undefined,
-    authority: import('../authority').AuthorityAdmission | undefined
+    generation: string | undefined
   ): Promise<EnqueueOptimisticMutationResult>;
   inspectQueryVariants(
     query: string,
@@ -222,7 +218,7 @@ export interface CacheEngine {
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
     data: unknown,
-    authority: import('../authority').AuthorityAdmission | undefined
+    generation: string | undefined
   ): Promise<CommitOptimisticWriteResult>;
   rollbackOptimisticWrite(
     transactionId: string,

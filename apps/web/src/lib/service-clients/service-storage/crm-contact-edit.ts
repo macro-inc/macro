@@ -17,7 +17,7 @@ export function prepareCrmContactEdit() {
   const session = captureCacheWriteSession();
   const client = getGraphqlSoupClient();
   const host = getGraphqlSoupCacheHost();
-  const authorityGeneration = host?.authority?.snapshot()?.generation;
+  const generation = host?.authority?.snapshot()?.generation;
   const isCurrent = () =>
     canCache() &&
     session.isCurrent() &&
@@ -47,7 +47,7 @@ export function prepareCrmContactEdit() {
           if (host.disabled || !isCurrent()) return;
           recordSessionCacheWrite(host, `GraphqlSoupCrmContact:${contact.id}`);
           await host.writeQuery({
-            authorityGeneration,
+            generation,
             query: stringifyDocument(CrmContactCacheWriteDocument),
             operationName: 'CrmContactCacheWrite',
             data: {

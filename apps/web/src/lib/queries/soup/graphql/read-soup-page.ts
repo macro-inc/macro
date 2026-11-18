@@ -1,15 +1,9 @@
-import { retainOwnedEmailWitnesses } from '@graphql-cache/authority-scope';
-import { witnessOwnedEmails } from '@graphql-cache/owned-email-authority';
-import { crmAccessAuthority } from '@service-storage/crm-access-authority';
 import type { RecordSelection } from '../../../graphql-cache/exchange/record-selection';
 import { readRecordsByKeys } from '../../../graphql-cache/exchange/record-selection';
 import type { CacheHost } from '../../../graphql-cache/host/types';
 import type { EntityFilterCacheResult } from '../../../graphql-cache/protocol';
 import type { MailItemFieldsFragment } from '../../../service-clients/service-storage/graphql/generated/graphql';
-import {
-  type GraphqlSoupItem,
-  getGraphqlSoupCacheHost,
-} from '../../../service-clients/service-storage/graphql-soup';
+import type { GraphqlSoupItem } from '../../../service-clients/service-storage/graphql-soup';
 import { readMailState } from './mail-state';
 import { type CachedMailView, materializeMailView } from './mail-view';
 import { materializeReconciledSoup, soupItemKey } from './reconciliation';
@@ -18,7 +12,7 @@ import { materializeReconciledSoup, soupItemKey } from './reconciliation';
  * Both initial reads and pagination publish only a single coherent revision.
  */
 export async function readSoupPage(
-  host: Pick<CacheHost, 'readRecordsByKeys' | 'currentRevision' | 'authority'>,
+  host: Pick<CacheHost, 'readRecordsByKeys' | 'currentRevision'>,
   options: {
     page: Extract<
       EntityFilterCacheResult,
@@ -32,62 +26,35 @@ export async function readSoupPage(
 ) {
   const { page, select, baseline, mailView, keys = page.keys } = options;
   const chunks = [];
-  const states: Awaited<ReturnType<typeof readMailState>>[] = [];
-  const snapshots = new Map(
-    baseline.map((record) => [soupItemKey(record), record])
-  );
   for (let offset = 0; offset < Math.max(1, page.keys.length); offset += 500) {
-    const pageKeys = page.keys.slice(offset, offset + 500);
-    const mailIds = pageKeys
-      .filter((key) => key.startsWith('GraphqlSoupEmailThread:'))
-      .map((key) => key.slice('GraphqlSoupEmailThread:'.length));
-    // Acquire before metadata resolves: another pane can fill the idle cache
-    // before this read resumes, or between its independent fallback flag reads.
-    const releaseWitnesses = retainOwnedEmailWitnesses(mailIds);
-    try {
-      if (host.authority && mailIds.length) {
-        await witnessOwnedEmails(
-          host,
-          mailIds,
-          crmAccessAuthority.account,
-          crmAccessAuthority.captureSession(),
-          () => getGraphqlSoupCacheHost() === host
-        );
-      }
-      const chunk = await readRecordsByKeys(host, select, pageKeys);
-      chunks.push(chunk);
-      const selected = new Map(
-        chunk.records.map((row) => [row.recordKey, row.record])
-      );
-      const fallbackKeys =
-        page.kind === 'mail-page'
-          ? pageKeys.filter((key) => {
-              if (!snapshots.has(key)) return false;
-              const record = selected.get(key);
-              return (
-                !record ||
-                !mailView ||
-                !materializeMailView(
-                  record as MailItemFieldsFragment,
-                  mailView,
-                  ''
-                )
-              );
-            })
-          : [];
-      states.push(await readMailState(host, fallbackKeys));
-    } finally {
-      releaseWitnesses();
-    }
+    chunks.push(
+      await readRecordsByKeys(
+        host,
+        select,
+        page.keys.slice(offset, offset + 500)
+      )
+    );
   }
   const selected = chunks.flatMap((chunk) => chunk.records);
   const selectedByKey = new Map(
     selected.map((row) => [row.recordKey, row.record])
   );
-  const state = {
-    revisions: states.flatMap((state) => state.revisions),
-    records: new Map(states.flatMap((state) => [...state.records])),
-  };
+  const snapshots = new Map(
+    baseline.map((record) => [soupItemKey(record), record])
+  );
+  const fallbackKeys =
+    page.kind === 'mail-page'
+      ? page.keys.filter((key) => {
+          if (!snapshots.has(key)) return false;
+          const record = selectedByKey.get(key);
+          return (
+            !record ||
+            !mailView ||
+            !materializeMailView(record as MailItemFieldsFragment, mailView, '')
+          );
+        })
+      : [];
+  const state = await readMailState(host, fallbackKeys);
   const revision = await host.currentRevision();
   if (
     page.revision !== revision ||

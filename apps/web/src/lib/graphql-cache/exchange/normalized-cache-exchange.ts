@@ -1,20 +1,5 @@
-import {
-  crmSnapshotAuthorization,
-  runOptimisticCacheWrite,
-} from '@app/lib/urql-solid/authorization';
 import { StaleCacheAuthorityError } from '../authority';
-import { queryNeedsCrmProof } from '../authority-scope';
-import {
-  assertResponseAuthority,
-  captureOperationResponse,
-  operationResponse,
-  preserveMutationOutcome,
-  responseAuthorityGeneration,
-} from '../response-authority';
-import {
-  sourceAuthorityEpoch,
-  sourceAuthorityGeneration,
-} from '../source-authority';
+import { cacheSessionGeneration } from '../session-generation';
 import { externalWriteVersion, predatesExternalWrite } from './external-writes';
 /**
  * urql exchange backed by the normalized wasm cache (via a `CacheHost`).
@@ -130,7 +115,6 @@ import {
   notifyOptimisticMutationEnqueued,
   optimisticContextOf,
   withOptimisticMutationDisposition,
-  withoutOptimisticSnapshot,
 } from './optimistic';
 import { queryShape } from './query-shape';
 import { runSubscriptionCacheEffects } from './subscription-cache-trace';
@@ -138,9 +122,6 @@ import { runSubscriptionCacheEffects } from './subscription-cache-trace';
 /** Server writes acknowledged since this query left for the network. */
 const QUERY_MUTATION_VERSION_CONTEXT_KEY =
   'normalizedCacheQueryMutationVersion';
-/** Identifies requests dispatched before first binding, including before init. */
-const QUERY_IDENTITY_VERSION_CONTEXT_KEY =
-  'normalizedCacheQueryIdentityVersion';
 /** Marks dependency-pushed reads as latency-sensitive worker work. */
 const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
 
@@ -543,11 +524,6 @@ export function normalizedCacheExchange(
         options.onCacheError?.(error, op);
     };
     let cacheGeneration = 0;
-    let observedAuthority = host.authority?.snapshot();
-    let identityVersion = 0;
-    let firstIdentityBinding:
-      | { requestVersion: number; account: string }
-      | undefined;
     let mutationVersion = 0;
     const currentMutationVersion = () =>
       mutationVersion + (options.externalMutationVersion?.() ?? 0);
@@ -575,7 +551,6 @@ export function normalizedCacheExchange(
       networkRequestsInFlight: number;
       replacementFallback: boolean;
       deferredAffected: boolean;
-      deferredAuthorityRead: boolean;
       completedReplacementFallback: boolean;
       networkRegistrationSatisfied: boolean;
       retainedReplacementFallback?: RetainedReplacementFallback;
@@ -595,7 +570,6 @@ export function normalizedCacheExchange(
           networkRequestsInFlight: 0,
           replacementFallback: false,
           deferredAffected: false,
-          deferredAuthorityRead: false,
           completedReplacementFallback: false,
           networkRegistrationSatisfied: false,
           networkResultVersion: 0,
@@ -612,7 +586,6 @@ export function normalizedCacheExchange(
       const state = queryState(key);
       const version = ++state.cacheReadVersion;
       const generation = cacheGeneration;
-      const identity = identityVersion;
       const isLatest = () =>
         activeOps.has(key) &&
         queryStates.get(key) === state &&
@@ -620,17 +593,6 @@ export function normalizedCacheExchange(
       return {
         isCurrent: () => generation === cacheGeneration && isLatest(),
         isLatest,
-        canRetryAuthority: (operation: Operation) =>
-          isLatest() &&
-          (identity === identityVersion ||
-            (firstIdentityBinding?.requestVersion === identity &&
-              host.authority?.snapshot()?.account ===
-                firstIdentityBinding.account)) &&
-          !queryNeedsCrmProof(
-            queryText(operation),
-            operation.variables as Record<string, unknown>,
-            operationName(operation)
-          ),
       };
     };
 
@@ -822,7 +784,6 @@ export function normalizedCacheExchange(
       if (!operation) return;
       const readVersion = beginCacheRead(key);
       let read: ReadResult | undefined;
-      let authorityReadRejected = false;
       try {
         read = await documentReader.read({
           opKey: key,
@@ -834,11 +795,8 @@ export function normalizedCacheExchange(
         });
       } catch (error) {
         reportReadError(error, operation);
-        authorityReadRejected =
-          error instanceof StaleCacheAuthorityError &&
-          readVersion.canRetryAuthority(operation);
       }
-      if (!readVersion.isCurrent() || authorityReadRejected) {
+      if (!readVersion.isCurrent()) {
         if (!readVersion.isLatest()) return;
         if (!retrying) {
           await Telemetry.anonymousSpan(
@@ -847,25 +805,11 @@ export function normalizedCacheExchange(
               span.setAttr('cache.retry.reason', 'generation-change');
               span.setAttr('cache.retry.count', 1);
               span.setAttr('cache.retry.read_type', 'affected');
-              if (authorityReadRejected) {
-                // The local rejection can precede its authority notification.
-                // Refresh owner metadata once, without a network proof.
-                try {
-                  await host.authority?.current();
-                } catch (error) {
-                  reportReadError(error, operation);
-                  return;
-                }
-                if (!readVersion.canRetryAuthority(operation)) return;
-              }
               await emitWatchedQuery(key, true);
             }
           );
           return;
         }
-        // Keep the mounted independent view on repeated admission failure;
-        // reexecuting through urql would start another local retry chain.
-        if (authorityReadRejected) return;
       } else if (read?.kind === 'hit') {
         emitAffectedResult(
           cacheResult(operation, read.data, false, 'affected-cache-reread')
@@ -935,14 +879,17 @@ export function normalizedCacheExchange(
       const { source: forwardQueue$, next: forwardNext } =
         makeSubject<Operation>();
       const enqueueForward = (op: Operation) =>
-        forwardNext(captureOperationResponse(op));
+        forwardNext(
+          makeOperation(op.kind, op, {
+            ...op.context,
+            cacheSessionGeneration: cacheSessionGeneration.capture(),
+          })
+        );
       const hydrationRequests = new Set<number>();
 
       const atMutationVersion = (op: Operation): Operation =>
         makeOperation('query', op, {
           ...op.context,
-          cacheAuthorityGeneration: host.authority?.snapshot()?.generation,
-          [QUERY_IDENTITY_VERSION_CONTEXT_KEY]: identityVersion,
           [QUERY_MUTATION_VERSION_CONTEXT_KEY]: currentMutationVersion(),
           externalCacheWriteVersion: externalWriteVersion(host),
           externalCacheWriteTypes:
@@ -997,14 +944,6 @@ export function normalizedCacheExchange(
         state.deferredAffected = false;
         const replacementFallback = state.replacementFallback;
         state.replacementFallback = false;
-        if (state.deferredAuthorityRead) {
-          state.deferredAuthorityRead = false;
-          state.completedReplacementFallback = false;
-          // The old response cannot fill an empty cache after its permission
-          // generation changed. This reread must still allow a network miss.
-          if (!replacementRegistrationSatisfied) recoverAuthorityQuery(key);
-          return;
-        }
         if (deferred) {
           state.completedReplacementFallback = false;
           if (!replacementRegistrationSatisfied) {
@@ -1033,18 +972,12 @@ export function normalizedCacheExchange(
         client,
         options,
         owner: queueOwner,
-        forward: (op) =>
-          enqueueForward(
-            makeOperation(op.kind, op, {
-              ...op.context,
-              cacheAuthorityGeneration: host.authority?.snapshot()?.generation,
-            })
-          ),
+        forward: enqueueForward,
         writeThrough,
         cacheDocument: (op) => ({
-          authorityGeneration:
-            typeof op.context.cacheAuthorityGeneration === 'string'
-              ? op.context.cacheAuthorityGeneration
+          generation:
+            typeof op.context.cacheSessionGeneration === 'string'
+              ? op.context.cacheSessionGeneration
               : undefined,
           query: queryText(op),
           operationName: operationName(op),
@@ -1070,8 +1003,10 @@ export function normalizedCacheExchange(
       async function revalidateAfterSettlement(
         revalidations: QueryRevalidationWire[],
         mutation?: Operation,
-        affectedOps?: readonly string[]
+        affectedOps?: readonly string[],
+        refetchAll = false
       ): Promise<void> {
+        if (refetchAll) refetchActiveQueries();
         const reportError = (error: unknown, operation = mutation) => {
           // Diagnostics cannot turn a durably settled attempt back into a retry.
           if (!operation) return;
@@ -1188,14 +1123,9 @@ export function normalizedCacheExchange(
           op.context[REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY] === true;
         let networkForwarded = previousAttempt?.networkForwarded ?? false;
         let read: ReadResult | undefined;
-        let authorityReadRejected = false;
         try {
           const pendingRead = documentReader.read({
             opKey: op.key,
-            authorityGeneration:
-              typeof op.context.cacheAuthorityGeneration === 'string'
-                ? op.context.cacheAuthorityGeneration
-                : undefined,
             query: queryText(op),
             operationName: operationName(op),
             variables: op.variables as Record<string, unknown> | undefined,
@@ -1218,20 +1148,6 @@ export function normalizedCacheExchange(
           read = await pendingRead;
         } catch (error) {
           reportReadError(error, op);
-          authorityReadRejected =
-            error instanceof StaleCacheAuthorityError &&
-            readVersion.canRetryAuthority(op);
-          if (
-            error instanceof StaleCacheAuthorityError &&
-            !authorityReadRejected &&
-            readVersion.isLatest() &&
-            !queryNeedsCrmProof(
-              queryText(op),
-              op.variables as Record<string, unknown>,
-              operationName(op)
-            )
-          )
-            return cacheResult(op, undefined, false);
           if (
             isOwnerEpochLostError(error) &&
             queryStates.get(op.key) === readState &&
@@ -1240,7 +1156,7 @@ export function normalizedCacheExchange(
             readState.replacementFallback = true;
           }
         }
-        if (!readVersion.isCurrent() || authorityReadRejected) {
+        if (!readVersion.isCurrent()) {
           // Teardown, remount, or a newer result still fences this attempt.
           if (!readVersion.isLatest()) return undefined;
           if (!previousAttempt) {
@@ -1254,35 +1170,7 @@ export function normalizedCacheExchange(
                 span.setAttr('cache.retry.count', 1);
                 span.setAttr('cache.retry.read_type', 'operation');
                 span.setAttr('cache.request_policy', policy);
-                let retryOperation = op;
-                if (authorityReadRejected) {
-                  try {
-                    await host.authority?.current();
-                  } catch (error) {
-                    reportReadError(error, op);
-                    if (!readVersion.canRetryAuthority(op))
-                      return readVersion.isLatest()
-                        ? cacheResult(op, undefined, false)
-                        : undefined;
-                    if (policy === 'cache-only')
-                      return cacheResult(op, undefined, false);
-                    if (!networkForwarded && !registrationOnly)
-                      enqueueQueryForward(op);
-                    return undefined;
-                  }
-                  if (!readVersion.canRetryAuthority(op))
-                    return readVersion.isLatest()
-                      ? cacheResult(op, undefined, false)
-                      : undefined;
-                  retryOperation = makeOperation('query', op, {
-                    ...op.context,
-                    cacheAuthorityGeneration:
-                      host.authority?.snapshot()?.generation,
-                  });
-                }
-                const result = await readThenRoute(retryOperation, {
-                  networkForwarded,
-                });
+                const result = await readThenRoute(op, { networkForwarded });
                 span.setAttr('cache.retry.cache_result', result !== undefined);
                 span.setAttr(
                   'cache.retry.has_data',
@@ -1310,40 +1198,6 @@ export function normalizedCacheExchange(
         return undefined;
       }
 
-      function recoverAuthorityQuery(key: number): void {
-        const op = activeOps.get(key);
-        if (!op) return;
-        // The wrapped fetch closes over this object. Keep the witness for a
-        // recovered request, but discard the rejected response before reading.
-        const responseWitness = op.context.cacheAuthorityResponse as
-          | { response?: Response }
-          | undefined;
-        if (responseWitness) responseWitness.response = undefined;
-        // urql still considers the rejected request dispatched while its
-        // result drains. Read current storage here and use the exchange's
-        // forwarding queue on a miss, without replaying that stale result.
-        trackAffectedRead(
-          key,
-          readThenRoute(
-            makeOperation('query', op, {
-              ...op.context,
-              cacheAuthorityGeneration: host.authority?.snapshot()?.generation,
-              cacheAuthorizationEpoch: crmSnapshotAuthorization().epoch,
-              requestPolicy:
-                op.context.requestPolicy === 'cache-only'
-                  ? 'cache-only'
-                  : 'cache-first',
-              [AFFECTED_READ_CONTEXT_KEY]: true,
-              [REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY]: false,
-            })
-          )
-            .then((result) => {
-              if (result) emitAffectedResult(result);
-            })
-            .catch((error) => reportReadError(error, op))
-        );
-      }
-
       /** Durably queues optimism before allowing the ordered runner to send. */
       async function prepareMutation(
         op: Operation
@@ -1359,33 +1213,15 @@ export function normalizedCacheExchange(
           enqueueForward(withQueueRequestTimeout(op));
           return undefined;
         }
-        let optimistic = optimisticContextOf(op);
+        const optimistic = optimisticContextOf(op);
         if (!optimistic) {
           enqueueForward(op);
           return undefined;
         }
-        const observed = host.authority?.snapshot();
-        const protectedSnapshot = queryNeedsCrmProof(
-          queryText(op),
-          op.variables as Record<string, unknown>,
-          operationName(op)
-        );
-        const visible = crmSnapshotAuthorization();
-        if (
-          visible.paused ||
-          (optimistic.authorizationEpoch ?? visible.epoch) !== visible.epoch ||
-          (protectedSnapshot &&
-            host.authority &&
-            (!observed?.ready ||
-              !optimistic.authorityGeneration ||
-              optimistic.authorityGeneration !== observed.generation))
-        ) {
-          op = withoutOptimisticSnapshot(op);
-          optimistic = optimisticContextOf(op)!;
-        }
         const args = {
+          generation:
+            optimistic.authorizationEpoch ?? cacheSessionGeneration.capture(),
           uuid: optimistic.uuid,
-          authorityGeneration: optimistic.authorityGeneration,
           query: queryText(op),
           operationName: operationName(op),
           variables: op.variables as Record<string, unknown> | undefined,
@@ -1396,23 +1232,6 @@ export function normalizedCacheExchange(
           clientMetadata: optimistic.clientMetadata,
           uncertainCalendarEventKeys: optimistic.uncertainCalendarEventKeys,
         };
-        const enqueueWithAuthority = (write: typeof args) =>
-          runOptimisticCacheWrite(
-            optimistic.authorizationEpoch,
-            (acceptSnapshot) =>
-              host.enqueueOptimisticMutation(
-                acceptSnapshot
-                  ? write
-                  : {
-                      ...write,
-                      data: {},
-                      linkPatches: [],
-                      revalidations: [],
-                      uncertainCalendarEventKeys: [],
-                    },
-                claim
-              )
-          );
         const now = Date.now();
         const claim = {
           owner: epoch.leaseOwner,
@@ -1426,7 +1245,7 @@ export function normalizedCacheExchange(
         let enqueue: EnqueueOptimisticMutationResult;
         let linkPatchesDegraded = false;
         try {
-          enqueue = await enqueueWithAuthority(args);
+          enqueue = await host.enqueueOptimisticMutation(args, claim);
         } catch (error) {
           if (!mutationQueue.isCurrent(epoch)) {
             enqueueTelemetry.failed('storage-changed');
@@ -1474,22 +1293,25 @@ export function normalizedCacheExchange(
           console.warn(`[graphql-cache] ${degraded.message}`, error);
           options.onCacheError?.(degraded, op);
           try {
-            enqueue = await enqueueWithAuthority({
-              ...args,
-              linkPatches: [],
-              revalidations: [
-                ...args.revalidations,
-                // Fragment recipes are not executable queries. Their callers
-                // provide targeted recovery queries in args.revalidations.
-                ...args.linkPatches
-                  .filter((patch) => !patch.recordRoot)
-                  .map((patch) => ({
-                    query: patch.query,
-                    operationName: patch.operationName,
-                    variablesJson: patch.variablesJson,
-                  })),
-              ],
-            });
+            enqueue = await host.enqueueOptimisticMutation(
+              {
+                ...args,
+                linkPatches: [],
+                revalidations: [
+                  ...args.revalidations,
+                  // Fragment recipes are not executable queries. Their callers
+                  // provide targeted recovery queries in args.revalidations.
+                  ...args.linkPatches
+                    .filter((patch) => !patch.recordRoot)
+                    .map((patch) => ({
+                      query: patch.query,
+                      operationName: patch.operationName,
+                      variablesJson: patch.variablesJson,
+                    })),
+                ],
+              },
+              claim
+            );
           } catch (fallbackError) {
             if (!mutationQueue.isCurrent(epoch)) {
               enqueueTelemetry.failed('storage-changed');
@@ -1545,9 +1367,9 @@ export function normalizedCacheExchange(
           try {
             if (effect.kind === 'write') {
               await host.writeQuery({
-                authorityGeneration:
-                  typeof op.context.cacheAuthorityGeneration === 'string'
-                    ? op.context.cacheAuthorityGeneration
+                generation:
+                  typeof op.context.cacheSessionGeneration === 'string'
+                    ? op.context.cacheSessionGeneration
                     : undefined,
                 query: queryText(op),
                 operationName: operationName(op),
@@ -1555,12 +1377,7 @@ export function normalizedCacheExchange(
                 data: effect.data,
               });
             } else {
-              await host.deleteRecords(
-                [effect.key],
-                typeof op.context.cacheAuthorityGeneration === 'string'
-                  ? op.context.cacheAuthorityGeneration
-                  : undefined
-              );
+              await host.deleteRecords([effect.key]);
             }
           } catch (error) {
             applied = false;
@@ -1618,9 +1435,9 @@ export function normalizedCacheExchange(
             queryStates.get(op.key) === state && activeOps.has(op.key);
           const writeArgs = {
             opKey: op.key,
-            authorityGeneration:
-              typeof op.context.cacheAuthorityGeneration === 'string'
-                ? op.context.cacheAuthorityGeneration
+            generation:
+              typeof op.context.cacheSessionGeneration === 'string'
+                ? op.context.cacheSessionGeneration
                 : undefined,
             query: queryText(op),
             operationName: operationName(op),
@@ -1676,40 +1493,6 @@ export function normalizedCacheExchange(
             return deletion?.revision ?? write.revision;
           } catch (error) {
             reportError(error);
-            // First identity binding fences the unbound response even for a
-            // personal query. Fetch fresh data once so that its live cache
-            // dependencies register; never restamp or replay the old payload.
-            // A fresh request captures the bound identity version and cannot retry
-            // through this path, nor can a response from another account.
-            if (
-              error instanceof StaleCacheAuthorityError &&
-              isActive() &&
-              !queryNeedsCrmProof(
-                queryText(op),
-                op.variables as Record<string, unknown>,
-                operationName(op)
-              )
-            ) {
-              const requestVersion =
-                op.context[QUERY_IDENTITY_VERSION_CONTEXT_KEY];
-              if (
-                !firstIdentityBinding &&
-                requestVersion === identityVersion &&
-                observedAuthority?.account == null
-              ) {
-                // The rejected write can beat the binding notification. This
-                // is one local owner read, not a network permission proof.
-                await host.authority?.current();
-              }
-              if (
-                firstIdentityBinding &&
-                requestVersion === firstIdentityBinding.requestVersion &&
-                host.authority?.snapshot()?.account ===
-                  firstIdentityBinding.account
-              ) {
-                state.deferredAuthorityRead = true;
-              }
-            }
             // An old-owner failure can arrive after this write started. Retain
             // only the latest successful response for replacement registration.
             if (
@@ -1751,116 +1534,60 @@ export function normalizedCacheExchange(
             return { attempted: false, revision: undefined };
           const deletion = await host.deleteRecords(
             keys,
-            typeof op.context.cacheAuthorityGeneration === 'string'
-              ? op.context.cacheAuthorityGeneration
+            typeof op.context.cacheSessionGeneration === 'string'
+              ? op.context.cacheSessionGeneration
               : undefined
           );
           return { ...deletion, attempted: true };
         } catch (error) {
           options.onCacheError?.(error, op);
         }
-        // A failed deletion may still have published affected notifications.
         return { attempted: true, revision: undefined };
       }
 
-      function writeThrough(
-        result: OperationResult
-      ): Promise<OperationResult | undefined> {
-        const op = result.operation;
-        if (op.kind !== 'subscription') return writeThroughInOrder(result);
-        // Reserve arrival order before any authority lookup can yield. Keep
-        // the original subscription and cache generation through every await.
-        const generation = subscriptionGenerations.get(op.key);
-        const cacheGenerationAtArrival = cacheGeneration;
-        const authorityGenerationAtArrival =
-          host.authority?.snapshot()?.generation;
-        const isCurrent = () =>
-          generation !== undefined &&
-          subscriptionGenerations.get(op.key) === generation &&
-          cacheGeneration === cacheGenerationAtArrival &&
-          host.authority?.snapshot()?.generation ===
-            authorityGenerationAtArrival;
-        let output: OperationResult | undefined;
-        const effects = runSubscriptionCacheEffects(
-          result,
-          subscriptionEffectChains.get(op.key) ?? Promise.resolve(true),
-          async (span) => {
-            if (!isCurrent()) return false;
-            output = await writeThroughInOrder(result, isCurrent, span);
-            const metadata = output && normalizedCacheResultMetadata(output);
-            return metadata?.source === 'live-network'
-              ? (metadata.cacheEffectsApplied ?? true)
-              : output !== undefined;
-          }
-        );
-        subscriptionEffectChains.set(op.key, effects);
-        return effects
-          .then(() => output)
-          .finally(() => {
-            if (subscriptionEffectChains.get(op.key) === effects)
-              subscriptionEffectChains.delete(op.key);
-          });
+      function refetchActiveQueries() {
+        for (const operation of activeOps.values())
+          client.reexecuteOperation(
+            makeOperation('query', operation, {
+              ...operation.context,
+              requestPolicy: 'network-only',
+              cacheSessionGeneration: cacheSessionGeneration.capture(),
+            })
+          );
       }
 
-      async function writeThroughInOrder(
-        result: OperationResult,
-        isSubscriptionCurrent: () => boolean = () => true,
-        subscriptionSpan?: Span
+      async function writeThrough(
+        result: OperationResult
       ): Promise<OperationResult | undefined> {
-        const responseGeneration =
-          responseAuthorityGeneration(operationResponse(result.operation)) ??
-          sourceAuthorityGeneration(result.data);
-        if (responseGeneration)
+        const frameGeneration = result.extensions?.cacheSessionGeneration;
+        if (typeof frameGeneration === 'string')
           result = {
             ...result,
             operation: makeOperation(result.operation.kind, result.operation, {
               ...result.operation.context,
-              cacheAuthorityGeneration: responseGeneration,
-              ...(result.operation.kind === 'subscription'
-                ? {
-                    cacheSourceAuthorizationEpoch: sourceAuthorityEpoch(
-                      result.data
-                    ),
-                  }
-                : {}),
+              cacheSessionGeneration: frameGeneration,
             }),
           };
         const op = result.operation;
-        // Queue settlement consumes successful identities before discarding an
-        // obsolete response. Every other path fences before effects or UI data.
-        if (!queueAttemptOf(op)) {
-          try {
-            await assertResponseAuthority(operationResponse(result.operation));
-            if (
-              op.kind === 'subscription' &&
-              host.authority &&
-              queryNeedsCrmProof(
-                queryText(op),
-                op.variables as Record<string, unknown>,
-                operationName(op)
-              )
-            ) {
-              if (
-                (await host.authority.current()).generation !==
-                op.context.cacheAuthorityGeneration
-              )
-                throw new StaleCacheAuthorityError();
-            }
-          } catch (error) {
-            // A rejected payload still completes its network request. Keep
-            // the normal query accounting and persistence acknowledgement.
-            const outcome = preserveMutationOutcome(result);
-            if (outcome) return outcome;
-            result = {
-              ...result,
-              data: undefined,
-              error: new CombinedError({
-                networkError:
-                  error instanceof Error ? error : new Error(String(error)),
-              }),
-            };
+        const generation = op.context.cacheSessionGeneration;
+        const stale =
+          typeof generation === 'string' &&
+          !cacheSessionGeneration.isCurrent(generation);
+        if (stale && !queueAttemptOf(op)) {
+          if (op.kind === 'mutation') {
+            refetchActiveQueries();
+            return result;
           }
+          if (op.kind === 'subscription') return undefined;
+          result = {
+            ...result,
+            data: undefined,
+            error: new CombinedError({
+              networkError: new StaleCacheAuthorityError(),
+            }),
+          };
         }
+
         if (
           op.kind === 'mutation' &&
           result.data != null &&
@@ -1878,16 +1605,38 @@ export function normalizedCacheExchange(
           result.data != null &&
           options.isUncachedSubscription?.(op) !== true
         ) {
-          const cacheEffectsApplied = await applyOperationCacheEffects(
-            op,
-            operationCacheEffects(result.data),
-            isSubscriptionCurrent,
-            subscriptionSpan
+          // Serialize effects across every emission for this operation, as
+          // well as within buffered payloads, so a slower earlier write cannot
+          // overtake a later delete. Subscribers still receive each original
+          // result after its effects settle.
+          const previousEffects =
+            subscriptionEffectChains.get(op.key) ?? Promise.resolve(true);
+          const generation = subscriptionGenerations.get(op.key);
+          const effects = runSubscriptionCacheEffects(
+            result,
+            previousEffects,
+            (span) =>
+              applyOperationCacheEffects(
+                op,
+                operationCacheEffects(result.data),
+                () =>
+                  generation !== undefined &&
+                  subscriptionGenerations.get(op.key) === generation,
+                span
+              )
           );
-          return withResultMetadata(result, {
-            source: 'live-network',
-            cacheEffectsApplied,
-          });
+          subscriptionEffectChains.set(op.key, effects);
+          try {
+            const cacheEffectsApplied = await effects;
+            return withResultMetadata(result, {
+              source: 'live-network',
+              cacheEffectsApplied,
+            });
+          } finally {
+            if (subscriptionEffectChains.get(op.key) === effects) {
+              subscriptionEffectChains.delete(op.key);
+            }
+          }
         } else if (op.kind === 'query' && isHydrateOnly(op)) {
           if (
             predatesMutation(op) ||
@@ -1908,9 +1657,9 @@ export function normalizedCacheExchange(
           if (result.data == null) return result;
           try {
             const hydration = await host.hydrateQuery({
-              authorityGeneration:
-                typeof op.context.cacheAuthorityGeneration === 'string'
-                  ? op.context.cacheAuthorityGeneration
+              generation:
+                typeof op.context.cacheSessionGeneration === 'string'
+                  ? op.context.cacheSessionGeneration
                   : undefined,
               query: cacheQueryText(op),
               operationName: operationName(op),
@@ -2057,12 +1806,6 @@ export function normalizedCacheExchange(
       const passthrough$ = pipe(
         shared,
         filter((op) => op.kind !== 'query' && op.kind !== 'mutation'),
-        map((op) =>
-          makeOperation(op.kind, op, {
-            ...op.context,
-            cacheAuthorityGeneration: host.authority?.snapshot()?.generation,
-          })
-        ),
         tap((op) => {
           if (op.kind === 'subscription') {
             subscriptionGenerations.set(op.key, {});
@@ -2080,88 +1823,25 @@ export function normalizedCacheExchange(
         })
       );
 
-      async function admitNetworkResult(result: OperationResult | undefined) {
-        if (!result || result.data == null) return result;
-        try {
-          await assertResponseAuthority(operationResponse(result.operation));
-          if (
-            host.authority &&
-            queryNeedsCrmProof(
-              queryText(result.operation),
-              result.operation.variables as Record<string, unknown>,
-              operationName(result.operation)
-            )
-          ) {
-            const current = await host.authority.current();
-            if (
-              current.generation !==
-              result.operation.context.cacheAuthorityGeneration
-            )
-              throw new StaleCacheAuthorityError();
-          }
-          return result;
-        } catch (error) {
-          const outcome = preserveMutationOutcome(result);
-          if (outcome) return outcome;
-          return {
-            ...result,
-            data: undefined,
-            error: queueAttemptOf(result.operation)
-              ? result.error
-              : new CombinedError({
-                  networkError:
-                    error instanceof Error ? error : new Error(String(error)),
-                }),
-          };
-        }
-      }
-
       const forwarded$ = pipe(
         merge([forwardQueue$, passthrough$]),
         forward,
-        mergeMap((result) =>
-          fromPromise(writeThrough(result).then(admitNetworkResult))
-        ),
+        mergeMap((result) => fromPromise(writeThrough(result))),
         filter((result): result is OperationResult => result !== undefined)
       );
 
       if (!host.disabled) {
         mutationQueue.start();
-        host.authority?.onChanged((authority) => {
-          const previousAccount = observedAuthority?.account ?? null;
-          const nextAccount = authority.account ?? null;
-          if (previousAccount !== nextAccount) {
-            firstIdentityBinding =
-              previousAccount === null && nextAccount !== null
-                ? { requestVersion: identityVersion, account: nextAccount }
-                : undefined;
-            identityVersion += 1;
-          }
-          observedAuthority = authority;
-          for (const [key, operation] of activeOps) {
+        cacheSessionGeneration.onChanged(() => {
+          if (!cacheSessionGeneration.state().paused) return;
+          cacheGeneration += 1;
+          for (const [key] of activeOps) {
+            liveQueries.delete(key);
+            documentReader.forget(key);
             const state = queryStates.get(key);
-            if (
-              state &&
-              queryNeedsCrmProof(
-                queryText(operation),
-                operation.variables as Record<string, unknown>,
-                operationName(operation)
-              )
-            ) {
-              // Authority changes affect CRM projections, not personal-mail
-              // registrations or in-flight independent cache reads.
+            if (state) {
               state.cacheReadVersion += 1;
-              liveQueries.delete(key);
-              documentReader.forget(key);
-              if (state.retainedReplacementFallback)
-                state.retainedReplacementFallback.invalidated = true;
               state.retainedReplacementFallback = undefined;
-              if (!authority.ready) continue;
-              if (state.networkBoundQueries > 0) {
-                state.deferredAuthorityRead = true;
-              } else {
-                recoverAuthorityQuery(key);
-              }
             }
           }
         });
@@ -2170,11 +1850,7 @@ export function normalizedCacheExchange(
         // which head is runnable after reconnecting.
         host.onCacheGenerationChanged((change) => {
           cacheGeneration += 1;
-          if (change.storage === 'reset') {
-            identityVersion += 1;
-            firstIdentityBinding = undefined;
-            mutationQueue.resetStorage();
-          }
+          if (change.storage === 'reset') mutationQueue.resetStorage();
           liveQueries.clear();
           documentReader.clear();
           mutationQueue.wake();

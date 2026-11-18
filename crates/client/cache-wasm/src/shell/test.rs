@@ -805,10 +805,10 @@ fn production_documents_preset_filters() -> Vec<(&'static str, serde_json::Value
     ]
 }
 
-async fn test_admission(engine: &CacheEngine) -> JsValue {
+async fn test_generation(engine: &CacheEngine) -> Option<String> {
     let authority: serde_json::Value =
         from_js(resolved(engine.current_authority("test-authority".into())).await);
-    js(serde_json::json!({"generation":authority["generation"], "requireProof":false}))
+    Some(authority["generation"].as_str().unwrap().to_owned())
 }
 
 async fn fresh_engine(scope: &str) -> CacheEngine {
@@ -1450,7 +1450,7 @@ async fn optimistic_v2_patch_is_filterable_after_enqueue_reopen_and_rollback() {
             100.0,
             js(serde_json::json!({"draftRevision": 10})),
             JsValue::UNDEFINED,
-            test_admission(&engine).await,
+            test_generation(&engine).await,
         ))
         .await,
     );
@@ -1595,7 +1595,7 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
             50.0,
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
-            test_admission(&engine).await,
+            test_generation(&engine).await,
         ))
         .await,
     );
@@ -1620,7 +1620,7 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
             50.0,
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
-            test_admission(&engine).await,
+            test_generation(&engine).await,
         ))
         .await,
     );
@@ -1727,7 +1727,7 @@ async fn optimistic_commit_reports_affected_ops_and_rejects_settled_or_malformed
             1_000.0,
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
-            test_admission(&engine).await,
+            test_generation(&engine).await,
         ))
         .await,
     );
@@ -1752,7 +1752,7 @@ async fn optimistic_commit_reports_affected_ops_and_rejects_settled_or_malformed
             js(serde_json::json!({
                 "setEntityProperty": { "id": "prop-1", "displayName": "Stage!" }
             })),
-            test_admission(&engine).await,
+            test_generation(&engine).await,
         ))
         .await,
     );
@@ -1830,7 +1830,7 @@ async fn destroy_recovery_wipes_records_and_queue() {
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
-        test_admission(&engine).await,
+        test_generation(&engine).await,
     ))
     .await;
     resolved(engine.close()).await;
@@ -2050,7 +2050,7 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
-        test_admission(&engine).await,
+        test_generation(&engine).await,
     ))
     .await;
     assert_reset_required(engine.bound_identity()).await;
@@ -2166,7 +2166,7 @@ async fn physical_reset_serializes_recreates_and_preserves_interner_registration
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
-        test_admission(&engine).await,
+        test_generation(&engine).await,
     ))
     .await;
 
@@ -2289,7 +2289,7 @@ async fn every_method_rejects_after_consuming_close() {
         2.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
-        JsValue::UNDEFINED,
+        None,
     ))
     .await;
     assert_closed(engine.inspect_query_variants(
@@ -2325,7 +2325,7 @@ async fn every_method_rejects_after_consuming_close() {
         js(serde_json::json!({
             "setEntityProperty": { "id": "prop-1", "displayName": "Closed" }
         })),
-        JsValue::UNDEFINED,
+        None,
     ))
     .await;
     assert_closed(engine.rollback_optimistic_write("1".into(), "closed".into(), "1".into())).await;
@@ -2644,7 +2644,7 @@ async fn queue_one_mutation(engine: &CacheEngine) {
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
-        test_admission(&engine).await,
+        test_generation(&engine).await,
     ))
     .await;
 }
@@ -2846,7 +2846,7 @@ async fn calendar_ranges_report_gaps_watermarks_and_uncertain_events_across_the_
         100.0,
         JsValue::UNDEFINED,
         js(serde_json::json!(["GraphqlCalendarEvent:e1"])),
-        test_admission(&engine).await,
+        test_generation(&engine).await,
     ))
     .await;
     let covered: serde_json::Value = from_js(resolved(engine.calendar_range(js(week))).await);

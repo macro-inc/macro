@@ -422,6 +422,22 @@ async fn delete<S: PredicateIndexStorage>(
     Ok(())
 }
 
+/// Finish durable cleanup before exposing cached data after an interrupted transition.
+/// This uses the already persisted policy and never requests server permission.
+pub async fn resume_crm_retirement<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+) -> Result<(), EngineError<S::Error>> {
+    let Some(pending) = engine.unfinished_retirement().await? else {
+        return Ok(());
+    };
+    let Some(policy) = pending.policy else {
+        return Ok(());
+    };
+    let current = engine.current_authority(&pending.identity).await?;
+    transition_crm_authority(engine, &pending.identity, current.generation, policy).await?;
+    Ok(())
+}
+
 /// Apply one fresh proof against the generation captured before its request.
 pub async fn transition_crm_authority<S: PredicateIndexStorage>(
     engine: &mut Engine<S>,

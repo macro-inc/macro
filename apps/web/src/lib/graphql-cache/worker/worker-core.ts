@@ -228,7 +228,7 @@ function requestPriority(request: CacheRequest): number {
 function readSignature(request: CacheRequest): string | undefined {
   if (request.kind !== 'read' || request.opId === undefined) return;
   return JSON.stringify([
-    request.authority ?? null,
+    request.generation ?? null,
     request.opId,
     request.query,
     request.operationName ?? null,
@@ -617,32 +617,39 @@ export class CacheWorkerCore {
   }
 
   private async dispatch(request: CacheRequest): Promise<unknown> {
-    const independent = [
-      'init',
-      'current-authority',
-      'transition-authority',
-      'current-revision',
-      'current-storage-generation',
-      'clear',
-      'teardown',
-      'claim-next-mutation',
-      'inspect-mutations',
-      'defer-optimistic-write',
-      'rollback-optimistic-write',
-      'enqueue-optimistic-mutation',
-      'commit-optimistic-write',
-    ].includes(request.kind);
+    let before: string | undefined;
     if (request.kind !== 'init') {
-      const engine = this.requireEngine();
-      const authority = await engine.currentAuthority(this.scope!);
-      this.executingAuthority = authority.generation;
-      if (!independent)
-        await engine.checkAuthority(
-          request.authority?.generation ?? undefined,
-          request.authority?.requireProof ?? true
+      const authority = await this.requireEngine().currentAuthority(
+        this.scope!
+      );
+      before = authority.generation;
+      this.executingAuthority = before;
+      if (
+        [
+          'write',
+          'hydrate',
+          'calendar-commit',
+          'people-update',
+          'contact-reconcile',
+          'invalidate',
+          'delete-records',
+        ].includes(request.kind) &&
+        request.generation !== undefined &&
+        request.generation !== before
+      )
+        throw new Error(
+          'cache response belongs to an older session generation'
         );
     }
     const result = await this.execute(request);
+    if (request.kind === 'write' || request.kind === 'hydrate') {
+      const authority = await this.requireEngine().currentAuthority(
+        this.scope!
+      );
+      this.executingAuthority = authority.generation;
+      if (authority.generation !== before)
+        this.push({ kind: 'authority-changed', authority });
+    }
     return { result, authorityGeneration: this.executingAuthority };
   }
 
@@ -860,7 +867,7 @@ export class CacheWorkerCore {
             request.leaseExpiresAtMs,
             request.clientMetadata,
             request.uncertainCalendarEventKeys,
-            request.authority
+            request.generation
           );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
@@ -940,7 +947,7 @@ export class CacheWorkerCore {
           request.operationName,
           request.variables,
           request.data,
-          request.authority
+          request.generation
         );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);

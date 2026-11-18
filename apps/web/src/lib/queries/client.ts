@@ -56,9 +56,6 @@ export const queryPersistence = setupQueryPersistence({
   exclude: (key) =>
     crmProtectedQueryKey(key) &&
     crmAccessAuthority.snapshot()?.policy?.endsWith(':denied') === true,
-  beforeRestore: async (key) => {
-    if (crmProtectedQueryKey(key)) await crmAccessAuthority.ensureCurrent();
-  },
 });
 
 // Subscribe to query cache events for automatic normalization of soup entities

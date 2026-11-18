@@ -29,7 +29,6 @@ vi.mock('../worker/wasm-module', async () => {
         ...module,
         openCache: async (...args: unknown[]) => ({
           currentAuthority: async (identity: string) => testAuthority(identity),
-          checkAuthority: async () => {},
           ...(await module.openCache(...args)),
         }),
       };

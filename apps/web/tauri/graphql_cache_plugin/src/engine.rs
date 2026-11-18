@@ -31,10 +31,11 @@ use cache_turso::{TursoStorage, TursoStorageCloseOutcome};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
+use uuid::Uuid;
 mod access;
 use access::EngineAccess;
 mod authority;
-pub use authority::{AuthorityAdmission, AuthorityTransitionWire};
+pub use authority::AuthorityTransitionWire;
 
 mod calendar;
 mod people;
@@ -408,7 +409,7 @@ struct EngineState {
 pub struct EngineHandle {
     inner: Arc<EngineAccess<EngineState>>,
     // Per-command capture, never shared mutable state between windows.
-    admission: Option<AuthorityAdmission>,
+    generation: Option<Uuid>,
     // Shared by cloned handles, changed when the native engine is reopened.
     // Revisions alone may repeat across process restarts.
     mail_generation: String,
@@ -465,7 +466,7 @@ impl EngineHandle {
             schema,
         );
         EngineHandle {
-            admission: None,
+            generation: None,
             mail_generation: soup_filter_cache_adapter::mail::new_generation(),
             inner: Arc::new(EngineAccess::new(EngineState {
                 engine,
@@ -538,7 +539,7 @@ impl EngineHandle {
         variables: Variables,
         entity_resolvers: Vec<EntityResolver>,
     ) -> Result<ReadResultWire, String> {
-        let mut state = self.admitted_read().await?;
+        let mut state = self.ready_read().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let op = op_id.map(|name| ops.intern(&name));
         engine
@@ -572,7 +573,7 @@ impl EngineHandle {
             .map(|value| value.parse::<CacheRevision>())
             .transpose()
             .map_err(|error| error.to_string())?;
-        let mut state = self.admitted_read().await?;
+        let mut state = self.ready_read().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let op = ops.intern(&op_id);
         engine
@@ -595,7 +596,7 @@ impl EngineHandle {
         fragment_name: String,
         keys: Vec<String>,
     ) -> Result<RecordSelectionResultWire, String> {
-        let mut state = self.admitted_read().await?;
+        let mut state = self.ready_read().await?;
         let schema = state.engine.schema_snapshot();
         let selection = state
             .selections
@@ -615,7 +616,7 @@ impl EngineHandle {
 
     /// Searches the compact materialized projection without record scans.
     pub async fn search(&self, request: SearchRequest) -> Result<SearchPage, String> {
-        self.admitted_read()
+        self.ready_read()
             .await?
             .engine
             .search(&request)
@@ -628,7 +629,7 @@ impl EngineHandle {
         &self,
         request: EntityFilterRequest,
     ) -> Result<EntityFilterResult, String> {
-        let mut state = self.admitted_read().await?;
+        let mut state = self.ready_read().await?;
         let state = &mut *state;
         soup::filter(
             &mut state.engine,
@@ -650,8 +651,9 @@ impl EngineHandle {
             .map(|revision| revision.parse())
             .transpose()
             .map_err(|error: cache_core::revision::ParseCacheRevisionError| error.to_string())?;
-        self.admitted_read()
-            .await?
+        self.inner
+            .lock()
+            .await
             .engine
             .resume_live_query(&id, registration_id, since)
             .await
@@ -666,7 +668,7 @@ impl EngineHandle {
         operation_name: Option<String>,
         path: Vec<String>,
     ) -> Result<Vec<CachedQueryVariant>, String> {
-        self.admitted_read()
+        self.ready_read()
             .await?
             .engine
             .inspect_query_variants(&QueryInspection {
@@ -687,7 +689,7 @@ impl EngineHandle {
         path: Vec<String>,
         variable_filters: Vec<serde_json::Map<String, serde_json::Value>>,
     ) -> Result<Vec<CachedQueryInstance>, String> {
-        self.admitted_read()
+        self.ready_read()
             .await?
             .engine
             .inspect_query(&QueryInspection {
@@ -712,7 +714,7 @@ impl EngineHandle {
             data,
             identity,
         } = request;
-        let mut state = self.admitted_write().await?;
+        let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
         let registration = registration.map(|registration| {
@@ -775,7 +777,7 @@ impl EngineHandle {
         identity: Option<String>,
         hydration_scope: Option<HydrationScope>,
     ) -> Result<HydrationWriteResultWire, String> {
-        let mut state = self.admitted_hydration().await?;
+        let mut state = self.snapshot_hydration().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let projections = soup::write_projections(
             engine,
@@ -870,16 +872,13 @@ impl EngineHandle {
             &data,
             operation_name.as_deref(),
         );
-        let admitted = self.admission.is_none()
-            || engine
-                .check_authority_generation(
-                    self.admission.as_ref().and_then(|scope| scope.generation),
-                    self.admission
-                        .as_ref()
-                        .is_none_or(|scope| scope.require_proof),
-                )
-                .await
-                .is_ok();
+        soup_filter_cache_adapter::permissions::resume_crm_retirement(engine)
+            .await
+            .map_err(|error| error.to_string())?;
+        let admitted = engine
+            .snapshot_is_current(self.generation)
+            .await
+            .map_err(|error| error.to_string())?;
         let projections = if admitted {
             soup::optimistic_projections(
                 engine,
@@ -893,15 +892,16 @@ impl EngineHandle {
         } else {
             Vec::new()
         };
+        let empty = serde_json::json!({});
         let input = BeginOptimisticWrite {
             client_metadata: client_metadata.as_ref(),
             uuid: &uuid,
             query: &query,
             operation_name: operation_name.as_deref(),
             variables: &variables,
-            data: &data,
-            link_patches: &link_patches,
-            revalidations: &revalidations,
+            data: if admitted { &data } else { &empty },
+            link_patches: if admitted { &link_patches } else { &[] },
+            revalidations: if admitted { &revalidations } else { &[] },
             created_at_ms,
             identity_bindings: &identity_bindings,
         };
@@ -914,31 +914,16 @@ impl EngineHandle {
             .into_iter()
             .map(|key| EntityKey(key.into()))
             .collect();
-        let result = if let Some(admission) = &self.admission {
-            engine
-                .enqueue_optimistic_mutation_in_authority(
-                    origin,
-                    input,
-                    claim,
-                    cache_core::engine::authority::OptimisticEffects {
-                        projections,
-                        uncertain_calendar_event_keys: uncertain,
-                    },
-                    admission.clone(),
-                )
-                .await
-        } else {
-            engine
-                .enqueue_optimistic_mutation_with_calendar(
-                    origin,
-                    input,
-                    claim,
-                    projections,
-                    uncertain,
-                )
-                .await
-        }
-        .map_err(|error| error.to_string())?;
+        let result = engine
+            .enqueue_optimistic_mutation_with_calendar(
+                origin,
+                input,
+                claim,
+                projections,
+                if admitted { uncertain } else { Vec::new() },
+            )
+            .await
+            .map_err(|error| error.to_string())?;
         let initial_claim = match result.initial_claim {
             InitialClaimOutcome::Claimed(claimed) => InitialMutationClaimWire::Claimed {
                 mutation: ClaimedMutationWire::try_from(*claimed)?,
@@ -1043,16 +1028,13 @@ impl EngineHandle {
         };
         let mut state = self.inner.write().await;
         let EngineState { engine, ops, .. } = &mut *state;
-        let admitted = self.admission.is_none()
-            || engine
-                .check_authority_generation(
-                    self.admission.as_ref().and_then(|scope| scope.generation),
-                    self.admission
-                        .as_ref()
-                        .is_none_or(|scope| scope.require_proof),
-                )
-                .await
-                .is_ok();
+        soup_filter_cache_adapter::permissions::resume_crm_retirement(engine)
+            .await
+            .map_err(|error| error.to_string())?;
+        let admitted = engine
+            .snapshot_is_current(self.generation)
+            .await
+            .map_err(|error| error.to_string())?;
         let projections = if admitted {
             soup::write_projections(
                 engine,
@@ -1066,36 +1048,22 @@ impl EngineHandle {
         } else {
             Vec::new()
         };
-        let result = if let Some(admission) = &self.admission {
-            engine
-                .commit_optimistic_write_in_authority(
-                    transaction,
-                    claim,
-                    NetworkWrite {
-                        query: &query,
-                        operation_name: operation_name.as_deref(),
-                        variables: &variables,
-                        data: &data,
-                        identity: None,
-                    },
-                    projections,
-                    admission.clone(),
-                )
-                .await
-        } else {
-            engine
-                .commit_optimistic_write_with_projections_outcome(
-                    transaction,
-                    claim,
-                    &query,
-                    operation_name.as_deref(),
-                    &variables,
-                    &data,
-                    projections,
-                )
-                .await
-        }
-        .map_err(|e| e.to_string())?;
+        let result = engine
+            .settle_optimistic_response(
+                transaction,
+                claim,
+                NetworkWrite {
+                    query: &query,
+                    operation_name: operation_name.as_deref(),
+                    variables: &variables,
+                    data: &data,
+                    identity: None,
+                },
+                projections,
+                admitted,
+            )
+            .await
+            .map_err(|e| e.to_string())?;
         let revision = if admitted && !matches!(&result, CommitOptimisticWriteResult::Failed(_)) {
             soup_filter_cache_adapter::permissions::remember_property_owners(
                 engine,
@@ -1180,7 +1148,7 @@ impl EngineHandle {
         &self,
         keys: Vec<String>,
     ) -> Result<AffectedOperationsResultWire, String> {
-        let mut state = self.admitted_write().await?;
+        let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let projections = soup::invalidation_projections(engine, &keys).await?;
         let keys: Vec<EntityKey<'static>> =
@@ -1201,7 +1169,7 @@ impl EngineHandle {
         &self,
         keys: Vec<String>,
     ) -> Result<AffectedOperationsResultWire, String> {
-        let mut state = self.admitted_write().await?;
+        let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let projections = soup::deletion_projections(engine, &keys).await?;
         let keys: Vec<EntityKey<'static>> =

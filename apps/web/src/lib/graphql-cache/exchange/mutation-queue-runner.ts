@@ -1,9 +1,3 @@
-import {
-  assertResponseAuthority,
-  hasResponseAuthority,
-  queuedSettlementRequest,
-  responseAuthorityGeneration,
-} from '../response-authority';
 /**
  * Strict runner for the durable optimistic mutation queue.
  *
@@ -67,6 +61,7 @@ import type {
   MutationLease,
   QueryRevalidationWire,
 } from '../protocol';
+import { cacheSessionGeneration } from '../session-generation';
 import type { MutationQueueOwner } from './mutation-queue-owner';
 import {
   failureDetails,
@@ -224,18 +219,16 @@ export function withQueueRequestTimeout(op: Operation): Operation {
   const attempt = queueAttemptOf(op);
   return makeOperation(op.kind, op, {
     ...op.context,
+    cacheSessionGeneration: cacheSessionGeneration.capture(),
     fetch: async (input, init) => {
       const timeoutSignal = AbortSignal.timeout(QUEUE_REQUEST_TIMEOUT_MS);
       const send = () =>
-        operationFetch(
-          input,
-          queuedSettlementRequest({
-            ...init,
-            signal: init?.signal
-              ? anyAbortSignal([init.signal, timeoutSignal])
-              : timeoutSignal,
-          })
-        );
+        operationFetch(input, {
+          ...init,
+          signal: init?.signal
+            ? anyAbortSignal([init.signal, timeoutSignal])
+            : timeoutSignal,
+        });
       const response = await (attempt?.telemetry?.run(send) ?? send());
       if (attempt) attempt.response = response;
       return response;
@@ -353,7 +346,7 @@ export type MutationQueueRunnerDeps = {
   ) => Promise<OperationResult | undefined>;
   /** Query text and variables the cache normalizes `op`'s data against. */
   cacheDocument: (op: Operation) => {
-    authorityGeneration?: string;
+    generation?: string;
     query: string;
     operationName?: string;
     variables?: Record<string, unknown>;
@@ -375,7 +368,8 @@ export type MutationQueueRunnerDeps = {
   revalidate: (
     revalidations: QueryRevalidationWire[],
     mutation?: Operation,
-    affectedOps?: readonly string[]
+    affectedOps?: readonly string[],
+    refetchAll?: boolean
   ) => Promise<void>;
 };
 
@@ -1208,24 +1202,21 @@ export function createMutationQueueRunner(
         if (!transition(attempt, confirm(confirmed))) return detachedResult();
         await recordAttemptResult(attempt, result, false);
         if (!isCurrent(attempt)) return detachedResult();
+        const snapshotGeneration =
+          typeof op.context.cacheSessionGeneration === 'string'
+            ? op.context.cacheSessionGeneration
+            : cacheSessionGeneration.capture();
         const committed = await host.commitOptimisticWrite(
           attempt.transactionId,
           claim,
           {
             ...deps.cacheDocument(op),
-            authorityGeneration: hasResponseAuthority(response)
-              ? responseAuthorityGeneration(response)
-              : deps.cacheDocument(op).authorityGeneration,
             data: result.data,
+            generation: snapshotGeneration,
           }
         );
         if (!transition(attempt, forgetConfirmed)) return detachedResult();
         settled = true;
-        try {
-          await assertResponseAuthority(response);
-        } catch {
-          result = { ...result, data: undefined };
-        }
         for (const error of committed.identityErrors ?? []) {
           try {
             options.onCacheError?.(new Error(error), op);
@@ -1261,22 +1252,28 @@ export function createMutationQueueRunner(
           replacementTransactionId = committed.replacementTransactionId;
           disposition = 'superseded';
           outcome = 'superseded';
-          await deps.deleteReportedRecords(result);
+          if (cacheSessionGeneration.isCurrent(snapshotGeneration))
+            await deps.deleteReportedRecords(result);
+          else await deps.revalidate([], op, undefined, true);
         } else {
           disposition = 'committed';
           outcome = 'committed';
-          const deleted = await deps.deleteReportedRecords(result);
-          if (!isCurrent(attempt)) return detachedResult();
-          const replay = deps.replayExplicitEffects(op, result.data, () =>
-            isCurrent(attempt)
-          );
-          if (replay) await replay;
-          if (isCurrent(attempt))
-            await deps.revalidate(
-              committed.revalidations ?? [],
-              op,
-              deleted.attempted || replay ? undefined : committed.affectedOps
+          if (!cacheSessionGeneration.isCurrent(snapshotGeneration)) {
+            await deps.revalidate([], op, undefined, true);
+          } else {
+            const deleted = await deps.deleteReportedRecords(result);
+            if (!isCurrent(attempt)) return detachedResult();
+            const replay = deps.replayExplicitEffects(op, result.data, () =>
+              isCurrent(attempt)
             );
+            if (replay) await replay;
+            if (isCurrent(attempt))
+              await deps.revalidate(
+                committed.revalidations ?? [],
+                op,
+                deleted.attempted || replay ? undefined : committed.affectedOps
+              );
+          }
         }
       }
     } catch (error) {
@@ -1302,11 +1299,6 @@ export function createMutationQueueRunner(
         );
       }
       attemptTelemetry.finish(outcome, details);
-    }
-    try {
-      await assertResponseAuthority(response);
-    } catch {
-      result = { ...result, data: undefined };
     }
     return withOptimisticMutationDisposition(
       result,

@@ -2,15 +2,6 @@
 
 import { z } from 'zod/v3';
 
-export const AuthorityAdmissionSchema = z
-  .object({
-    generation: z.union([z.string().uuid(), z.null()]).optional(),
-    requireProof: z.boolean(),
-  })
-  .strict();
-
-export type AuthorityAdmission = z.infer<typeof AuthorityAdmissionSchema>;
-
 export const AuthorityTransitionSchema = z
   .object({
     affectedOps: z.array(z.string()),

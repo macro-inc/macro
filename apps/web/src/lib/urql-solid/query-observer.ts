@@ -1,4 +1,3 @@
-import { queryNeedsCrmProof } from '@graphql-cache/authority-scope';
 import {
   type AnyVariables,
   type Client,
@@ -7,7 +6,6 @@ import {
   type OperationContext,
   type OperationResult,
   type OperationResultSource,
-  stringifyDocument,
 } from '@urql/core';
 import { onEnd, pipe, type Subscription, subscribe } from 'wonka';
 import { liveQueryData } from '../graphql-cache/exchange/live-query';
@@ -347,10 +345,6 @@ export class QueryObserver<
     const authorization = crmSnapshotAuthorization();
     if (
       nextResult.data != null &&
-      queryNeedsCrmProof(
-        stringifyDocument(execution.options.query),
-        execution.options.variables as Record<string, unknown>
-      ) &&
       (authorization.paused ||
         nextResult.operation.context.cacheAuthorizationEpoch !==
           authorization.epoch)

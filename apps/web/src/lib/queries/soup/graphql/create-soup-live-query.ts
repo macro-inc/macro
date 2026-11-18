@@ -1,8 +1,6 @@
 import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
-import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { excludesCrmContent } from '@graphql-cache/authority-scope';
 import { Telemetry } from '@macro-inc/observability';
 import { until } from '@solid-primitives/promise';
 import type { CombinedError } from '@urql/core';
@@ -126,13 +124,7 @@ export function createSoupLiveQuery(
   // keep the page current; incomplete or failed ones leave the network page.
   const [localMailCurrent, setLocalMailCurrent] = createSignal(false);
 
-  const crmBlocked = () =>
-    !excludesCrmContent(request()?.filters) &&
-    crmSnapshotAuthorization().paused;
   const firstPageInput = createMemo(() => {
-    // Independent inputs must not track CRM proof epochs: replacing their
-    // identity discards the loaded Mail cursor and any page still in flight.
-    if (crmBlocked()) return;
     const input = request();
     return input ? { initial: { ...input, expand: true } } : undefined;
   });
@@ -1016,7 +1008,6 @@ export function createSoupLiveQuery(
   // or fails. Preserve covered decisions and local additions, then append new
   // rows in server-page order until a successful reconciliation orders the union.
   const displayData = createMemo((): GraphqlSoupItem[] | undefined => {
-    if (crmBlocked()) return;
     const local = displayLocalProjection();
     if (networkIsAuthoritative()) {
       const fetched = query.data?.records();

@@ -22,10 +22,6 @@ export function createUrqlInfiniteQuery<
   return createBaseQuery(
     getOptions,
     createInfiniteQueryObserver<PageData, Variables, PageParam, SelectedData>,
-    'createUrqlInfiniteQuery',
-    (options) => {
-      const variables = options.variables(options.initialPageParam, 0);
-      return variables && typeof variables === 'object' ? variables : undefined;
-    }
+    'createUrqlInfiniteQuery'
   );
 }

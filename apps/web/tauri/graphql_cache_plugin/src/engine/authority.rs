@@ -1,55 +1,62 @@
-//! Permission-generation admission under the native owner's existing lock.
+//! Blanket response-generation fencing under the shared native owner lock.
 
 use super::{EngineHandle, EngineState, access::AccessGuard};
-pub use cache_core::engine::authority::AuthorityAdmission;
 pub use cache_core::engine::authority::AuthorityTransitionWire;
 use cache_core::engine::authority::CacheAuthority;
 use uuid::Uuid;
 
 impl EngineHandle {
-    /// Bind admission to this command's cloned handle. Older web bundles omit
-    /// the entire claim and retain their legacy contract; a supplied claim is
-    /// always checked, including one with a missing or stale generation.
-    pub fn with_authority(mut self, admission: Option<AuthorityAdmission>) -> Self {
-        self.admission = admission;
+    /// The source generation is checked only when response content is written.
+    /// Omitted generations retain the deployed bundle's legacy IPC contract.
+    pub fn with_generation(mut self, generation: Option<Uuid>) -> Self {
+        self.generation = generation;
         self
     }
 
-    async fn admit(&self, state: &EngineState) -> Result<(), String> {
-        if let Some(admission) = &self.admission {
-            state
-                .engine
-                .check_authority_generation(admission.generation, admission.require_proof)
-                .await
-                .map_err(|error| error.to_string())?;
+    async fn check_generation(&self, state: &mut EngineState) -> Result<(), String> {
+        if state
+            .engine
+            .snapshot_is_current(self.generation)
+            .await
+            .map_err(|error| error.to_string())?
+        {
+            Ok(())
+        } else {
+            Err("cache response belongs to an older session generation".into())
         }
-        Ok(())
     }
 
-    pub(super) async fn admitted_read(&self) -> Result<AccessGuard<'_, EngineState>, String> {
-        let state = self.inner.lock().await;
-        self.admit(&state).await?;
+    pub(super) async fn ready_read(&self) -> Result<AccessGuard<'_, EngineState>, String> {
+        let mut state = self.inner.lock().await;
+        soup_filter_cache_adapter::permissions::resume_crm_retirement(&mut state.engine)
+            .await
+            .map_err(|error| error.to_string())?;
         Ok(state)
     }
 
-    pub(super) async fn admitted_write(&self) -> Result<AccessGuard<'_, EngineState>, String> {
-        let state = self.inner.write().await;
-        self.admit(&state).await?;
+    pub(super) async fn snapshot_write(&self) -> Result<AccessGuard<'_, EngineState>, String> {
+        let mut state = self.inner.write().await;
+        soup_filter_cache_adapter::permissions::resume_crm_retirement(&mut state.engine)
+            .await
+            .map_err(|error| error.to_string())?;
+        self.check_generation(&mut state).await?;
         Ok(state)
     }
 
-    pub(super) async fn admitted_hydration(&self) -> Result<AccessGuard<'_, EngineState>, String> {
-        let state = self.inner.hydrate().await?;
-        self.admit(&state).await?;
+    pub(super) async fn snapshot_hydration(&self) -> Result<AccessGuard<'_, EngineState>, String> {
+        let mut state = self.inner.hydrate().await?;
+        soup_filter_cache_adapter::permissions::resume_crm_retirement(&mut state.engine)
+            .await
+            .map_err(|error| error.to_string())?;
+        self.check_generation(&mut state).await?;
         Ok(state)
     }
 
     /// Capture the owner generation before a request. This is also the native
     /// capability floor; older binaries do not implement this command.
     pub async fn current_authority(&self, identity: &str) -> Result<CacheAuthority, String> {
-        self.inner
-            .lock()
-            .await
+        self.ready_read()
+            .await?
             .engine
             .current_authority(identity)
             .await

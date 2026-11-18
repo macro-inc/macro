@@ -208,8 +208,7 @@ export function predictOptimisticMutation(
 
 /** Install immediately before normalizedCacheExchange, which owns settlement. */
 export function optimisticResolversExchange(
-  resolvers: readonly OptimisticResolver[],
-  currentGeneration?: () => string | undefined
+  resolvers: readonly OptimisticResolver[]
 ): Exchange {
   const byField = resolversByField(resolvers);
   return prepareOptimisticExchange((operation) => {
@@ -220,28 +219,17 @@ export function optimisticResolversExchange(
     ) {
       return operation;
     }
-    // These predictions contain only authored arguments. Capture their source
-    // before evaluation; copied caller updates still need their own provenance.
-    const generation = currentGeneration?.();
     const local = predict(byField, operation.query, operation.variables);
     if (!local) return operation;
     const options = operation.context.optimisticMutation as
       | OptimisticCallOptions
       | undefined;
-    const merged = mergeOptions(local.options, options);
     return makeOperation('mutation', operation, {
       ...operation.context,
-      ...optimisticMutationContext(local.response, {
-        ...merged,
-        authorizationEpoch:
-          merged.authorizationEpoch ??
-          operation.context.cacheAuthorizationEpoch,
-        authorityGeneration:
-          merged.authorityGeneration ??
-          (options?.updates?.length || options?.snapshotRejected
-            ? undefined
-            : generation),
-      }),
+      ...optimisticMutationContext(
+        local.response,
+        mergeOptions(local.options, options)
+      ),
     });
   });
 }

@@ -1,4 +1,3 @@
-import { beginQueryAuthorizationReset } from '@app/lib/urql-solid/authorization';
 import type {
   SearchCacheArgs,
   SearchCachePage,
@@ -92,42 +91,6 @@ function deferred<T>() {
 }
 
 describe('Quick Access local projection', () => {
-  it('drops email-only results and a delayed materialization when access is revoked', async () => {
-    const delayed = deferred<{ id: string }[]>();
-    const [revision, setRevision] = createSignal(0);
-    const project = vi
-      .fn()
-      .mockResolvedValueOnce([{ id: 'old mail' }])
-      .mockImplementationOnce(() => delayed.promise)
-      .mockResolvedValue([]);
-    const list = root(() =>
-      createProjectedList({
-        host: {
-          search: async () => ({
-            documents: [document('mail', 'email')],
-            nextCursor: null,
-          }),
-        },
-        buckets: ['email'],
-        revision,
-        materialize: project,
-      })
-    );
-    await vi.waitFor(() => expect(list.items()).toEqual([{ id: 'old mail' }]));
-    setRevision(1);
-    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(2));
-    const resume = beginQueryAuthorizationReset();
-    try {
-      await vi.waitFor(() => expect(list.items()).toEqual([]));
-      delayed.resolve([{ id: 'stale delayed mail' }]);
-      await Promise.resolve();
-      expect(list.items()).toEqual([]);
-    } finally {
-      resume();
-    }
-    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(3));
-    expect(list.items()).toEqual([]);
-  });
   it('ranks the row reads of a typed search with it, and leaves browsing reads alone', async () => {
     const readRecordsByKeys = vi.fn(async () => ({
       revision: 0 as never,

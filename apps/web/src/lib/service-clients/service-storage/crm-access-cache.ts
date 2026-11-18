@@ -1,25 +1,16 @@
-import { beginQueryAuthorizationReset } from '@app/lib/urql-solid/authorization';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   guardResponseBody,
-  type ResponseGuard,
   registerResponseObserver,
 } from '@core/util/response-observers';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
-import { recordExternalWrite } from '@graphql-cache/exchange/external-writes';
 import type { CacheHost } from '@graphql-cache/host/types';
-import {
-  isQueuedSettlementRequest,
-  rememberResponseAuthority,
-  rememberResponseSession,
-  rememberWriteResponse,
-} from '@graphql-cache/response-authority';
-import { Telemetry } from '@macro-inc/observability';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { queryClient, queryPersistence } from '@queries/client';
 import { crmProtectedQueryKey } from '@queries/crm-cache-scope';
 import { authServiceClient } from '@service-auth/client';
-import { onlineManager } from '@tanstack/solid-query';
+import { focusManager, onlineManager } from '@tanstack/solid-query';
 import { dssFetch } from './client';
 import {
   type CrmRetirementScope,
@@ -27,25 +18,18 @@ import {
   crmAccessAuthority,
   isCrmPolicy,
 } from './crm-access-authority';
-import {
-  crmResponseScope,
-  isEmailReminderPath,
-  isHistoryItemPath,
-} from './crm-response-scope';
 import type { CrmMemberAccessResponse } from './generated/schemas/crmMemberAccessResponse';
 
 let host: CacheHost | undefined;
 let installed = false;
+let lastMismatchedHint: string | undefined;
 
 async function fetchProof(timeoutMs: number): Promise<string> {
-  const context = Telemetry.captureContext();
   const signal = AbortSignal.timeout(timeoutMs);
-  const result = await context.run(() =>
-    dssFetch<CrmMemberAccessResponse>('/crm/member-access', {
-      cache: 'no-store',
-      signal,
-    })
-  );
+  const result = await dssFetch<CrmMemberAccessResponse>('/crm/member-access', {
+    cache: 'no-store',
+    signal,
+  });
   if (result.isErr()) {
     if (
       !signal.aborted &&
@@ -55,92 +39,33 @@ async function fetchProof(timeoutMs: number): Promise<string> {
     throw new Error('Unable to verify CRM access');
   }
   if (result.value == null || typeof result.value.allowed !== 'boolean')
-    throw new Error('Unable to verify CRM access');
-  const policy =
-    result.value.team_id == null
-      ? 'none'
-      : `${result.value.team_id}:${result.value.allowed ? 'allowed' : 'denied'}`;
-  if (!isCrmPolicy(policy)) throw new Error('Invalid CRM access proof');
-  return policy;
+    throw new Error('Invalid CRM access response');
+  return result.value.team_id == null
+    ? 'none'
+    : `${result.value.team_id}:${result.value.allowed ? 'allowed' : 'denied'}`;
 }
 
-let resumeVisibleSnapshots: (() => void) | undefined;
-let independentSessionRetirement: Promise<void> | undefined;
-
-function sessionSnapshotKey(key: readonly unknown[]): boolean {
-  const [kind, scope] = key;
-  // Reminder details can be seeded from collections belonging to any account.
-  // Retire both prefixes before replacement-login readers resume.
-  return (
-    kind === 'email' ||
-    kind === 'soup' ||
-    (kind === 'reminders' &&
-      ['email', 'emailCollection'].includes(String(scope)))
+async function retireVisibleSnapshots(
+  scope: CrmRetirementScope | undefined,
+  generation: string
+) {
+  await cacheSessionGeneration.transition(async () => {
+    // Cancel every pre-transition query; mutations retain their real server outcome.
+    await queryClient.cancelQueries();
+    if (scope)
+      await queryPersistence.retire(
+        scope === 'session' ? () => true : crmProtectedQueryKey
+      );
+  }, generation);
+  fireAndForget(
+    queryClient.refetchQueries({ type: 'active' }),
+    'crm.access.refetch'
   );
 }
 
-async function refetchIndependentSessionSnapshots() {
-  const retirement = independentSessionRetirement;
-  if (!retirement || !crmAccessAuthority.account()) return;
-  await retirement;
-  if (
-    retirement !== independentSessionRetirement ||
-    !crmAccessAuthority.account()
-  )
-    return;
-  independentSessionRetirement = undefined;
-  await queryClient.refetchQueries({
-    type: 'active',
-    predicate: (query) =>
-      sessionSnapshotKey(query.queryKey) &&
-      !crmProtectedQueryKey(query.queryKey),
-  });
-}
-
-async function retireVisibleSnapshots(scope: CrmRetirementScope) {
-  resumeVisibleSnapshots = beginQueryAuthorizationReset();
-  if (host)
-    recordExternalWrite(host, [
-      'GraphqlUser',
-      'GraphqlSoupCrmCompany',
-      'GraphqlSoupCrmContact',
-      'GraphqlSoupEmailThread',
-      'GraphqlCrmPipeline',
-    ]);
-  const retirement = queryPersistence.retire(
-    (key) =>
-      (scope === 'session' && sessionSnapshotKey(key)) ||
-      crmProtectedQueryKey(key)
-  );
-  if (scope === 'session') independentSessionRetirement = retirement;
-  await retirement;
-  // Persistence rebinds observers without fetching. Independent mail and flat
-  // Soup readers resume after session cleanup even without CRM proof.
-  if (scope === 'session')
-    fireAndForget(
-      refetchIndependentSessionSnapshots(),
-      'crm.access.mail_refetch'
-    );
-}
-
-function verifiedVisibleSnapshots() {
-  const resume = resumeVisibleSnapshots;
-  if (!resume) return;
-  resumeVisibleSnapshots = undefined;
-  resume();
-  // The response performing retirement must finish before an active REST read
-  // is reissued. The shared owner has already retired normalized snapshots.
-  setTimeout(
-    () =>
-      fireAndForget(
-        queryClient.refetchQueries({
-          type: 'active',
-          predicate: (query) => crmProtectedQueryKey(query.queryKey),
-        }),
-        'crm.access.refetch'
-      ),
-    0
-  );
+function refresh() {
+  if (crmAccessAuthority.account())
+    fireAndForget(crmAccessAuthority.refresh(), 'crm.access.refresh');
 }
 
 function install() {
@@ -149,7 +74,6 @@ function install() {
   configureCrmAccessAuthority({
     fetchProof,
     retire: retireVisibleSnapshots,
-    verified: verifiedVisibleSnapshots,
     async bindAccount(owner, generation, account) {
       const target = host;
       if (
@@ -158,8 +82,7 @@ function install() {
         crmAccessAuthority.account() !== account
       )
         throw new StaleCacheAuthorityError();
-      // Never bind from restored user-info. A fresh authenticated response
-      // must match this login, and the pre-fetch owner generation fences the write.
+      // Only fresh authenticated identity may bind a restored anonymous profile.
       const identity = await authServiceClient.getLegacyUserPermissions();
       if (
         identity.isErr() ||
@@ -169,35 +92,19 @@ function install() {
         crmAccessAuthority.account() !== account
       )
         throw new StaleCacheAuthorityError();
-      try {
-        await target.writeQuery({
-          query: '{ user { id } }',
-          data: { user: { id: account } },
-          identity: account,
-          authorityGeneration: generation,
-        });
-      } catch (error) {
-        if (
-          !(error instanceof StaleCacheAuthorityError) ||
-          (await owner.current()).account !== account
-        )
-          throw error;
-      }
+      await target.writeQuery({
+        query: '{ user { id } }',
+        data: { user: { id: account } },
+        identity: account,
+        generation,
+      });
     },
   });
-  crmAccessAuthority.onSessionChanged(() => {
-    fireAndForget(
-      refetchIndependentSessionSnapshots(),
-      'crm.access.mail_refetch'
-    );
+  focusManager.subscribe((focused) => {
+    if (focused) refresh();
   });
   onlineManager.subscribe((online) => {
-    if (
-      online &&
-      crmAccessAuthority.account() &&
-      ['pending', 'error'].includes(crmAccessAuthority.state())
-    )
-      fireAndForget(crmAccessAuthority.refresh(), 'crm.access.reconnect');
+    if (online) refresh();
   });
   registerResponseObserver((input, init) => {
     if (!crmAccessAuthority.account()) return;
@@ -205,129 +112,48 @@ function install() {
       input instanceof Request ? input.url : String(input),
       document.baseURI
     );
-    const matches = (base: string) => {
-      const parsed = new URL(base, document.baseURI);
-      return (
-        url.origin === parsed.origin &&
-        url.pathname.startsWith(`${parsed.pathname.replace(/\/$/, '')}/`)
+    const storage = new URL(
+      SERVER_HOSTS['document-storage-service'],
+      document.baseURI
+    );
+    const base = storage.pathname.replace(/\/$/, '');
+    const isStorage =
+      url.origin === storage.origin && url.pathname.startsWith(`${base}/`);
+    const path = isStorage ? url.pathname.slice(base.length) : '';
+    if (path === '/crm/member-access') return;
+    if (isStorage) {
+      const headers = new Headers(
+        init.headers ?? (input instanceof Request ? input.headers : undefined)
       );
+      headers.set('x-macro-crm-access-signal', '1');
+      init.headers = headers;
+    }
+    const generation = cacheSessionGeneration.capture();
+    const method = (
+      init.method ?? (input instanceof Request ? input.method : 'GET')
+    ).toUpperCase();
+    return (response) => {
+      const hint = response.headers.get('x-macro-crm-access');
+      const policy = crmAccessAuthority.snapshot()?.policy;
+      if (hint === policy) lastMismatchedHint = undefined;
+      else if (isCrmPolicy(hint) && hint !== lastMismatchedHint) {
+        lastMismatchedHint = hint;
+        refresh();
+      } else if (
+        isStorage &&
+        path.startsWith('/crm/') &&
+        response.status === 403 &&
+        crmAccessAuthority.state() !== 'denied'
+      )
+        refresh();
+      // GraphQL distinguishes queries from mutations in its exchange. REST writes
+      // keep their outcome; TanStack cancellation fences POST-based query results.
+      if (method !== 'GET' && method !== 'HEAD') return response;
+      return guardResponseBody(response, () => {
+        if (!cacheSessionGeneration.isCurrent(generation))
+          throw new StaleCacheAuthorityError();
+      });
     };
-    const storage = matches(SERVER_HOSTS['document-storage-service']);
-    const email = matches(SERVER_HOSTS['email-service']);
-    const agentActivity =
-      matches(SERVER_HOSTS['agent-harness']) &&
-      /\/agent-sessions\/[^/]+\/activity$/.test(url.pathname);
-    if (!storage && !email && !agentActivity) return;
-    if (storage && url.pathname.endsWith('/crm/member-access')) return;
-    const base = storage
-      ? SERVER_HOSTS['document-storage-service']
-      : agentActivity
-        ? SERVER_HOSTS['agent-harness']
-        : SERVER_HOSTS['email-service'];
-    const path = url.pathname.slice(
-      new URL(base, document.baseURI).pathname.replace(/\/$/, '').length
-    );
-    const assertSession = crmAccessAuthority.captureSession();
-    const scope = crmResponseScope(
-      storage ? 'storage' : agentActivity ? 'agent' : 'email',
-      path,
-      input,
-      init
-    );
-    const observeScope = (
-      scope: Awaited<ReturnType<typeof crmResponseScope>>
-    ): ResponseGuard | undefined | Promise<ResponseGuard> => {
-      const queuedMutation = isQueuedSettlementRequest(init);
-      if (!scope.protected) {
-        if (
-          !email &&
-          !queuedMutation &&
-          !path.endsWith('/graphql') &&
-          path !== '/items/soup/ast' &&
-          !isEmailReminderPath(path) &&
-          !isHistoryItemPath(path)
-        )
-          return;
-        assertSession();
-        return (response) => {
-          // Independent replies retain the login fence without waiting for
-          // CRM proof or rejecting a same-login permission generation change.
-          rememberResponseSession(response, assertSession);
-          // Durable commands must settle returned IDs even after login changes;
-          // the publication check still rejects their copied content.
-          if (queuedMutation && response.ok) return response;
-          assertSession();
-          return guardResponseBody(response, assertSession);
-        };
-      }
-      assertSession();
-      return (async () => {
-        if (storage) {
-          const headers = new Headers(
-            init.headers ??
-              (input instanceof Request ? input.headers : undefined)
-          );
-          headers.set('x-macro-crm-access-signal', '1');
-          init.headers = headers;
-        }
-        const captured = await crmAccessAuthority.prepare();
-        return async (response: Response) => {
-          let admitted: typeof captured | undefined = captured;
-          let rejected: unknown;
-          try {
-            const policy = response.headers.get('x-macro-crm-access');
-            const current = await captured.owner.current();
-            if (
-              !storage ||
-              (isCrmPolicy(policy) && policy === current.policy)
-            ) {
-              try {
-                await crmAccessAuthority.assertCurrent(captured);
-              } catch {
-                // Recover from a prior unavailable proof without trusting the hint.
-                await crmAccessAuthority.refresh();
-              }
-            } else {
-              await crmAccessAuthority.refresh();
-            }
-            // Hints can be memoized or read after the handler. Only a fresh proof
-            // changes authority; the response always retains its original generation.
-            await crmAccessAuthority.assertCurrent(captured);
-          } catch (error) {
-            // An ordinary write keeps its real outcome, while a successful queued
-            // write still needs its identity to settle. Neither can publish rejected
-            // content to a cache; only reads fail when content admission fails.
-            if (
-              !(scope.write && !queuedMutation) &&
-              (!queuedMutation || !response.ok)
-            )
-              throw error;
-            admitted = undefined;
-            rejected = error;
-          }
-          const check = async () => {
-            if (!admitted) throw rejected ?? new StaleCacheAuthorityError();
-            await crmAccessAuthority.assertCurrent(admitted);
-          };
-          rememberResponseAuthority(response, admitted?.generation, check);
-          if (scope.write && !queuedMutation) {
-            assertSession();
-            rememberWriteResponse(response, assertSession);
-            return guardResponseBody(response, async () => assertSession());
-          }
-          return guardResponseBody(response, async () => {
-            try {
-              await check();
-            } catch (error) {
-              if (!queuedMutation) throw error;
-            }
-          });
-        };
-      })();
-    };
-    return scope instanceof Promise
-      ? scope.then(observeScope)
-      : observeScope(scope);
   });
 }
 
@@ -339,7 +165,8 @@ export function installCrmCacheHost(next: CacheHost | undefined) {
 
 export function setCrmAccessSession(account: string | undefined, epoch = 0) {
   install();
-  crmAccessAuthority.setSession(account, epoch);
-  if (account)
-    fireAndForget(crmAccessAuthority.refresh(), 'crm.access.refresh');
+  if (crmAccessAuthority.setSession(account, epoch)) {
+    lastMismatchedHint = undefined;
+    refresh();
+  }
 }

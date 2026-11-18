@@ -6,6 +6,7 @@ pub mod authority;
 mod calendar;
 mod hydration;
 mod people;
+mod retirement;
 pub use hydration::HydrationScope;
 #[cfg(test)]
 mod test;
@@ -2530,7 +2531,10 @@ impl<S: Storage> Engine<S> {
         .await
     }
 
-    async fn settle_optimistic_response(
+    /// Finalizes a server outcome, optionally omitting copied response content.
+    /// Callers serialize cache retirement with publication; a stale outcome still
+    /// settles its queue claim and canonical identities without replaying HTTP.
+    pub async fn settle_optimistic_response(
         &mut self,
         transaction: OptimisticTransactionId,
         claim: MutationClaimToken,

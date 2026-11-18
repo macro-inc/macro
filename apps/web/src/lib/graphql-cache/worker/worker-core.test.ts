@@ -13,7 +13,6 @@ vi.mock('./wasm-module', () => ({
     const module = await loadCacheWasmMock();
     const wrap = (engine: object) => ({
       currentAuthority: async (identity: string) => testAuthority(identity),
-      checkAuthority: async () => {},
       ...engine,
     });
     const result = { ...module };
@@ -39,6 +38,77 @@ import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
+  it('rejects a delayed write from another tab after the shared owner retires its generation', async () => {
+    const started = Promise.withResolvers<void>();
+    const cleanup = Promise.withResolvers<void>();
+    const next = '00000000-0000-4000-8000-000000000099';
+    let generation = TEST_AUTHORITY_GENERATION;
+    const written = {
+      revision: INITIAL_CACHE_REVISION,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    };
+    const writeQuery = vi.fn().mockResolvedValue(written);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        currentAuthority: async (identity: string) => ({
+          ...testAuthority(identity),
+          generation,
+        }),
+        transitionAuthority: async (identity: string) => {
+          generation = next;
+          started.resolve();
+          await cleanup.promise;
+          return {
+            ...written,
+            changed: true,
+            authority: { ...testAuthority(identity), generation },
+          };
+        },
+        writeQuery,
+      }),
+    });
+    const first = { postMessage: vi.fn() };
+    const second = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(first, {
+      id: 1,
+      kind: 'init',
+      scope: 'shared-profile',
+    });
+    const transition = core.handleRequest(second, {
+      id: 2,
+      kind: 'transition-authority',
+      identity: 'shared-profile',
+      expected: generation,
+      policy: '00000000-0000-4000-8000-000000000001:denied',
+    });
+    await started.promise;
+    const write = {
+      id: 3,
+      kind: 'write' as const,
+      query: '{ user { id } }',
+      data: { user: { id: 'viewer' } },
+    };
+    const delayed = core.handleRequest(first, {
+      ...write,
+      generation: TEST_AUTHORITY_GENERATION,
+    });
+    cleanup.resolve();
+    await Promise.all([transition, delayed]);
+    expect(writeQuery).not.toHaveBeenCalled();
+    expect(first.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 3,
+        ok: false,
+        error: 'cache response belongs to an older session generation',
+      })
+    );
+    await core.handleRequest(first, { ...write, id: 4, generation: next });
+    expect(writeQuery).toHaveBeenCalledOnce();
+  });
+
   it('uses GraphQL JSON variable semantics for every WASM query and mutation path', async () => {
     const written = {
       revision: INITIAL_CACHE_REVISION,

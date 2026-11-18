@@ -1,32 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createCrmAccessAuthority } from '../../service-clients/service-storage/crm-access-authority';
-import { StaleCacheAuthorityError } from '../authority';
-import { testAuthority } from '../authority-fixture';
 
 const { invoke, listen } = vi.hoisted(() => ({
   invoke: vi.fn(),
   listen: vi.fn(),
 }));
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: (command: string, args: Record<string, unknown> = {}) => {
-    if (command === 'graphql_cache_current_authority')
-      return Promise.resolve(testAuthority(String(args.identity)));
-    if (command === 'graphql_cache_transition_authority')
-      return Promise.resolve({
-        authority: {
-          ...testAuthority(String(args.identity)),
-          policy: args.policy,
-        },
-        changed: false,
-        affectedOps: [],
-        revision: '0',
-      });
-    const { authority: _, authorityGeneration: _generation, ...request } = args;
-    return invoke(command, request);
-  },
-}));
+vi.mock('@tauri-apps/api/core', () => ({ invoke }));
 vi.mock('@tauri-apps/api/event', () => ({ listen, emit: vi.fn() }));
 
+import { testAuthority } from '../authority-fixture';
 import {
   type EntityFilterCacheArgs,
   type LiveQueryUpdate,
@@ -35,14 +16,7 @@ import {
 import { createTauriCacheHost, LIVE_QUERY_CAPACITY } from './tauri-host';
 
 const args: EntityFilterCacheArgs = {
-  filters: {
-    crmCompanyFilter: {
-      literal: { id: '00000000-0000-0000-0000-000000000000' },
-    },
-    crmContactFilter: {
-      literal: { id: '00000000-0000-0000-0000-000000000000' },
-    },
-  },
+  filters: {},
   sortMethod: 'UPDATED_AT',
   sortDirection: 'DESC',
   limit: 25,
@@ -69,158 +43,13 @@ describe('native retained view transport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listen.mockResolvedValue(() => {});
-    invoke.mockImplementation(async (command: string) =>
-      command.startsWith('graphql_cache_entity_filter') ? update : null
-    );
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_current_authority')
+        return testAuthority('scope-1');
+      return command.startsWith('graphql_cache_entity_filter') ? update : null;
+    });
   });
   afterEach(() => vi.restoreAllMocks());
-
-  it('resumes an ordinary view repeatedly without a CRM proof while offline', async () => {
-    const host = createTauriCacheHost({ scope: 'scope-1' });
-    const proof = vi.fn(async () => {
-      throw new TypeError('CRM proof is offline');
-    });
-    host.authority!.setReadGuard(proof);
-    try {
-      await host.entityFilter(args);
-      const next = {
-        ...args,
-        liveQuery: { ...args.liveQuery!, since: update.revision },
-      };
-      await expect(host.entityFilter(next)).resolves.toEqual(update);
-      await expect(host.entityFilter(next)).resolves.toEqual(update);
-      expect(proof).not.toHaveBeenCalled();
-      expect(
-        invoke.mock.calls.filter(
-          ([command]) => command === 'graphql_cache_entity_filter_resume'
-        )
-      ).toEqual([
-        [
-          'graphql_cache_entity_filter_resume',
-          {
-            id: 'view',
-            registrationId: 'registration-1',
-            since: update.revision,
-          },
-        ],
-        [
-          'graphql_cache_entity_filter_resume',
-          {
-            id: 'view',
-            registrationId: 'registration-1',
-            since: update.revision,
-          },
-        ],
-      ]);
-    } finally {
-      host.dispose();
-    }
-  });
-
-  it('keeps a CRM view resume gated by the permission proof', async () => {
-    const host = createTauriCacheHost({ scope: 'scope-1' });
-    const owner = await host.authority!.current();
-    await host.authority!.transition(owner.generation, 'none');
-    const crm = { ...args, filters: {} };
-    const proof = vi.fn(async () => {
-      throw new TypeError('CRM proof is offline');
-    });
-    try {
-      await host.entityFilter(crm);
-      host.authority!.setReadGuard(proof);
-      await expect(host.entityFilter(crm)).rejects.toThrow(
-        'CRM proof is offline'
-      );
-      expect(proof).toHaveBeenCalledOnce();
-      expect(
-        invoke.mock.calls.some(
-          ([command]) => command === 'graphql_cache_entity_filter_resume'
-        )
-      ).toBe(false);
-    } finally {
-      host.dispose();
-    }
-  });
-
-  it('retains a CRM registration while reusing the ready durable permission proof', async () => {
-    const host = createTauriCacheHost({ scope: 'scope-1' });
-    const fetchProof = vi.fn(async () => 'none');
-    const controller = createCrmAccessAuthority({
-      fetchProof,
-      retire: async () => {},
-    });
-    controller.setSession('viewer');
-    controller.setHost(host.authority);
-    const crm = { ...args, filters: {} };
-    try {
-      await expect(host.entityFilter(crm)).resolves.toEqual(update);
-      const next = {
-        ...crm,
-        liveQuery: { ...crm.liveQuery!, since: update.revision },
-      };
-      await expect(host.entityFilter(next)).resolves.toEqual(update);
-      await expect(host.entityFilter(next)).resolves.toEqual(update);
-      expect(fetchProof).not.toHaveBeenCalled();
-      expect(
-        invoke.mock.calls
-          .map(([command]) => command)
-          .filter((command) =>
-            command.startsWith('graphql_cache_entity_filter')
-          )
-      ).toEqual([
-        'graphql_cache_entity_filter',
-        'graphql_cache_entity_filter_resume',
-        'graphql_cache_entity_filter_resume',
-      ]);
-    } finally {
-      controller.setHost(undefined);
-      controller.setSession(undefined);
-      host.dispose();
-    }
-  });
-
-  it('rejects a resume whose ID was reused for another descriptor during proof preflight', async () => {
-    const host = createTauriCacheHost({ scope: 'scope-1' });
-    const owner = await host.authority!.current();
-    await host.authority!.transition(owner.generation, 'none');
-    const crm = { ...args, filters: {} };
-    await host.entityFilter(crm);
-    const entered = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    const proof = vi.fn(() => {
-      entered.resolve();
-      return release.promise;
-    });
-    host.authority!.setReadGuard(proof);
-    const pending = host.entityFilter(crm);
-    const rejected = expect(pending).rejects.toBeInstanceOf(
-      StaleCacheAuthorityError
-    );
-    try {
-      await entered.promise;
-      await host.entityFilter(args);
-      release.resolve();
-      await rejected;
-      expect(
-        invoke.mock.calls.some(
-          ([command]) => command === 'graphql_cache_entity_filter_resume'
-        )
-      ).toBe(false);
-      await expect(host.entityFilter(args)).resolves.toEqual(update);
-      expect(proof).toHaveBeenCalledOnce();
-      expect(invoke).toHaveBeenLastCalledWith(
-        'graphql_cache_entity_filter_resume',
-        {
-          id: 'view',
-          registrationId: 'registration-1',
-          since: undefined,
-        }
-      );
-    } finally {
-      release.resolve();
-      host.dispose();
-    }
-  });
 
   it('resumes a registered specification and registers again after engine eviction', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
@@ -340,9 +169,11 @@ describe('native retained view transport', () => {
 
   it('reads a fresh revision without transmitting a fragment for empty selections', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
-    invoke.mockImplementation(async (command: string) =>
-      command === 'graphql_cache_current_revision' ? '42' : null
-    );
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_current_authority')
+        return testAuthority('scope-1');
+      return command === 'graphql_cache_current_revision' ? '42' : null;
+    });
     await expect(
       host.readRecordsByKeys({
         document: args.liveQuery!.document,

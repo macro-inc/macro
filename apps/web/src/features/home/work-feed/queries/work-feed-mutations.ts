@@ -1,8 +1,4 @@
 import {
-  markSourceAuthority,
-  sourceAuthorityGeneration,
-} from '@graphql-cache/source-authority';
-import {
   MarkWorkFeedItemsDoneDocument,
   UndoWorkFeedItemsDoneDocument,
   type WorkFeedPatchFieldsFragment,
@@ -51,8 +47,5 @@ export async function undoWorkFeedItemsDone(
   if (result.error || !payload) {
     throw result.error ?? new Error('Undoing work feed done failed');
   }
-  return markSourceAuthority(
-    payload.patches,
-    sourceAuthorityGeneration(result.data)
-  );
+  return payload.patches;
 }

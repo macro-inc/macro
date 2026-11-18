@@ -795,7 +795,7 @@ the same on desktop and phones.
 A failed save keeps the previous state and can be retried; members do not see these controls.
 An independently shared item can remain open after revocation, but its CRM record
 breadcrumbs and task-creation preset disappear. Previews, including email mentions,
-withhold retired snapshots until permission verification completes. A CRM deep
+drop retired snapshots when the cache generation changes. A CRM deep
 link shows a loading skeleton while its first proof is pending, then the existing
 retry state if verification fails. **Try again** or reconnecting retries the proof.
 Only a proven denial shows the access-denied screen or closes CRM dialogs; a
@@ -806,27 +806,23 @@ once, while terminal proof errors do not retry automatically.
 when record routes return access denied. Clients holding CRM caches may request
 the storage retirement hint with `x-macro-crm-access-signal: 1`; its three-second
 server memoization never applies to record checks or this fresh endpoint. The
-next opted-in request after expiry observes the change (or a missing hint that
-requires a fresh proof); idle/offline clients have no fixed retirement deadline.
-The client sends that opt-in for storage responses that can carry CRM content;
-independent requests such as document creation and the fresh authority endpoint
-skip it. Changed or unavailable hints trigger a fresh proof before cache admission.
-Protected local reads reuse the verified proof for their current account and
-cache generation, including offline. Stale proofs and explicit permission
-signals require verification; a transient failure does not discard a valid proof. Cached personal inbox, Work Feed, bookmark metadata and ordinary
-database views remain readable at offline startup without that proof. Cached Soup
-continuations stay readable after their independently scoped parent page is read;
-unknown cursors remain gated, and account or cache replacement closes that scope.
-An own
-thread is readable when its cached ownership matches the current account and
-generation; CRM-only shared threads remain closed without access. The first
+next opted-in request after expiry observes the change; idle/offline clients have
+no fixed retirement deadline. The client sends that opt-in for storage requests
+except the fresh authority endpoint. Changed hints, CRM access-denied responses,
+boot, focus and reconnect trigger a background proof. Ordinary requests, response
+frames and cached reads never wait for it. A transient failure retains the last
+proven policy, so offline caches remain available until a proven access change.
+Missing hints alone do not change the policy. The first
 allowed or team-less proof preserves existing offline content. A proven denial
 or team-scope change performs conservative cleanup of mixed mail/database snapshots, so independent
 content removed by that cleanup needs an authorized refresh before it is
-available offline again. An already-started read retains its original generation and is
-discarded if authority changed while it was in flight. A completed write keeps
-its actual status and payload for the same login, but its cache effects are
-discarded after retirement. Company/contact create forms close after a successful
+available offline again. Every read and subscription frame retains its original
+session generation and is discarded if access changes while it is in flight;
+active queries refetch once after local retirement. Native webviews and browser
+tabs share the same generation comparison at the cache owner. A completed write
+keeps its actual status and payload for the same login, but its old cache effects
+are discarded after retirement. Queued writes still settle their identity and
+draft journal without restoring the retired response. Company/contact create forms close after a successful
 write even if the later proof fails; revocation closes the record view without
 reporting the completed creation as failed or offering a duplicate retry.
 

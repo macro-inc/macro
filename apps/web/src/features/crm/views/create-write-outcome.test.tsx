@@ -1,5 +1,5 @@
-import { beginQueryAuthorizationReset } from '@app/lib/urql-solid/authorization';
 import { safeFetch } from '@core/util/safeFetch';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   cleanup,
   fireEvent,
@@ -32,7 +32,10 @@ vi.mock('@service-storage/client', () => ({ dssFetch: fixtures.proof }));
 vi.mock('@service-auth/client', () => ({ authServiceClient: {} }));
 vi.mock('@queries/client', () => ({
   queryPersistence: { retire: fixtures.retire },
-  queryClient: { refetchQueries: fixtures.refetch },
+  queryClient: {
+    refetchQueries: fixtures.refetch,
+    cancelQueries: async () => {},
+  },
 }));
 vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
 vi.mock('@service-storage/crm-contacts', () => ({
@@ -87,7 +90,10 @@ vi.mock('./contact-detail', () => ({
 vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));
 
 import { crmAccessAuthority } from '@service-storage/crm-access-authority';
-import { installCrmCacheHost } from '@service-storage/crm-access-cache';
+import {
+  installCrmCacheHost,
+  setCrmAccessSession,
+} from '@service-storage/crm-access-cache';
 import { crmKeys } from '../queries/keys';
 import { CreateCompanyModal } from './create-company';
 import { CreateContactModal } from './create-contact';
@@ -117,7 +123,7 @@ beforeEach(async () => {
     }
   );
   installCrmCacheHost(undefined);
-  crmAccessAuthority.setSession('viewer');
+  setCrmAccessSession('viewer');
   await crmAccessAuthority.refresh();
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   const create = (path: string, input: unknown) =>
@@ -133,12 +139,12 @@ beforeEach(async () => {
     },
   } as unknown as CrmRecordDependencies;
 });
-afterEach(() => {
+afterEach(async () => {
   cleanup();
   motionStyles.remove();
   client.clear();
-  crmAccessAuthority.setSession(undefined);
-  beginQueryAuthorizationReset()();
+  setCrmAccessSession(undefined);
+  await cacheSessionGeneration.transition(async () => {});
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -146,15 +152,12 @@ afterEach(() => {
 it.each([
   ['company', 'unavailable'],
   ['company', 'revoked'],
-  ['company', 'owner-unavailable'],
   ['contact', 'unavailable'],
   ['contact', 'revoked'],
-  ['contact', 'owner-unavailable'],
 ] as const)(
   'keeps a committed %s create successful when post-response proof is %s',
   async (kind, proofState) => {
     const reply = Promise.withResolvers<Response>();
-    const owner = (await crmAccessAuthority.prepare()).owner;
     const fetch = vi.fn(() => reply.promise);
     vi.stubGlobal('fetch', fetch);
     const created = vi.fn();
@@ -205,10 +208,6 @@ it.each([
     fireEvent.submit(form);
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
     fixtures.proof.mockClear();
-    if (proofState === 'owner-unavailable')
-      vi.spyOn(owner, 'current').mockRejectedValueOnce(
-        new Error('Owner unavailable')
-      );
     // A second submit while the actual write is pending must not dispatch again.
     fireEvent.submit(form);
     fixtures.proof.mockResolvedValue(
@@ -219,7 +218,13 @@ it.each([
     reply.resolve(
       Response.json(
         { id: `${kind}-created`, name: 'Created once' },
-        { status: 201 }
+        {
+          status: 201,
+          headers:
+            proofState === 'revoked'
+              ? { 'x-macro-crm-access': `${team}:denied` }
+              : {},
+        }
       )
     );
     await waitFor(() =>
@@ -229,6 +234,7 @@ it.each([
     await waitFor(() => expect(screen.queryByRole('form')).toBeNull());
     expect(open()).toBe(false);
     if (proofState === 'revoked') {
+      await waitFor(() => expect(crmAccessAuthority.state()).toBe('denied'));
       expect(screen.queryByText('Opened company content')).toBeNull();
       expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
     } else {
@@ -251,7 +257,5 @@ it.each([
     fireEvent.submit(form);
     await Promise.resolve();
     expect(fetch).toHaveBeenCalledOnce();
-    if (proofState === 'owner-unavailable')
-      expect(fixtures.proof).not.toHaveBeenCalled();
   }
 );

@@ -1,5 +1,5 @@
 import type { CacheHost } from '@graphql-cache/host/types';
-import { sourceAuthorityGeneration } from '@graphql-cache/source-authority';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type {
   AttentionFeedOrder,
   AttentionFeedPosition,
@@ -116,11 +116,11 @@ export async function writeAttentionFeedPatches<
   host: Pick<CacheHost, 'readQuery' | 'writeQuery'>,
   cachedQuery: AttentionFeedCachedQuery,
   pageVariables: readonly Variables[],
-  patches: readonly Patch[]
+  patches: readonly Patch[],
+  generation = cacheSessionGeneration.capture()
 ): Promise<boolean> {
   if (pageVariables.length === 0) return false;
   const pages: Page[] = [];
-  const authorityGeneration = sourceAuthorityGeneration(patches);
   for (const variables of pageVariables) {
     const read = await host.readQuery({
       ...cachedQuery,
@@ -128,8 +128,6 @@ export async function writeAttentionFeedPatches<
       priority: 'user-visible',
     });
     if (read.kind !== 'hit') return false;
-    const source = sourceAuthorityGeneration(read);
-    if (source !== authorityGeneration) return false;
     // The generated document defines the normalized cache result's shape.
     pages.push(read.data as Page);
   }
@@ -146,10 +144,10 @@ export async function writeAttentionFeedPatches<
     const entries = placed[index];
     if (!entries || sameEntries(entries, shape.entries(page))) continue;
     await host.writeQuery({
+      generation,
       ...cachedQuery,
       variables: pageVariables[index],
       data: shape.withEntries(page, entries),
-      authorityGeneration,
     });
   }
   return true;

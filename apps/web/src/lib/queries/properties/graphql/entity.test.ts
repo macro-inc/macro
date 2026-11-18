@@ -1,4 +1,4 @@
-import { rememberOwnedEmail } from '@graphql-cache/authority-scope';
+import { cacheSessionExchange } from '@graphql-cache/exchange/session-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { MutationSettlement } from '@graphql-cache/protocol';
 import type { Property } from '@property/types';
@@ -25,10 +25,6 @@ import {
   vi,
 } from 'vitest';
 import { filter, makeSubject, mergeMap, pipe } from 'wonka';
-import {
-  beginQueryAuthorizationReset,
-  crmSnapshotAuthorization,
-} from '../../../urql-solid/authorization';
 
 const graphqlClientState = vi.hoisted(() => ({
   current: undefined as Client | undefined,
@@ -85,7 +81,7 @@ function makeControlledClient() {
     );
   const client = createClient({
     url: 'https://example.test/graphql',
-    exchanges: [exchange],
+    exchanges: [cacheSessionExchange, exchange],
   });
   graphqlClientState.current = client;
   return { client, requests };
@@ -479,156 +475,133 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
     expect(save.isPending).toBe(false);
   });
 
-  it.each(['TASK', 'THREAD'] as const)(
-    'prepares a bulk grouped %s edit once per active page while retaining its authoring epoch',
-    async (entityType) => {
-      makeSettlementHost();
-      const typename =
-        entityType === 'THREAD'
-          ? 'GraphqlSoupEmailThread'
-          : 'GraphqlSoupDocument';
-      const authorizationEpoch = crmSnapshotAuthorization().epoch;
-      const reading = Promise.withResolvers<void>();
-      const release = Promise.withResolvers<void>();
-      const input = {
-        initial: {
-          groupBy: {
-            field: 'PROPERTY' as const,
-            propertyDefinitionId: 'priority',
+  it('prepares a bulk grouped edit once per active page without cache inspection', async () => {
+    makeSettlementHost();
+    const input = {
+      initial: {
+        groupBy: {
+          field: 'PROPERTY' as const,
+          propertyDefinitionId: 'priority',
+        },
+      },
+    };
+    onTestFinished(
+      registerGraphqlSoupRevalidations(() => [
+        { document: GroupSoupDocument, variables: { input } },
+        { document: GroupSoupDocument, variables: { input } },
+      ])
+    );
+    const readQuery = vi.fn(async () => ({
+      kind: 'hit' as const,
+      data: {
+        user: {
+          groupSoup: {
+            bins: [
+              {
+                key: 'low',
+                totalCount: 2,
+                nextCursor: null,
+                items: ['task-1', 'task-2'].map((id) => ({
+                  __typename: 'GraphqlSoupDocument',
+                  id,
+                })),
+              },
+            ],
           },
         },
-      };
-      onTestFinished(
-        registerGraphqlSoupRevalidations(() => [
-          { document: GroupSoupDocument, variables: { input } },
-          { document: GroupSoupDocument, variables: { input } },
-        ])
-      );
-      const readQuery = vi.fn(async () => {
-        reading.resolve();
-        await release.promise;
-        return {
-          kind: 'hit' as const,
-          data: {
-            user: {
-              groupSoup: {
-                bins: [
-                  {
-                    key: 'low',
-                    totalCount: 2,
-                    nextCursor: null,
-                    items: ['task-1', 'task-2'].map((id) => ({
-                      __typename: typename,
-                      id,
-                    })),
-                  },
-                ],
+      },
+    }));
+    const inspect = vi.fn(async () => {
+      throw new Error('query inspection variant count 129 exceeds limit 128');
+    });
+    graphqlClientState.host = {
+      ...graphqlClientState.host,
+      readQuery,
+      inspectQuery: inspect,
+      inspectQueryVariants: inspect,
+    } as unknown as CacheHost;
+    const mutation = vi.fn(
+      (
+        _document: unknown,
+        _variables: unknown,
+        context: Record<string, unknown>
+      ) => ({
+        toPromise: async () => {
+          (context.normalizedCacheOptimisticEnqueued as () => void)();
+          return {
+            operation: { kind: 'mutation', context },
+            data: { setEntityProperty: { id: 'assignment' } },
+            stale: false,
+            hasNext: false,
+          };
+        },
+      })
+    );
+    graphqlClientState.current = { mutation } as unknown as Client;
+    const save = createRoot((rootDispose) => {
+      dispose = rootDispose;
+      return createGraphqlBulkSaveEntityPropertiesMutation();
+    });
+    await save.mutateAsync({
+      properties: ['task-1', 'task-2'].map((entityId) => ({
+        entityId,
+        entityType: 'TASK',
+        property: {
+          propertyId: `assignment-${entityId}`,
+          propertyDefinitionId: 'priority',
+          displayName: 'Priority',
+          valueType: 'SELECT_STRING',
+          value: ['low'],
+          isMultiSelect: false,
+        } as Property,
+        apiValues: { valueType: 'SELECT_STRING', values: ['urgent'] },
+      })),
+    });
+    expect(inspect).not.toHaveBeenCalled();
+    expect(readQuery).toHaveBeenCalledOnce();
+    expect(mutation).toHaveBeenCalledTimes(2);
+    for (const [index, call] of mutation.mock.calls.entries()) {
+      expect(call[2]).toMatchObject({
+        normalizedCacheOptimistic: {
+          linkPatches: [
+            {
+              recordRoot: {
+                entityKey: `GraphqlSoupDocument:task-${index + 1}`,
+              },
+              operation: {
+                kind: 'upsertByField',
+                entityKey: `GraphqlProperty:assignment-task-${index + 1}`,
+                whereField: 'propertyDefinitionId',
+                equals: 'priority',
               },
             },
-          },
-        };
+            {
+              operation: {
+                kind: 'removeEmbeddedLink',
+                entityKey: `GraphqlSoupDocument:task-${index + 1}`,
+              },
+            },
+            {
+              operation: {
+                kind: 'upsertEmbeddedLink',
+                entityKey: `GraphqlSoupDocument:task-${index + 1}`,
+              },
+            },
+          ],
+          revalidations: [
+            {
+              operationName: 'EntityProperties',
+              onlyOnLinkFailure: true,
+            },
+            {
+              operationName: 'GroupSoupMembership',
+              variablesJson: JSON.stringify({ input }),
+            },
+          ],
+        },
       });
-      const inspect = vi.fn(async () => {
-        throw new Error('query inspection variant count 129 exceeds limit 128');
-      });
-      graphqlClientState.host = {
-        ...graphqlClientState.host,
-        readQuery,
-        inspectQuery: inspect,
-        inspectQueryVariants: inspect,
-      } as unknown as CacheHost;
-      const mutation = vi.fn(
-        (
-          _document: unknown,
-          _variables: unknown,
-          context: Record<string, unknown>
-        ) => ({
-          toPromise: async () => {
-            (context.normalizedCacheOptimisticEnqueued as () => void)();
-            return {
-              operation: { kind: 'mutation', context },
-              data: { setEntityProperty: { id: 'assignment' } },
-              stale: false,
-              hasNext: false,
-            };
-          },
-        })
-      );
-      graphqlClientState.current = { mutation } as unknown as Client;
-      const save = createRoot((rootDispose) => {
-        dispose = rootDispose;
-        return createGraphqlBulkSaveEntityPropertiesMutation();
-      });
-      const pending = save.mutateAsync({
-        properties: ['task-1', 'task-2'].map((entityId) => ({
-          entityId,
-          entityType,
-          property: {
-            propertyId: `assignment-${entityId}`,
-            propertyDefinitionId: 'priority',
-            displayName: 'Priority',
-            valueType: 'SELECT_STRING',
-            value: ['low'],
-            isMultiSelect: false,
-          } as Property,
-          apiValues: { valueType: 'SELECT_STRING', values: ['urgent'] },
-        })),
-      });
-      await reading.promise;
-      if (entityType === 'THREAD') {
-        beginQueryAuthorizationReset()();
-        rememberOwnedEmail('task-1', () => true);
-        rememberOwnedEmail('task-2', () => true);
-      }
-      release.resolve();
-      await pending;
-      expect(inspect).not.toHaveBeenCalled();
-      expect(readQuery).toHaveBeenCalledOnce();
-      expect(mutation).toHaveBeenCalledTimes(2);
-      for (const [index, call] of mutation.mock.calls.entries()) {
-        expect(call[2]).toMatchObject({
-          normalizedCacheOptimistic: {
-            authorizationEpoch,
-            linkPatches: [
-              {
-                recordRoot: {
-                  entityKey: `${typename}:task-${index + 1}`,
-                },
-                operation: {
-                  kind: 'upsertByField',
-                  entityKey: `GraphqlProperty:assignment-task-${index + 1}`,
-                  whereField: 'propertyDefinitionId',
-                  equals: 'priority',
-                },
-              },
-              {
-                operation: {
-                  kind: 'removeEmbeddedLink',
-                  entityKey: `${typename}:task-${index + 1}`,
-                },
-              },
-              {
-                operation: {
-                  kind: 'upsertEmbeddedLink',
-                  entityKey: `${typename}:task-${index + 1}`,
-                },
-              },
-            ],
-            revalidations: [
-              {
-                operationName: 'EntityProperties',
-                onlyOnLinkFailure: true,
-              },
-              {
-                operationName: 'GroupSoupMembership',
-                variablesJson: JSON.stringify({ input }),
-              },
-            ],
-          },
-        });
-      }
     }
-  );
+  });
 
   it.each(['committed', 'permanently-failed'] as const)(
     'waits for later queued saves and reports their %s settlement',

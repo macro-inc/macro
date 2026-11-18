@@ -5,16 +5,12 @@ import {
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
-import { retainOwnedEmailWitnesses } from '@graphql-cache/authority-scope';
 import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/exchange/record-selection';
-import { witnessOwnedEmail } from '@graphql-cache/owned-email-authority';
 import type { ApiThread } from '@service-email/generated/schemas';
-import { crmAccessAuthority } from '@service-storage/crm-access-authority';
 import {
-  type EmailThreadIdentityFieldsFragment,
   EmailThreadIdentityFieldsFragmentDoc,
   EmailThreadPageDocument,
   type EmailThreadPageQuery,
@@ -110,36 +106,9 @@ type ThreadIdentity = {
   kind: 'remote' | 'local' | 'unknown';
 };
 
-/** Keep only the route and its current canonical identity active for this reader. */
-function retainThreadOwnership(threadId: string) {
-  const releaseRequested = retainOwnedEmailWitnesses([threadId]);
-  let canonical = threadId;
-  let releaseCanonical: (() => void) | undefined;
-  let released = false;
-  return {
-    retainCanonical(id: string) {
-      if (released) return false;
-      if (canonical === id) return true;
-      const next =
-        id === threadId ? undefined : retainOwnedEmailWitnesses([id]);
-      releaseCanonical?.();
-      releaseCanonical = next;
-      canonical = id;
-      return true;
-    },
-    release() {
-      if (released) return;
-      released = true;
-      releaseCanonical?.();
-      releaseRequested();
-    },
-  };
-}
-
 /** Resolve a durable local route before contacting the server with its ID. */
 async function cachedThreadIdentity(
   threadId: string,
-  retainCanonical: (id: string) => boolean,
   previous?: ThreadIdentity
 ): Promise<ThreadIdentity> {
   const cacheRequired = graphqlCacheEnabled();
@@ -147,50 +116,18 @@ async function cachedThreadIdentity(
   if (cacheRequired && !host) {
     throw new Error('Email cache is unavailable; thread identity is unknown');
   }
-  let result:
-    | Awaited<
-        ReturnType<typeof readRecordsByKeys<EmailThreadIdentityFieldsFragment>>
-      >
-    | undefined;
-  const assertSession = crmAccessAuthority.captureSession();
-  try {
-    if (host?.authority)
-      await witnessOwnedEmail(
+  const result = host
+    ? await readRecordsByKeys(
         host,
-        threadId,
-        crmAccessAuthority.account,
-        assertSession,
-        () => getGraphqlCacheHost() === host
-      );
-    result = host
-      ? await readRecordsByKeys(
-          host,
-          selectRecords(EmailThreadIdentityFieldsFragmentDoc),
-          [`GraphqlSoupEmailThread:${threadId}`]
-        )
-      : undefined;
-    const canonical = result?.records[0]?.record.id ?? threadId;
-    if (
-      canonical &&
-      retainCanonical(canonical) &&
-      canonical !== threadId &&
-      host?.authority
-    ) {
-      // The ownership read normally recorded both IDs. Recheck after pinning:
-      // an alias can settle or its idle witness can be evicted during selection.
-      await witnessOwnedEmail(
-        host,
-        canonical,
-        crmAccessAuthority.account,
-        assertSession,
-        () => getGraphqlCacheHost() === host
-      );
-    }
-  } catch (error) {
-    // Initialization may retire the host during either cache read. Only
-    // session-wide fallback makes an unresolved route safe to fetch.
-    if (graphqlCacheEnabled()) throw error;
-  }
+        selectRecords(EmailThreadIdentityFieldsFragmentDoc),
+        [`GraphqlSoupEmailThread:${threadId}`]
+      ).catch((error) => {
+        // Initialization may retire the host while this first read is pending.
+        // Only session-wide fallback makes an unresolved route safe to fetch.
+        if (graphqlCacheEnabled()) throw error;
+        return undefined;
+      })
+    : undefined;
   // Cache fallback must not discard positive knowledge of an unsynced draft
   // or an already-resolved server alias, even if the latest lookup failed.
   if (
@@ -229,70 +166,62 @@ export async function fetchGraphqlEmailThread(
   offset = 0
 ): Promise<ApiThread> {
   getGraphqlSoupClient();
-  const ownership = retainThreadOwnership(threadId);
-  try {
-    const identity = await cachedThreadIdentity(
-      threadId,
-      ownership.retainCanonical
-    );
-    // An asynchronous cache initialization failure can replace the client while
-    // resolving identity. Use the session's current transport after that read.
-    const client = getGraphqlSoupClient();
-    if (identity.kind === 'local' && !graphqlCacheEnabled()) {
-      throw new ThrownResultError([
-        {
-          code: 'UNKNOWN',
-          message: 'Email cache is unavailable for this local draft',
-        },
-      ]);
-    }
-    const variables: EmailThreadPageQueryVariables = {
-      threadId: identity.canonical,
-      offset,
-      limit: DEFAULT_THREAD_MESSAGES_LIMIT,
-    };
-    const result = await client
-      .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
-        EmailThreadPageDocument,
-        variables,
-        {
-          requestPolicy:
-            identity.kind === 'local' ? 'cache-only' : 'cache-and-network',
-        }
-      )
-      .toPromise();
-
-    if (result.error) {
-      // Without an active cache exchange a `cache-only` request is never
-      // answered, so only fall back when the persistent cache is live.
-      if (result.error.networkError && graphqlCacheEnabled()) {
-        const cached = await client
-          .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
-            EmailThreadPageDocument,
-            variables,
-            { requestPolicy: 'cache-only' }
-          )
-          .toPromise();
-        if (cached.data) {
-          return mapGraphqlEmailThreadPage(threadFromPage(cached.data));
-        }
-      }
-      throw mapGraphqlThreadError(result.error);
-    }
-
-    if (!result.data) {
-      throw new ThrownResultError([
-        {
-          code: 'UNKNOWN',
-          message: 'GraphQL email thread query returned no data',
-        },
-      ]);
-    }
-
-    return mapGraphqlEmailThreadPage(threadFromPage(result.data));
-  } finally {
-    ownership.release();
+  const identity = await cachedThreadIdentity(threadId);
+  // An asynchronous cache initialization failure can replace the client while
+  // resolving identity. Use the session's current transport after that read.
+  const client = getGraphqlSoupClient();
+  if (identity.kind === 'local' && !graphqlCacheEnabled()) {
+    throw new ThrownResultError([
+      {
+        code: 'UNKNOWN',
+        message: 'Email cache is unavailable for this local draft',
+      },
+    ]);
   }
+  const variables: EmailThreadPageQueryVariables = {
+    threadId: identity.canonical,
+    offset,
+    limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+  };
+  const result = await client
+    .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
+      EmailThreadPageDocument,
+      variables,
+      {
+        requestPolicy:
+          identity.kind === 'local' ? 'cache-only' : 'cache-and-network',
+      }
+    )
+    .toPromise();
+
+  if (result.error) {
+    // Without an active cache exchange a `cache-only` request is never
+    // answered, so only fall back when the persistent cache is live.
+    if (result.error.networkError && graphqlCacheEnabled()) {
+      const cached = await client
+        .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
+          EmailThreadPageDocument,
+          variables,
+          { requestPolicy: 'cache-only' }
+        )
+        .toPromise();
+      if (cached.data) {
+        return mapGraphqlEmailThreadPage(threadFromPage(cached.data));
+      }
+    }
+    throw mapGraphqlThreadError(result.error);
+  }
+
+  if (!result.data) {
+    throw new ThrownResultError([
+      {
+        code: 'UNKNOWN',
+        message: 'GraphQL email thread query returned no data',
+      },
+    ]);
+  }
+
+  return mapGraphqlEmailThreadPage(threadFromPage(result.data));
 }
 
 /** Creates the native urql-solid query for one thread's message pages. */
@@ -315,22 +244,11 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
   }>();
   let request = 0;
   let disposed = false;
-  let ownership: ReturnType<typeof retainThreadOwnership> | undefined;
   const refreshIdentity = async () => {
-    const retained = ownership;
-    if (!retained) return;
     const id = threadId();
     const generation = ++request;
     try {
-      const result = await cachedThreadIdentity(
-        id,
-        (canonical) => {
-          if (disposed || generation !== request || id !== threadId())
-            return false;
-          return retained.retainCanonical(canonical);
-        },
-        untrack(identity)
-      );
+      const result = await cachedThreadIdentity(id, untrack(identity));
       if (disposed || generation !== request || id !== threadId()) return;
       setIdentity((previous) =>
         previous?.requested === result.requested &&
@@ -357,13 +275,7 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
   // The memo re-reads identity only when the id value changes, not whenever
   // the accessor's underlying route or props signal does.
   createEffect(
-    on(createMemo(threadId), (id) => {
-      const retained = retainThreadOwnership(id);
-      ownership = retained;
-      onCleanup(() => {
-        retained.release();
-        if (ownership === retained) ownership = undefined;
-      });
+    on(createMemo(threadId), () => {
       fireAndForget(refreshIdentity(), 'email-thread');
     })
   );
