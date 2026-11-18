@@ -8,7 +8,7 @@
  * composer only knows how to edit the draft and what the two buttons mean.
  */
 
-import { createCalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
+import type { CreateCalendarEventFormControllerOptions } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
 import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
 import { eventGuestOptions } from '@app/features/calendar/components/composer/guest-options';
 import { ComposerRoot } from '@app/features/calendar/components/composer/root/ComposerRoot';
@@ -21,7 +21,7 @@ import {
   spansMultipleInboxes,
 } from '@app/features/calendar/utils/calendar-label';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
-import { DesktopComposer } from '@app/features/calendar/views/composer/DesktopComposer';
+import { AgentComposer } from '@app/features/calendar/views/composer/AgentComposer';
 import { MobileAgentComposer } from '@app/features/calendar/views/composer/mobile/MobileAgentComposer';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
@@ -182,7 +182,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
             calendar.emailLinkId === primaryInbox()?.id && calendar.isPrimary
         )?.id;
 
-  const controller = createCalendarEventFormController({
+  const formOptions: CreateCalendarEventFormControllerOptions = {
     initialValue: createCalendarEventToEditorInitialValues(props.initialData),
     calendarOptions,
     defaultCalendarId,
@@ -196,22 +196,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
       const args = currentArgs();
       if (args) props.sink.onEdit?.(args);
     },
-  });
-  let calendarInitialized = false;
-  createEffect(() => {
-    const calendars = calendarOptions();
-    if (calendarInitialized || calendars.length === 0) return;
-    calendarInitialized = true;
-    // Resolve the provider-default conference after the calendar catalog loads.
-    // A requested calendar must still exist, and without a request the primary
-    // inbox's calendar is the default; when neither resolves the selection stays
-    // empty so the user chooses explicitly.
-    const requested = props.initialData.calendarId;
-    const selected = requested
-      ? calendars.find((calendar) => calendar.id === requested)
-      : calendars.find((calendar) => calendar.id === defaultCalendarId());
-    if (selected) controller.setField('calendarId', selected.id);
-  });
+  };
 
   function currentArgs(
     values?: EventEditorSubmitValues,
@@ -236,7 +221,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   }
 
   agent = createAgentComposer({
-    controller,
+    form: formOptions,
     get timeFormat() {
       return preferences.timeFormat;
     },
@@ -247,6 +232,22 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
     prepare: currentArgs,
     onExecute: props.sink.onExecute,
     onReject: props.sink.onReject,
+  });
+  const controller = agent.controller;
+  let calendarInitialized = false;
+  createEffect(() => {
+    const calendars = calendarOptions();
+    if (calendarInitialized || calendars.length === 0) return;
+    calendarInitialized = true;
+    // Resolve the provider-default conference after the calendar catalog loads.
+    // A requested calendar must still exist, and without a request the primary
+    // inbox's calendar is the default; when neither resolves the selection stays
+    // empty so the user chooses explicitly.
+    const requested = props.initialData.calendarId;
+    const selected = requested
+      ? calendars.find((calendar) => calendar.id === requested)
+      : calendars.find((calendar) => calendar.id === defaultCalendarId());
+    if (selected) controller.setField('calendarId', selected.id);
   });
 
   const previewSubmission = createMemo(() => agent.model.submission());
@@ -350,17 +351,13 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
             >
               {status()}
               <ComposerRoot model={agent.model} class="min-h-0 flex-1">
-                <DesktopComposer
-                  onClose={() =>
-                    fireAndForget(agent.cancel(), 'ai-calendar-compose')
-                  }
+                <AgentComposer
                   onCancel={() =>
                     fireAndForget(agent.cancel(), 'ai-calendar-compose')
                   }
                   macroCallsEnabled={macroCallsEnabled()}
                   resolveAppLink={resolveAppLink}
-                  agentDraft
-                ></DesktopComposer>
+                />
               </ComposerRoot>
             </div>
           }

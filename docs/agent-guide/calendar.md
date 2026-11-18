@@ -27,6 +27,9 @@ and the month title stay outside; day headers, all-day events, and the grid stay
 inside. Pinning a left panel preserves the gap. In Day and Week, the opening
 7am label remains fully readable below the all-day lane.
 Desktop event creation and editing use one 384px composer, not a second split.
+Anchored, pinned, and agent-draft placements have separate view components over
+shared fields and setup; pinning retains the field tree. The registered legacy
+split route also uses the new composer views, not the preserved old form files.
 A selected grid range or event anchors the floating composer beside that selection.
 **Pin event composer** and **Pin event details** replace the calendar's left sidebar;
 unpinning restores navigation without changing the mounted draft. Drag the empty

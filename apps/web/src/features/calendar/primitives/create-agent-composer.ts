@@ -4,21 +4,25 @@ import { createSignal } from 'solid-js';
 import type { EventEditorSubmitValues } from '../components/composer/event-form-model';
 import type { CalendarComposerOptions } from '../core/composer';
 import type { ComposerMetadataChanges } from '../core/composer-metadata';
-import { createCalendarComposer } from './create-calendar-composer';
+import {
+  type ComposerSetupSource,
+  createCalendarComposerSetup,
+} from './create-calendar-composer-setup';
 
 /** One review decision and one composer model for either phone or desktop placement. */
-export function createAgentComposer<Args>(options: {
-  controller: CalendarComposerOptions['controller'];
-  timeFormat: CalendarComposerOptions['timeFormat'];
-  guestPolicyEditable: boolean;
-  canAct: () => boolean;
-  prepare: (
-    values?: EventEditorSubmitValues,
-    metadata?: ComposerMetadataChanges
-  ) => Args | undefined;
-  onExecute: (args: Args) => Promise<boolean>;
-  onReject: () => Promise<boolean>;
-}) {
+export function createAgentComposer<Args>(
+  options: ComposerSetupSource & {
+    timeFormat: CalendarComposerOptions['timeFormat'];
+    guestPolicyEditable: boolean;
+    canAct: () => boolean;
+    prepare: (
+      values?: EventEditorSubmitValues,
+      metadata?: ComposerMetadataChanges
+    ) => Args | undefined;
+    onExecute: (args: Args) => Promise<boolean>;
+    onReject: () => Promise<boolean>;
+  }
+) {
   const [operation, setOperation] = createSignal<'create' | 'reject'>();
   let finalized = false;
   const locked = () =>
@@ -46,8 +50,7 @@ export function createAgentComposer<Args>(options: {
       setOperation(undefined);
     }
   };
-  const model = createCalendarComposer({
-    controller: options.controller,
+  const { controller, model } = createCalendarComposerSetup(options, () => ({
     get pending() {
       return operation() === 'create';
     },
@@ -63,6 +66,6 @@ export function createAgentComposer<Args>(options: {
     visibilityReadOnlyReason: t('calendar.visibilityUnsupported'),
     onSubmit: (values, _scope, metadata) =>
       fireAndForget(create(values, metadata), 'ai-calendar-compose'),
-  });
-  return { model, create, cancel, locked, operation };
+  }));
+  return { controller, model, create, cancel, locked, operation };
 }

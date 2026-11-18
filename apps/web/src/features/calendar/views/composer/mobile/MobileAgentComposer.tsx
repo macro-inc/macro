@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import AgentMark from '@icon/system/regular/sparkle.svg';
 import { Button } from '@ui';
 import { type ComponentProps, createSignal, type ParentProps } from 'solid-js';
 import { ComposerRoot } from '../../../components/composer/root/ComposerRoot';
@@ -43,7 +44,7 @@ export function MobileAgentComposer(
             headerMount={header()}
             footerMount={footer()}
             macroCallsEnabled={props.macroCallsEnabled}
-            agentDraft
+            titleIcon={<AgentMark class="size-4 text-ink-muted" />}
             resolveAppLink={props.resolveAppLink}
           />
         </div>

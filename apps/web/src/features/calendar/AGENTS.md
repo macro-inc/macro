@@ -73,18 +73,23 @@ host lives in `../block-calendar/`.
   pickers expand inline and reveal within the host scroller. Keep current Repeat
   options until its replacement is designed; do not add a stacked Repeat sheet.
   Old `ComposerWhen` and `MobileComposerWhen` stay unwired for reference.
-  `MobileComposerHost` owns the sheet's footer, header, and sole scroll viewport.
+  `PhoneSheetComposer` owns the sheet's footer, header, and sole scroll viewport.
   New-menu sheets use 92% height; timed phone Day slot taps request a low 42%
   non-modal sheet with no scrim and a separate unsaved FullCalendar draft.
   Its native start/end resize handles bind only to the mounted composer's range;
   only that sheet ignores outside dismissal during a draft interaction. The
   sheet requests an opaque surface through the same owned drawer-height
-  registration. Add-field visibility and scroll-driven compact-title progress live
-  in composer primitives. Keep the compact title absolutely overlaid in the
+  registration. Optional fields keep their initial slot, stay open on blur, and
+  collapse only through the empty-field remove action. Add-field visibility and
+  scroll-driven compact-title progress live in composer primitives. Keep the compact title absolutely overlaid in the
   zero-height header outlet; it never changes the scroll body's geometry.
   Guest selection stages changes in `PickerSheet` and applies only on Done.
 - `primitives/create-agent-composer.ts` keeps one validated review decision; the
-  agent host selects `DesktopComposer` or `MobileAgentComposer` over that model.
+  agent host selects `AgentComposer` or `MobileAgentComposer` over that model.
+  `create-calendar-composer-setup.ts` constructs the shared controller/model;
+  normal and agent hosts supply transport and lifecycle callbacks. Anchored and
+  pinned views share one mounted `DesktopComposer` field tree and own their chrome.
+  The legacy `EventComposerSplit` route delegates to `StandaloneComposer`.
   Both layouts use creation-only Event/Out of office choices below the title,
   with the agent mark in the title icon column. Creation choices use 24px faces
   with 12px text on desktop and 28px faces with 13px text inside 44px touch

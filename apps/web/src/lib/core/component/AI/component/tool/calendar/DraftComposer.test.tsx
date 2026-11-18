@@ -1,4 +1,4 @@
-import type { DesktopComposer } from '@app/features/calendar/views/composer/DesktopComposer';
+import type { AgentComposer } from '@app/features/calendar/views/composer/AgentComposer';
 import type { VisibleCalendar } from '@queries/calendar/calendars';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import type { Link } from '@service-email/generated/schemas';
@@ -96,12 +96,12 @@ vi.mock('./EventPreview', () => ({
     </>
   ),
 }));
-vi.mock('@app/features/calendar/views/composer/DesktopComposer', async () => {
+vi.mock('@app/features/calendar/views/composer/AgentComposer', async () => {
   const { useCalendarComposer } = await import(
     '@app/features/calendar/context/calendar-composer-context'
   );
   return {
-    DesktopComposer: (props: ComponentProps<typeof DesktopComposer>) => {
+    AgentComposer: (props: ComponentProps<typeof AgentComposer>) => {
       const model = useCalendarComposer();
       const controller = model.controller;
       return (

@@ -5,9 +5,9 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Spinner } from '@ui';
 import { type Accessor, Show } from 'solid-js';
 import { ComposerRoot } from './components/composer/root/ComposerRoot';
+import { CalendarDesktopPlacement } from './views/composer/CalendarDesktopPlacement';
 import { createStandaloneComposerSetup } from './views/composer/create-standalone-composer-setup';
-import { DesktopComposer } from './views/composer/DesktopComposer';
-import { MobileComposerHost } from './views/composer/mobile/MobileComposerHost';
+import { PhoneSheetComposer } from './views/composer/mobile/PhoneSheetComposer';
 import type { StandaloneComposerProps } from './views/composer/StandaloneComposer';
 import { StandaloneComposerActions } from './views/composer/StandaloneComposerActions';
 
@@ -46,28 +46,27 @@ export function CalendarComposerEditor(
         <Show
           when={isTouchDevice()}
           fallback={
-            <DesktopComposer
+            <CalendarDesktopPlacement
               pinned={props.pinned}
               onTogglePin={props.onTogglePin}
               onHeaderPointerDown={props.onHeaderPointerDown}
               onClose={props.onClose}
-              onCancel={props.onClose}
               macroCallsEnabled={props.macroCallsEnabled()}
               saveError={setup.saveError()}
               resolveAppLink={resolveAppLink}
             >
               {extras()}
-            </DesktopComposer>
+            </CalendarDesktopPlacement>
           }
         >
-          <MobileComposerHost
+          <PhoneSheetComposer
             initialHeight={props.initialDrawerHeight}
             macroCallsEnabled={props.macroCallsEnabled()}
             saveError={setup.saveError()}
             resolveAppLink={resolveAppLink}
           >
             {extras()}
-          </MobileComposerHost>
+          </PhoneSheetComposer>
         </Show>
       </ComposerRoot>
     </div>

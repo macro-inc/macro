@@ -14,6 +14,7 @@ import {
   type Accessor,
   type ComponentProps,
   createSignal,
+  type JSX,
   type ParentProps,
   Show,
 } from 'solid-js';
@@ -49,7 +50,7 @@ export interface MobileComposerProps {
   footerMount?: HTMLElement;
   scrollElement: Accessor<HTMLElement | undefined>;
   macroCallsEnabled: boolean;
-  agentDraft?: boolean;
+  titleIcon?: JSX.Element;
   saveError?: string;
   resolveAppLink?: ComponentProps<typeof ComposerDescription>['resolveAppLink'];
 }
@@ -136,10 +137,7 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
         )}
       </Show>
       <div class="flex min-w-0 flex-col gap-4 px-5 pb-1">
-        <MobileComposerTitle
-          inputRef={setTitle}
-          agentDraft={props.agentDraft}
-        />
+        <MobileComposerTitle inputRef={setTitle} icon={props.titleIcon} />
         <PhoneWhen scrollElement={props.scrollElement} />
         <Show when={!model.isOutOfOffice()}>
           <Show when={fields.initiallyVisible('description')}>

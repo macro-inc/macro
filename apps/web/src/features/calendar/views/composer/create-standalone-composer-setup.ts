@@ -1,7 +1,6 @@
 import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { Accessor } from 'solid-js';
-import { createCalendarEventFormController } from '../../components/composer/create-calendar-event-form-controller';
 import { useDayDraftRange } from '../../context/day-draft-range-context';
 import {
   useCalendarGuestInvitesFlag,
@@ -9,7 +8,7 @@ import {
 } from '../../hooks/use-calendar-ui-flag';
 import { useEventEditor } from '../../hooks/use-event-editor';
 import { useSyncedCalendarEvent } from '../../hooks/use-synced-calendar-event';
-import { createCalendarComposer } from '../../primitives/create-calendar-composer';
+import { createCalendarComposerSetup } from '../../primitives/create-calendar-composer-setup';
 import { createComposerSuggestions } from '../../primitives/create-composer-suggestions';
 import { defaultComposerValues } from '../../primitives/default-composer-values';
 import { useCalendarPreferences } from '../../utils/preferences';
@@ -46,54 +45,57 @@ export function createStandaloneComposerSetup(
     !isEdit() && initial.conference === 'macro' && !props.macroCallsEnabled()
       ? { ...initial, conference: 'none' as const }
       : initial;
-  const controller = createCalendarEventFormController({
-    initialValue,
-    isEdit: isEdit(),
-    calendarOptions: editor.calendarOptions,
-    guestOptions: editor.guestOptions,
-  });
-  const model = createCalendarComposer({
-    controller,
-    get pending() {
-      return editor.pending();
+  const { controller, model } = createCalendarComposerSetup(
+    {
+      form: {
+        initialValue,
+        isEdit: isEdit(),
+        calendarOptions: editor.calendarOptions,
+        guestOptions: editor.guestOptions,
+      },
     },
-    get isEdit() {
-      return isEdit();
-    },
-    get timeFormat() {
-      return preferences.timeFormat;
-    },
-    // The existing form's wall-clock fields use the viewer's local zone.
-    initialMetadata: { visibility: props.event?.visibility },
-    get disabledFields() {
-      return editor.disabledFields();
-    },
-    get addOnlyGuests() {
-      return editor.addOnlyGuests();
-    },
-    get guestsReadOnlyReason() {
-      return editor.guestsReadOnlyReason();
-    },
-    get guestListHidden() {
-      return editor.guestListHidden();
-    },
-    get guestPolicyEditable() {
-      return editor.guestPolicyEditable();
-    },
-    get detailsReadOnlyReason() {
-      return editor.detailsReadOnlyReason();
-    },
-    get showRecurringEditNotice() {
-      return editor.showRecurringEditNotice();
-    },
-    onSubmit: (values, scope, metadata) =>
-      fireAndForget(
-        editor.save(values, scope, metadata),
-        'calendar-composer-save'
-      ),
-    onDirtyChange: (dirty) => props.onDirtyChange?.(dirty),
-    onCalendarChange: (id, color) => props.onCalendarChange?.(id, color),
-  });
+    () => ({
+      get pending() {
+        return editor.pending();
+      },
+      get isEdit() {
+        return isEdit();
+      },
+      get timeFormat() {
+        return preferences.timeFormat;
+      },
+      // The existing form's wall-clock fields use the viewer's local zone.
+      initialMetadata: { visibility: props.event?.visibility },
+      get disabledFields() {
+        return editor.disabledFields();
+      },
+      get addOnlyGuests() {
+        return editor.addOnlyGuests();
+      },
+      get guestsReadOnlyReason() {
+        return editor.guestsReadOnlyReason();
+      },
+      get guestListHidden() {
+        return editor.guestListHidden();
+      },
+      get guestPolicyEditable() {
+        return editor.guestPolicyEditable();
+      },
+      get detailsReadOnlyReason() {
+        return editor.detailsReadOnlyReason();
+      },
+      get showRecurringEditNotice() {
+        return editor.showRecurringEditNotice();
+      },
+      onSubmit: (values, scope, metadata) =>
+        fireAndForget(
+          editor.save(values, scope, metadata),
+          'calendar-composer-save'
+        ),
+      onDirtyChange: (dirty) => props.onDirtyChange?.(dirty),
+      onCalendarChange: (id, color) => props.onCalendarChange?.(id, color),
+    })
+  );
   dayDraftRange?.bind(model);
   const suggestions = createComposerSuggestions({
     suggestion: isEdit() ? undefined : props.suggestedValues,
