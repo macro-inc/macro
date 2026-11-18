@@ -1,29 +1,28 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/actionlint.rs
 self-hosted-runner:
   labels:
     - db-migrator
-    - linux-extra-beefy
-    - linux-latest-middy
     - linux-rust-ci-image-generation-small
+    - namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     - namespace-profile-linux-mid
-    - namespace-profile-linux-mid;overrides.cache-tag=web-ci
     - namespace-profile-linux-mid;overrides.cache-tag=desktop-linux
     - namespace-profile-linux-mid;overrides.cache-tag=observability-image
     - namespace-profile-linux-mid;overrides.cache-tag=sync-service-deploy
-    - namespace-profile-linux-small
-    - namespace-profile-linux-small;overrides.cache-tag=web-ci
-    - namespace-profile-linux-small;overrides.cache-tag=nix-checks
-    - namespace-profile-linux-small;overrides.cache-tag=sccache-ci
-    - namespace-profile-linux-tiny-no-cache
+    - namespace-profile-linux-mid;overrides.cache-tag=web-ci
     - namespace-profile-linux-rust-ci
     - namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
-    - namespace-profile-linux-large-build
-    - namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
-    - nscloud-macos-sequoia-arm64-6x14
+    - namespace-profile-linux-small
+    - namespace-profile-linux-small;overrides.cache-tag=nix-checks
+    - namespace-profile-linux-small;overrides.cache-tag=sccache-ci
+    - namespace-profile-linux-small;overrides.cache-tag=web-ci
+    - namespace-profile-linux-tiny-no-cache
+    - nscloud-cache-size-100gb
+    - nscloud-cache-tag-macro-desktop-macos
     - nscloud-macos-sequoia-arm64-12x28
     - nscloud-macos-sequoia-arm64-12x28-with-cache
+    - nscloud-macos-sequoia-arm64-6x14
     - nscloud-windows-2022-amd64-8x16
-    - nscloud-cache-tag-macro-desktop-macos
-    - nscloud-cache-size-100gb
 
 # shellcheck findings kept on purpose, one file and check per entry. A new
 # finding of another kind, or in another file, still fails.
@@ -42,12 +41,10 @@ paths:
       - 'SC2016:'
       # The shared Android helper prelude defines functions this step does not call.
       - 'SC2329:'
-  .github/workflows/web-app-check-main.yml:
+  .github/workflows/deploy_all_services.yml:
     ignore:
-      # The GraphQL query passed to `gh api` is single-quoted so gh, not bash, binds $owner.
-      - 'SC2016:'
-      # The shared Android helper prelude defines functions this step does not call.
-      - 'SC2329:'
+      # Each matrix output is its own `>> "$GITHUB_OUTPUT"` line, kept for readability.
+      - 'SC2129:'
   .github/workflows/ios_preview.yml:
     ignore:
       # The script for `nix develop -c bash -c` is single-quoted so the inner shell expands it.
@@ -64,7 +61,9 @@ paths:
     ignore:
       # `[[ $file == $stack_path ]]` is a deliberate glob match against the stack path pattern.
       - 'SC2053:'
-  .github/workflows/deploy_all_services.yml:
+  .github/workflows/web-app-check-main.yml:
     ignore:
-      # Each matrix output is its own `>> "$GITHUB_OUTPUT"` line, kept for readability.
-      - 'SC2129:'
+      # The GraphQL query passed to `gh api` is single-quoted so gh, not bash, binds $owner.
+      - 'SC2016:'
+      # The shared Android helper prelude defines functions this step does not call.
+      - 'SC2329:'
