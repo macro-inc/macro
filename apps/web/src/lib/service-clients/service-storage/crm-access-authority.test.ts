@@ -74,6 +74,43 @@ function client(
 }
 
 describe('CRM authority across cache clients', () => {
+  it.each([`${team}:allowed`, `${team}:denied`, 'none'])(
+    'exposes the current %s proof without fetching optional enrichment',
+    async (policy) => {
+      const owner = sharedOwner().port();
+      const { authority, fetchProof } = client(
+        owner,
+        vi.fn(async () => policy)
+      );
+      expect(authority.hasCurrentProof()).toBe(false);
+      await authority.prepare();
+      expect(authority.hasCurrentProof()).toBe(false);
+      expect(fetchProof).not.toHaveBeenCalled();
+      await authority.ensureCurrent();
+      expect(authority.hasCurrentProof()).toBe(true);
+      fetchProof.mockRejectedValueOnce(new Error('offline'));
+      await expect(authority.refresh()).rejects.toThrow('offline');
+      expect(authority.hasCurrentProof()).toBe(true);
+      expect(fetchProof).toHaveBeenCalledTimes(2);
+    }
+  );
+  it.each(['generation', 'account', 'session', 'host'] as const)(
+    'does not offer optional cache enrichment after a %s replacement',
+    async (replacement) => {
+      const storage = sharedOwner();
+      const owner = storage.port();
+      const { authority, fetchProof } = client(owner);
+      await authority.refresh();
+      expect(authority.hasCurrentProof()).toBe(true);
+      if (replacement === 'generation')
+        await owner.transition(storage.state().generation, `${team}:denied`);
+      else if (replacement === 'account') storage.bind('another-account');
+      else if (replacement === 'session') authority.setSession('viewer', 1);
+      else authority.setHost(sharedOwner().port());
+      expect(authority.hasCurrentProof()).toBe(false);
+      expect(fetchProof).toHaveBeenCalledOnce();
+    }
+  );
   it.each(['generation', 'session', 'host'] as const)(
     'does not retire a newer %s when an old response loses admission',
     async (replacement) => {

@@ -208,6 +208,8 @@ before sending. If the copy is interrupted, use retry or keep the original.
 A draft the provider could not save can still switch From, which moves it to an
 inbox that may accept it; a draft with an unfinished move or a conflict stays in
 its inbox until that is resolved.
+With the CRM proof endpoint unavailable, a locally authored draft must still
+save locally and report an offline From-inbox move without waiting for CRM proof.
 A draft opened from Drafts then shows its thread in the destination inbox,
 never the not-found page; a draft in compose stays open there. Keep editing
 after the switch and check that no "This draft changed while saving" notice

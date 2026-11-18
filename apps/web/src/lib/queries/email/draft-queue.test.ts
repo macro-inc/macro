@@ -40,7 +40,11 @@ const mocks = vi.hoisted(() => ({
   client: undefined as Client | undefined,
   queueBlocked: false,
   cacheEnabled: true,
+  proofCurrent: true,
   assertQueueAvailable: vi.fn(),
+}));
+vi.mock('@service-storage/crm-access-authority', () => ({
+  crmAccessAuthority: { hasCurrentProof: () => mocks.proofCurrent },
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@macro-inc/observability', () => ({
@@ -96,6 +100,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.queueBlocked = false;
   mocks.cacheEnabled = true;
+  mocks.proofCurrent = true;
   vi.mocked(queryClient.invalidateQueries).mockResolvedValue(undefined);
   vi.mocked(refetchSoupEntity).mockResolvedValue(undefined);
   vi.mocked(beginDraftAttempt).mockResolvedValue({
@@ -198,6 +203,32 @@ it('keeps active thread messages intact after a committed draft save', async () 
     'emailThread'
   );
 });
+
+it.each(['save', 'delete'] as const)(
+  'enqueues an authored %s without waiting for optional CRM-protected cache reads',
+  async (operation) => {
+    const { operations } = await setup();
+    mocks.proofCurrent = false;
+    vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('dirty'));
+    mocks.readRecordsByKeys.mockReturnValue(Promise.withResolvers().promise);
+    await expect(
+      operation === 'save'
+        ? saveEmailDraftQueued({ args: { ...args, draftId: serverId } })
+        : deleteEmailDraftQueued({
+            draftId: serverId,
+            threadId: 'local-thread',
+          })
+    ).resolves.toEqual({ kind: 'queued' });
+    expect(mocks.readRecordsByKeys).not.toHaveBeenCalled();
+    expect(operations).toHaveLength(1);
+    expect(optimisticContextOf(operations[0])?.uuid).toBe(handle);
+    expect(operations[0].variables?.input).toMatchObject({
+      draftId: handle,
+    });
+    if (operation === 'save')
+      expect(operations[0].variables?.input.threadDbId).toBe('local-thread');
+  }
+);
 
 it.each(['save', 'delete'] as const)(
   'blocks an uncached fallback %s before changing local intent or sending a request',
@@ -415,6 +446,27 @@ const workingCopy = (status: LocalDraft['status']): LocalDraft => ({
   attachments: [],
   status,
   updatedAt: 1,
+});
+
+it('returns the durable working copy without waiting for an unproven cache read', async () => {
+  await setup();
+  mocks.proofCurrent = false;
+  const local = workingCopy('dirty');
+  vi.mocked(readLocalDraft).mockResolvedValue(local);
+  mocks.readRecordsByKeys.mockReturnValue(Promise.withResolvers().promise);
+  expect(await readEmailDraft(serverId)).toMatchObject({ local });
+  expect(mocks.readRecordsByKeys).not.toHaveBeenCalled();
+  expect(localDraftMessage).toHaveBeenCalledWith(local);
+  expect(restoreLocalAttachments).toHaveBeenCalledWith(local);
+});
+
+it('keeps a draft without a working copy behind the protected cache read', async () => {
+  await setup();
+  mocks.proofCurrent = false;
+  const denied = new StaleCacheAuthorityError();
+  mocks.readRecordsByKeys.mockRejectedValue(denied);
+  await expect(readEmailDraft(serverId)).rejects.toBe(denied);
+  expect(mocks.readRecordsByKeys).toHaveBeenCalledOnce();
 });
 
 it('reads authoritative content once the local working copy is synced', async () => {

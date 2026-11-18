@@ -402,6 +402,25 @@ export function createCrmAccessAuthority(options: {
     allowed,
     state,
     ensureCurrent,
+    /** Optional cache enrichment must not initiate a network proof. */
+    hasCurrentProof() {
+      const captured = verifiedProof;
+      const current = owner.snapshot();
+      return (
+        captured !== undefined &&
+        current !== undefined &&
+        account !== undefined &&
+        captured.session === session &&
+        captured.owner === owner &&
+        !retirementFailed &&
+        !sessionRetirementPending &&
+        observedGeneration === current.generation &&
+        current.ready &&
+        isCrmPolicy(current.policy) &&
+        current.generation === captured.generation &&
+        (current.account == null || current.account === account)
+      );
+    },
     captureSession() {
       const captured = loginGeneration;
       return () => {

@@ -91,6 +91,10 @@ legacy offline snapshots when it is allowed or team-less; regrants also preserve
 content already admitted after denial. Inbox-authorized settings, labels, message
 batches, thread messages, drafts and mailbox mutation results never wait for CRM
 proof or lose their successful outcomes when that endpoint is unavailable.
+Authored draft saves and deletes omit optional copied cache content when no
+current proof is available. Draft reads use their durable working copy in that
+case; without a working copy, the raw cache read still requires proof. A current
+proof retains the cached delivery-generation comparison before choosing a copy.
 Email-reminder detail GET/PUT and collection GET have the same independent
 scope: their server contracts require an owned or delegated mailbox and return
 only caller-private reminder state. Other reminder endpoints remain protected.
@@ -112,7 +116,7 @@ contain only the moved entity and its folders, and the email domain requires
 Owner access before moving a thread or returning its updated snapshot.
 Saved-view reordering is independent for non-CRM kinds because the server returns
 the same definitions it authorized and filtered by the requested kind before
-writing positions. Create/update, missing or malformed kinds and unscoped
+writing positions. Create/update, missing or non-string kinds and unscoped
 saved-view reads remain protected.
 Committed queue writes without further repairs or effects wait only for their
 affected observers in the current client. An unrelated observer waiting for CRM

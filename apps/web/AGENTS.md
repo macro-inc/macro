@@ -44,7 +44,7 @@ browser/native owner's durable generation; `crm-access-cache.ts` retires visible
 and persisted query snapshots. Preserve source generations through HTTP decoding,
 cache writes, queued settlement and subscription reconnects; a current generation
 must never be assigned to already-fetched content. Keep authored drafts and queue
-variables independent of optional copied optimism. Coordinator protocol 18 and
+variables independent of optional copied optimism. Skip copied draft/thread enrichment when no current proof is available, and return an existing durable working copy without waiting for that optional protected read; drafts without a local copy remain protected. Coordinator protocol 18 and
 the native permission commands must precede enabling member-access changes.
 Only CRM-bearing storage responses opt into `x-macro-crm-access-signal: 1`;
 independent resources such as document creates and `/crm/member-access` skip it.
