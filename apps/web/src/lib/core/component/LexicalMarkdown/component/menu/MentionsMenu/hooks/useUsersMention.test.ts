@@ -172,16 +172,23 @@ it('lists Macro, then you, then people, then the other agents while browsing', (
   });
 });
 
-it('lists only the rows that lead the people until the directory lists them', () => {
+it('lists only the rows that lead the people until the directory first answers', () => {
   const [loading, setLoading] = createSignal(true);
   const [people, setPeople] = createSignal<UserItem[]>([]);
+  const [open, setOpen] = createSignal(true);
   mocks.loading = loading;
   mocks.users = people;
   const [searchTerm, setSearchTerm] = createSignal('');
-  const { directory, scoped, dispose } = createRoot((dispose) => ({
+  const { directory, macroOnly, scoped, dispose } = createRoot((dispose) => ({
     directory: useUsersMention({
       searchTerm,
+      enabled: open,
       transformUsers: (users) => [...users, reviewCodex, macroAgent],
+    }),
+    macroOnly: useUsersMention({
+      searchTerm,
+      enabled: open,
+      transformUsers: (users) => [...users, macroAgent],
     }),
     scoped: useUsersMention({
       searchTerm,
@@ -192,16 +199,18 @@ it('lists only the rows that lead the people until the directory lists them', ()
   const ids = () => directory.users().map((item) => item.id);
 
   // Codex will follow the people, who have not arrived: it waits rather
-  // than take a row a person is about to take.
+  // than take a row a person is about to take. Macro's People rows wait for
+  // the people whether or not other agents do.
   expect(ids()).toEqual([macroAgent.id]);
-  expect(directory.heldRows()).toBe(1);
-  expect(directory.waitingForPeople()).toBe(true);
+  expect(directory.holdsRows()).toBe(true);
+  expect(macroOnly.users().map((item) => item.id)).toEqual([macroAgent.id]);
+  expect(macroOnly.holdsRows()).toBe(true);
   setSearchTerm('rev');
   expect(ids()).toEqual([]);
-  expect(directory.heldRows()).toBe(1);
+  expect(directory.holdsRows()).toBe(true);
+  expect(macroOnly.holdsRows()).toBe(false);
   setSearchTerm('mac');
   expect(ids()).toEqual([macroAgent.id]);
-  expect(directory.heldRows()).toBe(0);
 
   // A scoped roster is complete as given.
   setSearchTerm('');
@@ -210,31 +219,41 @@ it('lists only the rows that lead the people until the directory lists them', ()
     sean.id,
     reviewCodex.id,
   ]);
-  expect(scoped.heldRows()).toBe(0);
+  expect(scoped.waitingForPeople()).toBe(false);
 
   setPeople([
     { ...userItem(sean), personOrder: 0 },
     { ...userItem(viewer), personOrder: 1 },
   ]);
   expect(ids()).toEqual([macroAgent.id, viewer.id, sean.id, reviewCodex.id]);
-  expect(directory.heldRows()).toBe(0);
   expect(directory.waitingForPeople()).toBe(false);
 
-  // A search that matches no one lists its agents once it has answered.
+  // Once the directory has answered, a term no one matches lists its agents
+  // while the directory reads it.
   setPeople([]);
-  setLoading(false);
   setSearchTerm('rev');
   expect(ids()).toEqual([reviewCodex.id]);
+  expect(directory.waitingForPeople()).toBe(false);
 
-  // A directory stuck behind other reads stops keeping the agents back.
-  setLoading(true);
+  // Reopening waits again, until other menus would stop saying the cache is
+  // searching.
+  setOpen(false);
+  setOpen(true);
   setSearchTerm('');
   expect(ids()).toEqual([macroAgent.id]);
   vi.advanceTimersByTime(11_999);
   expect(ids()).toEqual([macroAgent.id]);
   vi.advanceTimersByTime(1);
   expect(ids()).toEqual([macroAgent.id, reviewCodex.id]);
-  expect(directory.heldRows()).toBe(0);
+  expect(directory.holdsRows()).toBe(false);
+
+  // A directory that answers without anyone ends the wait too.
+  setOpen(false);
+  setOpen(true);
+  expect(directory.waitingForPeople()).toBe(true);
+  setLoading(false);
+  expect(directory.waitingForPeople()).toBe(false);
+  expect(ids()).toEqual([macroAgent.id, reviewCodex.id]);
   dispose();
 });
 

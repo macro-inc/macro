@@ -1,15 +1,15 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import { t } from '@app/lib/i18n';
 import { cn } from '@ui';
 import { For } from 'solid-js';
 
 /** Placeholders the size of mention rows, for rows still loading. */
 export function MentionLoadingRows(props: {
   count: number;
+  label: string;
   rowClass?: string;
 }) {
   return (
-    <ListSkeleton.Root label={t('common.loadingPeople')}>
+    <ListSkeleton.Root label={props.label}>
       <For each={Array.from({ length: props.count })}>
         {() => (
           <div

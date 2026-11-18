@@ -18,7 +18,7 @@ import {
 } from '@core/util/freshSort';
 import { preservePersonOrder } from '@core/util/ordered-window';
 import { createLazyMemo } from '@solid-primitives/memo';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import type { GroupMentionItem } from '../../../../utils/mentionsUtils';
 import { isBotMentionUser } from '../utils/botMention';
 
@@ -47,8 +47,9 @@ type UseUsersMentionResult = {
   isLoading: Accessor<boolean>;
   /** Whether the menu lists only the rows that lead the people still loading. */
   waitingForPeople: Accessor<boolean>;
-  /** Agents held back from `users` until the people they follow are listed. */
-  heldRows: Accessor<number>;
+  /** Whether the people still loading join rows already placed (Macro, or
+   * agents held back until they can be placed after the people). */
+  holdsRows: Accessor<boolean>;
   isLoadingMore: Accessor<boolean>;
   loadMore: () => Promise<void>;
 };
@@ -136,15 +137,26 @@ export function useUsersMention(
     });
   };
 
-  // Until the directory lists its first people for this term, it is not yet
-  // known where the agents go among them. The wait ends when other menus stop
-  // saying the cache is still searching, and the agents are listed after all.
-  const loadingPeople = () =>
-    usesDirectory() &&
-    workspace.isLoading() &&
-    !usersList().some((item) => !isBotMentionUser(item));
-  const waitedTooLong = deferredGate(loadingPeople, UNANSWERED_SEARCH_LIMIT_MS);
-  const waitingForPeople = () => loadingPeople() && !waitedTooLong();
+  // Until the directory first answers after the menu opens, it is not known
+  // where the agents go among the people. Later reads keep the people who still
+  // match while they run, so typing does not wait again. A directory that has
+  // not answered by the time other menus stop saying the cache is searching
+  // gets its agents listed after all.
+  const firstAnswer = createMemo<'unread' | 'reading' | 'answered'>((state) => {
+    if (!usesDirectory()) return 'unread';
+    if (state === 'answered') return state;
+    if (usersList().some((item) => !isBotMentionUser(item))) return 'answered';
+    if (workspace.isLoading()) return 'reading';
+    return state === 'reading' ? 'answered' : 'unread';
+  }, 'unread');
+  const awaitingDirectory = createMemo(
+    () => usesDirectory() && firstAnswer() !== 'answered'
+  );
+  const waitedTooLong = deferredGate(
+    awaitingDirectory,
+    UNANSWERED_SEARCH_LIMIT_MS
+  );
+  const waitingForPeople = () => awaitingDirectory() && !waitedTooLong();
 
   // Macro leads, then people come before the other agents and bots, as in
   // assignee menus. The directory's personal window keeps its own order among
@@ -152,7 +164,7 @@ export function useUsersMention(
   // only the rows outside it. While its people load, only the rows that lead
   // them all are listed, and the agents that will follow them are held back
   // so that none is shown in a place a person is about to take.
-  const listing = createLazyMemo((): { rows: UserItem[]; held: number } => {
+  const listing = createLazyMemo((): { rows: UserItem[]; agents: number } => {
     const term = searchTerm().trim();
     const list = usersList();
     const results = userSearch()(list, term);
@@ -170,10 +182,10 @@ export function useUsersMention(
           )
         )
         .map((result) => result.item);
-      return { rows, held: agents.length - rows.length };
+      return { rows, agents: agents.length };
     }
 
-    return { rows: orderedUsers(term, list, results, order), held: 0 };
+    return { rows: orderedUsers(term, list, results, order), agents: 0 };
   });
 
   function orderedUsers(
@@ -267,7 +279,7 @@ export function useUsersMention(
     hasMore: () => usesDirectory() && workspace.hasMore(),
     isLoading: () => usesDirectory() && workspace.isLoading(),
     waitingForPeople,
-    heldRows: () => listing().held,
+    holdsRows: () => waitingForPeople() && listing().agents > 0,
     isLoadingMore: () => usesDirectory() && workspace.isLoadingMore(),
     loadMore: async () => {
       if (usesDirectory()) await workspace.loadMore();

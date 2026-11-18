@@ -781,24 +781,28 @@ it('says it is searching only for a slow search, and never that there are no res
   expect(screen.queryByText('Searching…')).toBeNull();
 });
 
-const acmeContact = {
-  kind: 'entity',
-  bucket: 'crm_contact',
-  id: 'contact-1',
-  searchText: 'Acme contact',
-  sortTimestamp: 0,
-  timestamps: {},
-  data: {
-    type: 'crm_contact',
-    id: 'contact-1',
-    ownerId: 'team',
-    companyId: 'company',
-    name: 'Acme contact',
-    email: 'contact@example.com',
-    hidden: false,
-    lastInteraction: '2026-01-01T00:00:00Z',
-  },
-} as import('@core/context/quickAccess').EntityItem;
+const acmeContacts = Array.from(
+  { length: 8 },
+  (_, index) =>
+    ({
+      kind: 'entity',
+      bucket: 'crm_contact',
+      id: `contact-${index + 1}`,
+      searchText: `Acme contact ${index + 1}`,
+      sortTimestamp: 0,
+      timestamps: {},
+      data: {
+        type: 'crm_contact',
+        id: `contact-${index + 1}`,
+        ownerId: 'team',
+        companyId: 'company',
+        name: `Acme contact ${index + 1}`,
+        email: `contact${index + 1}@example.com`,
+        hidden: false,
+        lastInteraction: '2026-01-01T00:00:00Z',
+      },
+    }) as import('@core/context/quickAccess').EntityItem
+);
 const macroAgent: IUser = {
   id: 'bot|00000000-0000-0000-0000-00000000a2a2',
   name: 'Macro',
@@ -809,25 +813,43 @@ const codex: IUser = {
   name: 'Review Desk Codex',
   email: '@review-desk-codex',
 };
-const directoryPerson = (
-  name: string,
-  personOrder: number
-): import('@core/context/quickAccess').UserItem => {
-  const email = `${name.split(' ')[0].toLowerCase()}@macro.com`;
-  return {
-    id: `macro|${email}`,
+const directoryPeople: import('@core/context/quickAccess').UserItem[] = [
+  {
+    id: 'macro|ana@example.com',
     kind: 'user',
     bucket: 'person',
-    searchText: `${name} | ${email}`,
+    searchText: 'Ana Lima | ana@example.com',
     sortTimestamp: 0,
     timestamps: {},
-    personOrder,
-    data: { id: `macro|${email}`, name, email },
-  };
-};
+    personOrder: 0,
+    data: {
+      id: 'macro|ana@example.com',
+      name: 'Ana Lima',
+      email: 'ana@example.com',
+    },
+  },
+  {
+    id: 'macro|bo@example.com',
+    kind: 'user',
+    bucket: 'person',
+    searchText: 'Bo Chen | bo@example.com',
+    sortTimestamp: 0,
+    timestamps: {},
+    personOrder: 1,
+    data: {
+      id: 'macro|bo@example.com',
+      name: 'Bo Chen',
+      email: 'bo@example.com',
+    },
+  },
+];
 
-/** A discussion menu over the directory, its people still loading. */
-function renderWithPeopleLoading(onPick = vi.fn()) {
+/** A Discussion menu over the directory, opened while its people load. */
+function openWhilePeopleLoad(options: {
+  agents: IUser[];
+  editor?: LexicalEditor;
+  onPick?: () => void;
+}) {
   mocks.crmEnabled = true;
   mockNoEmails();
   Element.prototype.scrollIntoView = vi.fn();
@@ -837,67 +859,95 @@ function renderWithPeopleLoading(onPick = vi.fn()) {
   >([]);
   mocks.peopleLoading = loading;
   mocks.people = people;
-  mocks.contacts = [acmeContact];
+  mocks.contacts = acmeContacts;
   const menu = createMenuOperations();
   menu.openMenu();
   render(() => (
     <MentionsMenu
       menu={menu}
       sources={['users', 'crm']}
-      transformUsers={(users) => [...users, codex, macroAgent]}
-      anchor={document.createElement('div')}
-      onPick={onPick}
+      transformUsers={(users) => [...users, ...options.agents]}
+      editor={options.editor}
+      anchor={options.editor ? undefined : document.createElement('div')}
+      onPick={options.onPick ?? vi.fn()}
     />
   ));
-  return {
-    land: () => {
-      setPeople([
-        directoryPerson('Ana Lima', 0),
-        directoryPerson('Bo Chen', 1),
-      ]);
-      setLoading(false);
-    },
+  return () => {
+    setPeople(directoryPeople);
+    setLoading(false);
   };
 }
+const placeholderRows = (label: string) =>
+  (screen
+    .queryByRole('status', { name: label })
+    ?.querySelectorAll('.skeleton-shimmer').length ?? 0) / 2;
+const contactRows = () => screen.queryAllByText(/^Acme contact \d$/).length;
 
-it('holds the rows people will take while they load, so nothing moves under the highlight when they land', () => {
-  const onPick = vi.fn();
-  const people = renderWithPeopleLoading(onPick);
+it.each([
+  ['Macro and Codex', [codex, macroAgent]],
+  ['Macro alone', [macroAgent]],
+])(
+  'keeps the People rows for people still loading, so nothing moves under the highlight when they land (%s)',
+  (_, agents) => {
+    const onPick = vi.fn();
+    const land = openWhilePeopleLoad({ agents, onPick });
 
-  // Codex will follow the people: it waits instead of taking their rows.
-  expect(screen.getByText('Macro')).toBeTruthy();
-  expect(screen.queryByText('Review Desk Codex')).toBeNull();
-  expect(screen.getByRole('status', { name: 'Loading people' })).toBeTruthy();
-  fireEvent.keyDown(document, { key: 'ArrowDown' });
-  const contact = screen.getByText('Acme contact');
+    // Codex will follow the people: it waits instead of taking their rows.
+    expect(screen.getByText('Macro')).toBeTruthy();
+    expect(screen.queryByText('Review Desk Codex')).toBeNull();
+    expect(placeholderRows('Loading people')).toBe(2);
+    expect(contactRows()).toBe(5);
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    const contact = screen.getByText('Acme contact 1');
 
-  people.land();
-  expect(screen.queryByRole('status', { name: 'Loading people' })).toBeNull();
-  const text = document.body.textContent ?? '';
-  const order = ['Macro', 'Ana Lima', 'Bo Chen', 'Acme contact'].map((name) =>
-    text.indexOf(name)
-  );
-  expect(order).toEqual([...order].sort((left, right) => left - right));
-  expect(screen.getByText('Acme contact')).toBe(contact);
-  fireEvent.keyDown(document, { key: 'Enter' });
-  expect(onPick).toHaveBeenCalledWith(
-    expect.objectContaining({ id: 'contact-1' })
-  );
-});
+    land();
+    expect(placeholderRows('Loading people')).toBe(0);
+    expect(contactRows()).toBe(5);
+    const text = document.body.textContent ?? '';
+    const order = ['Macro', 'Ana Lima', 'Bo Chen', 'Acme contact 1'].map(
+      (name) => text.indexOf(name)
+    );
+    expect(order).toEqual([...order].sort((left, right) => left - right));
+    expect(screen.getByText('Acme contact 1')).toBe(contact);
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'contact-1' })
+    );
+  }
+);
 
-it('lists nothing below Macro on phones until the people it pins arrive', () => {
+it('lists nothing below Macro on phones until the people it pins arrive, at the height it will have', () => {
   mocks.mobile = true;
-  const people = renderWithPeopleLoading();
+  // jsdom lays nothing out; give the virtual list a viewport to fill.
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(256);
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(384);
+  const land = openWhilePeopleLoad({
+    agents: [codex, macroAgent],
+    editor: createEditor(),
+  });
+  const listed = () =>
+    Number.parseInt(
+      document.querySelector<HTMLElement>('[style*="position: relative"]')
+        ?.style.height ?? '0',
+      10
+    );
+  const filler = () =>
+    Number.parseInt(
+      screen.queryByRole('status', { name: 'Loading…' })?.parentElement?.style
+        .height ?? '0',
+      10
+    );
 
   expect(screen.getByText('Macro')).toBeTruthy();
-  expect(screen.queryByText('Acme contact')).toBeNull();
   expect(screen.queryByText('Review Desk Codex')).toBeNull();
-  expect(screen.getByRole('status', { name: 'Loading people' })).toBeTruthy();
+  expect(contactRows()).toBe(0);
+  expect(listed() + filler()).toBe(256);
 
-  people.land();
-  expect(screen.queryByRole('status', { name: 'Loading people' })).toBeNull();
+  land();
+  expect(screen.queryByRole('status', { name: 'Loading…' })).toBeNull();
   expect(screen.getByText('Ana Lima')).toBeTruthy();
-  expect(screen.getByText('Acme contact')).toBeTruthy();
+  expect(contactRows()).toBeGreaterThan(0);
+  expect(listed()).toBeGreaterThanOrEqual(256);
 });
 
 it('picks the highlighted mention on Enter at once, even while typing continues', async () => {

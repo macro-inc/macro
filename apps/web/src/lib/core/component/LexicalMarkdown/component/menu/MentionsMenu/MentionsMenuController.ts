@@ -27,8 +27,8 @@ export interface BucketConfig<T extends MentionItem = MentionItem> {
   hasMore?: () => boolean;
   isLoadingMore?: () => boolean;
   loadMore?: () => Promise<void> | void;
-  /** Rows held back until results they are placed among arrive. */
-  heldRows?: () => number;
+  /** Whether the listed rows wait for results that will land among them. */
+  holding?: () => boolean;
 }
 
 /**
@@ -115,14 +115,13 @@ class MentionsMenuController {
 
     // Keep people visible while asynchronous entity/email results arrive.
     // Proportional allocation can otherwise remove the person under the pointer.
-    // Rows held for people still loading keep their share too, so the other
+    // While people load, their preview keeps all its rows, so the other
     // categories do not give up rows when the people land.
-    const peopleCount = Math.min(users, PEOPLE_PREVIEW_COUNT, this.targetItems);
-    const peopleRows = Math.min(
-      users + (this.getBucket('users')?.heldRows?.() ?? 0),
-      PEOPLE_PREVIEW_COUNT,
-      this.targetItems
-    );
+    const previewRows = Math.min(PEOPLE_PREVIEW_COUNT, this.targetItems);
+    const peopleCount = Math.min(users, previewRows);
+    const peopleRows = this.getBucket('users')?.holding?.()
+      ? previewRows
+      : peopleCount;
     return {
       users: peopleCount,
       ...this.computeBins(otherBins, this.targetItems - peopleRows),
@@ -130,20 +129,17 @@ class MentionsMenuController {
   });
 
   /**
-   * Placeholder rows a category's preview shows below its listed rows for the
-   * ones it holds back, up to the People preview, so that nothing below them
-   * moves when they arrive.
+   * Placeholder rows a holding category's preview shows below its listed rows,
+   * up to the People preview, so that nothing below them moves when the
+   * results it waits for arrive.
    */
   loadingRows(bucketId: string): number {
-    const held = this.getBucket(bucketId)?.heldRows?.() ?? 0;
-    if (held === 0) return 0;
+    if (!this.getBucket(bucketId)?.holding?.()) return 0;
     const listed = this.bins()[bucketId] ?? 0;
-    const shown = Math.min(
-      listed + held,
-      PEOPLE_PREVIEW_COUNT,
-      this.targetItems
+    return Math.max(
+      0,
+      Math.min(PEOPLE_PREVIEW_COUNT, this.targetItems) - listed
     );
-    return Math.max(0, shown - listed);
   }
 
   combinedItems = createLazyMemo((): MentionItem[] => {

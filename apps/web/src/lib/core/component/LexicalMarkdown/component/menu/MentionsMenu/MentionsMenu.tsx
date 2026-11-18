@@ -479,7 +479,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           windowKey: peopleWindowKey,
           getData: mobileAllItems,
           // Everything below the people waits with them.
-          heldRows: () => (waitingForPeople() ? TARGET_ITEMS : 0),
+          holding: waitingForPeople,
           getFullCount: () =>
             (sourceEnabled('bookingLinks') ? bookingLinks().length : 0) +
             (sourceEnabled('users') ? mentionUsers().length : 0) +
@@ -492,12 +492,14 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             (sourceEnabled('emails') ? totalEmailCount() : 0) +
             (sourceEnabled('calendarEvents') ? calendarEvents().length : 0) +
             (sourceEnabled('dates') ? (dates()?.length ?? 0) : 0),
+          // Its hidden rows are not paged in while it waits.
           hasMore: () =>
-            (sourceEnabled('users') && userMention.hasMore()) ||
-            (sourceEnabled('documents') && docsMention.hasMore()) ||
-            (sourceEnabled('channels') && channelsMention.hasMore()) ||
-            (sourceEnabled('crm') && crmMention.hasMore()) ||
-            (sourceEnabled('emails') && hasMoreEmails()),
+            !waitingForPeople() &&
+            ((sourceEnabled('users') && userMention.hasMore()) ||
+              (sourceEnabled('documents') && docsMention.hasMore()) ||
+              (sourceEnabled('channels') && channelsMention.hasMore()) ||
+              (sourceEnabled('crm') && crmMention.hasMore()) ||
+              (sourceEnabled('emails') && hasMoreEmails())),
           isLoadingMore: () =>
             (sourceEnabled('users') && userMention.isLoadingMore()) ||
             (sourceEnabled('documents') && docsMention.isLoadingMore()) ||
@@ -536,7 +538,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         hasMore: userMention.hasMore,
         isLoadingMore: userMention.isLoadingMore,
         loadMore: userMention.loadMore,
-        heldRows: userMention.heldRows,
+        holding: userMention.holdsRows,
       },
       {
         id: 'documents',
@@ -622,9 +624,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     return filtered.filter(
       (bucket) =>
-        bucket.getFullCount() > 0 ||
-        bucket.hasMore?.() ||
-        (bucket.heldRows?.() ?? 0) > 0
+        bucket.getFullCount() > 0 || bucket.hasMore?.() || bucket.holding?.()
     );
   });
 
@@ -845,7 +845,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const mode = controller.viewAllMode();
     return mode ? controller.getBucket(mode) : undefined;
   };
-  const viewAllHolding = () => (activeViewAllBucket()?.heldRows?.() ?? 0) > 0;
+  const viewAllHolding = () => activeViewAllBucket()?.holding?.() ?? false;
   const viewAllEmpty = () =>
     controller.combinedItems().length === 0 && !viewAllHolding();
 
@@ -1002,7 +1002,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                               when={controller.loadingRows(bucket().config.id)}
                             >
                               {(count) => (
-                                <MentionLoadingRows count={count()} />
+                                <MentionLoadingRows
+                                  count={count()}
+                                  label={t('common.loadingPeople')}
+                                />
                               )}
                             </Show>
                           </ItemBin>
@@ -1071,6 +1074,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                   >
                     <MentionLoadingRows
                       count={Math.ceil(height() / VIRTUAL_ITEM_HEIGHT)}
+                      label={t('common.loading')}
                       rowClass="h-9 sm:h-9"
                     />
                   </div>
