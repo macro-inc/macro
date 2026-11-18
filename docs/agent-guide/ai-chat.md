@@ -909,8 +909,8 @@ the shimmer.
 
 ## Routine run history
 
-On phones, Routines uses the shared header islands: its title, Search, and Create
-Routine actions stay above the list. Opening a routine replaces them with Back,
+On phones, Routines uses the shared header islands: Back to conversations,
+its title, Search, and Create Routine actions stay above the list. Opening a routine replaces them with Back,
 the routine title, save status, and its action menu. Overview and Runs tabs remain
 in the page below the islands; desktop breadcrumbs and toolbar stay unchanged.
 

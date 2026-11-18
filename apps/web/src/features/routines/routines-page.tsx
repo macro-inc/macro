@@ -1,4 +1,5 @@
 import { useViewControlHotkeys } from '@app/components/view-shell';
+import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   SplitHeaderScope,
@@ -103,6 +104,7 @@ function RoutinesContent() {
         <RoutinesListView
           mobileHeader={(focusSearch) => (
             <MobileRoutinesListHeader
+              onBack={() => openAgentsPage(layout, 'new')}
               onSearch={focusSearch}
               onCreate={create}
             />
