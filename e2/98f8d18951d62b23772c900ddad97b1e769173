@@ -1,0 +1,30 @@
+crates/agent_code_mode/AGENTS.md
+  s_a79cb5c5d752a9::t_cc4771eed74343 105,114
+  s_a79cb5c5d752a9::t_3ea7fd0df31be0 102-104,108-113
+crates/code_execution/AGENTS.md
+  s_a79cb5c5d752a9::t_3ea7fd0df31be0 19-23,65-69
+crates/agent_egress/AGENTS.md
+  s_a79cb5c5d752a9::t_3ea7fd0df31be0 32-38
+crates/agent_permissions/AGENTS.md
+  s_a79cb5c5d752a9::t_3ea7fd0df31be0 28-34
+services/agent_harness_service/AGENTS.md
+  s_a79cb5c5d752a9::t_cc4771eed74343 71-78
+packages/sdk-ocaml/README.md
+  s_a79cb5c5d752a9::t_f64cce0760b4a1 170,177-180,235,355,372-374
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e298f8d18951d62b23772c900ddad97b1e769173",
+  "prompts": {},
+  "sessions": {
+    "s_a79cb5c5d752a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8bf8f92a-181b-4d3a-aaa6-3d5c01f60534",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
