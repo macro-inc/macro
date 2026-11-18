@@ -438,17 +438,17 @@ describe('command menu search ranking', () => {
     ]);
   });
 
-  it('prioritizes a broader cached DM match over a directly matched CRM contact', () => {
+  it('keeps a CRM contact named with the query above a DM that only holds its letters in order', () => {
     const items = [
       contact('crm', 'Qtr plan'),
       channel('dm', 'Quarterly plan', NOW - 60 * DAY, 'dm'),
     ];
 
-    expect(ids(items, 'qtr')).toEqual(['dm', 'crm']);
-    expect(ids(items, 'qtr', false)).toEqual(['dm', 'crm']);
+    expect(ids(items, 'qtr')).toEqual(['crm', 'dm']);
+    expect(ids(items, 'qtr', false)).toEqual(['crm', 'dm']);
   });
 
-  it('prioritizes a preserved server-matched person over a directly matched CRM contact', () => {
+  it('keeps a CRM contact named with the query above a server-matched person that only holds its letters in order', () => {
     const items = [
       contact('crm', 'Qtr plan'),
       person('jack', 'Quarterly plan'),
@@ -459,7 +459,22 @@ describe('command menu search ranking', () => {
         preserveAdditionalEntityMatches: false,
         preservedIds: new Set(['jack']),
       }).map((item) => item.id)
-    ).toEqual(['jack', 'crm']);
+    ).toEqual(['crm', 'jack']);
+  });
+
+  it('lists a Macro user ahead of an equally matched CRM contact, never a weaker match ahead of a stronger one', () => {
+    expect(
+      ids(
+        [contact('crm', 'Rand Paulson'), person('miranda', 'mirandahaymon')],
+        'rand'
+      )
+    ).toEqual(['crm', 'miranda']);
+    expect(
+      ids(
+        [contact('crm', 'Rand Paulson'), person('randall', 'Randall Moss')],
+        'rand'
+      )
+    ).toEqual(['randall', 'crm']);
   });
 
   describe('participant names in any order', () => {
@@ -681,13 +696,13 @@ describe('command menu search ranking', () => {
       expect.arrayContaining(['teammate', 'teammate-dm', 'exact-note'])
     );
     expect(order.slice(0, 2).sort()).toEqual(['teammate', 'teammate-dm']);
-    // Someone outside the team the viewer never messaged follows every
-    // result that matches at a word start, however exactly they match.
-    expect(order.indexOf('outside')).toBe(3);
     // A teammate who matches less well stays below better matches.
     expect(order.indexOf('weak-teammate')).toBeGreaterThan(
       order.indexOf('exact-note')
     );
+    // Someone outside the team the viewer never messaged follows every
+    // result with a word starting with the query, however exactly they match.
+    expect(order.at(-1)).toBe('outside');
   });
 
   it.each([false, true])(
@@ -702,11 +717,13 @@ describe('command menu search ranking', () => {
         windowed(person('stranger-exact', 'macro'), 0),
         windowed(person('stranger-prefix', 'macro.acct1'), 1),
         windowed(messagedPerson('messaged', 'Macro Lee'), 2),
-        windowed(person('stranger-contains', 'Jo Macropoulos'), 3),
+        windowed(person('stranger-later-word', 'Jo Macropoulos'), 3),
         windowed(person('teammate', 'Macroeconomics Club'), 4),
+        windowed(person('stranger-contains', 'Bigmacro Fan'), 5),
         project('project', 'Macro roadmap', NOW - 20 * DAY),
         channel('channel', 'macro-eng', NOW - 20 * DAY),
-        note('contains-note', 'Notes on macro', NOW),
+        note('later-word-note', 'Notes on macro', NOW),
+        note('contains-note', 'Nanomacros', NOW),
       ];
       const order = rankCommandSearchItems(items, 'macro', {
         preserveAdditionalEntityMatches: cacheEnabled,
@@ -718,8 +735,10 @@ describe('command menu search ranking', () => {
         'teammate',
         'channel',
         'project',
+        'later-word-note',
         'stranger-exact',
         'stranger-prefix',
+        'stranger-later-word',
         'contains-note',
         'stranger-contains',
       ]);
@@ -742,11 +761,20 @@ describe('command menu search ranking', () => {
 
     expect(ids(items, 'rand')).toEqual([
       'random',
+      'script',
       'randall',
       'crm',
-      'script',
       'miranda',
     ]);
+  });
+
+  it('lists a person the viewer messages, matched by a later word, above a stranger whose name starts with the query', () => {
+    const items = [
+      person('stranger', 'Leela Okafor'),
+      messagedPerson('known', 'Jordan Lee'),
+    ];
+
+    expect(ids(items, 'lee')).toEqual(['known', 'stranger']);
   });
 });
 

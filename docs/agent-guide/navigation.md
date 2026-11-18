@@ -1790,20 +1790,25 @@ after typing stops and pages 100 contacts at a time, so contacts beyond the firs
 usual recency lists without contacts. A contact whose email belongs to a Macro user
 appears as that person instead, even when only the CRM name matched: their existing
 direct message when you have one, otherwise the person, and selecting them opens a
-direct message. Matching direct messages rank ahead of CRM contacts, even when the
-conversation is old, and Macro users lead CRM contacts listed next to them.
-Relevance and recency still order results within each group.
+direct message. Matching direct messages rank ahead of CRM contacts that match as
+well, even when the conversation is old, and Macro users lead CRM contacts listed
+next to them that match as well. Relevance and recency still order results within
+each group.
 Verify this in both People and All with a recent CRM contact and a matching DM last
 viewed more than 30 days ago, including when server contacts arrive after the DM.
 
 People you never messaged (not a teammate, no direct message), CRM contacts and
 email-only correspondents included, rank after your own projects, channels,
-documents, agents and commands and after the people you know among names
-matching at a word start, however exactly their name matches; rows that only
-contain the query come last. The People tab lists the people you know first.
-To verify on dev as gab@, type `rand`: the `random`-named channels, agents and
-files lead, and email-only accounts follow them; then type the first name of a
-teammate you DM and check they lead strangers with the same first name.
+documents, agents and commands and after the people you know, among names with
+a word starting with what you typed, however exactly their name matches: typing
+`lee` lists Jordan Lee, whom you message, above a stranger named Leela. Rows
+that only contain the query mid-word come last, strangers last among them. The
+People tab ranks the same way over people only.
+To verify on dev as gab@, type `macro` and `rand` in All: your `macro`-named
+channels, companies, tasks and files, and the tasks and files with a word
+starting with `rand`, list before the email-only accounts whose names start
+with those letters; then type the first name of a teammate you DM and check
+they lead the never-messaged accounts with the same first name.
 Other contacts show their email and open the contact page; Enter and
 click open in place, Shift+Enter in a new split. A server match that arrives after
 typing takes the default selection from the Search for… row. Global Search does not
