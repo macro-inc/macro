@@ -3,9 +3,11 @@ import {
   mapMediaItems,
   partitionAttachments,
 } from '@channel/Media/media-items';
+import { getDocumentMentions } from '@core/util/documentMentions';
 import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { AttachmentChip } from './AttachmentChip';
+import { splitMessageContent } from './agent-session-link';
 import { useMessage } from './context';
 import { DocumentImagePreview } from './DocumentImagePreview';
 import { MediaPreview } from './MediaPreview';
@@ -22,13 +24,21 @@ export function Attachments(props: AttachmentsProps) {
   const mediaItems = createMemo<MediaItem[]>((previous = []) =>
     mapMediaItems(buckets().mediaAttachments, previous)
   );
-  const documentIds = createMemo(() =>
-    buckets()
+  // A document the text also mentions already previews under the text
+  // (MentionedImages); previewing the attachment too would show it twice.
+  const documentIds = createMemo(() => {
+    const mentioned = getDocumentMentions(
+      splitMessageContent(message()).body
+    ).map((mention) => mention.documentId);
+
+    return buckets()
       .documentAttachments.filter(
-        (attachment) => attachment.entity_type === 'document'
+        (attachment) =>
+          attachment.entity_type === 'document' &&
+          !mentioned.includes(attachment.entity_id)
       )
-      .map((attachment) => attachment.entity_id)
-  );
+      .map((attachment) => attachment.entity_id);
+  });
   const hasAttachments = createMemo(
     () =>
       buckets().mediaAttachments.length > 0 ||
