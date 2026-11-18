@@ -15,6 +15,7 @@ rustix = { workspace = true }
 async-trait = { workspace = true }
 code_mode_assets = { path = "../code_mode_assets" }
 futures = { workspace = true }
+nom = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -25,3 +26,6 @@ tokio-util = { workspace = true, features = ["codec", "rt"] }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }

@@ -120,7 +120,7 @@ export function ListHeaderSearch(props: {
       ref={props.ref}
       class={cn(
         !expanded() && 'w-8 shrink-0',
-        expanded() && !props.wide && 'w-56 max-w-[40cqw] min-w-24 shrink-0',
+        expanded() && !props.wide && 'w-56 max-w-[40cqw] min-w-24',
         expanded() && props.wide && 'min-w-24 flex-1'
       )}
     >

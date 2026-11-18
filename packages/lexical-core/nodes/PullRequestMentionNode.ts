@@ -97,7 +97,8 @@ export class PullRequestMentionNode extends DecoratorNode<
     const node = $createPullRequestMentionNode({
       id: serializedNode.id,
       label: serializedNode.label,
-      mentionUuid: serializedNode.mentionUuid,
+      // Loro stores an absent uuid as null.
+      mentionUuid: serializedNode.mentionUuid ?? undefined,
       url: serializedNode.url,
     });
     $applyIdFromSerialized(node, serializedNode);
