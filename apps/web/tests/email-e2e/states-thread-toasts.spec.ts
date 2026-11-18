@@ -109,7 +109,9 @@ test.describe("the notices of an open thread's header", () => {
         await actions.getByRole('button', { name: 'Mark as unread' }).click();
       }
       await expect(page).toHaveURL(/\/app\/mail$/);
-      await expect(actions).toHaveCount(0);
+      await expect(
+        page.getByRole('heading', { name: 'Question', level: 1 })
+      ).toHaveCount(0);
       await expect.poll(unread.held).toBeGreaterThan(0);
       await unread.release();
 
