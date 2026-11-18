@@ -82,8 +82,13 @@ export function isAccessRequestError(error: Error): boolean {
  * so a caller that retries on this must back off.
  */
 export function isGraphqlServerFault(error: Error): boolean {
+  if (!(error instanceof CombinedError)) return false;
+
+  // A 4xx response is the server refusing the request, whatever its errors say.
+  const status = error.response?.status;
+  if (status != null && status >= 400 && status < 500) return false;
+
   return (
-    error instanceof CombinedError &&
     error.graphQLErrors.length > 0 &&
     error.graphQLErrors.every(({ extensions }) => {
       const code = extensions.code;

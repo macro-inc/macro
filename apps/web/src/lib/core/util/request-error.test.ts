@@ -225,6 +225,22 @@ describe('isGraphqlServerFault', () => {
     ).toBe(expected);
   });
 
+  it.each([
+    { status: 200, expected: true },
+    { status: 401, expected: false },
+    { status: 403, expected: false },
+    { status: 500, expected: true },
+  ])('classifies uncoded errors with HTTP $status', ({ status, expected }) => {
+    expect(
+      isGraphqlServerFault(
+        new CombinedError({
+          graphQLErrors: [{ message: 'Request failed' }],
+          response: new Response(null, { status }),
+        })
+      )
+    ).toBe(expected);
+  });
+
   it('is false for transport failures', () => {
     expect(
       isGraphqlServerFault(
