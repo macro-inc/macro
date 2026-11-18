@@ -131,7 +131,7 @@ export function CountBadge(
       <span
         data-slot="count-badge"
         class={cn(
-          'inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-accent px-1 text-xxs font-medium leading-none tabular-nums text-surface',
+          'inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-accent px-1 text-xxs font-medium leading-none tabular-nums text-button-accent-ink',
           local.class
         )}
         {...others}

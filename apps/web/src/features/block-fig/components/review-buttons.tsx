@@ -31,11 +31,7 @@ export function CommentButton(props: {
           onClick={() => c().onToggle()}
         >
           <ChatCircle class="size-4 touch:size-6 shrink-0 pointer-events-none" />
-          <CountBadge
-            count={c().unread}
-            data-testid="fig-comments-unread"
-            class={c().active ? 'bg-accent-contrast text-accent' : undefined}
-          />
+          <CountBadge count={c().unread} data-testid="fig-comments-unread" />
         </Button>
       )}
     </Show>

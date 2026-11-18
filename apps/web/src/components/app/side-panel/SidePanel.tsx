@@ -1,6 +1,5 @@
 import { CollapsibleSection } from '@app/components/view-shell/CollapsibleSection';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { useMaybeBlockAliasedName } from '@core/block';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
@@ -457,7 +456,8 @@ function Toggle(props: { size?: 'sm' | 'md' } = {}) {
   const label = () => {
     if (ctx.isOpen()) return 'Hide details';
     if (unseen() === 0) return 'Show details';
-    return `Show details, ${t('nav.unseenItems', { count: unseen() })}`;
+    if (unseen() === 1) return 'Show details, 1 unseen item';
+    return `Show details, ${unseen()} unseen items`;
   };
 
   return (
