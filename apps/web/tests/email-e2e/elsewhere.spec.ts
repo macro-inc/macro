@@ -44,15 +44,10 @@ for (const provider of PROVIDERS) {
   test.describe(`elsewhere in Macro, with ${anInbox(provider)}`, () => {
     test.use({ provider });
 
-    // Class universal-input-email-needs-draft-id: the universal input saves
-    // its email without a draft id, which the save refuses ("Save the draft
-    // before sending"), so nothing is saved or sent.
     // When this fails, an email written in the universal input is not sent:
     // "Send email" does nothing, never says "Email sent", or the provider
     // gets no message, or one with another recipient, subject or text.
-    test('known bug: universal-input-email-needs-draft-id: the universal input sends an email @known-bug', {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    test('the universal input sends an email', async ({ page, mailbox }) => {
       await mailbox.open('/app/mail');
       await universalEmail(page, 'Lunch moved');
 
@@ -78,12 +73,12 @@ for (const provider of PROVIDERS) {
       confirmed('F-166');
     });
 
-    // Class universal-input-email-needs-draft-id, as above.
     // When this fails, "Save as draft" in the universal input keeps no
     // draft, or its "Open" leads somewhere else than the draft it saved.
-    test('known bug: universal-input-email-needs-draft-id: the universal input saves an email draft and opens it @known-bug', {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    test('the universal input saves an email draft and opens it', async ({
+      page,
+      mailbox,
+    }) => {
       await mailbox.open('/app/mail');
       await universalEmail(page, 'Lunch moved');
 
