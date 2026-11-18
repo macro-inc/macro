@@ -1,23 +1,48 @@
-/** Mirrors subsequence_match::ranking; shared fixtures freeze this per-row rule.
- * It never normalizes a score against the other rows in a result window. */
-export function normalizeNameText(value: string): string {
-  return value
+/** Remembers a pure string function's answers. Ranking thousands of rows
+ * reads the same names on every keystroke; the bound only caps memory. */
+function rememberText<R>(compute: (value: string) => R) {
+  const known = new Map<string, R>();
+  return (value: string): R => {
+    const hit = known.get(value);
+    if (hit !== undefined) return hit;
+    const result = compute(value);
+    if (known.size >= 50_000) known.clear();
+    known.set(value, result);
+    return result;
+  };
+}
+
+const normalizedText = rememberText((value) =>
+  value
     .split(/\p{White_Space}+/u)
     .filter(Boolean)
     .join(' ')
-    .toLowerCase();
+    .toLowerCase()
+);
+
+/** Mirrors subsequence_match::ranking; shared fixtures freeze this per-row rule.
+ * It never normalizes a score against the other rows in a result window. */
+export function normalizeNameText(value: string): string {
+  return normalizedText(value);
 }
 
 const WORD_BREAK = /[^\p{Alphabetic}\p{Number}]+/u;
 
+const wordsOf = rememberText((text): readonly string[] =>
+  text.toLowerCase().split(WORD_BREAK).filter(Boolean)
+);
+
+const queryParts = rememberText((query): readonly string[] =>
+  normalizeNameText(query).split(WORD_BREAK).filter(Boolean)
+);
+
 /** Whether every query term starts a word of the text, as the native people
  * ranker's word-prefix tier decides it: punctuation separates words. */
 export function startsWordsOf(text: string, query: string): boolean {
-  const words = text.toLowerCase().split(WORD_BREAK).filter(Boolean);
-  return normalizeNameText(query)
-    .split(WORD_BREAK)
-    .filter(Boolean)
-    .every((part) => words.some((word) => word.startsWith(part)));
+  const words = wordsOf(text);
+  return queryParts(query).every((part) =>
+    words.some((word) => word.startsWith(part))
+  );
 }
 
 function span(
