@@ -21,56 +21,57 @@ desktop and mobile Join with work and personal Google accounts signed in; a work
 calendar should open Meet with the work account. Search results without loaded
 calendar account metadata and other conferencing providers keep their original URL.
 
-Desktop event creation and editing use a 384px composer rather than a second
-split inside Calendar. A selected grid range or event anchors it beside that
-selection. **Pin event composer** reserves a right-side panel; unpinning keeps the
-same draft and field state. The header uses the rotated side-panel icon for both
-new and existing-event composers. Drag its empty header area to move a floating
-composer; dropping on the right-side target pins it. Dragging a pinned header
-left floats the card with a shadow; dropping over the calendar returns it to its
-event anchor, while dropping back on the panel leaves it pinned. Escape, pointer
-cancellation, or losing window focus cancels without discarding edits. Header
-menus and buttons retain their normal behavior. While pinned, selecting
-another editable occurrence replaces the editor without collapsing its panel;
-a dirty draft asks for discard first. Rejecting discard keeps that draft. Selecting
-the same occurrence never resets edits. Read-only occurrences keep their existing
-detail surface and do not replace the pinned draft. Pinned editors ignore outside
-clicks. Close, Cancel,
-Escape, and leaving the view ask before discarding edits; an open field menu
-handles Escape first. Touch uses a single grouped sheet with its save action pinned below the scroll body.
+Day, Week, Month, and Agenda use an inset, rounded content card on desktop.
+Desktop event creation and editing use one 384px composer, not a second split.
+A selected grid range or event anchors the floating composer beside that selection.
+**Pin event composer** and **Pin event details** replace the calendar's left sidebar;
+unpinning restores navigation without changing the mounted draft. Drag the empty
+header left to pin, or right out of the sidebar to float. Both surfaces share
+the same drag primitive and sidebar slot. Editing a pinned event card keeps the
+composer pinned there. A dirty editor must pass its discard guard before a
+different card takes the slot. Escape, pointer cancellation, or lost window focus
+cancels a drag without discarding edits. Header controls keep their normal behavior.
+While pinned, selecting another editable occurrence replaces the editor after
+discard confirmation when needed. Selecting the same occurrence preserves the
+draft. Read-only occurrences retain details and never gain edit access. Pinned
+surfaces ignore outside clicks. Close, Cancel, Escape, and navigation use the
+existing dirty guard; an open field menu handles Escape first. Touch uses one
+grouped sheet with its save action below the scroll body.
 New-menu drafts start at the next half hour and last thirty minutes. Grid
 selections and supplied draft values keep their chosen range.
 
-The desktop composer orders kind, title, time, description, guests, call, location,
-and calendar in aligned icon/value rows. Its title grows to three lines, then scrolls.
-The desktop header and phone title row share one 28px event-kind chip on the
-secondary surface. Its menu shows calendar-icon Event and prohibit-icon Out of
-office with a check beside the current kind. Edits and locked drafts cannot
-change kind. Agent drafts display an agent mark inside the chip on both layouts.
-Location is an inline text field. **More options** reveals Notifications, authorized
-Guest permissions, and Visibility; it also reveals an empty description on an
-existing event. Pinning keeps those options expanded. Visibility for **This event**
-is unavailable because occurrence reads do not expose that override.
-The plain duration value opens duration choices and **All day**. Choosing a duration
-keeps that length when the start moves; explicitly picking an end keeps that end fixed.
-Dropdown triggers and date/time inputs use the theme control surface. Menus use
-shared Dropdown spacing; searchable clock and time-zone lists keep their listbox
-semantics with the same menu frames. Verify calendar, recurrence, Guests,
-conferencing, and Notifications open on the first click from the title field and
-accept changes without closing the composer. Reminder pills contain their
-value, chevron, and remove button within one frame; Add follows the last pill.
-Desktop date pills open one month for a start-then-end range selection. Both dates
-commit together; Escape or an outside press drops an incomplete selection. Same-day
-ranges show one date, except when only the end is editable; multi-day ranges show
-both. Each timed end keeps its time field: type `3p` or `15:30` and the list jumps
-there, Enter commits, and Escape restores the old time. Escape dismisses the active
-menu before the composer. The phone sheet uses the same paired date picker above
-its start/end clock pills.
-Start-time edits keep the event's length until its end is explicitly changed.
-Legacy per-end date pickers also preserve the duration or all-day day count.
-A start past a fixed end shows the end-before-start error.
+The title is followed by creation-only **Event** and **Out of office** choices,
+shared between desktop and phone. Editing hides these choices. Agent drafts keep
+their mark in the title's icon column, not inside a kind selector.
+Location and Description share the same filled, rounded surface and first-line
+padding; a long location wraps. Clearing Description leaves its placeholder at the
+same first-line position. Add people is a filled value pill. Desktop guest removal
+overlays the trailing end on hover or keyboard focus without changing pill width;
+phone guest rows keep their visible removal control.
+**More options** appends extra fields after the existing ones, above the footer.
+It never inserts a newly revealed description between existing fields.
+Pinning keeps options expanded. Visibility offers **Calendar default**, **Public**,
+and **Private**. A synced confidential event displays Private, but an untouched
+save preserves confidential. Single-occurrence visibility remains unavailable
+because reads do not expose its override.
+**All day** is a switch, not a duration menu; enabling it hides the clock fields.
+Date pills are left-aligned. Selecting a date moves the range without inventing
+an end date; only real overnight, multi-day, or all-day spans show both dates.
+Use **Choose date range** inside the date picker for an explicit two-date span.
+Start changes always preserve the current length, including after an end edit.
+End changes never move the start. Clock pills keep their width, text position,
+and trailing meridiem while typing; focusing selects the value. The list opens
+4px below, centres the current choice, and uses a trailing selected check.
+Typing `6`, `630`, `6:30p`, or `18:30` highlights the best match; arrows step
+15 minutes, Enter commits, Escape reverts, and invalid blur reverts.
+The end list also shows each length. Phone T1 uses the same behavior.
+Time-zone pills show the Intl short name; menus show full and short names.
+Custom repeat opens the shared desktop Dialog or phone drawer. Edits are staged:
+Done applies and Cancel leaves the original rule unchanged. Reminder pills keep
+their remove control inside the frame. Empty labels and placeholders use tertiary
+ink, and action copy has no trailing ellipsis unless opening a dialog.
 
-The phone composer orders title and one event-kind dropdown chip, When, people,
+The phone composer orders title and creation-only kind choices, When, people,
 call/calendar, optional-field add rows, time zone, reminders, guest permissions,
 and visibility. Adding a Description or Location replaces its add row and focuses
 the field in its final position. The compact title overlays the scroller below
@@ -275,30 +276,14 @@ an agent reply appears, and messages remain in the saved history; starting a
 new session from the same meeting link must start a separate chat thread.
 
 
-Calendar event creation and editing open in a bottom sheet on touch devices,
-with scrollable content above the keyboard. `Create event` or `Save` sits at
-the top right of the sheet's pinned chrome, below the handle, so it stays in
-reach while the form scrolls. The title and description come first, then one
-event-kind dropdown chip offering `Event` and `Out of office`. A section of rows
-holds All-day (switch on the right), Starts and Ends (date and time), and Repeat; a
-second has one row each for Calendar, Guests, Call, Location, and Reminders
-(Declines and Message for out-of-office events). Location is a text field in
-its row, so the sheet scrolls it above the keyboard. Guest permissions follow, one
-per row. Guests opens its own sheet over the composer, as tall as the event
-sheet, with Cancel, the `Guests` title, and Done; its list fills the sheet.
-Picks apply only on Done, and Cancel, the backdrop, or Escape drop them; the
-guest sheet has no handle and does not drag, since a drag there also reached
-the event sheet beneath. Picking a guest keeps the keyboard up. The title
-sits directly below the pinned chrome. The sheet has no Cancel: drag, the
-backdrop, or Escape dismiss it.
-`This event`/`All events` sits at the bottom when editing a recurring event.
-Desktop retains the centered dialog with inline dates, wrapping pills, and its
-Cancel footer; both layouts compose `EventFormParts` (`MobileEventForm` and
-`EventForm`), and the range rows compose `DateTimeRange` parts.
-Dismissing a changed event by swipe, backdrop tap or Escape still asks before
-discarding the draft; Keep editing returns to the sheet with the edits intact,
-and the prompt stays away until the next attempt to close. An event created
-from Home's **+ New** → Event opens the calendar on it once it saves, with its
+Calendar event creation and editing on touch use the grouped composer described
+above: one scroll body, a pinned bottom Create event/Save footer, and staged
+guest selection in its own sheet. Custom recurrence opens a separate drawer.
+Recurring edits keep the padded This event/All events row above the footer.
+Swipe, backdrop, and Escape dismissal retain the dirty-draft confirmation;
+Keep editing returns to the same draft. Legacy EventForm/MobileEventForm remain
+unwired reference components, not the active desktop or phone layouts.
+An event created from Home's **+ New** → Event opens the calendar on it once it saves, with its
 details showing; events created inside the calendar stay where they were made.
 
 On phones, event details use inset round action buttons and a transparent RSVP

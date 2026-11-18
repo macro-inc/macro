@@ -8,7 +8,11 @@ export function ComposerGuestChip(
   props: ParentProps<{ guest: SelectedEventEditorGuest }>
 ) {
   return (
-    <Badge variant="secondary" size="sm" class="min-h-7 max-w-full gap-1.5">
+    <Badge
+      variant="secondary"
+      size="sm"
+      class="group/guest relative min-h-7 max-w-full gap-1.5"
+    >
       <span class="size-5 shrink-0">
         <UserIcon
           id={props.guest.id}

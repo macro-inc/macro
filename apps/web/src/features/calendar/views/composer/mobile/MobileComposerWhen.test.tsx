@@ -1,3 +1,4 @@
+import { installTimeInputResizeObserver } from '@app/components/date-time-range/test-support';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, expect, it, vi } from 'vitest';
@@ -8,6 +9,7 @@ import { createCalendarComposer } from '../../../primitives/create-calendar-comp
 import { MobileComposerWhen } from './MobileComposerWhen';
 
 beforeAll(() => {
+  installTimeInputResizeObserver();
   Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(cleanup);
@@ -83,6 +85,9 @@ it('commits both range dates without changing the displayed 24-hour times', asyn
   await userEvent.click(
     screen.getByRole('button', { name: 'Edit event start date' })
   );
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Choose date range' })
+  );
   await userEvent.click(screen.getByRole('gridcell', { name: '11' }));
   await userEvent.click(screen.getByRole('gridcell', { name: '13' }));
   expect(controller.state().start).toBe('2030-11-11T20:00');
@@ -90,6 +95,19 @@ it('commits both range dates without changing the displayed 24-hour times', asyn
   expect(
     screen.getByRole('combobox', { name: 'event end time' }).textContent
   ).toBe('21:00');
+});
+
+it('moves a single date without revealing a second date or changing clock times', async () => {
+  const controller = setup('24-hour');
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Edit event start date' })
+  );
+  await userEvent.click(screen.getByRole('gridcell', { name: '13' }));
+  expect(controller.state().start).toBe('2030-11-13T20:00');
+  expect(controller.state().end).toBe('2030-11-13T21:00');
+  expect(
+    screen.queryByRole('button', { name: 'Edit event end date' })
+  ).toBeNull();
 });
 
 it('announces why recurrence cannot change for a single occurrence', () => {

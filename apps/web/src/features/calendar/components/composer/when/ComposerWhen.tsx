@@ -1,8 +1,9 @@
 import { DateTimeRange } from '@app/components/date-time-range/date-time-range-fields';
+import { t } from '@app/lib/i18n';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import { ToggleSwitch } from '@ui';
 import { Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
-import { ComposerDuration } from './ComposerDuration';
 import { ComposerRangeFeedback } from './ComposerRangeFeedback';
 
 export function ComposerWhen() {
@@ -12,7 +13,7 @@ export function ComposerWhen() {
   return (
     <DateTimeRange.Root {...model.range}>
       <div class="flex min-w-0 flex-wrap items-center gap-1">
-        <DateTimeRange.Dates fieldWidth="110px" />
+        <DateTimeRange.Dates fieldWidth="110px" moveOnSelect />
         <Show when={!model.state().allDay}>
           <div class="grid grid-cols-[110px_20px_110px] items-center">
             <DateTimeRange.StartTime class="w-[110px]" splitMeridiem />
@@ -24,7 +25,13 @@ export function ComposerWhen() {
             <DateTimeRange.EndTime class="w-[110px]" splitMeridiem />
           </div>
         </Show>
-        <ComposerDuration />
+        <ToggleSwitch
+          label={t('calendar.allDay')}
+          size="sm"
+          checked={model.state().allDay}
+          disabled={model.fieldIsDisabled('allDay')}
+          onChange={model.controller.setAllDay}
+        />
       </div>
       <ComposerRangeFeedback />
     </DateTimeRange.Root>

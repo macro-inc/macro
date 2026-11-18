@@ -4,7 +4,7 @@ import { Dropdown, Tooltip } from '@ui';
 import { For } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 
-const VALUES = ['default', 'public', 'private', 'confidential'] as const;
+const VALUES = ['default', 'public', 'private'] as const;
 
 export function ComposerVisibility(props: { fullWidth?: boolean } = {}) {
   const model = useCalendarComposer();
@@ -22,14 +22,15 @@ export function ComposerVisibility(props: { fullWidth?: boolean } = {}) {
     get private() {
       return t('calendar.visibilityPrivate');
     },
-    get confidential() {
-      return t('calendar.visibilityConfidential');
-    },
+  };
+  const displayedVisibility = () => {
+    const visibility = model.visibility();
+    return visibility === 'confidential' ? 'private' : visibility;
   };
   const label = () => {
     if (model.options.visibilityReadOnlyReason) return t('calendar.visibility');
     if (unavailable()) return t('calendar.visibilityUnavailable');
-    const value = model.visibility();
+    const value = displayedVisibility();
     return value ? labels[value] : t('calendar.visibility');
   };
   return (
@@ -61,7 +62,7 @@ export function ComposerVisibility(props: { fullWidth?: boolean } = {}) {
       <Dropdown.Content portalScope="local" class="min-w-48">
         <Dropdown.Group>
           <Dropdown.RadioGroup
-            value={model.visibility()}
+            value={displayedVisibility()}
             onChange={(value) => {
               const visibility = VALUES.find((choice) => choice === value);
               if (visibility) model.setVisibility(visibility);

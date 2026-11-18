@@ -10,7 +10,7 @@ import { useDateTimeRange } from '../date-time-range-context';
 import { createRangeDateSelection } from '../primitives/create-range-date-selection';
 import { RangeDateTrigger } from './RangeDateTrigger';
 
-/** Date pills for one range; both share a one-month, two-click range picker. */
+/** Date pills share a one-month picker with optional one-click moves and explicit ranges. */
 export function RangeDates(props: {
   layout?: 'inline' | 'columns';
   /** Keep both date pills aligned with a host's fixed-width time fields. */

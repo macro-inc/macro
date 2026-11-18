@@ -20,7 +20,7 @@ export function MobileComposerAddRow(props: {
       <span aria-hidden="true" class="flex justify-center">
         {props.icon}
       </span>
-      <span>{props.label}</span>
+      <span class="text-ink-subtle">{props.label}</span>
       <PlusIcon class="size-4 shrink-0" />
     </Button>
   );

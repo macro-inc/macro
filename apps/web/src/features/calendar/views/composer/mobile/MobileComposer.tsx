@@ -66,7 +66,7 @@ export function MobileComposer(props: ParentProps<MobileComposerProps>) {
     disabled: model.fieldIsDisabled,
   });
   let description: HTMLDivElement | undefined;
-  let location: HTMLInputElement | undefined;
+  let location: HTMLTextAreaElement | undefined;
   const reveal = (field: ComposerOptionalField, button: HTMLButtonElement) => {
     if (!fields.reveal(field)) return;
     triggerFocusInput(

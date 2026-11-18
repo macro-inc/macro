@@ -45,7 +45,7 @@ interface TimeInputProps {
   invalid?: boolean;
   describedBy?: string;
   class?: string;
-  /** Separate the resting clock value and meridiem without changing native typing. */
+  /** Keep the numeric input and meridiem in fixed columns while resting or typing. */
   splitMeridiem?: boolean;
 }
 

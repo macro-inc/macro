@@ -38,6 +38,7 @@ export function ComposerConference(props: ComposerConferenceProps) {
         size={props.fullWidth ? 'sheet-row' : 'sm'}
         fullWidth={props.fullWidth}
         class={props.fullWidth ? 'justify-between' : undefined}
+        classList={{ 'text-ink-subtle': props.value === 'none' }}
         aria-label={t('calendar.conferencing')}
         disabled={props.disabled}
       >

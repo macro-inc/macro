@@ -28,11 +28,11 @@ host lives in `../block-calendar/`.
   owns the readiness boundary; `CalendarComposerEditor.tsx` selects desktop/phone
   composition around one model from `views/composer/create-standalone-composer-setup.ts`.
   `../calendar-view/views/composer/` owns floating/pinned placement and navigation
-  dismissal through `primitives/create-calendar-composer-session.ts`. Header dragging
-  uses `primitives/create-composer-header-drag.ts`; its target matches the future
-  dock without resizing the calendar until drop. Pinned occurrence changes use
-  `primitives/create-pinned-composer-selection.ts` and the session's guarded
-  `replacePinned`; resolve current selection again after discard approval.
+  dismissal through `primitives/create-calendar-composer-session.ts`. Cards and
+  composers share `create-calendar-panel-placement.ts`, the left-sidebar target,
+  and `create-composer-header-drag.ts`. `create-calendar-panel-state.ts` owns
+  exclusive sidebar occupancy and guarded card/editor handoff. Pinned occurrence changes use
+  `create-pinned-composer-selection.ts` and `replacePinned`; resolve selection again after discard approval.
   Keep replaced form and split components unwired for reference.
 - `primitives/create-composer-metadata.ts` owns explicit visibility/time-zone edits;
   the optional metadata argument to `useEventEditor.save` preserves legacy callers.
@@ -62,9 +62,9 @@ host lives in `../block-calendar/`.
 - Keep presentation components independent of production services; use the
   [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
 - Extend `../../components/date-time-range/` for shared date/time fields and
-  arithmetic; `DateTimeRange.Dates` stages and commits a two-click date range,
-  while the original per-end parts retain existing callers' behavior. Share typed
-  and picked clock state through its `primitives/create-time-input.ts` in both layouts.
+  arithmetic; single-date picks preserve the range, and only real multi-day
+  spans show an end date. Share typed and picked clock state through
+  `primitives/create-time-input.ts` in both layouts.
   Its `mobile-time-input/MobileTimeInput.tsx` is the new list-first T1 presentation;
   `MobileStartTime` and `MobileEndTime` share the same range and rollover behavior.
   Date/time pills share fixed widths, and clock/time-zone menus use the shared
@@ -83,10 +83,14 @@ host lives in `../block-calendar/`.
   Guest selection stages changes in `PickerSheet` and applies only on Done.
 - `primitives/create-agent-composer.ts` keeps one validated review decision; the
   agent host selects `DesktopComposer` or `MobileAgentComposer` over that model.
-  Both layouts use the shared event-kind chip with an agent mark. Pass explicit
-  time-zone metadata through the tool adapter and keep unsupported visibility
-  read-only; the current tool accepts one time, not alternatives.
+  Both layouts use creation-only Event/Out of office choices below the title,
+  with the agent mark in the title icon column. Pass explicit time-zone metadata
+  through the tool adapter and keep unsupported visibility read-only; the tool accepts one time, not alternatives.
   Feed the same validated time and recurrence snapshot to the preview and submission.
+- Visibility offers Calendar default/Public/Private, displays synced confidential
+  as Private, and preserves the original value until an explicit change.
+- Stage custom recurrence in the shared Dialog (MobileDrawer on phones); Cancel
+  leaves the current rule intact. Keep newly revealed options after existing fields.
 - Pass the calendar clock preference into shared date/time controls from their
   host; generic fields must not import calendar preferences.
 - Browse calendar foundations at `/app/component/ui?ui=date-tile`,

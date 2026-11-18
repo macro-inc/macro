@@ -7,7 +7,7 @@ export function ComposerScope() {
   const model = useCalendarComposer();
   return (
     <Show when={model.options.showRecurringEditNotice}>
-      <div class="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+      <div class="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm text-ink-muted">
         <span>{t('calendar.applyChangesTo')}</span>
         <RadioGroup
           size="sm"
@@ -20,13 +20,13 @@ export function ComposerScope() {
               model.changeEditScope(scope);
           }}
         >
-          <RadioGroup.Item value="this_event" class="gap-1.5">
+          <RadioGroup.Item value="this_event" class="min-h-8 gap-1.5">
             <RadioGroup.ItemControl />
             <RadioGroup.ItemLabel>
               {t('calendar.thisEvent')}
             </RadioGroup.ItemLabel>
           </RadioGroup.Item>
-          <RadioGroup.Item value="all" class="gap-1.5">
+          <RadioGroup.Item value="all" class="min-h-8 gap-1.5">
             <RadioGroup.ItemControl />
             <RadioGroup.ItemLabel>
               {t('calendar.allEvents')}

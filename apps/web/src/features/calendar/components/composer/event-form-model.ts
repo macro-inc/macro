@@ -33,6 +33,7 @@ import {
   buildRecurrenceLines,
   defaultCustomConfig,
   formatRecurrenceDescription,
+  isValidRecurrenceConfig,
   parseRecurrenceConfig,
   type RecurrenceConfig,
   recurrenceConfigsEqual,
@@ -541,19 +542,8 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     }
     setRecurrenceChoice(choice);
   };
-  const customValid = createMemo(() => {
-    if (recurrenceChoice() !== 'custom') return true;
-    const config = customConfig();
-    if (!Number.isInteger(config.interval) || config.interval < 1) return false;
-    if (config.frequency === 'WEEKLY' && config.byDay.length === 0) {
-      return false;
-    }
-    if (config.ends.kind === 'on') return config.ends.date !== '';
-    if (config.ends.kind === 'after') {
-      return Number.isInteger(config.ends.count) && config.ends.count >= 1;
-    }
-    return true;
-  });
+  const customValid = () =>
+    recurrenceChoice() !== 'custom' || isValidRecurrenceConfig(customConfig());
   const recurrenceConfig = (): RecurrenceConfig | undefined => {
     const choice = recurrenceChoice();
     if (choice === 'none') return undefined;

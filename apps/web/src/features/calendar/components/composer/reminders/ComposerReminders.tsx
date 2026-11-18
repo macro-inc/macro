@@ -29,6 +29,7 @@ export function ComposerReminders(props: ComposerReminderOptions) {
             size="sm"
             aria-label={t('calendar.addNotification')}
             disabled={props.disabled || !props.canAdd}
+            classList={{ 'text-ink-subtle': props.minutes.length === 0 }}
           >
             <PlusIcon class="size-3.5" />
             {t('calendar.add')}

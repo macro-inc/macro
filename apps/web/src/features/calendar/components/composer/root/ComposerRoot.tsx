@@ -11,6 +11,7 @@ export function ComposerRoot(
       <form
         id={props.model.ids.form}
         class={cn('flex min-h-0 flex-col text-sm text-ink', props.class)}
+        style={{ '--color-ink-placeholder': 'var(--color-ink-subtle)' }}
         onSubmit={(event) => {
           event.preventDefault();
           props.model.submit();

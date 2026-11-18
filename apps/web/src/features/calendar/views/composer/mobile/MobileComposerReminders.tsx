@@ -44,7 +44,7 @@ export function MobileComposerReminders(props: ComposerReminderOptions) {
             variant="ghost"
             size="sheet-row"
             fullWidth
-            class="justify-start"
+            class="justify-start text-ink-subtle"
             disabled={props.disabled || !props.canAdd}
           >
             {t('calendar.addReminder')}

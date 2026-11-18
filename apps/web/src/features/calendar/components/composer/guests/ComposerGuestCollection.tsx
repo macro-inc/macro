@@ -49,6 +49,7 @@ export function ComposerGuestCollection(props: ComposerGuestCollectionProps) {
                   <Button
                     variant="ghost"
                     size="icon-xs"
+                    class="absolute right-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/guest:opacity-100 group-focus-within/guest:opacity-100 focus-visible:opacity-100"
                     aria-label={t('calendar.removeGuest', {
                       name: composerGuestName(guest),
                     })}

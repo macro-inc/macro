@@ -10,7 +10,6 @@ import RepeatIcon from '@icon/system/regular/repeat.svg';
 import { ToggleSwitch } from '@ui';
 import { Show } from 'solid-js';
 import { ComposerRecurrence } from '../../../components/composer/recurrence/ComposerRecurrence';
-import { CustomRecurrence } from '../../../components/composer/recurrence/CustomRecurrence';
 import { ComposerRangeFeedback } from '../../../components/composer/when/ComposerRangeFeedback';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 
@@ -27,7 +26,7 @@ export function MobileComposerWhen() {
           class="items-start py-1"
         >
           <div class="flex flex-col gap-2">
-            <DateTimeRange.Dates layout="columns" />
+            <DateTimeRange.Dates layout="columns" moveOnSelect />
             <Show when={!model.state().allDay}>
               <div class="grid grid-cols-[110px_24px_110px] items-center">
                 <MobileStartTime />
@@ -58,20 +57,6 @@ export function MobileComposerWhen() {
         <SheetRow icon={<RepeatIcon class="size-4" />}>
           <ComposerRecurrence fullWidth />
         </SheetRow>
-        <Show when={model.controller.recurrenceChoice() === 'custom'}>
-          <SheetRow class="py-3">
-            <CustomRecurrence
-              value={model.controller.customConfig()}
-              start={model.controller.startForRecurrence()}
-              allDay={model.state().allDay}
-              disabled={
-                model.fieldIsDisabled('recurrence') ||
-                Boolean(model.recurrenceScopeReason())
-              }
-              onChange={model.controller.setCustomConfig}
-            />
-          </SheetRow>
-        </Show>
       </SheetGroup>
       <Show when={model.recurrenceScopeReason()}>
         {(reason) => (

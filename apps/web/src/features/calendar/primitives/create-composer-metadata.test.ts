@@ -83,6 +83,23 @@ describe('composer metadata', () => {
     });
   });
 
+  it('keeps confidential unchanged until the viewer explicitly chooses Private', () => {
+    createRoot((dispose) => {
+      const metadata = createComposerMetadata({
+        isEdit: true,
+        initial: { timeZone: 'UTC', visibility: 'confidential' },
+        timeZoneRelevant: () => true,
+      });
+      expect(metadata.state.visibility).toBe('confidential');
+      expect(metadata.submission(VALUES, RANGE)?.changes).toEqual({});
+      metadata.setVisibility('private');
+      expect(metadata.submission(VALUES, RANGE)?.changes).toEqual({
+        visibility: 'private',
+      });
+      dispose();
+    });
+  });
+
   it('does not make a date-only event dirty from a time-zone-only choice', () => {
     createRoot((dispose) => {
       const metadata = createComposerMetadata({

@@ -59,6 +59,24 @@ function TitleDemo() {
 }
 // #endregion
 
+// #region demo:embedded
+function EmbeddedDemo() {
+  return (
+    <TextField class="w-full max-w-sm" defaultValue="">
+      <TextField.Label>Location</TextField.Label>
+      <TextField.Surface>
+        <TextField.TextArea
+          variant="embedded"
+          rows={1}
+          autoResize
+          placeholder="Add location"
+        />
+      </TextField.Surface>
+    </TextField>
+  );
+}
+// #endregion
+
 // #region demo:states
 function StatesDemo() {
   return (
@@ -113,6 +131,13 @@ export default defineDoc({
       description:
         'Use `variant="title"` with `autoResize` for a three-line heading on desktop and touch.',
       render: TitleDemo,
+    },
+    {
+      id: 'embedded',
+      title: 'Quiet field surface',
+      description:
+        'Share TextField.Surface between rich text and an auto-growing embedded textarea.',
+      render: EmbeddedDemo,
     },
     {
       id: 'states',

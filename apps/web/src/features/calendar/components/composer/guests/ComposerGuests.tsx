@@ -52,6 +52,7 @@ export function ComposerGuests() {
                   <Button
                     variant="ghost"
                     size="icon-xs"
+                    class="absolute right-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/guest:opacity-100 group-focus-within/guest:opacity-100 focus-visible:opacity-100"
                     aria-label={t('calendar.removeGuest', {
                       name: composerGuestName(guest),
                     })}
@@ -67,9 +68,12 @@ export function ComposerGuests() {
           <Show when={!model.guests.readOnly}>
             <Popover.Trigger
               as={Button}
-              variant="ghost"
+              variant="value"
               size="sm"
               disabled={model.guests.disabled}
+              classList={{
+                'text-ink-subtle': model.guests.selected.length === 0,
+              }}
               aria-label={t('calendar.addGuests')}
             >
               <PlusIcon class="size-3.5" />

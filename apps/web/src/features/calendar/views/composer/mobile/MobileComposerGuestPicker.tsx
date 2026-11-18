@@ -26,10 +26,9 @@ export function MobileComposerGuestPicker(props: {
         }
       >
         <Button
-          variant="ghost"
-          size="sheet"
-          fullWidth
-          class="justify-start"
+          variant="value"
+          size="sm"
+          class="text-ink-subtle"
           onPointerDown={(event) => event.preventDefault()}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => setOpen(true)}

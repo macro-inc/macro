@@ -47,7 +47,7 @@ function TextFieldInput(props: TextFieldInputProps) {
 export type TextFieldTextAreaProps<T extends ValidComponent = 'textarea'> =
   ComponentProps<typeof KobalteTextField.TextArea<T>> & {
     /** Borderless, auto-growing title treatment used by composer headings. */
-    variant?: 'default' | 'title';
+    variant?: 'default' | 'title' | 'embedded';
   };
 
 function TextFieldTextArea<T extends ValidComponent = 'textarea'>(
@@ -58,16 +58,22 @@ function TextFieldTextArea<T extends ValidComponent = 'textarea'>(
     'variant',
   ]);
 
+  const treatment = () => {
+    if (local.variant === 'title')
+      return 'min-h-8 max-h-24 overflow-y-auto border-0 bg-transparent p-0 text-2xl font-semibold leading-8 touch:min-h-[30px] touch:max-h-[90px] touch:text-[22px] touch:leading-[30px]';
+    if (local.variant === 'embedded')
+      return 'min-h-10 border-0 bg-transparent px-0 py-1.5 text-sm';
+    return 'min-h-20 rounded-xl border border-edge-frame bg-control not-touch:elevated px-2.5 py-2 text-base transition-[border-color,box-shadow] duration-120 motion-reduce:transition-none';
+  };
   return (
     <KobalteTextField.TextArea
       data-slot="text-field-textarea"
       class={cn(
         'flex w-full resize-none text-ink caret-current outline-none',
-        local.variant === 'title'
-          ? 'min-h-8 max-h-24 overflow-y-auto border-0 bg-transparent p-0 text-2xl font-semibold leading-8 touch:min-h-[30px] touch:max-h-[90px] touch:text-[22px] touch:leading-[30px]'
-          : 'min-h-20 rounded-xl border border-edge-frame bg-control not-touch:elevated px-2.5 py-2 text-base transition-[border-color,box-shadow] duration-120 motion-reduce:transition-none',
+        treatment(),
         'placeholder:text-ink-placeholder',
-        local.variant !== 'title' && inputOutlineFocusClasses,
+        (!local.variant || local.variant === 'default') &&
+          inputOutlineFocusClasses,
         'aria-invalid:border-failure aria-invalid:ring-2 aria-invalid:ring-failure/20',
         'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
         local.class
@@ -77,6 +83,19 @@ function TextFieldTextArea<T extends ValidComponent = 'textarea'>(
   );
 }
 
+/** Shared quiet field surface for native and rich-text composer inputs. */
+function TextFieldSurface(props: ComponentProps<'div'>) {
+  const [local, rest] = splitProps(props, ['class']);
+  return (
+    <div
+      {...rest}
+      class={cn(
+        'min-h-12 w-full rounded-lg border border-transparent bg-ink/6 px-2.5 py-1 text-sm text-ink focus-within:border-input-focus',
+        local.class
+      )}
+    />
+  );
+}
 export type TextFieldLabelProps<T extends ValidComponent = 'label'> =
   ComponentProps<typeof KobalteTextField.Label<T>>;
 
@@ -181,5 +200,6 @@ export const TextField = Object.assign(TextFieldRoot, {
   ErrorMessage: TextFieldErrorMessage,
   Input: TextFieldInput,
   Label: TextFieldLabel,
+  Surface: TextFieldSurface,
   TextArea: TextFieldTextArea,
 });

@@ -12,7 +12,7 @@ import {
 type Selection = NonNullable<RootRangeProps['value']>;
 type Endpoint = 'start' | 'end';
 
-/** A two-click date draft; dismissing it never changes the submitted range. */
+/** Single-date moves preserve duration; explicit two-click ranges stay staged until complete. */
 export function createRangeDateSelection(options: {
   value: Accessor<DateTimeRangeValue>;
   startDisabled: Accessor<boolean>;

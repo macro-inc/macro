@@ -6,6 +6,7 @@ import ClockIcon from '@icon/system/regular/clock.svg';
 import VisibilityIcon from '@icon/system/regular/eye.svg';
 import LocationIcon from '@icon/system/regular/map-pin.svg';
 import ShieldIcon from '@icon/system/regular/shield-check.svg';
+import AgentMark from '@icon/system/regular/sparkle.svg';
 import DescriptionIcon from '@icon/system/regular/text-align-left.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import VideoIcon from '@icon/system/regular/video-camera.svg';
@@ -37,7 +38,7 @@ import { ComposerDecline } from '../../components/composer/out-of-office/Compose
 import { ComposerDeclineMessage } from '../../components/composer/out-of-office/ComposerDeclineMessage';
 import { ComposerGuestPermissions } from '../../components/composer/permissions/ComposerGuestPermissions';
 import { ComposerRecurrence } from '../../components/composer/recurrence/ComposerRecurrence';
-import { CustomRecurrence } from '../../components/composer/recurrence/CustomRecurrence';
+
 import { ComposerReminders } from '../../components/composer/reminders/ComposerReminders';
 import { ComposerScope } from '../../components/composer/scope/ComposerScope';
 import { ComposerTimeZone } from '../../components/composer/time-zone/ComposerTimeZone';
@@ -64,14 +65,14 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
   const model = useCalendarComposer();
   const [expanded, setExpanded] = createSignal(false);
   const showOptions = () => props.pinned || expanded();
-  const showDescription = () =>
-    !model.isEdit() || Boolean(model.state().description) || showOptions();
   const controller = model.controller;
+  // Keep newly revealed fields at the end even after they receive a value.
+  const descriptionInMainFields =
+    !model.isEdit() || Boolean(controller.initialValue().description);
 
   return (
     <>
       <ComposerHeader onPointerDown={props.onHeaderPointerDown}>
-        <ComposerKind agentDraft={props.agentDraft} />
         <div class="flex-1" />
         <Show when={props.onTogglePin}>
           {(toggle) => (
@@ -88,17 +89,29 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
         <ComposerFieldRow
           class="py-0"
           icon={
-            <Show when={model.isEdit()}>
-              <CalendarSwatch
-                color={
-                  controller.selectedCalendarOption()?.color ??
-                  DEFAULT_CALENDAR_SOURCE.color
-                }
-              />
+            <Show
+              when={props.agentDraft}
+              fallback={
+                <Show when={model.isEdit()}>
+                  <CalendarSwatch
+                    color={
+                      controller.selectedCalendarOption()?.color ??
+                      DEFAULT_CALENDAR_SOURCE.color
+                    }
+                  />
+                </Show>
+              }
+            >
+              <AgentMark class="size-4 text-ink-muted" />
             </Show>
           }
         >
           <ComposerTitle />
+          <Show when={!model.isEdit()}>
+            <div class="mt-2">
+              <ComposerKind />
+            </div>
+          </Show>
           <Show when={model.isEdit()}>
             <div class="mt-1">
               <ComposerWhen />
@@ -134,23 +147,9 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
             </p>
           )}
         </Show>
-        <Show when={controller.recurrenceChoice() === 'custom'}>
-          <ComposerFieldRow>
-            <CustomRecurrence
-              value={controller.customConfig()}
-              start={controller.startForRecurrence()}
-              allDay={model.state().allDay}
-              disabled={
-                model.fieldIsDisabled('recurrence') ||
-                Boolean(model.recurrenceScopeReason())
-              }
-              onChange={controller.setCustomConfig}
-            />
-          </ComposerFieldRow>
-        </Show>
         <Switch>
           <Match when={!model.isOutOfOffice()}>
-            <Show when={showDescription()}>
+            <Show when={descriptionInMainFields}>
               <ComposerFieldRow icon={<DescriptionIcon class="size-4" />}>
                 <ComposerDescription resolveAppLink={props.resolveAppLink} />
               </ComposerFieldRow>
@@ -189,6 +188,11 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
           <ComposerCalendar />
         </ComposerFieldRow>
         <Show when={showOptions()}>
+          <Show when={!descriptionInMainFields && !model.isOutOfOffice()}>
+            <ComposerFieldRow icon={<DescriptionIcon class="size-4" />}>
+              <ComposerDescription resolveAppLink={props.resolveAppLink} />
+            </ComposerFieldRow>
+          </Show>
           <ComposerFieldRow icon={<BellIcon class="size-4" />}>
             <ComposerReminders
               minutes={controller.reminderMinutes()}

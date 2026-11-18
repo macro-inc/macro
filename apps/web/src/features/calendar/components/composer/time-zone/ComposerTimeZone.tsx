@@ -11,7 +11,7 @@ export function ComposerTimeZone(props: { fullWidth?: boolean } = {}) {
     () =>
       new Intl.DateTimeFormat(formatLocale(), {
         timeZone: model.timeZone(),
-        timeZoneName: 'longGeneric',
+        timeZoneName: 'short',
       })
         .formatToParts(new Date())
         .find((part) => part.type === 'timeZoneName')?.value ?? model.timeZone()

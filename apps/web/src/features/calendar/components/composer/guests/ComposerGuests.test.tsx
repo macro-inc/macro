@@ -58,7 +58,7 @@ it('closes guest search on Escape without also closing the composer', async () =
       </Popover>
     );
   });
-  await userEvent.click(screen.getByRole('button', { name: /Add guests/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Add people' }));
   await userEvent.click(screen.getByRole('textbox', { name: 'Search guests' }));
   await userEvent.keyboard('{Escape}');
   expect(screen.queryByRole('textbox', { name: 'Search guests' })).toBeNull();
