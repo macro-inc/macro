@@ -159,10 +159,8 @@ export const greeterOf = ({
         );
       },
     },
-    clock: { sleep },
-    after,
+    clock: { sleep, after, sinceStartMs },
     trace,
-    sinceStartMs,
   };
 };
 
