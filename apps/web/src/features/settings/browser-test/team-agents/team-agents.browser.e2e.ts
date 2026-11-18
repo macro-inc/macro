@@ -722,7 +722,7 @@ test('a sign-in that expired on the computer offers a new link, which signs in',
   await pasteCode(page, 'stale#code');
 
   const alert = dialog.getByRole('alert');
-  await expect(alert).toContainText('This sign-in timed out');
+  await expect(alert).toContainText('This link expired');
   await expect(
     dialog.getByRole('textbox', { name: 'Paste the code Claude showed you' })
   ).toBeDisabled();

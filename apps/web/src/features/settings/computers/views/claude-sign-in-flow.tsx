@@ -9,14 +9,7 @@ import {
   useClaudeCompleteMutation,
   useClaudeSignInMutation,
 } from '@queries/computers/claude';
-import {
-  ActionDialogShell,
-  Button,
-  buttonClasses,
-  cn,
-  Input,
-  Spinner,
-} from '@ui';
+import { ActionDialogShell, Button, buttonClasses, cn, Input } from '@ui';
 import {
   createSignal,
   createUniqueId,
@@ -68,7 +61,7 @@ function failureMessage(failure: ClaudeSignInFailure): string {
 /** One numbered step: what to do, and the control that does it. */
 function SignInStep(props: {
   number: number;
-  done: boolean;
+  done?: boolean;
   title: string;
   children: JSX.Element;
 }) {
@@ -86,7 +79,12 @@ function SignInStep(props: {
         </Show>
       </span>
       <div class="flex min-w-0 flex-1 flex-col gap-2">
-        <p class="text-sm leading-6 font-medium">{props.title}</p>
+        <p class="text-sm leading-6 font-medium">
+          {props.title}
+          <Show when={props.done}>
+            <span class="sr-only"> ({t('computers.claudeStepDone')})</span>
+          </Show>
+        </p>
         {props.children}
       </div>
     </li>
@@ -115,66 +113,96 @@ export function ClaudeSignInFlow(props: {
   /** Guided setup's step header and progress, above the title. */
   header?: JSX.Element;
   /** The secondary way out, e.g. "Keep using Macro credits". */
-  secondary?: { label: string; onClick: () => void };
+  secondary?: { label: string; pending?: boolean; onClick: () => void };
 }) {
   const start = useClaudeSignInMutation();
   const complete = useClaudeCompleteMutation();
   const codeId = createUniqueId();
+  const alertId = createUniqueId();
   const [opened, setOpened] = createSignal(false);
   const [url, setUrl] = createSignal<string>();
   const [code, setCode] = createSignal('');
   const [problem, setProblem] = createSignal<Problem>();
-  let request: AbortController | undefined;
-  let generation = 0;
+  // The link request and the code check run independently: a code sent
+  // while a new link loads must not drop that link.
+  let linkRequest: AbortController | undefined;
+  let linkGeneration = 0;
+  let codeGeneration = 0;
+  let disposed = false;
   let codeInput: HTMLInputElement | undefined;
-  // Clicked before the link arrived: the tab opened then, and is pointed at
-  // claude.ai once the sign-in answers.
-  let waitingTab: Window | null | undefined;
+  let recoveryButton: HTMLButtonElement | undefined;
+  // Opened before the link arrived. On the web the tab opened within the
+  // click and is pointed at claude.ai once the sign-in answers; the phone
+  // apps open the link when it arrives.
+  let waitingTab: Window | undefined;
+  let openWhenReady = false;
+
+  const forgetWaitingTab = () => {
+    waitingTab?.close();
+    waitingTab = undefined;
+    openWhenReady = false;
+  };
 
   const begin = async () => {
-    const current = ++generation;
-    request?.abort();
-    request = new AbortController();
+    const current = ++linkGeneration;
+    linkRequest?.abort();
+    linkRequest = new AbortController();
     setUrl(undefined);
     try {
       const result = await start.mutateAsync({
         harnessId: props.harnessId,
         entry: props.entry,
-        signal: request.signal,
+        signal: linkRequest.signal,
       });
-      if (current !== generation) return;
+      if (current !== linkGeneration) return;
       if (!isHttpsUrl(result.url)) throw new Error('untrusted sign-in link');
       setUrl(result.url);
       if (waitingTab) {
         // The Claude page gets no handle back to Macro.
         waitingTab.opener = null;
         waitingTab.location.href = result.url;
+      } else if (openWhenReady) {
+        openExternalUrl(result.url);
       }
       waitingTab = undefined;
+      openWhenReady = false;
     } catch (failure) {
-      if (current !== generation) return;
-      waitingTab?.close();
-      waitingTab = undefined;
+      if (current !== linkGeneration) return;
+      forgetWaitingTab();
       setOpened(false);
-      setProblem({
+      showProblem({
         failure: claudeSignInFailure(failure),
-        recovery: 'retry',
+        recovery: claudeSignInRecovery('start', claudeSignInFailure(failure)),
       });
     }
   };
   fireAndForget(begin(), 'computer-claude');
 
-  // A user who switched tabs sees in the tab strip that the link is ready.
+  // A user who went to claude.ai sees in the tab strip that Macro waits
+  // for the code.
   const pageTitle = document.title;
-  const markTab = (ready: boolean) => {
-    document.title = ready ? t('computers.signInTabTitle') : pageTitle;
+  const markTab = (waiting: boolean) => {
+    document.title = waiting ? t('computers.signInTabTitle') : pageTitle;
   };
 
   onCleanup(() => {
+    disposed = true;
     document.title = pageTitle;
-    generation++;
-    request?.abort();
+    linkGeneration++;
+    linkRequest?.abort();
+    forgetWaitingTab();
+    // A code being checked is left to finish: it may still sign the
+    // computer in, and its success toast says so.
   });
+
+  /** Show a failure and move focus to where the user recovers from it. */
+  const showProblem = (next: Problem) => {
+    setProblem(next);
+    queueMicrotask(() => {
+      if (next.recovery === 'repaste') codeInput?.focus();
+      else recoveryButton?.focus();
+    });
+  };
 
   /** A new sign-in: a new link, and the code from it. */
   const startOver = () => {
@@ -185,49 +213,69 @@ export function ClaudeSignInFlow(props: {
     fireAndForget(begin(), 'computer-claude');
   };
 
-  // A plain new-tab link keeps the click a user gesture: the browser opens a
-  // tab, and the desktop app hands new windows to the system browser. Only the
-  // phone apps, which have no new-window handler, go through openExternalUrl.
-  const openClaude = (event: MouseEvent) => {
+  /** A failure that needs a new link has nothing left to paste into. */
+  const needsNewLink = () => {
+    const current = problem();
+    return !!current && current.recovery !== 'repaste';
+  };
+
+  const afterOpening = () => {
     setOpened(true);
     markTab(true);
     queueMicrotask(() => codeInput?.focus());
-    const href = url();
-    if (href && !isNativeMobilePlatform()) return;
+  };
+
+  // A plain new-tab link keeps the click a user gesture: the browser opens a
+  // tab, and the desktop app hands new windows to the system browser. Only the
+  // phone apps, which have no new-window handler, go through openExternalUrl.
+  const openLink = (event: MouseEvent, href: string) => {
+    afterOpening();
+    if (!isNativeMobilePlatform()) return;
     event.preventDefault();
-    if (href) openExternalUrl(href);
-    else waitingTab = window.open('about:blank', '_blank');
+    openExternalUrl(href);
+  };
+
+  // Clicked before the link arrived.
+  const openBeforeLink = () => {
+    if (isNativeMobilePlatform()) {
+      openWhenReady = true;
+      afterOpening();
+      return;
+    }
+    if (waitingTab && !waitingTab.closed) {
+      waitingTab.focus();
+      return;
+    }
+    // A blocked popup opens nothing, so the step stays undone.
+    waitingTab = window.open('about:blank', '_blank') ?? undefined;
+    if (waitingTab) afterOpening();
   };
 
   const submit = async () => {
-    if (!code().trim() || complete.isPending) return;
-    const current = ++generation;
-    request = new AbortController();
+    if (!code().trim() || complete.isPending || start.isPending) return;
+    const current = ++codeGeneration;
     setProblem(undefined);
     try {
       await complete.mutateAsync({
         harnessId: props.harnessId,
         entry: props.entry,
         code: code().trim(),
-        signal: request.signal,
+        // Never aborted: closing mid-check lets the computer finish.
+        signal: new AbortController().signal,
       });
-      if (current !== generation) return;
-      markTab(false);
+      if (current !== codeGeneration) return;
+      if (!disposed) markTab(false);
       props.onSignedIn();
     } catch (failure) {
-      if (current !== generation) return;
+      if (current !== codeGeneration || disposed) return;
       const kind = claudeSignInFailure(failure);
       const recovery = claudeSignInRecovery('complete', kind);
       if (recovery === 'new_link') setCode('');
-      setProblem({ failure: kind, recovery });
+      showProblem({ failure: kind, recovery });
     }
   };
 
-  /** A failure that needs a new link has nothing left to paste into. */
-  const needsNewLink = () => {
-    const current = problem();
-    return !!current && current.recovery !== 'repaste';
-  };
+  const hasCode = () => !!code().trim();
 
   return (
     <>
@@ -248,37 +296,51 @@ export function ClaudeSignInFlow(props: {
             title={t('computers.claudeStepOpen')}
           >
             <div>
-              <a
-                href={url()}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-disabled={needsNewLink() || undefined}
-                class={cn(
-                  buttonClasses({
-                    variant: opened() ? 'secondary' : 'primary',
-                    size: 'md',
-                  }),
-                  needsNewLink() && 'pointer-events-none opacity-45'
-                )}
-                onClick={openClaude}
-              >
-                <Show
-                  when={url() || needsNewLink()}
-                  fallback={<Spinner size="sm" decorative />}
-                >
-                  <ArrowSquareOutIcon class="size-3.5 shrink-0" />
-                </Show>
-                {opened()
-                  ? t('computers.openClaudeAgain')
-                  : t('computers.openClaudeSignIn')}
-              </a>
+              <Switch>
+                <Match when={!needsNewLink() && url()}>
+                  {(href) => (
+                    <a
+                      href={href()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class={buttonClasses({
+                        variant: opened() ? 'secondary' : 'primary',
+                        size: 'md',
+                      })}
+                      onClick={(event) => openLink(event, href())}
+                    >
+                      <ArrowSquareOutIcon class="size-3.5 shrink-0" />
+                      {opened()
+                        ? t('computers.openClaudeAgain')
+                        : t('computers.openClaudeSignIn')}
+                    </a>
+                  )}
+                </Match>
+                <Match when={true}>
+                  {/* No link yet, or none to use: a button, so it stays a
+                      keyboard stop while the link loads. */}
+                  <Button
+                    type="button"
+                    variant={opened() ? 'secondary' : 'primary'}
+                    disabled={needsNewLink()}
+                    loading={!needsNewLink() && opened() && start.isPending}
+                    onClick={openBeforeLink}
+                  >
+                    <ArrowSquareOutIcon class="size-3.5 shrink-0" />
+                    {opened()
+                      ? t('computers.openClaudeAgain')
+                      : t('computers.openClaudeSignIn')}
+                  </Button>
+                </Match>
+              </Switch>
             </div>
+            <Show when={!needsNewLink() && !opened() && start.isPending}>
+              <p class="text-xs text-ink-muted">
+                {t('computers.claudePreparingLink')}
+              </p>
+            </Show>
           </SignInStep>
-          <SignInStep
-            number={2}
-            done={false}
-            title={t('computers.claudeStepPaste')}
-          >
+          <SignInStep number={2} title={t('computers.claudeStepPaste')}>
             <form
               class="ph-no-capture flex gap-2 max-sm:flex-col"
               onSubmit={(event) => {
@@ -294,21 +356,23 @@ export function ClaudeSignInFlow(props: {
                 ref={(input) => {
                   codeInput = input;
                 }}
-                class="min-w-0 flex-1 font-mono max-sm:flex-none"
+                class="min-w-0 flex-1 max-sm:flex-none"
                 placeholder={t('computers.claudeCodePlaceholder')}
                 value={code()}
-                disabled={needsNewLink() || complete.isPending}
+                readOnly={complete.isPending}
+                disabled={needsNewLink()}
                 aria-invalid={
                   problem()?.failure === 'malformed_code' || undefined
                 }
+                aria-describedby={problem() ? alertId : undefined}
                 onInput={(event) => setCode(event.currentTarget.value)}
                 autocomplete="off"
                 spellcheck={false}
               />
               <Button
                 type="submit"
-                variant="primary"
-                disabled={!code().trim() || needsNewLink()}
+                variant={hasCode() ? 'primary' : 'secondary'}
+                disabled={!hasCode() || needsNewLink() || start.isPending}
                 loading={complete.isPending}
               >
                 {t('computers.completeSignIn')}
@@ -319,34 +383,28 @@ export function ClaudeSignInFlow(props: {
         <Show when={problem()}>
           {(current) => (
             <div
+              id={alertId}
               role="alert"
               class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-failure/8 px-3 py-2 text-sm text-failure"
             >
               <span class="min-w-0 flex-1">
                 {failureMessage(current().failure)}
               </span>
-              <Switch>
-                <Match when={current().recovery === 'new_link'}>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={startOver}
-                  >
-                    {t('computers.claudeNewLink')}
-                  </Button>
-                </Match>
-                <Match when={current().recovery === 'retry'}>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={startOver}
-                  >
-                    {t('computers.claudeTryAgain')}
-                  </Button>
-                </Match>
-              </Switch>
+              <Show when={current().recovery !== 'repaste'}>
+                <Button
+                  ref={(button: HTMLButtonElement) => {
+                    recoveryButton = button;
+                  }}
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={startOver}
+                >
+                  {current().recovery === 'new_link'
+                    ? t('computers.claudeNewLink')
+                    : t('computers.claudeTryAgain')}
+                </Button>
+              </Show>
             </div>
           )}
         </Show>
@@ -356,13 +414,15 @@ export function ClaudeSignInFlow(props: {
       </ActionDialogShell.Body>
       <Show when={props.secondary}>
         {(secondary) => (
-          <ActionDialogShell.Footer>
+          <ActionDialogShell.Footer class="max-sm:justify-stretch">
             {/* Not while a pasted code is being checked, which may still
                 sign the computer in. */}
             <Button
               type="button"
               variant="ghost"
+              class="max-sm:flex-1"
               disabled={complete.isPending}
+              loading={secondary().pending}
               onClick={secondary().onClick}
             >
               {secondary().label}

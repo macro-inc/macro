@@ -78,6 +78,7 @@ export default {
   failedNoticeBody: "Retry from {{name}}'s row in Members.",
   messageAgent: 'Message {{name}}',
   connectClaude: 'Connect Claude plan',
+  reconnectClaude: 'Reconnect Claude plan',
   dmSettingUp: "{{name}} is still being set up. It'll answer once it's ready.",
   dmSetupFailed: "{{name}} isn't running: setup failed.",
   dmOffline: "{{name}} isn't running: its computer is offline.",

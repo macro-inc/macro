@@ -6,7 +6,7 @@ import {
   useClaudeModeQuery,
   useClaudeSignOutMutation,
 } from '@queries/computers/claude';
-import { ActionDialogShell, Dialog } from '@ui';
+import { ActionDialogShell, confirmDialog, Dialog } from '@ui';
 import { ClaudeSignInFlow } from './claude-sign-in-flow';
 
 /**
@@ -26,12 +26,20 @@ export function ClaudeSignInDialog(props: {
   footnote?: string;
   /** Replaces the default toast once signed in. */
   onSignedIn?: () => void;
+  /** Replaces the default question before signing out to Macro credits. */
+  switchToCredits?: { title: string; body: string };
 }) {
   const signOut = useClaudeSignOutMutation();
   const mode = useClaudeModeQuery(() => props.harnessId);
   // Unknown until the mode loads: closing is the safe reading.
   const onCredits = () => !mode.isSuccess || mode.data.mode === 'macro_credits';
   const switchToCredits = async () => {
+    const confirmed = await confirmDialog({
+      title: props.switchToCredits?.title ?? t('computers.claudeSwitchTitle'),
+      body: props.switchToCredits?.body ?? t('computers.claudeSwitchBody'),
+      confirmLabel: t('computers.claudeSwitchToCredits'),
+    });
+    if (!confirmed) return;
     try {
       await signOut.mutateAsync(props.harnessId);
       props.onClose();
@@ -62,6 +70,7 @@ export function ClaudeSignInDialog(props: {
                 }
               : {
                   label: t('computers.claudeSwitchToCredits'),
+                  pending: signOut.isPending,
                   onClick: () =>
                     fireAndForget(switchToCredits(), 'computer-claude'),
                 }

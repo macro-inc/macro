@@ -25,6 +25,10 @@ export function AgentClaudeDialog(props: {
       title={t('teamAgents.connectClaudeTitle', { name: name() })}
       description={t('teamAgents.connectClaudeBody', { name: name() })}
       footnote={t('teamAgents.connectClaudeFootnote', { name: name() })}
+      switchToCredits={{
+        title: t('teamAgents.useCreditsTitle', { name: name() }),
+        body: t('teamAgents.useCreditsBody', { name: name() }),
+      }}
       onSignedIn={() =>
         toast.success(t('teamAgents.claudeSignedIn', { name: name() }))
       }
