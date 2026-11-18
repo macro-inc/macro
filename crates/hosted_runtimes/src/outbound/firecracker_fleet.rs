@@ -380,6 +380,7 @@ fn exec_request(argv: &[&str], user: u32) -> ExecRequest {
             ("PATH".to_owned(), GUEST_USER.path.to_owned()),
         ]),
         cwd: GUEST_USER.home.to_owned(),
+        trace_id: crate::domain::telemetry::trace_id(),
     }
 }
 

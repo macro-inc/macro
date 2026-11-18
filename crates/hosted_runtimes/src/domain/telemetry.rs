@@ -17,6 +17,13 @@ pub fn traceparent() -> Option<String> {
     carrier.remove("traceparent")
 }
 
+/// The current span's trace id (W3C hex), absent outside a trace.
+pub fn trace_id() -> Option<String> {
+    let context = tracing::Span::current().context();
+    let trace = context.span().span_context().trace_id();
+    (trace != opentelemetry::trace::TraceId::INVALID).then(|| trace.to_string())
+}
+
 /// Attach durable context before entering a new span; already-running callbacks link instead.
 pub fn attach(span: &tracing::Span, traceparent: Option<&str>) {
     let Some(traceparent) = traceparent else {

@@ -26,6 +26,10 @@ fn durable_work_adopts_parent_before_entering_and_running_callbacks_link() {
                 .expect("context is injected")
                 .starts_with("00-11111111111111111111111111111111-")
         );
+        assert_eq!(
+            trace_id().as_deref(),
+            Some("11111111111111111111111111111111")
+        );
         effect_failed("create");
         let callback = tracing::info_span!("callback");
         let _entered_callback = callback.enter();
