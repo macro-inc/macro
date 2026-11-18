@@ -32,8 +32,8 @@ hibernate). Not shipped; run by hand against bench hosts.
   "<ssh to host>" --out <dir>`; then `stats.py <dir>/e2e-<label>.jsonl`.
 - Agent teammate e2e on a deployed environment (never prod): `./e2e.py
   --agent --auth-url <url> --harness-url <url> --storage-url <url>
-  --token-file <file> --tempo-url none --label <env> --out <dir>`; it skips
-  host load and clock offset without `--host-cmd`.
+  --token-file <file> --tempo-url none --label <env> --control-plane <env>
+  --out <dir>`; it skips host load and clock offset without `--host-cmd`.
 
 ## Checks
 
