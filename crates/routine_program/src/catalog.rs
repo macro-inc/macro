@@ -579,7 +579,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
                 "Archive the thread of each new email when {?isNoise}, if AI is at least {certainty}% sure.",
             )),
             named_knobs: &[],
-            instructions: "Archive this email\u{2019}s thread, unless I have written in it. If there is any chance it needs me, such as a receipt, a security alert, or a message from a person, leave it where it is.",
+            instructions: "Archive this email\u{2019}s thread, unless I have written in it. If there is any chance it needs me, such as a receipt, a bill, a security alert, a request for my review or approval, or a message from a person, leave it where it is.",
             affects_others: false,
             safe_default: false,
             template: true,
