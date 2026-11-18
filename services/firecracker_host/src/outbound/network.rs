@@ -81,6 +81,7 @@ impl Network {
         Ok(())
     }
 
+    #[tracing::instrument(name = "firecracker_host.network_slot", skip(self), fields(remade = tracing::field::Empty), err)]
     async fn ensure_slot(&self, slot: u16) -> Result<(), NetworkError> {
         let netns = self.netns(slot);
         let veth = self.host_veth(slot);
@@ -92,6 +93,7 @@ impl Network {
         if present && tap_owner(&netns).await.as_deref() == Some(uid.as_str()) {
             return Ok(());
         }
+        tracing::Span::current().record("remade", present);
         // A half-made slot from an interrupted start goes first.
         let _ = run("ip", &["netns", "del", &netns]).await;
         let _ = run("ip", &["link", "del", &veth]).await;
