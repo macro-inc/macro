@@ -83,6 +83,7 @@ fn booking(profile: Uuid, start: DateTime<Utc>) -> BookingRecord {
             attendance: BookingAttendance::Unknown,
             reschedule_count: 0,
             rescheduled_at: None,
+            abandoned_at: None,
             location: String::new(),
             answers: Default::default(),
             question_labels: Default::default(),

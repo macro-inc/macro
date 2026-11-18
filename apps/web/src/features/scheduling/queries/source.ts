@@ -6,6 +6,7 @@ import { schedulingClient } from '@service-email/scheduling';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import type { SchedulingSource } from '../context/scheduling-context';
+import { bookingAbandoned } from '../core/booking-list';
 import {
   newDefaultBookingLink,
   newSchedule,
@@ -132,8 +133,12 @@ export function createSchedulingSource(
       await bookings.refetch();
     },
     cancel: async (id) => {
-      await throwOnErr(() => schedulingClient.cancel(id));
+      const { booking } = await throwOnErr(() => schedulingClient.cancel(id));
       await bookings.refetch();
+      if (bookingAbandoned(booking))
+        throw new Error(
+          'The cancellation didn’t reach your calendar. Check its connection and try again.'
+        );
     },
     loadInsights: (from, to) => {
       const owner = scope();

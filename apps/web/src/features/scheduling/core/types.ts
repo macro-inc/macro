@@ -133,6 +133,8 @@ export type Booking = {
   attendance: BookingAttendance;
   rescheduleCount: number;
   rescheduledAt: string | null;
+  /** Set when Macro stopped trying to update the host's calendar. */
+  abandonedAt?: string | null;
   location: string;
   answers: Record<string, string>;
   questionLabels?: Record<string, string>;
