@@ -9,6 +9,6 @@
   "scripts": {
     "lint": "biome check .",
     "test": "bun test",
-    "type-check": "tsc --noEmit --project tsconfig.json"
+    "type-check": "bun ../../node_modules/typescript-native/bin/tsc --noEmit --project tsconfig.json"
   }
 }
