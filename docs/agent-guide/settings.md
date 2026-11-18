@@ -253,16 +253,18 @@ narrow page the two invite buttons wrap, together, onto their own line. The
 desktop settings sidebar lists **Invite agents** under **Invite your team** for
 the same viewers. Members, and everyone while a flag is off or still loading,
 see only the people invite. **Invite Agent** opens **Invite an agent**, which asks only for a name and the
-agent's computer size; picture, voice and role come later, and the agent asks
-what to take on once it is online. While the name is empty, **Try** offers
-**Ada**, **Bo**, **Kim** and **Nova**, and the avatar shows the name's first
-letter. Sizes come from the same catalog and prices as Buy a computer
+agent's computer size, with no explanatory text around them (layout A,
+`components/agent-invite-layout-a.tsx`; the form hands it named parts so
+another layout can replace it). Voice and role come later, and the agent asks
+what to take on once it is online. The avatar shows the name's first letter.
+Sizes come from the same catalog and prices as Buy a computer
 (sold-out sizes are disabled and marked **Sold out**). The agent's seat is
-included, so the button reads **Add <name> · $X/month** (or **Add <name>**
-when included); while it is disabled, the line under it says why ("Give your
-agent a name to continue.", a name too long, no size for sale). Adding calls
+included, so the button reads **Add <name> · $X/month** (or **Add agent ·
+$X/month** before a name). Add is always enabled: with no name (or one too
+long) it marks the name field invalid and moves the caret there, and sends
+nothing. Adding calls
 `POST /team_agents` with `jobDescription` and `personality` empty, then waits
-in the dialog (**Adding <name>…**, "Starting <name>…") reading
+in the dialog (**Adding <name>…**) reading
 `GET /team_agents` every 500 ms until the agent reports itself online, and
 closes into the agent's DM, where it has said hi; no toast. Past five seconds
 it closes into the DM anyway, where the banner says it is still being set up

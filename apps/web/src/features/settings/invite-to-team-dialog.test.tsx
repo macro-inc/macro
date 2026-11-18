@@ -313,12 +313,14 @@ describe('InviteToTeamDialog agent teammates', () => {
       .mockResolvedValue({ agents: [{ ...ada, status: 'running' }] });
     openAsAdmin(onClose);
 
-    expect(addButton().disabled).toBe(true);
-    expect(
-      screen.getByText('Give your agent a name to continue.')
-    ).toBeTruthy();
-    // A suggestion fills the name.
-    fireEvent.click(screen.getByRole('button', { name: 'Ada' }));
+    // Add stays pressable: with no name it marks the field and sends nothing.
+    const field = screen.getByRole('textbox', { name: 'Name' });
+    fireEvent.click(addButton());
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(field);
+    expect(mocks.createAgent).not.toHaveBeenCalled();
+    fireEvent.input(field, { target: { value: 'Ada' } });
+    expect(field.getAttribute('aria-invalid')).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: 'Large' }));
     expect(addButton().textContent).toContain('Add Ada');
     expect(addButton().textContent).toContain('$80');

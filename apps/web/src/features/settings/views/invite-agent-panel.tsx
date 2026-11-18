@@ -1,6 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useComputerOffersQuery } from '@queries/computers/computers';
-import type { JSX } from 'solid-js';
 import {
   openAgentDirectMessage,
   openBilling,
@@ -16,7 +15,6 @@ import { useAddTeamAgent } from '../primitives/add-team-agent';
  */
 export function InviteAgentPanel(props: {
   teamId: string;
-  header?: JSX.Element;
   onCancel: () => void;
   /** The agent was added; the dialog closes. */
   onInvited: () => void;
@@ -32,7 +30,6 @@ export function InviteAgentPanel(props: {
 
   return (
     <InviteAgentForm
-      header={props.header}
       offers={offers.isSuccess ? offers.data : undefined}
       offersFailed={offers.isError}
       onRetryOffers={() => fireAndForget(offers.refetch(), 'team-agent.offers')}

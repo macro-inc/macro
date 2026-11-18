@@ -1,8 +1,6 @@
 export default {
   inviteTitle: 'Invite an agent',
   agent: 'Agent',
-  intro:
-    'An agent is a member of your team with its own Macro computer. You talk to it in a DM or a channel, like anyone else.',
   name: 'Name',
   namePlaceholder: 'Ada',
   tooLong: {
@@ -28,28 +26,15 @@ export default {
   voiceSaveFailed:
     "Couldn't save the voice. Your choice is still selected; try again.",
   computer: 'Computer',
-  computerHint: 'Its own computer, always on. Its seat is included.',
   loadingSizes: 'Loading computer sizes…',
   sizesFailed: "Couldn't load computer sizes.",
   tryAgain: 'Try again',
-  nameRequired: 'Give your agent a name to continue.',
-  nameSuggestions: 'Try',
-  comesLater:
-    "Picture, voice and role come later. {{name}} asks you what to take on once it's online.",
-  comesLaterUnnamed:
-    "Picture, voice and role come later. It asks you what to take on once it's online.",
   add: 'Add {{name}}',
   addPriced: 'Add {{name}} · {{price}}',
   adding: 'Adding {{name}}…',
-  yourAgent: 'Your agent',
-  addCaption:
-    '{{name}} gets its own account and computer, and is online in a couple of seconds. It says hi first; tell it what to do from there.',
-  addingCaption: 'Starting {{name}}…',
   tryAgainPriced: 'Try again · {{price}}',
   declined:
     'Your card was declined. Nothing was charged and nothing was set up. Update the card, or try again if your bank has cleared it.',
-  declinedCaption:
-    'Try again charges the card on file once more. The name and size are kept.',
   updateCard: 'Update card',
   noRoom:
     'No room for a {{size}} computer right now. Nothing was charged. Pick another size.',
@@ -58,9 +43,7 @@ export default {
   refunded:
     "{{name}} didn't start again. The charge was undone and the computer released. Retry starts a fresh one; you aren't charged twice.",
   retryStart: 'Retry',
-  retryCaption: 'Retry keeps the name and size.',
   inviteInProgress: 'This agent is still being added. Wait a moment.',
-  noSizeForSale: 'No computer size is for sale right now.',
   invalid: 'Check the name, job description, and personality.',
   notEnabled: "Agent teammates aren't available for this team yet.",
   computerUnavailable: "Couldn't buy a computer for this agent.",

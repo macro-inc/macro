@@ -472,15 +472,17 @@ test('adding an agent waits in the dialog until it is online, then closes into i
   await page.goto('/');
   const dialog = await openInviteAgent(page);
 
-  // Disabled, with the reason beside it; a suggestion names it.
+  // Add is always pressable: with no name it marks the field and focuses it.
   const add = dialog.getByRole('button', { name: /^Add/ });
-  await expect(add).toBeDisabled();
-  await expect(dialog).toContainText('Give your agent a name to continue.');
+  const nameField = dialog.getByRole('textbox', { name: 'Name' });
   await screenshot(page, testInfo, 'add-agent-empty');
-  await dialog.getByRole('button', { name: 'Ada', exact: true }).click();
-  await expect(dialog.getByRole('textbox', { name: 'Name' })).toHaveValue(
-    'Ada'
-  );
+  await add.click();
+  await expect(nameField).toHaveAttribute('aria-invalid', 'true');
+  await expect(nameField).toBeFocused();
+  await screenshot(page, testInfo, 'add-agent-asked');
+  expect(backend.created).toEqual([]);
+  await nameField.fill('Ada');
+  await expect(nameField).not.toHaveAttribute('aria-invalid', 'true');
 
   // Standard is preselected; XL is sold out. The price is the computer's.
   await expect(dialog.getByRole('radio', { name: 'Standard' })).toBeChecked();
