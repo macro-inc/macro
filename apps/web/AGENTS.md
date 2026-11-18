@@ -77,8 +77,14 @@ Contact invalidations from messages, native sharing and websocket events call
 runner owns the work. Full-list hooks, query keys and handwritten GET clients
 are retired; no compatibility query should be created by an invalidation.
 Ranked person
-cursors and contact reconciliation use coordinator protocol 17; native menu policy 5
-orders exact names, all-word prefixes, then literal contains by recency and identity.
+cursors and contact reconciliation use coordinator protocol 17; native menu policy 6
+lists people the viewer has a direct message with first among matches at a word
+start, however exactly a stranger's name matches; within each group, exact names
+(full, or the first name for a one-term query) come before all-word prefixes, then
+recency and identity. Literal contains matches come last. "Has a direct message" means a
+positive interaction time, which context facts take from direct-message channels,
+including group and never-written DMs. Native (desktop, iOS, Android) binaries released
+before policy 6 still answer with policy 5; keep accepting it (`PEOPLE_MIN_POLICY_VERSION`).
 Explicit addresses/IDs never match name aliases; empty property browsing pins self.
 Exclude automated recipient addresses before limiting unless explicitly addressed.
 Generate separate suggestion/reference policy floors from Rust; reference evidence
@@ -298,6 +304,10 @@ retained detail is claimed by another pane or preview. Keep this check in view
 restoration and preserve entity deduplication and native dock stack restoration;
 `split-layout/tests/view-restoration.test.tsx` covers Chat and Tasks lists in
 either pane, keeping the other pane's detail and history independent.
+Resolve collection-provider ownership from the committed router entry before
+mounting its outlet; the layout's mount metadata can still describe the previous
+view. `split-layout/tests/SplitPanel-collection-navigation.test.tsx` covers CRM
+to Calls, history, and split reuse while that mirror is stale.
 
 Links in database text and URL cells open without editing the cell, on desktop
 and touch, while the rest of the cell still edits:
@@ -555,7 +565,7 @@ boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
 match. Among equally good name matches Cmd+K lists Macro users and DMs before
-other rows. Personal contact rows keep policy-5 source order among equally good
+other rows. Personal contact rows keep the native window order among equally good
 name matches only, so a recent weaker match never takes a better match's slot.
 A row whose letters merely appear in order ranks below every row containing the
 typed words.
@@ -563,8 +573,9 @@ Soup's local search pool (`createSearchState`) stays lazy: it builds only when
 local search has text. Measure Quick Access ranking at scale with the
 [scale fixture](src/features/command/browser-test/README.md).
 Ordinary DM entity matching in Cmd+K and mobile name search treats the first
-name as exact, so it reaches a full-name DM; personal contact windows keep their
-independent policy-5 tiers. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
+name as exact, so it reaches a full-name DM; personal contact windows count an
+exact first name as exact the same way, in their native tiers, after leading with
+people the viewer has a direct message with. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
 Quick Access, and Soup search including the Chat sidebar) matches channels and
 DMs by terms in any order, adding to uFuzzy's in-order matches, because names
 are generated from participants and people type them in any order. It also
@@ -879,6 +890,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   which has no dev/local override while backend ingestion rolls out;
   another contributor's copy remains eligible. Desktop/phone coverage lives in
   `src/features/crm/browser-test/privacy`.
+- Show CRM mailbox-domain block refusals beside the submitted input and existing
+  matching-entry explanations in the shared settings row description; retain
+  removal and distinguish company domains from personal providers.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see

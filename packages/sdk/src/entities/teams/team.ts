@@ -127,7 +127,7 @@ export class Team extends MacroEntity<TeamRecord> {
    * @returns `true` when at least one new invite was sent, `false` when every
    *   address was already a member or already invited.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   async invite(

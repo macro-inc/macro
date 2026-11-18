@@ -13,8 +13,9 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
-import { type JSXElement, lazy } from 'solid-js';
+import type { JSXElement } from 'solid-js';
 import {
   RedirectSplit,
   usePageViewTracking,

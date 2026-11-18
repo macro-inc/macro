@@ -5,10 +5,10 @@ import {
   loadResult,
 } from '@core/block';
 import { enablePsdEditor, isFeatureEnabled } from '@core/constant/featureFlags';
+import { lazy } from '@core/util/lazy';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 
 /** Photoshop documents, large ones (`.psb`) too. */
 export const PSD_MIME = 'image/vnd.adobe.photoshop';

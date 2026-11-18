@@ -202,6 +202,8 @@ where
             .await
         {
             Ok(result) => Ok(result),
+            // Refused before it ran: the caller paces and retries it.
+            Err(error @ EgressError::RateLimited { .. }) => Err(error),
             Err(error) if !listing => {
                 tracing::warn!(?error, "actor MCP exchange failed");
                 Ok(tool_error_result(UNKNOWN_OUTCOME.into()))
@@ -272,6 +274,9 @@ where
     }
 }
 
+/// What a call the upstream refused with HTTP 429 says: it did not run.
+const RATE_LIMITED: &str = "The app is rate limiting the selected account; this call did not run. Make fewer calls and try again later.";
+
 /// What a failed call says: it may have run upstream before failing.
 const UNKNOWN_OUTCOME: &str = "The selected account's tool could not complete. Its outcome may be unknown; check state before retrying writes.";
 
@@ -287,6 +292,9 @@ async fn exchange_result(
     let id = request["id"].clone();
     let mut result = match transport.exchange(session, actor, upstream, request).await {
         Ok(result) => result,
+        Err(EgressError::RateLimited { .. }) if !listing => {
+            return Ok(tool_result_response(id, RATE_LIMITED.into()));
+        }
         Err(error) if !listing => {
             tracing::warn!(?error, "actor MCP exchange failed");
             return Ok(tool_result_response(id, UNKNOWN_OUTCOME.into()));

@@ -1097,6 +1097,7 @@ where
                     .watch_calendar(
                         access_token,
                         key.email_link_id,
+                        calendar_id,
                         &watch_provider_calendar_id,
                         channel_id,
                         watch,
