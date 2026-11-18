@@ -4,6 +4,7 @@ import { createEditor, type LexicalEditor } from 'lexical';
 import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createMenuOperations } from '../../../shared/inlineMenu';
+import type { MentionItem } from '../../../utils/mentionsUtils';
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import { MentionsMenu } from './MentionsMenu';
 import { createItemHandler } from './utils/mentionHandlers';
@@ -22,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   hasMoreContacts: false,
   peopleLoading: (): boolean => false,
   people: (): import('@core/context/quickAccess').UserItem[] => [],
+  peopleError: (): unknown => undefined,
+  retryPeople: vi.fn(async () => {}),
   contactsLoadingMore: (): boolean => false,
   loadMoreContacts: vi.fn(async () => {}),
   calendarEvents:
@@ -152,6 +155,9 @@ vi.mock('@core/context/quickAccess', () => ({
         totalCount: () => 0,
         hasMore: () => false,
         isLoading: () => mocks.peopleLoading(),
+        error: () =>
+          options?.buckets.includes('person') ? mocks.peopleError() : undefined,
+        retry: mocks.retryPeople,
         isLoadingMore: () => false,
         loadMore: async () => {},
       };
@@ -235,6 +241,8 @@ afterEach(() => {
   mocks.hasMoreContacts = false;
   mocks.peopleLoading = () => false;
   mocks.people = () => [];
+  mocks.peopleError = () => undefined;
+  mocks.retryPeople.mockClear();
   mocks.contactsLoadingMore = () => false;
   mocks.loadMoreContacts.mockReset();
   mocks.loadMoreContacts.mockImplementation(async () => {});
@@ -847,34 +855,59 @@ const directoryPeople: import('@core/context/quickAccess').UserItem[] = [
 /** A Discussion menu over the directory, opened while its people load. */
 function openWhilePeopleLoad(options: {
   agents: IUser[];
-  editor?: LexicalEditor;
-  onPick?: () => void;
+  phone?: boolean;
+  onPick?: (item: MentionItem) => void;
 }) {
   mocks.crmEnabled = true;
   mockNoEmails();
   Element.prototype.scrollIntoView = vi.fn();
   const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<unknown>();
   const [people, setPeople] = createSignal<
     import('@core/context/quickAccess').UserItem[]
   >([]);
   mocks.peopleLoading = loading;
+  mocks.peopleError = error;
   mocks.people = people;
   mocks.contacts = acmeContacts;
   const menu = createMenuOperations();
   menu.openMenu();
-  render(() => (
-    <MentionsMenu
-      menu={menu}
-      sources={['users', 'crm']}
-      transformUsers={(users) => [...users, ...options.agents]}
-      editor={options.editor}
-      anchor={options.editor ? undefined : document.createElement('div')}
-      onPick={options.onPick ?? vi.fn()}
-    />
-  ));
-  return () => {
-    setPeople(directoryPeople);
-    setLoading(false);
+  const transformUsers = (users: readonly IUser[]) => [
+    ...users,
+    ...options.agents,
+  ];
+  render(() =>
+    options.phone ? (
+      <MentionsMenu
+        menu={menu}
+        sources={['users', 'crm']}
+        transformUsers={transformUsers}
+        editor={createEditor()}
+      />
+    ) : (
+      <MentionsMenu
+        menu={menu}
+        sources={['users', 'crm']}
+        transformUsers={transformUsers}
+        anchor={document.createElement('div')}
+        onPick={options.onPick ?? vi.fn()}
+      />
+    )
+  );
+  return {
+    land: () => {
+      setPeople(directoryPeople);
+      setError(undefined);
+      setLoading(false);
+    },
+    fail: () => {
+      setError(new Error('cache worker timeout: read'));
+      setLoading(false);
+    },
+    read: () => {
+      setError(undefined);
+      setLoading(true);
+    },
   };
 }
 const placeholderRows = (label: string) =>
@@ -890,7 +923,7 @@ it.each([
   'keeps the People rows for people still loading, so nothing moves under the highlight when they land (%s)',
   (_, agents) => {
     const onPick = vi.fn();
-    const land = openWhilePeopleLoad({ agents, onPick });
+    const people = openWhilePeopleLoad({ agents, onPick });
 
     // Codex will follow the people: it waits instead of taking their rows.
     expect(screen.getByText('Macro')).toBeTruthy();
@@ -900,7 +933,7 @@ it.each([
     fireEvent.keyDown(document, { key: 'ArrowDown' });
     const contact = screen.getByText('Acme contact 1');
 
-    land();
+    people.land();
     expect(placeholderRows('Loading people')).toBe(0);
     expect(contactRows()).toBe(5);
     const text = document.body.textContent ?? '';
@@ -921,9 +954,9 @@ it('lists nothing below Macro on phones until the people it pins arrive, at the 
   // jsdom lays nothing out; give the virtual list a viewport to fill.
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(256);
   vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(384);
-  const land = openWhilePeopleLoad({
+  const people = openWhilePeopleLoad({
     agents: [codex, macroAgent],
-    editor: createEditor(),
+    phone: true,
   });
   const listed = () =>
     Number.parseInt(
@@ -943,11 +976,36 @@ it('lists nothing below Macro on phones until the people it pins arrive, at the 
   expect(contactRows()).toBe(0);
   expect(listed() + filler()).toBe(256);
 
-  land();
+  people.land();
   expect(screen.queryByRole('status', { name: 'Loading…' })).toBeNull();
   expect(screen.getByText('Ana Lima')).toBeTruthy();
   expect(contactRows()).toBeGreaterThan(0);
   expect(listed()).toBeGreaterThanOrEqual(256);
+});
+
+it('offers to retry a failed people read, and waits for the retried read as on opening', () => {
+  const people = openWhilePeopleLoad({ agents: [codex, macroAgent] });
+
+  // The read failed, so the agents are listed and People says so.
+  people.fail();
+  expect(screen.getByText('Review Desk Codex')).toBeTruthy();
+  expect(screen.getByRole('alert').textContent).toContain(
+    "Couldn't load people"
+  );
+  fireEvent.click(screen.getByText('Retry'));
+  expect(mocks.retryPeople).toHaveBeenCalledOnce();
+
+  people.read();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.queryByText('Review Desk Codex')).toBeNull();
+  expect(placeholderRows('Loading people')).toBe(2);
+
+  people.land();
+  const text = document.body.textContent ?? '';
+  const order = ['Macro', 'Ana Lima', 'Bo Chen'].map((name) =>
+    text.indexOf(name)
+  );
+  expect(order).toEqual([...order].sort((left, right) => left - right));
 });
 
 it('picks the highlighted mention on Enter at once, even while typing continues', async () => {

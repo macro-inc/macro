@@ -29,6 +29,9 @@ export interface BucketConfig<T extends MentionItem = MentionItem> {
   loadMore?: () => Promise<void> | void;
   /** Whether the listed rows wait for results that will land among them. */
   holding?: () => boolean;
+  /** Whether a read the category needs failed; `retry` reads it again. */
+  failed?: () => boolean;
+  retry?: () => void;
 }
 
 /**

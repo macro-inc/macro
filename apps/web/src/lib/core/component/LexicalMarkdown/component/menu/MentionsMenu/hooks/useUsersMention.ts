@@ -18,7 +18,7 @@ import {
 } from '@core/util/freshSort';
 import { preservePersonOrder } from '@core/util/ordered-window';
 import { createLazyMemo } from '@solid-primitives/memo';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type { GroupMentionItem } from '../../../../utils/mentionsUtils';
 import { isBotMentionUser } from '../utils/botMention';
 
@@ -50,9 +50,15 @@ type UseUsersMentionResult = {
   /** Whether the people still loading join rows already placed (Macro, or
    * agents held back until they can be placed after the people). */
   holdsRows: Accessor<boolean>;
+  /** Whether the directory's read for the term failed and lists no one. */
+  peopleFailed: Accessor<boolean>;
+  /** Reads the failed directory window again, waiting for it as on opening. */
+  retryPeople: () => Promise<void>;
   isLoadingMore: Accessor<boolean>;
   loadMore: () => Promise<void>;
 };
+
+type DirectoryAnswer = 'unread' | 'reading' | 'answered';
 
 /** Available group aliases and their match functions */
 const GROUPS = [
@@ -137,26 +143,44 @@ export function useUsersMention(
     });
   };
 
-  // Until the directory first answers after the menu opens, it is not known
-  // where the agents go among the people. Later reads keep the people who still
-  // match while they run, so typing does not wait again. A directory that has
-  // not answered by the time other menus stop saying the cache is searching
-  // gets its agents listed after all.
-  const firstAnswer = createMemo<'unread' | 'reading' | 'answered'>((state) => {
-    if (!usesDirectory()) return 'unread';
-    if (state === 'answered') return state;
-    if (usersList().some((item) => !isBotMentionUser(item))) return 'answered';
-    if (workspace.isLoading()) return 'reading';
-    return state === 'reading' ? 'answered' : 'unread';
-  }, 'unread');
+  // Until the directory first answers after the menu opens or a retry, it is
+  // not known where the agents go among the people. Later reads keep the
+  // people who still match while they run, so typing does not wait again. A
+  // directory that has not answered by the time other menus stop saying the
+  // cache is searching gets its agents listed after all.
+  const listsPeople = () => usersList().some((item) => !isBotMentionUser(item));
+  const [attempt, setAttempt] = createSignal(0);
+  const firstAnswer = createMemo<{ attempt: number; state: DirectoryAnswer }>(
+    (previous) => {
+      const current = attempt();
+      const state = previous.attempt === current ? previous.state : 'unread';
+      const answer = (next: DirectoryAnswer) => ({
+        attempt: current,
+        state: next,
+      });
+      if (!usesDirectory()) return answer('unread');
+      if (state === 'answered' || listsPeople()) return answer('answered');
+      if (workspace.isLoading()) return answer('reading');
+      return answer(state === 'reading' ? 'answered' : 'unread');
+    },
+    { attempt: 0, state: 'unread' }
+  );
   const awaitingDirectory = createMemo(
-    () => usesDirectory() && firstAnswer() !== 'answered'
+    () => usesDirectory() && firstAnswer().state !== 'answered'
   );
   const waitedTooLong = deferredGate(
     awaitingDirectory,
     UNANSWERED_SEARCH_LIMIT_MS
   );
   const waitingForPeople = () => awaitingDirectory() && !waitedTooLong();
+
+  // A failed read is not repeated until the text changes, so the menu offers
+  // to retry it, as other contact menus do.
+  const peopleFailed = () =>
+    usesDirectory() &&
+    !waitingForPeople() &&
+    workspace.error() != null &&
+    !listsPeople();
 
   // Macro leads, then people come before the other agents and bots, as in
   // assignee menus. The directory's personal window keeps its own order among
@@ -280,6 +304,11 @@ export function useUsersMention(
     isLoading: () => usesDirectory() && workspace.isLoading(),
     waitingForPeople,
     holdsRows: () => waitingForPeople() && listing().agents > 0,
+    peopleFailed,
+    retryPeople: async () => {
+      setAttempt((value) => value + 1);
+      await workspace.retry?.();
+    },
     isLoadingMore: () => usesDirectory() && workspace.isLoadingMore(),
     loadMore: async () => {
       if (usesDirectory()) await workspace.loadMore();

@@ -68,6 +68,7 @@ import type {
 import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
 import { ItemBin } from './components/ItemBin';
 import { MentionLoadingRows } from './components/MentionLoadingRows';
+import { MentionRetryRow } from './components/MentionRetryRow';
 import { MentionsMenuItem } from './components/MentionsMenuItem';
 import { createMentionPageLoader } from './hooks/createMentionPageLoader';
 import { useBookingLinkMention } from './hooks/useBookingLinkMention';
@@ -445,6 +446,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       contactMention.isLoading());
   const waitingForPeople = () =>
     sourceEnabled('users') && userMention.waitingForPeople();
+  const retryPeople = () =>
+    fireAndForget(userMention.retryPeople(), 'mentions-menu');
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
     // Phones pin people above every other row and rank the rest around them,
@@ -480,6 +483,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           getData: mobileAllItems,
           // Everything below the people waits with them.
           holding: waitingForPeople,
+          failed: () => sourceEnabled('users') && userMention.peopleFailed(),
+          retry: retryPeople,
           getFullCount: () =>
             (sourceEnabled('bookingLinks') ? bookingLinks().length : 0) +
             (sourceEnabled('users') ? mentionUsers().length : 0) +
@@ -539,6 +544,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         isLoadingMore: userMention.isLoadingMore,
         loadMore: userMention.loadMore,
         holding: userMention.holdsRows,
+        failed: userMention.peopleFailed,
+        retry: retryPeople,
       },
       {
         id: 'documents',
@@ -624,7 +631,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     return filtered.filter(
       (bucket) =>
-        bucket.getFullCount() > 0 || bucket.hasMore?.() || bucket.holding?.()
+        bucket.getFullCount() > 0 ||
+        bucket.hasMore?.() ||
+        bucket.holding?.() ||
+        bucket.failed?.()
     );
   });
 
@@ -846,8 +856,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     return mode ? controller.getBucket(mode) : undefined;
   };
   const viewAllHolding = () => activeViewAllBucket()?.holding?.() ?? false;
+  const viewAllFailed = () => activeViewAllBucket()?.failed?.() ?? false;
   const viewAllEmpty = () =>
-    controller.combinedItems().length === 0 && !viewAllHolding();
+    controller.combinedItems().length === 0 &&
+    !viewAllHolding() &&
+    !viewAllFailed();
 
   const visibleBuckets = createMemo(() => {
     const currentBins = controller.bins();
@@ -859,7 +872,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         (config) =>
           (currentBins[config.id] || 0) > 0 ||
           config.hasMore?.() ||
-          controller.loadingRows(config.id) > 0
+          controller.loadingRows(config.id) > 0 ||
+          config.failed?.()
       )
       .map((config) => {
         const bucketLimit = currentBins[config.id] || 0;
@@ -1008,6 +1022,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                                 />
                               )}
                             </Show>
+                            <Show when={bucket().config.failed?.()}>
+                              <MentionRetryRow
+                                message={t('common.peopleUnavailable')}
+                                onRetry={() => bucket().config.retry?.()}
+                              />
+                            </Show>
                           </ItemBin>
                         </>
                       )}
@@ -1079,6 +1099,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                     />
                   </div>
                 )}
+              </Show>
+              <Show when={viewAllFailed()}>
+                <MentionRetryRow
+                  message={t('common.peopleUnavailable')}
+                  onRetry={() => activeViewAllBucket()?.retry?.()}
+                />
               </Show>
             </Show>
           </Surface>
