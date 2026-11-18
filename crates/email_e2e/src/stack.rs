@@ -132,6 +132,10 @@ pub struct StackOptions {
     /// scenarios run one at a time (the `email-e2e-focus` test group):
     /// keep them in `tests/focus.rs`.
     pub focus: bool,
+    /// Turns the Outlook import live pass on: the email services read
+    /// `enable-outlook-import-live-pass` from the Macro services stand-in,
+    /// which answers it on. Off by default, as in production.
+    pub outlook_import_live_pass: bool,
 }
 
 /// What a stack with calendar runs on top of the email services.
@@ -597,6 +601,13 @@ impl Stack {
                 macro_services: &macro_services,
                 queues,
             });
+            if options.outlook_import_live_pass {
+                env.insert("POSTHOG_HOST".to_owned(), macro_services.posthog_url());
+                env.insert(
+                    "POSTHOG_API_KEY".to_owned(),
+                    crate::focus::POSTHOG_PROJECT_KEY.to_owned(),
+                );
+            }
             env.extend(options.env.iter().cloned());
 
             // Held until now, so no listener of the harness took it.

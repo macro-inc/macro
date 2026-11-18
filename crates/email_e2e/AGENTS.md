@@ -32,6 +32,10 @@ scenarios.
   indexer misses nothing published while it joins, and each indexer goes on
   from where the last one stopped. Events of other scenarios in between
   name mail that is not in this scenario's database and are passed over.
+- `StackOptions { outlook_import_live_pass: true, .. }` turns on the Outlook
+  import live pass (`enable-outlook-import-live-pass`): the email services
+  read the flag from the Macro services stand-in, which answers PostHog's
+  `/flags/` with it on. Off by default, as in production.
 - `StackOptions { focus: true, .. }` adds the real `email_focus_worker`,
   which classifies arriving mail for Focus from the mail's Kafka events, and
   stand-ins for the three things it asks outside the database

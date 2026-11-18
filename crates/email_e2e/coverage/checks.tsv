@@ -28,6 +28,7 @@ F-017	gmail new_mail_arrives_through_push
 F-017	outlook new_mail_arrives_through_sync
 F-017	sync_ingestion gmail_received_message_fields_come_through
 F-017	sync_ingestion outlook_received_message_fields_come_through
+F-017	sync_backfill outlook_mail_arriving_mid_import_shows_before_the_import_ends
 F-018	sync_ingestion gmail_mail_from_an_odd_address_is_still_announced
 F-019	journey_parity gmail_filing_at_the_provider
 F-019	journey_parity outlook_filing_at_the_provider
