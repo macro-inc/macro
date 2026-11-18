@@ -96,6 +96,16 @@ Same steps as dev, with production approval for each:
 - **Launch**: turn `enable-macro-computers` on in widening steps. Watch restore
   latency, create failures and host memory against the high watermark.
 
+**Upgrading the host agent** (a NixOS rebuild of the host) restarts only the
+agent; VMs keep running and it adopts them. The first start of an agent whose
+goldens' snapshots lack an empty `/home` of a sold size (any agent upgraded
+from one that cloned `/home` templates) adds them to every golden as a new
+snapshot and then destroys and rebuilds every spare disk set, since a spare
+names the snapshot it came from. Until the spares are back, creates
+`zfs clone` the new snapshot directly (tens of ms slower, no other effect).
+The agent also refuses to start on OpenZFS < 2.4.1 or with block cloning off
+or unsafe; check `journalctl -u firecracker-host` before admitting again.
+
 Hosts move later (for example to dedicated servers) with `zfs send` over
 WireGuard: pre-copy while the computer runs, then a short cutover and one cold
 boot on the new host ([host agent](../architecture/firecracker-computers.md), **Hosts**).
