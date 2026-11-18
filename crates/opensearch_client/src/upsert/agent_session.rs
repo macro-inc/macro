@@ -93,6 +93,10 @@ struct ParentDocument<'a> {
     /// Child id to content hash of every message this parent's children hold.
     /// Kept in `_source` only: the mapping is not dynamic, so it is never indexed.
     indexed_messages: &'a IndexedMessages,
+    /// Children a reconcile set out to write or delete and did not confirm:
+    /// the next one rewrites or deletes them whatever their hash says.
+    #[serde(skip_serializing_if = "<[String]>::is_empty")]
+    pending_messages: &'a [String],
 }
 
 #[derive(Serialize)]
@@ -116,7 +120,7 @@ struct ChildRelation<'a> {
 struct ReconcilePlan {
     /// Child id and serialized document of each new or changed message.
     write: Vec<(String, String)>,
-    /// Ids of recorded children the snapshot no longer has.
+    /// Ids of recorded or pending children the snapshot no longer has.
     delete: Vec<String>,
     unchanged: usize,
     /// The record the parent holds once the writes succeed.
@@ -134,6 +138,7 @@ fn child_id(agent_session_id: &str, message: &AgentSessionMessageDocument) -> St
 fn parent_document<'a>(
     args: &'a ReconcileAgentSessionArgs,
     record: &'a IndexedMessages,
+    pending: &'a [String],
 ) -> ParentDocument<'a> {
     ParentDocument {
         agent_session_id: &args.agent_session_id,
@@ -146,6 +151,7 @@ fn parent_document<'a>(
         updated_at_millis: args.updated_at_millis,
         agent_session_relation: PARENT_RELATION,
         indexed_messages: record,
+        pending_messages: pending,
     }
 }
 
@@ -186,10 +192,12 @@ fn serialization_error(
 }
 
 /// Compares the snapshot's messages with the parent's record of what the
-/// index holds. With no record, every message is written.
+/// index holds. With no record, every message is written; a pending message
+/// is rewritten, or deleted when the snapshot no longer has it.
 fn plan(
     args: &ReconcileAgentSessionArgs,
     previous: Option<&IndexedMessages>,
+    pending: &[String],
 ) -> Result<ReconcilePlan> {
     let mut plan = ReconcilePlan::default();
     for message in &args.messages {
@@ -199,7 +207,8 @@ fn plan(
         })?;
         let hash = content_hash(&document);
 
-        if previous.and_then(|record| record.get(&id)) == Some(&hash) {
+        let recorded = previous.and_then(|record| record.get(&id)) == Some(&hash);
+        if recorded && !pending.contains(&id) {
             plan.unchanged += 1;
         } else {
             plan.write.push((id.clone(), document));
@@ -207,14 +216,41 @@ fn plan(
         plan.record.insert(id, hash);
     }
 
-    if let Some(previous) = previous {
-        plan.delete = previous
-            .keys()
-            .filter(|id| !plan.record.contains_key(*id))
-            .cloned()
-            .collect();
-    }
+    let known: std::collections::BTreeSet<&String> = previous
+        .into_iter()
+        .flat_map(|record| record.keys())
+        .chain(pending)
+        .collect();
+    plan.delete = known
+        .into_iter()
+        .filter(|id| !plan.record.contains_key(*id))
+        .cloned()
+        .collect();
     Ok(plan)
+}
+
+impl ReconcilePlan {
+    fn touches_children(&self) -> bool {
+        !self.write.is_empty() || !self.delete.is_empty()
+    }
+
+    /// The record of the children this plan leaves alone, and the ids it is
+    /// about to write or delete, for the parent to hold while it does.
+    fn intent(&self) -> (IndexedMessages, Vec<String>) {
+        let touched: Vec<String> = self
+            .write
+            .iter()
+            .map(|(id, _)| id.clone())
+            .chain(self.delete.iter().cloned())
+            .collect();
+        let untouched = self
+            .record
+            .iter()
+            .filter(|(id, _)| !touched.contains(*id))
+            .map(|(id, hash)| (id.clone(), hash.clone()))
+            .collect();
+        (untouched, touched)
+    }
 }
 
 #[tracing::instrument(skip_all, fields(written = plan.write.len(), deleted = plan.delete.len()))]
@@ -327,6 +363,12 @@ async fn prune_unrecorded_children(
     .await
 }
 
+fn to_parent_value(parent: ParentDocument<'_>) -> Result<serde_json::Value> {
+    serde_json::to_value(parent).map_err(|error| {
+        serialization_error(OpensearchOperation::ReconcileAgentSessionParent, error)
+    })
+}
+
 #[tracing::instrument(skip_all)]
 async fn write_parent(
     client: &opensearch::OpenSearch,
@@ -360,10 +402,10 @@ async fn write_parent(
 ///
 /// Nothing waits for a refresh: no caller reads the index back, and every
 /// write and delete names its document by id, which needs no refresh to apply.
-/// The parent is written after its children, so its record only names
-/// children that were written; after a failure the next reconcile rewrites
-/// the difference. The sweep comes last so a failed sweep never leaves the
-/// parent's name or recency stale.
+/// While children change the parent names them pending, and it records them
+/// only after they were written, so after a failure at any step the next
+/// reconcile rewrites or deletes exactly what might differ. The sweep comes
+/// last so a failed sweep never leaves the parent's name or recency stale.
 pub(crate) async fn reconcile_agent_session(
     client: &opensearch::OpenSearch,
     args: &ReconcileAgentSessionArgs,
@@ -377,16 +419,31 @@ pub(crate) async fn reconcile_agent_session(
 
     let stored = stored_parent(client, index, routing).await?;
     let previous = stored.as_ref().and_then(|parent| parent.indexed_messages());
-    let plan = plan(args, previous.as_ref())?;
+    let pending = stored
+        .as_ref()
+        .map(|parent| parent.pending_messages())
+        .unwrap_or_default();
+    let plan = plan(args, previous.as_ref(), &pending)?;
 
-    if !plan.write.is_empty() || !plan.delete.is_empty() {
+    // Before any child changes, the parent stops vouching for the children the
+    // plan touches and names them pending, so a reconcile that fails part way
+    // leaves them for the next one to rewrite or delete by id.
+    if plan.touches_children() {
+        let (untouched, touched) = plan.intent();
+        write_parent(
+            client,
+            index,
+            args,
+            to_parent_value(parent_document(args, &untouched, &touched))?,
+            require_alias,
+        )
+        .await?;
         write_children(client, index, routing, &plan, require_alias).await?;
     }
 
-    let parent = serde_json::to_value(parent_document(args, &plan.record)).map_err(|error| {
-        serialization_error(OpensearchOperation::ReconcileAgentSessionParent, error)
-    })?;
-    let parent_written = stored.as_ref().map(|stored| stored.source()) != Some(&parent);
+    let parent = to_parent_value(parent_document(args, &plan.record, &[]))?;
+    let parent_written =
+        plan.touches_children() || stored.as_ref().map(|stored| stored.source()) != Some(&parent);
     if parent_written {
         write_parent(client, index, args, parent, require_alias).await?;
     }

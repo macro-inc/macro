@@ -67,8 +67,10 @@ projects.
 - Agent-session writes never wait for a refresh. Delete-by-query sees only
   refreshed documents, so delete what you know by id first and leave those ids
   out of the query, or it reports a version conflict on documents it still
-  sees. The parent's `indexed_messages` record (child id to content hash) is
-  read with a real-time GET, so it is current without a refresh.
+  sees. The parent's `indexed_messages` record (child id to content hash) and
+  `pending_messages` (children being changed, not yet confirmed) are read with a
+  real-time GET, so they are current without a refresh. Never trust a record
+  without first naming the children you change as pending.
 - The request-level `_source` filter does not reach `has_child` inner hits:
   each one returns the child's whole document unless its `InnerHits` names
   `source_fields`. Every join query names the fields its hit's `_source`

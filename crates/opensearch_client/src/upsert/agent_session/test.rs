@@ -33,19 +33,19 @@ fn user_message(turn: u32, content: &str) -> AgentSessionMessageDocument {
 
 /// The parent `_source` a reconcile of `args` leaves behind.
 fn stored_parent_source(args: &ReconcileAgentSessionArgs) -> serde_json::Value {
-    let record = plan(args, None).unwrap().record;
-    serde_json::to_value(parent_document(args, &record)).unwrap()
+    let record = plan(args, None, &[]).unwrap().record;
+    serde_json::to_value(parent_document(args, &record, &[])).unwrap()
 }
 
 #[test]
 fn the_parent_records_a_hash_of_each_child_it_holds() {
     let args = args();
-    let record = plan(&args, None).unwrap().record;
+    let record = plan(&args, None, &[]).unwrap().record;
     let hash = record["session-1:3:agent"].clone();
     assert_eq!(hash.len(), 16);
 
     assert_eq!(
-        serde_json::to_value(parent_document(&args, &record)).unwrap(),
+        serde_json::to_value(parent_document(&args, &record, &[])).unwrap(),
         json!({
             "agent_session_id": "session-1",
             "name": "Investigate indexing",
@@ -83,10 +83,10 @@ fn the_parent_records_a_hash_of_each_child_it_holds() {
 fn only_new_or_changed_messages_are_written_and_missing_ones_deleted() {
     let mut args = args();
     args.messages.push(user_message(4, "next prompt"));
-    let indexed = plan(&args, None).unwrap().record;
-    assert_eq!(plan(&args, None).unwrap().write.len(), 2);
+    let indexed = plan(&args, None, &[]).unwrap().record;
+    assert_eq!(plan(&args, None, &[]).unwrap().write.len(), 2);
 
-    let unchanged = plan(&args, Some(&indexed)).unwrap();
+    let unchanged = plan(&args, Some(&indexed), &[]).unwrap();
     assert!(unchanged.write.is_empty());
     assert!(unchanged.delete.is_empty());
     assert_eq!(unchanged.unchanged, 2);
@@ -97,12 +97,35 @@ fn only_new_or_changed_messages_are_written_and_missing_ones_deleted() {
     args.messages.push(user_message(5, "another prompt"));
     let mut previous = indexed.clone();
     previous.insert("session-1:6:agent".into(), "0123456789abcdef".into());
-    let changed = plan(&args, Some(&previous)).unwrap();
+    let changed = plan(&args, Some(&previous), &[]).unwrap();
     let written: Vec<&str> = changed.write.iter().map(|(id, _)| id.as_str()).collect();
     assert_eq!(written, ["session-1:4:user", "session-1:5:user"]);
     assert_eq!(changed.delete, ["session-1:6:agent"]);
     assert_eq!(changed.unchanged, 1);
     assert_eq!(changed.record.len(), 3);
+}
+
+#[test]
+fn pending_messages_are_rewritten_or_deleted_whatever_the_record_says() {
+    let mut args = args();
+    args.messages.push(user_message(4, "next prompt"));
+    let indexed = plan(&args, None, &[]).unwrap().record;
+
+    // A failed reconcile left turn 4's prompt and a turn 5 reply pending: the
+    // record still vouches for the prompt, and the reply was never recorded.
+    let pending = [
+        "session-1:4:user".to_owned(),
+        "session-1:5:agent".to_owned(),
+    ];
+    let recovered = plan(&args, Some(&indexed), &pending).unwrap();
+    let written: Vec<&str> = recovered.write.iter().map(|(id, _)| id.as_str()).collect();
+    assert_eq!(written, ["session-1:4:user"]);
+    assert_eq!(recovered.delete, ["session-1:5:agent"]);
+    assert_eq!(recovered.unchanged, 1);
+
+    let (untouched, touched) = recovered.intent();
+    assert_eq!(untouched.keys().collect::<Vec<_>>(), ["session-1:3:agent"]);
+    assert_eq!(touched, ["session-1:4:user", "session-1:5:agent"]);
 }
 
 #[test]
@@ -200,7 +223,7 @@ const PRUNE_OK: &str = r#"{"deleted":0,"failures":[],"timed_out":false}"#;
 #[tokio::test]
 async fn a_session_without_a_record_writes_every_child_then_records_them() {
     let (requests, result) = serve_reconcile(
-        vec![not_found(), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
+        vec![not_found(), ok("{}"), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
         args(),
         None,
     )
@@ -215,6 +238,11 @@ async fn a_session_without_a_record_writes_every_child_then_records_them() {
             messages_deleted: 0,
         }
     );
+    // The parent names the children it is about to write before writing them.
+    let intent: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+    assert_eq!(intent["indexed_messages"], json!({}));
+    assert_eq!(intent["pending_messages"], json!(["session-1:3:agent"]));
+    let requests = [&requests[0], &requests[2], &requests[3], &requests[4]];
     assert!(
         requests[0]
             .line
@@ -241,10 +269,10 @@ async fn a_session_without_a_record_writes_every_child_then_records_them() {
         requests[3].line.contains("conflicts=proceed"),
         "{requests:?}"
     );
-    for request in [&requests[1], &requests[2]] {
+    for request in [requests[1], requests[2]] {
         assert!(request.line.contains("require_alias=true"), "{request:?}");
     }
-    for request in &requests {
+    for request in requests {
         assert!(!request.line.contains("refresh"), "{request:?}");
     }
 }
@@ -252,12 +280,13 @@ async fn a_session_without_a_record_writes_every_child_then_records_them() {
 #[tokio::test]
 async fn explicit_backfill_overrides_allow_a_physical_index() {
     let (requests, result) = serve_reconcile(
-        vec![not_found(), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
+        vec![not_found(), ok("{}"), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
         args(),
         Some("scratch-index"),
     )
     .await;
     result.unwrap();
+    let requests = [&requests[0], &requests[2], &requests[3], &requests[4]];
     assert!(
         requests[0]
             .line
@@ -270,7 +299,7 @@ async fn explicit_backfill_overrides_allow_a_physical_index() {
             .line
             .starts_with("POST /scratch-index/_doc/session-1?")
     );
-    for request in [&requests[1], &requests[2]] {
+    for request in [requests[1], requests[2]] {
         assert!(request.line.contains("require_alias=false"), "{request:?}");
     }
 }
@@ -306,11 +335,12 @@ async fn a_changed_message_is_rewritten_and_a_removed_one_deleted_by_id() {
     });
 
     let (requests, result) = serve_reconcile(
-        vec![found(stored), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
+        vec![found(stored), ok("{}"), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
         args(),
         None,
     )
     .await;
+    let requests = [&requests[0], &requests[2], &requests[3], &requests[4]];
 
     assert_eq!(
         result.unwrap(),
@@ -369,6 +399,7 @@ async fn deleting_a_session_removes_recorded_children_by_id_first() {
         "session-1:3:agent": "0000000000000000",
         "session-1:4:user": "1111111111111111",
     });
+    stored["pending_messages"] = json!(["session-1:5:agent"]);
 
     let (requests, result) = serve(
         vec![found(stored), ok(BULK_OK), ok(PRUNE_OK)],
@@ -388,7 +419,12 @@ async fn deleting_a_session_removes_recorded_children_by_id_first() {
         .collect();
     assert_eq!(
         deleted,
-        ["session-1:3:agent", "session-1:4:user", "session-1"]
+        [
+            "session-1:3:agent",
+            "session-1:4:user",
+            "session-1:5:agent",
+            "session-1"
+        ]
     );
     let sweep: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
     assert_eq!(
@@ -405,10 +441,11 @@ async fn deleting_a_session_removes_recorded_children_by_id_first() {
 }
 
 #[tokio::test]
-async fn a_failed_bulk_leaves_the_parent_record_unchanged() {
+async fn a_failed_bulk_leaves_its_children_pending() {
     let (requests, result) = serve_reconcile(
         vec![
             not_found(),
+            ok("{}"),
             ok(r#"{"errors":true,"items":[{"index":{"status":429}}]}"#),
         ],
         args(),
@@ -420,7 +457,33 @@ async fn a_failed_bulk_leaves_the_parent_record_unchanged() {
         panic!("expected the failed item to be reported, got {result:?}");
     };
     assert_eq!(operation, OpensearchOperation::ReconcileAgentSessionBulk);
-    assert_eq!(requests.len(), 2, "the parent is not written: {requests:?}");
+    assert_eq!(
+        requests.len(),
+        3,
+        "the parent is not recorded: {requests:?}"
+    );
+    let intent: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+    assert_eq!(intent["pending_messages"], json!(["session-1:3:agent"]));
+}
+
+#[tokio::test]
+async fn a_recorded_child_left_pending_is_rewritten_though_its_hash_matches() {
+    // A reconcile wrote this child with other content, then failed before
+    // recording it; the record still holds the hash of what the snapshot has.
+    let mut stored = stored_parent_source(&args());
+    stored["pending_messages"] = json!(["session-1:3:agent"]);
+
+    let (requests, result) = serve_reconcile(
+        vec![found(stored), ok("{}"), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
+        args(),
+        None,
+    )
+    .await;
+
+    assert_eq!(result.unwrap().messages_written, 1);
+    assert!(requests[2].body.contains(r#""_id":"session-1:3:agent""#));
+    let recorded: serde_json::Value = serde_json::from_str(&requests[3].body).unwrap();
+    assert_eq!(recorded, stored_parent_source(&args()));
 }
 
 #[tokio::test]
@@ -428,6 +491,7 @@ async fn a_load_balancer_error_page_on_prune_is_reported_with_its_body() {
     let (_, result) = serve_reconcile(
         vec![
             not_found(),
+            ok("{}"),
             ok(BULK_OK),
             ok("{}"),
             (

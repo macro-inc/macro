@@ -28,6 +28,14 @@ impl StoredParent {
     pub(crate) fn indexed_messages(&self) -> Option<IndexedMessages> {
         serde_json::from_value(self.0.get("indexed_messages")?.clone()).ok()
     }
+
+    /// Children a reconcile set out to change and did not confirm.
+    pub(crate) fn pending_messages(&self) -> Vec<String> {
+        self.0
+            .get("pending_messages")
+            .and_then(|pending| serde_json::from_value(pending.clone()).ok())
+            .unwrap_or_default()
+    }
 }
 
 /// Read a session's parent in real time, so it reflects the last write even

@@ -9,7 +9,7 @@ use crate::{
 
 /// Remove a session parent and all of its message children.
 ///
-/// The parent and the children its record names go by id, which applies
+/// The parent and the children its record names or holds pending go by id, which applies
 /// before any refresh. Delete-by-query then removes the rest, such as children
 /// written before parents kept records. It skips the ids just deleted, which
 /// it may still see, proceeds past conflicts with children an earlier
@@ -22,11 +22,21 @@ pub(crate) async fn delete_agent_session(
     let index = index_override.unwrap_or(SearchIndex::AgentSessions.as_ref());
     let operation = OpensearchOperation::DeleteAgentSession;
 
-    let mut deleted: Vec<String> = stored_parent(client, index, agent_session_id)
-        .await?
+    let stored = stored_parent(client, index, agent_session_id).await?;
+    let mut deleted: Vec<String> = stored
+        .as_ref()
         .and_then(|parent| parent.indexed_messages())
         .map(|record| record.into_keys().collect())
         .unwrap_or_default();
+    for id in stored
+        .as_ref()
+        .map(|parent| parent.pending_messages())
+        .unwrap_or_default()
+    {
+        if !deleted.contains(&id) {
+            deleted.push(id);
+        }
+    }
     deleted.push(agent_session_id.to_owned());
 
     let body: Vec<String> = deleted

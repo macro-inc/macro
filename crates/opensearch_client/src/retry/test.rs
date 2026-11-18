@@ -254,9 +254,10 @@ async fn writes_sharing_a_closed_connection_are_resent_on_a_new_one() {
     results.1.unwrap();
     results.2.unwrap();
     results.3.unwrap();
-    // Four first attempts lost, then each reconcile's parent read, bulk,
-    // prune, and parent write plus each email bulk on a fresh connection.
-    assert_eq!(server.requests.load(Ordering::SeqCst), 4 + 4 * 2 + 2);
+    // Four first attempts lost, then each reconcile's parent read, pending
+    // record, bulk, parent write and sweep plus each email bulk on a fresh
+    // connection.
+    assert_eq!(server.requests.load(Ordering::SeqCst), 4 + 5 * 2 + 2);
     assert!(server.connections.load(Ordering::SeqCst) >= 2);
 }
 

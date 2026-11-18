@@ -45,9 +45,13 @@ through the OpenSearch write. Lease connections have their own pool so waiting
 workers cannot exhaust the pool used to load snapshots. The parent keeps a
 record of a content hash per message child (`indexed_messages`, in `_source`
 only), read back in real time on each reconcile. A reconcile writes only the
-children whose hash changed, deletes recorded children the session no longer
-has by id, sweeps any child no record names with a delete-by-query, and writes
-the parent last, only when it changed. Nothing waits for a refresh; writes are
+children whose hash changed and deletes recorded children the session no
+longer has by id. Before touching any, it rewrites the parent to name them in
+`pending_messages` and drop them from the record; once they succeed it writes
+the final record. So a reconcile that fails part way leaves the next one to
+rewrite or delete exactly those children, whatever their hashes say. Last, a
+delete-by-query sweeps any child no record or pending list names. The parent is
+written only when it changed. Nothing waits for a refresh; writes are
 searchable after the index's next scheduled refresh. Missing sessions delete
 their entire projection, even when triggered by an older event. The reconcile
 span records the trigger (lifecycle kind or `backfill`) and the parent and
