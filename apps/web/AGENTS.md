@@ -113,7 +113,8 @@ A window key names the page or growing list on screen, never a refresh of it. Re
 virtual focus/scroll only on window replacement, not label updates or refreshes.
 Menus hold the row the user moved to by identity (`createSelectionAnchor`) while
 results arrive; the highlight resets only when the query or category changes.
-The person list and recipient sources (`recipient-window.ts`) keep their still-matching rows while the next read is pending, so the contact
+The person list and recipient sources (`recipient-window.ts`) keep their still-matching rows while the next read is pending (recipient
+sources only rows read in the current cache generation, `readNow`), so the contact
 window's `loading()` must have no gap between its text settling and its query fetching (a memo
 can still see the disabled query of the unsettled text then). Keep explicit participant/team pools scoped and
 selected IDs/self independent of suggestion pages. Discussion mentions on documents,
