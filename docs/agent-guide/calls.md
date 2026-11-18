@@ -48,6 +48,9 @@ Native token skipping also requires the selected session to match the native cal
 The `call.join` trace records the intent, source, session ID, and outcome.
 Its `call.lookup` and `call.token` phases share the trace with the HTTP request;
 media connection also runs in that trace. No RTC tokens are recorded.
+The desktop Chat sidebar also lists active channel/DM and quick calls above
+its conversation sections; see [Chat's Live section](channels.md#live-calls-above-the-desktop-sections)
+for joining, dismissing rings, ordering, and touch behavior.
 Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 
