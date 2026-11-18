@@ -34,10 +34,12 @@ scenarios.
   name mail that is not in this scenario's database and are passed over.
 - `StackOptions { focus: true, .. }` adds the real `email_focus_worker`,
   which classifies arriving mail for Focus from the mail's Kafka events, and
-  stand-ins for the two things it asks outside the database
+  stand-ins for the three things it asks outside the database
   (`src/focus.rs`): the model that answers the Focus questions, reached
-  through `OVERRIDE_TYPESAFE_API_URL`, and the agent harness route that reads
-  a thread's due date, through `OVERRIDE_AGENT_HARNESS_SERVICE_URL`. Its
+  through `OVERRIDE_TYPESAFE_API_URL`; the agent harness route that reads
+  a thread's due date, through `OVERRIDE_AGENT_HARNESS_SERVICE_URL`; and
+  PostHog's flag definitions, through `POSTHOG_HOST`, from which it reads
+  whether an inbox's owner has the `enable-email-focus` flag. Its
   pushes go to the connection gateway stand-in like every other service's.
 - Scenarios run in parallel and share nothing but the servers (Postgres,
   Redis, SQS, Kafka, and OpenSearch for search).
@@ -151,7 +153,15 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   as due, and `times_asked_about(text)` tells whether mail reached the
   model at all; `stack.focus_worker_log()` is what the worker logged. The questions and their order are the product's: the
   stand-in answers yes only to the first, "would the owner want this in
-  Focus". Only inboxes at `example.com` are classified. Classifying follows
+  Focus". The worker classifies an inbox only while its owner has the
+  Focus flag: every owner has it unless the scenario turns it off with
+  `turn_off_focus_flag_for(address)` before linking any inbox, since the
+  worker reads the flag on its first look at the inboxes and again only
+  five minutes later. `stack.focus_skipped_without_flag(thread_id)`
+  tells that the worker is done with a thread and left it unclassified
+  because its owner does not have the flag; it reads a debug line the
+  stack's `RUST_LOG` for the worker turns on, so a scenario that sets
+  its own `RUST_LOG` loses it. Classifying follows
   the sync, so wait for the list or the thread's `focus`. Keep these
   scenarios in `tests/focus.rs`, whose tests nextest runs one at a time.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
@@ -410,9 +420,12 @@ shared with the web app's suite) and backend entry points second.
   `email-focus`, so two of them split the mail events between them. The
   `email-e2e-focus` test group runs `tests/focus.rs` serially. The harness
   gives the group an offset before its first worker starts, so mail that
-  arrives while a worker joins is still read; the worker's later sweeps are
-  an hour apart and no scenario sees one. Events of other scenarios name
-  threads that are not in this scenario's database and are passed over.
+  arrives while a worker joins is still read. The worker's later sweeps
+  are an hour apart and no scenario sees one, but it looks at every linked
+  inbox once a minute and backfills those whose owner has the flag, so a
+  scenario longer than a minute may see a thread classified by that too.
+  Events of other scenarios name threads that are not in this scenario's
+  database and are passed over.
 - A Redis database whose lease ran out is not handed out while any client
   is still connected to it: the services of a scenario that stalled would
   write into the next one's state. A former writer that is not connected at
