@@ -166,7 +166,7 @@ pub struct UpdateCalendarEvent {
 
     /// The user's reply approving a change to the guests, quoted verbatim.
     #[schemars(
-        description = "Required when `attendees` adds or changes guests, because the calendar \
+        description = "Required from an agent when `attendees` adds or changes guests, because the calendar \
                        emails each new guest: the user's own message approving these \
                        invitations, quoted verbatim, in reply to the guest list you wrote out \
                        for them. Never the request that asked for the change, and never \
