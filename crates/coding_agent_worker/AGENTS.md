@@ -236,8 +236,15 @@ workspace on session start. The enrollment deployment's egress URL is
 stored as `[macro].egress_url`; computer sessions route first-party MCP and
 Anthropic requests through it without changing custom external MCP addresses.
 
-Service/enrollment telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT`
-(gRPC). Only enrollment spans (`run_enroll`, `macrod.enroll.claim`) export,
-with the marker's computer UUID as a resource attribute. Enrollment joins the
-setup trace from `Enrollment.traceparent`; its claim sends the setup
-`traceparent`. stdout remains the daemon protocol.
+Service telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT` and
+`OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc`, the default, or `http/protobuf`).
+`macrod enroll` exports to the enrollment's `deployment.telemetry_url`
+(OTLP/HTTP) and writes those two variables to `/var/lib/macrod/telemetry.env`,
+which a computer's `macrod.service` loads. Only setup spans (`run_enroll`,
+`macrod.enroll.*`, `macrod.agent.apply`) export, with the marker's computer
+UUID as a resource attribute. Enrollment joins the setup trace from
+`Enrollment.traceparent`; its claim sends the setup `traceparent`.
+`ApplyAgent.traceparent` parents `macrod.agent.apply` and is staged once, beside
+the agent's environment and never in it (a redelivery's fresh one would rewrite
+agent.env and restart the agent), at `/run/macro-agent-inbox/setup-traceparent`. stdout remains the daemon
+protocol.

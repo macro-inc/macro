@@ -103,7 +103,17 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `macro-agent.path` (`PathChanged` on it and on the runtime's restart
   marker `~macro/agent/.restart`) restarts `macro-agent.service`, so
   writing, rewriting or removing the file starts, restarts or stops the
-  agent (`ConditionPathExists`).
+  agent (`ConditionPathExists`). `start-agent` exports the file's
+  `OTEL_EXPORTER_OTLP_ENDPOINT` (telemetry, not a credential) to the runtime;
+  everything else stays a credential. `macro-agent-apply` also installs the
+  setup traceparent macrod staged (`setup-traceparent` in the inbox) once, as
+  `/run/macrod/agent-traceparent` (root, 0644, at most 128 bytes; a failure
+  never stops the environment's install), and `start-agent` exports it as
+  `MACRO_SETUP_TRACEPARENT` for the first start only (it records the one used
+  in `~macro/agent/state/setup-traceparent`).
+- `macrod.service` loads `/var/lib/macrod/telemetry.env` (written by
+  `macrod enroll` from the enrollment's telemetry intake) when present, so
+  macrod's setup spans export there.
 - The agent's units exist only with `macro.box.agentMode` (the
   `macro-box-agent` images), where macro has no sudo or docker.
 - `macro-agent.service` is a system unit running as `macro`, the user
