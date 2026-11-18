@@ -132,6 +132,8 @@ const savedLayouts = new Map<
 >();
 const MAX_SAVED_LAYOUTS = 20;
 
+type EmailThreadRow = Extract<EmailDataSourceItem, { kind: 'entity' }>;
+
 const isGroupHeaderRow = (row: EmailDataSourceItem) =>
   row.kind === 'group-header';
 
@@ -176,10 +178,13 @@ export function EmailList(props: EmailListProps) {
   }
 
   // Its place among the listed threads, day headers left out.
-  function trackFocusThreadOpen(rowId: string) {
-    const threads = source.items().filter((row) => row.kind === 'entity');
+  function trackFocusThreadOpen(row: EmailThreadRow) {
+    if (state.tab !== 'focus') return;
+    // Activating the thread the pane already shows opens nothing new.
+    if (selectedThread()?.id === row.entity.id) return;
+    const threads = source.items().filter((item) => item.kind === 'entity');
     analytics.track('email_focus_thread_opened', {
-      position: threads.findIndex((row) => row.id === rowId),
+      position: threads.findIndex((thread) => thread.id === row.id),
       rows: threads.length,
       sort: state.focusSort,
     });
@@ -201,9 +206,7 @@ export function EmailList(props: EmailListProps) {
 
     if (sourceRow?.kind !== 'entity') return;
 
-    // Activating the thread the pane already shows opens nothing new.
-    if (state.tab === 'focus' && selectedThread()?.id !== sourceRow.entity.id)
-      trackFocusThreadOpen(sourceRow.id);
+    trackFocusThreadOpen(sourceRow);
 
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
