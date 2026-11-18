@@ -824,6 +824,8 @@ filtered list. Its toast offers **Undo** to restore the email.
 **Sender → Signal**, **Sender → Noise** and **Block Sender**, and the sender
 commands in the command menu, appear only when the thread has a sender other
 than you. A thread you sent alone omits them.
+In Noise, choose **Sender → Signal** for a thread in the list. The thread
+leaves Noise, and switching to Signal shows it without reloading Mail.
 With an email row focused or selected, open Command-K and search **Block Sender**
 to block its sender. The success toast offers **Undo**. Multiple selected email
 rows apply the action to each sender in its linked inbox; mixed selections and

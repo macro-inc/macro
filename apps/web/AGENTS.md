@@ -1379,6 +1379,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   flags alongside fallback previews; retained rows and legacy hosts still need
   mutation revalidation. Merge continuation pages through the indexed cursor.
   Never restore explicitly invalidated membership from an older view's snapshot.
+- Sender filter writes and Undo return no per-thread classification. Refresh
+  active GraphQL Soup readers with an email Importance predicate so their
+  server pages reconcile Signal and Noise membership.
 - Render user-visible text in new UI, and every menu and navigation label,
   with `t()` from `@app/lib/i18n`, adding only the English to
   `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills
