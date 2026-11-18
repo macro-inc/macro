@@ -5,6 +5,7 @@ import {
   OnboardingSignup,
 } from '@app/features/onboarding/onboarding';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { SIGN_IN_ATTEMPT_PARAM } from '@core/auth/sign-in-attempt';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableMicrosoftSignup } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
@@ -17,7 +18,7 @@ import { useNavigate, useSearchParams } from '@solidjs/router';
 import { createMemo, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
 import { AuthProvider, type AuthUser } from './context/auth-context';
-import { sessionTokenParam } from './core/email-code';
+import { sessionTokenParam, signInAttemptParam } from './core/email-code';
 import {
   AGENT_SETUP_PATH,
   postAuthTarget,
@@ -50,6 +51,7 @@ export function Login(props: { signupMode?: boolean }) {
         // Dev persona links (`?email=`) sign straight in against a local backend.
         autoStart={import.meta.env.DEV && email !== undefined}
         token={sessionTokenParam(params.token)}
+        signInAttempt={signInAttemptParam(params[SIGN_IN_ATTEMPT_PARAM])}
         ssoFallbackNotice={ssoFallbackNotice(
           typeof params.sso_error === 'string' ? params.sso_error : undefined
         )}
@@ -95,6 +97,7 @@ export function AgentSignup() {
         showApple={false}
         compact={virtualKeyboardVisible()}
         token={sessionTokenParam(params.token)}
+        signInAttempt={signInAttemptParam(params[SIGN_IN_ATTEMPT_PARAM])}
         signedIn={(user) => (
           <PostLoginRedirect
             target={agentSignupDestination(user(), teamInvite())}

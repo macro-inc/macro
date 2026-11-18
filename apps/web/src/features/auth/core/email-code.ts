@@ -14,3 +14,9 @@ export function sessionTokenParam(value: unknown): string | undefined {
   const token = Array.isArray(value) ? value[value.length - 1] : value;
   return typeof token === 'string' && token.length > 0 ? token : undefined;
 }
+
+/**
+ * The sign-in attempt a return URL names; of several, the last, as for
+ * {@link sessionTokenParam}.
+ */
+export const signInAttemptParam = sessionTokenParam;

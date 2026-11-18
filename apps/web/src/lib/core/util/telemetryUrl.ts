@@ -27,13 +27,18 @@ export function redactPrivatePageTokens(value: string): string {
 /**
  * Everything `redactPrivatePageTokens` hides, plus sign-in session codes: the
  * `/session/login/{code}` request and the `?token=` an SSO return carries
- * (in the hash on native, which routes by hash). Those pages still report
+ * (in the hash on native, which routes by hash), with the verifier that
+ * redeems a code and the attempt that names it. Those pages still report
  * events, such as the signup conversion, with the code removed.
  */
 export function redactLinkTokens(value: string): string {
   return redactPrivatePageTokens(value)
     .replace(/(\/session\/login\/)[^/?#\s"']+/g, '$1:sessionCode')
-    .replace(/((?:[?&]|%3F|%26)token(?:=|%3D))[^&%#\s"']+/gi, '$1:sessionCode');
+    .replace(/((?:[?&]|%3F|%26)token(?:=|%3D))[^&%#\s"']+/gi, '$1:sessionCode')
+    .replace(
+      /((?:[?&]|%3F|%26)(?:code_verifier|sign_in_attempt)(?:=|%3D))[^&%#\s"']+/gi,
+      '$1:signInAttempt'
+    );
 }
 
 /** Person-property updates can retain landing URLs after the page is closed. */

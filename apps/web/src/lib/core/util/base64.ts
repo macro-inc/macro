@@ -1,6 +1,5 @@
-/** Encode UTF-8 text as unpadded URL-safe base64. */
-export function encodeBase64UrlUtf8(input: string): string {
-  const bytes = new TextEncoder().encode(input);
+/** Encode bytes as unpadded URL-safe base64. */
+export function encodeBase64UrlBytes(bytes: Uint8Array): string {
   const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join(
     ''
   );
@@ -8,6 +7,11 @@ export function encodeBase64UrlUtf8(input: string): string {
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');
+}
+
+/** Encode UTF-8 text as unpadded URL-safe base64. */
+export function encodeBase64UrlUtf8(input: string): string {
+  return encodeBase64UrlBytes(new TextEncoder().encode(input));
 }
 
 /** Decode standard or URL-safe base64 into bytes. */

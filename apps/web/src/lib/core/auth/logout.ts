@@ -36,6 +36,7 @@ import { confirmDialog } from '@ui';
 import { getOwner } from 'solid-js';
 import { clearComposerStorage } from './clear-composer-storage';
 import { unregisterPushRegistrationsForLogout } from './push-registration-lifecycle';
+import { forgetSignInAttempts } from './sign-in-attempt';
 
 const unauthenticatedUserInfo: UserInfoData = {
   id: '',
@@ -154,6 +155,7 @@ export function useLogout() {
     )
       return;
     clearPostLoginRedirect();
+    forgetSignInAttempts();
     // Must run before the session is torn down — the unregister call is
     // authenticated. Time-boxed so a hung request can't block logout.
     await raceTimeout(unregisterPushRegistrationsForLogout(), 3000);
