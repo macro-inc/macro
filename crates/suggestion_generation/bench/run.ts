@@ -157,6 +157,13 @@ async function workTables(db: SQL): Promise<string[]> {
 
 /** Delete everything an earlier generation left for `user`: suggestions, routine suggestions, generations, drafts. */
 export async function forgetWork(db: SQL, user: string) {
+  // An abandoned session may still exist, and only its row keeps it to the
+  // narrow generation scope: deleting the row would lift that.
+  const [{ abandoned }] = await db.unsafe(
+    `SELECT count(*)::int AS abandoned FROM suggestion_generation_session WHERE user_id = $1 AND cleanup = 'abandoned'`,
+    [user],
+  );
+  if (abandoned) throw new Error(`${user} has ${abandoned} abandoned generation sessions; delete their agent sessions, then their suggestion_generation rows, before running again`);
   const tables = await workTables(db);
   await db.begin(async (tx) => {
     for (const table of tables) await tx.unsafe(`DELETE FROM ${table} WHERE user_id = $1`, [user]);
@@ -295,11 +302,13 @@ export async function generate(
   };
   const db = new SQL(at.postgres);
   const transcript = new Map<string, unknown>();
+  let asked: number | undefined;
   try {
     writeInbox(at.instance, email, recentMessages(persona, variant, now));
     const token = await login(at, email);
     const route = trigger === 'onboarding' ? 'generate' : 'regenerate';
-    const asked = Date.now();
+    asked = Date.now();
+    const start = asked;
     await call(`${at.harness}/scheduled-action/suggestions/${route}?timezone=${encodeURIComponent(timezone)}`, {
       method: 'POST',
       token,
@@ -322,7 +331,7 @@ export async function generate(
                         (SELECT min(created_at) FROM routine_suggestion WHERE user_id = $1)) AS at`,
           [user],
         );
-        if (first?.at) result.firstMs = new Date(first.at).getTime() - asked;
+        if (first?.at) result.firstMs = new Date(first.at).getTime() - start;
       }
       const [state] = await db.unsafe(
         `SELECT status, finished_at, trace_id FROM suggestion_generation WHERE id = $1`,
@@ -332,7 +341,7 @@ export async function generate(
         ended = state;
         break;
       }
-      if (Date.now() - asked > DEADLINE_MS[trigger]) {
+      if (Date.now() - start > DEADLINE_MS[trigger]) {
         result.buildFailed = true;
         throw new Error(`generation still running after ${DEADLINE_MS[trigger] / 60_000} minutes`);
       }
@@ -340,15 +349,20 @@ export async function generate(
     }
     result.status = ended.status;
     result.traceId = ended.trace_id;
-    result.wallMs = (ended.finished_at ? new Date(ended.finished_at).getTime() : Date.now()) - asked;
+    result.wallMs = (ended.finished_at ? new Date(ended.finished_at).getTime() : Date.now()) - start;
     result.sessions = (await db.unsafe(SESSIONS, [row.id])) as SessionRow[];
     result.routines = await routinesOf(db, user);
     result.cards = await cardsOf(db, user);
     // Usage rows land as each model call settles: give the last ones a moment.
     await Bun.sleep(5000);
-    result.cost = await costOf(db, user, new Date(asked - 1000), new Date());
+    result.cost = await costOf(db, user, new Date(start - 1000), new Date());
   } catch (error) {
     result.error = String(error).slice(0, 500);
+    // A generation that failed or ran out of time may still have spent: count it.
+    if (asked !== undefined) {
+      result.wallMs ??= Date.now() - asked;
+      result.cost = await costOf(db, user, new Date(asked - 1000), new Date()).catch(() => result.cost);
+    }
   } finally {
     // A paid person's onboarding counts them in for nightly runs: leave none due.
     await db.unsafe(`DELETE FROM suggestion_audience WHERE user_id = $1`, [user]).catch(() => {});

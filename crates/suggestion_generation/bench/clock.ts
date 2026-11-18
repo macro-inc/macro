@@ -38,6 +38,8 @@ function moved(year: number, month: number, day: number, days: number) {
 // "Nov 12", "November 12th", "Nov. 12, 2026"
 const MONTH_DAY =
   /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(\.?) (\d{1,2})(st|nd|rd|th)?(, (20\d\d))?\b/g;
+// "Monday the 9th": a day of a month the text leaves out.
+const WEEKDAY_ORDINAL = /\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday) the (\d{1,2})(st|nd|rd|th)\b/g;
 // "10/26", only for the months the personas span, so pipe sizes ("3/4") and "24/7" stay.
 const NUMERIC = /(?<![\d/.])\b(9|10|11|12)\/(\d{1,2})\b(?![\d/"”])/g;
 // "2026-11-12", also as the start of "2026-11-12T09:00Z".
@@ -58,7 +60,18 @@ export function shiftText(text: string, days: number): string {
   if (days === 0) return text;
   const held: string[] = [];
   const hold = (value: string) => `\u0000${held.push(value) - 1}\u0000`;
-  let out = text.replace(MONTH_DAY, (whole, month: string, dot: string, day: string, suffix: string | undefined, comma: string | undefined, year: string | undefined) => {
+  // The month is the one near the anchor in which that day falls on that weekday.
+  let out = text.replace(WEEKDAY_ORDINAL, (whole, weekday: string, day: string) => {
+    const date = Number(day);
+    const anchor = new Date(ANCHOR);
+    const month = [-1, 0, 1]
+      .map((offset) => new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() + offset, date)))
+      .find((candidate) => candidate.getUTCDate() === date && WEEKDAYS[candidate.getUTCDay()] === weekday);
+    if (!month) return hold(whole);
+    const next = new Date(month.getTime() + days * DAY_MS);
+    return hold(`${WEEKDAYS[next.getUTCDay()]} the ${next.getUTCDate()}${ordinal(next.getUTCDate())}`);
+  });
+  out = out.replace(MONTH_DAY, (whole, month: string, dot: string, day: string, suffix: string | undefined, comma: string | undefined, year: string | undefined) => {
     const index = monthIndex(month);
     const date = Number(day);
     if (index < 0 || date < 1 || date > 31) return whole;

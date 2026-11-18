@@ -165,7 +165,6 @@ async function runSection(section: Section, values: Record<string, string | unde
   const truthKey = section === 'routines' ? 'routinesTruth' : 'feedTruth';
   people = people.filter((persona) => persona[truthKey]);
   if (!people.length) throw new Error(`no persona in set ${set} has a ${section} answer key`);
-  if (set !== 'tune') spend(set, section, values.label!);
   const reps = Number(values.reps);
   const concurrency = Math.max(1, Number(values.concurrency));
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -191,6 +190,8 @@ async function runSection(section: Section, values: Record<string, string | unde
     for (let rep = 1; rep <= reps; rep++) {
       const now = Date.now();
       for (const persona of people) await prepare(at, persona, spec.variant, now, join(dir, `${persona.name}-${rep}`));
+      // A held-out set is read once its people are seeded and generations start.
+      if (rep === 1 && set !== 'tune') spend(set, section, values.label!);
       if (spec.search) await indexAll(at, people, spec.variant);
       for (let i = 0; i < people.length; i += concurrency) {
         const batch = people.slice(i, i + concurrency);
@@ -245,13 +246,16 @@ function readSide(arg: string): RunFile {
 async function rejudge(path: string, values: Record<string, string | undefined>) {
   const run = readRun(path);
   const at = stack(values.instance!, values.tempo!);
-  await seedGrader(at.instance);
   const people = new Map(personas(run.set).map((persona) => [persona.name, persona]));
-  for (const attempt of run.attempts) {
-    if (attempt.generation.error) continue; // a build failure keeps its 0
-    attempt.benchError = undefined;
-    await judgeAndScore(at, run.section, people.get(attempt.persona)!, attempt);
-  }
+  // The judge's cost is read from the grader's usage, so nothing else may judge meanwhile.
+  await exclusive(at.instance, 'suggestions bench rejudge', async () => {
+    await seedGrader(at.instance);
+    for (const attempt of run.attempts) {
+      if (attempt.generation.error) continue; // a build failure keeps its 0
+      attempt.benchError = undefined;
+      await judgeAndScore(at, run.section, people.get(attempt.persona)!, attempt);
+    }
+  });
   writeFileSync(path, `${JSON.stringify(run, null, 1)}\n`);
   console.log(reportLines([run]).join('\n'));
 }

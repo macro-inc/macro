@@ -67,7 +67,11 @@ async function author(at: Stack): Promise<string> {
     await seed(at.instance, account, 'full', Date.now(), join(HELDOUT_DIR, 'author.seed.log'));
   })();
   await authorSeeded;
-  authorToken ??= login(at, AUTHOR);
+  // A failed sign-in is not kept: the next call tries again.
+  authorToken ??= login(at, AUTHOR).catch((error) => {
+    authorToken = undefined;
+    throw error;
+  });
   return authorToken;
 }
 

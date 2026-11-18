@@ -35,7 +35,12 @@ export async function seedGrader(instance: string) {
 
 // Local tokens last an hour and a run lasts longer: sign in again on a 401.
 let graderToken: Promise<string> | undefined;
-const grader = (at: Stack) => (graderToken ??= login(at, GRADER));
+// A failed sign-in is not kept: the next call tries again.
+const grader = (at: Stack) =>
+  (graderToken ??= login(at, GRADER).catch((error) => {
+    graderToken = undefined;
+    throw error;
+  }));
 
 async function complete<T>(at: Stack, prompt: string, instructions: string, schema: object): Promise<T> {
   let last: unknown;
@@ -205,24 +210,14 @@ The suggestions, in the order they were made:
 ${suggestions}
 
 Mark every suggestion, S1 to S${generation.routines.length}, in order.`;
-  const result = await complete<{ marks: RoutineMark[] }>(at, prompt, ROUTINES_RUBRIC, ROUTINES_SCHEMA);
-  return generation.routines.map(
-    (_, i) =>
-      result.marks.find((mark) => mark.suggestion.replace(/^S/, '') === String(i + 1)) ?? {
-        suggestion: `S${i + 1}`,
-        meets: [],
-        decoys: [],
-        keep: 1,
-        misfit: false,
-        broken: false,
-        bad_knob: false,
-        wrong_surface: false,
-        duplicate: false,
-        unsafe: false,
-        invented: false,
-        why: 'the judge left it unmarked',
-      },
-  );
+  // A suggestion the judge left unmarked can't be scored: ask again, then give up.
+  for (let attempt = 0; ; attempt++) {
+    const result = await complete<{ marks: RoutineMark[] }>(at, prompt, ROUTINES_RUBRIC, ROUTINES_SCHEMA);
+    const marks = generation.routines.map((_, i) => result.marks.find((mark) => mark.suggestion.replace(/^S/, '') === String(i + 1)));
+    const missing = marks.flatMap((mark, i) => (mark ? [] : [`S${i + 1}`]));
+    if (!missing.length) return marks as RoutineMark[];
+    if (attempt === 1) throw new Error(`the judge left ${missing.join(', ')} unmarked`);
+  }
 }
 
 // ---------- feed ----------
@@ -349,25 +344,12 @@ The feed, most important first:
 ${cards.map((card, i) => `C${i + 1}. ${describeCard(card, names)}`).join('\n\n')}
 
 Mark every card, C1 to C${cards.length}, in order.`;
-  const result = await complete<FeedMarks>(at, prompt, FEED_RUBRIC, FEED_SCHEMA);
-  return {
-    feed_rating: result.feed_rating,
-    cards: cards.map(
-      (_, i) =>
-        result.cards.find((mark) => mark.card.replace(/^C/, '') === String(i + 1)) ?? {
-          card: `C${i + 1}`,
-          covers: [],
-          decoys: [],
-          grounding: 1,
-          specificity: 1,
-          actionability: 1,
-          worth: 1,
-          stale: false,
-          duplicate: false,
-          unsafe: false,
-          invented: false,
-          invented_what: 'the judge left it unmarked',
-        },
-    ),
-  };
+  // A card the judge left unmarked can't be scored: ask again, then give up.
+  for (let attempt = 0; ; attempt++) {
+    const result = await complete<FeedMarks>(at, prompt, FEED_RUBRIC, FEED_SCHEMA);
+    const marks = cards.map((_, i) => result.cards.find((mark) => mark.card.replace(/^C/, '') === String(i + 1)));
+    const missing = marks.flatMap((mark, i) => (mark ? [] : [`C${i + 1}`]));
+    if (!missing.length) return { feed_rating: result.feed_rating, cards: marks as CardMark[] };
+    if (attempt === 1) throw new Error(`the judge left ${missing.join(', ')} unmarked`);
+  }
 }
