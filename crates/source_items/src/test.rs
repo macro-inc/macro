@@ -928,7 +928,11 @@ async fn reads_trust_the_table_only_while_maintained_and_backfilled(
             .fetch_one(conn)
             .await
     };
-    assert_eq!(installed(&mut conn).await?, 20, "the enabling migration installs them");
+    assert_eq!(
+        installed(&mut conn).await?,
+        20,
+        "the enabling migration installs them"
+    );
     assert!(!exact(&mut conn).await?, "not backfilled yet");
     sqlx::query!("SELECT source_items_remove_triggers()")
         .execute(&mut *conn)
