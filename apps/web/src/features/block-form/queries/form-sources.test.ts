@@ -22,6 +22,28 @@ const sync = vi.hoisted(() => ({
   channels: [] as { id: string; participantIds: string[] }[],
   pendingChannelIds: new Set<string>(),
   channelsError: undefined as unknown,
+  // REST participants by channel: user ids, an error, or absent while read.
+  restParticipants: {} as Record<string, string[] | Error>,
+}));
+vi.mock('@queries/channel/participants-rest-fallback', () => ({
+  channelParticipantsRestFallbackOptions: (channelId: string) => ({
+    channelId,
+  }),
+}));
+vi.mock('@tanstack/solid-query', async (original) => ({
+  ...(await original<typeof import('@tanstack/solid-query')>()),
+  useQueries: (options: () => { queries: { channelId: string }[] }) =>
+    options().queries.map(({ channelId }) => {
+      const read = sync.restParticipants[channelId];
+      if (read === undefined) return { isSuccess: false, isError: false };
+      if (read instanceof Error)
+        return { isSuccess: false, isError: true, error: read };
+      return {
+        isSuccess: true,
+        isError: false,
+        data: read.map((user_id) => ({ user_id })),
+      };
+    }),
 }));
 vi.mock('@queries/channel/by-ids', () => ({
   useCachedChannelsByIds: () => ({
@@ -133,6 +155,7 @@ beforeEach(() => {
   sync.channels = [];
   sync.pendingChannelIds = new Set();
   sync.channelsError = undefined;
+  sync.restParticipants = {};
 });
 
 describe('createFormDetailSource', () => {
@@ -299,6 +322,25 @@ describe('createInvitedSource', () => {
 
     sync.pendingChannelIds = new Set();
     sync.channelsError = new Error('unavailable');
+    const source = invited();
+    expect(source.value()).toBeUndefined();
+    expect(source.failure()).toBeDefined();
+  });
+
+  it('reads a channel the soup read leaves out from REST', () => {
+    sync.sharedChannelIds = ['channel-1', 'public-1'];
+    sync.channels = [{ id: 'channel-1', participantIds: [owner, 'macro|a'] }];
+    expect(invited().value()).toBeUndefined();
+
+    sync.restParticipants = {
+      'public-1': ['macro|a', 'macro|b'],
+    };
+    expect(invited().value()).toBe(2);
+  });
+
+  it('leaves the count unknown when a channel cannot be read from REST either', () => {
+    sync.sharedChannelIds = ['public-1'];
+    sync.restParticipants = { 'public-1': new Error('forbidden') };
     const source = invited();
     expect(source.value()).toBeUndefined();
     expect(source.failure()).toBeDefined();

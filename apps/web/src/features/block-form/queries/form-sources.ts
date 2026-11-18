@@ -3,6 +3,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import { useCachedChannelsByIds } from '@queries/channel/by-ids';
+import { channelParticipantsRestFallbackOptions } from '@queries/channel/participants-rest-fallback';
 import { queryReadyGate } from '@queries/gate';
 import { useDatabaseDetailQuery } from '@queries/storage/databases';
 import {
@@ -22,6 +23,7 @@ import {
 } from '@queries/storage/forms-sync';
 import type { FormsError } from '@service-storage/forms';
 import type { FormErrorCode } from '@service-storage/generated/schemas/formErrorCode';
+import { useQueries } from '@tanstack/solid-query';
 import type { ResultAsync } from 'neverthrow';
 import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -328,21 +330,42 @@ export function createInvitedSource(
     channelIds,
     () => channelIds().length > 0
   );
+  // The soup read leaves out public channels the owner has not joined; read
+  // those from REST, as the Participants tab does.
+  const missingIds = () => {
+    if (channels.pendingIds().size || channels.error()) return [];
+    const read = new Set(channels.channels().map((channel) => channel.id));
+    return channelIds().filter((id) => !read.has(id));
+  };
+  const fallbacks = useQueries(() => ({
+    queries: missingIds().map((id) =>
+      channelParticipantsRestFallbackOptions(id, true)
+    ),
+  }));
   return {
     value: () => {
       if (!permissions.isSuccess) return undefined;
       if (channelIds().length === 0) return null;
       if (channels.pendingIds().size || channels.error()) return undefined;
-      // A channel the owner can no longer read counts no one.
-      const people = new Set(
-        channels.channels().flatMap((channel) => channel.participantIds ?? [])
-      );
+      // A channel the owner can no longer read leaves the count unknown.
+      if (!fallbacks.every((query) => query.isSuccess)) return undefined;
+      const people = new Set([
+        ...channels
+          .channels()
+          .flatMap((channel) => channel.participantIds ?? []),
+        ...fallbacks.flatMap((query) =>
+          query.data.map((participant) => participant.user_id)
+        ),
+      ]);
       // The owner is in every channel they posted to.
       people.delete(ownerId());
       return people.size;
     },
     failure: () => {
-      const error = permissions.error ?? channels.error();
+      const error =
+        permissions.error ??
+        channels.error() ??
+        fallbacks.find((query) => query.isError)?.error;
       return error ? loadFailureOf(error) : undefined;
     },
   };
