@@ -117,8 +117,13 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
                 "the last reconcile left problems; its log has them",
             )
         };
-        let swap = if self.squeeze_window().is_some() && self.probe.measure().swap_total_bytes == 0
-        {
+        let measurement = self.probe.measure();
+        let swap = if measurement.disk_swap_devices > 0 {
+            CheckOutcome::failed(
+                HealthCheck::Swap,
+                "a swap device besides zram is active: guest memory could be swapped to disk",
+            )
+        } else if self.squeeze_window().is_some() && measurement.swap_total_bytes == 0 {
             CheckOutcome::failed(
                 HealthCheck::Swap,
                 "the host limits ask for the zram squeeze, but the host has no swap",

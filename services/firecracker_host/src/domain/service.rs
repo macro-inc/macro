@@ -207,6 +207,9 @@ pub struct HostMeasurement {
     pub swap_used_bytes: u64,
     /// RAM zram devices hold, compressed (`mm_stat` `mem_used_total`).
     pub zram_used_bytes: u64,
+    /// Active swap devices that are not zram (`/proc/swaps`): guest memory
+    /// swapped there lands on a disk.
+    pub disk_swap_devices: u32,
 }
 
 type Entry = Arc<Mutex<Option<ComputerRecord>>>;

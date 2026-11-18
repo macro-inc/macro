@@ -210,3 +210,37 @@ async fn the_window_comes_from_the_host_limits_and_needs_swap() {
     assert_eq!(host.service.squeeze_window(), Some(WINDOW));
     assert!(!swap_check(&host), "the fake host has no swap");
 }
+
+#[tokio::test]
+async fn a_disk_swap_device_fails_the_swap_check_and_stops_the_squeeze() {
+    let host = host_with(FakeStore::default(), FakeMachines::default(), 2).await;
+    host.service
+        .create(computer_id(), create_request(1, true))
+        .await
+        .unwrap();
+    host.machines
+        .usage
+        .lock()
+        .unwrap()
+        .insert(computer_id(), usage(0));
+    *host.probe.0.lock().unwrap() = 95 * GIB;
+    *host.probe.1.lock().unwrap() = 1;
+    let settings = ActivitySettings::default();
+    let start = Instant::now();
+    host.service.activity_pass(start, &settings);
+    let late = start + SQUEEZE_AFTER;
+    host.service.activity_pass(late, &settings);
+
+    assert_eq!(host.service.squeeze_once(WINDOW, late).await, None);
+    assert!(host.machines.reclaims.lock().unwrap().is_empty());
+    let swap = host
+        .service
+        .service_checks()
+        .into_iter()
+        .find(|check| check.check == HealthCheck::Swap)
+        .unwrap();
+    assert!(
+        !swap.healthy,
+        "no squeeze asked, but a disk swap device is active"
+    );
+}

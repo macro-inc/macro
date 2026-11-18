@@ -305,9 +305,10 @@ impl Machines for FakeMachines {
     }
 }
 
-/// A 128 GiB host with as much memory in use as the test sets.
+/// A 128 GiB host with as much memory in use, and as many disk swap
+/// devices, as the test sets.
 #[derive(Clone, Default)]
-pub(super) struct FakeProbe(pub(super) Arc<Mutex<u64>>);
+pub(super) struct FakeProbe(pub(super) Arc<Mutex<u64>>, pub(super) Arc<Mutex<u32>>);
 
 impl HostProbe for FakeProbe {
     fn measure(&self) -> HostMeasurement {
@@ -315,6 +316,7 @@ impl HostProbe for FakeProbe {
         HostMeasurement {
             memory_total_bytes: total,
             memory_available_bytes: total - *self.0.lock().unwrap(),
+            disk_swap_devices: *self.1.lock().unwrap(),
             ..HostMeasurement::default()
         }
     }

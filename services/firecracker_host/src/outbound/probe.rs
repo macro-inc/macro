@@ -3,6 +3,9 @@
 use crate::domain::service::{HostMeasurement, HostProbe};
 use crate::outbound::cgroup::vms_memory_current;
 
+#[cfg(test)]
+mod test;
+
 const PAGE_BYTES: u64 = 4096;
 
 /// Reads the host.
@@ -38,8 +41,24 @@ impl HostProbe for ProcProbe {
             swap_total_bytes: kib("SwapTotal"),
             swap_used_bytes: kib("SwapTotal").saturating_sub(kib("SwapFree")),
             zram_used_bytes: zram_used_bytes(),
+            // Unreadable reads as none: `SwapTotal` still shows swap exists.
+            disk_swap_devices: std::fs::read_to_string("/proc/swaps")
+                .map(|swaps| disk_swap_devices(&swaps))
+                .unwrap_or(0),
         }
     }
+}
+
+/// Swap devices in `/proc/swaps` (a header, then one line per device) that
+/// are not zram.
+fn disk_swap_devices(swaps: &str) -> u32 {
+    let devices = swaps
+        .lines()
+        .skip(1)
+        .filter_map(|line| line.split_whitespace().next())
+        .filter(|device| !device.starts_with("/dev/zram"))
+        .count();
+    u32::try_from(devices).unwrap_or(u32::MAX)
 }
 
 /// `mem_used_total` (the third `mm_stat` field) of every zram device.
