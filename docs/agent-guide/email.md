@@ -1357,8 +1357,10 @@ conversation.
 An already-sent rejection after reconnect follows the same path as an immediate
 already-sent response: cancel pending autosave, announce that the email or reply
 was sent, then keep any text the sent message lacks as a new draft (saying it
-was not sent), or else leave the sent draft. Autosave and Send wait until the
-composer has settled it, and it must never offer Retry for that draft.
+was not sent), or else leave the sent draft. Edits made meanwhile count toward
+that text; autosave, Send and the From switch wait until the composer has
+settled it, and it must never offer Retry for that draft. A discard pressed or
+a composer closed before it settles takes precedence: no notice, no kept draft.
 Verify this in standalone and reply composers, including a queued edit awaiting
 its debounce and a failure racing the first identity read. A settlement for a
 previous or different draft must not clear the current editor.
