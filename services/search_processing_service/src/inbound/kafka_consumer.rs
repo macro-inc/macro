@@ -132,6 +132,10 @@ struct ReceivedEvent {
     event: DeclaredMacroEvent,
     partition: i32,
     offset: i64,
+    /// Wire type of `event`, e.g. `email.thread_backfilled`.
+    event_type: &'static str,
+    /// When the broker recorded the event, in Unix milliseconds, if it did.
+    produced_at_ms: Option<i64>,
     /// The record's `kafka.process` span, from receipt until processing ends,
     /// so its duration includes the wait in the worker channel.
     span: tracing::Span,
@@ -360,11 +364,43 @@ fn attach_event_coordinates<E>(
     span: tracing::Span,
 ) -> Result<ReceivedEvent, E> {
     decoded.map(|event| ReceivedEvent {
+        event_type: event_type(&event),
         event,
         partition,
         offset,
+        produced_at_ms: None,
         span,
     })
+}
+
+/// Opens a record's `kafka.process` span and attaches it, with the record's
+/// coordinates, to the decoded event. The span is returned on its own too, so
+/// a record that failed to decode can still be marked failed.
+fn receive_record<M: rdkafka::Message, E>(
+    message: &M,
+    decoded: Result<DeclaredMacroEvent, E>,
+) -> (tracing::Span, Result<ReceivedEvent, E>) {
+    let span = consumer_span(message, SearchProcessingConsumerGroup::GROUP_NAME);
+    let received =
+        attach_event_coordinates(decoded, message.partition(), message.offset(), span.clone()).map(
+            |received| ReceivedEvent {
+                produced_at_ms: message.timestamp().to_millis(),
+                ..received
+            },
+        );
+    if let Ok(received) = &received {
+        record_event_identity(&span, received);
+    }
+    (span, received)
+}
+
+/// The search entity an event acts on, safe to record: every producer key
+/// except entity properties', which can name a user.
+fn entity_id(event: &DeclaredMacroEvent) -> Option<Cow<'_, str>> {
+    match event {
+        DeclaredMacroEvent::PropertyMacroEvent(_) => None,
+        _ => Some(ordering_key(event)),
+    }
 }
 
 /// The event's wire type, e.g. `email.thread_backfilled`.
@@ -417,10 +453,10 @@ fn event_id(event: &DeclaredMacroEvent) -> Uuid {
 }
 
 /// Records which event a record's `kafka.process` span carries.
-fn record_event_identity(span: &tracing::Span, event: &DeclaredMacroEvent) {
-    span.record("macro.event.id", field::display(event_id(event)));
-    span.record("macro.event.type", event_type(event));
-    if let DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) = event {
+fn record_event_identity(span: &tracing::Span, received: &ReceivedEvent) {
+    span.record("macro.event.id", field::display(event_id(&received.event)));
+    span.record("macro.event.type", received.event_type);
+    if let DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) = &received.event {
         span.record(
             "agent.session.id",
             field::display(event.event().event.session_id()),
@@ -429,14 +465,20 @@ fn record_event_identity(span: &tracing::Span, event: &DeclaredMacroEvent) {
 }
 
 /// The `process_event` span for one record: the processing phase under its
-/// `kafka.process` span, with the event type and, once known, the outcome.
+/// `kafka.process` span. `record_age_ms` is how long after the broker recorded
+/// the event processing began, the search index's lag for that entity.
 fn processing_span(received: &ReceivedEvent) -> tracing::Span {
+    let record_age_ms = received
+        .produced_at_ms
+        .map(|produced_at| chrono::Utc::now().timestamp_millis() - produced_at);
     tracing::info_span!(
         parent: &received.span,
         "process_event",
         partition = received.partition,
         offset = received.offset,
-        event_type = event_type(&received.event),
+        event_type = received.event_type,
+        entity_id = entity_id(&received.event).as_deref(),
+        record_age_ms,
         outcome = field::Empty,
         otel.status_code = field::Empty,
     )
@@ -446,6 +488,27 @@ fn record_outcome(span: &tracing::Span, outcome: EventOutcome) {
     span.record("outcome", <&'static str>::from(outcome));
     if outcome == EventOutcome::Dropped {
         span.record("otel.status_code", "ERROR");
+    }
+}
+
+/// Runs one record's processing inside its spans and records the outcome. A
+/// dropped event also fails the record's span, the consumer's top-level span,
+/// so drops count in the service's error rate.
+async fn process_received<'a, F, Fut>(received: &'a ReceivedEvent, process: F)
+where
+    F: FnOnce(&'a ReceivedEvent) -> Fut,
+    Fut: Future<Output = EventOutcome>,
+{
+    let span = processing_span(received);
+    // A span ends at its last exit, so the record's span is entered again
+    // here to cover the processing it waited for.
+    let outcome = process(received)
+        .instrument(span.clone())
+        .instrument(received.span.clone())
+        .await;
+    record_outcome(&span, outcome);
+    if outcome == EventOutcome::Dropped {
+        record_span_error(&received.span, "event dropped after its processing retries");
     }
 }
 
@@ -510,19 +573,15 @@ async fn run_event_worker(
 ) {
     let context = &context;
     drain_worker_events(events, pending_rereads, |received| async move {
-        let span = processing_span(&received);
-        // A span ends at its last exit, so the record's span is entered again
-        // here to cover the processing it waited for.
-        let outcome = process_event(
-            context,
-            &received.event,
-            received.partition,
-            received.offset,
-        )
-        .instrument(span.clone())
-        .instrument(received.span.clone())
+        process_received(&received, |received| {
+            process_event(
+                context,
+                &received.event,
+                received.partition,
+                received.offset,
+            )
+        })
         .await;
-        record_outcome(&span, outcome);
     })
     .await;
     tracing::trace!("search processing event worker drained");
@@ -587,16 +646,7 @@ async fn poll_events(
                     }
                 };
                 let kafka_message = message.inner();
-                let span = consumer_span(kafka_message, SearchProcessingConsumerGroup::GROUP_NAME);
-                let decoded = attach_event_coordinates(
-                    message.decode_payload(),
-                    kafka_message.partition(),
-                    kafka_message.offset(),
-                    span.clone(),
-                );
-                if let Ok(received) = &decoded {
-                    record_event_identity(&span, &received.event);
-                }
+                let (span, decoded) = receive_record(kafka_message, message.decode_payload());
 
                 match workers.handoff(decoded).instrument(span.clone()).await {
                     HandoffOutcome::HandedOff | HandoffOutcome::Coalesced => {}
@@ -604,7 +654,7 @@ async fn poll_events(
                         record_span_error(&span, &error);
                         tracing::error!(
                             parent: &span,
-                            error = ?error,
+                            error = %error,
                             topic = rdkafka::Message::topic(kafka_message),
                             partition = kafka_message.partition(),
                             offset = kafka_message.offset(),
@@ -631,7 +681,7 @@ async fn poll_events(
 
                 // Deliberately commit immediately after a successful handoff. The worker
                 // owns retries and drops exhausted events without requesting redelivery.
-                commit_logged(consumer, kafka_message);
+                span.in_scope(|| commit_logged(consumer, kafka_message));
             }
         }
     }

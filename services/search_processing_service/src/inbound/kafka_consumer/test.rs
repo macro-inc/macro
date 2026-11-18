@@ -131,19 +131,21 @@ fn test_pool(workers: usize, capacity: usize) -> (WorkerPool, Vec<mpsc::Receiver
 }
 
 fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEvent {
-    ReceivedEvent {
-        event: DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
-            EMAIL_LINK_ID.to_string(),
-            EmailTopicEvent::ThreadBackfilled(ThreadBackfilledMetadata {
-                link_id: EMAIL_LINK_ID,
-                owner: user_id(),
-                thread_id,
-            }),
-        )),
-        partition: 0,
+    let event = DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
+        EMAIL_LINK_ID.to_string(),
+        EmailTopicEvent::ThreadBackfilled(ThreadBackfilledMetadata {
+            link_id: EMAIL_LINK_ID,
+            owner: user_id(),
+            thread_id,
+        }),
+    ));
+    attach_event_coordinates(
+        Ok::<_, EventBrokerError>(event),
+        0,
         offset,
-        span: tracing::Span::none(),
-    }
+        tracing::Span::none(),
+    )
+    .expect("attached event")
 }
 
 fn received_agent_session_event(session: Uuid, offset: i64) -> ReceivedEvent {
@@ -2739,165 +2741,192 @@ fn standalone_call_deletion_indexes_by_call_without_channel_context() {
     );
 }
 
-/// Closed spans by name with their recorded fields, for asserting telemetry.
-#[derive(Clone, Default)]
-struct SpanCapture(Arc<std::sync::Mutex<Vec<CapturedSpan>>>);
-
-#[derive(Debug, Clone)]
-struct CapturedSpan {
-    name: &'static str,
-    fields: std::collections::HashMap<String, String>,
+/// Exports every finished span to memory, through the same OpenTelemetry layer
+/// production uses, so tests see real parents and end times.
+struct OtelCapture {
+    exporter: opentelemetry_sdk::trace::InMemorySpanExporter,
+    _provider: opentelemetry_sdk::trace::SdkTracerProvider,
+    _guard: tracing::subscriber::DefaultGuard,
 }
 
-struct FieldRecorder<'a>(&'a mut std::collections::HashMap<String, String>);
-
-impl tracing::field::Visit for FieldRecorder<'_> {
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0.insert(field.name().to_owned(), format!("{value:?}"));
-    }
-
-    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-        self.0.insert(field.name().to_owned(), value.to_owned());
-    }
-}
-
-impl<S> tracing_subscriber::Layer<S> for SpanCapture
-where
-    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
-{
-    fn on_new_span(
-        &self,
-        attrs: &tracing::span::Attributes<'_>,
-        id: &tracing::span::Id,
-        ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) {
-        let mut fields = std::collections::HashMap::new();
-        attrs.record(&mut FieldRecorder(&mut fields));
-        if let Some(span) = ctx.span(id) {
-            span.extensions_mut().insert(fields);
-        }
-    }
-
-    fn on_record(
-        &self,
-        id: &tracing::span::Id,
-        values: &tracing::span::Record<'_>,
-        ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) {
-        if let Some(span) = ctx.span(id)
-            && let Some(fields) = span
-                .extensions_mut()
-                .get_mut::<std::collections::HashMap<String, String>>()
-        {
-            values.record(&mut FieldRecorder(fields));
-        }
-    }
-
-    fn on_close(&self, id: tracing::span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
-        if let Some(span) = ctx.span(&id) {
-            let fields = span
-                .extensions()
-                .get::<std::collections::HashMap<String, String>>()
-                .cloned()
-                .unwrap_or_default();
-            self.0.lock().expect("capture lock").push(CapturedSpan {
-                name: span.name(),
-                fields,
-            });
-        }
-    }
-}
-
-impl SpanCapture {
-    fn install(&self) -> tracing::subscriber::DefaultGuard {
+impl OtelCapture {
+    fn install() -> Self {
+        use opentelemetry::trace::TracerProvider as _;
         use tracing_subscriber::layer::SubscriberExt as _;
-        tracing::subscriber::set_default(tracing_subscriber::registry().with(self.clone()))
+
+        let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+            .with_simple_exporter(exporter.clone())
+            .build();
+        let guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(
+            tracing_opentelemetry::layer().with_tracer(provider.tracer("search-processing-test")),
+        ));
+        Self {
+            exporter,
+            _provider: provider,
+            _guard: guard,
+        }
     }
 
-    fn named(&self, name: &str) -> Vec<CapturedSpan> {
-        self.0
-            .lock()
-            .expect("capture lock")
-            .iter()
+    /// Call after a first pass has registered the callsites under test:
+    /// another test thread may have cached a "never" interest for them before
+    /// this subscriber existed, so recompute it and measure a second pass.
+    fn rearm(&self) {
+        tracing::callsite::rebuild_interest_cache();
+        self.exporter.reset();
+    }
+
+    fn finished(&self, name: &str) -> Vec<opentelemetry_sdk::trace::SpanData> {
+        self.exporter
+            .get_finished_spans()
+            .expect("in-memory exporter")
+            .into_iter()
             .filter(|span| span.name == name)
-            .cloned()
             .collect()
     }
 }
 
-#[tokio::test]
-async fn coalesced_event_records_a_process_event_span_with_its_outcome() {
-    let capture = SpanCapture::default();
-    let _guard = capture.install();
-    let (pool, _receivers) = test_pool(1, 4);
-
-    for offset in [1, 2] {
-        let mut event = received_agent_session_event(AGENT_SESSION_ID, offset);
-        event.partition = 3;
-        let _ = pool.handoff(Ok::<_, EventBrokerError>(event)).await;
-    }
-
-    let spans = capture.named("process_event");
-    assert_eq!(
-        spans.len(),
-        1,
-        "only the coalesced event has finished: {spans:?}"
-    );
-    let fields = &spans[0].fields;
-    assert_eq!(fields["outcome"], "coalesced");
-    assert_eq!(fields["event_type"], "agent_session.renamed");
-    assert_eq!(fields["partition"], "3");
-    assert_eq!(fields["offset"], "2");
+fn attribute(span: &opentelemetry_sdk::trace::SpanData, key: &str) -> Option<String> {
+    span.attributes
+        .iter()
+        .find(|attribute| attribute.key.as_str() == key)
+        .map(|attribute| attribute.value.to_string())
 }
 
-#[test]
-fn dropped_outcome_marks_the_processing_span_failed() {
-    let capture = SpanCapture::default();
-    let _guard = capture.install();
-    let received = received_thread_backfilled_event(EMAIL_THREAD_ID, 9);
+fn kafka_record(
+    topic: &str,
+    key: String,
+    partition: i32,
+    offset: i64,
+) -> rdkafka::message::OwnedMessage {
+    rdkafka::message::OwnedMessage::new(
+        None,
+        Some(key.into_bytes()),
+        topic.to_owned(),
+        rdkafka::message::Timestamp::CreateTime(1_000),
+        partition,
+        offset,
+        None,
+    )
+}
 
-    for outcome in [EventOutcome::Indexed, EventOutcome::Dropped] {
-        record_outcome(&processing_span(&received), outcome);
+#[tokio::test]
+async fn coalesced_event_records_a_process_event_span_with_its_outcome() {
+    let capture = OtelCapture::install();
+    let (pool, _receivers) = test_pool(1, 8);
+
+    for session in [SECOND_AGENT_SESSION_ID, AGENT_SESSION_ID] {
+        capture.rearm();
+        for offset in [1, 2] {
+            let mut event = received_agent_session_event(session, offset);
+            event.partition = 3;
+            let _ = pool.handoff(Ok::<_, EventBrokerError>(event)).await;
+        }
     }
 
-    let spans = capture.named("process_event");
-    assert_eq!(spans.len(), 2);
-    assert_eq!(spans[0].fields["outcome"], "indexed");
-    assert!(!spans[0].fields.contains_key("otel.status_code"));
-    assert_eq!(spans[1].fields["outcome"], "dropped");
-    assert_eq!(spans[1].fields["otel.status_code"], "ERROR");
-    assert_eq!(spans[1].fields["event_type"], "email.thread_backfilled");
+    let spans = capture.finished("process_event");
+    let [coalesced] = spans.as_slice() else {
+        panic!("only the coalesced event has finished: {spans:?}");
+    };
+    assert_eq!(
+        attribute(coalesced, "outcome").as_deref(),
+        Some("coalesced")
+    );
+    assert_eq!(
+        attribute(coalesced, "event_type").as_deref(),
+        Some("agent_session.renamed")
+    );
+    assert_eq!(attribute(coalesced, "partition").as_deref(), Some("3"));
+    assert_eq!(attribute(coalesced, "offset").as_deref(), Some("2"));
 }
 
 #[test]
 fn received_record_span_names_its_event() {
-    use rdkafka::message::{OwnedMessage, Timestamp};
-
-    let capture = SpanCapture::default();
-    let _guard = capture.install();
-    let received = received_agent_session_event(AGENT_SESSION_ID, 4);
-    let record = OwnedMessage::new(
-        None,
-        Some(AGENT_SESSION_ID.to_string().into_bytes()),
-        macro_event_topics::MacroAgentSessionLifecycleTopic::TOPIC_STR.to_owned(),
-        Timestamp::NotAvailable,
+    let capture = OtelCapture::install();
+    let record = kafka_record(
+        macro_event_topics::MacroAgentSessionLifecycleTopic::TOPIC_STR,
+        AGENT_SESSION_ID.to_string(),
         1,
         4,
-        None,
     );
+    let mut id = None;
+    for _ in 0..2 {
+        capture.rearm();
+        let event = received_agent_session_event(AGENT_SESSION_ID, 4).event;
+        id = Some(event_id(&event));
+        let (span, received) = receive_record(&record, Ok::<_, EventBrokerError>(event));
+        let received = received.expect("decoded record");
+        assert_eq!(received.event_type, "agent_session.renamed");
+        assert_eq!(received.produced_at_ms, Some(1_000));
+        drop((span, received));
+    }
+    let id = id.expect("measured pass");
 
-    let span = consumer_span(&record, SearchProcessingConsumerGroup::GROUP_NAME);
-    record_event_identity(&span, &received.event);
-    drop(span);
-
-    let spans = capture.named("kafka.process");
-    assert_eq!(spans.len(), 1);
-    let fields = &spans[0].fields;
-    assert_eq!(fields["macro.event.type"], "agent_session.renamed");
+    let spans = capture.finished("kafka.process");
+    let [record] = spans.as_slice() else {
+        panic!("expected one record span, got {spans:?}");
+    };
     assert_eq!(
-        fields["macro.event.id"],
-        event_id(&received.event).to_string()
+        attribute(record, "macro.event.type").as_deref(),
+        Some("agent_session.renamed")
     );
-    assert_eq!(fields["agent.session.id"], AGENT_SESSION_ID.to_string());
-    assert_eq!(fields["messaging.kafka.offset"], "4");
+    assert_eq!(attribute(record, "macro.event.id"), Some(id.to_string()));
+    assert_eq!(
+        attribute(record, "agent.session.id"),
+        Some(AGENT_SESSION_ID.to_string())
+    );
+    assert_eq!(
+        attribute(record, "messaging.kafka.offset").as_deref(),
+        Some("4")
+    );
+}
+
+#[tokio::test]
+async fn record_span_covers_processing_and_fails_with_a_dropped_event() {
+    let capture = OtelCapture::install();
+    let record = kafka_record(MacroEmailTopic::TOPIC_STR, EMAIL_LINK_ID.to_string(), 2, 7);
+    for _ in 0..2 {
+        capture.rearm();
+        let event = received_thread_backfilled_event(EMAIL_THREAD_ID, 7).event;
+        let (span, received) = receive_record(&record, Ok::<_, EventBrokerError>(event));
+        let received = received.expect("decoded record");
+        // The poll loop is inside the record span only while it hands off.
+        async {}.instrument(span.clone()).await;
+        drop(span);
+
+        process_received(&received, |_| async {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            EventOutcome::Dropped
+        })
+        .await;
+        drop(received);
+    }
+
+    let records = capture.finished("kafka.process");
+    let processing = capture.finished("process_event");
+    let ([record], [processing]) = (records.as_slice(), processing.as_slice()) else {
+        panic!("expected one record and one processing span: {records:?} {processing:?}");
+    };
+    assert_eq!(processing.parent_span_id, record.span_context.span_id());
+    assert!(
+        record.end_time >= processing.end_time,
+        "the record span must cover the processing it waited for"
+    );
+    for span in [record, processing] {
+        assert!(
+            matches!(span.status, opentelemetry::trace::Status::Error { .. }),
+            "a dropped event fails {}",
+            span.name
+        );
+    }
+    assert_eq!(attribute(processing, "outcome").as_deref(), Some("dropped"));
+    assert_eq!(
+        attribute(processing, "event_type").as_deref(),
+        Some("email.thread_backfilled")
+    );
+    assert_eq!(
+        attribute(processing, "entity_id"),
+        Some(EMAIL_THREAD_ID.to_string())
+    );
+    assert!(attribute(processing, "record_age_ms").is_some());
 }
