@@ -9,10 +9,12 @@ use agent_session::domain::routines::{ConnectedApps, RoutineSessionsService};
 use agent_session::domain::service::AgentSessionService;
 use agent_session::inbound::routine_sessions::{RoutineSessionsState, routine_sessions_router};
 use axum::Router;
+use bots::domain::models::AgentMcpServer;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use pipedream_mcp::domain::ports::ConnectionStore;
+use scheduled_action::domain::ports::DraftApps;
 
 use crate::external_session_requests::BrokerExternalSessionRequests;
 
@@ -62,6 +64,28 @@ impl<Connections: ConnectionStore> ConnectedApps for PipedreamConnectedApps<Conn
             .into_iter()
             .filter(|connection| connection.enabled)
             .map(|connection| connection.app_slug)
+            .collect())
+    }
+}
+
+/// The same enabled connections, as the apps a routine's draft may require.
+#[async_trait::async_trait]
+impl<Connections: ConnectionStore> DraftApps for PipedreamConnectedApps<Connections> {
+    async fn connected(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> anyhow::Result<Vec<AgentMcpServer>> {
+        Ok(self
+            .0
+            .list(owner)
+            .await
+            .map_err(|error| anyhow::anyhow!("could not list Pipedream connections: {error:?}"))?
+            .into_iter()
+            .filter(|connection| connection.enabled)
+            .map(|connection| AgentMcpServer {
+                app_slug: connection.app_slug,
+                server_name: connection.server_name,
+            })
             .collect())
     }
 }
