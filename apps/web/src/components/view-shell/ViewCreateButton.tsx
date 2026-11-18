@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, type ButtonProps, cn } from '@ui';
@@ -5,8 +6,9 @@ import { Show, splitProps } from 'solid-js';
 import { ViewSidebar } from './ViewSidebar';
 
 /**
- * Shared desktop New action, including polymorphic dropdown triggers. In a
- * header it drops its label below a 600px header, as header actions do.
+ * Shared desktop New action, including polymorphic dropdown triggers. Inside
+ * an `@container/split-header` 600px or narrower it shows only its icon (and
+ * its caret, for a menu), as header actions do.
  */
 export function ViewCreateButton(
   props: ButtonProps & {
@@ -23,7 +25,7 @@ export function ViewCreateButton(
     'tooltip',
   ]);
   const sidebar = () => local.presentation === 'sidebar';
-  const label = () => local['aria-label'] ?? 'New';
+  const label = () => local['aria-label'] ?? t('create.new');
 
   return (
     <Button
@@ -50,7 +52,7 @@ export function ViewCreateButton(
       <span
         class={cn('truncate', !sidebar() && '@max-[600px]/split-header:hidden')}
       >
-        New
+        {t('create.new')}
       </span>
       <Show when={local.menu}>
         <Show when={sidebar()} fallback={<CaretDownIcon class="size-3" />}>

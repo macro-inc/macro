@@ -37,7 +37,8 @@ const FILES = [
  * The real field, hotkey engine and list controller, over local rows.
  * `?surface=sidebar` puts the field in a sidebar header, as Home and Chat
  * have it, instead of a list header. `?surface=header&width=<px>` puts it in
- * a real `ListHeader` of that width, beside a full set of header actions.
+ * a real `ListHeader` of that width, beside a full set of header actions;
+ * `&plainNew` gives its New no menu caret.
  */
 function Fixture() {
   const params = new URLSearchParams(location.search);
@@ -173,7 +174,10 @@ function Fixture() {
                     <For each={HEADER_ACTIONS}>
                       {(name) => <Button variant="secondary">{name}</Button>}
                     </For>
-                    <ViewCreateButton presentation="toolbar" menu />
+                    <ViewCreateButton
+                      presentation="toolbar"
+                      menu={!params.has('plainNew')}
+                    />
                     {field()}
                   </ListHeader>
                 </SplitPanelContext.Provider>

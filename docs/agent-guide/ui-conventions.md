@@ -28,9 +28,10 @@ in a detail header), never inside a group. Action groups use
 `variant="secondary" finish="raised"`, fully rounded ends, and 8px gaps. Keep
 the right side of a bar at one height: detail headers use `sm`/`icon-sm` segments
 (28px controls); collection headers, beside New and Search, use `md`/`icon-md`
-(32px). New and Search retain `md` sizing. Below a 600px header (the
-`@max-[600px]/split-header` rule header actions share), New drops its label and
-keeps its icon, caret, name and tooltip. The open Search field narrows, down
+(32px). New and Search retain `md` sizing. Inside an `@container/split-header`
+600px or narrower (the `@max-[600px]/split-header` rule header actions share),
+New drops its label and keeps its icon, its caret when it opens a menu, its name
+and its tooltip. The open Search field narrows, down
 to its 96px minimum, before the header's actions would push its end and its
 close button out of view; check a narrowed pane (Customers or Tasks at 760px,
 or beside a docked sidebar) with the field open. A block whose split header is

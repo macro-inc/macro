@@ -171,6 +171,15 @@ test('New drops its label in a narrow header so the open field fits', async ({
   const create = page.getByRole('button', { name: 'New' });
   await expect(create).toBeInViewport({ ratio: 1 });
   await expect(create.getByText('New')).toBeHidden();
+  // The plus icon and the menu caret both stay.
+  expect(
+    await create
+      .locator('svg')
+      .evaluateAll(
+        (icons) =>
+          icons.filter((icon) => icon.getBoundingClientRect().width > 0).length
+      )
+  ).toBe(2);
   await create.hover();
   await expect(page.getByRole('tooltip')).toHaveText('New');
 
@@ -178,4 +187,15 @@ test('New drops its label in a narrow header so the open field fits', async ({
   await expect(
     page.getByRole('button', { name: 'New' }).getByText('New')
   ).toBeVisible();
+});
+
+test('a New without a menu becomes a 32px square in a narrow header', async ({
+  page,
+}) => {
+  await open(page, '?surface=header&width=550&plainNew');
+  const create = page.getByRole('button', { name: 'New' });
+  await expect(create.getByText('New')).toBeHidden();
+  const box = await create.boundingBox();
+  expect(box?.width).toBeCloseTo(32, 0);
+  expect(box?.height).toBeCloseTo(32, 0);
 });
