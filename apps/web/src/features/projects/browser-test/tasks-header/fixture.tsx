@@ -7,12 +7,13 @@ import { MobileCreateButton } from '@components/app/mobile/MobileCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
+import { AddProjectTasks } from '../../add-project-tasks';
 import {
   type ProjectsContext,
   ProjectsProvider,
 } from '../../context/projects-context';
 import type { ProjectDetail } from '../../core/project';
-import { AddProjectTasks } from '../../views/add-project-tasks';
+import { NewProjectTaskPill } from '../../new-project-task';
 import { ProjectTasksList } from '../../views/project-tasks-list';
 
 const project: ProjectDetail = {
@@ -72,6 +73,12 @@ function Fixture() {
           }
           addTasksAction={
             readOnly ? undefined : <AddProjectTasks project={project} />
+          }
+        />
+        {/* The project detail floats this pill for every tab on touch. */}
+        <NewProjectTaskPill
+          onCreateTask={
+            readOnly ? undefined : () => setCreates((count) => count + 1)
           }
         />
         {/* The Tasks view's own floating pill (MobilePageActionRow), which
