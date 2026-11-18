@@ -206,7 +206,7 @@ function CalendarPageContent(props: { agenda: boolean }) {
   return (
     <div
       ref={tourTarget(CALENDAR_TOUR.grid)}
-      class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col not-touch:m-3 not-touch:overflow-hidden not-touch:rounded-xl not-touch:bg-surface"
+      class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col not-touch:m-3 not-touch:overflow-hidden not-touch:rounded-xl not-touch:bg-surface-3"
     >
       <Show when={props.agenda} fallback={<CalendarPages />}>
         <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">

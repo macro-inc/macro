@@ -21,7 +21,11 @@ desktop and mobile Join with work and personal Google accounts signed in; a work
 calendar should open Meet with the work account. Search results without loaded
 calendar account metadata and other conferencing providers keep their original URL.
 
-Day, Week, Month, and Agenda use an inset, rounded content card on desktop.
+Day, Week, Month, and Agenda use the same raised `surface-3` content card on
+desktop, with 12px outer gaps and rounded, clipped corners. Navigation controls
+and the month title stay outside; day headers, all-day events, and the grid stay
+inside. Pinning a left panel preserves the gap. In Day and Week, the opening
+7am label remains fully readable below the all-day lane.
 Desktop event creation and editing use one 384px composer, not a second split.
 A selected grid range or event anchors the floating composer beside that selection.
 **Pin event composer** and **Pin event details** replace the calendar's left sidebar;

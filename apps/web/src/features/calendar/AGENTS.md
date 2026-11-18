@@ -103,6 +103,9 @@ host lives in `../block-calendar/`.
 - Compose the desktop date-navigation/tabs/search row above the 22px month title
   and creation actions; retain the existing touch header and matching skeleton.
   The month picker uses 304px width and 64×40px choices.
+- Keep the desktop content card on `surface-3`, with 12px gaps and clipped rounded
+  corners; the navigation and month-title rows stay outside it in every view.
+  Leave the opening hour label fully inside the time-grid viewport.
 - Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
   focus scope attaches to real content and restores focus when the picker closes.
 - Keep Agenda on the navigation context, with five fourteen-day windows clipped

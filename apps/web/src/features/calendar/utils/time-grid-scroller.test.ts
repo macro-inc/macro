@@ -71,6 +71,36 @@ describe('applyTimeGridOpeningScroll', () => {
     expect(calendar.scrollToTime).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { top: 93, bottom: 111, expectedScroll: 418 },
+    { top: 102, bottom: 120, expectedScroll: 449 },
+    { top: 80, bottom: 98, expectedScroll: 449 },
+  ])(
+    'keeps the opening hour readable without resetting other scroll positions ($top)',
+    ({ top, bottom, expectedScroll }) => {
+      const root = gridRoot({ clientHeight: 600, scrollTop: 449 });
+      const scroller = root.querySelector('.fc-scroller')!;
+      const slot = document.createElement('div');
+      slot.className = 'fc-timegrid-slot';
+      slot.dataset.time = '07:00:00';
+      const label = document.createElement('span');
+      label.className = 'fc-timegrid-slot-label-cushion';
+      slot.append(label);
+      scroller.append(slot);
+      vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(0, 100, 600, 600)
+      );
+      vi.spyOn(label, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(0, top, 34, bottom - top)
+      );
+      const calendar = calendarStub();
+
+      expect(applyTimeGridOpeningScroll(root, calendar, '07:00:00')).toBe(true);
+      expect(scroller.scrollTop).toBe(expectedScroll);
+      expect(calendar.scrollToTime).not.toHaveBeenCalled();
+    }
+  );
+
   it('waits for a grid that has not laid out yet', () => {
     const calendar = calendarStub();
 

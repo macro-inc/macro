@@ -5,6 +5,7 @@ const SCROLL_THRESHOLD = 20;
 
 const GRADIENT_COLOR = {
   surface: 'var(--color-surface)',
+  'surface-3': 'var(--color-surface-3)',
   panel: 'var(--color-panel)',
   page: 'var(--color-page)',
   inset: 'var(--color-inset)',

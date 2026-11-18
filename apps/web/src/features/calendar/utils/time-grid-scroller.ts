@@ -61,8 +61,8 @@ export const TIME_GRID_OPENING_SCROLL_TIME = '07:00:00';
  * scroller at midnight once it becomes visible. Re-measuring and scrolling
  * again on the first laid-out frame restores the intended opening hour.
  *
- * Returns whether the grid has laid out, so callers can stop retrying. A grid
- * that already scrolled itself, and one a reader has scrolled, are left alone.
+ * Returns whether the grid has laid out, so callers can stop retrying. Existing
+ * scroll positions stay unchanged unless the opening label straddles the top edge.
  */
 export function applyTimeGridOpeningScroll(
   root: HTMLElement | undefined,
@@ -72,9 +72,22 @@ export function applyTimeGridOpeningScroll(
   const scroller = timeGridScroller(root);
   // Month views have no hour scroller and no opening hour to restore.
   if (!calendar || !scroller || scroller.clientHeight === 0) return false;
-  if (scroller.scrollTop !== 0) return true;
+  if (scroller.scrollTop === 0) {
+    calendar.updateSize();
+    calendar.scrollToTime(scrollTime);
+  }
 
-  calendar.updateSize();
-  calendar.scrollToTime(scrollTime);
+  // Hour labels sit above their grid line. Keep the opening label below the
+  // grid's 24px scroll fade, not half-clipped against the requested hour.
+  const label = root?.querySelector<HTMLElement>(
+    `.fc-timegrid-slot[data-time="${scrollTime}"] .fc-timegrid-slot-label-cushion`
+  );
+  if (label) {
+    const viewportTop = scroller.getBoundingClientRect().top;
+    const labelBox = label.getBoundingClientRect();
+    if (labelBox.top < viewportTop && labelBox.bottom > viewportTop) {
+      scroller.scrollTop -= Math.ceil(viewportTop - labelBox.top) + 24;
+    }
+  }
   return true;
 }

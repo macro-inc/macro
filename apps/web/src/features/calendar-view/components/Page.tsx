@@ -134,7 +134,7 @@ function CalendarScrollIndicators(props: {
           <ScrollIndicators
             scrollRef={() => scrollTarget.scrollElement}
             appearance="gradient"
-            gradientColor="panel"
+            gradientColor={isMobile() ? 'panel' : 'surface-3'}
             class="h-6"
           />
         </Portal>
