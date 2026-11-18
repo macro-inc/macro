@@ -1,0 +1,19 @@
+Cargo.lock
+  s_a79cb5c5d752a9::t_bd4555bcf76ad2 335-336,904,931
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9d09611189abc2fce7273042615d4349fa049f5c",
+  "prompts": {},
+  "sessions": {
+    "s_a79cb5c5d752a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8bf8f92a-181b-4d3a-aaa6-3d5c01f60534",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
