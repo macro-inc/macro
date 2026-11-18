@@ -1,3 +1,4 @@
+import { PaneVisibilityContext } from '@core/context/pane-visibility';
 import { render } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -475,5 +476,57 @@ describe('TraceFlow', () => {
       ['view.home', 'success'],
     ]);
     expect(operations).toEqual([{ name: 'app.boot', outcome: 'painted' }]);
+  });
+});
+
+describe('TraceFlow in a hidden (parked) pane', () => {
+  beforeEach(() => {
+    spans.length = 0;
+    operations.length = 0;
+    contexts.length = 0;
+  });
+
+  it('records nothing and never holds the visible navigation open', async () => {
+    const hidden = { hidden: () => true, suspended: () => true };
+    function Content() {
+      usePending('mail.items', () => true);
+      return null;
+    }
+    const navigation = beginInteraction('navigation');
+    render(() => (
+      <PaneVisibilityContext.Provider value={hidden}>
+        <TraceFlow name="view.mail">
+          <Content />
+        </TraceFlow>
+      </PaneVisibilityContext.Provider>
+    ));
+    navigation.end();
+    await flush();
+
+    expect(operations).toEqual([{ name: 'navigation', outcome: 'painted' }]);
+    expect(spans.map((span) => span.name)).toEqual(['navigation']);
+  });
+
+  it('cancels a view still loading when its pane is parked', async () => {
+    const [isHidden, setHidden] = createSignal(false);
+    function Content() {
+      usePending('mail.items', () => true);
+      return null;
+    }
+    render(() => (
+      <PaneVisibilityContext.Provider
+        value={{ hidden: isHidden, suspended: isHidden }}
+      >
+        <TraceFlow name="view.mail">
+          <Content />
+        </TraceFlow>
+      </PaneVisibilityContext.Provider>
+    ));
+    await flush();
+    expect(operations).toEqual([{ name: 'view.mail', outcome: undefined }]);
+
+    setHidden(true);
+    await flush();
+    expect(operations).toEqual([{ name: 'view.mail', outcome: 'cancelled' }]);
   });
 });

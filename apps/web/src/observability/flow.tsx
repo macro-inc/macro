@@ -1,3 +1,4 @@
+import { usePaneHidden } from '@core/context/pane-visibility';
 import {
   NOOP_SPAN,
   type Span,
@@ -165,6 +166,26 @@ function childNode(
   });
 }
 
+/**
+ * The node of a flow in a hidden view (a parked pane): already settled, so it
+ * records nothing and its loads never join or hold the visible view's trace.
+ */
+function hiddenNode(): FlowNode {
+  const root: FlowRoot = {
+    span: NOOP_SPAN,
+    name: 'hidden',
+    phaseCount: 0,
+    readyPhases: 0,
+  };
+  return createNode(
+    NOOP_SPAN,
+    root,
+    undefined,
+    () => {},
+    () => true
+  );
+}
+
 /** The nearest flow; a keyed flow replaces its node when the key changes. */
 interface FlowScope {
   /** The current node, read without tracking. */
@@ -325,13 +346,16 @@ export function TraceFlow(props: {
   children: JSX.Element;
 }): JSX.Element {
   const parent = useContext(FlowContext);
+  const hidden = usePaneHidden();
   const start = () =>
-    openNode(
-      parent,
-      untrack(() => props.name),
-      untrack(() => props.attributes),
-      untrack(() => props.sampling)
-    );
+    untrack(hidden)
+      ? hiddenNode()
+      : openNode(
+          parent,
+          untrack(() => props.name),
+          untrack(() => props.attributes),
+          untrack(() => props.sampling)
+        );
   const [current, setCurrent] = createSignal(start());
   const scope = flowScope(current);
   const releaseMount = scope.node.hold();
@@ -352,6 +376,16 @@ export function TraceFlow(props: {
         { defer: true }
       )
     );
+  // A view parked while loading stops timing it, as when it unmounted.
+  createEffect(
+    on(
+      hidden,
+      (isHidden) => {
+        if (isHidden) scope.node.abandon();
+      },
+      { defer: true }
+    )
+  );
   onCleanup(() => scope.node.abandon());
   return (
     <FlowContext.Provider value={scope}>{props.children}</FlowContext.Provider>
