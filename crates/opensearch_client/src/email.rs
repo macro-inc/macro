@@ -167,6 +167,18 @@ impl OpensearchClient {
         }
     }
 
+    /// Refreshes the email index, so a following search or delete-by-query
+    /// sees every write so far.
+    pub async fn refresh_email_index(&self) -> Result<()> {
+        resend_on_lost_connection(|| {
+            delete::email::refresh_index(
+                &self.inner,
+                models_opensearch::SearchIndex::Emails.as_ref(),
+            )
+        })
+        .await
+    }
+
     /// The inbox delete task OpenSearch is running for `link_id`, if any.
     async fn running_email_link_delete(
         &self,

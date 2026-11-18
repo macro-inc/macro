@@ -39,7 +39,8 @@ const MAX_POLL_ERRORS: u8 = 3;
 /// Failed progress reads between later warnings, about five minutes apart.
 const POLL_ERRORS_PER_WARNING: u32 = 60;
 /// How long progress may stay unreadable before the delete is given up on and
-/// its slot freed.
+/// its slot freed. Its task may still be running then, so past this the
+/// [`MAX_RUNNING`] limit is best effort.
 const UNREADABLE_LIMIT: Duration = Duration::from_secs(30 * 60);
 /// Attempts to start a task that waited for its turn or replaces a failed one.
 const START_ATTEMPTS: u8 = 3;
@@ -57,6 +58,8 @@ pub(crate) trait DeleteTasks: Send + Sync + 'static {
         &self,
         task_id: &EmailDeleteTaskId,
     ) -> impl Future<Output = anyhow::Result<Option<EmailDeleteTask>>> + Send;
+    /// Makes every write so far visible to the next delete-by-query.
+    fn refresh(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 impl DeleteTasks for OpensearchClient {
@@ -71,6 +74,10 @@ impl DeleteTasks for OpensearchClient {
         task_id: &EmailDeleteTaskId,
     ) -> anyhow::Result<Option<EmailDeleteTask>> {
         Ok(self.email_delete_task(task_id).await?)
+    }
+
+    async fn refresh(&self) -> anyhow::Result<()> {
+        Ok(self.refresh_email_index().await?)
     }
 }
 
@@ -360,12 +367,21 @@ impl<T: DeleteTasks> MailboxDeletes<T> {
                 return report(FollowOutcome::Failed);
             }
             tracing::warn!(failure, "inbox search delete failed, starting it again");
-            // Wait past a scheduled refresh, so the replacement sees what the
-            // failed task deleted and what changed under it.
-            tokio::select! {
+            // The replacement's scan must see what the failed task deleted and
+            // what changed under it, so refresh first; if that fails, wait past
+            // a scheduled refresh instead.
+            let refreshed = tokio::select! {
                 biased;
                 () = self.shutdown.cancelled() => return report(FollowOutcome::NotStarted),
-                () = tokio::time::sleep(self.poll_interval) => {}
+                refreshed = self.tasks.refresh() => refreshed,
+            };
+            if let Err(error) = refreshed {
+                tracing::warn!(error = ?error, "could not refresh the email index before restarting an inbox delete");
+                tokio::select! {
+                    biased;
+                    () = self.shutdown.cancelled() => return report(FollowOutcome::NotStarted),
+                    () = tokio::time::sleep(self.poll_interval) => {}
+                }
             }
             restarts += 1;
             match self.start_task(link_id).await {

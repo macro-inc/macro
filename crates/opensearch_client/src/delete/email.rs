@@ -434,7 +434,7 @@ where
     })
 }
 
-async fn refresh_index(client: &opensearch::OpenSearch, index: &str) -> Result<()> {
+pub(crate) async fn refresh_index(client: &opensearch::OpenSearch, index: &str) -> Result<()> {
     const OPERATION: OpensearchOperation = OpensearchOperation::RefreshEmailIndex;
     let response = client
         .indices()

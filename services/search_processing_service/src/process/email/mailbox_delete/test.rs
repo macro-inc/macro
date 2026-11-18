@@ -29,6 +29,7 @@ struct FakeTasks {
     starts: Mutex<VecDeque<Scripted<anyhow::Result<EmailDeleteTaskId>>>>,
     progress: Mutex<HashMap<EmailDeleteTaskId, VecDeque<Scripted<Reply>>>>,
     started: Mutex<Vec<Uuid>>,
+    refreshes: std::sync::atomic::AtomicUsize,
 }
 
 impl FakeTasks {
@@ -58,6 +59,7 @@ impl FakeTasks {
                     .collect(),
             ),
             started: Mutex::default(),
+            refreshes: std::sync::atomic::AtomicUsize::default(),
         })
     }
 
@@ -96,6 +98,12 @@ impl DeleteTasks for FakeTasks {
             Scripted::Answer(reply) => reply,
             Scripted::Hang => std::future::pending().await,
         }
+    }
+
+    async fn refresh(&self) -> anyhow::Result<()> {
+        self.refreshes
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(())
     }
 }
 
@@ -175,6 +183,11 @@ async fn a_failed_task_is_started_once_more() {
     assert_eq!(report.outcome, FollowOutcome::Completed);
     assert_eq!(report.restarts, 1);
     assert_eq!(tasks.started(), [LINK_ID]);
+    assert_eq!(
+        tasks.refreshes.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "the replacement starts after a refresh"
+    );
 }
 
 #[tokio::test(start_paused = true)]
