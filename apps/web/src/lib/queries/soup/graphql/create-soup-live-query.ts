@@ -17,7 +17,6 @@ import {
   runWithOwner,
   untrack,
 } from 'solid-js';
-import { match } from 'ts-pattern';
 import { NIL as NIL_UUID } from 'uuid';
 import { arrayEquals } from '../../../core/util/compareUtils';
 import { createBrowserOfflineSignal } from '../../../core/util/connectivity';
@@ -100,16 +99,17 @@ export type SoupLiveQueryOptions = {
   localReconciliation?: 'without-email';
 };
 
+const SOUP_DOCUMENTS = {
+  'channel-list': ChannelListSoupDocument,
+  preview: SoupPreviewPageDocument,
+} satisfies Record<SoupProjection, unknown>;
+
+const soupDocumentFor = (projection: SoupProjection | undefined) =>
+  projection ? SOUP_DOCUMENTS[projection] : SoupDocument;
+
 // A page result can carry the viewer without its `soup` field. Selection runs
 // over every loaded page, so such a page reads as unloaded instead of failing
 // the whole list.
-const soupDocumentFor = (projection: SoupProjection | undefined) =>
-  match(projection)
-    .with('channel-list', () => ChannelListSoupDocument)
-    .with('preview', () => SoupPreviewPageDocument)
-    .with(undefined, () => SoupDocument)
-    .exhaustive();
-
 const hasSoupPage = (
   page: SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery
 ): boolean => page.user?.soup != null;
@@ -229,6 +229,10 @@ export function createSoupLiveQuery(
     ChannelListItemFieldsFragmentDoc
   );
   const previewItemSelection = selectRecords(SoupItemPreviewFieldsFragmentDoc);
+  const projectionSelections = {
+    'channel-list': channelListItemSelection,
+    preview: previewItemSelection,
+  } satisfies Record<SoupProjection, unknown>;
   const mailItemSelection = selectRecords(MailItemFieldsFragmentDoc);
   let localRequest = 0;
   let localEvaluationRunning = false;
@@ -598,11 +602,9 @@ export function createSoupLiveQuery(
       records,
       withoutEmail,
       mailView,
-      select: match(queryOptions.projection)
-        .with('channel-list', () => channelListItemSelection)
-        .with('preview', () => previewItemSelection)
-        .with(undefined, () => soupItemSelection)
-        .exhaustive(),
+      select: queryOptions.projection
+        ? projectionSelections[queryOptions.projection]
+        : soupItemSelection,
       source: {
         filters: withoutEmail
           ? {
