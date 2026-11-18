@@ -48,13 +48,13 @@ pub async fn get_batch_preview_handler(
         .authorization
         .as_ref()
         .and_then(UserOrInternalServiceAuthorization::acting_user)
-        .map(|user| user.macro_user_id.to_string());
+        .map(|user| &user.macro_user_id);
 
     let document_preview_results =
         macro_db_client::document::preview::batch_get_document_preview_v2(
             &ctx.db,
             &document_ids,
-            viewer_id.as_deref(),
+            viewer_id,
         )
         .await
         .map_err(|err| {
