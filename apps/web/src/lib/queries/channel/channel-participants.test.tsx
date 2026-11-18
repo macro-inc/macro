@@ -18,6 +18,7 @@ vi.mock('../client', () => ({
 
 const detail = vi.hoisted(() => ({
   pending: true,
+  error: null as unknown,
   entities: [] as unknown[],
   listeners: new Set<() => void>(),
 }));
@@ -32,9 +33,14 @@ vi.mock('./detail', async () => {
         return detail.pending;
       },
       isLoading: false,
+      get error() {
+        version();
+        return detail.error;
+      },
       get data() {
         version();
-        return detail.pending ? undefined : { entities: detail.entities };
+        if (detail.pending || detail.error) return undefined;
+        return { entities: detail.entities };
       },
     })),
   };
@@ -74,6 +80,7 @@ function participant(
 
 function setDetail(participants: ChannelParticipant[] | undefined) {
   detail.pending = participants === undefined;
+  detail.error = null;
   detail.entities = participants
     ? [
         {
@@ -112,6 +119,7 @@ function mount() {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.useRealTimers();
   setDetail(undefined);
 });
 
@@ -201,6 +209,54 @@ describe('useChannelParticipantsQuery', () => {
 
     add.mutate({ channelId: 'channel-2', participants: ['other'] });
     await waitFor(() => expect(add.isPending).toBe(true));
+    expect(ids()).toEqual(['owner']);
+  });
+
+  it('keeps the participants on screen when a refresh fails', () => {
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    const { query, ids } = mount();
+
+    detail.error = new Error('refresh failed');
+    for (const listener of detail.listeners) listener();
+
+    expect(query.isSuccess).toBe(true);
+    expect(ids()).toEqual(['owner']);
+  });
+
+  it('lets a later change made elsewhere win over a confirmed remove', async () => {
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'owner'),
+      participant('member', '2026-01-02T00:00:00Z'),
+    ]);
+    storage.removeParticipantsFromChannel.mockResolvedValue(ok({}));
+    const { remove, ids } = mount();
+
+    remove.mutate({ channelId: 'channel-1', participants: ['member'] });
+    await waitFor(() => expect(remove.isSuccess).toBe(true));
+    expect(ids()).toEqual(['owner']);
+
+    // The soup update confirms the remove, then the member is added back elsewhere.
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'owner'),
+      participant('member', '2026-01-05T00:00:00Z'),
+    ]);
+    expect(ids()).toEqual(['owner', 'member']);
+  });
+
+  it('stops showing a succeeded add whose soup update never arrives', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['new'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    expect(ids()).toEqual(['owner', 'new']);
+
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(ids()).toEqual(['owner', 'new']);
+    await vi.advanceTimersByTimeAsync(2_000);
     expect(ids()).toEqual(['owner']);
   });
 });

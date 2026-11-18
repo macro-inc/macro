@@ -1,6 +1,13 @@
 import type { ChannelEntity } from '@entity';
 import { type Mutation, useMutationState } from '@tanstack/solid-query';
-import { type Accessor, createMemo } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import { queryClient } from '../client';
 import { createChannelDetailQuery } from './detail';
 import {
@@ -10,7 +17,8 @@ import {
 } from './participants';
 import type { ChannelParticipant } from './types';
 
-type PendingParticipantChange = {
+type ParticipantChange = {
+  id: number;
   kind: 'add' | 'remove';
   channelId: string;
   userIds: string[];
@@ -18,9 +26,30 @@ type PendingParticipantChange = {
   settled: boolean;
 };
 
-function selectPendingChange(
+/** What one reader remembers about the changes it showed. */
+type Overlay = {
+  data: ChannelParticipant[] | undefined;
+  /** Changes this reader saw in flight. */
+  seenPending: ReadonlySet<number>;
+  /** Succeeded changes still shown: the roster they succeeded over, and since when. */
+  settled: ReadonlyMap<number, { roster: string; since: number }>;
+  /** Succeeded changes a newer record has superseded; never shown again. */
+  superseded: ReadonlySet<number>;
+  /** When the next succeeded change stops showing. */
+  expiresAt: number | undefined;
+};
+
+const EMPTY_OVERLAY: Overlay = {
+  data: undefined,
+  seenPending: new Set(),
+  settled: new Map(),
+  superseded: new Set(),
+  expiresAt: undefined,
+};
+
+function selectChange(
   mutation: Mutation<unknown, Error, unknown, unknown>
-): PendingParticipantChange | undefined {
+): ParticipantChange | undefined {
   const { status, variables, submittedAt } = mutation.state;
   // A failed change shows nothing, which is its rollback.
   if (status !== 'pending' && status !== 'success') return undefined;
@@ -29,6 +58,7 @@ function selectPendingChange(
   const kind = mutation.options.mutationKey?.at(-1);
   if (kind !== 'add' && kind !== 'remove') return undefined;
   return {
+    id: mutation.mutationId,
     kind,
     channelId: vars.channelId,
     userIds: vars.participants,
@@ -37,44 +67,102 @@ function selectPendingChange(
   };
 }
 
-function applyPendingChanges(
+function rosterOf(participants: readonly ChannelParticipant[]) {
+  return participants
+    .map((participant) => participant.user_id)
+    .sort()
+    .join('\n');
+}
+
+function recordShows(
+  change: ParticipantChange,
+  participants: readonly ChannelParticipant[]
+) {
+  const present = new Set(
+    participants.map((participant) => participant.user_id)
+  );
+  return change.kind === 'add'
+    ? change.userIds.every((userId) => present.has(userId))
+    : change.userIds.every((userId) => !present.has(userId));
+}
+
+function applyChange(
   channelId: string,
   participants: ChannelParticipant[],
-  changes: readonly (PendingParticipantChange | undefined)[]
+  change: ParticipantChange
 ): ChannelParticipant[] {
-  let result = participants;
-  const now = Date.now();
+  if (change.kind === 'remove') {
+    const removed = new Set(change.userIds);
+    return participants.filter(
+      (participant) => !removed.has(participant.user_id)
+    );
+  }
+  const present = new Set(
+    participants.map((participant) => participant.user_id)
+  );
+  const joinedAt = new Date(change.submittedAt).toISOString();
+  const added = change.userIds
+    .filter((userId) => !present.has(userId))
+    .map(
+      (userId): ChannelParticipant => ({
+        channel_id: channelId,
+        user_id: userId,
+        role: 'member',
+        joined_at: joinedAt,
+        left_at: null,
+      })
+    );
+  return added.length ? [...participants, ...added] : participants;
+}
+
+/**
+ * Shows the channel's adds and removes over its record: in flight, and once
+ * they succeed until the record shows them, the record changes otherwise
+ * (someone changed it since), or the change has shown for a while without its
+ * soup update arriving.
+ */
+export function overlayParticipantChanges(
+  channelId: string,
+  participants: ChannelParticipant[] | undefined,
+  changes: readonly (ParticipantChange | undefined)[],
+  previous: Overlay,
+  now: number
+): Overlay {
+  if (!participants)
+    return { ...previous, data: undefined, expiresAt: undefined };
+  const roster = rosterOf(participants);
+  const seenPending = new Set<number>();
+  const settled = new Map<number, { roster: string; since: number }>();
+  const superseded = new Set<number>();
+  let expiresAt: number | undefined;
+  let data = participants;
   for (const change of changes) {
     if (!change || change.channelId !== channelId) continue;
-    // The soup update has long arrived; a later change made elsewhere wins.
-    if (
-      change.settled &&
-      now - change.submittedAt > CHANNEL_PARTICIPANTS_MUTATION_GC_MS
-    )
-      continue;
-    if (change.kind === 'remove') {
-      const removed = new Set(change.userIds);
-      result = result.filter(
-        (participant) => !removed.has(participant.user_id)
-      );
+    if (!change.settled) {
+      seenPending.add(change.id);
+      data = applyChange(channelId, data, change);
       continue;
     }
-    const present = new Set(result.map((participant) => participant.user_id));
-    const joinedAt = new Date(change.submittedAt).toISOString();
-    const added = change.userIds
-      .filter((userId) => !present.has(userId))
-      .map(
-        (userId): ChannelParticipant => ({
-          channel_id: channelId,
-          user_id: userId,
-          role: 'member',
-          joined_at: joinedAt,
-          left_at: null,
-        })
-      );
-    if (added.length) result = [...result, ...added];
+    const seen = previous.settled.get(change.id) ?? {
+      roster,
+      // A reader opened after the change succeeded times it from its submission.
+      since: previous.seenPending.has(change.id) ? now : change.submittedAt,
+    };
+    const expires = seen.since + CHANNEL_PARTICIPANTS_MUTATION_GC_MS;
+    if (
+      previous.superseded.has(change.id) ||
+      seen.roster !== roster ||
+      recordShows(change, participants) ||
+      now >= expires
+    ) {
+      superseded.add(change.id);
+      continue;
+    }
+    settled.set(change.id, seen);
+    expiresAt = Math.min(expiresAt ?? expires, expires);
+    data = applyChange(channelId, data, change);
   }
-  return result;
+  return { data, seenPending, settled, superseded, expiresAt };
 }
 
 /**
@@ -91,25 +179,50 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
   const changes = useMutationState(
     () => ({
       filters: { mutationKey: CHANNEL_PARTICIPANTS_MUTATION_KEY },
-      select: selectPendingChange,
+      select: selectChange,
     }),
     () => queryClient
   );
-  const confirmed = createMemo(() => {
+  const confirmed = createMemo<
+    | { channelId: string; participants: ChannelParticipant[] | undefined }
+    | undefined
+  >((previous) => {
     if (query.isPending) return undefined;
     const id = channelId();
+    // A failed refresh keeps the participants on screen.
+    if (query.error && previous?.channelId === id) return previous;
     const entity = query.data?.entities.find(
       (entity): entity is ChannelEntity =>
         entity.type === 'channel' && entity.id === id
     );
-    return entity?.participants;
+    return { channelId: id, participants: entity?.participants };
   });
-  const data = createMemo(() => {
-    const participants = confirmed();
-    return participants
-      ? applyPendingChanges(channelId(), participants, changes())
-      : undefined;
-  });
+  // Ticks when a succeeded change's time to show runs out.
+  const [tick, setTick] = createSignal(0);
+  const overlay = createMemo<Overlay>((previous) => {
+    tick();
+    return overlayParticipantChanges(
+      channelId(),
+      confirmed()?.participants,
+      changes(),
+      previous,
+      Date.now()
+    );
+  }, EMPTY_OVERLAY);
+  createEffect(
+    on(
+      () => overlay().expiresAt,
+      (expiresAt) => {
+        if (expiresAt === undefined) return;
+        const timer = setTimeout(
+          () => setTick((value) => value + 1),
+          Math.max(0, expiresAt - Date.now())
+        );
+        onCleanup(() => clearTimeout(timer));
+      }
+    )
+  );
+  const data = () => overlay().data;
   return {
     get isPending() {
       return query.isPending;
