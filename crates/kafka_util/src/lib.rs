@@ -413,19 +413,27 @@ impl KafkaEventProducer {
     }
 
     /// Sends a keyed payload to `topic` and waits for delivery confirmation.
+    /// `event_type`, the payload's event type, is recorded on the publish span.
     #[tracing::instrument(
         name = "kafka.publish",
         err,
-        skip(self, payload),
+        skip(self, event_type, payload),
         fields(
             otel.kind = "producer",
             messaging.system = "kafka",
             messaging.operation.name = "publish",
             messaging.operation.type = "send",
             messaging.destination.name = topic,
+            macro.event.type = event_type,
         )
     )]
-    pub async fn send(&self, topic: &str, key: &str, payload: &[u8]) -> KafkaResult<()> {
+    pub async fn send(
+        &self,
+        topic: &str,
+        key: &str,
+        event_type: Option<&str>,
+        payload: &[u8],
+    ) -> KafkaResult<()> {
         let record = FutureRecord::to(topic)
             .key(key)
             .payload(payload)
