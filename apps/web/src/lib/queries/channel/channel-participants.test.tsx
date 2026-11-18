@@ -179,6 +179,19 @@ describe('useChannelParticipantsQuery', () => {
     });
   });
 
+  it('never asks REST while the GraphQL read is pending or failed', async () => {
+    const { query } = mount();
+    expect(query.isPending).toBe(true);
+
+    detail.pending = false;
+    detail.error = new Error('unavailable');
+    for (const listener of detail.listeners) listener();
+    await Promise.resolve();
+
+    expect(query.isSuccess).toBe(false);
+    expect(storage.getChannelParticipants).not.toHaveBeenCalled();
+  });
+
   it('has no participants for a channel the viewer cannot read', async () => {
     storage.getChannelParticipants.mockResolvedValue(
       err([{ code: 'UNAUTHORIZED', message: 'forbidden' }])

@@ -48,10 +48,10 @@ async function readParticipantsFromRest(
             channel_id: channelId,
           })
         );
-        return participants.map((participant) => ({
-          ...participant,
-          left_at: null,
-        }));
+        // Earliest joined first, as the soup record lists them.
+        return participants
+          .map((participant) => ({ ...participant, left_at: null }))
+          .sort((a, b) => Date.parse(a.joined_at) - Date.parse(b.joined_at));
       } catch (error) {
         span.error(error);
         throw error;
