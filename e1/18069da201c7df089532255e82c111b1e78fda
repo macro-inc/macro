@@ -1,0 +1,83 @@
+crates/agent_permissions/src/domain/model.rs
+  s_6966afebcdde0a::t_63ae316cce5718 31,45,48,56,301,312,396
+crates/agent_permission_registry/src/lib.rs
+  s_6966afebcdde0a::t_63ae316cce5718 23
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_6966afebcdde0a::t_56ed5011f82e7f 20,83-86,4060-4125,4376-4432,4490-4776
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentToolPermissions.ts
+  s_6966afebcdde0a::t_8eb04d113e15cd 1-40
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentToolPermissionsSessionRules.ts
+  s_6966afebcdde0a::t_bb933a5d0b9ce6 1-13
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_6966afebcdde0a::t_e35e656cc56f55 109-110,319,342,473,477-499
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/loosenedOperation.ts
+  s_6966afebcdde0a::t_ea2561799cfc30 1-23
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/permissionAction.ts
+  s_6966afebcdde0a::t_566612c79d9acc 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/tightenToolPermissionsResponse.ts
+  s_6966afebcdde0a::t_7d91b3d3a85dfb 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionAction.ts
+  s_6966afebcdde0a::t_016fb7ddbf3c79 1-29
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionAppliedTo.ts
+  s_6966afebcdde0a::t_56275cea24ada0 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionCatalog.ts
+  s_6966afebcdde0a::t_1c6a749cea7f19 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionCatalogAction.ts
+  s_6966afebcdde0a::t_6ad3895088a414 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionCatalogGroup.ts
+  s_6966afebcdde0a::t_8b04786080f846 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionCatalogTool.ts
+  s_6966afebcdde0a::t_56703cdf7aeee3 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionChange.ts
+  s_6966afebcdde0a::t_de1ffcf3276552 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionChangeState.ts
+  s_6966afebcdde0a::t_d90e0fdd926d96 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionChanges.ts
+  s_6966afebcdde0a::t_256fa6db70a508 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionError.ts
+  s_6966afebcdde0a::t_5214bcc79799ba 1-23
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionErrorOperations.ts
+  s_6966afebcdde0a::t_3b1164e46fee3e 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionErrorTargets.ts
+  s_6966afebcdde0a::t_3615a3eb17e5d7 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionGroup.ts
+  s_6966afebcdde0a::t_836e48fdfca55d 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionOrigin.ts
+  s_6966afebcdde0a::t_c847887868a743 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionOverride.ts
+  s_6966afebcdde0a::t_b2a504ae22f983 1-24
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionPolicyKind.ts
+  s_6966afebcdde0a::t_7f1a1eaa13c662 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionRule.ts
+  s_6966afebcdde0a::t_c3e461fb933716 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionState.ts
+  s_6966afebcdde0a::t_259cd06457a7a4 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTarget.ts
+  s_6966afebcdde0a::t_9a29f20fddf37e 1-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOf.ts
+  s_6966afebcdde0a::t_4cf52896c091db 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfKind.ts
+  s_6966afebcdde0a::t_438a76ca117fac 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfThree.ts
+  s_6966afebcdde0a::t_8a050ff199b4af 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfThreeKind.ts
+  s_6966afebcdde0a::t_49b05267c6d6ec 1-14
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_6966afebcdde0a::t_c260a3eccea471 3520-3580,3779-3817,3852-4142,5645-5707,7698-7724,7903-7907,9075-9089,9105-9430,9848-9851
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e118069da201c7df089532255e82c111b1e78fda",
+  "prompts": {},
+  "sessions": {
+    "s_6966afebcdde0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "13694447-aca1-404a-8fbf-c900186fe6c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
