@@ -250,26 +250,27 @@ pub fn unknown_targets(catalog: &Catalog, changes: &[Change]) -> Vec<Target> {
         .collect()
 }
 
-/// Whether a stored layer keeps `state` for `target`. A group's action is
-/// never stored as always (its default); an overlay holds restrictions only.
-fn stores(target: &Target, state: PermissionState, overlay: bool) -> bool {
+/// Whether a write keeps `state` for `target`. A group's action is never
+/// stored as always (its default); a restriction (a tightening, or an
+/// overlay) never stores always at all: on a tool it would exempt it from a
+/// stricter group setting.
+fn stores(target: &Target, state: PermissionState, restriction: bool) -> bool {
     match target {
         Target::GroupAction { .. } => state != PermissionState::Always,
-        Target::Tool { .. } => !overlay || state != PermissionState::Always,
+        Target::Tool { .. } => !restriction || state != PermissionState::Always,
     }
 }
 
-/// The changes as the store applies them: a state the layer does not keep
-/// becomes a removal.
-/// A target named twice keeps its last change.
-pub fn normalize(changes: Vec<Change>, overlay: bool) -> Vec<Change> {
+/// The changes as the store applies them: a state the write does not keep
+/// becomes a removal. A target named twice keeps its last change.
+pub fn normalize(changes: Vec<Change>, restriction: bool) -> Vec<Change> {
     let mut normalized: Vec<Change> = Vec::with_capacity(changes.len());
     for change in changes {
         normalized.retain(|earlier| earlier.target != change.target);
         normalized.push(Change {
             state: change
                 .state
-                .filter(|state| stores(&change.target, *state, overlay)),
+                .filter(|state| stores(&change.target, *state, restriction)),
             target: change.target,
         });
     }

@@ -6,11 +6,53 @@ use sqlx::PgPool;
 
 use super::*;
 use crate::domain::model::PermissionState;
+use crate::domain::ports::{Write, WriteTo};
 
 const OWNER: &str = "macro|perm-owner@example.com";
 const OTHER: &str = "macro|perm-other@example.com";
 const AGENT: BotId = BotId::new_from_uuid(Uuid::from_u128(0x91000000_0000_0000_0000_000000000021));
 const SESSION: Uuid = Uuid::from_u128(0x91000000_0000_0000_0000_000000000031);
+
+/// Writes that apply `changes` as given, as the service's plans do once
+/// they pass.
+impl PgPermissionStore {
+    async fn apply(
+        &self,
+        owner: &PolicyOwner,
+        changes: &[Change],
+        by: &MacroUserIdStr<'static>,
+        via_agent: bool,
+    ) -> Result<(), PgPermissionStoreError> {
+        let write = Write {
+            owner,
+            session: None,
+            to: WriteTo::Saved,
+            by,
+            via_agent,
+        };
+        let planned = self.write(write, |_, _| Ok(changes.to_vec())).await?;
+        assert!(planned.is_ok());
+        Ok(())
+    }
+
+    async fn apply_session(
+        &self,
+        session: AgentSessionId,
+        changes: &[Change],
+        by: &MacroUserIdStr<'static>,
+    ) -> Result<(), PgPermissionStoreError> {
+        let write = Write {
+            owner: &PolicyOwner::Agent(AGENT),
+            session: Some(session),
+            to: WriteTo::Session(session),
+            by,
+            via_agent: true,
+        };
+        let planned = self.write(write, |_, _| Ok(changes.to_vec())).await?;
+        assert!(planned.is_ok());
+        Ok(())
+    }
+}
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_owned()).unwrap()
@@ -247,4 +289,45 @@ async fn rows_go_with_their_agent_person_and_session(pool: PgPool) {
         .await
         .unwrap();
     assert!(store.rules(&agent).await.unwrap().is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("permissions"))
+)]
+async fn a_write_reads_both_layers_and_a_refused_plan_writes_nothing(pool: PgPool) {
+    let store = PgPermissionStore::new(pool);
+    let owner = PolicyOwner::Agent(AGENT);
+    let session = AgentSessionId::new_from_uuid(SESSION);
+    store
+        .apply(
+            &owner,
+            &[group_action(Some(PermissionState::Ask))],
+            &user(OWNER),
+            false,
+        )
+        .await
+        .unwrap();
+    store
+        .apply_session(session, &[tool(Some(PermissionState::Never))], &user(OTHER))
+        .await
+        .unwrap();
+
+    let write = Write {
+        owner: &owner,
+        session: Some(session),
+        to: WriteTo::Saved,
+        by: &user(OWNER),
+        via_agent: true,
+    };
+    let refused = store
+        .write(write, |saved, overlay| {
+            assert_eq!((saved.len(), overlay.len()), (1, 1));
+            Err(PermissionError::Forbidden)
+        })
+        .await
+        .unwrap();
+
+    assert!(matches!(refused, Err(PermissionError::Forbidden)));
+    assert_eq!(store.rules(&owner).await.unwrap().len(), 1);
 }
