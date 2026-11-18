@@ -258,7 +258,7 @@ impl Repository for PostgresRepository {
         record.revision = record.revision.saturating_add(1);
         let json = encode(&record)?;
         let updated = sqlx::query!(
-            "UPDATE scheduling_booking SET status = $2, record = $3, recovery_at = $5 WHERE id = $1 AND status = $4 AND COALESCE(record->>'revision', '0') = $8 AND ($4 <> 'processing' OR (record->'operation'->>'id' IS NOT DISTINCT FROM $6 AND record->'operation'->>'attempt' IS NOT DISTINCT FROM $7))",
+            "UPDATE scheduling_booking SET status = $2, record = $3, recovery_at = $5, starts_at = $9, ends_at = $10 WHERE id = $1 AND status = $4 AND COALESCE(record->>'revision', '0') = $8 AND ($4 <> 'processing' OR (record->'operation'->>'id' IS NOT DISTINCT FROM $6 AND record->'operation'->>'attempt' IS NOT DISTINCT FROM $7))",
             record.booking.id,
             status(record.booking.status),
             json,
@@ -266,7 +266,9 @@ impl Repository for PostgresRepository {
             if matches!(record.booking.status, BookingStatus::Processing | BookingStatus::Failed) { record.operation.as_ref().filter(|o| o.abandoned_at.is_none()).map(|o| o.retry_at) } else { None },
             record.operation.as_ref().map(|o| o.id.to_string()),
             record.operation.as_ref().map(|o| o.attempt.to_string()),
-            expected_revision
+            expected_revision,
+            record.booking.starts_at,
+            record.booking.ends_at
         )
         .execute(&mut *tx)
         .await

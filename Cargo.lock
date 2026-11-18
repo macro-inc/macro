@@ -4043,7 +4043,6 @@ dependencies = [
  "email_api_client",
  "email_db_client",
  "email_utils",
- "futures",
  "google_token",
  "macro_auth",
  "macro_authorization",

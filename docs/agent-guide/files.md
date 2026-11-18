@@ -243,9 +243,15 @@ details include Print, and DOCX files include Download DOCX. Markdown details
 use the document menu, which already includes Download. Spreadsheets keep the
 editor's Import and export menu for Excel and CSV downloads. Choose the current location
 breadcrumb to return to the list; choosing an ancestor file drops newer detail
-entries. Opening a list row or sidebar favorite pushes a new one-item detail path;
-sidebar favorites start from My Files instead of inheriting a previously selected
-folder. Only navigation originating inside a detail appends to that path. Browser
+entries. Opening a list row or a sidebar shortcut (a favorite, or an item in the
+Databases section) pushes a new one-item detail path; sidebar shortcuts start
+from My Files instead of inheriting a previously selected folder, and a new item
+opens in the list that holds it (its folder, else My Files). Only navigation
+originating inside a detail appends to that path. Only a file opened from a Drive
+list names that list as its location (`My Files ›`, `Shared with me ›`, a folder
+path); a sidebar shortcut, a call, or a file opened from anywhere else (an email
+attachment, a channel, search, a link) shows no location breadcrumb, nor do the
+files opened from inside it. Browser
 Back and Forward restore the exact path saved with each entry, and renamed files
 update in mounted ancestor breadcrumbs without rewriting history. Cmd/Ctrl-clicking a
 row toggles selection; Shift-clicking a checkbox selects a range, and Shift+Enter

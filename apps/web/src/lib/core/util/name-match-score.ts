@@ -8,6 +8,18 @@ export function normalizeNameText(value: string): string {
     .toLowerCase();
 }
 
+const WORD_BREAK = /[^\p{Alphabetic}\p{Number}]+/u;
+
+/** Whether every query term starts a word of the text, as the native people
+ * ranker's word-prefix tier decides it: punctuation separates words. */
+export function startsWordsOf(text: string, query: string): boolean {
+  const words = text.toLowerCase().split(WORD_BREAK).filter(Boolean);
+  return normalizeNameText(query)
+    .split(WORD_BREAK)
+    .filter(Boolean)
+    .every((part) => words.some((word) => word.startsWith(part)));
+}
+
 function span(
   text: string,
   query: string

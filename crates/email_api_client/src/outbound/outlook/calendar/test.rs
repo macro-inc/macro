@@ -438,6 +438,108 @@ async fn discover(time_zone: Option<&str>) -> OutlookDiscovery {
 }
 
 #[tokio::test]
+async fn discovery_reads_who_owns_each_calendar_and_whether_it_was_shared() {
+    let (server, api) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailboxSettings"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mailbox_settings(None)))
+        .mount(&server)
+        .await;
+    let mut shared = default_calendar("AAMkShared");
+    shared["isDefaultCalendar"] = json!(false);
+    shared["canEdit"] = json!(false);
+    shared["isSharedWithMe"] = json!(true);
+    shared["owner"] = json!({"name":"Ada","address":"ada@example.com"});
+    let mut unowned = default_calendar("AAMkUnowned");
+    unowned["isDefaultCalendar"] = json!(false);
+    unowned["owner"] = json!({"name":"","address":""});
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value":[default_calendar("AAMkCalendar"), shared, unowned],
+        })))
+        .mount(&server)
+        .await;
+
+    let discovery = api
+        .calendars("token", target().binding.unwrap())
+        .await
+        .unwrap();
+
+    let read: Vec<_> = discovery
+        .calendars
+        .iter()
+        .map(|c| (c.owner_address.as_deref(), c.shared_with_me))
+        .collect();
+    assert_eq!(
+        read,
+        [
+            (Some("olivia@example.com"), false),
+            (Some("ada@example.com"), true),
+            (None, false),
+        ]
+    );
+}
+
+/// The calendars Graph lists for a mailbox that added holidays, Birthdays
+/// and a calendar subscribed from the web, with the properties a real
+/// mailbox returned: only the holidays and Birthdays are its own read-only
+/// calendars, and the subscription keeps its usual rounds.
+#[tokio::test]
+async fn holidays_and_birthdays_are_system_calendars_and_a_web_subscription_is_not() {
+    let (server, api) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailboxSettings"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mailbox_settings(None)))
+        .mount(&server)
+        .await;
+    let added = |id: &str, name: &str| {
+        let mut calendar = default_calendar(id);
+        calendar["name"] = json!(name);
+        calendar["isDefaultCalendar"] = json!(false);
+        calendar["canEdit"] = json!(false);
+        calendar["canShare"] = json!(false);
+        calendar["isRemovable"] = json!(true);
+        calendar
+    };
+    let mut subscription = added("AAMkSubscription", "test");
+    subscription["isSharedWithMe"] = json!(true);
+    subscription["owner"] = Value::Null;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value":[
+                default_calendar("AAMkCalendar"),
+                added("AAMkHolidays", "United States holidays"),
+                added("AAMkBirthdays", "Birthdays"),
+                subscription,
+            ],
+        })))
+        .mount(&server)
+        .await;
+
+    let discovery = api
+        .calendars("token", target().binding.unwrap())
+        .await
+        .unwrap();
+
+    let system: Vec<_> = discovery
+        .calendars
+        .iter()
+        .map(|c| (c.calendar.name.as_str(), c.is_system("olivia@example.com")))
+        .collect();
+    assert_eq!(
+        system,
+        [
+            ("Calendar", false),
+            ("United States holidays", true),
+            ("Birthdays", true),
+            ("test", false),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn calendars_carry_the_iana_zone_of_the_mailbox() {
     for (named, iana) in [
         (Some("Pacific Standard Time"), "America/Los_Angeles"),

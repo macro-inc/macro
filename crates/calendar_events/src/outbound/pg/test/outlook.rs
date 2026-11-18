@@ -55,6 +55,8 @@ fn discovered_calendar(provider_calendar_id: &str) -> OutlookCalendar {
             default_reminders: vec![],
         },
         online_meeting_providers: vec!["teamsForBusiness".into()],
+        owner_address: None,
+        shared_with_me: false,
     }
 }
 async fn calendar(repo: &PgCalendarRepository) -> OutlookCalendarLease {
@@ -940,7 +942,10 @@ async fn a_first_import_lists_this_month_and_next_before_the_whole_window(pool: 
         repo.checkpoint_outlook_calendar(&finish, OutlookCalendarProgress::Finish)
             .await
             .unwrap(),
-        OutlookCheckpoint::RoundFinished { first_sync: true }
+        OutlookCheckpoint::RoundFinished {
+            first_sync: true,
+            cleared_sync_error: false
+        }
     );
     let (synced_at, materialized_from, status, account_synced) = coverage(&pool, calendar_id).await;
     assert!(synced_at.is_some(), "synced once the whole window is in");
@@ -968,7 +973,10 @@ async fn a_first_import_lists_this_month_and_next_before_the_whole_window(pool: 
         repo.checkpoint_outlook_calendar(&finish, OutlookCalendarProgress::Finish)
             .await
             .unwrap(),
-        OutlookCheckpoint::RoundFinished { first_sync: false },
+        OutlookCheckpoint::RoundFinished {
+            first_sync: false,
+            cleared_sync_error: false
+        },
         "a later round is not a first sync"
     );
     sqlx::query!(
@@ -2313,24 +2321,30 @@ async fn reclaim(
 }
 
 /// Fails a primary calendar's sync `times` times with `kind`, reclaiming it
-/// after each failure, and returns the next lease.
+/// after each failure, and returns the next lease with whether each failure
+/// showed or changed the badge.
 async fn fail_times(
     pool: &PgPool,
     repo: &PgCalendarRepository,
     mut lease: OutlookCalendarLease,
     kind: CalendarProviderErrorKind,
     times: i32,
-) -> OutlookCalendarLease {
+) -> (OutlookCalendarLease, Vec<bool>) {
+    let mut badge_changes = Vec::new();
     for _ in 0..times {
-        repo.fail_outlook_calendar(&lease, kind).await.unwrap();
+        badge_changes.push(repo.fail_outlook_calendar(&lease, kind).await.unwrap());
         lease = reclaim(pool, repo, lease.id).await;
     }
-    lease
+    (lease, badge_changes)
 }
 
 /// Runs one clean round of a primary calendar: the near window when its first
-/// import has not listed it yet, its last page, then the finish.
-async fn clean_round(repo: &PgCalendarRepository, lease: &OutlookCalendarLease) {
+/// import has not listed it yet, its last page, then the finish, whose
+/// checkpoint it returns.
+async fn clean_round(
+    repo: &PgCalendarRepository,
+    lease: &OutlookCalendarLease,
+) -> OutlookCheckpoint {
     let lease = &if lease.near_window {
         past_near_window(repo, lease.clone()).await
     } else {
@@ -2351,7 +2365,7 @@ async fn clean_round(repo: &PgCalendarRepository, lease: &OutlookCalendarLease) 
     assert_eq!(finish.id, lease.id);
     repo.checkpoint_outlook_calendar(&finish, OutlookCalendarProgress::Finish)
         .await
-        .unwrap();
+        .unwrap()
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -2361,7 +2375,7 @@ async fn an_outlook_sync_error_badge_logs_when_it_appears_and_when_it_changes(po
     let calendar_id = lease.target.as_ref().unwrap().calendar_id;
     let before = counter(&pool, link).await;
 
-    let lease = fail_times(
+    let (lease, shown) = fail_times(
         &pool,
         &repo,
         lease,
@@ -2374,16 +2388,25 @@ async fn an_outlook_sync_error_badge_logs_when_it_appears_and_when_it_changes(po
         vec![CalendarChangeOp::UpsertCalendar(calendar_id)],
         "only the failure that crosses the threshold shows a badge"
     );
+    assert_eq!(
+        shown,
+        [false, false, true, false],
+        "viewers hear of the failure that shows the badge"
+    );
 
-    let lease = fail_times(&pool, &repo, lease, CalendarProviderErrorKind::Transient, 2).await;
-    repo.fail_outlook_calendar(&lease, CalendarProviderErrorKind::ReauthRequired)
-        .await
-        .unwrap();
+    let (lease, reworded) =
+        fail_times(&pool, &repo, lease, CalendarProviderErrorKind::Transient, 2).await;
+    assert!(
+        repo.fail_outlook_calendar(&lease, CalendarProviderErrorKind::ReauthRequired)
+            .await
+            .unwrap()
+    );
     assert_eq!(
         ops_after(&pool, link, before).await,
         vec![CalendarChangeOp::UpsertCalendar(calendar_id); 3],
         "each reworded badge logs once; a repeat of the shown one does not"
     );
+    assert_eq!(reworded, [true, false]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -2391,7 +2414,7 @@ async fn a_clean_outlook_round_logs_a_cleared_badge_once(pool: PgPool) {
     let (repo, link, _) = mailbox(&pool).await;
     let lease = calendar(&repo).await;
     let calendar_id = lease.target.as_ref().unwrap().calendar_id;
-    let lease = fail_times(
+    let (lease, _) = fail_times(
         &pool,
         &repo,
         lease,
@@ -2412,7 +2435,16 @@ async fn a_clean_outlook_round_logs_a_cleared_badge_once(pool: PgPool) {
     };
     assert_eq!(stored_kind().await.as_deref(), Some("permanent"));
 
-    clean_round(&repo, &lease).await;
+    assert!(
+        matches!(
+            clean_round(&repo, &lease).await,
+            OutlookCheckpoint::RoundFinished {
+                cleared_sync_error: true,
+                ..
+            }
+        ),
+        "viewers hear of the round that clears a shown badge"
+    );
     assert_eq!(
         ops_after(&pool, link, before).await,
         vec![CalendarChangeOp::UpsertCalendar(calendar_id)],
@@ -2420,10 +2452,14 @@ async fn a_clean_outlook_round_logs_a_cleared_badge_once(pool: PgPool) {
     );
     assert_eq!(stored_kind().await, None);
 
+    let routine = OutlookCheckpoint::RoundFinished {
+        first_sync: false,
+        cleared_sync_error: false,
+    };
     let lease = reclaim(&pool, &repo, lease.id).await;
-    clean_round(&repo, &lease).await;
+    assert_eq!(clean_round(&repo, &lease).await, routine);
     let lease = reclaim(&pool, &repo, lease.id).await;
-    let lease = fail_times(
+    let (lease, _) = fail_times(
         &pool,
         &repo,
         lease,
@@ -2431,7 +2467,11 @@ async fn a_clean_outlook_round_logs_a_cleared_badge_once(pool: PgPool) {
         CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD - 1,
     )
     .await;
-    clean_round(&repo, &lease).await;
+    assert_eq!(
+        clean_round(&repo, &lease).await,
+        routine,
+        "an error that never showed clears quietly"
+    );
     assert_eq!(
         ops_after(&pool, link, before).await,
         vec![CalendarChangeOp::UpsertCalendar(calendar_id)],
@@ -2445,7 +2485,7 @@ async fn reconnecting_clears_a_reauth_badge_through_the_change_log(pool: PgPool)
     let lease = calendar(&repo).await;
     let calendar_id = lease.target.as_ref().unwrap().calendar_id;
     let before = counter(&pool, link).await;
-    let lease = fail_times(
+    let (lease, _) = fail_times(
         &pool,
         &repo,
         lease,
@@ -2487,7 +2527,16 @@ async fn reconnecting_clears_a_reauth_badge_through_the_change_log(pool: PgPool)
         .unwrap();
     let lease = claim(&repo).await.unwrap();
     assert_eq!(lease.target.as_ref().unwrap().calendar_id, calendar_id);
-    clean_round(&repo, &lease).await;
+    assert!(
+        matches!(
+            clean_round(&repo, &lease).await,
+            OutlookCheckpoint::RoundFinished {
+                cleared_sync_error: true,
+                ..
+            }
+        ),
+        "viewers hear of the reconnect clearing the badge"
+    );
     assert_eq!(
         ops_after(&pool, link, before).await,
         vec![CalendarChangeOp::UpsertCalendar(calendar_id); 2],
@@ -2698,4 +2747,77 @@ async fn the_queue_depth_counts_claimable_work_waiting(pool: PgPool) {
         0,
         "an account no claim may take is not queue depth"
     );
+}
+
+/// Discovers one read-only calendar owned by `owner` (the mailbox itself when
+/// `None`), finishes its first round, and returns whether discovery marked it
+/// a system calendar, how long until its next round, and how long after its
+/// sync booking reads it as due.
+async fn read_only_calendar_round(pool: &PgPool, owner: Option<&str>) -> (bool, i64, i64) {
+    let (repo, _, user) = mailbox(pool).await;
+    let discovery = claim(&repo).await.unwrap();
+    let mut calendar = discovered_calendar("holidays");
+    calendar.calendar.access_role = Some("reader".into());
+    calendar.owner_address = Some(owner.map_or_else(
+        || discovery.token_identity.email_address.to_uppercase(),
+        str::to_owned,
+    ));
+    repo.commit_outlook_calendars(&discovery, vec![calendar])
+        .await
+        .unwrap();
+    let lease = claim(&repo).await.unwrap();
+    let calendar_id = lease.target.as_ref().unwrap().calendar_id;
+    clean_round(&repo, &lease).await;
+    let row = sqlx::query!(
+        r#"SELECT c.system_calendar,c.synced_at AS "synced_at!",
+            extract(epoch FROM w.next_run_at-now())::bigint AS "wait!"
+        FROM calendars c JOIN calendar_outlook_work w ON w.calendar_id=c.id WHERE c.id=$1"#,
+        calendar_id
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let due = repo
+        .calendar_sync_health(&user)
+        .await
+        .unwrap()
+        .calendars
+        .into_iter()
+        .find(|freshness| freshness.calendar_id == calendar_id)
+        .unwrap()
+        .refresh_due_at
+        .unwrap();
+    (
+        row.system_calendar,
+        row.wait,
+        (due - row.synced_at).num_seconds(),
+    )
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_mailboxs_own_read_only_calendar_syncs_once_a_day(pool: PgPool) {
+    let (system, wait, due_after) = read_only_calendar_round(&pool, None).await;
+    assert!(
+        system,
+        "a read-only calendar of the mailbox's own, such as its holidays"
+    );
+    assert!(
+        (86_390..=86_400).contains(&wait),
+        "its next round is a day away, as Google's system calendars, not {wait} s"
+    );
+    assert_eq!(
+        due_after, 86_400,
+        "booking reads it as current for a day after each sync"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_calendar_shared_read_only_keeps_its_two_minute_rounds(pool: PgPool) {
+    let (system, wait, due_after) = read_only_calendar_round(&pool, Some("ada@example.com")).await;
+    assert!(
+        !system,
+        "a colleague's calendar shared read-only is their schedule"
+    );
+    assert!((110..=120).contains(&wait), "next round in {wait} s");
+    assert_eq!(due_after, 0);
 }

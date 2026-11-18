@@ -39,7 +39,10 @@ materials while each segment keeps its own interaction states. Standalone Button
 remain independent. Nested shared actions reuse the containing group rather than adding
 another frame, and a group with no visible actions renders nothing. Keep
 tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
-iconOnly`, then a menu). Preserve specialized editor toolbars. A touch header
+iconOnly`, then a menu). Decide those steps from whether the row fits with the
+shared mechanisms, `createLabelCollapse` (`@core/signal/create-label-collapse`;
+Reviews' list header, Email's phone reply buttons) or the split header's
+`PriorityCollapse`, never a new measurement. Preserve specialized editor toolbars. A touch header
 belongs to its view's mobile view, which lists every island it shows. A new one
 shows Back, the title (tap it for the title menu), and Info, with other actions
 in the title menu, as the email thread's does. A header split from a shared one

@@ -345,7 +345,17 @@ function useChannelsDataSource(
     items,
     isLoading: () => query.isEnabled && query.isLoading && items().length === 0,
     isFetching: () => query.isEnabled && query.isFetching,
-    error: () => (query.isEnabled ? (query.error ?? undefined) : undefined),
+    // The live query hides a network failure behind its local cache rows,
+    // which are empty when the list was never cached. An empty list after a
+    // failed fetch is unknown, not "no conversations".
+    error: () => {
+      if (!query.isEnabled) return undefined;
+      return (
+        query.error ??
+        (items().length === 0 ? query.fetchError : null) ??
+        undefined
+      );
+    },
     hasMore: () => query.isEnabled && query.hasNextPage,
     isLoadingMore: () => query.isEnabled && query.isFetchingNextPage,
     loadMore: async () => {

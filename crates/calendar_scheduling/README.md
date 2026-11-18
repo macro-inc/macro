@@ -18,8 +18,8 @@ calendar whose grant works, and every calendar that counts toward their busy tim
 must be current (`macro_services/sync_health.rs`, over
 `CalendarSyncHealthReader`): a calendar failing transiently still offers time
 around its stored events for 45 minutes after its next sync was due (its last
-successful sync; for a Google system calendar such as holidays, which Macro
-syncs daily, a day after it), while a
+successful sync; for a calendar Macro syncs daily, such as holidays from Google
+or an Outlook mailbox's own read-only calendars, a day after it), while a
 permanent or reauthorization failure, a calendar or inbox still on its first
 sync, or a failure past that window refuses availability. A calendar with Busy
 off never blocks booking, whatever its sync state. Busy time comes from every connected calendar
@@ -81,7 +81,10 @@ an event the host can no longer see) abandons the operation at once; any other f
 hourly until the meeting's start time has passed, then abandoned. An abandoned booking stays
 `failed` with its reservations and is never retried again. Cancelling it releases
 them once the calendar accepts the cancellation; a calendar that refuses that too keeps them, as
-lost access always has. An abandoned move stays at the requested time with both intervals held. Keyed deletion works even after local calendar projection
+lost access always has. A move the calendar refuses on its first attempt returns the booking to its
+original time and status and releases the new interval; one refused after an earlier attempt that
+left no recorded outcome, or that keeps failing until its new start, stays failed at the requested
+time with both intervals held. Keyed deletion works even after local calendar projection
 retirement. Completion-persistence failures still return the durable private receipt. Rescheduling reserves the old and new intervals until the provider
 accepts the update, then releases the old interval. Calendar projections without a
 source time zone for all-day events conservatively block all possible UTC offsets.
