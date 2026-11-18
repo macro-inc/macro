@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -29,18 +30,18 @@ export function MobileAddProjectTasks(props: { project: ProjectDetail }) {
       <Button
         variant="secondary"
         size={isMobile() ? 'icon-md' : 'md'}
-        aria-label={isMobile() ? 'Add existing tasks' : undefined}
+        aria-label={isMobile() ? t('mobile.addExistingTasks') : undefined}
         onClick={() => {
           picker.reset();
           setOpen(true);
         }}
       >
         <ListPlusIcon class={isMobile() ? 'size-6' : 'size-4'} />
-        {isMobile() ? null : 'Add existing tasks'}
+        {isMobile() ? null : t('mobile.addExistingTasks')}
       </Button>
       <PickerSheet.Root open={open()} onCancel={cancel}>
         <PickerSheet.Header
-          title="Add tasks"
+          title={t('mobile.addTasks')}
           onDone={() => fireAndForget(add(), 'projects')}
           doneDisabled={picker.saving() || !picker.selected().size}
         />
@@ -60,7 +61,7 @@ export function MobileAddProjectTasks(props: { project: ProjectDetail }) {
             <Suspense
               fallback={
                 <p role="status" class="px-4 py-3 text-ink-muted">
-                  Loading tasks…
+                  {t('mobile.loadingTasks')}
                 </p>
               }
             >
@@ -68,7 +69,7 @@ export function MobileAddProjectTasks(props: { project: ProjectDetail }) {
                 config={{
                   specificEntityType: 'TASK',
                   isMultiSelect: true,
-                  placeholder: 'Search tasks…',
+                  placeholder: t('mobile.searchTasks'),
                   excludedIds: picker.excludedIds,
                   fillHeight: true,
                 }}

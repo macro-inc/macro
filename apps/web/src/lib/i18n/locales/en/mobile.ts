@@ -34,6 +34,12 @@ export default {
   // Picker sheet
   done: 'Done',
 
+  // Adding existing tasks to a project
+  addExistingTasks: 'Add existing tasks',
+  addTasks: 'Add tasks',
+  searchTasks: 'Search tasks…',
+  loadingTasks: 'Loading tasks…',
+
   // App update waiting for Wi-Fi
   updateOffWifiTitle: 'Update available',
   updateOffWifiDescription:
