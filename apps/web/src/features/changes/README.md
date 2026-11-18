@@ -41,8 +41,9 @@ reduced-motion support. The divider stays visible but inert through exit, releas
 its layout space with the tree only when the animation finishes. Hiding retains
 directory state and the diff stack. Starting a drag or keyboard resize, or resizing
 the outer split or viewport, settles the visibility animation synchronously first.
-At 720px or narrower, and on touch devices, the tree starts closed and opens over
-the diff stack as a pane-local drawer, without reserving space or a divider.
+In a pane 720px or narrower, and on touch devices, the tree starts closed and opens over
+the diff stack as a pane-local drawer, without reserving space or a divider, and
+the diff shows unified, without the Unified/Split toggle.
 **Show file tree** stays in the diff controls; file selection, Escape, the backdrop,
 and the close toggle dismiss the drawer and restore focus to its opener.
 Closing retains only an inert visual frame; dialog listeners release immediately.
@@ -71,7 +72,9 @@ cancels exit without remounting the pane. Patch parsing and diff bodies are queu
 after the pane shell mounts, and off-screen bodies wait until needed.
 Split/full toggles retain the host and diff owners and restore the dragged split
 ratio without replaying the visibility slide or reparsing unchanged patch text.
-Hosts at 720px or narrower open Changes at full width and hide the width toggle,
+A host passes `hostMinWidth` to `ChangesSplit` (320px by default; a PR passes
+560px, which its header's title and actions need). A host no wider than that plus
+the pane's 400px opens Changes at full width and hides the width toggle,
 without changing the saved split ratio or route layout. Widening restores the
 requested wide layout and keeps the same conversation and diff owners.
 A spotlight request during a slide applies after the slide settles. A full-width
@@ -83,7 +86,7 @@ stack inside the diff column, with Unified/Split on the left and collapse/refres
 on the right, without a full-pane toolbar or bottom border. The pane has no outer
 top, right, or bottom border; the resize divider separates it from the host.
 The metadata opens GitHub; narrow panes truncate the branch range. Unified/Split
-retains its text labels at every non-touch width. The shared `DiffStats` shows
+retains its text labels wherever it shows. The shared `DiffStats` shows
 exact totals beside five subtly hatched green/red squares with inset edges,
 summarizing the addition/deletion mix without animation.
 At full width, the header adds a `text-sm` PR title with extra top padding before

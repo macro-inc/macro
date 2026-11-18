@@ -78,15 +78,17 @@ The Changes toggle has no diff totals and becomes icon-only below 28rem of heade
 width, retaining its name, tooltip, and active state. Breadcrumbs keep their existing layout.
 The full-height file tree has a fixed header with its file count on the left and
 **Hide file tree** on the right. Borderless diff controls float above the diff stack
-rather than spanning the pane in a second toolbar. Unified/Split retains text labels
-at narrow non-touch widths on the left, with diff collapse/expand and refresh on
-the right. Hiding the tree moves its count
+rather than spanning the pane in a second toolbar. Unified/Split sits on the left
+with its text labels, with diff collapse/expand and refresh on the right; a pane
+720px or narrower (and every phone) shows the unified diff without that toggle. Hiding the tree moves its count
 and **Show file tree** above the diffs, as described in
 [AI Chat](ai-chat.md#reviewing-a-linked-github-pull-request).
 Spotlighting changes hides the left pane and its top bar; **Back to the split**
 restores the prior divider position and retains the draft, diff state, and scroll.
-At host widths of 720px or less, Changes opens full-width automatically without
-that width toggle; widening restores the requested wide layout and split ratio.
+A PR split 960px or narrower (the 560px its header needs plus the pane's 400px)
+opens Changes full-width over the PR instead of as a split inside the split,
+without that width toggle; widening restores the requested wide layout and split
+ratio. Beside the PR, dragging the divider stops at 560px for the PR.
 Narrow file trees start closed. **Show file tree** opens an animated drawer over the
 diffs without resizing them, including on phones. File selection, Escape, the
 backdrop, or **Hide file tree** closes the drawer and restores focus to its opener.

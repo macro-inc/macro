@@ -147,7 +147,7 @@ function ChangesControls(props: { narrow: boolean; drawerOpen: boolean }) {
           {describeFileCount(model.files().length)}
         </span>
       </Show>
-      <Show when={!isTouchDevice()}>
+      <Show when={!props.narrow}>
         <DiffView.StyleToggle
           value={diffStyle()}
           onChange={setDiffStyle}
@@ -197,20 +197,17 @@ function ChangesTreeHeader(props: { narrow: boolean; onClose: () => void }) {
 }
 
 /** The tree beside the diff stack, both over the changeset's files. */
-function ChangesBody() {
-  const [body, setBody] = createSignal<HTMLDivElement>();
-  const narrow = createChangesNarrow(body);
+function ChangesBody(props: { narrow: Accessor<boolean> }) {
   const [drawerOpen, setDrawerOpen] = createSignal(false);
   const closeDrawer = () => setDrawerOpen(false);
   return (
     <Dialog.Root
-      open={narrow() && drawerOpen()}
+      open={props.narrow() && drawerOpen()}
       onOpenChange={setDrawerOpen}
       modal={false}
     >
       <ChangesBodyContent
-        body={setBody}
-        narrow={narrow}
+        narrow={props.narrow}
         drawerOpen={drawerOpen}
         closeDrawer={closeDrawer}
       />
@@ -219,7 +216,6 @@ function ChangesBody() {
 }
 
 function ChangesBodyContent(props: {
-  body: (element: HTMLDivElement) => void;
   narrow: Accessor<boolean>;
   drawerOpen: Accessor<boolean>;
   closeDrawer: () => void;
@@ -308,10 +304,7 @@ function ChangesBodyContent(props: {
   );
   return (
     <Panel.Body class="relative flex flex-col">
-      <div
-        ref={props.body}
-        class="relative flex size-full min-h-0 min-w-0 flex-col"
-      >
+      <div class="relative flex size-full min-h-0 min-w-0 flex-col">
         <CaptureBanners />
         <Show when={model.changeset()?.truncated}>
           <CaptureBanner
@@ -531,16 +524,19 @@ export function ChangesPane(props: { fullWidth?: boolean }) {
   };
   const showsFiles = () =>
     model.changeset() !== undefined && model.files().length > 0;
+  const [pane, setPane] = createSignal<HTMLDivElement>();
+  const narrow = createChangesNarrow(pane);
 
   return (
     <DiffView.Root
       files={model.files()}
       patch={model.patch() ?? ''}
-      diffStyle={isTouchDevice() ? 'unified' : diffStyle()}
+      diffStyle={narrow() ? 'unified' : diffStyle()}
       collapse={collapse}
       active={review.active()}
     >
       <Panel
+        ref={setPane}
         hideBorder
         class="rounded-none @container/changes-pane"
         role="region"
@@ -569,7 +565,7 @@ export function ChangesPane(props: { fullWidth?: boolean }) {
           </div>
         </Panel.Header>
         <Show when={showsFiles()} fallback={<ChangesNotices />}>
-          <ChangesBody />
+          <ChangesBody narrow={narrow} />
         </Show>
       </Panel>
     </DiffView.Root>

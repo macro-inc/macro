@@ -70,6 +70,7 @@ import {
 } from '../primitives/create-pr-actions';
 import { usePrFileOperations } from '../primitives/pr-file-operations';
 import { githubAvatarUrl, githubDisplayLogin } from '../util/githubMarkdown';
+import { PR_HOST_MIN_WIDTH } from '../util/pr-layout';
 import type { PrRef } from '../util/prKey';
 import { prDisplayName, prHtmlUrl } from '../util/prKey';
 
@@ -294,7 +295,7 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
         pullRequestTitle={detail.data()?.pullRequest.name ?? undefined}
         pullRequestChangeCounts={detail.changeCounts()}
       >
-        <ChangesSplit>
+        <ChangesSplit hostMinWidth={PR_HOST_MIN_WIDTH}>
           {/* Touch shows the PR's split header, as a hosted PR does. */}
           <SplitHeaderScope.Root when={isTouchDevice()}>
             <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
