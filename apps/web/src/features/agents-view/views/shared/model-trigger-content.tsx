@@ -11,6 +11,14 @@ import { MACRO_PERSONA_ID } from '../../core/roster';
 export function UnifiedModelTriggerContent(props: { mobile?: boolean }) {
   const state = useUnifiedModelSelector();
   const custom = () => state.agent && state.agent.id !== MACRO_PERSONA_ID;
+  const model = () =>
+    state.models.find((option) => option.id === state.model)?.label ??
+    catalogModelLabel(state.model, state.models);
+  const label = () => {
+    if (!custom()) return model();
+    if (state.showModelLabel) return `${state.agent?.name} · ${model()}`;
+    return state.agent?.name;
+  };
   return (
     <>
       <Show
@@ -21,11 +29,7 @@ export function UnifiedModelTriggerContent(props: { mobile?: boolean }) {
           <AgentIcon agent={state.agent!} class="size-3.5" />
         </span>
       </Show>
-      <span class="min-w-0 truncate text-ink-muted">
-        {custom()
-          ? state.agent?.name
-          : catalogModelLabel(state.model, state.models)}
-      </span>
+      <span class="min-w-0 truncate text-ink-muted">{label()}</span>
       <Show
         when={
           !props.mobile &&

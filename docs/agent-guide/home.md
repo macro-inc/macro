@@ -221,6 +221,13 @@ code, and videos. Share uses the selected item's permissions and updates when
 switching items; copied links point to the entity rather than the Home feed.
 
 AI chat, agent, and channel message bodies use 15px text, including thread replies.
+Home uses the same unified agent/model selector as the Agents workspace. Switch
+from Auto to Chat or Code to show it. The menu includes custom agents, advertised
+models, Reasoning effort, and supported Speed choices; Auto hides those controls.
+Opening or dismissing the selector preserves Home's separate unsent draft and
+attachments. The saved model, per-model effort, and speed keep their existing
+preference ownership. Inline and standalone agent sessions use that selector too,
+with session-owned changes rather than new-chat preferences.
 Desktop AI chats, agents, and channel composers share Home's rounded composer
 surface: a muted dark fill or a white light-mode surface with a soft shadow,
 15px input text, and circular controls. Composer geometry is scaled to 15/16

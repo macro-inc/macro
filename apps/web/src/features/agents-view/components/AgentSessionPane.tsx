@@ -58,7 +58,6 @@ import { EmptyStatePanel } from '@ui';
 import { type ParentProps, Show } from 'solid-js';
 import { changeSessionArchiveState } from '../../block-agent/queries/change-session-archive-state';
 import { ChatSessionInput } from './ChatComposer';
-import { SessionModelSelector } from './ModelSelector';
 import { Topbar } from './Topbar';
 
 function SessionClearance(
@@ -397,7 +396,6 @@ function SessionContent(props: {
                         <AgentComposer
                           autofocus={!searchTarget()}
                           input={ChatSessionInput}
-                          modelSelector={SessionModelSelector}
                         />
                       </Show>
                     </div>

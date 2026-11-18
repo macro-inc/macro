@@ -404,7 +404,7 @@ empty session there. Command-menu actions open a new split.
 code files, images, canvases, spreadsheets, email, channels, calls, and projects,
 and the channel message hover menu, open the Agents workspace's new-conversation
 composer in a new split, the same centered composer as Home and **Create → Agent**,
-with its Auto/Chat/Code switch and agent, model, and effort pickers. Their entity
+with its grouped Auto/Chat/Code switch and unified agent/model selector. Their entity
 mention fills the composer as an unsent draft; an Agents split that is already open
 returns to its composer with that draft. The mention fills the composer once: after
 sending, Back, Forward, or returning to Agents from the dock or sidebar shows the
@@ -748,18 +748,18 @@ the shimmer.
   a model selected from its submenu overrides that default for the next send
   only. Sending or choosing another agent clears the override. This does not
   update the saved agent; configure persistent defaults in the agent editor.
-  Within an existing session, the model picker remains available on the right.
-  Its trigger, model options, and session metadata use the same readable model names
-  as the new-conversation picker. Large catalogs share the Settings picker:
-  provider icons, search, **Suggested** first, and **More models** for the
-  complete provider catalog. Desktop opens a submenu; phone widths show
-  the catalog in place with a Back action. Search includes every model.
-- A labeled **Effort** button (dial icon and current level, e.g. `Effort: High` to screen readers) beside the model selector opens a titled list of effort levels with a check beside the current choice: a popover centered below the button on desktop, or its own bottom sheet on mobile. Choosing a level applies it and closes the menu. Mobile shows it alongside the model control after the input expands. It is hidden when the model has fewer than two effort choices.
-  Model-specific effort choices remain available in desktop model submenus.
-  New conversations remember the last effort picked for each runtime and model,
-  per signed-in user, across sends, mode switches, and reloads, while that model
-  still offers it. Without one, Free and Pro users start at the lowest advertised
-  level. Existing sessions keep their current setting.
+  Inline and standalone sessions use the same unified agent/model selector as
+  Home and new conversations. The session host applies model and effort changes;
+  new-chat preferences do not overwrite existing session configuration.
+  **Suggested** models and custom agents share the root list. **All models** retains
+  the provider catalog submenu on desktop and its pushed page on phone. Search
+  includes every model. Universal-input AI drafts and routine agent/model targets
+  use the same selector, but omit effort and speed because those hosts store only
+  an agent/model target.
+- **Reasoning effort** and **Speed** live inside that selector, as desktop submenus
+  and phone pushed pages. Rows with fewer than two advertised choices stay hidden.
+  New conversations retain per-user, per-runtime/model effort preferences across
+  sends, mode switches, and reloads. Existing sessions retain their own setting.
 - On desktop, chat agents' empty input shows the static hint **Type @ to mention
   docs, people, or channels, / for skills** immediately, without typing or cycling
   through other hints. Clearing a draft restores the same hint.

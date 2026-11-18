@@ -17,6 +17,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - `core/conversation-list.ts` and `primitives/conversation-list-view.ts`: sorting, waiting partition, and user-scoped preferences.
 - `views/shared/conversation-row/`: new row composition; shared status/code presentation is under `components/`.
 - `core/model-selection.ts`, `primitives/model-selector-navigation.ts`, and `model-selector.tsx`: shared selector logic and platform entry; trigger parts live under `views/shared/`.
+- `views/agent-model-picker.tsx`: model-only adapter for universal-input AI drafts and routine targets; does not add unsupported effort or speed settings.
 - `views/shared/code-details-drawer/`: common phone PR/branch drawer for rows and the session header.
 - `queries/session-code-details.ts`: bounded session-ID/owner lookup for cold header code identity.
 - `../block-agent/views/mobile/redesigned-session-header/`: normal-weight session title, code details, Info, and retained action owners.
@@ -26,7 +27,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 
 ## Boundaries
 
-- Keep original agent/model/effort/speed pickers for unrelated consumers; new-chat and Agents running sessions share selector behavior without moving their preference or session mutations.
+- Use the unified selector for Home, new chats, inline and standalone sessions, universal-input AI drafts, and routine agent/model targets; keep old picker components unwired for reference and preserve each host's preference and mutation ownership.
 - Keep `components/AgentsSidebar.tsx`, `AgentSessionRow.tsx`, and `views/AgentSessionListItem.tsx` for reference and Home consumers.
 - Preserve Home row geometry and activity rendering when extracting shared behavior.
 - Reuse Soup entity actions and session archive mutations; do not add another action or cache path.
