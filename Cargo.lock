@@ -649,6 +649,7 @@ dependencies = [
  "agent_git",
  "agent_harness",
  "agent_inmem",
+ "agent_permissions",
  "agent_preview",
  "agent_runtime_protocol",
  "agent_session",
