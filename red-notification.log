@@ -1,0 +1,53 @@
+
+ RUN  v5.1.0 <repo>/apps/web
+
+stderr | src/features/notifications/tests/team-agent-ready-navigation.test.ts
+computations created outside a `createRoot` or `render` will never be disposed
+computations created outside a `createRoot` or `render` will never be disposed
+
+ ❯ |notifications| src/features/notifications/tests/team-agent-ready-navigation.test.ts (1 test | 1 failed) 1998ms
+   × opens a ready agent teammate's real DM, where its greeting lands 1997ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |notifications| src/features/notifications/tests/team-agent-ready-navigation.test.ts > opens a ready agent teammate's real DM, where its greeting lands
+AssertionError: expected "vi.fn()" to be called with arguments: [ { type: 'channel', …(1) }, …(1) ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+    {
+-     "id": "channel-ada",
++     "id": "pending-dm-ee290935-c93b-4c0b-a2fe-17cec4cd9a30",
+      "type": "channel",
+    },
+-   ObjectContaining {
++   {
+      "activate": true,
++     "handle": undefined,
++     "preferNewSplit": false,
++     "referredFrom": null,
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ src/features/notifications/tests/team-agent-ready-navigation.test.ts:99:25
+     97|   expect((await openNotification(notification, layout)).isOk()).toBe(t…
+     98|
+     99|   expect(openWithSplit).toHaveBeenCalledWith(
+       |                         ^
+    100|     { type: 'channel', id: 'channel-ada' },
+    101|     expect.objectContaining({ activate: true })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  17:54:35
+   Duration  3.61s (tests 57%, transform 21%, import 15%, environment 7%)
+
