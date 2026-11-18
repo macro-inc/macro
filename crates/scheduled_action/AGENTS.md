@@ -190,11 +190,15 @@ each run.
 - `src/domain/knob_entities.rs`: the items code steps' entity knobs name,
   checked as the owner through the `KnobEntities` port
   (`outbound/knob_entities.rs` over entity access, and people through
-  `KnownPeople`, which the harness composes): `TargetValidation` refuses an unpicked item or one the
+  `KnownPeople`, and trashed documents, tasks, folders and chats through
+  `LiveItems`, both of which the harness composes, since an owner keeps their
+  grant on what they trashed): `TargetValidation` refuses an unpicked item or one the
   owner can't open on create, check and update, and the program runner
   checks again before each code step that has one, failing it with the
-  reason and without running its code. A composition without the port
-  refuses entity knobs.
+  reason and without running its code. `GET
+  /scheduled-actions/{id}/unusable-items` lists a saved routine's knobs that
+  need a new pick, with the same reason, for its page. A composition without
+  the port refuses entity knobs.
 - `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
   suggestions and the tools routines sessions write them with. The sessions
   themselves belong to generations (`crates/suggestion_generation`: an
