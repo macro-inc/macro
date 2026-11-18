@@ -3,7 +3,6 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import ArchiveIcon from '@icon/system/regular/archive.svg';
-import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
@@ -88,16 +87,7 @@ export function PhoneListHeader(
         fallback={
           props.archived ? (
             <>
-              <MobileHeader.Island class="size-10 justify-center !px-0">
-                <Button
-                  variant="ghost"
-                  size="icon-md"
-                  aria-label={t('agentControls.back')}
-                  onClick={props.onBack}
-                >
-                  <ArrowLeftIcon class="size-5" />
-                </Button>
-              </MobileHeader.Island>
+              <MobileHeader.Back />
               <MobileHeader.Island>
                 <span class="text-sm font-semibold">
                   {t('viewMenus.archived')}

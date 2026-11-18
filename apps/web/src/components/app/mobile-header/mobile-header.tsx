@@ -13,6 +13,7 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { SidePanel, useSidePanel } from '../side-panel';
+import { SplitBackButton } from '../split-layout/components/SplitBackButton';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
@@ -21,7 +22,8 @@ import { MobileHeaderIsland } from './island';
 
 /**
  * The header of a mobile view: `children` on the left, `trailing` on the
- * right, each built from islands. Back comes from the shell.
+ * right, each built from islands. Back comes from the shell; scoped headers
+ * use MobileHeader.Back to share its history action and caret.
  *
  * While it is mounted it owns the pane's header: `SplitHeaderLeft` /
  * `SplitHeaderRight` contributions from anywhere else in the pane render
@@ -133,6 +135,14 @@ function Title(props: {
   );
 }
 
+/** Use the shell's history-aware Back action and canonical caret. */
+function Back() {
+  return (
+    <MobileHeaderIsland class="size-10 justify-center !px-0">
+      <SplitBackButton />
+    </MobileHeaderIsland>
+  );
+}
 /** Opens the pane's details drawer. Renders nothing without details. */
 function Info() {
   const sidePanel = useSidePanel();
@@ -153,6 +163,7 @@ function Info() {
 
 export const MobileHeader = Object.assign(MobileHeaderRoot, {
   Title,
+  Back,
   Island: MobileHeaderIsland,
   Info,
 });

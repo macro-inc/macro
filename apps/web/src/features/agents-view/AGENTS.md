@@ -42,7 +42,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Keep All models as a desktop submenu and a pushed phone page; derive both catalogs from non-Suggested IDs, including search, and omit empty provider groups.
 - Use shared grouped Tabs for Agents modes and preserve Home's original track tabs and below-composer settings drawer; keep the Auto gate and host mode state unchanged.
 - Keep session model controls inside the composer; place only + on the left and model, dictation, then Send/Stop on the right, with Agents desktop mode/repository controls in the right group, Home settings below, and phone controls in their upper drawer.
-- Use `MobileHeader.Title` for the phone Agents title and retain its shared 12px inline island padding; do not replace it with a custom title container.
+- Use `MobileHeader.Title` with its shared padding and `MobileHeader.Back` with the shell's history action and caret; do not hand-build title or back islands.
 - Follow Root-and-parts composition and the [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
 - Keep catalog option identities stable across capability updates; isolate optional speed-marker discovery with Suspense so it cannot detach the editor.
 - Keep phone file inputs and overlay owners mounted on blur; add-menu, model, and repository sheets hold the composer expanded.
