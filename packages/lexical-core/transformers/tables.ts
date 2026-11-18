@@ -34,8 +34,13 @@ import {
   I_EQUATION_NODE,
 } from './katex';
 import {
+  E_AGENT_SESSION_MENTION,
+  E_BOOKING_LINK_MENTION,
   E_CONTACT_MENTION,
   E_DOCUMENT_MENTION,
+  E_GROUP_MENTION,
+  E_PR_MENTION,
+  E_TAG_MENTION,
   E_USER_MENTION,
   I_AGENT_SESSION_MENTION,
   I_BOOKING_LINK_MENTION,
@@ -304,14 +309,25 @@ const REG_EXP_TABLE_ROW = /^(?:\|)(.+)(?:\|)\s?$/;
 // Each delimiter cell needs at least one dash, so an empty `| | |` row stays a row.
 const REG_EXP_TABLE_ROW_DIVIDER = /^\|(?:\s*:?-+:?\s*\|)+\s*$/;
 
+// Chips export in the order EXTERNAL_TRANSFORMERS gives them, so a cell writes
+// each chip as a paragraph does.
 const externalTransformersWithinTables: Transformer[] = [
   BR_TAG_TO_LINE_BREAK,
   CHECK_LIST,
   E_USER_MENTION,
+  E_GROUP_MENTION,
   I_DOCUMENT_MENTION, // for citations
   E_DOCUMENT_MENTION,
+  I_PR_MENTION,
+  I_BOOKING_LINK_MENTION,
+  I_AGENT_SESSION_MENTION,
+  E_PR_MENTION,
+  E_BOOKING_LINK_MENTION,
+  E_AGENT_SESSION_MENTION,
   E_CONTACT_MENTION,
   I_DATE_MENTION,
+  E_TAG_MENTION,
+  I_CONNECT_APP,
   E_BLOCK_EQUATION_NODE,
   E_INLINE_EQUATION_NODE,
   IMAGE,
@@ -319,6 +335,7 @@ const externalTransformersWithinTables: Transformer[] = [
   ...HTML_ENTITY_TRANSFORMERS,
   ...HTML_TEXT_FORMAT_TRANSFORMERS,
   ...TRANSFORMERS,
+  UNKNOWN_MENTION, // Last: the fallback for tags nothing above recognizes
 ];
 
 // Cells import every inline chip a paragraph imports, since agents write them
