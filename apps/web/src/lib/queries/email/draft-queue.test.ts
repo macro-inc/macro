@@ -400,6 +400,30 @@ const workingCopy = (status: LocalDraft['status']): LocalDraft => ({
   updatedAt: 1,
 });
 
+it('drops a synced working copy from its cached thread when the discard is enqueued', async () => {
+  const { operations } = await setup();
+  vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('synced'));
+  expect(
+    await deleteEmailDraftQueued({
+      draftId: serverId,
+      threadId: 'local-thread',
+    })
+  ).toEqual({ kind: 'queued' });
+  const operation = operations[0];
+  const response = optimisticContextOf(operation)!
+    .optimisticResponse as DeleteEmailDraftMutation;
+  expect(operation.variables?.input.draftId).toBe(handle);
+  expect(response.deleteEmailDraft).toMatchObject({
+    threadDeleted: true,
+    thread: {
+      isDraft: false,
+      mailDraftPreview: null,
+      messages: [],
+      mailDraftState: { drafts: [] },
+    },
+  });
+});
+
 it('reads authoritative content once the local working copy is synced', async () => {
   const { draftResult } = await setup();
   const cached = draftResult();
