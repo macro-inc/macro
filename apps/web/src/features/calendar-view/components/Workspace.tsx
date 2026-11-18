@@ -139,82 +139,80 @@ function CalendarPages() {
   });
 
   return (
-    <Layer depth={2}>
-      <div class="flex min-w-0 min-h-0 flex-1 flex-col">
-        <SyncStatus
-          syncing={calendarPager.activeData()?.isSyncing() ?? false}
-        />
-        <RangeUnavailableBanner
-          class={isMobile() ? 'order-last' : undefined}
-          fullWidth={isMobile()}
-        />
-        <div
-          ref={setViewport}
-          class="relative flex min-w-0 min-h-0 flex-1 overflow-hidden"
-          role="region"
-          aria-label="Calendar periods"
-        >
-          <Pager.Viewport class="size-full min-w-0 min-h-0">
-            <For each={CALENDAR_PAGE_IDS}>
-              {(pageId) => (
-                <Pager.Page id={pageId}>
-                  <Show when={mountedPages().includes(pageId)}>
-                    <CalendarPeriodPage
-                      id={pageId}
-                      useNarrowDayHeaders={useNarrowDayHeaders()}
-                    />
-                  </Show>
-                </Pager.Page>
-              )}
-            </For>
-          </Pager.Viewport>
-          <Show when={viewport()}>
-            {(boundary) => (
-              <SelectedCalendarEvent
-                boundary={boundary()}
-                anchor={calendarView.selectedEventAnchor}
-                event={calendarView.selectedEvent}
-                timeFormat={() => calendarView.displaySettings.timeFormat}
-                onClose={calendarView.closeEventDetails}
-              />
+    <div class="flex min-w-0 min-h-0 flex-1 flex-col">
+      <SyncStatus syncing={calendarPager.activeData()?.isSyncing() ?? false} />
+      <RangeUnavailableBanner
+        class={isMobile() ? 'order-last' : undefined}
+        fullWidth={isMobile()}
+      />
+      <div
+        ref={setViewport}
+        class="relative flex min-w-0 min-h-0 flex-1 overflow-hidden"
+        role="region"
+        aria-label="Calendar periods"
+      >
+        <Pager.Viewport class="size-full min-w-0 min-h-0">
+          <For each={CALENDAR_PAGE_IDS}>
+            {(pageId) => (
+              <Pager.Page id={pageId}>
+                <Show when={mountedPages().includes(pageId)}>
+                  <CalendarPeriodPage
+                    id={pageId}
+                    useNarrowDayHeaders={useNarrowDayHeaders()}
+                  />
+                </Show>
+              </Pager.Page>
             )}
-          </Show>
-          <Show when={isMobile()}>
-            <PagerSwipeGestures
-              edgeInset={CALENDAR_SWIPE_EDGE_INSET}
-              canStart={(event) =>
-                !(
-                  event.target instanceof Element &&
-                  event.target.closest(
-                    'button, input, select, textarea, [role="button"], .fc-event'
-                  )
-                )
-              }
+          </For>
+        </Pager.Viewport>
+        <Show when={viewport()}>
+          {(boundary) => (
+            <SelectedCalendarEvent
+              boundary={boundary()}
+              anchor={calendarView.selectedEventAnchor}
+              event={calendarView.selectedEvent}
+              timeFormat={() => calendarView.displaySettings.timeFormat}
+              onClose={calendarView.closeEventDetails}
             />
-          </Show>
-          <SetupStatus
-            data={calendarPager.activeData()}
-            hasOverlayEvents={calendarPager.activeTeamEvents().length > 0}
+          )}
+        </Show>
+        <Show when={isMobile()}>
+          <PagerSwipeGestures
+            edgeInset={CALENDAR_SWIPE_EDGE_INSET}
+            canStart={(event) =>
+              !(
+                event.target instanceof Element &&
+                event.target.closest(
+                  'button, input, select, textarea, [role="button"], .fc-event'
+                )
+              )
+            }
           />
-        </div>
+        </Show>
+        <SetupStatus
+          data={calendarPager.activeData()}
+          hasOverlayEvents={calendarPager.activeTeamEvents().length > 0}
+        />
       </div>
-    </Layer>
+    </div>
   );
 }
 
 function CalendarPageContent(props: { agenda: boolean }) {
   return (
-    <div
-      ref={tourTarget(CALENDAR_TOUR.grid)}
-      class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col not-touch:m-3 not-touch:overflow-hidden not-touch:rounded-xl not-touch:bg-surface-3"
-    >
-      <Show when={props.agenda} fallback={<CalendarPages />}>
-        <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
-          <AgendaContent />
-          <AgendaSetup />
-        </div>
-      </Show>
-    </div>
+    <Layer offset={1}>
+      <div
+        ref={tourTarget(CALENDAR_TOUR.grid)}
+        class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col not-touch:m-3 not-touch:overflow-hidden not-touch:rounded-xl not-touch:bg-surface"
+      >
+        <Show when={props.agenda} fallback={<CalendarPages />}>
+          <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+            <AgendaContent />
+            <AgendaSetup />
+          </div>
+        </Show>
+      </div>
+    </Layer>
   );
 }
 

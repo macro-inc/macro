@@ -14,11 +14,17 @@ vi.mock('@queries/calendar/mutations', () => ({
   useRsvpCalendarEventMutation: () => ({ mutate }),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
-vi.mock('@ui', () => ({
-  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button onClick={props.onClick}>{props.children}</button>
-  ),
-}));
+vi.mock('@ui', async () => {
+  const { Layer } = await import('@ui/components/Layer');
+  const { cn } = await import('@ui/utils/classname');
+  return {
+    Layer,
+    cn,
+    Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
+      <button onClick={props.onClick}>{props.children}</button>
+    ),
+  };
+});
 vi.mock('../../calendar/components/EventRsvpScopeDialog', () => ({
   EventRsvpScopeDialog: (props: {
     open: boolean;

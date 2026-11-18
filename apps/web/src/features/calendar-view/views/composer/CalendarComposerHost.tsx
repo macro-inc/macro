@@ -2,6 +2,7 @@ import { useCalendarView } from '@app/features/calendar/components/CalendarViewC
 import { CalendarComposerHostContext } from '@app/features/calendar/context/calendar-composer-host-context';
 import { createCalendarComposerSession } from '@app/features/calendar/primitives/create-calendar-composer-session';
 import { createCalendarPanelState } from '@app/features/calendar/primitives/create-calendar-panel-state';
+import type { ComposerHeaderDrag } from '@app/features/calendar/primitives/create-composer-header-drag';
 import { createPinnedComposerSelection } from '@app/features/calendar/primitives/create-pinned-composer-selection';
 import { t } from '@app/lib/i18n';
 import { useBeforeLeave } from '@app/lib/split-router';
@@ -23,6 +24,7 @@ export function CalendarComposerHost(props: ParentProps) {
   const owner = getOwner();
   const [boundary, setBoundary] = createSignal<HTMLElement>();
   const [dock, setDock] = createSignal<HTMLElement>();
+  const [drag, setDrag] = createSignal<ComposerHeaderDrag>();
   const sessions = createCalendarComposerSession({
     confirmDiscard: () =>
       confirmDialog(
@@ -76,6 +78,8 @@ export function CalendarComposerHost(props: ParentProps) {
         boundary,
         dock,
         setDock,
+        drag,
+        setDrag,
         cardPinned: panels.cardPinned,
         setCardPinned: panels.setCardPinned,
         leftPanelPinned: panels.leftPanelPinned,

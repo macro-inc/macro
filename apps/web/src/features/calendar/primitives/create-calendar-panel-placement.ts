@@ -33,6 +33,13 @@ export function createCalendarPanelPlacement(options: {
   const drag = createComposerHeaderDrag({
     boundary: () => options.boundary()?.getBoundingClientRect(),
     surface: () => options.surface()?.getBoundingClientRect(),
+    pinTarget: () => {
+      const sidebar = options
+        .boundary()
+        ?.querySelector<HTMLElement>('[data-calendar-sidebar]');
+      const bounds = sidebar?.getBoundingClientRect();
+      return bounds && bounds.width > 0 ? bounds : undefined;
+    },
     disabled: options.disabled,
     pinned: options.pinned,
     onPin: options.onPin,
@@ -55,6 +62,8 @@ export function createCalendarPanelPlacement(options: {
     const dock = options.dock();
     if (boundary) observer.observe(boundary);
     if (dock) observer.observe(dock);
+    const surface = options.surface();
+    if (surface) observer.observe(surface);
     onCleanup(() => observer.disconnect());
   });
   const docked = () => options.pinned() && !drag.state.active;
@@ -77,5 +86,23 @@ export function createCalendarPanelPlacement(options: {
       Math.max(8, ((boundary?.width ?? window.innerWidth) - 384) / 2);
     return new DOMRect(left, (boundary?.top ?? 0) + 108, 0, 0);
   };
-  return { drag, docked, dockRect, anchorRect };
+  const maxHeight = () => {
+    version();
+    if (docked()) return dockRect()?.height;
+    const root = options.boundary();
+    const boundary =
+      root
+        ?.querySelector<HTMLElement>('.calendar-view-content')
+        ?.getBoundingClientRect() ?? root?.getBoundingClientRect();
+    const top = Math.max(16, boundary?.top ?? 16);
+    const bottom = Math.min(
+      window.innerHeight - 16,
+      boundary?.bottom ?? window.innerHeight - 16
+    );
+    const position = drag.position();
+    const surfaceTop =
+      position?.y ?? options.surface()?.getBoundingClientRect().top ?? top;
+    return Math.max(0, bottom - Math.max(top, surfaceTop));
+  };
+  return { drag, docked, dockRect, anchorRect, maxHeight };
 }

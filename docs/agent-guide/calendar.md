@@ -21,7 +21,7 @@ desktop and mobile Join with work and personal Google accounts signed in; a work
 calendar should open Meet with the work account. Search results without loaded
 calendar account metadata and other conferencing providers keep their original URL.
 
-Day, Week, Month, and Agenda use the same raised `surface-3` content card on
+Day, Week, Month, and Agenda use the same `Layer`-raised `bg-surface` card on
 desktop, with 12px outer gaps and rounded, clipped corners. Navigation controls
 and the month title stay outside; day headers, all-day events, and the grid stay
 inside. Pinning a left panel preserves the gap. In Day and Week, the opening
@@ -35,6 +35,12 @@ the same drag primitive and sidebar slot. Editing a pinned event card keeps the
 composer pinned there. A dirty editor must pass its discard guard before a
 different card takes the slot. Escape, pointer cancellation, or lost window focus
 cancels a drag without discarding edits. Header controls keep their normal behavior.
+Dragging replaces navigation with a dashed **Pin here** target, including when
+navigation starts collapsed. A drop there opens the left panel; an outside drop
+or Escape restores navigation. Pinned cards follow both axes when lifted. Floating
+cards cap their height to the available calendar/viewport space; fixed headers
+and footers frame the scrolling body. Agenda day headers are opaque at the card's
+layer depth, and RSVP choices sit on solid surfaces with accent-selected replies.
 While pinned, selecting another editable occurrence replaces the editor after
 discard confirmation when needed. Selecting the same occurrence preserves the
 draft. Read-only occurrences retain details and never gain edit access. Pinned

@@ -28,25 +28,28 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
   const pinned = () => host.sessions.state.pinned;
   let content: HTMLDivElement | undefined;
   let operation: UiOperation | undefined;
-  const { drag, docked, dockRect, anchorRect } = createCalendarPanelPlacement({
-    boundary: host.boundary,
-    dock: host.dock,
-    surface: () => content,
-    anchor: () => session.request.anchorRect?.(),
-    disabled: () => host.sessions.state.transitioning,
-    pinned,
-    onPin: () => host.sessions.setPinned(session.key, true),
-    onUnpin: () => host.sessions.setPinned(session.key, false),
-    onStart: () => {
-      operation = startUiOperation('calendar.composer.drag');
-    },
-    onFinish: (outcome) => {
-      operation?.span.setAttr('calendar.composer.drag_outcome', outcome);
-      if (outcome === 'cancelled') operation?.cancel();
-      else operation?.afterPaint();
-      operation = undefined;
-    },
-  });
+  const { drag, docked, dockRect, anchorRect, maxHeight } =
+    createCalendarPanelPlacement({
+      boundary: host.boundary,
+      dock: host.dock,
+      surface: () => content,
+      anchor: () => session.request.anchorRect?.(),
+      disabled: () => host.sessions.state.transitioning,
+      pinned,
+      onPin: () => host.sessions.setPinned(session.key, true),
+      onUnpin: () => host.sessions.setPinned(session.key, false),
+      onStart: () => {
+        operation = startUiOperation('calendar.composer.drag');
+        host.setDrag(drag);
+      },
+      onFinish: (outcome) => {
+        host.setDrag(undefined);
+        operation?.span.setAttr('calendar.composer.drag_outcome', outcome);
+        if (outcome === 'cancelled') operation?.cancel();
+        else operation?.afterPaint();
+        operation = undefined;
+      },
+    });
   onMount(() => {
     // Let the creation menu finish its focus handoff before focusing the editor.
     const openingFrame = requestAnimationFrame(() => {
@@ -88,7 +91,7 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
             width: docked() ? `${dockRect()?.width ?? 384}px` : '384px',
             height: docked() ? `${dockRect()?.height ?? 0}px` : undefined,
             'max-width': 'calc(100vw - 32px)',
-            'max-height': 'calc(100dvh - 32px)',
+            'max-height': `${maxHeight()}px`,
           }}
           onOpenAutoFocus={(event) => event.preventDefault()}
           onEscapeKeyDown={(event) => {

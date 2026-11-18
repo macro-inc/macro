@@ -1,5 +1,6 @@
 export default {
   busy: 'Busy',
+  pinHere: 'Pin here',
   chooseMonth: 'Choose month',
   previousYear: 'Previous year',
   nextYear: 'Next year',

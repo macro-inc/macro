@@ -54,11 +54,16 @@ function setup() {
   let disabled = false;
   let pinned = false;
   let width = 1000;
+  let height = 500;
+  let target:
+    | { left: number; top: number; width: number; height: number }
+    | undefined;
   const source = createRoot((dispose) => {
     disposers.push(dispose);
     return createComposerHeaderDrag({
       boundary: () => ({ left: 300, top: 100, width, height: 800 }),
-      surface: () => ({ left: 500, top: 200, width: 384, height: 500 }),
+      surface: () => new DOMRect(500, 200, 384, height),
+      pinTarget: () => target,
       disabled: () => disabled,
       pinned: () => pinned,
       onPin,
@@ -76,6 +81,12 @@ function setup() {
     onFinish,
     setPinned: (value: boolean) => {
       pinned = value;
+    },
+    setHeight: (value: number) => {
+      height = value;
+    },
+    setTarget: (value: typeof target) => {
+      target = value;
     },
     resize: (nextWidth: number) => {
       width = nextWidth;
@@ -187,7 +198,26 @@ it('keeps a moved surface inside resized content without mutating its saved posi
   expect(source.position()).toEqual({ x: 750, y: 240 });
 });
 
-it('drags a pinned composer over the grid and restores its event anchor on drop', () => {
+it('uses the visible sidebar footprint rather than the expanded dock width', () => {
+  const { header, source, setTarget, onPin } = setup();
+  setTarget({ left: 300, top: 100, width: 250, height: 800 });
+  pointer(header, 'pointerdown', 600, 210);
+  pointer(window, 'pointermove', 600, 250);
+  expect(source.state.overTarget).toBe(false);
+  pointer(window, 'pointerup', 540, 250);
+  expect(onPin).toHaveBeenCalledOnce();
+});
+it('lifts a full-height pinned card along both pointer axes', () => {
+  const { header, source, setPinned, setHeight } = setup();
+  setPinned(true);
+  setHeight(800);
+  pointer(header, 'pointerdown', 500, 210);
+  pointer(window, 'pointermove', 900, 330);
+  expect(source.position()).toEqual({ x: 900, y: 320 });
+  pointer(window, 'pointerup', 900, 330);
+  expect(source.state.position).toBeDefined();
+});
+it('drags a pinned composer over the grid and keeps its drop position', () => {
   const { header, source, onPin, onUnpin, onFinish, setPinned } = setup();
   setPinned(true);
   pointer(header, 'pointerdown', 500, 210);
@@ -199,7 +229,7 @@ it('drags a pinned composer over the grid and restores its event anchor on drop'
   pointer(window, 'pointerup', 900, 250);
   expect(onUnpin).toHaveBeenCalledOnce();
   expect(onPin).not.toHaveBeenCalled();
-  expect(source.state.position).toBeUndefined();
+  expect(source.state.position).toEqual({ x: 900, y: 240 });
   expect(onFinish).toHaveBeenLastCalledWith('floating');
 });
 
@@ -230,7 +260,7 @@ it('resets a floating position after pinning and unpins the same session on a la
   pointer(header, 'pointerdown', 500, 210);
   pointer(window, 'pointerup', 900, 250);
   expect(onUnpin).toHaveBeenCalledOnce();
-  expect(source.state.position).toBeUndefined();
+  expect(source.state.position).toEqual({ x: 900, y: 240 });
 });
 
 it('cancels a pinned drag without changing pinning or its anchor', () => {

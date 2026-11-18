@@ -472,28 +472,31 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
   let content: HTMLDivElement | undefined;
   let operation: UiOperation | undefined;
   const pinned = () => host?.cardPinned() ?? false;
-  const { drag, docked, dockRect, anchorRect } = createCalendarPanelPlacement({
-    boundary: () => host?.boundary() ?? props.boundary,
-    dock: () => host?.dock(),
-    surface: () => content,
-    anchor: () =>
-      props.anchor.isConnected
-        ? props.anchor.getBoundingClientRect()
-        : undefined,
-    pinned,
-    disabled: () => !host || host.sessions.state.transitioning,
-    onPin: () => host?.setCardPinned(true),
-    onUnpin: () => host?.setCardPinned(false),
-    onStart: () => {
-      operation = startUiOperation('calendar.event_card.drag');
-    },
-    onFinish: (outcome) => {
-      operation?.span.setAttr('calendar.event_card.drag_outcome', outcome);
-      if (outcome === 'cancelled') operation?.cancel();
-      else operation?.afterPaint();
-      operation = undefined;
-    },
-  });
+  const { drag, docked, dockRect, anchorRect, maxHeight } =
+    createCalendarPanelPlacement({
+      boundary: () => host?.boundary() ?? props.boundary,
+      dock: () => host?.dock(),
+      surface: () => content,
+      anchor: () =>
+        props.anchor.isConnected
+          ? props.anchor.getBoundingClientRect()
+          : undefined,
+      pinned,
+      disabled: () => !host || host.sessions.state.transitioning,
+      onPin: () => host?.setCardPinned(true),
+      onUnpin: () => host?.setCardPinned(false),
+      onStart: () => {
+        operation = startUiOperation('calendar.event_card.drag');
+        host?.setDrag(drag);
+      },
+      onFinish: (outcome) => {
+        host?.setDrag(undefined);
+        operation?.span.setAttr('calendar.event_card.drag_outcome', outcome);
+        if (outcome === 'cancelled') operation?.cancel();
+        else operation?.afterPaint();
+        operation = undefined;
+      },
+    });
   const deleteDialog = useDeleteEventDialog({
     event: () => props.event,
     onDeleted: () => props.onOpenChange(false),
@@ -600,9 +603,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
               style={{
                 height: docked() ? `${dockRect()?.height ?? 0}px` : undefined,
                 width: docked() ? `${dockRect()?.width ?? 384}px` : undefined,
-                'max-height': docked()
-                  ? undefined
-                  : 'min(32rem, var(--kb-popper-content-available-height, 32rem))',
+                'max-height': `${maxHeight()}px`,
               }}
             >
               <Popover.Title class="sr-only">{props.event.title}</Popover.Title>

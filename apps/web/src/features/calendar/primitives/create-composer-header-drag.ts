@@ -25,11 +25,13 @@ interface HeaderDragState {
 export type ComposerDragOutcome = 'pinned' | 'floating' | 'cancelled';
 
 const DRAG_THRESHOLD = 8;
+const MIN_FLOATING_HEIGHT = 144;
 
 /** Own pointer capture and cancellation without moving or replacing the editor. */
 export function createComposerHeaderDrag(options: {
   boundary: Accessor<ComposerDragBounds | undefined>;
   surface: Accessor<ComposerDragBounds | undefined>;
+  pinTarget?: Accessor<ComposerDragBounds | undefined>;
   disabled: Accessor<boolean>;
   pinned?: Accessor<boolean>;
   onPin: () => void;
@@ -45,7 +47,10 @@ export function createComposerHeaderDrag(options: {
   let gesture: HeaderGesture | undefined;
   const target = () => {
     const boundary = options.boundary();
-    return boundary ? composerPinTarget(boundary) : undefined;
+    return (
+      options.pinTarget?.() ??
+      (boundary ? composerPinTarget(boundary) : undefined)
+    );
   };
 
   const detach = () => {
@@ -82,7 +87,7 @@ export function createComposerHeaderDrag(options: {
     if (!state.active && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
     event.preventDefault();
     if (!state.active) options.onStart?.();
-    const pinTarget = composerPinTarget(boundary);
+    const pinTarget = target() ?? composerPinTarget(boundary);
     const overTarget =
       event.clientX >= pinTarget.left &&
       event.clientX <= pinTarget.left + pinTarget.width &&
@@ -93,7 +98,13 @@ export function createComposerHeaderDrag(options: {
       overTarget,
       position: clampComposerPosition(
         { x: current.surface.left + dx, y: current.surface.top + dy },
-        current.surface,
+        // Keep the header reachable, but let a tall lifted panel follow both axes.
+        {
+          left: current.surface.left,
+          top: current.surface.top,
+          width: current.surface.width,
+          height: Math.min(MIN_FLOATING_HEIGHT, current.surface.height),
+        },
         boundary
       ),
     });
@@ -109,7 +120,7 @@ export function createComposerHeaderDrag(options: {
     setState({
       active: false,
       overTarget: false,
-      position: active && (pin || wasPinned) ? undefined : state.position,
+      position: pin ? undefined : state.position,
     });
     if (!active) return;
     if (pin && !wasPinned) options.onPin();
@@ -163,7 +174,15 @@ export function createComposerHeaderDrag(options: {
     const boundary = options.boundary();
     const surface = options.surface();
     if (!current || !boundary || !surface) return current;
-    return clampComposerPosition(current, surface, boundary);
+    // Floating panels cap their body to the space below the header. Clamp the
+    // header, not the previous pinned height, so release cannot jump upward.
+    const size = {
+      left: surface.left,
+      top: surface.top,
+      width: surface.width,
+      height: Math.min(MIN_FLOATING_HEIGHT, surface.height),
+    };
+    return clampComposerPosition(current, size, boundary);
   };
   onCleanup(cancel);
   return {
@@ -175,3 +194,5 @@ export function createComposerHeaderDrag(options: {
     reset: () => setState('position', undefined),
   };
 }
+
+export type ComposerHeaderDrag = ReturnType<typeof createComposerHeaderDrag>;

@@ -360,7 +360,11 @@ export function CalendarSidebar() {
   };
 
   return (
-    <ViewSidebar.Root aria-label="Calendar navigation">
+    <ViewSidebar.Root
+      aria-label="Calendar navigation"
+      data-calendar-sidebar=""
+      class={composerHost?.drag()?.state.active ? 'invisible' : undefined}
+    >
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />

@@ -33,6 +33,8 @@ host lives in `../block-calendar/`.
   and `create-composer-header-drag.ts`. `create-calendar-panel-state.ts` owns
   exclusive sidebar occupancy and guarded card/editor handoff. Pinned occurrence changes use
   `create-pinned-composer-selection.ts` and `replacePinned`; resolve selection again after discard approval.
+  During drag, hide sidebar contents behind its dashed target. Keep the pointer's
+  two-axis position after release and cap the floating body below fixed chrome.
   Keep replaced form and split components unwired for reference.
 - `primitives/create-composer-metadata.ts` owns explicit visibility/time-zone edits;
   the optional metadata argument to `useEventEditor.save` preserves legacy callers.
@@ -105,9 +107,9 @@ host lives in `../block-calendar/`.
 - Compose the desktop date-navigation/tabs/search row above the 22px month title
   and creation actions; retain the existing touch header and matching skeleton.
   The month picker uses 304px width and 64×40px choices.
-- Keep the desktop content card on `surface-3`, with 12px gaps and clipped rounded
-  corners; the navigation and month-title rows stay outside it in every view.
-  Leave the opening hour label fully inside the time-grid viewport.
+- Wrap the desktop content card in `Layer offset={1}` and use `bg-surface`, with
+  12px gaps and clipped rounded corners; keep Agenda headers opaque at the same
+  depth. Keep navigation outside and the opening hour label inside the viewport.
 - Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
   focus scope attaches to real content and restores focus when the picker closes.
 - Keep Agenda on the navigation context, with five fourteen-day windows clipped
