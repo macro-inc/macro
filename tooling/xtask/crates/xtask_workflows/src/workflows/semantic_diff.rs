@@ -126,7 +126,7 @@ fn diff_value(
         _ if before == after => {}
 
         (Value::String(before), Value::String(after))
-            if same_expressions(before, after, at.ends_with(".if")) => {}
+            if same_expressions(before, after, is_condition(at)) => {}
 
         _ if matches!(scalars, Scalars::ActionInput)
             && input_text(before).is_some_and(|text| input_text(after) == Some(text)) => {}
@@ -155,20 +155,40 @@ fn is_action(step: &serde_yaml::Mapping) -> bool {
         .is_some_and(|uses| !uses.starts_with("docker://"))
 }
 
-/// The string GitHub passes an action for a scalar input.
+/// The string GitHub passes an action for a scalar input. Only booleans and
+/// integers: GitHub may re-spell a float (`3.0` as `3`), so a float and a
+/// string stay different.
 fn input_text(value: &Value) -> Option<String> {
     match value {
         Value::String(text) => Some(text.clone()),
         Value::Bool(flag) => Some(flag.to_string()),
-        Value::Number(number) => Some(number.to_string()),
+        Value::Number(number) if number.is_i64() || number.is_u64() => Some(number.to_string()),
         _ => None,
+    }
+}
+
+/// The path segments after the file name, which itself contains dots.
+fn segments(at: &str) -> Vec<&str> {
+    let after_file = [".yml.", ".yaml."]
+        .iter()
+        .find_map(|extension| at.split_once(extension).map(|(_, rest)| rest))
+        .unwrap_or(at);
+    after_file.split('.').collect()
+}
+
+/// Whether `at` is an `if:` GitHub evaluates: a job's, a step's, or a
+/// composite action step's, not an input or env var named `if`.
+fn is_condition(at: &str) -> bool {
+    match segments(at).as_slice() {
+        ["jobs", _, "if"] => true,
+        ["jobs", _, steps, "if"] | ["runs", steps, "if"] => steps.starts_with("steps["),
+        _ => false,
     }
 }
 
 /// Whether `at` is an event directly under a workflow's `on:`.
 fn is_trigger(at: &str) -> bool {
-    at.rsplit_once('.')
-        .is_some_and(|(parent, _)| parent.ends_with(".on"))
+    matches!(segments(at).as_slice(), ["on", _])
 }
 
 fn is_empty_trigger(value: &Value) -> bool {

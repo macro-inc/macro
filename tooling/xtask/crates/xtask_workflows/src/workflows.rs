@@ -544,6 +544,7 @@ pub fn generate() -> Result<()> {
 /// Fail if any committed workflow, or `checks.lock`, differs from what we'd
 /// generate now.
 pub fn check() -> Result<()> {
+    reject_hand_written_actions()?;
     let dir = workflows_dir()?;
     let mut stale = Vec::new();
     for workflow in WORKFLOWS {
@@ -588,6 +589,34 @@ pub fn check() -> Result<()> {
         );
     }
     println!("all generated workflows are up to date");
+    Ok(())
+}
+
+/// Fail on a composite action under `.github/actions` that isn't in
+/// `composite::ACTIONS`: it would be neither generated nor checked.
+fn reject_hand_written_actions() -> Result<()> {
+    let actions_dir = xtask_paths::repo_root().join(".github/actions");
+    for entry in
+        fs::read_dir(&actions_dir).with_context(|| format!("reading {}", actions_dir.display()))?
+    {
+        let path = entry?.path();
+        let Some(directory) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let has_action = ["action.yml", "action.yaml"]
+            .iter()
+            .any(|file| path.join(file).is_file());
+        if has_action
+            && !composite::ACTIONS
+                .iter()
+                .any(|action| action.directory == directory)
+        {
+            bail!(
+                "{} is not generated: write it as a module in src/workflows/composite/ and add it to composite::ACTIONS",
+                path.display()
+            );
+        }
+    }
     Ok(())
 }
 

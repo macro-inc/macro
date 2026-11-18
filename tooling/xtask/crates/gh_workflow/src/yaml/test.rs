@@ -49,6 +49,10 @@ fn a_workflow_shape_renders_in_block_style() {
 fn strings_read_back_unchanged() {
     let strings = [
         "plain words",
+        "\techo a\necho b\n",
+        "a\u{2028}b",
+        "line\u{2029}\nnext\n",
+        "\u{feff}x",
         "${{ github.event_name == 'push' && 'a' || 'b' }}",
         "true",
         "on",

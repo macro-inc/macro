@@ -226,7 +226,12 @@ fn emit_entries(out: &mut String, entries: &[(String, Node)], indent: usize, fir
             let end = out[start..]
                 .find('\n')
                 .map_or(out.len(), |offset| start + offset);
-            let comment = format!(" # {}", line.join("; ").replace('\n', " "));
+            let text: String = line
+                .join("; ")
+                .chars()
+                .map(|c| if needs_escape(c) { ' ' } else { c })
+                .collect();
+            let comment = format!(" # {text}");
             out.insert_str(end, &comment);
         }
     }
@@ -335,15 +340,24 @@ fn emit_block(out: &mut String, text: &str, content_indent: usize) {
 
 /// A literal block scalar can't start with a space or a blank line (its
 /// indentation would be misread) and can't carry control characters.
+/// A block scalar takes its indentation from its first line, which must
+/// therefore start with neither a space nor a tab.
 fn fits_block_scalar(text: &str) -> bool {
-    !text.starts_with([' ', '\n'])
+    !text.starts_with([' ', '\t', '\n'])
         && text
             .chars()
-            .all(|c| c == '\n' || c == '\t' || !c.is_control())
+            .all(|c| c == '\n' || c == '\t' || !needs_escape(c))
+}
+
+/// Characters only a double-quoted string can carry: controls, and the
+/// Unicode line and paragraph separators and byte-order mark, which YAML
+/// reads as line breaks or strips.
+fn needs_escape(c: char) -> bool {
+    c.is_control() || matches!(c, '\u{2028}' | '\u{2029}' | '\u{feff}')
 }
 
 fn emit_quoted(out: &mut String, text: &str) {
-    if text.chars().any(|c| c.is_control()) {
+    if text.chars().any(needs_escape) {
         emit_double_quoted(out, text);
         return;
     }
@@ -361,7 +375,7 @@ fn emit_double_quoted(out: &mut String, text: &str) {
             '\n' => out.push_str("\\n"),
             '\t' => out.push_str("\\t"),
             '\r' => out.push_str("\\r"),
-            c if c.is_control() => {
+            c if needs_escape(c) => {
                 let _ = write!(out, "\\u{:04x}", c as u32);
             }
             c => out.push(c),
@@ -382,7 +396,7 @@ fn is_plain_safe(text: &str) -> bool {
         || (first == '-' && (text.len() == 1 || text[1..].starts_with(' ')))
         || text.ends_with(':');
     let has_unsafe_inner =
-        text.contains(": ") || text.contains(" #") || text.chars().any(|c| c.is_control());
+        text.contains(": ") || text.contains(" #") || text.chars().any(needs_escape);
 
     !has_unsafe_edge && !has_unsafe_inner && !is_reserved(text) && !looks_numeric(text)
 }

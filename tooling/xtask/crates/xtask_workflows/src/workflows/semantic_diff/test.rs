@@ -113,3 +113,25 @@ fn expression_spelling_is_not_semantic_but_its_meaning_is() {
         ]
     );
 }
+
+#[test]
+fn only_conditions_compare_as_expressions() {
+    let before = "jobs:\n  a:\n    if: a == 'x'\n    steps:\n    - uses: o/r@v\n      with:\n        if: a=='x'\n";
+    let after = "jobs:\n  a:\n    if: (a == 'x')\n    steps:\n    - uses: o/r@v\n      with:\n        if: (a == 'x')\n";
+
+    assert_eq!(
+        diff_file("w.yml", Some(before), Some(after)).unwrap(),
+        vec!["w.yml.jobs.a.steps[0].with.if: \"a=='x'\" -> \"(a == 'x')\""]
+    );
+}
+
+#[test]
+fn a_float_action_input_differs_from_its_string_spelling() {
+    let before = "jobs:\n  a:\n    steps:\n    - uses: o/r@v\n      with:\n        version: 3.0\n";
+    let after = "jobs:\n  a:\n    steps:\n    - uses: o/r@v\n      with:\n        version: '3.0'\n";
+
+    assert_eq!(
+        diff_file("w.yml", Some(before), Some(after)).unwrap(),
+        vec!["w.yml.jobs.a.steps[0].with.version: 3.0 -> \"3.0\""]
+    );
+}
