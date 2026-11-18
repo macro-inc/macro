@@ -16,6 +16,8 @@ export function SidebarSectionDragHandle<Key extends string>(props: {
   children: JSX.Element;
 }) {
   const dragId = `${props.reorder.scope}:${props.section}`;
+  // Register only the node with draggable.ref below. The directive/dragActivators
+  // would also attach the provider's timed sensor to embedded header controls.
   const draggable = createDraggable(dragId, {
     dragType: props.dragType ?? SIDEBAR_SECTION_DRAG_TYPE,
     dndScope: props.reorder.scope,

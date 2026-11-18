@@ -1,5 +1,5 @@
 import { fireEvent, render } from '@solidjs/testing-library';
-import { DragDropProvider } from '@thisbeyond/solid-dnd';
+import { DragDropProvider, DragDropSensors } from '@thisbeyond/solid-dnd';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CollapsibleSection } from './CollapsibleSection';
@@ -21,6 +21,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   localStorage.clear();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -175,9 +176,11 @@ describe('sidebar section composition', () => {
   });
 
   it('preserves named section regions and excludes checkbox labels from dragging', () => {
+    vi.useFakeTimers();
     const dragStarted = vi.fn();
     const result = render(() => (
       <DragDropProvider onDragStart={dragStarted}>
+        <DragDropSensors />
         <ViewSidebar.Root reorderId="labels">
           <ViewSidebar.Content>
             <ViewSidebar.Section id="plain" label="Plain section">
@@ -198,8 +201,11 @@ describe('sidebar section composition', () => {
     );
     const label = result.getByTestId('checkbox-label');
     fireEvent.mouseDown(label, { button: 0, clientX: 0, clientY: 0 });
+    vi.advanceTimersByTime(300);
+    expect(dragStarted).not.toHaveBeenCalled();
     fireEvent.mouseMove(document, { clientX: 20, clientY: 20 });
     fireEvent.mouseUp(document);
+    vi.useRealTimers();
     expect(dragStarted).not.toHaveBeenCalled();
     fireEvent.click(label);
     const checkbox = result.getByRole('checkbox', { name: 'Show calendar' });
