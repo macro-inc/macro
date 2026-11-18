@@ -641,8 +641,8 @@
 
       # DSS and its worker are separate Cargo packages with separate pruned
       # source closures, but CI hands both binaries to the same Pulumi stack.
-      # Bundle only the deploy output; local-stack-binaries keeps the worker
-      # opt-in by continuing to use the unbundled deployServiceBinaryPackages.
+      # Bundle only the deploy output; local-stack-binaries links the service's
+      # own binaries out of the bundle, so the worker stays opt-in there.
       documentStorageDeployBinaries =
         let
           cfg = builtins.fromJSON (builtins.readFile ../.github/services-config.json);
@@ -699,14 +699,42 @@
         "whatsapp-session-service"
       ];
 
+      # The deploy pipeline pushes the DSS and email bundles to the Nix cache,
+      # not the packages they copy from, so the local stack links those
+      # services' binaries out of the bundles and substitutes them instead of
+      # compiling. Linking only the service's own binaries keeps the workers
+      # opt-in.
+      deployBundles = {
+        document-storage-service = documentStorageDeployBinaries;
+        email-service = emailServiceDeployBinaries;
+      };
+
+      localStackDeployPackage =
+        serviceName:
+        let
+          unbundled = deployServiceBinaryPackages."deploy-service-binaries-${serviceName}";
+          bundle = deployBundles.${serviceName};
+          def = pkgs.lib.findFirst (
+            def: def.serviceName == serviceName
+          ) (throw "no deploy binary definition for ${serviceName}") deployServiceBinaryDefinitions;
+        in
+        if deployBundles ? ${serviceName} then
+          pkgs.runCommand "local-stack-${serviceName}-binaries" { } ''
+            mkdir -p $out/bin
+            ${pkgs.lib.concatMapStringsSep "\n" (binary: ''
+              test -x ${bundle}/bin/${binary}
+              ln -s ${bundle}/bin/${binary} $out/bin/${binary}
+            '') def.binaries}
+          ''
+        else
+          unbundled;
+
       localStackBinaries = pkgs.buildEnv {
         name = "local-stack-binaries";
         pathsToLink = [ "/bin" ];
         paths =
           pkgs.lib.attrValues localStackBinaryPackages
-          ++ map (
-            serviceName: deployServiceBinaryPackages."deploy-service-binaries-${serviceName}"
-          ) localStackDeployServiceNames;
+          ++ map localStackDeployPackage localStackDeployServiceNames;
       };
 
       # ── Lambda builds (crane + cargo-zigbuild) ─────────────────────

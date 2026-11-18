@@ -555,10 +555,12 @@ pub fn check_macro_db_migrations_job(name: &str, ships_code: &str) -> Job {
 }
 
 /// Build Nix targets using Namespace's mounted `/nix` cache volume.
-pub fn nix_build(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
+/// `max_jobs` is a count or `auto`: the hand-written nix.conf leaves Nix's
+/// default of one, which builds independent derivations one after the other.
+pub fn nix_build(name: &str, max_jobs: &str, targets: &str, done_msg: &str) -> Step<Run> {
     Step::new(name)
         .run(format!(
-            "set -euo pipefail\nnix build --print-build-logs {targets}\necho \"{done_msg}\""
+            "set -euo pipefail\nnix build --max-jobs {max_jobs} --print-build-logs {targets}\necho \"{done_msg}\""
         ))
         .shell("bash")
 }

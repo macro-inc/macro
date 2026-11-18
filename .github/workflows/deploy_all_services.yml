@@ -87,7 +87,7 @@ jobs:
     - name: Warm shared release deps
       run: |-
         set -euo pipefail
-        nix build --print-build-logs ".#deployCargoArtifacts"
+        nix build --max-jobs 1 --print-build-logs ".#deployCargoArtifacts"
         echo "Shared release deps realised into /nix/store; committed on job exit."
       shell: bash
     - name: Push to nix cache
@@ -140,7 +140,7 @@ jobs:
     - name: Warm shared lambda dep closure
       run: |-
         set -euo pipefail
-        nix build --print-build-logs ".#lambdaDeployCargoArtifacts" ".#callRecordingPreviewFfmpegLayer"
+        nix build --max-jobs 1 --print-build-logs ".#lambdaDeployCargoArtifacts" ".#callRecordingPreviewFfmpegLayer"
         echo "Shared lambda deps realised into /nix/store; committed on job exit."
       shell: bash
     - name: Push to nix cache
