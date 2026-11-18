@@ -1,0 +1,26 @@
+crates/code_execution/src/outbound/deno.rs
+  s_cb87bda6e61d39::t_88a6e104cf0fe5 628
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_cb87bda6e61d39::t_88a6e104cf0fe5 15-17,20-31,33
+crates/code_execution/AGENTS.md
+  s_cb87bda6e61d39::t_4ec9a704b89ec6 80-84
+crates/code_execution/src/outbound/deno/test.rs
+  s_cb87bda6e61d39::t_778ba519fe30aa 750-771
+  s_cb87bda6e61d39::t_2d94ab8a0be3a3 748-749
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e9333a4cd5d252ad72dcd554939330caaa152c62",
+  "prompts": {},
+  "sessions": {
+    "s_cb87bda6e61d39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4c0f4b8a-73f7-44f8-a102-78950ffd4542",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
