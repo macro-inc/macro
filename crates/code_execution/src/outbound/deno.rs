@@ -409,13 +409,16 @@ impl DenoRunner {
         if !exited_by_itself && let Some(pid) = pid {
             usage.sample(pid);
         }
+        // A run that failed before waiting (an output budget overrun, say)
+        // may still have a child that already exited on its own.
+        let killed = !exited_by_itself && !matches!(child.try_wait(), Ok(Some(_)));
         if let Some(status) = reap(&mut child).await {
             exit::ProcessExit {
                 status,
                 wall: spawned.elapsed(),
                 usage,
                 answered,
-                killed: !exited_by_itself,
+                killed,
             }
             .record(&tracing::Span::current());
         }
