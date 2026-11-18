@@ -291,3 +291,83 @@ it('keeps the people still matching typed text until its read lands', async () =
   expect(listed()).toEqual([]);
   client.clear();
 });
+
+it('keeps only the people the read for the typed text can list, from the same cache generation', async () => {
+  vi.useFakeTimers();
+  const client = new QueryClient();
+  const [search, setSearch] = createSignal('');
+  let changeGeneration = () => {};
+  const host = {
+    clientId: 'client',
+    onCacheChanged: () => () => {},
+    onCacheGenerationChanged: (listener: () => void) => {
+      changeGeneration = listener;
+      return () => {};
+    },
+  } as unknown as NonNullable<
+    ReturnType<Parameters<typeof createContactRecipientSource>[0]>['host']
+  >;
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return {
+        query: request.query,
+        source: 'cache',
+        sync: 'snapshot',
+        offline: false,
+        users: request.query
+          ? []
+          : [
+              {
+                id: 'macro|sam@example.com',
+                email: 'sam@example.com',
+                name: 'Sam Lee',
+              },
+            ],
+        nextCursor: null,
+      };
+    });
+  let source: ReturnType<typeof createContactRecipientSource> | undefined;
+  function Harness() {
+    source = createContactRecipientSource(
+      () => ({ userId: 'macro|viewer@example.com', host }),
+      {
+        search,
+        enabled: () => true,
+        selfId: () => undefined,
+        senderDomain: () => undefined,
+        includeSelf: () => true,
+      },
+      () => false,
+      reader
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const listed = () => source!.items().map((item) => item.data.name);
+  await vi.advanceTimersByTimeAsync(50);
+  expect(listed()).toEqual(['Sam Lee']);
+
+  // The cache splits typed text at white space only, so "sam," needs a comma.
+  setSearch('sam,');
+  expect(listed()).toEqual([]);
+  setSearch('');
+  await vi.advanceTimersByTimeAsync(250);
+  expect(listed()).toEqual(['Sam Lee']);
+  setSearch('SAM LEE');
+  expect(listed()).toEqual(['Sam Lee']);
+
+  // A new cache generation keeps nobody listed from the one before.
+  setSearch('');
+  await vi.advanceTimersByTimeAsync(250);
+  expect(listed()).toEqual(['Sam Lee']);
+  changeGeneration();
+  setSearch('sam');
+  expect(listed()).toEqual([]);
+  client.clear();
+});

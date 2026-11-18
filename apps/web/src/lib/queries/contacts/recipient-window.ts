@@ -8,21 +8,41 @@ import type {
   RecipientSourceInput,
 } from '@core/user/recipient-source';
 import type { IUser } from '@core/user/types';
-import { matchesTokenSubsequences } from '@core/util/string';
 import { createMemo } from 'solid-js';
 import { readContactDirectory } from './directory';
 import { createContactDirectoryList } from './directory-list';
 import type { createContactDirectoryWindow } from './directory-query';
 import { createContactExclusions } from './exclusions';
 
+const WHITE_SPACE = /\p{White_Space}+/u;
+
+const isSubsequence = (word: string, text: string) => {
+  let position = 0;
+  for (const character of word) {
+    const next = text.indexOf(character, position);
+    if (next < 0) return false;
+    position = next + character.length;
+  }
+  return true;
+};
+
 /** Whether a listed person can still match text typed since, as the contact
- * cache matches people: each typed word in order within name and address. */
-const stillMatches =
-  (search: string) => (item: CombinedRecipientItem<'user'>) =>
-    matchesTokenSubsequences(
-      `${item.data.name ?? ''} | ${item.data.email}`,
-      search
-    );
+ * cache matches recipients (`cache-core` people ranking): every word of the
+ * text, split at white space only, in order within the person's name (else
+ * the address's local part) and address. */
+const stillMatches = (search: string) => {
+  const words = search.toLowerCase().split(WHITE_SPACE).filter(Boolean);
+  return (item: CombinedRecipientItem<'user'>) => {
+    const { name, email } = item.data;
+    const label = (name ?? email.split('@')[0])
+      .split(WHITE_SPACE)
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    const text = `${label} | ${email.toLowerCase()}`;
+    return words.every((word) => isSubsequence(word, text));
+  };
+};
 
 /** A selector's query, exclusions and domain reach the ranker before its limit. */
 export function createContactRecipientSource(
@@ -64,7 +84,7 @@ export function createContactRecipientSource(
     items: createMemo<CombinedRecipientItem<'user'>[]>((shown) => {
       const page = directory.data();
       const current = scope();
-      const owner = `${current.userId ?? ''}\n${current.host?.clientId ?? ''}`;
+      const owner = `${current.userId ?? ''}\n${current.host?.clientId ?? ''}\n${directory.generation()}`;
       if (!page) {
         // The list drops its page from each keystroke until the read for
         // the new text lands. Keep the people shown who still match that
