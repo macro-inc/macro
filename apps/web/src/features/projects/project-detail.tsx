@@ -16,6 +16,7 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { createOpenTracker } from '@core/internal/open-tracker';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -95,6 +96,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
   usePending('project.detail', source.loading);
+  createOpenTracker('initiative', () => source.project()?.id);
   useSplitDisplayName(
     () => source.project()?.name ?? t('tabs.projectFallbackName')
   );

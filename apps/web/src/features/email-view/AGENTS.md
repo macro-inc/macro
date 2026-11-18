@@ -46,8 +46,10 @@ the Soup-backed thread list, and saved email views.
   editors; the mobile drawer shares People.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
-- `views/email-saved-views.tsx`: sidebar section (also the touch sidebar sheet), menus, the
-  builder dialog, header actions, unavailable and skipped-setting states.
+- `views/email-saved-views.tsx`: sidebar section, menus, the builder dialog,
+  header actions, unavailable and skipped-setting states. The section uses
+  the shell's sidebar layout to choose drag or, in the navigation sheet,
+  Move up and Move down.
 - Saved-view creation uses the shared `create-saved-view-creation` lifecycle and route-owned `SavedViewDraftHost` leave protection.
 
 ## Gotchas

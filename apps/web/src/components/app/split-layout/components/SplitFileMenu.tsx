@@ -907,13 +907,18 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     ].filter((op) => !!op);
   });
 
+  // Key each tool by its position before filtering: callers pass `tools` as
+  // a JSX array, which every read of `props.tools` rebuilds, so looking a tool
+  // up again by identity finds nothing and gives every row the same key.
   const filteredTools = createMemo(() =>
-    (props.tools ?? []).filter((tool) => !tool.condition || tool.condition())
+    (props.tools ?? [])
+      .map((tool, index) => ({ tool, id: `tool-${index}` }))
+      .filter(({ tool }) => !tool.condition || tool.condition())
   );
 
   const tools = createMemo<SplitFileMenuAction[]>(() =>
-    filteredTools().map((tool) => ({
-      id: `tool-${props.tools?.indexOf(tool)}`,
+    filteredTools().map(({ tool, id }) => ({
+      id,
       label: typeof tool.label === 'function' ? tool.label() : tool.label,
       disabledReason: tool.disabledReason,
       icon: tool.icon,

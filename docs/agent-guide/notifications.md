@@ -9,6 +9,15 @@ first. The flag is on in dev and comes from PostHog elsewhere;
 route redirects to Home once flags load, and `g i` stays on Home; with it on,
 Home keeps `g h`.
 
+With the flag on, the rail's Notifications, Channels and Mail buttons (and the
+mobile dock's) show how many unread rows of this list they hold, in place of
+the unread dot: every kind for Notifications, the channel kinds for Channels,
+mail for Mail, and `99+` past ninety-nine. Home keeps a dot, lit while anything
+here is unread; on the mobile dock the bell is Home, opens this view, and
+carries the total. The numbers are pushed by the server and follow reads, done,
+clears and new activity within about a second, on every open tab; nothing
+polls. With the flag off the buttons keep their dots and show no number.
+
 Each list row is one row of the server's notification inbox
 (`user.notificationInbox`): an email thread, a channel's top-level messages, one
 top-level message with everything about it (its replies, mentions and reactions,
@@ -414,7 +423,7 @@ computer id, name, and outcome; opening one reopens that computer's setup
 dialog on Bring your AI (see the Macro computers walkthrough in
 [settings.md](settings.md)). An agent teammate's computer notifies its
 inviter with the agent instead (`agent { userId, name }`): "<name> is ready",
-with **Message <name>** and, for owners and admins, **Bring your AI**, or
+with **Message <name>** and, for owners and admins, **Connect Claude plan**, or
 "<name> couldn't be set up" with **Retry**; opening it goes to the DM or to
 Team → Members (see Agent teammates in [settings.md](settings.md)).
 

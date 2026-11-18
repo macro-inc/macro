@@ -3,7 +3,6 @@ import {
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import {
   useParams,
@@ -12,7 +11,6 @@ import {
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitPanel } from '@components/app/split-panel';
-import { enableMacroComputers } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -29,6 +27,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
+import { useMacroComputersRollout } from '@queries/computers/computers';
 import { useSearchParams } from '@solidjs/router';
 import {
   createMemo,
@@ -113,7 +112,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // from people without a team.
   const navTabs = createMemo(() => navGroups().flatMap((group) => group.items));
   const outlook = useOutlookAvailable();
-  const macroComputers = useFeatureFlag(enableMacroComputers);
+  const macroComputers = useMacroComputersRollout();
 
   const activeNavigationTab = activeTabId;
 

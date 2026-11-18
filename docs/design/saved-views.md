@@ -554,8 +554,9 @@ Email is the second consumer (`kind: "email"`, `version: 1`). Its definition is 
   were added to that filter for this consumer. Text search keeps only hits the
   view's own predicate admits, as alias filters do.
 - Sidebar rows show an unread dot from each view's first unread page (presence,
-  never a count) and drag to reorder on desktop; the mobile picker, which has
-  no drag, offers Move up/Move down in each row's menu instead.
+  never a count) and drag to reorder on desktop. On phones and tablets the
+  sidebar sheet offers Move up and Move down in each row's menu when there's
+  a view in that direction.
 - Subject keywords read the per-inbox trigram index
   `idx_email_messages_link_subject_trgm` and check message visibility only for
   the threads a page needs, so a page costs about the same for rare and common

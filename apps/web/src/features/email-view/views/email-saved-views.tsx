@@ -1,3 +1,4 @@
+import { useViewShell } from '@app/components/view-shell';
 import { createTagFacetContext } from '@app/features/soup';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
@@ -533,7 +534,7 @@ function createEmailSavedViewOrder() {
 function EmailSavedViewRows(props: {
   onAction?: (action: () => void) => void;
   dialogOwner?: Owner | null;
-  /** Desktop rows drag to reorder; the phone picker moves through menus. */
+  /** Docked and overlay rows drag. Navigation sheet rows move through menus. */
   draggable?: boolean;
 }) {
   const { savedViewsList, savedViewCreation } = useEmailView();
@@ -680,8 +681,9 @@ function EmailSavedViewRows(props: {
   );
 }
 
-/** The desktop sidebar's Saved views section. */
+/** The Saved views section of the Mail sidebar. */
 export function EmailSavedViewsSection() {
+  const { aside } = useViewShell();
   const {
     savedViewsEnabled,
     savedViewsList,
@@ -706,7 +708,7 @@ export function EmailSavedViewsSection() {
           createButtonRef={attachCreateHotkeys}
         />
         <SavedViewList.Content>
-          <EmailSavedViewRows draggable />
+          <EmailSavedViewRows draggable={!aside.isSheet()} />
         </SavedViewList.Content>
       </SavedViewList.Root>
     </Show>

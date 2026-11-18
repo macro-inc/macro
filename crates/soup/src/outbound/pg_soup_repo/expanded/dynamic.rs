@@ -6,11 +6,13 @@ mod test;
 
 mod database_row;
 mod document_ids;
+mod feed;
 mod initiative;
 mod property_filter;
 
 use database_row::{build_database_row_filter, database_row_opted_in, database_row_top_clause};
 pub(in crate::outbound::pg_soup_repo) use document_ids::DocumentIdArrays;
+use feed::{Feed, FeedArm, FeedReads, OrderedScans};
 use initiative::initiative_top_clause;
 pub(in crate::outbound::pg_soup_repo) use initiative::{
     build_initiative_filter, initiative_access_clause, initiative_opted_in,
@@ -1255,6 +1257,30 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
     }
 }
 
+/// The value `document_literal_sql` renders `literal` as when it renders a constant.
+pub(in crate::outbound::pg_soup_repo) fn document_literal_constant(
+    literal: &DocumentLiteral,
+) -> Option<bool> {
+    match literal {
+        DocumentLiteral::IncludeCbmAtmNc(false) => Some(true),
+        DocumentLiteral::CrmAssociated(_) => Some(false),
+        DocumentLiteral::FileType(_)
+        | DocumentLiteral::Id(_)
+        | DocumentLiteral::ProjectId(_)
+        | DocumentLiteral::Owner(_)
+        | DocumentLiteral::Importance(_)
+        | DocumentLiteral::NotificationState(_)
+        | DocumentLiteral::IncludeCbmAtmNc(true)
+        | DocumentLiteral::SubType(_)
+        | DocumentLiteral::IsEmailAttachment(_)
+        | DocumentLiteral::CreatedAt(_)
+        | DocumentLiteral::UpdatedAt(_)
+        | DocumentLiteral::Property(_)
+        | DocumentLiteral::EmailAttachmentParticipant(_)
+        | DocumentLiteral::NameContains(_) => None,
+    }
+}
+
 fn document_literal_sql(literal: DocumentLiteral) -> String {
     match literal {
         DocumentLiteral::FileType(f) => {
@@ -1428,6 +1454,22 @@ fn build_calendar_event_filter(ast: Option<&Expr<CalendarEventLiteral>>) -> Stri
     }
 }
 
+/// The value `build_chat_filter` renders `literal` as when it renders a constant.
+pub(in crate::outbound::pg_soup_repo) fn chat_literal_constant(
+    literal: &ChatLiteral,
+) -> Option<bool> {
+    match literal {
+        ChatLiteral::Role(_) => Some(true),
+        ChatLiteral::Importance(important) => Some(*important),
+        ChatLiteral::ProjectId(_)
+        | ChatLiteral::ChatId(_)
+        | ChatLiteral::Owner(_)
+        | ChatLiteral::NotificationState(_)
+        | ChatLiteral::CreatedAt(_)
+        | ChatLiteral::UpdatedAt(_) => None,
+    }
+}
+
 pub(in crate::outbound::pg_soup_repo) fn build_chat_filter(
     ast: Option<&Expr<ChatLiteral>>,
 ) -> String {
@@ -1468,6 +1510,21 @@ pub(in crate::outbound::pg_soup_repo) fn build_chat_filter(
         String::new()
     } else {
         format!(" AND {}", formatting)
+    }
+}
+
+/// The value `build_project_filter` renders `literal` as when it renders a constant.
+pub(in crate::outbound::pg_soup_repo) fn project_literal_constant(
+    literal: &ProjectLiteral,
+) -> Option<bool> {
+    match literal {
+        ProjectLiteral::Importance(important) => Some(*important),
+        ProjectLiteral::ProjectId(_)
+        | ProjectLiteral::ProjectIdSelf(_)
+        | ProjectLiteral::Owner(_)
+        | ProjectLiteral::NotificationState(_)
+        | ProjectLiteral::CreatedAt(_)
+        | ProjectLiteral::UpdatedAt(_) => None,
     }
 }
 
@@ -2144,6 +2201,83 @@ fn project_top_where_clause(source_ids: usize) -> String {
     )
 }
 
+/// Source scans read up to a page from every source the user holds, where the item tables read
+/// each visible item once. Past this many sources × page size the query reads the item tables. A
+/// routing threshold fit to the production-scale benchmark, not a bound on rows read.
+const SOURCE_SCAN_ROWS: i64 = 5_000;
+
+/// Each source also costs an index descent per kind before it yields a row. The benchmark's users
+/// held up to 354 sources; past this many the query reads the item tables.
+const SOURCE_SCAN_SOURCES: i64 = 400;
+
+/// What decides whether a page may read `source_items`: asked once, on the page's connection,
+/// before any page with a projected arm, and never with the projection disabled.
+struct ScanBound {
+    /// How many sources `fetch_user_source_ids` returned for the user.
+    sources: i64,
+    /// Whether the session's time zone is UTC. Projected scans order and bound the stored
+    /// `timestamp` values, which order like the item-table path's `timestamptz` casts only
+    /// where no daylight-saving jump reorders them.
+    utc: bool,
+    /// Whether the table is maintained and was backfilled since (`source_items_exact()`). Without
+    /// it the table can be empty or stale, so the page reads the item tables: a revoked grant
+    /// must not keep listing an item.
+    exact: bool,
+}
+
+impl ScanBound {
+    fn allows(&self, reads: FeedReads, limit: i64) -> bool {
+        self.exact
+            && match reads.ordered {
+                None => true,
+                Some(OrderedScans::Owner) => self.utc,
+                Some(OrderedScans::Sources) => {
+                    self.utc
+                        && self.sources <= SOURCE_SCAN_SOURCES
+                        && self.sources * limit <= SOURCE_SCAN_ROWS
+                }
+            }
+    }
+}
+
+async fn scan_bound(
+    connection: &mut sqlx::PgConnection,
+    source_ids: &[String],
+) -> Result<ScanBound, sqlx::Error> {
+    let sources = i64::try_from(source_ids.len()).unwrap_or(i64::MAX);
+    let span = tracing::info_span!(
+        "soup.source_items.bound",
+        sources,
+        utc = tracing::field::Empty,
+        exact = tracing::field::Empty
+    );
+    let state = sqlx::query!(
+        r#"SELECT current_setting('TimeZone') IN ('UTC', 'Etc/UTC') AS "utc!",
+            source_items_exact() AS "exact!""#
+    )
+    .fetch_one(connection)
+    .instrument(span.clone())
+    .await?;
+    span.record("utc", state.utc);
+    span.record("exact", state.exact);
+    Ok(ScanBound {
+        sources,
+        utc: state.utc,
+        exact: state.exact,
+    })
+}
+
+/// Where `build_query` finds documents, chats and projects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ItemSource {
+    /// `source_items`, under every sort it can order.
+    SourceItems,
+    /// The item tables, which `CreatedAt` always reads.
+    ItemTables,
+}
+
+/// The flat query over the item tables, as production builds it with the projection disabled.
+#[cfg(test)]
 fn build_query<'a>(
     filter_ast: &'a EntityFilterAst,
     exclude_frecency: bool,
@@ -2151,11 +2285,33 @@ fn build_query<'a>(
     document_grants: DocumentGrants,
     document_ids: &mut DocumentIdArrays,
 ) -> QueryBuilder<'a, Postgres> {
+    build_query_from(
+        filter_ast,
+        exclude_frecency,
+        sort,
+        document_grants,
+        ItemSource::ItemTables,
+        "",
+        document_ids,
+    )
+    .0
+}
+
+/// The flat query, reading documents, chats and projects from `item_source` where it can.
+/// Also returns the in-order scans whose bound the caller must check before running it.
+fn build_query_from<'a>(
+    filter_ast: &'a EntityFilterAst,
+    exclude_frecency: bool,
+    sort: DynamicSort,
+    document_grants: DocumentGrants,
+    item_source: ItemSource,
+    viewer: &str,
+    document_ids: &mut DocumentIdArrays,
+) -> (QueryBuilder<'a, Postgres>, Option<FeedReads>) {
     let sort_method = sort.timestamp_method();
     let source_ids = source_ids_slot(sort, false);
     let property_sort = matches!(sort, DynamicSort::Property { .. });
     let name_sort = matches!(sort, DynamicSort::Name { .. });
-    let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
     let DynamicArms {
         documents: include_documents,
@@ -2223,6 +2379,57 @@ fn build_query<'a>(
             filter_ast.project_filter.as_deref()
         };
 
+    let properties_filter = filter_ast.properties_filter.as_deref();
+    // An arm comes from source_items when the projection can order this sort and
+    // the arm's filter lets a source scan stop at the page; otherwise it reads its
+    // item table, as every arm does with the projection disabled. Building the
+    // document arm binds its id arrays, so only the arm the query reads is built.
+    let projected = item_source == ItemSource::SourceItems
+        && matches!(sort, DynamicSort::Timestamp(method) if Feed::serves(method));
+    let document_arm = (projected && include_documents)
+        .then(|| {
+            FeedArm::document(
+                document_filter,
+                properties_filter,
+                optimized_notification_predicate.is_some() && document_notification.is_some(),
+                viewer,
+                document_ids,
+            )
+        })
+        .flatten();
+    let chat_arm = (projected && include_chats)
+        .then(|| {
+            FeedArm::chat(
+                chat_filter,
+                properties_filter,
+                optimized_notification_predicate.is_some() && chat_notification.is_some(),
+            )
+        })
+        .flatten();
+    let project_arm = (projected && include_projects)
+        .then(|| {
+            FeedArm::project(
+                project_filter,
+                properties_filter,
+                optimized_notification_predicate.is_some() && project_notification.is_some(),
+            )
+        })
+        .flatten();
+    let documents_from_table = include_documents && document_arm.is_none();
+    let chats_from_table = include_chats && chat_arm.is_none();
+    let projects_from_table = include_projects && project_arm.is_none();
+    let feed = projected
+        .then(|| {
+            Feed::new(
+                sort_method,
+                exclude_frecency,
+                source_ids,
+                [document_arm, chat_arm, project_arm].into_iter().flatten(),
+            )
+        })
+        .flatten();
+
+    let mut builder = sqlx::QueryBuilder::new(PREFIX);
     if let Some(predicate) = optimized_notification_predicate {
         let mut item_types = Vec::with_capacity(3);
         if include_documents && document_notification.is_some() {
@@ -2236,6 +2443,9 @@ fn build_query<'a>(
         }
         build_notification_items_cte(&mut builder, predicate, &item_types);
     }
+    if let Some(feed) = &feed {
+        feed.push_ctes(&mut builder);
+    }
 
     // TopItems CTE: lightweight id + sort_ts with filters, cursor, and limit
     builder.push("TopItems AS (");
@@ -2248,7 +2458,11 @@ fn build_query<'a>(
 
     let mut needs_separator = false;
 
-    if include_documents {
+    if let Some(feed) = &feed {
+        feed.push_members(&mut builder, &mut needs_separator);
+    }
+
+    if documents_from_table {
         push_union_separator(&mut builder, &mut needs_separator);
         // Subtype is needed only for task-property filters or property-sort namespaces.
         let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
@@ -2278,7 +2492,7 @@ fn build_query<'a>(
         builder.push(access.close(page, source_ids));
     }
 
-    if include_chats {
+    if chats_from_table {
         push_union_separator(&mut builder, &mut needs_separator);
         // Chat top clause (lightweight)
         builder.push(chat_top_clause(sort_method, property_sort, name_sort));
@@ -2293,7 +2507,7 @@ fn build_query<'a>(
         ));
     }
 
-    if include_projects {
+    if projects_from_table {
         push_union_separator(&mut builder, &mut needs_separator);
         // Project top clause (lightweight)
         builder.push(project_top_clause(sort_method, property_sort, name_sort));
@@ -2492,7 +2706,7 @@ fn build_query<'a>(
     ));
     builder.push(" LIMIT $3");
 
-    builder
+    (builder, feed.as_ref().map(Feed::reads))
 }
 
 #[derive(Debug, FromRow)]
@@ -2769,7 +2983,7 @@ impl SoupRow {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct ExpandedDynamicCursorArgs<'a> {
     /// the user for which we are performing the query
     pub user_id: MacroUserIdStr<'a>,
@@ -2807,6 +3021,7 @@ async fn begin_dynamic_query(db: &PgPool) -> Result<Transaction<'static, Postgre
 async fn expanded_dynamic_cursor_soup_hydrated(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
+    item_source: ItemSource,
 ) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let ExpandedDynamicCursorArgs {
         user_id,
@@ -2835,15 +3050,28 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
     let document_grants =
         DocumentGrants::count(&mut transaction, cursor.filter(), &source_ids).await?;
-    let mut document_ids =
-        DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), false));
-    let mut builder = build_query(
-        cursor.filter(),
-        exclude_frecency,
-        *cursor.sort_method(),
-        document_grants,
-        &mut document_ids,
-    );
+    let first_document_ids = first_document_id_slot(*cursor.sort_method(), false);
+    let mut document_ids = DocumentIdArrays::starting_at(first_document_ids);
+    let build = |item_source, document_ids: &mut DocumentIdArrays| {
+        build_query_from(
+            cursor.filter(),
+            exclude_frecency,
+            *cursor.sort_method(),
+            document_grants,
+            item_source,
+            user_id.as_ref(),
+            document_ids,
+        )
+    };
+    let (mut builder, feed_reads) = build(item_source, &mut document_ids);
+    if let Some(reads) = feed_reads
+        && !scan_bound(&mut transaction, &source_ids)
+            .await?
+            .allows(reads, query_limit)
+    {
+        document_ids = DocumentIdArrays::starting_at(first_document_ids);
+        (builder, _) = build(ItemSource::ItemTables, &mut document_ids);
+    }
     let mut query = builder
         .build()
         .bind(user_id.as_ref())
@@ -2899,19 +3127,56 @@ async fn expanded_dynamic_cursor_soup_hydrated(
 pub(crate) async fn expanded_dynamic_cursor_soup_with_projection(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
+    source_items_enabled: bool,
 ) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
-    expanded_dynamic_cursor_soup_hydrated(db, args).await
+    let item_source = if source_items_enabled {
+        ItemSource::SourceItems
+    } else {
+        ItemSource::ItemTables
+    };
+    expanded_dynamic_cursor_soup_hydrated(db, args, item_source).await
 }
 
-/// Execute a flat expanded dynamic query without exposing projection metadata.
+/// Execute a flat expanded dynamic query on both listing paths, require the same
+/// page from each, and return it without projection metadata.
 #[cfg(test)]
 #[tracing::instrument(err, skip_all, fields(limit = i64::from(args.limit), exclude_frecency = args.exclude_frecency))]
 pub(crate) async fn expanded_dynamic_cursor_soup(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
-    Ok(expanded_dynamic_cursor_soup_hydrated(db, args)
-        .await?
+    let item_tables =
+        expanded_dynamic_cursor_soup_hydrated(db, args.clone(), ItemSource::ItemTables).await?;
+    // The migrations install no maintenance triggers: turn them on and rebuild the projection
+    // from what the fixtures wrote, so reads trust it; `crates/source_items` tests the triggers.
+    sqlx::query!("SELECT source_items_install_triggers()")
+        .execute(db)
+        .await?;
+    let backfill = source_items::backfill::run(db).await?;
+    assert!(
+        backfill.readable,
+        "the projection was not maintained while backfilled"
+    );
+    let mismatches = source_items::audit::run(db).await?;
+    assert!(
+        mismatches.is_empty(),
+        "source_items drifted: {mismatches:?}"
+    );
+    let source_items =
+        expanded_dynamic_cursor_soup_hydrated(db, args, ItemSource::SourceItems).await?;
+    let shown = |page: &[SoupProjectionHydration]| {
+        page.iter()
+            .map(|hydration| serde_json::to_value(&hydration.item).unwrap())
+            .collect::<Vec<_>>()
+    };
+    // Production reads the item tables unless the projection is enabled, so
+    // every query test checks both listings and asserts on the default one.
+    assert_eq!(
+        shown(&source_items),
+        shown(&item_tables),
+        "source_items and the item tables listed different pages"
+    );
+    Ok(item_tables
         .into_iter()
         .map(|hydration| hydration.item)
         .collect())

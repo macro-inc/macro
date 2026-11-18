@@ -277,10 +277,14 @@ export function updateDraftThread(
   };
 }
 
-/** Discard restores the full non-draft baseline, even beyond message page one. */
+/**
+ * Discard restores the full non-draft baseline, even beyond message page one.
+ * The draft leaves under each of its ids: one saved on this device keeps its
+ * client handle, while the cached thread lists it by the server's ID.
+ */
 export function removeDraftFromThread(
   existing: DraftThread,
-  draftId: string
+  draftIds: readonly string[]
 ): DraftThread | undefined {
   if (!existing.mailDraftState) return;
   const next = applyDraftState(
@@ -288,14 +292,16 @@ export function removeDraftFromThread(
     {
       ...existing.mailDraftState,
       drafts: existing.mailDraftState.drafts.filter(
-        (entry) => entry.id !== draftId
+        (entry) => !draftIds.includes(entry.id)
       ),
     },
     new Date().toISOString()
   );
   return {
     ...next,
-    messages: existing.messages.filter((message) => message.id !== draftId),
+    messages: existing.messages.filter(
+      (message) => !draftIds.includes(message.id)
+    ),
   };
 }
 

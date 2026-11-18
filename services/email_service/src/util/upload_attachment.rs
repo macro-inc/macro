@@ -134,7 +134,11 @@ pub async fn store_attachment(
 }
 
 /// Uploads an image or video attachment to SFS.
-#[tracing::instrument(skip(ctx, attachment_data), err)]
+#[tracing::instrument(
+    skip(ctx, args, attachment_data),
+    fields(attachment_id = %args.attachment_metadata.attachment_db_id),
+    err
+)]
 async fn upload_media_attachment(
     ctx: &AttachmentStorageContext<'_>,
     args: &AttachmentUploadArgs,
@@ -169,7 +173,10 @@ async fn upload_media_attachment(
 }
 
 /// Uploads a document attachment to DSS.
-#[tracing::instrument(skip(ctx, attachment_data))]
+#[tracing::instrument(
+    skip(ctx, args, attachment_data),
+    fields(attachment_id = %args.attachment_metadata.attachment_db_id)
+)]
 async fn upload_document_attachment(
     ctx: &AttachmentStorageContext<'_>,
     args: &AttachmentUploadArgs,

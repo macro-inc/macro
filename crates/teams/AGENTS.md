@@ -63,6 +63,9 @@ event contract (schema, sanitization, delivery semantics).
   way. Removing a computer's item archives its own price. Retain
   receipts after subscription/team deletion to prevent delayed duplicate charges.
   Seat prices passed here change seat items too.
+  Catalog prices are cached per process (`customer_repo/stripe_calls.rs`;
+  their amount, currency and interval never change); wrap each Stripe call in
+  `traced(stripe_span!("stripe.<object>.<verb>", <object>_id = …), …)`.
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI
   tool surface.
 - `src/outbound/team_repo.rs`: the Postgres repository; reads use the supplied pool.

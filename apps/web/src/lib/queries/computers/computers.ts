@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import {
   invalidateHarnesses,
@@ -112,6 +112,17 @@ function refreshOnChange(
 }
 
 /** The current team's Macro computers; any team member can read them. */
+/**
+ * The team's computers read now, past the cache's freshness, for a caller
+ * waiting on one of them; the list query shows the same answer.
+ */
+export async function fetchComputers(): Promise<ComputerStatus[]> {
+  return await queryClient.fetchQuery({
+    ...computersQueryOptions(true),
+    staleTime: 0,
+  });
+}
+
 export function useComputersQuery(enabled: () => boolean) {
   const computers = useQuery(() => computersQueryOptions(enabled()));
   const harnesses = useHarnessesQuery();
@@ -163,6 +174,34 @@ export function retryComputerOffers(failures: number, error: unknown): boolean {
   );
 }
 
+const ROLLOUT_STALE_MS = 5 * 60_000;
+
+function computerRolloutQueryOptions() {
+  return queryOptions({
+    queryKey: computerKeys.rollout.queryKey,
+    queryFn: () => throwOnErr(computersClient.rollout),
+    staleTime: ROLLOUT_STALE_MS,
+    // A refusal (no team, signed out) means not rolled out; it won't change on retry.
+    retry: false,
+  });
+}
+
+type ComputersRollout = { enabled: boolean; loading: boolean };
+
+/**
+ * Whether the computer UI is on for the current user. The backend answers
+ * with the same check purchases and offers make (`enable-macro-computers`,
+ * plus the dev-only allowlist), so the web never shows computers the backend
+ * would refuse. Any failure reads as off.
+ */
+export function useMacroComputersRollout(): () => ComputersRollout {
+  const query = useQuery(() => computerRolloutQueryOptions());
+  return () => ({
+    enabled: query.isSuccess && query.data.enabled,
+    loading: query.isPending,
+  });
+}
+
 function computerOffersQueryOptions(enabled: boolean) {
   return queryOptions({
     queryKey: computerKeys.offers.queryKey,
@@ -194,21 +233,29 @@ function storeComputer(updated: ComputerStatus) {
   );
 }
 
-async function purchaseComputer(request: PurchaseComputerRequest) {
-  return await Telemetry.span('computers.purchase', async (span) => {
-    span.setAttr('computer.size', request.size);
-    try {
-      const purchased = await throwOnErr(() =>
-        computersClient.purchase(request)
-      );
-      span.setAttr('computer.id', purchased.computerId);
-      span.setAttr('computer.purchase_state', purchased.state);
-      return purchased;
-    } catch (error) {
-      span.error('Computer purchase failed');
-      throw error;
-    }
-  });
+type PurchaseComputerArgs = PurchaseComputerRequest & {
+  /** The Buy flow's span, so the purchase joins its trace across the await. */
+  parentSpan?: Span;
+};
+
+async function purchaseComputer(args: PurchaseComputerArgs) {
+  const { parentSpan, ...request } = args;
+  const purchase = (span: Span) => purchaseInSpan(request, span);
+  if (parentSpan) return await parentSpan.span('computers.purchase', purchase);
+  return await Telemetry.span('computers.purchase', purchase);
+}
+
+async function purchaseInSpan(request: PurchaseComputerRequest, span: Span) {
+  span.setAttr('computer.size', request.size);
+  try {
+    const purchased = await throwOnErr(() => computersClient.purchase(request));
+    span.setAttr('computer.id', purchased.computerId);
+    span.setAttr('computer.purchase_state', purchased.state);
+    return purchased;
+  } catch (error) {
+    span.error('Computer purchase failed');
+    throw error;
+  }
 }
 
 export function usePurchaseComputerMutation() {

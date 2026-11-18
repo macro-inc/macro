@@ -10,6 +10,10 @@ import type {
   TeamAgent,
   TeamAgents,
 } from './generated/schemas';
+import {
+  type PurchaseRefusalErrorCode,
+  readPurchaseRefusal,
+} from './purchase-refusal';
 
 export type {
   AgentVoice,
@@ -48,7 +52,13 @@ async function serverMessage(response: Response): Promise<string> {
 
 async function createError(
   response: Response
-): Promise<ResultError<BaseFetchErrorCode | CreateTeamAgentErrorCode>> {
+): Promise<
+  ResultError<
+    BaseFetchErrorCode | CreateTeamAgentErrorCode | PurchaseRefusalErrorCode
+  >
+> {
+  const refused = await readPurchaseRefusal(response);
+  if (refused) return refused;
   const code = match(response.status)
     .returnType<CreateTeamAgentErrorCode | undefined>()
     .with(400, () => 'INVALID_AGENT')
@@ -80,7 +90,10 @@ const voiceUrl = (agentUserId: string) =>
 export const teamAgentsClient = {
   list: () => fetchWithToken<TeamAgents>(base),
   create: (request: CreateTeamAgent) =>
-    fetchWithToken<TeamAgent, CreateTeamAgentErrorCode>(base, {
+    fetchWithToken<
+      TeamAgent,
+      CreateTeamAgentErrorCode | PurchaseRefusalErrorCode
+    >(base, {
       method: 'POST',
       body: JSON.stringify(request),
       errorResponseHandler: createError,

@@ -731,3 +731,51 @@ mod cargo_target_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod checkout_tests {
+    /// A stalled fetch otherwise holds a job until its timeout; see
+    /// [`super::steps::abort_stalled_fetch`].
+    #[test]
+    fn every_checkout_gives_up_on_a_stalled_fetch() {
+        let expected = super::steps::abort_stalled_fetch(
+            gh_workflow::Step::new("x").uses("actions", "checkout", "x"),
+        );
+        let expected = serde_yaml::to_value(&expected).expect("step serializes")["env"].clone();
+
+        let mut checked = Vec::new();
+        for workflow in super::WORKFLOWS {
+            let yaml = (workflow.render_yaml)().expect("workflow renders");
+            let root: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("workflow parses");
+            for (id, job) in root["jobs"].as_mapping().expect("jobs") {
+                let id = id.as_str().unwrap_or_default();
+                checked.push((
+                    format!("{} job {id}", workflow.file_name),
+                    job["steps"].clone(),
+                ));
+            }
+        }
+        // Composite actions are hand-written and run inside generated jobs.
+        let actions = xtask_paths::repo_root().join(".github/actions");
+        for entry in std::fs::read_dir(&actions).expect("composite actions") {
+            let path = entry.expect("action dir").path().join("action.yml");
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let root: serde_yaml::Value = serde_yaml::from_str(&text).expect("action parses");
+            checked.push((path.display().to_string(), root["runs"]["steps"].clone()));
+        }
+
+        for (place, steps) in checked {
+            for step in steps.as_sequence().into_iter().flatten() {
+                let uses = step["uses"].as_str().unwrap_or_default();
+                if uses.starts_with("actions/checkout@") {
+                    assert_eq!(
+                        step["env"], expected,
+                        "{place} checks out without abort_stalled_fetch's settings"
+                    );
+                }
+            }
+        }
+    }
+}

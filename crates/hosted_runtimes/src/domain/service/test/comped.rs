@@ -119,7 +119,7 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
     ));
     assert_eq!(
         *service.billing.calls.lock().unwrap(),
-        vec!["quote", "add_computer"]
+        vec!["purchase_price", "add_computer"]
     );
 }
 

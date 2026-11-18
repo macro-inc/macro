@@ -133,6 +133,10 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- Personal data stays off spans and logs (`.agents/rules/observability.md`);
+  here that also means a `MacroUserIdStr` parse error, which quotes the
+  address. `draft_save_and_delete_spans_record_no_personal_data` reads the
+  draft spans back.
 - Moving a thread into a folder (`update_thread_project`) calls
   `entity_access_db_utils::project_grants::refuse_filing_in` in the
   transaction that writes `project_id`, so a scoped agent session can't file
@@ -279,9 +283,9 @@ tools — hexagonal, heavily feature-gated.
   page order from the record's address superset or from each contributing
   inbox's newest threads, and each gets the message match and the privacy rule
   until the page fills. Keep its `OFFSET 0` fences, or the planner checks the
-  whole stream before the LIMIT, and keep the superset stream's lookup by id
-  (`= ANY(ARRAY(…))`): as a semi-join the planner reads every thread of the
-  inboxes. `team_blocked` relies on `crm_companies_email_sync_off_idx`, or it
+  whole stream before the LIMIT. Fetch each distinct superset or selection
+  match through the fenced lateral primary-key lookup: even `id = ANY(…)`
+  can become a mailbox-wide index filter under stale statistics. `team_blocked` relies on `crm_companies_email_sync_off_idx`, or it
   scans every company. `push_allowed` restates `crm_email_thread_allowed`
   set-based, and the contributing inboxes in `dynamic/resolve.rs` restate its
   mailbox conditions (`allowed_restates_the_privacy_function` and
@@ -347,12 +351,21 @@ tools — hexagonal, heavily feature-gated.
   (`stage_thread_labels` / `commit_thread_label_write` in
   `domain/service/thread_labels.rs`); route new thread label actions through them.
   Message-label batches go through `domain/message_labels.rs`, with their atomic
-  staging and unqueued-write undo behind `MessageLabelRepository`. The queued
+  staging and unqueued-write undo behind `MessageLabelRepository`. A thread on
+  an Outlook inbox, or a message batch whose first message resolves to one,
+  takes its label as one category mailbox command (`enqueue_mailbox_action`)
+  instead of a Gmail label write. The queued
   half lives in `domain/message_labels/gmail_ops.rs`: it owns turn ordering,
   partial acceptance/reversion, retry routing, and delivery dispositions through
   link, settlement, provider, and retry-queue ports. Provider admission remains
   inside the host's existing Gmail adapter.
 - Recompute thread metadata inside staged Gmail SPAM/TRASH writes so restored All Mail previews, ordering, and signal state do not wait for the provider worker.
+- Gmail Report spam and Not spam move the thread between the inbox and Spam
+  (`set_gmail_thread_junk`): a SPAM write and an INBOX write, each its own
+  thread label write, and the agent tool `UpdateThreadLabels` routes `SPAM`
+  there too. Never send the SPAM label alone for them; only the REST and
+  GraphQL label routes (`update_thread_labels_for_user`) write exactly the
+  label they are given.
 - `domain/recent_inbox.rs` merges a user's newest messages read live from
   each of their own inboxes (50 by default, at most 100); an inbox whose read
   fails is skipped. Subjects are cut to 200 characters and snippets to the
@@ -412,6 +425,8 @@ tools — hexagonal, heavily feature-gated.
   `SharedThreadReplyAccess` (edit access to its thread; wired in
   `document_storage_service` with `with_shared_thread_replies`). The reply
   starts a thread in the caller's inbox; other hosts keep `NoSharedThreadReplies`.
+- Let first saves adopt unbound reply drafts by reply target. Keep separately
+  bound working copies distinct when Undo restores a draft for that target.
 - Sender discovery authorizes the inbox first. Gmail aliases use the sender
   provider; Outlook exposes its verified primary address without a Gmail lookup.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
