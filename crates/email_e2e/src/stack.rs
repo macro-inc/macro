@@ -474,12 +474,7 @@ impl Stack {
             crate::infra::kafka::start_group_at_end(brokers, FOCUS_WORKER_GROUP).await?;
         }
         let stand_ins = FocusStandIns::start().await?;
-        let env = focus_environment::focus_env(
-            &self.worker_env,
-            &stand_ins.model_url(),
-            &stand_ins.harness_url(),
-            &options.env,
-        );
+        let env = focus_environment::focus_env(&self.worker_env, &stand_ins, &options.env);
         self.focus_stand_ins = Some(stand_ins);
         // Kept from here on, so that a worker that fails to start is
         // stopped with the stack and its log shown.

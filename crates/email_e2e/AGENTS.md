@@ -34,10 +34,12 @@ scenarios.
   name mail that is not in this scenario's database and are passed over.
 - `StackOptions { focus: true, .. }` adds the real `email_focus_worker`,
   which classifies arriving mail for Focus from the mail's Kafka events, and
-  stand-ins for the two things it asks outside the database
+  stand-ins for the three things it asks outside the database
   (`src/focus.rs`): the model that answers the Focus questions, reached
-  through `OVERRIDE_TYPESAFE_API_URL`, and the agent harness route that reads
-  a thread's due date, through `OVERRIDE_AGENT_HARNESS_SERVICE_URL`. Its
+  through `OVERRIDE_TYPESAFE_API_URL`; the agent harness route that reads
+  a thread's due date, through `OVERRIDE_AGENT_HARNESS_SERVICE_URL`; and
+  PostHog's flag definitions, through `POSTHOG_HOST`, from which it reads
+  whether an inbox's owner has the `enable-email-focus` flag. Its
   pushes go to the connection gateway stand-in like every other service's.
 - Scenarios run in parallel and share nothing but the servers (Postgres,
   Redis, SQS, Kafka, and OpenSearch for search).
@@ -151,7 +153,11 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   as due, and `times_asked_about(text)` tells whether mail reached the
   model at all; `stack.focus_worker_log()` is what the worker logged. The questions and their order are the product's: the
   stand-in answers yes only to the first, "would the owner want this in
-  Focus". Only inboxes at `example.com` are classified. Classifying follows
+  Focus". The worker classifies an inbox only while its owner has the
+  Focus flag: every owner has it unless the scenario turns it off with
+  `turn_off_focus_flag_for(address)`, before any of the stack's mail
+  arrives, since the worker reads the flag again only five minutes
+  later. Classifying follows
   the sync, so wait for the list or the thread's `focus`. Keep these
   scenarios in `tests/focus.rs`, whose tests nextest runs one at a time.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
