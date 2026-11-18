@@ -104,7 +104,7 @@ fn error_response<E>(error: MessageLabelError<E>) -> Response {
             StatusCode::INTERNAL_SERVER_ERROR,
             "unable to commit transaction".into(),
         ),
-        MessageLabelError::Unqueued(_) => (
+        MessageLabelError::Unqueued(_) | MessageLabelError::Command(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             "unable to queue the label change".into(),
         ),

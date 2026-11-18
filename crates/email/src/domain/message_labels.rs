@@ -41,8 +41,7 @@ pub struct MessageLabelOutcome {
     /// Messages whose requested state remains staged.
     pub successful_ids: Vec<Uuid>,
     /// Messages whose provider write was not queued: on Gmail those restored
-    /// after the queue refused it, on Outlook those the inbox no longer holds
-    /// or all of them when the command was refused.
+    /// after the queue refused it, on Outlook those the inbox no longer holds.
     pub failed_ids: Vec<Uuid>,
     /// Requested ids absent from the caller's message lookup.
     pub missing_ids: Vec<Uuid>,
@@ -75,6 +74,10 @@ pub enum MessageLabelError<E> {
     /// Neither queueing nor restoring the write succeeded.
     #[error("unable to queue the label change: {0}")]
     Unqueued(E),
+    /// The Outlook category command was refused or could not be written;
+    /// its transaction rolled back.
+    #[error("unable to queue the category change: {0}")]
+    Command(E),
 }
 
 /// The transaction step that failed, after its original error has been logged.
@@ -380,9 +383,8 @@ where
             );
         }
         let targets = action.targets(&requested);
-        let queued = !targets.is_empty()
-            && self
-                .repository
+        if !targets.is_empty() {
+            self.repository
                 .enqueue_mailbox_action(link_id, actor, &action, &targets)
                 .await
                 .inspect_err(|e| {
@@ -393,11 +395,12 @@ where
                         "Failed to queue the Outlook category change"
                     );
                 })
-                .is_ok();
+                .map_err(MessageLabelError::Command)?;
+        }
         let (successful_ids, failed_ids) = messages
             .iter()
             .map(|m| m.db_id)
-            .partition(|id| queued && targets.iter().any(|target| target.message_id == *id));
+            .partition(|id| targets.iter().any(|target| target.message_id == *id));
         Ok(MessageLabelOutcome {
             successful_ids,
             failed_ids,

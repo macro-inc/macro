@@ -570,7 +570,7 @@ async fn outlook_removal_takes_the_category_off() {
 }
 
 #[tokio::test]
-async fn outlook_command_refused_reports_every_message_failed() {
+async fn outlook_command_that_cannot_be_queued_fails_the_request() {
     let mut service = outlook();
     service.repository.messages = vec![message(3, 9), message(4, 9)];
     service.repository.facts = vec![
@@ -578,18 +578,12 @@ async fn outlook_command_refused_reports_every_message_failed() {
         (Uuid::from_u128(9), fact(4, true)),
     ];
     service.repository.command_fails = true;
-    let outcome = service
-        .change(request(vec![Uuid::from_u128(3), Uuid::from_u128(4)]))
-        .await
-        .unwrap();
-    assert_eq!(
-        outcome,
-        MessageLabelOutcome {
-            successful_ids: vec![],
-            failed_ids: vec![Uuid::from_u128(3), Uuid::from_u128(4)],
-            missing_ids: vec![],
-        }
-    );
+    assert!(matches!(
+        service
+            .change(request(vec![Uuid::from_u128(3), Uuid::from_u128(4)]))
+            .await,
+        Err(MessageLabelError::Command(TestError))
+    ));
 }
 
 #[tokio::test]
