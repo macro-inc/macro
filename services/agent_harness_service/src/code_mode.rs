@@ -356,6 +356,7 @@ impl UserExecutionCredentials for UserRunCredentials {
 /// keep email's: deployed services share one gateway origin, so leaving the
 /// host out would not narrow Deno's network allowlist.)
 pub struct MentionRunCredentials {
+    pub egress: EgressRollout,
     pub signer: MacroApiTokenSigner,
     pub endpoints: SdkEndpoints,
 }
@@ -382,6 +383,7 @@ impl agent_code_mode::domain::MentionExecutionCredentials for MentionRunCredenti
             session_id: None,
             execution_id: None,
             unattended: None,
+            egress: self.egress.egress(user).await,
         })
     }
 }

@@ -26,6 +26,7 @@ impl JwtValidator for UserCredentials {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: USER.into(),
                 fusion_user_id: "fusion-mentioner".into(),
                 organization_id: None,
@@ -87,6 +88,7 @@ impl MentionExecutionCredentials for Spy {
             execution_id: None,
             endpoints: Default::default(),
             unattended: None,
+            egress: Default::default(),
         })
     }
 }

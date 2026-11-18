@@ -1960,6 +1960,7 @@ pub async fn run() -> anyhow::Result<()> {
                 agent_code_mode::inbound::internal_user_executions::UserExecutionsState::new(
                     Arc::new(channel_bots.clone()),
                     Arc::new(code_mode::MentionRunCredentials {
+                        egress: code_egress.clone(),
                         signer: MacroApiTokenSigner::new(
                             pool.clone(),
                             config.macro_api_token_issuer.as_ref(),
