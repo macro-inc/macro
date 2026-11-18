@@ -25,6 +25,7 @@ pub(super) enum EmailIndexAction {
     },
     RemoveMessage {
         message_id: Uuid,
+        thread_id: Uuid,
     },
     ReindexThread {
         thread_id: Uuid,
@@ -103,6 +104,7 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
             action: if metadata.is_spam_or_trash {
                 EmailIndexAction::RemoveMessage {
                     message_id: metadata.message_id,
+                    thread_id: metadata.thread_id,
                 }
             } else {
                 EmailIndexAction::UpsertMessage {
@@ -117,6 +119,7 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
             action: if metadata.is_spam_or_trash {
                 EmailIndexAction::RemoveMessage {
                     message_id: metadata.message_id,
+                    thread_id: metadata.thread_id,
                 }
             } else {
                 EmailIndexAction::UpsertMessage {
@@ -147,6 +150,7 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
         EmailTopicEvent::MessageDeleted(metadata) => EmailEventDescription {
             action: EmailIndexAction::RemoveMessage {
                 message_id: metadata.message_id,
+                thread_id: metadata.thread_id,
             },
             link_id: metadata.link_id,
             event_type: "email.message_deleted",
@@ -246,9 +250,10 @@ async fn process_email_index_action(
         EmailIndexAction::UpsertSentMessage { message_id, owner } => {
             upsert::process_upsert_sent_message(opensearch_client, db, message_id, &owner).await
         }
-        EmailIndexAction::RemoveMessage { message_id } => {
-            remove::process_remove_message(opensearch_client, message_id, None).await
-        }
+        EmailIndexAction::RemoveMessage {
+            message_id,
+            thread_id,
+        } => remove::process_remove_message(opensearch_client, message_id, thread_id, None).await,
         EmailIndexAction::ReindexThread { thread_id, owner } => {
             upsert::process_upsert_thread_message(opensearch_client, db, thread_id, &owner, None)
                 .await

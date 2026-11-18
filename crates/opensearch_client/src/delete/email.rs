@@ -388,22 +388,88 @@ pub struct EmailMessageDeleted {
     pub passes: u8,
 }
 
+/// What deleting one message removed: its document under the thread its
+/// event names, and copies indexed under other threads.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct EmailMessageRemoved {
+    pub by_id: bool,
+    pub other_threads: EmailMessageDeleted,
+}
+
+impl EmailMessageRemoved {
+    pub fn deleted(&self) -> u64 {
+        u64::from(self.by_id) + self.other_threads.deleted
+    }
+}
+
 /// Deletes every document of one deleted message, whatever thread it was
-/// indexed under, visible to search when this returns. Deleting it cannot go
-/// stale, so a document another write changed mid-query is deleted on one
-/// more pass, after a refresh lets that pass see the change.
+/// indexed under, and forces a refresh only to recheck a copy that conflicted:
+/// search stops finding the message at the index's next scheduled refresh.
+/// The document under the event's thread is deleted by id, which finds it
+/// even before a refresh has made it searchable. A delete-by-query then
+/// removes copies under other threads, the query
+/// [`delete_email_message_outside_thread`] runs; it leaves the event's thread
+/// out, because its search still sees the document just deleted until the
+/// next refresh and would count it as a conflict. Deleting cannot go stale, so a copy another
+/// write changed mid-query, or deleted within one refresh interval, is
+/// deleted on one more pass, after a refresh lets that pass see the change.
 pub async fn delete_email_message(
     client: &opensearch::OpenSearch,
     message_id: &str,
+    thread_id: &str,
     index_override: Option<&str>,
-) -> Result<EmailMessageDeleted> {
+) -> Result<EmailMessageRemoved> {
     let index = resolve_destination(index_override);
-    let message_ids = [message_id.to_owned()];
-    delete_with_recheck(
-        || delete_by_message_ids(client, &message_ids, index),
+    let document_id = crate::upsert::email::email_document_id(thread_id, message_id);
+    let by_id = delete_document_by_id(client, &document_id, index).await?;
+    let other_threads = delete_with_recheck(
+        || delete_outside_thread_pass(client, message_id, thread_id, index),
         || refresh_index(client, index),
     )
-    .await
+    .await?;
+    Ok(EmailMessageRemoved {
+        by_id,
+        other_threads,
+    })
+}
+
+/// Deletes one email document by id; false when it was never indexed or is
+/// already gone.
+async fn delete_document_by_id(
+    client: &opensearch::OpenSearch,
+    document_id: &str,
+    index: &str,
+) -> Result<bool> {
+    const OPERATION: OpensearchOperation = OpensearchOperation::DeleteEmailMessageById;
+    let response = client
+        .delete(opensearch::DeleteParts::IndexId(index, document_id))
+        .send()
+        .await
+        .map_err(|err| OpensearchClientError::request_failed(OPERATION, &err))?;
+    let status_code = response.status_code();
+    if status_code.is_success() {
+        return Ok(true);
+    }
+    let body = response
+        .text()
+        .await
+        .map_err(|err| OpensearchClientError::deserialization_failed(OPERATION, &err))?;
+    if is_missing_document(status_code.as_u16(), &body) {
+        return Ok(false);
+    }
+    tracing::error!(status_code = ?status_code, body = ?body, "error deleting an email message by id");
+    Err(OpensearchClientError::Unknown {
+        details: body,
+        operation: OPERATION,
+    })
+}
+
+/// A delete-by-id 404 for a document that does not exist, not for a missing
+/// index, which is an outage.
+fn is_missing_document(status_code: u16, body: &str) -> bool {
+    status_code == 404
+        && serde_json::from_str::<serde_json::Value>(body)
+            .is_ok_and(|value| value["result"] == "not_found")
 }
 
 /// Runs `pass`; when it skipped documents on version conflicts, runs
@@ -432,6 +498,15 @@ where
         deleted: first.deleted + second.deleted,
         passes: 2,
     })
+}
+
+/// Refreshes the email index a delete targets, so the next search or
+/// delete-by-query on it sees every write so far.
+pub(crate) async fn refresh_destination(
+    client: &opensearch::OpenSearch,
+    index_override: Option<&str>,
+) -> Result<()> {
+    refresh_index(client, resolve_destination(index_override)).await
 }
 
 pub(crate) async fn refresh_index(client: &opensearch::OpenSearch, index: &str) -> Result<()> {
