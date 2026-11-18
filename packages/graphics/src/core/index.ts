@@ -4,6 +4,7 @@ export * from './artifact-commands';
 export * from './artifact-order';
 export type { GraphicsBackend } from './backend';
 export {
+  type FitViewport,
   fitImageCamera,
   INITIAL_CAMERA,
   MAX_SCALE,

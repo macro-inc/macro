@@ -67,6 +67,14 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
     return draft.body_text ? plainTextToHtml(draft.body_text) : '';
   });
 
+  // Read by id: the draft is a new object on every thread read, and the
+  // host's footer must not be rebuilt under the composer each time.
+  const draftId = createMemo(() => props.draft?.db_id);
+  const draftOrigin = createMemo(() => {
+    const id = draftId();
+    return id ? viewContext.rendering.renderDraftOrigin?.(id) : undefined;
+  });
+
   function focusMessage(id: string) {
     ctx.messages.setFocused(id);
     const message = ctx
@@ -172,6 +180,7 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
               isEditingExisting={
                 props.replyingTo() == null && props.draft != null
               }
+              footer={draftOrigin()}
             />
           </Layer>
         )}

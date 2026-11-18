@@ -39,6 +39,10 @@ jobs:
         set -euo pipefail
         run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
         message="🚨 The daily cargo deny advisories run failed on $GITHUB_REF_NAME. If the log shows a RustSec advisory against a package in Cargo.lock, update the crate, or ignore the advisory in deny.toml with a reason. $run_url"
+        if [[ -z "$MACRO_WEBHOOK_URL" || -z "$MACRO_BOT_TOKEN" ]]; then
+          echo 'Configure the Macro Alerts webhook URL and bot token' >&2
+          exit 1
+        fi
         jq -n --arg content "$message" '{content: $content}' |
           curl --fail-with-body --silent --show-error --retry 3 \
             --header 'Content-Type: application/json' \

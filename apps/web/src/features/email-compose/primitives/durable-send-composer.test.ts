@@ -17,9 +17,13 @@ import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
 import { mountReplyComposer } from '../tests/reply';
 import type { DraftFormAttachment } from './email-form-state';
+import { resetScheduledNoticesForTests } from './email-send-schedule';
 
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  resetScheduledNoticesForTests();
+});
 
 it.each(['standalone', 'reply'] as const)(
   'requires local persistence but no server acknowledgement for an offline %s send',

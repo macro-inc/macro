@@ -631,8 +631,17 @@ pub async fn run() -> anyhow::Result<()> {
             matches!(config.environment, Environment::Local),
         )?
         .with_owner_approvals(Arc::clone(&tool_approvals))
+        // Each account's MCP exchanges are paced per upstream, after
+        // approvals, and a 429 is retried after its Retry-After.
         .with_actor_mcp(Arc::new(
-            agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new(mcp_address_policy)?,
+            agent_egress::outbound::budgeted_mcp::BudgetedMcpTransport::new(
+                Arc::new(
+                    agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new(
+                        mcp_address_policy,
+                    )?,
+                ),
+                agent_egress::outbound::budgeted_mcp::BudgetPolicy::DEFAULT,
+            ),
         )),
     );
 

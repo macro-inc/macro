@@ -24,13 +24,16 @@ export function MobileCanvasInspectorSheet(props: {
         <MobileDrawer.Content aria-label="Canvas inspector" maxHeight={50}>
           <MobileDrawer.Handle />
           <MobileDrawer.ScrollBody data-canvas-inspector-scroll>
-            <CanvasInspectorSections />
+            <CanvasInspectorSections swatchRows />
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>
   );
 }
+
+/** What the side panel takes of the canvas's right edge: its width and gutter. */
+export const INSPECTOR_PANEL_CLEARANCE = '17rem';
 
 /**
  * A tablet's inspector (and a phone's, turned sideways): the floating panel

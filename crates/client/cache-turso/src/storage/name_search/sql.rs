@@ -14,6 +14,8 @@ impl Params {
 pub(super) enum Bounds {
     Equal(Vec<u8>),
     Prefix(Vec<u8>),
+    /// From the first value, up to but excluding the second when there is one.
+    Between(Vec<u8>, Option<Vec<u8>>),
     All,
 }
 pub(super) struct Seed {
@@ -34,6 +36,14 @@ impl Seed {
                 sql.push_str(&format!(" AND {alias}.value>={low}"));
                 if let Some(end) = prefix_end(value) {
                     let high = p.bind(Value::from_blob(end));
+                    sql.push_str(&format!(" AND {alias}.value<{high}"));
+                }
+            }
+            Bounds::Between(low, high) => {
+                let low = p.bind(Value::from_blob(low.clone()));
+                sql.push_str(&format!(" AND {alias}.value>={low}"));
+                if let Some(high) = high {
+                    let high = p.bind(Value::from_blob(high.clone()));
                     sql.push_str(&format!(" AND {alias}.value<{high}"));
                 }
             }
@@ -94,10 +104,7 @@ pub(super) fn seeds(read: &NameSearchRead<'_>, stage: NameStage) -> Vec<Seed> {
             attribute: "email_lower",
             bounds: Bounds::Prefix(value.as_bytes().to_vec()),
         }],
-        (NameSearch::Name(q), NameStage::ExactName) => vec![Seed {
-            attribute: names::NAME,
-            bounds: Bounds::Equal(q.normalized().as_bytes().to_vec()),
-        }],
+        (NameSearch::Name(q), NameStage::ExactName) => vec![exact_name(q.normalized())],
         (NameSearch::Name(q), NameStage::WordPrefix) => q
             .words()
             .map(|word| Seed {
@@ -114,6 +121,23 @@ pub(super) fn seeds(read: &NameSearchRead<'_>, stage: NameStage) -> Vec<Seed> {
             bounds: Bounds::All,
         }],
         _ => vec![],
+    }
+}
+/// A full name equal to the query, or for a one-term query a name starting with
+/// it and a space (its first name), sorts from the query up to the query and the
+/// byte after the space. The core recheck drops the few other names in between.
+fn exact_name(query: &str) -> Seed {
+    let query = query.as_bytes().to_vec();
+    if query.contains(&b' ') {
+        return Seed {
+            attribute: names::NAME,
+            bounds: Bounds::Equal(query),
+        };
+    }
+    let first_name = prefix_end(&[query.as_slice(), b" "].concat());
+    Seed {
+        attribute: names::NAME,
+        bounds: Bounds::Between(query, first_name),
     }
 }
 pub(super) fn matches(p: &mut Params, read: &NameSearchRead<'_>, stage: NameStage) -> String {
