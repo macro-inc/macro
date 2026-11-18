@@ -1719,6 +1719,45 @@ applies even when no extra cross-account approval was needed. Changing tool
 credentials does not remove private results already in the conversation; the
 agent is instructed not to disclose another person’s earlier private results.
 
+## Agent permissions in a session
+
+Behind `enable-agent-permissions` and `enable-ocaml-code-mode`, an OCaml
+`ExecuteCode` program is checked against the agent's permissions (Settings →
+Agents → Permissions) before it runs:
+
+- **Ask**: a permission hold (`tool_approval` with `serverSlug: "macro-sdk"`)
+  appears above the composer as **Approval needed**: `<Agent> wants to run a
+  program that may:` and the operations set to Ask, by group, each with its
+  action, name and (on a wide card) `service.operation`; more than six fold
+  behind **Show N more**. A note links `<Agent>'s permissions` (for people who
+  can edit the agent) and **View program** reveals the source. Only the
+  approver the hold names may answer: **Decline**, **Allow for this session**
+  (stops asking for these operations until the session ends) or **Approve**.
+  Anyone else sees `Waiting for <name> to approve` and, with edit access,
+  **Cancel**. Answered holds become a row such as `Run a program that may send
+  email and edit documents · Allowed for this session by you`.
+- **Never**: nothing runs. The call renders as its own **Blocked by
+  permissions** card (outside the tool group) naming what the program could
+  have done and the refused operations, with **Review permissions** (opens the
+  agent's permissions page beside the chat, at the first refused group, action
+  or tool) for people who can edit the agent and `Only people who can edit
+  <Agent> can change this.` for others.
+- A declined, cancelled or expired hold leaves a quiet row in the tool group,
+  `Didn't run a program that may … · Declined`, not counted as a failure. A
+  step the bootstrap backstop refused mid-run reads **Blocked**.
+
+When the agent calls `ShowPermissions`, the transcript shows **<Agent>'s
+permissions**: its one-line reason, then the asked groups' actions and tools
+with the same `Allow · Ask · Never` controls as the settings page, reading the
+session's view (the agent's own limits for the session carry a **This
+session** badge). A click saves to the agent at once; **All permissions** opens
+the page. People who can't edit the agent see the controls disabled and `Only
+people who can edit <Agent> can change these.`
+
+Backend-free check (desktop and phone):
+`bunx playwright test --config src/features/block-agent/browser-test/permissions.playwright.config.ts`
+from `apps/web`; set `PERMISSIONS_SCREENSHOT_DIR` to keep its screenshots.
+
 ## Forms authoring and sharing
 
 With Forms enabled, ask the agent to create a complete form, including ordered
