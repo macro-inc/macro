@@ -1,3 +1,7 @@
+import {
+  groupMenuItems,
+  type MenuGroup as MenuGroupId,
+} from '@core/menu/group-menu-items';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
@@ -22,6 +26,7 @@ import { createSignal, createUniqueId, For, onCleanup, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   ContextMenuContent,
+  MenuGroup,
   MenuItem,
   MenuSeparator,
 } from '../../../lib/core/component/ContextMenu';
@@ -215,7 +220,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
           {
             label: 'Rename column',
             icon: PencilIcon,
-            group: 'edit',
+            group: 'modify' as const,
             run: rename,
           },
         ]
@@ -225,13 +230,13 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
           {
             label: 'Insert left',
             icon: ColumnsPlusLeftIcon,
-            group: 'edit',
+            group: 'modify' as const,
             run: () => props.onInsert?.(props.column.id, 'left'),
           },
           {
             label: 'Insert right',
             icon: ColumnsPlusRightIcon,
-            group: 'edit',
+            group: 'modify' as const,
             run: () => props.onInsert?.(props.column.id, 'right'),
           },
         ]
@@ -241,7 +246,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
           {
             label: 'Edit formula',
             icon: FunctionIcon,
-            group: 'edit',
+            group: 'modify' as const,
             run: () => {
               requested = () => setFormulaEditing({ kind: 'edit' });
             },
@@ -253,7 +258,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
           {
             label: 'Edit options',
             icon: ListBulletsIcon,
-            group: 'edit',
+            group: 'modify' as const,
             run: () => {
               requested = 'options';
             },
@@ -263,13 +268,13 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
     {
       label: 'Sort ascending',
       icon: ArrowUpIcon,
-      group: 'view',
+      group: 'state' as const,
       run: () => props.onSort(props.column.id, 'asc'),
     },
     {
       label: 'Sort descending',
       icon: ArrowDownIcon,
-      group: 'view',
+      group: 'state' as const,
       run: () => props.onSort(props.column.id, 'desc'),
     },
     ...(props.sortDirection
@@ -277,7 +282,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
           {
             label: 'Remove sort',
             icon: XIcon,
-            group: 'view',
+            group: 'state' as const,
             run: () => props.onSort(props.column.id, null),
           },
         ]
@@ -287,14 +292,14 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
           {
             label: 'Move left',
             icon: ArrowLeftIcon,
-            group: 'view',
+            group: 'modify' as const,
             disabled: !props.canMoveLeft,
             run: () => props.onMove?.(props.column.id, 'left'),
           },
           {
             label: 'Move right',
             icon: ArrowRightIcon,
-            group: 'view',
+            group: 'modify' as const,
             disabled: !props.canMoveRight,
             run: () => props.onMove?.(props.column.id, 'right'),
           },
@@ -305,7 +310,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
           {
             label: 'Delete column',
             icon: TrashIcon,
-            group: 'delete',
+            group: 'delete' as const,
             disabled: props.column.protections?.includes('delete') ?? false,
             run: () => {
               if (props.column.protections?.includes('delete')) return;
@@ -317,6 +322,8 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
         ]
       : []),
   ];
+  const sections = () =>
+    groupMenuItems(actions(), (action): MenuGroupId => action.group);
   return (
     <>
       <ContextMenu>
@@ -421,95 +428,80 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                       openRequestedOptions(event);
                     }}
                   >
-                    <For each={['edit', 'view', 'delete']}>
-                      {(group) => (
-                        <Show
-                          when={
-                            actions().some(
-                              (action) => action.group === group
-                            ) ||
-                            (group === 'edit' &&
-                              props.onChangeType &&
-                              canRename())
-                          }
-                        >
-                          <Dropdown.Group>
-                            <Show
-                              when={
-                                group === 'delete' &&
-                                props.column.protections?.includes('delete')
-                              }
-                            >
-                              <Dropdown.Item disabled>
-                                This column cannot be deleted
-                              </Dropdown.Item>
-                            </Show>
-                            <For
-                              each={actions().filter(
-                                (action) => action.group === group
-                              )}
-                            >
-                              {(action) => (
-                                <Dropdown.Item
-                                  disabled={
-                                    pending() ||
-                                    ('disabled' in action && action.disabled)
-                                  }
-                                  onSelect={action.run}
-                                  class={
-                                    group === 'delete'
-                                      ? 'text-failure-ink'
-                                      : undefined
-                                  }
-                                >
-                                  <action.icon class="size-3.5" />
-                                  {action.label}
-                                </Dropdown.Item>
-                              )}
-                            </For>
-                            <Show
-                              when={
-                                group === 'edit' &&
-                                props.onChangeType &&
-                                canRename() &&
-                                (!props.column.formula ||
-                                  props.column.dataType === 'NUMBER')
-                              }
-                            >
-                              <ColumnTypeMenu
-                                column={props.column}
-                                tables={props.relationTables}
-                                loadCasts={(open) =>
-                                  props.columnCasts?.(props.column.id, open)
+                    <For each={sections()}>
+                      {(section) => (
+                        <Dropdown.Group>
+                          <Show
+                            when={
+                              section.id === 'delete' &&
+                              props.column.protections?.includes('delete')
+                            }
+                          >
+                            <Dropdown.Item disabled>
+                              This column cannot be deleted
+                            </Dropdown.Item>
+                          </Show>
+                          <For each={section.items}>
+                            {(action) => (
+                              <Dropdown.Item
+                                disabled={
+                                  pending() ||
+                                  ('disabled' in action && action.disabled)
                                 }
-                                onChange={(change) =>
-                                  fireAndForget(changeType(change), 'database')
-                                }
-                                onFormula={
-                                  formulas && !props.column.formula
-                                    ? () => {
-                                        const replace = formulaReplaces();
-                                        requested = () =>
-                                          setFormulaEditing({
-                                            kind: 'create',
-                                            replace,
-                                          });
-                                        setMenuOpen(false);
-                                      }
+                                onSelect={action.run}
+                                class={
+                                  section.id === 'delete'
+                                    ? 'text-failure-ink'
                                     : undefined
                                 }
-                                onConvertToNewColumn={
-                                  props.onConvert &&
-                                  ((choice) => {
-                                    setMenuOpen(false);
-                                    setError('');
-                                    setConverting(choice);
-                                  })
-                                }
-                              />
-                            </Show>
-                          </Dropdown.Group>
-                        </Show>
+                              >
+                                <action.icon class="size-3.5" />
+                                {action.label}
+                              </Dropdown.Item>
+                            )}
+                          </For>
+                          <Show
+                            when={
+                              section.id === 'modify' &&
+                              props.onChangeType &&
+                              canRename() &&
+                              (!props.column.formula ||
+                                props.column.dataType === 'NUMBER')
+                            }
+                          >
+                            <ColumnTypeMenu
+                              column={props.column}
+                              tables={props.relationTables}
+                              loadCasts={(open) =>
+                                props.columnCasts?.(props.column.id, open)
+                              }
+                              onChange={(change) =>
+                                fireAndForget(changeType(change), 'database')
+                              }
+                              onFormula={
+                                formulas && !props.column.formula
+                                  ? () => {
+                                      const replace = formulaReplaces();
+                                      requested = () =>
+                                        setFormulaEditing({
+                                          kind: 'create',
+                                          replace,
+                                        });
+                                      setMenuOpen(false);
+                                    }
+                                  : undefined
+                              }
+                              onConvertToNewColumn={
+                                props.onConvert &&
+                                ((choice) => {
+                                  setMenuOpen(false);
+                                  setError('');
+                                  setConverting(choice);
+                                })
+                              }
+                            />
+                          </Show>
+                        </Dropdown.Group>
                       )}
                     </For>
                   </Dropdown.Content>
@@ -574,24 +566,30 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
               openRequestedOptions(event);
             }}
           >
-            <For each={actions()}>
-              {(action, index) => (
+            <For each={sections()}>
+              {(section, index) => (
                 <>
-                  <Show
-                    when={
-                      index() > 0 &&
-                      action.group !== actions()[index() - 1].group
-                    }
-                  >
-                    <MenuSeparator />
+                  <Show when={index() > 0}>
+                    <MenuSeparator class="touch:border-transparent" />
                   </Show>
-                  <MenuItem
-                    text={action.label}
-                    icon={<action.icon class="size-3.5" />}
-                    disabled={'disabled' in action && action.disabled}
-                    onClick={action.run}
-                    closeOnSelect
-                  />
+                  <MenuGroup class={index() > 0 ? 'touch:mt-2' : undefined}>
+                    <For each={section.items}>
+                      {(action) => (
+                        <MenuItem
+                          text={action.label}
+                          class={
+                            section.id === 'delete'
+                              ? 'text-failure-ink'
+                              : undefined
+                          }
+                          icon={<action.icon class="size-3.5" />}
+                          disabled={'disabled' in action && action.disabled}
+                          onClick={action.run}
+                          closeOnSelect
+                        />
+                      )}
+                    </For>
+                  </MenuGroup>
                 </>
               )}
             </For>

@@ -1,4 +1,8 @@
 /** What a timeline's context menu offers for a record. */
+import {
+  groupMenuItems,
+  type MenuGroup,
+} from '../../../lib/core/menu/group-menu-items';
 
 export type TimelineRecordAction =
   | 'open'
@@ -34,4 +38,19 @@ export function timelineRecordActions(params: {
     'duplicate',
     'delete',
   ];
+}
+
+/** Keep action eligibility from the view while ordering its visible record menu. */
+export function timelineRecordActionGroups(
+  actions: readonly TimelineRecordAction[],
+  hasMoveChoices: boolean
+): TimelineRecordAction[][] {
+  return groupMenuItems(
+    actions.filter((action) => action !== 'move' || hasMoveChoices),
+    (action): MenuGroup => {
+      if (action === 'open') return 'open';
+      if (action === 'delete') return 'delete';
+      return 'modify';
+    }
+  ).map((section) => section.items);
 }

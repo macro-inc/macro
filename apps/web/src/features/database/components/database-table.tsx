@@ -24,10 +24,12 @@ import {
   createSignal,
   For,
   type JSX,
+  Match,
   on,
   onCleanup,
   onMount,
   Show,
+  Switch,
   untrack,
 } from 'solid-js';
 import { createHorizontalReorder } from '../../../components/drag-drop/create-horizontal-reorder';
@@ -36,6 +38,7 @@ import { DragSessionSensors } from '../../../components/drag-drop/drag-session-s
 import { InsertionLine } from '../../../components/drag-drop/insertion-line';
 import {
   ContextMenuContent,
+  MenuGroup,
   MenuItem,
   MenuSeparator,
 } from '../../../lib/core/component/ContextMenu';
@@ -57,6 +60,7 @@ import type {
   GridCellControl,
   GridCellEditorOptions,
 } from '../core/grid-cell-editor';
+import { databaseRecordMenuGroups } from '../core/record-menu';
 import { canEditCell, type DatabaseRow } from '../core/table';
 import {
   cellRangeBounds,
@@ -1276,86 +1280,109 @@ export function DatabaseTable(props: DatabaseTableProps) {
                   });
                 }}
               >
-                <Show
-                  when={
-                    props.canEdit &&
-                    contextField() &&
-                    canEditCell(contextField()!)
-                  }
+                <For
+                  each={databaseRecordMenuGroups({
+                    editCell:
+                      !!props.canEdit &&
+                      !!contextField() &&
+                      canEditCell(contextField()!),
+                    saved: !props.isUnsavedRow?.(contextRowId()),
+                    rename:
+                      !!props.canEdit &&
+                      !!renameField() &&
+                      contextTarget()?.columnId !== renameField()?.id,
+                    duplicate: !!props.canEdit && !!props.onDuplicate,
+                    delete: !!props.canEdit && !!props.onRequestDelete,
+                  })}
                 >
-                  <MenuItem
-                    closeOnSelect
-                    icon={PencilIcon}
-                    text="Edit cell"
-                    onClick={() =>
-                      deferAction(() =>
-                        control(
-                          contextRowId(),
-                          contextTarget()!.columnId!
-                        )?.edit()
-                      )
-                    }
-                  />
-                </Show>
-                <Show when={!props.isUnsavedRow?.(contextRowId())}>
-                  <MenuItem
-                    closeOnSelect
-                    icon={ArrowSquareOutIcon}
-                    text="Open record"
-                    onClick={() =>
-                      deferAction(() => props.onOpen(contextRowId()))
-                    }
-                  />
-                  <Show
-                    when={
-                      props.canEdit &&
-                      renameField() &&
-                      contextTarget()?.columnId !== renameField()?.id
-                    }
-                  >
-                    <MenuItem
-                      closeOnSelect
-                      icon={PencilIcon}
-                      text="Rename"
-                      onClick={() =>
-                        deferAction(() =>
-                          control(contextRowId(), renameField()!.id)?.edit()
-                        )
-                      }
-                    />
-                  </Show>
-                  <Show when={props.canEdit && props.onDuplicate}>
-                    <MenuItem
-                      closeOnSelect
-                      icon={CopyIcon}
-                      text="Duplicate"
-                      disabled={props.pending}
-                      onClick={() =>
-                        deferAction(() => {
-                          fireAndForget(
-                            props.onDuplicate?.(contextRowId()),
-                            'database'
-                          );
-                        })
-                      }
-                    />
-                  </Show>
-                  <Show when={props.canEdit && props.onRequestDelete}>
-                    <MenuSeparator />
-                    <MenuItem
-                      closeOnSelect
-                      icon={TrashIcon}
-                      text="Delete record"
-                      class="text-failure"
-                      disabled={props.pending}
-                      onClick={() =>
-                        deferAction(() =>
-                          props.onRequestDelete?.(contextRowId())
-                        )
-                      }
-                    />
-                  </Show>
-                </Show>
+                  {(section, index) => (
+                    <>
+                      <Show when={index() > 0}>
+                        <MenuSeparator class="touch:border-transparent" />
+                      </Show>
+                      <MenuGroup class={index() > 0 ? 'touch:mt-2' : undefined}>
+                        <For each={section}>
+                          {(action) => (
+                            <Switch>
+                              <Match when={action === 'edit-cell'}>
+                                <MenuItem
+                                  closeOnSelect
+                                  icon={PencilIcon}
+                                  text="Edit cell"
+                                  onClick={() =>
+                                    deferAction(() =>
+                                      control(
+                                        contextRowId(),
+                                        contextTarget()!.columnId!
+                                      )?.edit()
+                                    )
+                                  }
+                                />
+                              </Match>
+                              <Match when={action === 'open'}>
+                                <MenuItem
+                                  closeOnSelect
+                                  icon={ArrowSquareOutIcon}
+                                  text="Open record"
+                                  onClick={() =>
+                                    deferAction(() =>
+                                      props.onOpen(contextRowId())
+                                    )
+                                  }
+                                />
+                              </Match>
+                              <Match when={action === 'rename'}>
+                                <MenuItem
+                                  closeOnSelect
+                                  icon={PencilIcon}
+                                  text="Rename"
+                                  onClick={() =>
+                                    deferAction(() =>
+                                      control(
+                                        contextRowId(),
+                                        renameField()!.id
+                                      )?.edit()
+                                    )
+                                  }
+                                />
+                              </Match>
+                              <Match when={action === 'duplicate'}>
+                                <MenuItem
+                                  closeOnSelect
+                                  icon={CopyIcon}
+                                  text="Duplicate"
+                                  disabled={props.pending}
+                                  onClick={() =>
+                                    deferAction(() => {
+                                      fireAndForget(
+                                        props.onDuplicate?.(contextRowId()),
+                                        'database'
+                                      );
+                                    })
+                                  }
+                                />
+                              </Match>
+                              <Match when={action === 'delete'}>
+                                <MenuItem
+                                  closeOnSelect
+                                  icon={TrashIcon}
+                                  text="Delete record"
+                                  class="text-failure"
+                                  disabled={props.pending}
+                                  onClick={() =>
+                                    deferAction(() =>
+                                      props.onRequestDelete?.(contextRowId())
+                                    )
+                                  }
+                                />
+                              </Match>
+                            </Switch>
+                          )}
+                        </For>
+                      </MenuGroup>
+                    </>
+                  )}
+                </For>
               </ContextMenuContent>
             </ContextMenu.Portal>
           </ContextMenu>

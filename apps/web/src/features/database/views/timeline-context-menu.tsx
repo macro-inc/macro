@@ -19,7 +19,10 @@ import {
   MenuSeparator,
   SubTrigger,
 } from '../../../lib/core/component/ContextMenu';
-import type { TimelineRecordAction } from '../core/timeline-record-menu';
+import {
+  type TimelineRecordAction,
+  timelineRecordActionGroups,
+} from '../core/timeline-record-menu';
 
 /** A group a record can move to from its menu. */
 type TimelineMoveChoice = { id: string; label: string };
@@ -256,49 +259,71 @@ function RecordItems(props: {
       )}
     </For>
   );
-  return (
-    <>
-      {item('open', 'Open record', ArrowSquareOutIcon, false)}
-      {item('edit-range', 'Edit time range…', CalendarIcon)}
-      {item('rename', 'Rename', PencilIcon)}
-      <Show when={has('move') && props.menu.groups.length}>
-        <Show
-          when={!isMobile()}
-          fallback={
-            <>
-              <MenuSeparator />
-              <MenuGroup>
-                <ContextMenu.GroupLabel class="px-2 py-1 text-xs text-ink-muted">
+  const render = (action: TimelineRecordAction) => {
+    switch (action) {
+      case 'open':
+        return item('open', 'Open record', ArrowSquareOutIcon, false);
+      case 'edit-range':
+        return item('edit-range', 'Edit time range…', CalendarIcon);
+      case 'rename':
+        return item('rename', 'Rename', PencilIcon);
+      case 'add-dates':
+        return item('add-dates', 'Add dates', CalendarPlusIcon);
+      case 'remove-dates':
+        return item('remove-dates', 'Remove dates', CalendarXIcon);
+      case 'duplicate':
+        return item('duplicate', 'Duplicate', CopyIcon);
+      case 'move':
+        return (
+          <Show
+            when={!isMobile()}
+            fallback={
+              <>
+                <ContextMenu.GroupLabel class="mt-2 px-2 py-1 text-xs text-ink-muted">
                   Move to group
                 </ContextMenu.GroupLabel>
                 {groups()}
-              </MenuGroup>
-              <MenuSeparator />
-            </>
-          }
-        >
-          <ContextMenu.Sub>
-            <SubTrigger text="Move to group" icon={FolderIcon} />
-            <ContextMenuContent submenu class="max-h-80 min-w-44">
-              {groups()}
-            </ContextMenuContent>
-          </ContextMenu.Sub>
-        </Show>
-      </Show>
-      {item('add-dates', 'Add dates', CalendarPlusIcon)}
-      {item('remove-dates', 'Remove dates', CalendarXIcon)}
-      {item('duplicate', 'Duplicate', CopyIcon)}
-      <Show when={has('delete')}>
-        <MenuSeparator />
-        <MenuItem
-          closeOnSelect
-          icon={TrashIcon}
-          text="Delete record"
-          class="text-failure"
-          disabled={props.menu.pending}
-          onClick={() => props.onAction('delete')}
-        />
-      </Show>
-    </>
+              </>
+            }
+          >
+            <ContextMenu.Sub>
+              <SubTrigger text="Move to group" icon={FolderIcon} />
+              <ContextMenuContent submenu class="max-h-80 min-w-44">
+                {groups()}
+              </ContextMenuContent>
+            </ContextMenu.Sub>
+          </Show>
+        );
+      case 'delete':
+        return (
+          <MenuItem
+            closeOnSelect
+            icon={TrashIcon}
+            text="Delete record"
+            class="text-failure"
+            disabled={props.menu.pending}
+            onClick={() => props.onAction('delete')}
+          />
+        );
+    }
+  };
+  return (
+    <For
+      each={timelineRecordActionGroups(
+        props.menu.actions,
+        props.menu.groups.length > 0
+      )}
+    >
+      {(section, index) => (
+        <>
+          <Show when={index() > 0 && !isMobile()}>
+            <MenuSeparator />
+          </Show>
+          <MenuGroup class={index() > 0 && isMobile() ? 'mt-2' : undefined}>
+            <For each={section}>{render}</For>
+          </MenuGroup>
+        </>
+      )}
+    </For>
   );
 }
