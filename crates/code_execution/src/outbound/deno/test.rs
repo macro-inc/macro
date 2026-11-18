@@ -277,17 +277,20 @@ async fn javascript_logs_result_and_cleanup() {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
-async fn a_program_edits_an_image_with_jimp() {
+async fn a_program_edits_an_image_with_photon() {
     let (_root, service) = setup(Limits::default()).await;
     let source = r#"
-import { Jimp, JimpMime } from 'jimp';
+import * as photon from 'photon';
 export async function main() {
-  const image = new Jimp({ width: 200, height: 100, color: 0xff0000ff });
-  image.resize({ w: 100 }).rotate(90).greyscale();
-  const png = await image.getBuffer(JimpMime.png);
-  const decoded = await Jimp.read(png);
-  const jpeg = await decoded.getBuffer(JimpMime.jpeg, { quality: 80 });
-  return { width: decoded.width, height: decoded.height, jpeg: jpeg.length > 0 };
+  const pixels = new Uint8Array(200 * 100 * 4).fill(255);
+  const image = new photon.PhotonImage(pixels, 200, 100);
+  const resized = photon.resize(image, 100, 50, photon.SamplingFilter.Lanczos3);
+  photon.grayscale(resized);
+  photon.draw_text(resized, 'hi', 5, 5, 12);
+  const rotated = photon.rotate(resized, 90);
+  const decoded = photon.PhotonImage.new_from_byteslice(rotated.get_bytes());
+  const jpeg = rotated.get_bytes_jpeg(80);
+  return { width: decoded.get_width(), height: decoded.get_height(), jpeg: jpeg.length > 0 };
 }
 "#;
     let (_, outcome) = run(&service, source, 10_000).await;

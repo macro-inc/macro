@@ -2,7 +2,7 @@
 
 ## Scope
 
-Packages the public Macro SDK, Handlebars and Jimp (image editing) for restricted Deno execution and
+Packages the public Macro SDK, Handlebars and Photon (image editing) for restricted Deno execution and
 builds the agent documentation catalog. Canonical TypeDoc rendering and the
 HTML worker belong to `packages/sdk-docs`.
 

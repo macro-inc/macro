@@ -2,7 +2,7 @@
 
 `ExecuteCode` accepts a JavaScript ES module exporting `main`. The agent harness
 starts a fresh Deno 2.9.6 child for each execution; there is no separate runner
-service. Macro SDK, Handlebars and Jimp imports are bundled ahead of time, with no
+service. Macro SDK, Handlebars and Photon imports are bundled ahead of time, with no
 per-run package download or TypeScript compilation.
 
 ```js

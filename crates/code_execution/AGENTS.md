@@ -23,7 +23,7 @@ service. Session authentication, token issuance and execution storage belong to
 
 The bundled public SDK makes ordinary HTTP requests. There is no tool-name
 proxy or host-call bridge. Cancellation stops the process; it does not roll back
-completed API writes. SDK, Handlebars and Jimp bundles, the operation catalog and
+completed API writes. SDK, Handlebars and Photon bundles, the operation catalog and
 the SDK's type declarations come from `crates/code_mode_assets`, generated from
 the public SDK at build time by `packages/code-mode-sdk`. A POST that only reads
 must be listed in the generator's `postReads`, or dry runs skip it.
