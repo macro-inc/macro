@@ -10,6 +10,7 @@ import type { InviteCalendarEventGuestsRequestCalendarId } from './inviteCalenda
 import type { InviteCalendarEventGuestsRequestInbox } from './inviteCalendarEventGuestsRequestInbox';
 import type { InviteCalendarEventGuestsRequestRecurrenceId } from './inviteCalendarEventGuestsRequestRecurrenceId';
 import type { InviteCalendarEventGuestsRequestScope } from './inviteCalendarEventGuestsRequestScope';
+import type { InviteCalendarEventGuestsRequestUserConfirmation } from './inviteCalendarEventGuestsRequestUserConfirmation';
 
 /**
  * Request body adding guests to an event without touching anyone already
@@ -29,4 +30,8 @@ mismatch is refused whoever sends it. */
   /** Original-start key of the occurrence the guests are added to. */
   recurrenceId?: InviteCalendarEventGuestsRequestRecurrenceId;
   scope?: InviteCalendarEventGuestsRequestScope;
+  /** The user's own reply approving these invitations, quoted verbatim.
+Required from an agent's program, because the calendar emails each
+new guest; never the request that asked for the change. Not stored. */
+  userConfirmation?: InviteCalendarEventGuestsRequestUserConfirmation;
 }
