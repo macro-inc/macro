@@ -19388,6 +19388,9 @@
               }
             }
           },
+          "403": {
+            "description": "An agent's program sent without userConfirmation (code confirmation_required), or the caller may not send"
+          },
           "429": {
             "description": "One send request per second per user; Retry-After: 1"
           }
@@ -36694,6 +36697,10 @@
           "content": {
             "type": "string",
             "description": "Message body."
+          },
+          "notification_policy": {
+            "$ref": "#/components/schemas/PostMessageNotificationPolicy",
+            "description": "Who hears about the message; `Silent` notifies no one."
           }
         }
       },
@@ -47777,6 +47784,10 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Message being quoted, within this chat."
+          },
+          "userConfirmation": {
+            "type": ["string", "null"],
+            "description": "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
           }
         }
       },
@@ -58488,6 +58499,10 @@
             "type": ["string", "null"],
             "description": "Client nonce for optimistic reconciliation."
           },
+          "notification_policy": {
+            "$ref": "#/components/schemas/PostMessageNotificationPolicy",
+            "description": "Who hears about this post. `Silent` still delivers and shows the\nmessage, but sends no notification of any kind, mentions included.\nChannel messages only; other parents accept only `Default`."
+          },
           "thread_id": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -58497,7 +58512,7 @@
       },
       "PostMessageNotificationPolicy": {
         "type": "string",
-        "description": "Internal notification behavior for a posted channel message.",
+        "description": "Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.",
         "enum": ["Default", "MentionsOnly", "Silent"]
       },
       "PostSoupAstRequest": {

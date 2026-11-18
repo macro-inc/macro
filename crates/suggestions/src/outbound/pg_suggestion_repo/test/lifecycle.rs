@@ -176,7 +176,7 @@ async fn resolving_follows_the_table(pool: PgPool) {
         let id = f.prompt_in(from).await;
         let moved = f
             .repo
-            .resolve(&f.user, id, ResolveReason::Replied, Utc::now())
+            .resolve(&f.user, id, ResolveReason::Deleted, Utc::now())
             .await
             .unwrap();
         assert_eq!(
@@ -185,6 +185,21 @@ async fn resolving_follows_the_table(pool: PgPool) {
             "from {from:?}"
         );
         assert_eq!(f.state(id).await, after(from, LifecycleEvent::Resolve));
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn answering_follows_the_table(pool: PgPool) {
+    let f = fixture(pool).await;
+    for from in SuggestionState::iter() {
+        let id = f.prompt_in(from).await;
+        let moved = f.repo.answer(&f.user, id, Utc::now()).await.unwrap();
+        assert_eq!(
+            moved,
+            transition(from, LifecycleEvent::Answer).is_some(),
+            "from {from:?}"
+        );
+        assert_eq!(f.state(id).await, after(from, LifecycleEvent::Answer));
     }
 }
 
@@ -393,7 +408,7 @@ async fn replacing_follows_the_table_from_the_state_read(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn closing_a_suggestion_cancels_its_run_as_the_machine_says(pool: PgPool) {
     let f = fixture(pool).await;
-    let close: [(&str, LifecycleEvent, SuggestionState); 4] = [
+    let close: [(&str, LifecycleEvent, SuggestionState); 5] = [
         (
             "dismiss",
             LifecycleEvent::Dismiss,
@@ -406,6 +421,7 @@ async fn closing_a_suggestion_cancels_its_run_as_the_machine_says(pool: PgPool) 
             SuggestionState::Resolved,
         ),
         ("complete", LifecycleEvent::Complete, SuggestionState::Done),
+        ("answer", LifecycleEvent::Answer, SuggestionState::Done),
     ];
     for name in RunStateName::iter().filter(|name| !name.is_settled()) {
         for (how, event, to) in close {
@@ -424,9 +440,11 @@ async fn closing_a_suggestion_cancels_its_run_as_the_machine_says(pool: PgPool) 
             let now = Utc::now();
             let moved = if event == LifecycleEvent::Resolve {
                 f.repo
-                    .resolve(&f.user, id, ResolveReason::Replied, now)
+                    .resolve(&f.user, id, ResolveReason::Deleted, now)
                     .await
                     .unwrap()
+            } else if event == LifecycleEvent::Answer {
+                f.repo.answer(&f.user, id, now).await.unwrap()
             } else {
                 f.repo
                     .set_state(&f.user, id, &sources(event), to, None, now)

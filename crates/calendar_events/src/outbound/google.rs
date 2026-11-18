@@ -1888,15 +1888,15 @@ fn truncate_recurrence_lines(lines: &[String], cutoff: &EventStart) -> Vec<Strin
 /// the caller maps it to a reauth prompt rather than a retry.
 fn non_retryable_after_write(error: CalendarProviderError) -> CalendarProviderError {
     match error.kind() {
-        CalendarProviderErrorKind::Transient | CalendarProviderErrorKind::SyncTokenExpired => {
-            CalendarProviderError::new(
-                CalendarProviderErrorKind::Permanent,
-                format!(
-                    "Google Calendar applied the change but has not returned it yet, refresh to see it: {}",
-                    error.message()
-                ),
-            )
-        }
+        CalendarProviderErrorKind::Transient
+        | CalendarProviderErrorKind::SyncTokenExpired
+        | CalendarProviderErrorKind::Deferred => CalendarProviderError::new(
+            CalendarProviderErrorKind::Permanent,
+            format!(
+                "Google Calendar applied the change but has not returned it yet, refresh to see it: {}",
+                error.message()
+            ),
+        ),
         CalendarProviderErrorKind::Permanent
         | CalendarProviderErrorKind::ReauthRequired
         | CalendarProviderErrorKind::PushUnsupported => error,

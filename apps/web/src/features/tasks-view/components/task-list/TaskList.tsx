@@ -101,7 +101,6 @@ export function TaskList(props: TaskListProps) {
   const {
     state,
     calendar,
-    projectsEnabled,
     showTaskProject,
     setState,
     source,
@@ -350,11 +349,10 @@ export function TaskList(props: TaskListProps) {
     scopeId: panel.splitHotkeyScope,
     description: 'Add to project…',
     tags: [HotkeyTags.SelectionModification],
-    condition: () =>
-      panel.isPanelActive() && projectsEnabled() && selectedTasks().length > 0,
+    condition: () => panel.isPanelActive() && selectedTasks().length > 0,
     keyDownHandler: () => {
       const ids = selectedTasks().map((task) => task.id);
-      if (!projectsEnabled() || !ids.length) return false;
+      if (!ids.length) return false;
       setAssigningProjectTasks(ids);
       return true;
     },
@@ -731,7 +729,7 @@ export function TaskList(props: TaskListProps) {
                 analyticsSource="tasks_view_selection_toolbar"
               />
             </Show>
-            <Show when={projectsEnabled() && assigningProjectTasks()}>
+            <Show when={assigningProjectTasks()}>
               {(assigning) => (
                 <ProjectAssignmentDialog
                   taskIds={assigning()}

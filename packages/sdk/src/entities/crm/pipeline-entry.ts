@@ -91,8 +91,10 @@ export function pipelineImport(
 }
 
 /**
- * One entry of a CRM pipeline (a deal): the company or contact it tracks
- * (none in a generic pipeline of free-form rows) and its fields by name. Change it with {@link PipelineEntry.update} or take it
+ * A CRM pipeline entry (a deal), with its fields by name.
+ *
+ * It tracks a company or contact, or neither in a generic pipeline of
+ * free-form rows. Change it with {@link PipelineEntry.update} or take it
  * out with {@link PipelineEntry.remove}.
  *
  * @mcp-exclude Built from a pipeline listing; use CrmPipeline.updateEntries and removeRecords.
