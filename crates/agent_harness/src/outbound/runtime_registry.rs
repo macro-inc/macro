@@ -27,7 +27,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use crate::domain::ports::{
-    HarnessBindings, HarnessPresence, RuntimeConnectionId, RuntimeConnections,
+    ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeConnectionId, RuntimeConnections,
 };
 
 #[cfg(test)]
@@ -259,12 +259,13 @@ where
     }
 }
 
-/// Record a dial with presence, then tell the runtime to re-read its agents.
+/// Record a dial with presence, and when that bound an agent, tell the
+/// runtime to re-read its agents.
 ///
-/// Recording a connection can bind agents to it: a Macro computer gets its
-/// first agent on its first connect. Told now rather than at its next poll,
-/// the runtime covers that agent at once, so a session requested the moment
-/// the computer is ready reaches it.
+/// A Macro computer gets its first agent on its first connect. Told now
+/// rather than at its next poll, the runtime covers that agent at once, so a
+/// session requested the moment the computer is ready reaches it. Only then:
+/// a runtime too old to know the message would log every one it is sent.
 async fn record_connected<Sender>(
     presence: Arc<dyn HarnessPresence>,
     harness: HarnessId,
@@ -272,7 +273,10 @@ async fn record_connected<Sender>(
 ) where
     Sender: TransportSender<ToRuntimeMessage>,
 {
-    presence.connected(harness, listed.id).await;
+    let recorded = presence.connected(harness, listed.id).await;
+    if recorded != ConnectionRecorded::AgentBound {
+        return;
+    }
     if let Err(error) = listed.connection.agents_changed().await {
         tracing::debug!(%harness, error = %error, "could not tell the runtime its agents changed");
     }

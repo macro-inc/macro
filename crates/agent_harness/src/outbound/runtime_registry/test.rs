@@ -234,6 +234,8 @@ enum PresenceEvent {
 
 #[derive(Default)]
 struct RecordingPresence {
+    /// Whether recording a connection binds an agent.
+    binds_an_agent: bool,
     events: Mutex<Vec<PresenceEvent>>,
     renewed: Mutex<Vec<Vec<(HarnessId, RuntimeConnectionId)>>>,
 }
@@ -243,12 +245,17 @@ impl HarnessPresence for RecordingPresence {
         self: Arc<Self>,
         _harness: HarnessId,
         connection: RuntimeConnectionId,
-    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> {
+    ) -> std::pin::Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>> {
         Box::pin(async move {
             self.events
                 .lock()
                 .unwrap()
                 .push(PresenceEvent::Connected(connection));
+            if self.binds_an_agent {
+                ConnectionRecorded::AgentBound
+            } else {
+                ConnectionRecorded::AgentsUnchanged
+            }
         })
     }
 
@@ -371,11 +378,14 @@ async fn a_close_waits_for_its_own_connected_write() {
     );
 }
 
-/// Recording a connection can bind agents to it, so the runtime is told to
-/// re-read them once presence has the dial.
+/// The dial that binds an agent tells its runtime to re-read its agents,
+/// once presence has it.
 #[tokio::test]
-async fn a_recorded_dial_tells_its_runtime_that_its_agents_changed() {
-    let presence = Arc::new(RecordingPresence::default());
+async fn a_dial_that_binds_an_agent_tells_its_runtime_its_agents_changed() {
+    let presence = Arc::new(RecordingPresence {
+        binds_an_agent: true,
+        ..RecordingPresence::default()
+    });
     let runtime = ContainerMock::default();
     let listed = ListedConnection {
         id: RuntimeConnectionId::generate(),
@@ -397,6 +407,31 @@ async fn a_recorded_dial_tells_its_runtime_that_its_agents_changed() {
         runtime.sent().as_slice(),
         [ToRuntimeMessage::AgentsChanged]
     ));
+}
+
+/// Every other dial sends nothing new: a runtime too old to know the
+/// message must never be sent it.
+#[tokio::test]
+async fn a_dial_that_binds_nothing_sends_its_runtime_nothing() {
+    let presence = Arc::new(RecordingPresence::default());
+    let runtime = ContainerMock::default();
+    let listed = ListedConnection {
+        id: RuntimeConnectionId::generate(),
+        connection: RuntimeConnection::connect(runtime.clone()),
+    };
+
+    record_connected(
+        Arc::clone(&presence) as Arc<dyn HarnessPresence>,
+        HarnessId::TEST_A,
+        listed.clone(),
+    )
+    .await;
+
+    assert_eq!(
+        *presence.events.lock().unwrap(),
+        [PresenceEvent::Connected(listed.id)]
+    );
+    assert!(runtime.sent().is_empty(), "{:?}", runtime.sent());
 }
 
 #[tokio::test]
