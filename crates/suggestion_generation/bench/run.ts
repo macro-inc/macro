@@ -104,11 +104,26 @@ export async function seed(instance: string, persona: Persona, variant: Variant,
     stdout: 'pipe',
     stderr: 'pipe',
   });
-  writeFileSync(log, result.stdout.toString() + result.stderr.toString(), { flag: 'a' });
+  const output = result.stdout.toString() + result.stderr.toString();
+  writeFileSync(log, output, { flag: 'a' });
   if (result.exitCode !== 0) throw new Error(`seed-scenario apply ${scenarioName(persona, variant)} exited with ${result.exitCode}; see ${log}`);
+  // The seed CLI goes on without a login when the signup webhook refuses one
+  // (it allows 50 signups an hour from one address); say so here, not as a
+  // failed login later.
+  const refused = output.match(/FusionAuth account creation failed.*/)?.[0];
+  if (refused) throw new Error(`seeding ${scenarioName(persona, variant)}: ${refused}; see ${log}`);
 }
 
-const SIGNUP_SETTLE_MS = 20_000;
+/** How long a first signup's sample content and a generation still running may take to settle. */
+const SIGNUP_SETTLE_MS = 90_000;
+const RUNNING_SETTLE_MS = 15 * 60_000;
+
+/** Poll `ready` once a second until it holds, or throw after `limitMs`. */
+async function until(what: string, limitMs: number, ready: () => Promise<boolean>) {
+  for (const start = Date.now(); !(await ready()); await Bun.sleep(1000)) {
+    if (Date.now() - start > limitMs) throw new Error(`${what} after ${limitMs / 1000} s`);
+  }
+}
 
 /**
  * The tables a generation writes a person's rows to: every suggestion and
@@ -214,12 +229,29 @@ export async function prepare(at: Stack, persona: Persona, variant: Variant, now
   try {
     const email = ownerEmail(persona, variant);
     const user = userId(email);
+    // A generation an earlier attempt gave up on may still be running as the
+    // person; clearing its rows would hide it from the harness's cleanup.
+    await until(`${user} still has a generation running`, RUNNING_SETTLE_MS, async () => {
+      const [{ running }] = await db.unsafe(
+        `SELECT count(*)::int AS running FROM suggestion_generation WHERE user_id = $1 AND status = 'generating'`,
+        [user],
+      );
+      return running === 0;
+    });
     const [{ known }] = await db.unsafe('SELECT count(*)::int AS known FROM macro_user WHERE email = $1', [email]);
     await seed(at.instance, persona, variant, now, `${out}.seed.log`);
-    // A first seed signs the person up, and the signup's sample content and
-    // support channel land a few seconds later: let them, so the generation
-    // sees what later attempts will.
-    if (known === 0) await Bun.sleep(SIGNUP_SETTLE_MS);
+    // A first seed signs the person up, and the signup's sample documents and
+    // then its support channel land seconds later: wait for the channel, so
+    // the generation sees what later attempts will.
+    if (known === 0) {
+      await until(`${user}'s signup content never arrived`, SIGNUP_SETTLE_MS, async () => {
+        const [{ channels }] = await db.unsafe(
+          `SELECT count(*)::int AS channels FROM comms_channels WHERE owner_id = $1 AND name LIKE 'Macro Support x %'`,
+          [user],
+        );
+        return channels > 0;
+      });
+    }
     await forgetWork(db, user);
     await assertClean(db, user);
   } finally {

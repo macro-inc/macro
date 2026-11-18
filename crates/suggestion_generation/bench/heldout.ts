@@ -142,14 +142,32 @@ const MESSAGES = obj({
   },
 });
 
-const WORKSPACE = obj({
+// The workspace is written in parts: the harness gives a structured
+// completion 90 seconds, too few for a whole workspace or 25 emails at once.
+const PLAN = obj({
   projects: { type: 'array', items: obj({ key: str, name: str }) },
-  documents: { type: 'array', items: obj({ key: str, owner: str, name: str, project: str, content: str }) },
-  tasks: { type: 'array', items: obj({ key: str, owner: str, name: str, status: { type: 'string', enum: ['not_started', 'in_progress', 'completed'] }, assignees: strs, content: str }) },
   channels: { type: 'array', items: obj({ key: str, name: str }) },
-  messages: { type: 'array', items: obj({ channel: str, from: str, text: str }) },
-  calls: { type: 'array', items: obj({ key: str, channel: str, name: str, ended_minutes_ago: { type: 'integer' }, duration_minutes: { type: 'integer' }, transcript: { type: 'array', items: obj({ speaker: str, text: str }) } }) },
+  documents: { type: 'array', items: obj({ key: str, owner: str, name: str, project: str, about: str }) },
+  tasks: { type: 'array', items: obj({ key: str, owner: str, name: str, status: { type: 'string', enum: ['not_started', 'in_progress', 'completed'] }, assignees: strs, content: str }) },
+  calls: { type: 'array', items: obj({ key: str, channel: str, name: str, ended_minutes_ago: { type: 'integer' }, duration_minutes: { type: 'integer' }, about: str }) },
+  opportunities: strs,
+  decoys: strs,
 });
+const DOCUMENTS = obj({ documents: { type: 'array', items: obj({ key: str, content: str }) } });
+const CHAT = obj({ messages: { type: 'array', items: obj({ channel: str, from: str, text: str }) } });
+const TRANSCRIPT = obj({ transcript: { type: 'array', items: obj({ speaker: str, text: str }) } });
+
+type Plan = {
+  projects: { key: string; name: string }[];
+  channels: { key: string; name: string }[];
+  documents: { key: string; owner: string; name: string; project: string; about: string }[];
+  tasks: { key: string; owner: string; name: string; status: string; assignees: string[]; content: string }[];
+  calls: { key: string; channel: string; name: string; ended_minutes_ago: number; duration_minutes: number; about: string }[];
+  opportunities: string[];
+  decoys: string[];
+};
+
+const BATCH = 10;
 
 const FEED_TRUTH = obj({
   planted: { type: 'array', items: obj({ id: str, what: str, evidence: strs, ideal_suggestion: str }) },
@@ -181,13 +199,13 @@ For each: a short slug (lowercase letters), a one-sentence persona, a first and 
     mkdirSync(dir, { recursive: true });
     const owner = { name: `${sketch.owner_first} ${sketch.owner_last}`, email: `${sketch.owner_first.toLowerCase()}@${sketch.domain}` };
     const who = `${owner.name} <${owner.email}>: ${sketch.persona} Labels: ${sketch.labels.join(', ')}. Colleagues: ${sketch.colleagues.map((c) => `${c.first} ${c.last} (${c.role}, ${c.first.toLowerCase()}@${sketch.domain})`).join('; ')}. Recurring mail: ${sketch.streams.join('; ')}. This month: ${sketch.situation}`;
-    // The mailbox, newest first, a quarter at a time.
+    // The mailbox, newest first, ten at a time.
     const messages: Record<string, unknown>[] = [];
-    for (let part = 0; part < 4; part++) {
+    for (let part = 0; part < 100 / BATCH; part++) {
       const { messages: batch } = await write<{ messages: Record<string, unknown>[] }>(
         at,
-        `Write 25 emails from the inbox of ${who}
-It is now ${anchor}. Write messages ${part * 25 + 1} to ${part * 25 + 25} of their newest 100, newest first, dated between ${part * 5} and ${part * 5 + 5} days before now (ISO timestamps in UTC). Mix the recurring streams (keep their senders and subjects consistent with earlier messages), real conversations with customers, colleagues and suppliers, a little promotion and one phishing attempt over the whole mailbox. Labels: INBOX on each, UNREAD on a few recent ones, CATEGORY_UPDATES or CATEGORY_PROMOTIONS for automated mail, and their own labels where they would file it. Snippets are the first 300 to 500 characters of the body, concrete (names, amounts, dates, ids). Every name, company and address is invented; addresses end in .example.
+        `Write ${BATCH} emails from the inbox of ${who}
+It is now ${anchor}. Write messages ${part * BATCH + 1} to ${part * BATCH + BATCH} of their newest 100, newest first, dated between ${part * 2} and ${part * 2 + 2} days before now (ISO timestamps in UTC). Mix the recurring streams (keep their senders and subjects consistent with earlier messages), real conversations with customers, colleagues and suppliers, a little promotion and one phishing attempt over the whole mailbox. Labels: INBOX on each, UNREAD on a few recent ones, CATEGORY_UPDATES or CATEGORY_PROMOTIONS for automated mail, and their own labels where they would file it. Snippets are the first 300 to 500 characters of the body, concrete (names, amounts, dates, ids). Every name, company and address is invented; addresses end in .example.
 ${messages.length ? `Earlier batches' subjects, so you don't repeat them: ${messages.map((m) => m.subject).join(' | ')}` : ''}`,
         MESSAGES,
       );
@@ -210,16 +228,54 @@ ${messages.length ? `Earlier batches' subjects, so you don't repeat them: ${mess
     writeFileSync(join(dir, 'inbox.json'), `${JSON.stringify(inbox, null, 1)}\n`);
     const digest = inbox.messages.map((m, i) => `[${i + 1}] ${m.date} ${m.from.email} | ${m.subject} | ${(m.labels as string[]).join(',')}\n${m.snippet}`).join('\n');
     const keys = ['owner', ...sketch.colleagues.map((c) => c.first.toLowerCase())];
-    const ws = await write<Record<string, Record<string, unknown>[]>>(
+    const plan = await write<Plan>(
       at,
-      `Write the work app workspace of ${who}
-It is now ${anchor}. Their mail is below. Users are keyed ${keys.join(', ')} (owner is ${owner.name}). Write 3 projects, 8 to 11 documents (markdown, real content: plans, trackers, process notes, meeting notes), 8 to 12 tasks (some completed), 3 or 4 team channels with 25 to 35 messages between them, and 2 calls with transcripts of 8 to 16 turns. Keys are short kebab-case; owners, assignees, speakers and message senders use the user keys; a document's project and a call's channel use those keys.
-Plant 6 to 9 opportunities a sharp assistant would raise by connecting the workspace with the mail (a promise not kept, a deadline nobody owns, conflicting work, money left on the table, a stale tracker), each evidenced in at least two places, and 3 decoys: things that look urgent in one place but another place shows are already handled.
+      `Plan the work app workspace of ${who}
+It is now ${anchor}. Their mail is below. Users are keyed ${keys.join(', ')} (owner is ${owner.name}). Plan 3 projects, 3 or 4 team channels, 8 to 11 documents (plans, trackers, process notes, meeting notes: for each, what it says in two or three sentences), 8 to 12 tasks written out in full (some completed; content is one to three sentences), and 2 calls (for each, who said what in two or three sentences). Keys are short kebab-case; owners and assignees use the user keys; a document's project and a call's channel use those keys.
+Plant 6 to 9 opportunities a sharp assistant would raise by connecting the workspace with the mail (a promise not kept, a deadline nobody owns, conflicting work, money left on the table, a stale tracker), each evidenced in at least two places, and 3 decoys: things that look urgent in one place but another place shows are already handled. List each under opportunities or decoys with where its evidence is (document, task, channel or call keys, mail subjects).
 <mail>
 ${digest}
 </mail>`,
-      WORKSPACE,
+      PLAN,
     );
+    const brief = `The workspace plan of ${who}
+It is now ${anchor}. Users are keyed ${keys.join(', ')}.
+<plan>${JSON.stringify(plan)}</plan>`;
+    const contents = new Map<string, string>();
+    for (let i = 0; i < plan.documents.length; i += 3) {
+      const part = plan.documents.slice(i, i + 3);
+      const { documents } = await write<{ documents: { key: string; content: string }[] }>(
+        at,
+        `${brief}
+Write the markdown content of documents ${part.map((d) => d.key).join(', ')}: real content, 150 to 400 words each, as the plan says, carrying every detail the plan's opportunities and decoys put in them.`,
+        DOCUMENTS,
+      );
+      for (const d of documents) contents.set(d.key, d.content);
+    }
+    const { messages: chat } = await write<{ messages: Record<string, unknown>[] }>(
+      at,
+      `${brief}
+Write 25 to 35 messages across the channels, oldest first, from the user keys, carrying every detail the plan's opportunities and decoys put in channels.`,
+      CHAT,
+    );
+    const transcripts = new Map<string, unknown[]>();
+    for (const c of plan.calls) {
+      const { transcript } = await write<{ transcript: unknown[] }>(
+        at,
+        `${brief}
+Write the transcript of call ${c.key} ("${c.name}"): 8 to 16 turns, speakers are user keys, as the plan says, with every commitment or detail the plan's opportunities and decoys put in it.`,
+        TRANSCRIPT,
+      );
+      transcripts.set(c.key, transcript);
+    }
+    const ws = {
+      projects: plan.projects,
+      documents: plan.documents.map((d) => ({ ...d, content: contents.get(d.key) ?? d.about })),
+      tasks: plan.tasks,
+      channels: plan.channels,
+      messages: chat,
+      calls: plan.calls.map((c) => ({ ...c, transcript: transcripts.get(c.key) ?? [] })),
+    };
     const users = Object.fromEntries([
       ['owner', { email: owner.email, first_name: sketch.owner_first, last_name: sketch.owner_last, roles: ['team_subscriber', 'sub_opus'] }],
       ...sketch.colleagues.map((c) => [c.first.toLowerCase(), { email: `${c.first.toLowerCase()}@${sketch.domain}`, first_name: c.first, last_name: c.last }]),

@@ -122,8 +122,10 @@ bun $B/bench.ts noise <main-a run.json> <main-b run.json>
 
 A side of `compare`, `noise` or `report` may be several runs of one section
 joined by commas (`a1.json,a2.json`): their reps follow on and pair up rep for
-rep, so two runs a side narrow the interval when a change is close to the
-margin.
+rep. More pairs narrow the interval, which must leave zero; the margin stays
+the one measured at the default size, so a change still has to move the score
+by more than it (routines 37, feed 17). Measure the margin again at the size
+you compare at for a smaller one.
 
 ### Held-out personas
 
@@ -159,9 +161,9 @@ Noise (`MARGINS`): `routines` moved -17.0 between the runs (95% -37.0 to
 3.3), so its margin is 37; `feed` moved -7.4 (95% -17.3 to 2.5), margin 17.
 Routines' swing is almost all in *bad*: every attempt met every need a
 catalog routine can meet and few that need a drafted one, while the number of
-misfit catalog picks varied from run to run, most for the plumber. Two runs a
-side (`a1,a2` against `b1,b2`) narrow the interval when a change lands near
-the margin.
+misfit catalog picks varied from run to run, most for the plumber. A routines
+change has to move the score by about 37 points before `compare` calls it;
+its parts (found, bad) show smaller moves first.
 
 ## Cost and time
 
@@ -193,12 +195,14 @@ cost nothing beyond the model calls.
 - **Clean runs.** Every attempt seeds its persona again with the seed CLI's
   `apply`, which replaces the persona's seeded rows. A person signs up
   through the signup webhook on their first seed and keeps that account (the
-  bench waits for a first signup's sample content to land); signing up anew
+  bench waits for a first signup's support channel, the last of its sample
+  content, and stops if the webhook refused the signup); signing up anew
   each time would pile up a support channel and a billing customer per
-  attempt. The bench then deletes what earlier generations left: the
-  person's rows in every suggestion and routine suggestion table (read from
-  the catalog) and their mailboxes' drafts, and checks none are left before
-  it starts. Sessions delete their logs when they end, so the bench copies
+  attempt. The bench waits out a generation an earlier attempt gave up on,
+  then deletes what earlier generations left: the person's rows in every
+  suggestion and routine suggestion table (read from the catalog) and their
+  mailboxes' drafts (`apply` already replaces the seeded mailbox), and checks
+  none are left before it starts. Sessions delete their logs when they end, so the bench copies
   `agent_session_log` while they run (the last lines can be missed).
 - **Parallel personas.** A rep seeds every persona, then runs their
   generations at once (`--concurrency`, default 3); the feed section indexes
