@@ -1,14 +1,11 @@
-import { PullRequestAttachment } from '@app/features/block-pr/component/PullRequestAttachment';
-import { ProjectAttachment } from '@app/features/projects/project-attachment';
 import {
   type MediaItem,
   mapMediaItems,
   partitionAttachments,
 } from '@channel/Media/media-items';
-import { ItemPreview } from '@core/component/ItemPreview';
-import { stringToItemType } from '@service-storage/client';
 import { cn } from '@ui';
-import { createMemo, For, Match, Show, Switch } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
+import { AttachmentChip } from './AttachmentChip';
 import { useMessage } from './context';
 import { MediaPreview } from './MediaPreview';
 
@@ -43,27 +40,7 @@ export function Attachments(props: AttachmentsProps) {
         <Show when={buckets().documentAttachments.length > 0}>
           <div class="flex flex-row mt-2 gap-2 flex-wrap max-w-full">
             <For each={buckets().documentAttachments}>
-              {(attachment) => (
-                <Switch
-                  fallback={
-                    <ItemPreview
-                      id={attachment.entity_id}
-                      type={stringToItemType(attachment.entity_type)}
-                    />
-                  }
-                >
-                  <Match when={attachment.entity_type === 'initiative'}>
-                    <ProjectAttachment id={attachment.entity_id} />
-                  </Match>
-                  <Match
-                    when={
-                      stringToItemType(attachment.entity_type) === 'foreign'
-                    }
-                  >
-                    <PullRequestAttachment id={attachment.entity_id} />
-                  </Match>
-                </Switch>
-              )}
+              {(attachment) => <AttachmentChip attachment={attachment} />}
             </For>
           </div>
         </Show>

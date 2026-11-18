@@ -119,24 +119,29 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
       preferNewSplit: event.shiftKey,
     });
 
+  // Soup returns only live entities the viewer can list, of the types the AST
+  // names: a trashed or deleted document, one without access, or a pull request
+  // is missing from it although its message still shows it. Such an attachment
+  // keeps its row and shows as the message shows it.
   const rows = createMemo<AttachmentEntityListRow[]>(() => {
-    const entities = soupQuery.isLoading
-      ? []
-      : (soupQuery.data?.entities ?? []);
-    const lookup = attachmentByEntityId();
+    if (soupQuery.isLoading) return [];
 
-    return [...entities]
-      .sort((a, b) => {
-        const aTime = lookup.get(a.id)?.created_at ?? '';
-        const bTime = lookup.get(b.id)?.created_at ?? '';
-        return bTime.localeCompare(aTime);
-      })
-      .map((entity) => {
-        const attachment = lookup.get(entity.id);
+    const entityById = new Map(
+      (soupQuery.data?.entities ?? []).map((entity) => [entity.id, entity])
+    );
+
+    return [...attachmentByEntityId().values()]
+      .filter((attachment) => attachment.entity_type !== 'initiative')
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .map((attachment): AttachmentEntityListRow => {
+        const entity = entityById.get(attachment.entity_id);
+        if (!entity) return { kind: 'attachment', attachment };
+
         return {
+          kind: 'entity',
           entity,
-          timestamp: attachment?.created_at,
-          senderId: attachment?.sender_id,
+          timestamp: attachment.created_at,
+          senderId: attachment.sender_id,
           onClick: (event) => handleEntityClick(entity, event),
         };
       });

@@ -31,6 +31,11 @@ vi.mock('./AttachmentEntityRow', () => ({
     <span>{props.entity.id}</span>
   ),
 }));
+vi.mock('./AttachmentChipRow', () => ({
+  AttachmentChipRow: (props: { attachment: { entity_id: string } }) => (
+    <span>Chip {props.attachment.entity_id}</span>
+  ),
+}));
 vi.mock('./attachment-utils', () => ({ getEntityClickContent: vi.fn() }));
 vi.mock('./SectionHeader', () => ({
   AttachmentSection: (props: ParentProps<{ label: string }>) => (
@@ -84,8 +89,8 @@ it('retains cached project attachments after a background refetch failure withou
 });
 
 it.each([true, false])(
-  'waits for document hydration before offering project pagination (documents visible: %s)',
-  (hasDocuments) => {
+  'waits for document hydration before offering pagination (Soup returns the document: %s)',
+  (soupReturnsDocument) => {
     const [loading, setLoading] = createSignal(true);
     const fetchNextPage = vi.fn();
     fixture.query = {
@@ -110,7 +115,7 @@ it.each([true, false])(
       },
       get data() {
         if (loading()) throw new Error('Pending Soup data must not be read');
-        return { entities: hasDocuments ? [{ id: 'document' }] : [] };
+        return { entities: soupReturnsDocument ? [{ id: 'document' }] : [] };
       },
     };
     const view = render(() => (
@@ -124,18 +129,57 @@ it.each([true, false])(
 
     setLoading(false);
     expect(view.queryByLabelText('Loading documents')).toBeNull();
+    expect(
+      view.getByText(soupReturnsDocument ? 'document' : 'Chip document')
+    ).toBeTruthy();
+    expect(view.queryByText('No documents in this channel yet.')).toBeNull();
     const projects = view.getByRole('region', { name: 'Projects' });
-    if (hasDocuments) {
-      expect(view.getByText('document')).toBeTruthy();
-      expect(view.queryByText('No documents in this channel yet.')).toBeNull();
-      expect(projects.querySelector('button')).toBeNull();
-    } else {
-      expect(view.getByText('No documents in this channel yet.')).toBeTruthy();
-      fireEvent.click(view.getByRole('button', { name: 'Load More' }));
-      expect(fetchNextPage).toHaveBeenCalledOnce();
-    }
+    expect(projects.querySelector('button')).toBeNull();
+    fireEvent.click(view.getByRole('button', { name: 'Load More' }));
+    expect(fetchNextPage).toHaveBeenCalledOnce();
   }
 );
+
+it('lists a trashed document beside live ones instead of saying there are none', () => {
+  fixture.query = {
+    isPending: false,
+    data: {
+      pages: [
+        {
+          items: [
+            {
+              entity_type: 'initiative',
+              entity_id: 'Deleted project',
+              created_at: '2026-11-18T08:03:00Z',
+            },
+            {
+              entity_type: 'document',
+              entity_id: 'Trashed plan',
+              created_at: '2026-11-18T08:02:00Z',
+            },
+            {
+              entity_type: 'document',
+              entity_id: 'Live notes',
+              created_at: '2026-11-18T08:01:00Z',
+            },
+          ],
+        },
+      ],
+    },
+    hasNextPage: false,
+  };
+  fixture.soupQuery = {
+    isLoading: false,
+    data: { entities: [{ id: 'Live notes' }] },
+  };
+  const view = render(() => (
+    <ChannelAttachmentEntitySection channelId="channel" />
+  ));
+  const documents = view.getByRole('region', { name: 'Documents' });
+  expect(view.queryByText('No documents in this channel yet.')).toBeNull();
+  expect(documents.textContent).toBe('Chip Trashed planLive notes');
+  expect(view.getByText('Deleted project')).toBeTruthy();
+});
 
 it('keeps pagination available for a page containing only projects', () => {
   const fetchNextPage = vi.fn();
