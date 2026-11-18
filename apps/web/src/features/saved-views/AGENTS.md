@@ -35,6 +35,7 @@ Reusable named view definitions. Consumers are main Tasks, Projects, and Email; 
 - Keep creation consumer-owned and forward the final Create view control ref so the host can isolate its keyboard scope.
 - Set variant="ghost" and size="icon-xs" explicitly when Dropdown.Trigger renders ViewSidebar.Control so dropdown text-button defaults cannot stretch the 24px circle.
 - Open task and project row actions through a long-press sheet on touch and a hover/focus More menu on desktop; reuse permission-aware actions and finish closure before opening dialogs.
+- Suppress only the pointer click following a held row; keep keyboard and assistive activation usable after sheet dismissal.
 - Bind deferred menu actions to the opening account and discard them after an account change.
 - Validate the response viewer before exposing cached reads after an account change.
 - Keep list and detail hooks independent; pass mutation dialogs a refresh callback, not an aggregate read source.

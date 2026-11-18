@@ -32,12 +32,18 @@ vi.mock('@core/directive/touchHandler', () => ({
 }));
 // Corvu's animation is not available in jsdom. Notify the row when the sheet closes.
 vi.mock('@components/app/mobile/MobileDrawer', async () => {
-  const { createEffect, Show } = await import('solid-js');
+  const { createEffect, onCleanup, Show } = await import('solid-js');
   const Drawer = (props: {
     open: boolean;
+    onOpenChange: (open: boolean) => void;
     onContentPresentChange: (present: boolean) => void;
     children: JSX.Element;
   }) => {
+    const dismiss = (event: KeyboardEvent) => {
+      if (props.open && event.key === 'Escape') props.onOpenChange(false);
+    };
+    window.addEventListener('keydown', dismiss);
+    onCleanup(() => window.removeEventListener('keydown', dismiss));
     createEffect(() => {
       if (!props.open) props.onContentPresentChange(false);
     });
@@ -94,7 +100,7 @@ afterEach(() => {
   press.cancel.mockClear();
 });
 
-function setup(owned = true, touchInitially = true) {
+function setup(owned = true, touchInitially = true, mobile = false) {
   const [scope, setScope] = createSignal('me');
   const [touch, setTouch] = createSignal(touchInitially);
   const select = vi.fn();
@@ -108,6 +114,7 @@ function setup(owned = true, touchInitially = true) {
       selected={false}
       scopeKey={scope()}
       touchActions={touch()}
+      mobile={mobile}
       onSelect={select}
       menu={(defer) => (
         <SavedViewMenuItems
@@ -146,12 +153,29 @@ describe('saved view touch actions', () => {
     expect(screen.queryByRole('button', { name: 'Delete view' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
     await waitFor(() => expect(state.copy).toHaveBeenCalledOnce());
-    fireEvent.click(screen.getByRole('button', { name: 'Weekly' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Weekly' }), {
+      detail: 1,
+    });
     expect(state.select).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Weekly' }));
     expect(state.select).toHaveBeenCalledOnce();
   });
 
+  it.each([false, true])(
+    'keeps keyboard activation after dismissing a held row (mobile=%s)',
+    async (mobile) => {
+      const state = setup(true, true, mobile);
+      press.hold?.();
+      fireEvent.keyDown(document, { key: 'Escape' });
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: 'Duplicate' })).toBeNull()
+      );
+      const row = screen.getByRole('button', { name: 'Weekly' });
+      expect(document.activeElement).toBe(row);
+      fireEvent.click(row, { detail: 0 });
+      expect(state.select).toHaveBeenCalledOnce();
+    }
+  );
   it('runs a deferred action after the sheet closes and returns focus', async () => {
     const state = setup();
     press.hold?.();

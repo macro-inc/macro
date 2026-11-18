@@ -169,6 +169,18 @@ export function SavedViewListRow(props: {
     disposed = true;
     pending = undefined;
   });
+  const select = (event: MouseEvent) => {
+    // Keyboard and assistive activation have no click count; only swallow
+    // the pointer click that can follow a hold.
+    const suppressPointerClick = suppressTap && event.detail > 0;
+    suppressTap = false;
+    if (suppressPointerClick) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    props.onSelect();
+  };
   const defer = (run: () => void) => {
     pending = { scopeKey: props.scopeKey, run };
   };
@@ -271,15 +283,7 @@ export function SavedViewListRow(props: {
             fallback={
               <ViewSidebar.Item
                 active={props.selected}
-                onClick={(event) => {
-                  if (suppressTap) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    suppressTap = false;
-                    return;
-                  }
-                  props.onSelect();
-                }}
+                onClick={select}
                 class={hasTrailing() ? 'pr-15' : 'pr-10'}
                 title={label()}
                 aria-label={label()}
@@ -295,15 +299,7 @@ export function SavedViewListRow(props: {
               aria-current={props.selected ? 'page' : undefined}
               aria-label={label()}
               title={label()}
-              onClick={(event) => {
-                if (suppressTap) {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  suppressTap = false;
-                  return;
-                }
-                props.onSelect();
-              }}
+              onClick={select}
               class="h-12 gap-3 pr-24 text-base aria-[current=page]:bg-accent/15 aria-[current=page]:text-accent"
             >
               <BookmarkIcon class="size-5 shrink-0" />
