@@ -1,13 +1,25 @@
-/* Keep the hover target stable when the wider time swaps back to its icon. */
-.conversation-row .conversation-age { visibility: hidden; }
-.conversation-row .conversation-code { display: flex; opacity: 1; }
+.conversation-row {
+  --conversation-row-surface: var(--color-hover);
+}
+.conversation-row[aria-current='page'] {
+  --conversation-row-surface: var(--color-active);
+}
+.conversation-row:focus-within:not([aria-current='page']) {
+  background-color: var(--color-hover);
+}
+
+/* The age floats above the trailing icon without entering the row's flex layout. */
+.conversation-row .conversation-age {
+  background: linear-gradient(to right, transparent, var(--conversation-row-surface) 2rem);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
 .conversation-row:hover .conversation-age,
-.conversation-row:focus-within .conversation-age { visibility: visible; }
-.conversation-row:hover .conversation-code,
-.conversation-row:focus-within .conversation-code { opacity: 0; }
-.conversation-row .conversation-trailing[data-has-code]:hover .conversation-age,
-.conversation-row .conversation-trailing[data-has-code]:focus-within .conversation-age,
-.conversation-row .conversation-trailing[data-preview-open] .conversation-age { visibility: hidden; }
-.conversation-row .conversation-trailing:hover .conversation-code,
-.conversation-row .conversation-trailing:focus-within .conversation-code,
-.conversation-row .conversation-trailing[data-preview-open] .conversation-code { opacity: 1; }
+.conversation-row:focus-within .conversation-age {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .conversation-row .conversation-age {
+    transition: none;
+  }
+}

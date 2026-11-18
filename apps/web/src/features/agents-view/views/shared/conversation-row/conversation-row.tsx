@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { unreadFilterFn } from '@entity/utils/filter';
 import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
-import { createSignal, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { ConversationRowRoot } from '../../../components/conversation-row/root';
 import { ConversationRowStatus } from '../../../components/conversation-row/status';
 import { ConversationRowTitle } from '../../../components/conversation-row/title';
@@ -27,7 +27,6 @@ export function ConversationRow(props: {
   actions: ConversationActions;
   onOpen: (event: MouseEvent) => void;
 }) {
-  const [previewOpen, setPreviewOpen] = createSignal(false);
   const state = () =>
     props.conversation.type === 'agent_session'
       ? conversationState(
@@ -78,7 +77,6 @@ export function ConversationRow(props: {
         age={compactAge(
           sortConversationTimestamp(props.conversation, props.sort)
         )}
-        previewOpen={previewOpen()}
       >
         <Show when={details()}>
           {(code) => (
@@ -86,7 +84,6 @@ export function ConversationRow(props: {
               <ConversationCodeLink
                 details={code()}
                 actions={props.actions}
-                onPreviewChange={setPreviewOpen}
                 onOpenRow={props.onOpen}
               />
             </Show>

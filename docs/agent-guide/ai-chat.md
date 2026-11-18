@@ -532,8 +532,9 @@ the shimmer.
   ring, unread is blue, and failed is a red five-dot ×. Session titles keep normal
   weight in every state. Home keeps its existing row layout and indicators.
   Rows follow persisted turn updates without a reload.
-  Hovering a desktop row swaps its code icon for its age, using the selected sort
-  timestamp. Pointing at that slot restores the icon and opens its preview.
+  On hover or keyboard focus, the selected-sort age overlays the row's right end
+  over a matching surface gradient, including its code icon, without changing title truncation.
+  At rest the age is hidden. The code icon retains its preview and activation target.
   PR previews reuse the existing synced card or its unsynced fallback; a synced
   PR icon opens the PR in Macro (Shift opens a split), while an unresolved PR opens
   GitHub. Branch previews show only the branch and repository, with Copy branch

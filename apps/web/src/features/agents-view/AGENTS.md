@@ -35,6 +35,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Keep the `connections` page routable even though the redesigned navigation omits it.
 - Preserve `agents-conversation-list-view-v1` filters when changing sort; legacy grouping does not determine the redesigned list.
 - Partition desktop rows once: Waiting on you first, flagged Open PRs second, Conversations last; share filters and sort, and fill paging from unpinned Conversations.
+- Render desktop row ages as pointer-transparent hover/focus overlays using the row's hover or active surface; never let the age change title truncation or appear on phone rows.
 - Follow Root-and-parts composition and the [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
 - Keep catalog option identities stable across capability updates; isolate optional speed-marker discovery with Suspense so it cannot detach the editor.
 - Keep phone file inputs and overlay owners mounted on blur; add-menu, model, and repository sheets hold the composer expanded.
@@ -46,6 +47,7 @@ From `apps/web`:
 - `bun run test --project app src/features/agents-view`
 - `bun run test --project app src/lib/i18n`
 - `bun run type-check`
+- `bunx playwright test --config src/features/agents-view/browser-test/playwright.config.ts`: timestamp overlay geometry, hover/focus, and active-surface regression.
 
 From the repository root, run `just check`. Exercise the sidebar, archive actions, PR/branch previews, phone flows, and unchanged Home consumers before release.
 
