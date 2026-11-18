@@ -112,6 +112,45 @@ describe('MacroEvents', () => {
     ]);
   });
 
+  test('stopping a live stream is quiet: no unhandled rejection from the abort', async () => {
+    // A stream that stays open, as Macro's does between events.
+    const server = Bun.serve({
+      port: 0,
+      fetch: () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(sseBody(created)));
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+    });
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      const macro = new Macro({
+        token: 'user-token',
+        hosts: { storage: `http://localhost:${server.port}` },
+      });
+      const delivered = Promise.withResolvers<void>();
+      macro.events.on('document.created', () => delivered.resolve());
+      const stop = await macro.events.listen();
+      await delivered.promise;
+      // Idle, as a stream is between events when its listener stops it.
+      await Bun.sleep(20);
+
+      stop();
+      await Bun.sleep(100);
+
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+      server.stop(true);
+    }
+  });
+
   test('listen() throws when there are no filters or handlers', async () => {
     const macro = new Macro({
       token: 'user-token',
