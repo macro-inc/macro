@@ -32,6 +32,35 @@ align trailing controls by their outer edges or offset an individual icon.
 - Use `--sidebar-action-inset` for a trailing control beside a separate selectable
   row, as in Email's inbox list. Do not repeat numeric offsets in the workspace.
 
+## Section order
+
+Give `ViewSidebar.Root` a stable `reorderId` for its view. Give each top-level
+`CollapsibleSection.Root` a stable `sectionId` and a `sectionLabel`, and compose
+its trigger and actions inside `CollapsibleSection.Header`. Non-collapsible
+sections use `ViewSidebar.Section` (`id`, `label`) and `ViewSidebar.SectionHeader`.
+Keep these sections as direct resolved children of `ViewSidebar.Content`;
+fragments, conditional children, and components returning a section are supported.
+Nested disclosure groups remain contents of their owning section, not separate drag targets.
+
+The shared app drag provider supplies isolated scopes for each sidebar instance.
+Drag a section header with the mouse, or Tab to its Reorder control and use
+Up/Down. Header action buttons keep their normal behavior. Touch retains normal
+scrolling and collapse behavior without section dragging. The shared handle,
+drop indicator, reorder math, and layout animation also serve Chat; Chat retains
+its own preference storage.
+
+Order is local to the account and view (`sidebar-section-order:<view>:<account>`).
+Storage is schema-validated through `makePersistedState`; unavailable storage
+leaves in-memory ordering usable. Unknown keys are ignored and new sections stay
+in their default slots. Fixed rows and footer controls do not move. Sections move
+as existing DOM nodes, not CSS `order`, preserving input state and reading order.
+
+The backend-free `browser-test/sidebar-reorder.browser.e2e.ts` regression covers
+mouse and keyboard moves, reload/view isolation, header actions, and touch at
+390×844. Run it with this directory's Playwright configuration.
+
+## Navigation layout
+
 Desktop multi-split close controls live in the outer frame corner. The inherited split controller sets `closeButtonPlacement` to `frame` to suppress duplicate header/sidebar close buttons; touch layouts retain header placement.
 
 Automatic navigation closure after the first measurable layout keeps the docked
