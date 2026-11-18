@@ -26,7 +26,9 @@ use crate::domain::usage::{self, UsageSample};
 /// Hibernations relief runs at once on one host; each takes ~3 s.
 const HIBERNATIONS_AT_ONCE: usize = 4;
 const MIB: u64 = 1024 * 1024;
-/// Between deletions of usage readings past their retention.
+/// Between deletions of usage readings past their retention. Pruning rides
+/// on the overcommit pass, the only writer of readings: while it does not
+/// run, nothing is written and nothing is pruned.
 const USAGE_PRUNE_EVERY: chrono::Duration = chrono::Duration::minutes(10);
 
 /// What the overcommit pass keeps between passes.

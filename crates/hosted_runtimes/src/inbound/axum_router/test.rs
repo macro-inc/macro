@@ -540,6 +540,8 @@ async fn usage_answers_a_member_with_each_computers_latest_reading_and_day() {
             .unwrap(),
     )
     .unwrap();
+    // The first reading has memory only; the second measures the CPU. Both
+    // fall in the last 15-minute step: its average CPU and highest memory.
     let latest = serde_json::json!({ "cpuPercent": 25.0, "memoryBytes": 2_000_000_000_u64 });
     assert_eq!(body[0]["computerId"], id.to_string());
     assert_eq!(body[0]["latest"], latest);

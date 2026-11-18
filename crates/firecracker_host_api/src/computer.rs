@@ -157,9 +157,7 @@ pub struct Usage {
     pub private_memory_bytes: u64,
     /// Memory of this VM the host moved to swap (cgroup
     /// `memory.swap.current`): the zram squeeze of an idle computer lands
-    /// here, so `private_memory_bytes` plus this is what the VM holds. Zero
-    /// from an agent older than the field.
-    #[serde(default)]
+    /// here, so `private_memory_bytes` plus this is what the VM holds.
     pub swap_bytes: u64,
     /// CPU time used since the process started (cgroup `cpu.stat`
     /// `usage_usec`); two readings give its recent activity.

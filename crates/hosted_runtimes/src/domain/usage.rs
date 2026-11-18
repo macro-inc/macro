@@ -64,8 +64,10 @@ pub struct StoredSample {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UsagePoint {
-    /// Share of its CPUs in use, 0 to 100.
-    pub cpu_percent: f64,
+    /// Share of its CPUs in use, 0 to 100. Absent until a second reading
+    /// of the same run measures it: a computer's first reading after it
+    /// starts or wakes has memory only.
+    pub cpu_percent: Option<f64>,
     /// Memory only it holds, in bytes; memory shared with its image is not
     /// counted.
     pub memory_bytes: u64,
@@ -83,7 +85,8 @@ pub struct ComputerUsage {
     /// (off, or idle and put to sleep).
     pub latest: Option<UsagePoint>,
     /// The last 24 hours in 15-minute steps, oldest first: average CPU and
-    /// highest memory of each step, absent where the computer did not run.
+    /// highest memory of each step, absent where the computer has no
+    /// reading (it did not run).
     pub points: Vec<Option<UsagePoint>>,
 }
 
@@ -103,7 +106,21 @@ fn cpu_percent(earlier: &StoredSample, later: &StoredSample, vcpus: u32) -> Opti
     Some(percent.clamp(0.0, 100.0))
 }
 
+/// One bucket of the graph while it is filled.
+#[derive(Clone, Copy, Default)]
+struct Bucket {
+    /// Readings that fell in it.
+    readings: u32,
+    /// Their highest memory.
+    memory_bytes: u64,
+    /// The sum and count of the CPU measurements that ended in it.
+    cpu_percent_sum: f64,
+    cpu_measurements: u32,
+}
+
 /// The graph of `computer_id` at `now` from its readings, oldest first.
+/// Memory comes from every reading; CPU from each reading and the one
+/// before it, when both are of one run.
 pub fn history(
     computer_id: ComputerId,
     vcpus: u32,
@@ -111,39 +128,43 @@ pub fn history(
     now: DateTime<Utc>,
 ) -> ComputerUsage {
     let start = now - WINDOW;
-    // Per bucket: the sum and count of CPU readings, and the highest memory.
-    let mut buckets = vec![(0.0_f64, 0_u32, 0_u64); BUCKETS];
+    let mut buckets = vec![Bucket::default(); BUCKETS];
     let mut latest = None;
 
-    for pair in samples.windows(2) {
-        let [earlier, later] = pair else { continue };
-        let Some(cpu_percent) = cpu_percent(earlier, later, vcpus) else {
-            continue;
-        };
-        let since_start = later.sampled_at - start;
-        if since_start < Duration::zero() || later.sampled_at > now {
+    for (index, sample) in samples.iter().enumerate() {
+        let since_start = sample.sampled_at - start;
+        if since_start < Duration::zero() || sample.sampled_at > now {
             continue;
         }
-        let index = (since_start.num_seconds() / BUCKET.num_seconds()) as usize;
-        if let Some(bucket) = buckets.get_mut(index.min(BUCKETS - 1)) {
-            bucket.0 += cpu_percent;
-            bucket.1 += 1;
-            bucket.2 = bucket.2.max(later.memory_bytes);
+        let cpu_percent = index
+            .checked_sub(1)
+            .and_then(|earlier| samples.get(earlier))
+            .and_then(|earlier| cpu_percent(earlier, sample, vcpus));
+
+        let position = (since_start.num_seconds() / BUCKET.num_seconds()) as usize;
+        if let Some(bucket) = buckets.get_mut(position.min(BUCKETS - 1)) {
+            bucket.readings += 1;
+            bucket.memory_bytes = bucket.memory_bytes.max(sample.memory_bytes);
+            if let Some(cpu_percent) = cpu_percent {
+                bucket.cpu_percent_sum += cpu_percent;
+                bucket.cpu_measurements += 1;
+            }
         }
-        if now - later.sampled_at <= LATEST_MAX_AGE {
+        if now - sample.sampled_at <= LATEST_MAX_AGE {
             latest = Some(UsagePoint {
                 cpu_percent,
-                memory_bytes: later.memory_bytes,
+                memory_bytes: sample.memory_bytes,
             });
         }
     }
 
     let points = buckets
         .into_iter()
-        .map(|(cpu_sum, readings, memory_bytes)| {
-            (readings > 0).then(|| UsagePoint {
-                cpu_percent: cpu_sum / f64::from(readings),
-                memory_bytes,
+        .map(|bucket| {
+            (bucket.readings > 0).then(|| UsagePoint {
+                cpu_percent: (bucket.cpu_measurements > 0)
+                    .then(|| bucket.cpu_percent_sum / f64::from(bucket.cpu_measurements)),
+                memory_bytes: bucket.memory_bytes,
             })
         })
         .collect();

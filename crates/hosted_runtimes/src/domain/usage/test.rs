@@ -31,7 +31,7 @@ fn cpu_is_the_counters_growth_as_a_share_of_the_computers_cpus() {
     assert_eq!(
         usage.latest,
         Some(UsagePoint {
-            cpu_percent: 50.0,
+            cpu_percent: Some(50.0),
             memory_bytes: 3 * GIB,
         })
     );
@@ -68,7 +68,7 @@ fn a_bucket_averages_cpu_and_keeps_the_highest_memory() {
     assert_eq!(
         usage.points[91],
         Some(UsagePoint {
-            cpu_percent: 50.0,
+            cpu_percent: Some(50.0),
             memory_bytes: 5 * GIB,
         })
     );
@@ -76,7 +76,27 @@ fn a_bucket_averages_cpu_and_keeps_the_highest_memory() {
 }
 
 #[test]
-fn a_restarted_computer_measures_nothing_across_the_restart() {
+fn a_computers_first_reading_shows_its_memory_before_any_cpu() {
+    let now = Utc.with_ymd_and_hms(2026, 11, 18, 12, 0, 0).unwrap();
+    // Just bought: one reading, nothing to measure CPU against.
+    let samples = [StoredSample {
+        sampled_at: now - Duration::seconds(20),
+        cpu_usage_microseconds: 3_000_000,
+        memory_bytes: 2 * GIB,
+    }];
+
+    let usage = history(computer(), 4, &samples, now);
+
+    let memory_only = Some(UsagePoint {
+        cpu_percent: None,
+        memory_bytes: 2 * GIB,
+    });
+    assert_eq!(usage.latest, memory_only);
+    assert_eq!(usage.points[95], memory_only);
+}
+
+#[test]
+fn a_restarted_computer_measures_no_cpu_across_the_restart_but_keeps_its_memory() {
     let now = Utc.with_ymd_and_hms(2026, 11, 18, 12, 0, 0).unwrap();
     // The counter starts over with the new process.
     let samples = [
@@ -88,18 +108,22 @@ fn a_restarted_computer_measures_nothing_across_the_restart() {
         StoredSample {
             sampled_at: now - Duration::minutes(1),
             cpu_usage_microseconds: 5_000_000,
-            memory_bytes: GIB,
+            memory_bytes: 3 * GIB,
         },
     ];
 
     let usage = history(computer(), 2, &samples, now);
 
-    assert_eq!(usage.latest, None);
-    assert!(usage.points.iter().all(Option::is_none));
+    let memory_only = Some(UsagePoint {
+        cpu_percent: None,
+        memory_bytes: 3 * GIB,
+    });
+    assert_eq!(usage.latest, memory_only);
+    assert_eq!(usage.points[95], memory_only);
 }
 
 #[test]
-fn time_asleep_is_a_gap_not_an_average() {
+fn time_asleep_is_a_gap_in_cpu_not_an_average() {
     let now = Utc.with_ymd_and_hms(2026, 11, 18, 12, 0, 0).unwrap();
     // Hibernated for three hours between two readings: the same process
     // would have had to be measured within five minutes.
@@ -112,12 +136,26 @@ fn time_asleep_is_a_gap_not_an_average() {
         StoredSample {
             sampled_at: now - Duration::seconds(30),
             cpu_usage_microseconds: 20_000_000,
-            memory_bytes: GIB,
+            memory_bytes: 2 * GIB,
         },
     ];
 
     let usage = history(computer(), 2, &samples, now);
 
-    assert_eq!(usage.latest, None);
-    assert!(usage.points.iter().all(Option::is_none));
+    assert_eq!(
+        usage.latest,
+        Some(UsagePoint {
+            cpu_percent: None,
+            memory_bytes: 2 * GIB,
+        })
+    );
+    // Three hours ago is eleven steps before the last; nothing lies between.
+    assert_eq!(
+        usage.points[84],
+        Some(UsagePoint {
+            cpu_percent: None,
+            memory_bytes: GIB,
+        })
+    );
+    assert!(usage.points[85..95].iter().all(Option::is_none));
 }
