@@ -48,6 +48,7 @@ import {
   createFilesReadyHandler,
   getDragDropPosition,
 } from '../utils/fileUploadUtils';
+import { $enterContinuesList } from './enterKeyUtils';
 import { MarkdownShellContent } from './MarkdownShellContent';
 import type { EditorBuilder, EditorComponentProps } from './types';
 
@@ -161,6 +162,7 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
           Object.defineProperty(e, 'shiftKey', { value: false });
           return false;
         }
+        if ($enterContinuesList(e)) return false;
         const captured = onEnter(e, markdownState());
         if (captured) {
           e.preventDefault();
