@@ -22,8 +22,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::model::{
     AgentAccess, AppliedTo, Caller, Catalog, Change, Credential, OperationKey, Origin,
-    PermissionError, PermissionState, PermissionsView, PolicyKind, PolicyOwner, ResolvedCall,
-    Rule, SessionFacts, SessionPolicy, Tightened, ToolPermissionCatalog,
+    PermissionError, PermissionState, PermissionsView, PolicyKind, PolicyOwner, ResolvedCall, Rule,
+    SessionFacts, SessionPolicy, Tightened, ToolPermissionCatalog,
 };
 use super::ports::{AgentDirectory, PermissionStore, PermissionsRollout, SessionDirectory};
 use super::resolve::{self, Layer, ViewAccess};
@@ -76,8 +76,11 @@ pub trait AgentPermissions: Send + Sync + 'static {
 
     /// Delete every saved setting, so everything is always allowed again
     /// (session overlays stay). A person's own session only.
-    async fn reset(&self, caller: &Caller, agent: BotId)
-    -> Result<PermissionsView, PermissionError>;
+    async fn reset(
+        &self,
+        caller: &Caller,
+        agent: BotId,
+    ) -> Result<PermissionsView, PermissionError>;
 
     /// What a session's permissions say about each of `calls`. An operation
     /// the registry does not know is `never`. Does not check the rollout:
@@ -434,8 +437,15 @@ where
             .await
             .map_err(internal)?;
         let context = self.agent_context(caller, agent).await?;
-        self.build_view(caller, agent, access, owner, context.as_ref(), Some(overlay))
-            .await
+        self.build_view(
+            caller,
+            agent,
+            access,
+            owner,
+            context.as_ref(),
+            Some(overlay),
+        )
+        .await
     }
 
     #[tracing::instrument(
@@ -522,7 +532,14 @@ where
 
         let overlay = self.session_rules(context.as_ref()).await?;
         let permissions = self
-            .build_view(caller, agent, access, (owner, kind), context.as_ref(), overlay)
+            .build_view(
+                caller,
+                agent,
+                access,
+                (owner, kind),
+                context.as_ref(),
+                overlay,
+            )
             .await?;
         Ok(Tightened {
             applied_to,
@@ -577,30 +594,32 @@ where
 
         Ok(calls
             .iter()
-            .map(|key| match self.catalog.entry(&key.service, &key.operation) {
-                Some(entry) => {
-                    let (state, origin) = resolve::effective(&saved, &overlay, entry);
-                    ResolvedCall {
-                        key: key.clone(),
-                        entry: Some(entry.clone()),
-                        state,
-                        origin,
+            .map(
+                |key| match self.catalog.entry(&key.service, &key.operation) {
+                    Some(entry) => {
+                        let (state, origin) = resolve::effective(&saved, &overlay, entry);
+                        ResolvedCall {
+                            key: key.clone(),
+                            entry: Some(entry.clone()),
+                            state,
+                            origin,
+                        }
                     }
-                }
-                None => {
-                    tracing::error!(
-                        service = %key.service,
-                        operation = %key.operation,
-                        "an analyzed SDK operation is missing from the permission registry"
-                    );
-                    ResolvedCall {
-                        key: key.clone(),
-                        entry: None,
-                        state: PermissionState::Never,
-                        origin: Origin::Default,
+                    None => {
+                        tracing::error!(
+                            service = %key.service,
+                            operation = %key.operation,
+                            "an analyzed SDK operation is missing from the permission registry"
+                        );
+                        ResolvedCall {
+                            key: key.clone(),
+                            entry: None,
+                            state: PermissionState::Never,
+                            origin: Origin::Default,
+                        }
                     }
-                }
-            })
+                },
+            )
             .collect())
     }
 }

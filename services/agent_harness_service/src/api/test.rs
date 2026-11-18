@@ -441,10 +441,26 @@ async fn coding_agent_commands_keep_internal_auth_and_user_at_both_mounts() {
 fn the_openapi_document_serves_agent_tool_permissions() {
     let document = <super::swagger::ApiDoc as utoipa::OpenApi>::openapi();
     for (path, method, operation_id) in [
-        ("/agent-tool-permissions/catalog", "get", "get_agent_tool_permission_catalog"),
-        ("/agents/{agent_id}/tool-permissions", "get", "get_agent_tool_permissions"),
-        ("/agents/{agent_id}/tool-permissions", "put", "set_agent_tool_permissions"),
-        ("/agents/{agent_id}/tool-permissions", "delete", "reset_agent_tool_permissions"),
+        (
+            "/agent-tool-permissions/catalog",
+            "get",
+            "get_agent_tool_permission_catalog",
+        ),
+        (
+            "/agents/{agent_id}/tool-permissions",
+            "get",
+            "get_agent_tool_permissions",
+        ),
+        (
+            "/agents/{agent_id}/tool-permissions",
+            "put",
+            "set_agent_tool_permissions",
+        ),
+        (
+            "/agents/{agent_id}/tool-permissions",
+            "delete",
+            "reset_agent_tool_permissions",
+        ),
         (
             "/agents/{agent_id}/tool-permissions/tighten",
             "post",

@@ -1,8 +1,8 @@
 use agent_permission_registry::Action;
 use bot_id::{BotId, MACRO_NEW_BOT_ID};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use sqlx::PgPool;
 use macro_uuid::Uuid;
+use sqlx::PgPool;
 
 use super::*;
 use crate::domain::model::PermissionState;
@@ -66,14 +66,23 @@ async fn an_agents_rules_upsert_delete_and_reset(pool: PgPool) {
         .await
         .unwrap();
     store
-        .apply(&owner, &[group_action(Some(PermissionState::Ask))], &user(OWNER), true)
+        .apply(
+            &owner,
+            &[group_action(Some(PermissionState::Ask))],
+            &user(OWNER),
+            true,
+        )
         .await
         .unwrap();
     assert_eq!(
         states(&store.rules(&owner).await.unwrap()),
         vec![
             ("email:send".to_owned(), PermissionState::Ask, true),
-            ("static-files.delete_file".to_owned(), PermissionState::Always, false),
+            (
+                "static-files.delete_file".to_owned(),
+                PermissionState::Always,
+                false
+            ),
         ]
     );
 
@@ -103,7 +112,12 @@ async fn a_personas_rules_are_each_persons_own(pool: PgPool) {
     };
 
     store
-        .apply(&mine, &[tool(Some(PermissionState::Never))], &user(OWNER), false)
+        .apply(
+            &mine,
+            &[tool(Some(PermissionState::Never))],
+            &user(OWNER),
+            false,
+        )
         .await
         .unwrap();
     assert_eq!(store.rules(&mine).await.unwrap().len(), 1);
@@ -131,7 +145,11 @@ async fn a_sessions_overlay_upserts_and_deletes(pool: PgPool) {
         .unwrap();
     assert_eq!(
         states(&store.session_rules(session).await.unwrap()),
-        vec![("static-files.delete_file".to_owned(), PermissionState::Never, true)]
+        vec![(
+            "static-files.delete_file".to_owned(),
+            PermissionState::Never,
+            true
+        )]
     );
 
     store
@@ -146,11 +164,11 @@ async fn a_sessions_overlay_upserts_and_deletes(pool: PgPool) {
     fixtures(path = "../../../fixtures", scripts("permissions"))
 )]
 async fn the_tables_refuse_a_stored_default_and_a_bad_target(pool: PgPool) {
-    let always_group_action = sqlx::query(
+    let always_group_action = sqlx::query!(
         "INSERT INTO agent_tool_permission (bot_id, kind, target, state)
          VALUES ($1, 'group_action', 'email:send', 'always')",
+        AGENT.as_uuid(),
     )
-    .bind(AGENT.as_uuid())
     .execute(&pool)
     .await;
     assert!(always_group_action.is_err());
@@ -161,23 +179,23 @@ async fn the_tables_refuse_a_stored_default_and_a_bad_target(pool: PgPool) {
         ("tool", "email:send"),
         ("tool", "storage delete"),
     ] {
-        let inserted = sqlx::query(
+        let inserted = sqlx::query!(
             "INSERT INTO agent_tool_permission (bot_id, kind, target, state)
              VALUES ($1, $2, $3, 'never')",
+            AGENT.as_uuid(),
+            kind,
+            target,
         )
-        .bind(AGENT.as_uuid())
-        .bind(kind)
-        .bind(target)
         .execute(&pool)
         .await;
         assert!(inserted.is_err(), "{kind} {target}");
     }
 
-    let always_overlay = sqlx::query(
+    let always_overlay = sqlx::query!(
         "INSERT INTO agent_session_tool_permission (agent_session_id, kind, target, state)
          VALUES ($1, 'tool', 'email.send_email', 'always')",
+        SESSION,
     )
-    .bind(SESSION)
     .execute(&pool)
     .await;
     assert!(always_overlay.is_err());
@@ -196,13 +214,21 @@ async fn rows_go_with_their_agent_person_and_session(pool: PgPool) {
     };
     let session = AgentSessionId::new_from_uuid(SESSION);
     let never = [tool(Some(PermissionState::Never))];
-    store.apply(&agent, &never, &user(OTHER), false).await.unwrap();
-    store.apply(&persona, &never, &user(OTHER), false).await.unwrap();
-    store.apply_session(session, &never, &user(OTHER)).await.unwrap();
+    store
+        .apply(&agent, &never, &user(OTHER), false)
+        .await
+        .unwrap();
+    store
+        .apply(&persona, &never, &user(OTHER), false)
+        .await
+        .unwrap();
+    store
+        .apply_session(session, &never, &user(OTHER))
+        .await
+        .unwrap();
 
     // Deleting the person who set the agent's rule keeps it, without them.
-    sqlx::query(r#"DELETE FROM "User" WHERE id = $1"#)
-        .bind(OTHER)
+    sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, OTHER)
         .execute(&pool)
         .await
         .unwrap();
@@ -210,15 +236,13 @@ async fn rows_go_with_their_agent_person_and_session(pool: PgPool) {
     assert!(store.rules(&persona).await.unwrap().is_empty());
     assert_eq!(store.session_rules(session).await.unwrap().len(), 1);
 
-    sqlx::query("DELETE FROM agent_session WHERE id = $1")
-        .bind(SESSION)
+    sqlx::query!("DELETE FROM agent_session WHERE id = $1", SESSION)
         .execute(&pool)
         .await
         .unwrap();
     assert!(store.session_rules(session).await.unwrap().is_empty());
 
-    sqlx::query("DELETE FROM bots WHERE id = $1")
-        .bind(AGENT.as_uuid())
+    sqlx::query!("DELETE FROM bots WHERE id = $1", AGENT.as_uuid())
         .execute(&pool)
         .await
         .unwrap();

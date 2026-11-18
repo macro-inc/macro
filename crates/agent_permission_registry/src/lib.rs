@@ -59,7 +59,9 @@ impl Action {
 
     /// The action named `name` (its stored name), if there is one.
     pub fn parse(name: &str) -> Option<Action> {
-        Action::ALL.into_iter().find(|action| action.as_str() == name)
+        Action::ALL
+            .into_iter()
+            .find(|action| action.as_str() == name)
     }
 }
 

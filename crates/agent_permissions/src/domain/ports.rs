@@ -16,8 +16,10 @@ pub trait PermissionStore: Send + Sync + 'static {
     type Err: std::error::Error + Send + Sync + 'static;
 
     /// A policy's saved settings.
-    fn rules(&self, owner: &PolicyOwner)
-    -> impl Future<Output = Result<Vec<Rule>, Self::Err>> + Send;
+    fn rules(
+        &self,
+        owner: &PolicyOwner,
+    ) -> impl Future<Output = Result<Vec<Rule>, Self::Err>> + Send;
 
     /// A session's overlay.
     fn session_rules(

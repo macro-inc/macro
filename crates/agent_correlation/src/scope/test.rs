@@ -84,7 +84,10 @@ fn a_run_that_sends_nothing_reaches_nobody() {
         ("POST", "/agent-harness/agent-sessions/01a1/reviews"),
         ("DELETE", "/agent-sessions/01a1/queue/02b2"),
         // An agent may always restrict itself.
-        ("POST", "/agent-harness/agents/01a1/tool-permissions/tighten"),
+        (
+            "POST",
+            "/agent-harness/agents/01a1/tool-permissions/tighten",
+        ),
     ] {
         assert!(scope.allows(method, path), "{method} {path}");
     }
