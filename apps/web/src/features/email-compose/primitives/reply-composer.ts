@@ -1721,8 +1721,9 @@ export function createReplyComposer(
       editVersion,
       state.type === 'sent' ? state.sentCopy : undefined
     );
-    // Edits that emptied the draft leave nothing to keep.
-    if (unsavedEdits > 0 && collectDraft()) {
+    // Edits that emptied the draft leave nothing to keep. Without its editor
+    // the composer cannot tell, and keeps them.
+    if (unsavedEdits > 0 && (!editor() || collectDraft())) {
       detachFromObsoleteDraft(
         state.type === 'sent' ? 'sent-elsewhere' : 'changed-elsewhere',
         unsavedEdits,

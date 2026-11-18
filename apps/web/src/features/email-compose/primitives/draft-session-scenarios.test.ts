@@ -1,4 +1,4 @@
-import { $getRoot } from 'lexical';
+import { $getRoot, type LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
@@ -1204,6 +1204,43 @@ describe.each(['reply', 'compose'] as const)(
         root.dispose();
       }
     });
+
+    it.runIf(surface === 'compose')(
+      'keeps the text of a draft refused as sent when its editor is not in place',
+      async () => {
+        const context = createComposeContext();
+        const workingCopy = queuedWorkingCopy(context);
+        const read = Promise.withResolvers<EmailDraftLifecycleState>();
+        readOnlyOnRefusal(context, () => read.promise);
+        const host = { showThread: vi.fn() };
+        const root = mountEmailComposer(context, host);
+        try {
+          root.edit('Reply that another device sends');
+          await vi.advanceTimersByTimeAsync(600);
+          workingCopy.acknowledge();
+          await vi.advanceTimersByTimeAsync(0);
+          refuseNextSave(context);
+          root.edit('Text typed after the send');
+          await vi.advanceTimersByTimeAsync(600);
+          // Without its editor the composer cannot tell whether the draft
+          // is empty, so it must not leave the text as sent.
+          root.state.context.captureEditor(
+            undefined as unknown as LexicalEditor
+          );
+          read.resolve(sentElsewhere);
+          await vi.advanceTimersByTimeAsync(1000);
+
+          expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+            'This email was already sent. Your newer text was kept as a new draft and was not sent.'
+          );
+          expect(host.showThread).not.toHaveBeenCalled();
+          // Nothing to read the body from, so no empty draft is saved.
+          expect(newDraftSaves(context)).toEqual([]);
+        } finally {
+          root.dispose();
+        }
+      }
+    );
 
     it('keeps nothing when the draft refused as sent was emptied', async () => {
       const context = createComposeContext();
