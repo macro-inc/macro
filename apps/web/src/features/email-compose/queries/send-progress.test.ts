@@ -319,7 +319,12 @@ it.each(inboxes)(
     const session = await emailStorageSession();
     const queued = await localDraftStore.putSend(session, intent(inbox), true);
     const thread = new Promise<string>((resolve) =>
-      stops.push(watchSentThread(queued.uuid, resolve))
+      stops.push(
+        watchSentThread(
+          { sendAttemptId: queued.uuid, inboxId: inbox.linkId },
+          resolve
+        )
+      )
     );
     const runner = dispatch(session, {
       submit: async () => ({
@@ -341,7 +346,12 @@ it.each(inboxes)(
     const session = await emailStorageSession();
     const queued = await localDraftStore.putSend(session, intent(inbox), true);
     const thread = new Promise<string>((resolve) =>
-      stops.push(watchSentThread(queued.uuid, resolve))
+      stops.push(
+        watchSentThread(
+          { sendAttemptId: queued.uuid, inboxId: inbox.linkId },
+          resolve
+        )
+      )
     );
     // Started after the thread watcher, so its first read follows that one.
     const progress = follow(queued.uuid);
@@ -356,6 +366,93 @@ it.each(inboxes)(
       ...attempt(queued, 'SENT'),
       threadId: null,
     });
+
+    await expect(thread).resolves.toBe('server-thread');
+  }
+);
+
+it.each(inboxes)(
+  'keeps a $provider send’s thread closed while its cancellation is unresolved',
+  async (inbox) => {
+    const session = await emailStorageSession();
+    const queued = intent(inbox);
+    const accepted = {
+      ...attempt(queued, 'ACCEPTED'),
+      threadId: 'server-thread',
+    };
+    await localDraftStore.putSend(
+      session,
+      {
+        ...queued,
+        phase: 'committed',
+        submissionStarted: true,
+        cancellationRequested: true,
+        resolvedThreadId: 'server-thread',
+        response: { sendEmailMessage: { attempt: accepted } },
+      },
+      true
+    );
+    let opened: string | undefined;
+    const thread = new Promise<string>((resolve) =>
+      stops.push(
+        watchSentThread(
+          { sendAttemptId: queued.uuid, inboxId: inbox.linkId },
+          (threadId) => {
+            opened = threadId;
+            resolve(threadId);
+          }
+        )
+      )
+    );
+    // Started after the thread watcher, so its first read follows that one.
+    const progress = follow(queued.uuid);
+    await progress.reached('pending');
+    expect(opened).toBeUndefined();
+
+    // The cancellation came too late: the provider delivered the message.
+    const claimed = await localDraftStore.claimSend(
+      session,
+      queued.uuid,
+      'dispatcher',
+      Date.now()
+    );
+    if (!claimed?.dispatch) throw new Error('The dispatcher did not claim it');
+    await localDraftStore.settleSend(
+      session,
+      queued.uuid,
+      'dispatcher',
+      claimed.dispatch.generation,
+      {
+        attempt: { ...accepted, status: 'SENT' },
+        nextAttemptAt: Date.now(),
+      }
+    );
+
+    await expect(thread).resolves.toBe('server-thread');
+  }
+);
+
+it.each(inboxes)(
+  'reports the thread of a $provider send that left the outbox before the watch began',
+  async (inbox) => {
+    const session = await emailStorageSession();
+    const queued = await localDraftStore.putSend(session, intent(inbox), true);
+    const delivered = { ...attempt(queued, 'SENT'), threadId: 'server-thread' };
+    vi.mocked(readEmailSendStatus).mockImplementation(async (input) =>
+      input.attemptId === queued.uuid && input.linkId === inbox.linkId
+        ? delivered
+        : null
+    );
+    await deliverInAnotherTab(session, queued, delivered);
+
+    const thread = new Promise<string>((resolve) =>
+      stops.push(
+        watchSentThread(
+          { sendAttemptId: queued.uuid, inboxId: inbox.linkId },
+          resolve
+        )
+      )
+    );
 
     await expect(thread).resolves.toBe('server-thread');
   }

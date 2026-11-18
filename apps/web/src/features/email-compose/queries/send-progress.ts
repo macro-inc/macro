@@ -9,7 +9,10 @@ import {
   watchEmailSends,
 } from '@queries/email/send-queue';
 import { recordEmailSend, traceEmailSend } from '@queries/email/send-telemetry';
-import type { EmailSendProgress } from '../context/compose-capabilities';
+import type {
+  EmailSendProgress,
+  QueuedSend,
+} from '../context/compose-capabilities';
 
 function emailSendProgress(intent: EmailSendIntent): EmailSendProgress {
   const attempt = settledSendAttempt(intent);
@@ -39,7 +42,7 @@ async function departedSendProgress(
   const attempt = await traceEmailSend(
     'status',
     seen.metadata.payload.input.attempt,
-    () => fetchEmailSendStatus(seen)
+    () => fetchEmailSendStatus(seen.metadata.payload.input.attempt)
   );
   recordEmailSend(
     {
@@ -58,10 +61,9 @@ async function departedSendProgress(
 
 /** The outbox records the server's thread id when the server accepts the send. */
 export function watchSentThread(
-  sendAttemptId: string,
+  send: QueuedSend,
   found: (threadId: string) => void
 ): () => void {
-  let seen: EmailSendIntent | undefined;
   let departing = false;
   let finished = false;
   const finish = (threadId?: string | null) => {
@@ -72,26 +74,28 @@ export function watchSentThread(
   };
   const read = async () => {
     const intent = (await readEmailSendIntents()).find(
-      (row) => row.uuid === sendAttemptId
+      (row) => row.uuid === send.sendAttemptId
     );
     if (finished || departing) return;
     if (intent) {
-      seen = intent;
-      if (intent.resolvedThreadId) finish(intent.resolvedThreadId);
+      // A requested cancellation owns the outcome until delivery overrides it.
+      const delivered = settledSendAttempt(intent)?.status === 'SENT';
+      if (
+        intent.resolvedThreadId &&
+        (delivered || !intent.cancellationRequested)
+      )
+        finish(intent.resolvedThreadId);
       return;
     }
-    if (!seen) return finish();
     // Another tab can deliver and retire the send before this one reads it.
     departing = true;
-    const departed = seen;
+    const attempt = { attemptId: send.sendAttemptId, linkId: send.inboxId };
     let threadId: string | null | undefined;
     try {
-      const attempt = await traceEmailSend(
-        'status',
-        departed.metadata.payload.input.attempt,
-        () => fetchEmailSendStatus(departed)
+      const status = await traceEmailSend('status', attempt, () =>
+        fetchEmailSendStatus(attempt)
       );
-      if (attempt?.status === 'SENT') threadId = attempt.threadId;
+      if (status?.status === 'SENT') threadId = status.threadId;
     } finally {
       finish(threadId);
     }

@@ -215,7 +215,9 @@ export async function cancelEmailSendAndConfirm(
     if (latest) current = latest;
     else {
       // Another tab may have restored or retired it. Absence alone is not Undo.
-      const attempt = await fetchEmailSendStatus(current);
+      const attempt = await fetchEmailSendStatus(
+        current.metadata.payload.input.attempt
+      );
       if (attempt?.status === 'CANCELLED') return;
       if (attempt?.status === 'SENT' || attempt?.status === 'SENDING')
         throw new EmailSendCancellationTooLate();
@@ -224,11 +226,10 @@ export async function cancelEmailSendAndConfirm(
 }
 
 /** A status check never resubmits a message. */
-export async function fetchEmailSendStatus(intent: EmailSendIntent) {
-  return await readEmailSendStatus(
-    intent.metadata.payload.input.attempt,
-    AbortSignal.timeout(15_000)
-  );
+export async function fetchEmailSendStatus(
+  attempt: SendEmailAttemptInput['attempt']
+) {
+  return await readEmailSendStatus(attempt, AbortSignal.timeout(15_000));
 }
 
 /** Restore the existing draft identity so uploaded and forwarded files stay attached. */

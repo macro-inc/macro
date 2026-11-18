@@ -742,7 +742,7 @@ function sendBeforeFirstServerSave() {
   );
   const following: { found?: (threadId: string) => void } = {};
   const stopFollowing = vi.fn();
-  context.delivery.watchSentThread = vi.fn((_sendAttemptId, found) => {
+  context.delivery.watchSentThread = vi.fn((_send, found) => {
     following.found = found;
     return stopFollowing;
   });
@@ -766,7 +766,7 @@ it('opens a new email by the thread id the server gives its send', async () => {
 
     expect(context.drafts.saveDraft).not.toHaveBeenCalled();
     expect(context.delivery.watchSentThread).toHaveBeenCalledWith(
-      'attempt',
+      { sendAttemptId: 'attempt', inboxId: 'inbox' },
       expect.any(Function)
     );
     expect(host.showThread).not.toHaveBeenCalled();
@@ -821,6 +821,35 @@ it('still opens the thread when Undo comes too late to cancel the send', async (
   } finally {
     root.dispose();
   }
+});
+
+it('never waits for the thread of a send that settles after its composer closed', async () => {
+  const { context, host, root } = sendBeforeFirstServerSave();
+  const sent = Promise.withResolvers<void>();
+  vi.mocked(context.delivery.sendMessage).mockReset();
+  vi.mocked(context.delivery.sendMessage).mockImplementationOnce(
+    async (input) => {
+      await sent.promise;
+      return {
+        draftId: input.clientHandles?.draftId,
+        threadId: input.clientHandles?.threadId,
+        inboxId: 'inbox',
+        sendAttemptId: 'attempt',
+        persistence: 'queued',
+      };
+    }
+  );
+  root.edit('Sent before autosave');
+  root.state.context.onSend();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+
+  root.dispose();
+  sent.resolve();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(context.delivery.watchSentThread).not.toHaveBeenCalled();
+  expect(host.showThread).not.toHaveBeenCalled();
 });
 
 it('stops waiting for a new email’s thread when the composer closes', async () => {
