@@ -245,7 +245,11 @@ editor's Import and export menu for Excel and CSV downloads. Choose the current 
 breadcrumb to return to the list; choosing an ancestor file drops newer detail
 entries. Opening a list row or sidebar favorite pushes a new one-item detail path;
 sidebar favorites start from My Files instead of inheriting a previously selected
-folder. Only navigation originating inside a detail appends to that path. Browser
+folder. Only navigation originating inside a detail appends to that path. Only a
+file opened from a Drive list names that list as its location (`My Files ›`,
+`Shared with me ›`, a folder path); a sidebar favorite, or a file opened from
+anywhere else (an email attachment, a channel, search, a link), shows no location
+breadcrumb, nor do the files opened from inside it. Browser
 Back and Forward restore the exact path saved with each entry, and renamed files
 update in mounted ancestor breadcrumbs without rewriting history. Cmd/Ctrl-clicking a
 row toggles selection; Shift-clicking a checkbox selects a range, and Shift+Enter
