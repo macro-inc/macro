@@ -184,15 +184,18 @@ and `email_e2e_full_stack.rs`):
 | `Email end-to-end (full stack)`: the tier, its `@known-bug` tests and its coverage check | no | yes | yes |
 | The `@known-bug` report of the first two (non-gating) | no | yes | with `known_bugs` |
 
-- A push to `main` runs once per commit, with no waiting for later pushes. A
-  failure is a red run on that commit; nothing is reverted or blocked by it.
+- Pushes to `main` queue as the dev deploys do: one run at a time, and a newer
+  push replaces the one waiting, whose changes the next run tests with its
+  own ([CI on pull requests](../../../../docs/development/ci.md#email-end-to-end-suites)).
+  A failure is a red run on the commit it tested; nothing is reverted or
+  blocked by it.
 - Each workflow's last job, `Tell Macro Alerts`, posts to the Macro Alerts
   channel when its pushes to `main` or its sweep turn red, and when they pass
   again; never for a run by hand. What the alert says, and what to do about
   it: [CI on pull requests](../../../../docs/development/ci.md#when-an-email-end-to-end-alert-fires).
 - The sweep runs `main`'s head whether or not it changed. Cron is UTC and
   does not follow daylight saving: 21:00 UTC is 4pm EST and 5pm EDT.
-- The coverage check fails the run wherever the suite runs: on every push to
+- The coverage check fails the run wherever the suite runs: on the pushes to
   `main` and in the sweep (the tier's own in the sweep). That a test for a
   known bug now passes is found by the sweep, where those tests run.
 - The browser workflow splits the suite over three machines (Playwright's

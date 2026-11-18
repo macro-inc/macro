@@ -393,6 +393,28 @@ async fn a_listing_carries_each_members_time_when_macro_can_read_it() {
     );
 }
 
+#[test]
+fn a_call_macros_admission_refused_is_deferred_and_a_graph_throttle_is_not() {
+    let deferred = error(EmailApiError::RateLimited {
+        retry_after: Some(std::time::Duration::from_secs(3)),
+        origin: RateLimitOrigin::Gate(crate::domain::models::GateLimit::Window),
+    });
+    assert_eq!(deferred.kind(), CalendarProviderErrorKind::Deferred);
+    assert_eq!(
+        deferred.retry_after(),
+        Some(std::time::Duration::from_secs(3))
+    );
+    let throttled = error(EmailApiError::RateLimited {
+        retry_after: Some(std::time::Duration::from_secs(3)),
+        origin: RateLimitOrigin::Provider { concurrency: false },
+    });
+    assert_eq!(
+        throttled.kind(),
+        CalendarProviderErrorKind::Transient,
+        "Microsoft itself throttled the call, which counts as a failure as before"
+    );
+}
+
 /// Discover the calendars of a mailbox whose settings name `time_zone`.
 async fn discover(time_zone: Option<&str>) -> OutlookDiscovery {
     let (server, api) = setup().await;

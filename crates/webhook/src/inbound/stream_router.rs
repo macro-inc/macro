@@ -4,15 +4,20 @@
 //! delivers every broker event that matches the caller's filters and passes
 //! the caller's entity access. Each SSE event's `id` is the UUIDv7 broker
 //! event id and its `event` is the event name; the `data` is the same broker
-//! envelope persisted webhooks deliver. Delivery is best-effort: disconnected
-//! or slow clients can miss events and must resync out of band when needed.
+//! envelope persisted webhooks deliver. A client that asks to `resume` with the
+//! standard SSE `Last-Event-ID` header first receives the events this process
+//! still retains after that id (see [`StreamCursor`]); events older than the
+//! retention are missed and must be resynced out of band when needed.
+
+#[cfg(test)]
+mod test;
 
 use crate::domain::models::{WebhookFilters, WebhookScope};
-use crate::domain::stream::{WebhookEventStreamService, WebhookStreamError};
+use crate::domain::stream::{StreamCursor, WebhookEventStreamService, WebhookStreamError};
 use axum::{
     Json, Router,
     extract::{FromRef, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{
         IntoResponse, Response,
         sse::{Event, KeepAlive, Sse},
@@ -86,6 +91,20 @@ pub struct StreamEventsQuery {
     pub filters: Option<String>,
 }
 
+/// Asks for the retained events after `Last-Event-ID` before live ones.
+///
+/// Kept out of the documented parameters while macrod is its one client:
+/// without it the stream is exactly what it was before resuming existed, so
+/// a browser `EventSource` or SDK listener reconnecting never replays.
+#[derive(Debug, serde::Deserialize)]
+pub struct ResumeQuery {
+    /// `true` replays the retained events after `Last-Event-ID` first. Kept
+    /// as text so any other value means no, rather than refusing the
+    /// client.
+    #[serde(default)]
+    pub resume: Option<String>,
+}
+
 /// Parse the query's filters into the typed filter model.
 fn parse_filters(filters: Option<String>) -> Result<WebhookFilters, WebhookStreamHandlerError> {
     let bad_request =
@@ -97,6 +116,26 @@ fn parse_filters(filters: Option<String>) -> Result<WebhookFilters, WebhookStrea
     serde_json::from_str(&filters)
         .map_err(|error| bad_request(format!("invalid `filters` JSON: {error}")))
 }
+
+/// The cursor a reconnecting client resumes from, sent the standard SSE way.
+///
+/// One this service cannot read is no cursor: the stream opens live, as it
+/// did before resuming existed. Refusing it would stop a browser
+/// `EventSource` from ever reconnecting.
+fn resume_cursor(headers: &HeaderMap) -> Option<StreamCursor> {
+    let value = headers.get(LAST_EVENT_ID_HEADER)?;
+    let cursor = value
+        .to_str()
+        .ok()
+        .and_then(|value| StreamCursor::parse(value).ok());
+    if cursor.is_none() {
+        tracing::info!("ignoring an unreadable Last-Event-ID; the stream opens live");
+    }
+    cursor
+}
+
+/// The SSE header a reconnecting client names its last seen event with.
+const LAST_EVENT_ID_HEADER: &str = "last-event-id";
 
 /// Stream matching broker events to the caller over Server-Sent Events.
 #[utoipa::path(
@@ -114,12 +153,17 @@ fn parse_filters(filters: Option<String>) -> Result<WebhookFilters, WebhookStrea
 pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizationService>(
     State(state): State<WebhookStreamRouterState<St, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
+    headers: HeaderMap,
     Query(query): Query<StreamEventsQuery>,
+    Query(resume): Query<ResumeQuery>,
 ) -> Result<
     Sse<impl Stream<Item = Result<Event, Infallible>> + Send + 'static>,
     WebhookStreamHandlerError,
 > {
     let filters = parse_filters(query.filters)?;
+    let after = (resume.resume.as_deref() == Some("true"))
+        .then(|| resume_cursor(&headers))
+        .flatten();
 
     let events = state
         .stream_service
@@ -127,6 +171,7 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
             authorization.authorization.user.macro_user_id,
             query.scope,
             filters,
+            after,
         )
         .await?;
 

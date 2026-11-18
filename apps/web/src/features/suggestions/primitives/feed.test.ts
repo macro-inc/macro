@@ -17,6 +17,7 @@ import {
   failedSuggestion,
   quietBackgroundSuggestion as quietSuggestion,
   replySuggestion,
+  reviewSuggestion,
   routineSuggestion,
   runningSuggestion,
 } from '../tests/fixtures';
@@ -95,7 +96,7 @@ function shownIds(feed: SuggestionsFeed) {
 }
 
 describe('suggestions feed', () => {
-  it('shows the server’s order and counts as they are, with a failed run counted under Running', async () => {
+  it('shows the server’s order as it is', async () => {
     await withFeed(
       [
         composerSuggestion,
@@ -111,13 +112,6 @@ describe('suggestions feed', () => {
           'suggestion-failed',
           'suggestion-running',
           'suggestion-done',
-        ]);
-        expect(feed.counts()).toEqual({ all: 5, running: 2, open: 2, done: 1 });
-
-        feed.setFilter('running');
-        expect(shownIds(feed)).toEqual([
-          'suggestion-failed',
-          'suggestion-running',
         ]);
       }
     );
@@ -250,21 +244,6 @@ describe('suggestions feed', () => {
     );
   });
 
-  it('lists an answered reply suggestion as done once the server says so, and opens it again without accepting', async () => {
-    const answered = { ...draftedReplySuggestion, status: 'done' as const };
-    await withFeed(
-      [replySuggestion, answered],
-      async (feed, { source, actions }) => {
-        expect(shownIds(feed)).toEqual(['suggestion-reply', answered.id]);
-        expect(feed.counts()).toEqual({ all: 2, running: 0, open: 1, done: 1 });
-
-        feed.open(answered);
-        expect(actions.openDraft).toHaveBeenCalledWith(DRAFT);
-        expect(source.accept).not.toHaveBeenCalled();
-      }
-    );
-  });
-
   it('keeps an opened reply suggestion open while the server does, and accepts it again on the next open', async () => {
     await withFeed([replySuggestion], async (feed, { source, actions }) => {
       await feed.accept(replySuggestion);
@@ -272,7 +251,7 @@ describe('suggestions feed', () => {
 
       expect(source.accept).toHaveBeenCalledTimes(2);
       expect(actions.openItem).toHaveBeenCalledTimes(2);
-      expect(feed.counts()).toEqual({ all: 1, running: 0, open: 1, done: 0 });
+      expect(shownIds(feed)).toEqual(['suggestion-reply']);
     });
   });
 
@@ -301,7 +280,7 @@ describe('suggestions feed', () => {
 
     await createRoot(async (dispose) => {
       const feed = createSuggestionsFeed(deps.source, deps.actions);
-      await feed.reviewRoutine(routineSuggestion);
+      await feed.look(routineSuggestion);
 
       const view = feed.view();
       if (view.kind !== 'suggestions') throw new Error('expected a feed');
@@ -320,34 +299,75 @@ describe('suggestions feed', () => {
     });
   });
 
-  it('opens what the server says a finished run left, and a running one’s session', async () => {
+  it('looks at a running suggestion’s session, and at a waiting one’s prompt without taking it up', async () => {
     await withFeed(
-      [runningSuggestion, doneSuggestion],
-      async (feed, { actions }) => {
-        feed.open(doneSuggestion);
+      [runningSuggestion, backgroundSuggestion],
+      async (feed, { source, actions }) => {
+        await feed.look(runningSuggestion);
+        expect(actions.openItem).toHaveBeenLastCalledWith({
+          entityType: 'agent_session',
+          entityId: 'session-1',
+        });
+
+        await feed.look(backgroundSuggestion);
+        expect(actions.openComposer).toHaveBeenCalledWith(
+          'Summarize this week and post it.'
+        );
+        expect(source.accept).not.toHaveBeenCalled();
+      }
+    );
+  });
+
+  it('opens what a finished run left, and a finished reply’s draft, without accepting', async () => {
+    const opened = { ...draftedReplySuggestion, status: 'done' as const };
+    await withFeed(
+      [doneSuggestion, opened],
+      async (feed, { source, actions }) => {
+        await feed.open(doneSuggestion);
         expect(actions.openItem).toHaveBeenLastCalledWith({
           entityType: 'document',
           entityId: 'document-1',
         });
 
-        feed.open(runningSuggestion);
-        expect(actions.openItem).toHaveBeenLastCalledWith({
-          entityType: 'agent_session',
-          entityId: 'session-1',
-        });
+        await feed.open(opened);
+        expect(actions.openDraft).toHaveBeenCalledWith(DRAFT);
+        expect(source.accept).not.toHaveBeenCalled();
       }
     );
   });
 
-  it('opens nothing for a finished suggestion that left nothing', async () => {
-    const unsettled: Suggestion = {
-      ...quietSuggestion,
-      status: 'done',
-    };
+  it('opens nothing for a finished run that left nothing', async () => {
+    const unsettled: Suggestion = { ...quietSuggestion, status: 'done' };
     await withFeed([unsettled], async (feed, { actions }) => {
-      feed.open(unsettled);
+      await feed.open(unsettled);
 
       expect(actions.openItem).not.toHaveBeenCalled();
+      expect(actions.openComposer).not.toHaveBeenCalled();
+    });
+  });
+
+  it('marks a review done by taking it up, without opening anything', async () => {
+    await withFeed([reviewSuggestion], async (feed, { source, actions }) => {
+      await feed.markDone(reviewSuggestion);
+
+      expect(source.accept).toHaveBeenCalledWith(reviewSuggestion);
+      expect(actions.openItem).not.toHaveBeenCalled();
+    });
+  });
+
+  it('never marks a reply done, since only the person’s reply finishes it', async () => {
+    await withFeed([replySuggestion], async (feed, { source }) => {
+      await feed.markDone(replySuggestion);
+
+      expect(source.accept).not.toHaveBeenCalled();
+    });
+  });
+
+  it('never marks a background prompt done, since taking it up starts its run', async () => {
+    await withFeed([backgroundSuggestion], async (feed, { source }) => {
+      await feed.markDone(backgroundSuggestion);
+
+      expect(source.accept).not.toHaveBeenCalled();
     });
   });
 
@@ -366,7 +386,6 @@ describe('suggestions feed', () => {
           ['suggestion-reply', false],
           ['suggestion-composer', true],
         ]);
-        expect(feed.counts().all).toBe(1);
       }
     );
   });

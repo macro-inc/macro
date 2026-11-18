@@ -87,6 +87,39 @@ fn a_streams_alert_jobs_run_one_at_a_time() {
     }
 }
 
+/// A workflow's runs queue for each event and branch, not for each commit:
+/// a push that waits is replaced by the next, whose alert job posts in its
+/// place. The run in progress is never cancelled, since a cancelled run's
+/// alert job never runs, and a run by hand or a re-run stays out of the
+/// queue, where a re-run would replace the push waiting with an older commit.
+#[test]
+fn a_workflows_runs_queue_without_cancelling_the_one_running() {
+    let mut groups = Vec::new();
+    for (name, workflow) in workflows() {
+        let concurrency = &workflow["concurrency"];
+        assert_eq!(
+            concurrency["cancel-in-progress"].as_bool(),
+            Some(false),
+            "{name}"
+        );
+        let group = concurrency["group"].as_str().expect("a group");
+        assert!(
+            !group.contains("github.sha"),
+            "{name} queues each commit apart: {group}"
+        );
+        assert!(
+            group.contains(
+                "(github.event_name == 'workflow_dispatch' || github.run_attempt != '1') && github.run_id"
+            ),
+            "{name} queues a run by hand or a re-run behind the pushes: {group}"
+        );
+        groups.push(group.to_owned());
+    }
+    groups.sort_unstable();
+    groups.dedup();
+    assert_eq!(groups.len(), 3, "two workflows share a queue: {groups:?}");
+}
+
 /// The script reads the job and its steps by the names the workflow gives
 /// them, and the steps that record what the channel shows come last.
 #[test]
