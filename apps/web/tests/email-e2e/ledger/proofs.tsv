@@ -697,7 +697,7 @@ STC-061	not shown as the row says (toast: That send time has passed. Choose a fu
 STC-062	not shown as the row says (toast: Failed to schedule email): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
 STC-063	not shown as the row says (toast: Failed to schedule email (or Failed to update schedule) — Draft is not ready to schedule. Resolve any save or connection errors and try again): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
 STC-064	not shown as the row says (toast: Email scheduled, but unable to mark thread done): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
-STC-065	not shown as the row says (toast: Schedule cancelled.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-065	Undo of an initial schedule shows Schedule cancelled. The reply test also checks that attempted typing while locked leaves the original text, and Undo makes that text editable without a kept-reply notice.
 STC-066	not shown as the row says (toast: Schedule cancelled, but the draft could not be reopened. Check Drafts.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
 STC-067	not shown as the row says (toast: This email was already sent and can no longer be unscheduled.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
 STC-068	not shown as the row says (toast: Failed to undo scheduled send): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
