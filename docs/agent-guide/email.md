@@ -970,7 +970,8 @@ as `person+tag@example.com`, whether or not it is a saved contact. That holds
 when contacts or their names load after typing starts and reorder the list,
 including under a resting pointer, and when the address was typed or pasted
 before suggestions loaded. Name-word prefixes outrank substring matches;
-`jo sm` and `sm jo` both find John Smith. Within each name tier, and on empty
+`jo sm` and `sm jo` both find John Smith. A domain (`gmail.com`) or a local part
+unlike the name finds the contact, below name matches. Within each name tier, and on empty
 input, personal suggestions are recent-first rather than domain/brevity-weighted.
 A chip shows the name followed by the address in muted ink.
 Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal
