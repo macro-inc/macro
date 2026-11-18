@@ -28,7 +28,7 @@ afterEach(() => {
 });
 function setup() {
   const request = vi
-    .fn<() => Promise<{ error?: CombinedError }>>()
+    .fn<() => Promise<{ data?: unknown; error?: CombinedError }>>()
     .mockResolvedValue({});
   const query = vi.fn((..._args: Parameters<Client['query']>) => ({
     toPromise: request,
@@ -512,6 +512,24 @@ describe('new channels reaching channel lists', () => {
     expect(f.query).toHaveBeenCalledTimes(3);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(f.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('runs an explicit refresh made during a read without waiting for the backoff', async () => {
+    const f = setup();
+    list(f, firstPage('dms'), ['direct_message']);
+    const inFlight = deferred();
+    f.request
+      .mockReturnValueOnce(inFlight.promise)
+      .mockResolvedValue(page('older'));
+
+    f.queue.expectChannel({ id: 'new', channelType: 'direct_message' });
+    await tick();
+    expect(f.query).toHaveBeenCalledTimes(1);
+    const refreshed = f.queue.refresh([firstPage('dms')]);
+    inFlight.resolve(page('older'));
+    await tick();
+    expect(f.query).toHaveBeenCalledTimes(2);
+    await refreshed;
   });
 
   it('leaves lists of other channel types and continuation pages alone', async () => {

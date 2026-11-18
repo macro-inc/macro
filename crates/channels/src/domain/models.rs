@@ -947,6 +947,16 @@ pub struct ChannelInfo {
     pub team_id: Option<Uuid>,
 }
 
+impl ChannelInfo {
+    /// Whether the channel has a name of its own. A blank name counts as none,
+    /// as it does for display names.
+    pub fn named(&self) -> bool {
+        self.name
+            .as_deref()
+            .is_some_and(|name| !name.trim().is_empty())
+    }
+}
+
 /// Request for a batched channel preview lookup.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

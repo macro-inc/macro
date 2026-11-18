@@ -130,13 +130,17 @@ that leaving without sending creates nothing, that the other person's list gains
 the DM only after the send, and that reloading a `pending-dm-` URL opens the
 Chat list on desktop and closes the pane on touch.
 
-The first message of a new DM or group chat notifies registered members as
-every later message does (an unread dot on the row, the Chat badge, and the
-message text in the push); people without an account get the invitation email
-instead, and named channels still send an invite. The recipient's open Chat list
-shows the new conversation without a reload: the push brings it from the
-primary, and a list whose first read comes from a lagging replica reads its
-first page again, for up to a minute, until the conversation is there.
+A person's first message in a new DM or group chat notifies its registered
+members as every later message does (an unread dot on the row, the Chat badge,
+and the message text in the push); people without an account get the
+invitation email instead. In a named channel, a person's first top-level
+message still invites the members it does not mention; a bot's first message
+does not. The recipient's open Chat list shows the new conversation without a
+reload. When the `soupUpdates` push for a channel created in the last few
+minutes says the viewer is a member, each list whose first page shows that
+channel type reads its first page again, for up to a minute, until the
+conversation is there, so a first read from a lagging replica does not leave it
+out.
 
 Sending a human
 message queues an immediate email for nonusers, including follow-up messages,

@@ -426,7 +426,8 @@ export class ChannelNotificationRefresh {
     }
     if (nextRead === undefined) return;
     this.invalidate(job);
-    job.retryAt = nextRead;
+    // An explicit refresh waiting on this job reads at once, not after the backoff.
+    if (job.waiters.length === 0) job.retryAt = nextRead;
   }
 
   private settle(job: Job, generation: number, error?: unknown) {

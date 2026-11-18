@@ -281,7 +281,7 @@ where
             .map_err(repo_error)?;
         Ok(ChannelMetadata {
             channel_type: info.channel_type,
-            named: info.name.is_some(),
+            named: info.named(),
             channel_name: info.name.unwrap_or_default(),
         })
     }

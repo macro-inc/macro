@@ -2490,7 +2490,7 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(ChannelMetadata {
             channel_type: info.channel_type,
             channel_name,
-            named: info.name.is_some(),
+            named: info.named(),
         })
     }
 
