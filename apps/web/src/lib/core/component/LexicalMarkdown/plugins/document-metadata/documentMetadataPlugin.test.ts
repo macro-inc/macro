@@ -182,6 +182,7 @@ describe('documentMetadataPlugin', () => {
   it('stamps the first local edit to a document stored without a version', async () => {
     await openStoredDocument();
 
+    expect(storedVersion()).toBe(-1);
     expect(versionCommittedWith('Typed text', typeParagraph)).toBe(
       MARKDOWN_VERSION_COUNTER
     );
