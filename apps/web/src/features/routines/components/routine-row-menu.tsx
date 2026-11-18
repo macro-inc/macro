@@ -7,6 +7,7 @@ import { canOpenInNewTab } from '@components/app/tab-layout/open-in-new-tab';
 import {
   ContextMenuContent,
   ContextMenuTrigger,
+  MenuGroup,
   MenuItem,
   MenuSeparator,
 } from '@core/component/ContextMenu';
@@ -250,20 +251,22 @@ export function RoutineRowMenu(props: ParentProps<RoutineRowMenuProps>) {
                         <Show when={index() > 0}>
                           <MenuSeparator />
                         </Show>
-                        <For each={group}>
-                          {(entry) => (
-                            <MenuItem
-                              text={entry.label}
-                              disabled={entry.disabled}
-                              class={
-                                entry.destructive
-                                  ? 'text-failure-ink'
-                                  : undefined
-                              }
-                              onClick={entry.run}
-                            />
-                          )}
-                        </For>
+                        <MenuGroup>
+                          <For each={group}>
+                            {(entry) => (
+                              <MenuItem
+                                text={entry.label}
+                                disabled={entry.disabled}
+                                class={
+                                  entry.destructive
+                                    ? 'text-failure-ink'
+                                    : undefined
+                                }
+                                onClick={entry.run}
+                              />
+                            )}
+                          </For>
+                        </MenuGroup>
                       </>
                     )}
                   </For>

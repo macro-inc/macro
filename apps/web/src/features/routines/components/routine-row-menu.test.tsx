@@ -183,14 +183,14 @@ describe('routine row menu', () => {
       'Open in new split',
       'Open in new tab',
       'Run now',
-      'Turn off',
-      'Duplicate',
+      'Share',
       'Copy Link',
       'Copy ID',
-      'Share',
+      'Duplicate',
+      'Turn off',
       'Delete',
     ]);
-    expect(screen.getAllByRole('separator')).toHaveLength(4);
+    expect(screen.getAllByRole('separator')).toHaveLength(5);
     expect(
       screen.getByRole('menuitem', { name: 'Delete' }).className
     ).toContain('text-failure-ink');
@@ -374,11 +374,11 @@ describe('routine row menu', () => {
       [...drawer.querySelectorAll('button')].map((item) => item.textContent)
     ).toEqual([
       'Run now',
-      'Turn off',
-      'Duplicate',
+      'Share',
       'Copy Link',
       'Copy ID',
-      'Share',
+      'Duplicate',
+      'Turn off',
       'Delete',
     ]);
     fireEvent.click(screen.getByRole('button', { name: 'Run now' }));
