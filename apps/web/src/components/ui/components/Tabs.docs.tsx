@@ -186,7 +186,7 @@ export default defineDoc({
       id: 'sizes',
       title: 'Sizes',
       description:
-        'Tabs share Button minimum heights and square icon sizes. Medium labels use 14px text and 12px horizontal padding; large labels use 15px text. Touch treatments retain their minimum targets.',
+        'Tabs share Button minimum heights and square icon sizes. Medium labels use 14px text and 12px horizontal padding; large labels use 15px text. Touch treatments retain their minimum targets. `size="composer"` with the inset treatment matches repository controls: 38px frame, 36px items, 14/20 text, 8px label padding, and full rounding.',
       render: SizesDemo,
     },
     {

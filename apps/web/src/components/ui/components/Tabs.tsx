@@ -11,10 +11,10 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { cn } from '../utils/classname';
 import {
-  iconControlSizes,
   type LabeledControlSize,
-  labeledControlContents,
-  labeledControlFrames,
+  labeledControlContents as sharedControlContents,
+  labeledControlFrames as sharedControlFrames,
+  iconControlSizes as sharedIconControlSizes,
 } from '../utils/control-sizes';
 import { Layer } from './Layer';
 import { Tooltip } from './Tooltip';
@@ -37,7 +37,18 @@ export type TabOption<T extends string> = {
 };
 
 /** Button-sized pills; touch treatments keep their own minimum targets. */
-export type TabsSize = LabeledControlSize;
+export type TabsSize = LabeledControlSize | 'composer';
+
+// Match a composer repository pill: 36px control, 8px label inset, 14/20 text.
+const iconControlSizes = {
+  ...sharedIconControlSizes,
+  composer: 'h-9 w-9 min-h-9 shrink-0 aspect-square p-0 text-sm leading-5',
+};
+const labeledControlFrames = { ...sharedControlFrames, composer: 'min-h-9' };
+const labeledControlContents = {
+  ...sharedControlContents,
+  composer: 'px-2 py-0 text-sm leading-5',
+};
 
 const tabIconSizes: Record<TabsSize, { square: string; labeled: string }> = {
   xs: { square: 'size-3', labeled: 'size-3' },
@@ -45,6 +56,7 @@ const tabIconSizes: Record<TabsSize, { square: string; labeled: string }> = {
   md: { square: 'size-4', labeled: 'size-3.5' },
   lg: { square: 'size-5', labeled: 'size-4' },
   xl: { square: 'size-6', labeled: 'size-5' },
+  composer: { square: 'size-4', labeled: 'size-4' },
 };
 
 // The grouped frame adds 2px of border and 4px of padding around each tab.
@@ -56,6 +68,7 @@ const joinedIconSizes: Record<TabsSize, string> = {
   md: 'size-6.5',
   lg: 'size-8.5',
   xl: 'size-10.5',
+  composer: 'h-9 min-w-9',
 };
 
 function tabContentClasses(size: TabsSize) {
@@ -171,7 +184,10 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
         >
           <div
             class={cn(
-              'inline-flex min-w-0 items-stretch overflow-hidden rounded-full border border-edge-button bg-control gap-0.5 p-0.5',
+              'inline-flex min-w-0 items-stretch overflow-hidden rounded-full border border-edge-button bg-control gap-0.5',
+              props.size === 'composer'
+                ? 'px-1 py-0 text-sm leading-5'
+                : 'p-0.5',
               labeledControlFrames[props.size ?? 'md'],
               props.fullWidth && 'w-full'
             )}
@@ -280,7 +296,8 @@ function PillOption<T extends string>(props: {
       <KSegmentedControl.ItemLabel
         class={cn(
           'flex min-w-0 flex-1 self-stretch items-center justify-center gap-2 font-medium whitespace-nowrap select-none',
-          !square() && tabContentClasses(props.size),
+          (!square() || props.size === 'composer') &&
+            tabContentClasses(props.size),
           props.joined && 'py-0'
         )}
       >
@@ -437,7 +454,8 @@ function TouchInset<T extends string>(props: TabsProps<T>) {
     <Layer depth={0}>
       <div
         class={cn(
-          'relative flex items-center rounded-full border border-edge-muted bg-surface p-0.5 has-focus-visible:ring-2 has-focus-visible:ring-accent/20',
+          'relative flex items-center rounded-full border border-edge-muted bg-surface has-focus-visible:ring-2 has-focus-visible:ring-accent/20',
+          size() === 'composer' ? 'px-1 py-0 text-sm leading-5' : 'p-0.5',
           props.fullWidth && 'w-full'
         )}
       >
@@ -467,7 +485,8 @@ function TouchInset<T extends string>(props: TabsProps<T>) {
                 <KSegmentedControl.ItemLabel
                   class={cn(
                     'flex min-w-0 flex-1 self-stretch items-center gap-1.5 rounded-full font-medium whitespace-nowrap text-ink-extra-muted ring-inset hover:text-ink data-checked:bg-surface data-checked:text-ink data-checked:ring data-checked:ring-edge-muted',
-                    !(props.iconOnly && option.icon !== undefined) &&
+                    (size() === 'composer' ||
+                      !(props.iconOnly && option.icon !== undefined)) &&
                       tabContentClasses(size()),
                     (props.fullWidth ||
                       (props.iconOnly && option.icon !== undefined)) &&
