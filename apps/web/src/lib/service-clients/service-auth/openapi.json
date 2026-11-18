@@ -6031,7 +6031,7 @@
             }
           },
           "403": {
-            "description": "The account is not an agent",
+            "description": "The account is not an agent, or the caller is an agent's program",
             "content": {
               "application/json": {
                 "schema": {

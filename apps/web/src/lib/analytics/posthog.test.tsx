@@ -1,7 +1,8 @@
 import type { RemoteFlag } from '@core/constant/featureFlags';
+import { lazy } from '@core/util/lazy';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { FeatureFlagResult, PostHog } from 'posthog-js';
-import { type JSX, lazy, Suspense } from 'solid-js';
+import { type JSX, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PosthogProvider, ShowFeatureFlag, useFeatureFlag } from './posthog';
 

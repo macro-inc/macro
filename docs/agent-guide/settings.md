@@ -129,6 +129,21 @@ on by default, and the section's only copy is "See when recipients open
 messages you send." Messages sent from an inbox with it on carry an invisible
 pixel; see [read receipts in a thread](email.md#read-receipts) for the status.
 
+### Email row style
+
+**Settings → Email → Display options → Row style** picks how Mail rows look on
+this device: **Minimalist** (the default; an unread dot, the checkbox on hover)
+or **Classic** (rows wall to wall with one faint line between them and above
+each date group's first row, unread rows on a raised fill with bolder sender,
+subject and date, and the selection checkbox always shown instead of the dot).
+Below the tabs, an inert sample of two made-up rows (one unread, one read)
+shows the chosen style, drawn by the real Mail row; screen readers get a short
+description instead. The choice saves immediately and applies to every open
+Mail list. Phones always show Minimalist rows, so the section and its search
+entry are absent there. The backend-free desktop, tablet and phone
+regression, which also covers the sample (`?view=settings` in the fixture), is
+`bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts row-styles.browser.e2e.ts`.
+
 ### Notification permission prompt
 
 After onboarding, eligible desktop, Android, and web users see **Enable

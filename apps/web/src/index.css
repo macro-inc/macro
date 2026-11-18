@@ -398,11 +398,15 @@ body.tauri-ios {
   --color-link-visited: var(--color-accent);
   --color-page: var(--color-surface-0);
   --color-panel: var(--theme-panel, var(--color-surface-1));
-  --color-control: var(--color-surface-2);
+  /* Mail's list fill and row divider under names no surface overrides, so a
+     sample list inside one (Settings → Email) can take them back. */
+  --color-list-control: var(--color-surface-2);
+  --color-list-divider: color-mix(in oklch, var(--color-content-0) 4%, transparent);
+  --color-control: var(--color-list-control);
   --color-control-raised: color-mix(in oklch, var(--color-surface-2) 95%, var(--color-content-0));
   --color-edge-frame: color-mix(in oklch, var(--color-content-0) 8%, transparent);
   --color-edge-button: color-mix(in oklch, var(--color-content-0) 5%, transparent);
-  --color-edge-divider: color-mix(in oklch, var(--color-content-0) 4%, transparent);
+  --color-edge-divider: var(--color-list-divider);
   --color-edge-focus: color-mix(in oklch, var(--color-content-0) 40%, transparent);
   --color-dialog: var(--color-surface-2);
   --color-menu: var(--color-surface-2);

@@ -31,6 +31,12 @@ use sqlx::postgres::PgPoolOptions;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+/// Concurrent Outlook claim loops per task. Each claim takes at most one item
+/// per account, as Google's backfill workers take one job per account, and
+/// eight cover the measured demand with headroom.
+const OUTLOOK_SYNC_LOOPS: usize = 8;
+/// How often the Outlook sync logs its queue depth.
+const OUTLOOK_QUEUE_DEPTH_INTERVAL: Duration = Duration::from_secs(60);
 
 mod scheduling_recovery;
 
@@ -197,13 +203,22 @@ async fn main() -> anyhow::Result<()> {
         ),
     );
     let outlook_provider = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-        email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate(redis_conn.clone()),
+        email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate::new(
+            redis_conn.clone(),
+            email_api_client::outbound::microsoft_gate::RequestBudget::Live,
+        ),
     ))?
     .with_rejected_token_refresh(Arc::new(CalendarTokenProviderAdapter::new(
         redis_conn.clone(),
         Arc::new(auth_service_client.clone()),
     )));
-    if config.calendar_sync_enabled && config.outlook_sync_enabled {
+    let outlook_loops = config.outlook_loops();
+    tracing::info!(
+        outlook_sync = outlook_loops.sync,
+        outlook_projection_relay = outlook_loops.relay,
+        "starting the Outlook calendar loops this task runs"
+    );
+    if outlook_loops.sync {
         let sync = calendar_events::domain::outlook::OutlookCalendarSync::new(
             PgCalendarRepository::new(db.clone()),
             outlook_provider.clone(),
@@ -218,14 +233,29 @@ async fn main() -> anyhow::Result<()> {
             ),
         )
         .with_writes_enabled(config.outlook_writes_enabled);
+        let sync = Arc::new(sync);
+        for _ in 0..OUTLOOK_SYNC_LOOPS {
+            let sync = Arc::clone(&sync);
+            let cancellation = worker_cancellation_token.clone();
+            worker_tracker.spawn(async move {
+                loop {
+                    let result = tokio::select! { _ = cancellation.cancelled() => break, result = sync.run_once() => result };
+                    match result { Ok(true) => continue, Ok(false) => {}, Err(error) => tracing::warn!(error=?error, "Outlook calendar synchronization will retry") }
+                    tokio::select! { _ = cancellation.cancelled() => break, _ = tokio::time::sleep(Duration::from_secs(2)) => {} }
+                }
+            });
+        }
         let cancellation = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
+            let mut tick = tokio::time::interval(OUTLOOK_QUEUE_DEPTH_INTERVAL);
             loop {
-                let result = tokio::select! { _ = cancellation.cancelled() => break, result = sync.run_once() => result };
-                match result { Ok(true) => continue, Ok(false) => {}, Err(error) => tracing::warn!(error=?error, "Outlook calendar synchronization will retry") }
-                tokio::select! { _ = cancellation.cancelled() => break, _ = tokio::time::sleep(Duration::from_secs(2)) => {} }
+                tokio::select! { _ = cancellation.cancelled() => break, _ = tick.tick() => {} }
+                // The report logs its own failure on its span.
+                let _ = sync.report_queue_depth().await;
             }
         });
+    }
+    if outlook_loops.relay {
         let relay = calendar_events::domain::outlook::CalendarProjectionRelay::new(
             PgCalendarRepository::new(db.clone()),
             macro_event_broker.clone(),

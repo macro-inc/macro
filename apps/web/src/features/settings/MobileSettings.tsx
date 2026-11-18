@@ -40,6 +40,7 @@ export function MobileSettings() {
       page={settings.page()}
       groups={navGroups()}
       searchGroups={searchGroups()}
+      emailRowStyle={false}
       outlook={outlook()}
       macroComputers={macroComputers().enabled}
       name={displayName()}
@@ -62,7 +63,7 @@ export function MobileSettings() {
       onLogout={() => {
         fireAndForget(logout(), 'logout');
       }}
-      renderPage={(page) => <SettingsTabContent tab={page} />}
+      renderPage={(page) => <SettingsTabContent tab={page} phone />}
     />
   );
 }

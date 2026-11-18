@@ -21,7 +21,7 @@ pub struct BookingLinkEvent {
     pub location: String,
     /// Attach a Macro call when someone books. A join link is created for that
     /// booking and written onto the calendar invitation. Mutually exclusive
-    /// with `googleMeet`. Prefer this for a Macro booking; omit or false when
+    /// with `googleMeet`. Set it when the user wants a Macro call; omit or false when
     /// the link should use Google Meet or no video. False is omitted so drafts
     /// saved before this field still round-trip unchanged.
     #[serde(default, skip_serializing_if = "is_false")]

@@ -60,6 +60,7 @@ vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@components/app/mobile/use-mobile-nav', () => ({
   useForegroundMobileView: () => () =>
     mocks.viewAccessor ? mocks.viewAccessor() : mocks.view,
+  useForegroundProject: () => () => false,
   useMobileNavNavigate: () => vi.fn(),
 }));
 vi.mock('@components/app/mobile/mobile-dock-views', () => ({

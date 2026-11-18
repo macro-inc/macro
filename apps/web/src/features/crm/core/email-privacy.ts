@@ -4,8 +4,12 @@ export type EmailPrivacy = {
   mailboxLinkId: string | null;
   teamDomains: string[];
   personalDomains: string[];
+  teamDomainWarnings?: Record<string, MailboxDomainConflict>;
+  personalDomainWarnings?: Record<string, MailboxDomainConflict>;
   canRemoveTeamDomains: boolean;
 };
+
+export type MailboxDomainConflict = 'company' | 'personal_provider';
 
 export type EmailBlockScope = 'team' | 'personal';
 export type EmailConsent = Pick<

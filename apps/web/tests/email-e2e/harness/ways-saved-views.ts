@@ -159,7 +159,7 @@ export async function changeStoredView(
   );
 }
 
-/** The saved views of the desktop sidebar, or of the phone's drawer. */
+/** The saved views of the Email sidebar, or of its sheet on touch. */
 export function viewList(page: Page): Locator {
   return page.getByRole('navigation', { name: 'Saved email views' });
 }

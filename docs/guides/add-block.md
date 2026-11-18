@@ -47,7 +47,8 @@ and none of the file-type steps. Sections 4 and 5 are one or the other.
 - **`definition.ts` is eager.** The glob puts every definition in the entry
   chunk. Blocks used to import their components statically here, which put
   every block's UI in the startup bundle until a sweep made them lazy. Use
-  `component: lazy(() => import('./<name>-block'))` and dynamic-import query
+  `component: lazy(() => import('./<name>-block'))`, with `lazy` from
+  `@core/util/lazy`, and dynamic-import query
   modules inside `load` (`block-form/definition.ts`). A `loading` placeholder is
   allowed but must be a tiny skeleton with no editor or engine imports. Making a
   block eager is a measured trade (the agent block is eager on purpose, as the

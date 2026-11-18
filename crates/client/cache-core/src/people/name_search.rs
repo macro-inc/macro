@@ -16,11 +16,14 @@ pub mod reader;
 pub enum NameStage {
     /// Empty query, ordered by current published recency.
     Browse,
+    /// No name tier matched, but every query term occurs in the address: a
+    /// domain, or a local part unlike the name.
+    Address,
     /// Literal per-term containment in a name, never arbitrary gaps.
     Contains,
     /// Every query word prefixes a name word.
     WordPrefix,
-    /// Exact normalized full name.
+    /// Exact normalized full name, or a one-term query equal to the first name.
     ExactName,
     /// An incomplete typed address prefixes the actual email.
     EmailPrefix,
@@ -74,14 +77,29 @@ impl NameSearch {
                 .starts_with(prefix)
                 .then_some(NameStage::EmailPrefix),
             Self::Name(query) => {
+                let name_stage =
+                    query
+                        .classify_normalized(normalized_name)
+                        .map(|tier| match tier {
+                            NameMatch::Browse => NameStage::Browse,
+                            NameMatch::Contains => NameStage::Contains,
+                            NameMatch::WordPrefix => NameStage::WordPrefix,
+                            NameMatch::Exact => NameStage::ExactName,
+                        });
+                if name_stage.is_some() {
+                    return name_stage;
+                }
+
+                // People also look someone up by part of their address: a
+                // local part that differs from their name, or a domain. That
+                // ranks below every name match. Storage mirrors this with a
+                // LIKE over the `email_lower` fact.
+                let email = user.email_str();
                 query
-                    .classify_normalized(normalized_name)
-                    .map(|tier| match tier {
-                        NameMatch::Browse => NameStage::Browse,
-                        NameMatch::Contains => NameStage::Contains,
-                        NameMatch::WordPrefix => NameStage::WordPrefix,
-                        NameMatch::Exact => NameStage::ExactName,
-                    })
+                    .normalized()
+                    .split_whitespace()
+                    .all(|term| email.contains(term))
+                    .then_some(NameStage::Address)
             }
         }
     }
@@ -107,6 +125,15 @@ impl RecentKey {
     /// Exact BLOB bytes used by the existing fact index.
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
+    }
+    /// The timestamp a stored key encodes; None when the bytes are too short.
+    pub fn timestamp(key: &[u8]) -> Option<i64> {
+        let mut time: [u8; 8] = key.get(..8)?.try_into().ok()?;
+        for byte in &mut time {
+            *byte = !*byte;
+        }
+        time[0] ^= 0x80;
+        Some(i64::from_be_bytes(time))
     }
     /// Sparse context overrides are partitioned by publication epoch. Old
     /// epochs remain harmless while the default rank supplies untouched users.
