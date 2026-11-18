@@ -1790,6 +1790,8 @@ pub async fn run() -> anyhow::Result<()> {
     };
     let (runtime_commands_ready, mut runtime_commands_readiness) =
         tokio::sync::watch::channel(false);
+    // Outside the retry: a resubscription must not forget what was issued.
+    let runtime_command_issued = Arc::new(runtime_commands::IssuedAgents::default());
     let runtime_commands = tokio::spawn(async move {
         let result = Retry::start(
             FixedInterval::new(std::time::Duration::from_secs(1))
@@ -1809,7 +1811,7 @@ pub async fn run() -> anyhow::Result<()> {
                     {
                         let runtimes = Arc::clone(&runtime_command_runtimes);
                         let agents = runtime_command_agents.clone();
-                        let issued = Arc::new(runtime_commands::IssuedAgents::default());
+                        let issued = Arc::clone(&runtime_command_issued);
                         Arc::new(move |request| {
                             let Some(agents) = agents.clone() else {
                                 tracing::warn!(computer_id = %request.computer_id,

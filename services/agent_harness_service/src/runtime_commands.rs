@@ -111,31 +111,11 @@ pub(crate) async fn deliver_agent_to_runtime(
     }
     let span = request.span();
     async move {
-        let environment = match issued.get(request.computer_id, request.generation) {
-            Some(environment) => environment,
-            None => {
-                let enrollment = match agents.issue(request.computer_id, request.generation).await {
-                    Ok(Some(enrollment)) => enrollment,
-                    Ok(None) => {
-                        tracing::warn!("the computer runs no agent; nothing to hand over");
-                        return;
-                    }
-                    Err(error) => {
-                        tracing::warn!(?error, "could not issue the agent's environment");
-                        return;
-                    }
-                };
-                let environment = agent_runtime_protocol::domain::schema::v0::AgentEnvironment(
-                    enrollment
-                        .env
-                        .expose()
-                        .iter()
-                        .map(|(key, value)| (key.as_str().to_owned(), value.clone()))
-                        .collect(),
-                );
-                issued.keep(request.computer_id, request.generation, environment.clone());
-                environment
-            }
+        let Some(environment) = issued
+            .get_or_issue(request.computer_id, request.generation, &*agents)
+            .await
+        else {
+            return;
         };
         let delivered = send(request.deliver_agent_harness, environment).await;
         tracing::Span::current().record("delivered", delivered);
@@ -154,7 +134,7 @@ const ISSUED_AGENT_KEPT_FOR: std::time::Duration = std::time::Duration::from_sec
 /// when dropped.
 #[derive(Default)]
 pub(crate) struct IssuedAgents(
-    std::sync::Mutex<
+    tokio::sync::Mutex<
         std::collections::HashMap<
             (
                 hosted_runtimes::domain::ids::ComputerId,
@@ -169,34 +149,43 @@ pub(crate) struct IssuedAgents(
 );
 
 impl IssuedAgents {
-    fn get(
+    /// The environment kept for the enrollment, issued first if none is. The
+    /// lock spans `issue`, so hand-offs racing for one enrollment issue once.
+    async fn get_or_issue(
         &self,
         computer_id: hosted_runtimes::domain::ids::ComputerId,
         generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
+        agents: &dyn hosted_runtimes::domain::agent::AgentEnrollmentSource,
     ) -> Option<agent_runtime_protocol::domain::schema::v0::AgentEnvironment> {
-        let mut issued = self
-            .0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut issued = self.0.lock().await;
         issued.retain(|_, (at, _)| at.elapsed() < ISSUED_AGENT_KEPT_FOR);
-        issued
-            .get(&(computer_id, generation))
-            .map(|(_, environment)| environment.clone())
-    }
-
-    fn keep(
-        &self,
-        computer_id: hosted_runtimes::domain::ids::ComputerId,
-        generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
-        environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
-    ) {
-        self.0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(
-                (computer_id, generation),
-                (std::time::Instant::now(), environment),
-            );
+        if let Some((_, environment)) = issued.get(&(computer_id, generation)) {
+            return Some(environment.clone());
+        }
+        let enrollment = match agents.issue(computer_id, generation).await {
+            Ok(Some(enrollment)) => enrollment,
+            Ok(None) => {
+                tracing::warn!("the computer runs no agent; nothing to hand over");
+                return None;
+            }
+            Err(error) => {
+                tracing::warn!(?error, "could not issue the agent's environment");
+                return None;
+            }
+        };
+        let environment = agent_runtime_protocol::domain::schema::v0::AgentEnvironment(
+            enrollment
+                .env
+                .expose()
+                .iter()
+                .map(|(key, value)| (key.as_str().to_owned(), value.clone()))
+                .collect(),
+        );
+        issued.insert(
+            (computer_id, generation),
+            (std::time::Instant::now(), environment.clone()),
+        );
+        Some(environment)
     }
 }
 
