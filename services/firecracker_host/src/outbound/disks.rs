@@ -154,6 +154,11 @@ impl FileDisks {
         key: &GoldenKey,
         sizes_gib: &[u32],
     ) -> Result<(), DiskError> {
+        // A rebuild drops the marker first (under `templates`, like this):
+        // never snapshot a golden whose files are being replaced.
+        if !self.layout.golden(key).join(GOLDEN_READY_MARKER).is_file() {
+            return Ok(());
+        }
         let relative = golden_relative(key);
         let Some(snapshot) = datasets.latest_snapshot(&relative).await? else {
             // Not sealed yet: its seal adds them.
@@ -166,6 +171,8 @@ impl FileDisks {
             .copied()
             .filter(|&gib| !in_snapshot.join(home_file_name(gib)).is_file())
             .collect();
+        // Snapshotted even when the files were already there: a crash
+        // between writing them and the snapshot.
         if !missing.is_empty() {
             self.add_golden_homes(key, &missing).await?;
             datasets
@@ -329,6 +336,9 @@ const SPARE_BUILDING: &str = "building";
 fn spare_tag(snapshot: &str, gib: u32) -> String {
     format!("{snapshot}|home-{gib}g")
 }
+
+/// Written into a golden's directory once it is published (`ready.json`).
+const GOLDEN_READY_MARKER: &str = "ready.json";
 
 /// The file of an empty `/home` of `gib`, in a template directory or a
 /// golden's disk set.
@@ -503,9 +513,15 @@ impl Disks for FileDisks {
                     new_filesystem_uuid(&staged).await?;
                     std::fs::rename(&staged, &home).map_err(io("replace", &home))?;
                 }
-                // The golden had no `/home` of this size (not sold when its
-                // snapshot was taken): a fresh one, no block cloning.
-                Containers::Zfs(_) => format_home(&home, record.resources.home_disk_gib).await?,
+                // The clone's own home files, if a crash cut its first
+                // prepare short; else the golden had none of this size (not
+                // sold when its snapshot was taken): a fresh one.
+                Containers::Zfs(_) => {
+                    let directory = self.layout.computer(record.computer_id);
+                    if !keep_golden_home(&directory, record.resources.home_disk_gib).await? {
+                        format_home(&home, record.resources.home_disk_gib).await?;
+                    }
+                }
             }
         }
         grow(&home, record.resources.home_disk_gib)?;
@@ -530,11 +546,18 @@ impl Disks for FileDisks {
         }
         let source = self.layout.image(&key.image).join("rootfs.ext4");
         let target = directory.join("rootfs.ext4");
-        // Replaces a sealed (read-only) one from an earlier build.
-        match std::fs::remove_file(&target) {
-            Ok(()) => {}
-            Err(error) if error.kind() == ErrorKind::NotFound => {}
-            Err(error) => return Err(io("remove", &target)(error)),
+        {
+            // Unmarked first, under `templates`: a `/home` top-up then
+            // either finished its snapshot of the old build or skips this one.
+            let _turn = self.templates.lock().await;
+            for path in [directory.join(GOLDEN_READY_MARKER), target.clone()] {
+                // The rootfs: replaces a sealed (read-only) one from an earlier build.
+                match std::fs::remove_file(&path) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == ErrorKind::NotFound => {}
+                    Err(error) => return Err(io("remove", &path)(error)),
+                }
+            }
         }
         tokio::fs::copy(&source, &target)
             .await
@@ -551,12 +574,14 @@ impl Disks for FileDisks {
         std::fs::set_permissions(&rootfs, std::fs::Permissions::from_mode(0o444))
             .map_err(io("chmod", &rootfs))?;
         if let Containers::Zfs(datasets) = &self.containers {
+            // Sizes read under the lock: a top-up that changes them runs
+            // wholly before or after.
+            let _turn = self.templates.lock().await;
             let sizes_gib = self
                 .home_sizes_gib
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .clone();
-            let _turn = self.templates.lock().await;
             self.add_golden_homes(key, &sizes_gib).await?;
             // Named per build: a rebuild never touches the snapshot that
             // existing computers are clones of.

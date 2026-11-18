@@ -240,7 +240,17 @@ impl Datasets {
         let listing = zfs_output(
             "zfs",
             &[
-                "list", "-H", "-t", "snapshot", "-o", "name", "-s", "creation", &name,
+                // createtxg, not creation (whole seconds): two snapshots in
+                // one second still sort in the order they were taken.
+                "list",
+                "-H",
+                "-t",
+                "snapshot",
+                "-o",
+                "name",
+                "-s",
+                "createtxg",
+                &name,
             ],
         )
         .await?;
