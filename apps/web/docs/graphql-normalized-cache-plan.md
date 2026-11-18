@@ -923,9 +923,9 @@ UUIDs, leases, retry state, identity bindings and authored draft recovery surviv
 Only copied optimistic response content and its derived recipes are removed.
 A successful queued response may settle canonical identities after revocation,
 but cannot publish obsolete record content. Callers retain its committed
-acknowledgement independently of optional response data. Draft saves recover
-canonical IDs from their authored journal; calendar creates select only the
-settled identity before returning an event for navigation or later edits.
+acknowledgement independently of optional response data. Draft saves retain accepted queued journal state until settlement confirms the
+current identity; calendar creates select only the settled identity before
+returning an event for navigation or later edits.
 If that identity is unavailable, creation remains acknowledged and the composer
 closes and refreshes without navigating or offering to create the event again.
 Permission support requires
