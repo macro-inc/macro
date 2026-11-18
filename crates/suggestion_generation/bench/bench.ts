@@ -56,7 +56,7 @@ export const SECTIONS: Record<Section, SectionSpec> = {
  * default size (3 personas × 3 reps): a smaller difference is noise. Measured
  * with `noise` (README, Baseline); a run of another size needs its own.
  */
-export const MARGINS: Record<Section, number> = { routines: 12, feed: 12 };
+export const MARGINS: Record<Section, number> = { routines: 37, feed: 17 };
 
 const RUNS = join(CACHE, 'runs');
 

@@ -144,11 +144,38 @@ says so: make a new one.
 
 ## Baseline
 
-BASELINE
+Main (`c59b249582`) with the bench on top, two runs of each section at the
+default size, on one local stack, 2026-11-18. Each row is 9 attempts; the
+score's range is its 95% bootstrap interval, times are medians.
+
+| Section | Run | Score | Found / needs | Bad | Invented | Suggested | First | End |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `routines` | A | -2.2 (-20.7 to 16.3) | 2.78 / 5.7 | 2.89 | 0.11 | 13.0 | 44 s | 186 s |
+| `routines` | B | -19.3 (-54.4 to 15.9) | 2.78 / 5.7 | 3.89 | 0.22 | 13.4 | 48 s | 146 s |
+| `feed` | A | 76.5 (67.9 to 85.2) | 7.44 / 9 | 0.56 | 0.33 | 11.7 | 166 s | 305 s |
+| `feed` | B | 69.1 (61.7 to 76.5) | 6.56 / 9 | 0.33 | 0.11 | 11.6 | 201 s | 317 s |
+
+Noise (`MARGINS`): `routines` moved -17.0 between the runs (95% -37.0 to
+3.3), so its margin is 37; `feed` moved -7.4 (95% -17.3 to 2.5), margin 17.
+Routines' swing is almost all in *bad*: every attempt met every need a
+catalog routine can meet and few that need a drafted one, while the number of
+misfit catalog picks varied from run to run, most for the plumber. Two runs a
+side (`a1,a2` against `b1,b2`) narrow the interval when a change lands near
+the margin.
 
 ## Cost and time
 
-COST
+From the baseline runs. A generation's cost is its `ai_usage`; the judge
+(Opus 5.5) costs about as much again.
+
+| Section | Generation | Judge | One run (9 attempts) | Wall time of a run |
+| --- | --- | --- | --- | --- |
+| `routines` | $0.22 | $0.21 | about $3.90 | about 15 minutes |
+| `feed` | $0.17 | $0.29 | about $4.20 | about 22 minutes |
+
+A comparison is two runs (about $8 and 30 to 45 minutes for one section);
+`all` runs both sections in about 40 minutes. The stand-in and the stack
+cost nothing beyond the model calls.
 
 ## How it works
 
