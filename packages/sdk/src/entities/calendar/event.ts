@@ -73,6 +73,10 @@ export interface UpdateEventOptions {
    * `copy_choice_required`, listing each copy's inbox, role and event, until
    * it does. It must be the inbox holding this copy. */
   inbox?: string;
+  /** The user's own reply approving this change to the attendees, quoted verbatim.
+   * Required from an agent's program, which is otherwise refused (403
+   * `confirmation_required`); never the request that asked for the change. */
+  userConfirmation?: string;
 }
 
 /** How a deletion is scoped across a recurring series. */
@@ -110,6 +114,10 @@ export interface InviteGuestsOptions {
    * `copy_choice_required`, listing each copy's inbox, role and event, until
    * it does. It must be the inbox holding this copy. */
   inbox?: string;
+  /** The user's own reply approving these invitations, quoted verbatim.
+   * Required from an agent's program, which is otherwise refused (403
+   * `confirmation_required`); never the request that asked for the change. */
+  userConfirmation?: string;
 }
 
 /** The RSVP to record and how it is scoped across a recurring series. */
@@ -206,7 +214,12 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
     return this.detail.get();
   }
 
-  /** Update the event and return a handle to its synced record.
+  /** Update the event; changing `attendees` from an agent's program needs the user's reply approving it in `userConfirmation`, or it is refused (403).
+   *
+   * The calendar emails guests who are added, so write out who will be
+   * invited or removed, ask, and change attendees only after the user says
+   * yes; the request that asked for the change is not the approval. Other
+   * fields need no confirmation. Returns a handle to the synced record.
    *
    * A meeting on more than one of the user's inboxes is one event per inbox,
    * each with its own id (see the occurrence listing's `inbox` and `role`).
@@ -317,8 +330,12 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
     return result.url ?? undefined;
   }
 
-  /** Add guests without touching anyone already invited, and return a handle
-   * to the synced record.
+  /** Add guests; an agent's program must quote the user's reply approving these invitations in `userConfirmation`, or it is refused (403).
+   *
+   * The calendar emails each new guest, so write out who will be invited,
+   * ask, and invite only after the user says yes; the request that asked for
+   * the invitations is not the approval. Adds guests without touching anyone
+   * already invited, and returns a handle to the synced record.
    *
    * When the meeting is on more than one of the user's inboxes, add from the
    * copy the user organizes when there is one (it invites directly, while a
@@ -346,6 +363,7 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
           recurrenceId: options.recurrenceId,
           calendarId: options.calendar?.id,
           inbox: options.inbox,
+          userConfirmation: options.userConfirmation,
         },
       }),
     );
@@ -447,5 +465,6 @@ function toUpdateBody(options: UpdateEventOptions): UpdateCalendarEventRequest {
     recurrenceId: options.recurrenceId,
     calendarId: options.calendar?.id,
     inbox: options.inbox,
+    userConfirmation: options.userConfirmation,
   };
 }

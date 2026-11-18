@@ -248,6 +248,11 @@ pub struct UpdateCalendarEventRequest {
     /// inboxes, and it must be the inbox holding the addressed copy; a
     /// mismatch is refused whoever sends it.
     pub inbox: Option<String>,
+    /// The user's own reply approving a change to the guest list, quoted verbatim.
+    /// Required from an agent's program, because the calendar emails each
+    /// new guest; never the request that asked for the change. Not stored.
+    #[serde(default)]
+    pub user_confirmation: Option<String>,
 }
 
 /// How much of a recurring series an update applies to.
@@ -379,6 +384,11 @@ pub struct InviteCalendarEventGuestsRequest {
     /// inboxes, and it must be the inbox holding the addressed copy; a
     /// mismatch is refused whoever sends it.
     pub inbox: Option<String>,
+    /// The user's own reply approving these invitations, quoted verbatim.
+    /// Required from an agent's program, because the calendar emails each
+    /// new guest; never the request that asked for the change. Not stored.
+    #[serde(default)]
+    pub user_confirmation: Option<String>,
 }
 
 /// Machine-readable failure category for calendar mutations.
@@ -433,8 +443,8 @@ pub enum CalendarMutationErrorCode {
     /// run did not name the inbox of the copy it changes, or named another
     /// copy's; the message lists each copy's inbox, role and id.
     CopyChoiceRequired,
-    /// An agent's program asked to create an event the user has not seen;
-    /// it must present a review or quote the user's approval.
+    /// An agent's program asked to create an event the user has not seen,
+    /// or to invite guests without quoting the user's approval.
     ConfirmationRequired,
 }
 
@@ -485,6 +495,30 @@ fn refuse_program_create(
         return Err(CalendarMutationApiError {
             code: CalendarMutationErrorCode::ConfirmationRequired,
             message: PROGRAM_CREATE_REFUSAL.to_owned(),
+            status: StatusCode::FORBIDDEN,
+        });
+    }
+    Ok(())
+}
+
+/// Why an agent's program may not invite guests as it asked: the calendar
+/// emails every new guest, so the user approves the invitations first, as
+/// with email.
+const PROGRAM_INVITE_REFUSAL: &str = "An agent's program cannot invite guests to a calendar event without the user's approval: the calendar emails each new guest. Write out who will be invited, ask whether to invite them, and only after the user replies approving it call inviteGuests (or update with attendees) again with their reply quoted in userConfirmation.";
+
+/// Refuse an agent run (see [`is_agent_run`]) that changes an event's guests
+/// without quoting the user's approval. A person in the app and an owner
+/// routine invite as before.
+fn refuse_unconfirmed_program_invite(
+    attribution: CredentialAttribution,
+    headers: &HeaderMap,
+    confirmation: Option<&str>,
+) -> Result<(), CalendarMutationApiError> {
+    let confirmed = confirmation.is_some_and(|quote| !quote.trim().is_empty());
+    if is_agent_run(attribution, headers) && !confirmed {
+        return Err(CalendarMutationApiError {
+            code: CalendarMutationErrorCode::ConfirmationRequired,
+            message: PROGRAM_INVITE_REFUSAL.to_owned(),
             status: StatusCode::FORBIDDEN,
         });
     }
@@ -795,7 +829,7 @@ fn update_scope(
         (status = 200, description = "The updated calendar event", body = CalendarEvent),
         (status = 400, description = "Invalid event fields", body = CalendarMutationApiError),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Calendar is read-only or needs reauthorization, or the event is a snapshot of a shared meeting", body = CalendarMutationApiError),
+        (status = 403, description = "Calendar is read-only or needs reauthorization, the event is a snapshot of a shared meeting, or an agent's program changed attendees without userConfirmation (code confirmation_required)", body = CalendarMutationApiError),
         (status = 404, description = "Event or targeted occurrence not found", body = CalendarMutationApiError),
         (status = 409, description = "The provider rejected the update", body = CalendarMutationApiError),
         (status = 503, description = "Transient provider failure, or the Macro call could not be created", body = CalendarMutationApiError),
@@ -813,6 +847,13 @@ where
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
 {
+    if request.attendees.is_some() {
+        refuse_unconfirmed_program_invite(
+            user.authorization.user.attribution(),
+            &headers,
+            request.user_confirmation.as_deref(),
+        )?;
+    }
     let scope = update_scope(request.scope, request.recurrence_id)?;
     let patch = CalendarEventPatch {
         title: request.title,
@@ -998,7 +1039,7 @@ where
         (status = 200, description = "The updated calendar event", body = CalendarEvent),
         (status = 400, description = "Invalid guests or scope", body = CalendarMutationApiError),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Calendar is read-only, only the organizer can invite guests, the event is a snapshot of a shared meeting, or the calendar needs reauthorization", body = CalendarMutationApiError),
+        (status = 403, description = "Calendar is read-only, only the organizer can invite guests, the event is a snapshot of a shared meeting, the calendar needs reauthorization, or an agent's program invited without userConfirmation (code confirmation_required)", body = CalendarMutationApiError),
         (status = 404, description = "Event or occurrence not found", body = CalendarMutationApiError),
         (status = 409, description = "The connected account neither organizes nor attends the event", body = CalendarMutationApiError),
         (status = 503, description = "Transient provider failure", body = CalendarMutationApiError),
@@ -1016,6 +1057,11 @@ where
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
 {
+    refuse_unconfirmed_program_invite(
+        user.authorization.user.attribution(),
+        &headers,
+        request.user_confirmation.as_deref(),
+    )?;
     let scope = match (request.scope, request.recurrence_id) {
         (Some(CalendarUpdateScopeParam::All), _) | (None, None) => CalendarUpdateScope::All,
         (Some(CalendarUpdateScopeParam::ThisEvent), Some(recurrence_id))

@@ -258,6 +258,71 @@ fn an_owner_routine_code_step_creates_events_but_an_agent_program_does_not() {
     assert!(refuse_program_create(CredentialAttribution::Agent, &code_step).is_err());
 }
 
+fn code_execution() -> axum::http::HeaderMap {
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
+    headers
+}
+
+#[test]
+fn an_agent_program_cannot_invite_guests_without_the_users_approval() {
+    let browser = axum::http::HeaderMap::new();
+    let refusal = refuse_unconfirmed_program_invite(CredentialAttribution::Agent, &browser, None)
+        .unwrap_err();
+    assert_eq!(refusal.status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        refusal.code,
+        CalendarMutationErrorCode::ConfirmationRequired
+    );
+    assert_eq!(refusal.message, PROGRAM_INVITE_REFUSAL);
+    assert!(
+        refuse_unconfirmed_program_invite(CredentialAttribution::Person, &code_execution(), None)
+            .is_err()
+    );
+    assert!(
+        refuse_unconfirmed_program_invite(CredentialAttribution::Agent, &browser, Some("  "))
+            .is_err()
+    );
+}
+
+#[test]
+fn an_agent_program_invites_guests_on_the_users_quoted_approval() {
+    assert!(
+        refuse_unconfirmed_program_invite(
+            CredentialAttribution::Agent,
+            &axum::http::HeaderMap::new(),
+            Some("yes, invite them")
+        )
+        .is_ok()
+    );
+    assert!(
+        refuse_unconfirmed_program_invite(
+            CredentialAttribution::Person,
+            &code_execution(),
+            Some("yes, invite them")
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn a_person_in_the_app_and_an_owner_routine_invite_guests_as_before() {
+    let browser = axum::http::HeaderMap::new();
+    assert!(
+        refuse_unconfirmed_program_invite(CredentialAttribution::Person, &browser, None).is_ok()
+    );
+    assert!(
+        refuse_unconfirmed_program_invite(CredentialAttribution::Routine, &browser, None).is_ok()
+    );
+    assert!(
+        refuse_unconfirmed_program_invite(CredentialAttribution::Routine, &code_execution(), None)
+            .is_ok()
+    );
+}
+
 /// Two inboxes hold the meeting, so a request that names no copy is refused.
 struct TwoCopies;
 
