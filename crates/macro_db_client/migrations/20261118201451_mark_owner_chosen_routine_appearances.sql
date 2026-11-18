@@ -1,8 +1,8 @@
 -- Until now only the appearance endpoint and templates set a routine's appearance: keep every
 -- routine that has one as it is. A routine whose look was reset to none through the endpoint
 -- has no appearance left, but the endpoint recorded the change in its activity, so keep that
--- choice too. Row locks only; a routine has at most one row. The activity lookup is one probe
--- of idx_activity_events_entity_action_timeline per routine without a look.
+-- choice too. Row locks only; a routine has at most one row. The activity lookup is one
+-- index-only scan of idx_activity_events_entity_action_timeline over routines' entries.
 SET LOCAL lock_timeout = '5s';
 
 UPDATE scheduled_action
