@@ -2,6 +2,8 @@ import { type UserItem, useQuickAccess } from '@core/context/quickAccess';
 import { useEmail, useUserId } from '@core/context/user';
 import type { IUser } from '@core/user';
 import {
+  leadsPeople,
+  type MenuOrder,
   peopleBeforeAgents,
   placeAgentsAfterPeople,
   rankAgentsAfterPeople,
@@ -9,6 +11,7 @@ import {
 import {
   createFreshSearch,
   FreshSearchPresets,
+  type FreshSortResult,
   NAME_MATCH_RANKING,
 } from '@core/util/freshSort';
 import { preservePersonOrder } from '@core/util/ordered-window';
@@ -40,6 +43,10 @@ type UseUsersMentionResult = {
   windowKey: Accessor<string | undefined>;
   hasMore: Accessor<boolean>;
   isLoading: Accessor<boolean>;
+  /** Whether the menu lists only the rows that lead the people still loading. */
+  waitingForPeople: Accessor<boolean>;
+  /** Agents held back from `users` until the people they follow are listed. */
+  heldRows: Accessor<number>;
   isLoadingMore: Accessor<boolean>;
   loadMore: () => Promise<void>;
 };
@@ -127,15 +134,49 @@ export function useUsersMention(
     });
   };
 
+  // Until the directory lists its first people for this term, it is not yet
+  // known where the agents go among them.
+  const waitingForPeople = () =>
+    usesDirectory() &&
+    workspace.isLoading() &&
+    !usersList().some((item) => !isBotMentionUser(item));
+
   // Macro leads, then people come before the other agents and bots, as in
   // assignee menus. The directory's personal window keeps its own order among
   // people: its rows take the slots the ranking gives people, and search ranks
-  // only the rows outside it.
-  const users = createLazyMemo(() => {
+  // only the rows outside it. While its people load, only the rows that lead
+  // them all are listed, and the agents that will follow them are held back
+  // so that none is shown in a place a person is about to take.
+  const listing = createLazyMemo((): { rows: UserItem[]; held: number } => {
     const term = searchTerm().trim();
     const list = usersList();
     const results = userSearch()(list, term);
     const order = { viewerId: currentUserId(), mention: true };
+    if (waitingForPeople()) {
+      const agents = results.filter(
+        (result) => !term || result.nameMatchRank >= 0
+      );
+      const rows = agents
+        .filter((result) =>
+          leadsPeople(
+            result.item.id,
+            order,
+            term ? result.nameMatchRank : undefined
+          )
+        )
+        .map((result) => result.item);
+      return { rows, held: agents.length - rows.length };
+    }
+
+    return { rows: orderedUsers(term, list, results, order), held: 0 };
+  });
+
+  function orderedUsers(
+    term: string,
+    list: UserItem[],
+    results: FreshSortResult<UserItem>[],
+    order: MenuOrder
+  ): UserItem[] {
     if (!usesDirectory()) {
       if (term) {
         return rankAgentsAfterPeople(results, (item) => item.id, order);
@@ -179,7 +220,9 @@ export function useUsersMention(
       (item) => item.id,
       order
     );
-  });
+  }
+
+  const users = () => listing().rows;
 
   /**
    * Special groups like @here that are only available in channel composers.
@@ -218,6 +261,8 @@ export function useUsersMention(
     windowKey: () => (usesDirectory() ? workspace.windowKey?.() : undefined),
     hasMore: () => usesDirectory() && workspace.hasMore(),
     isLoading: () => usesDirectory() && workspace.isLoading(),
+    waitingForPeople,
+    heldRows: () => listing().held,
     isLoadingMore: () => usesDirectory() && workspace.isLoadingMore(),
     loadMore: async () => {
       if (usesDirectory()) await workspace.loadMore();

@@ -67,6 +67,7 @@ import type {
 } from '../../../utils/mentionsUtils';
 import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
 import { ItemBin } from './components/ItemBin';
+import { MentionLoadingRows } from './components/MentionLoadingRows';
 import { MentionsMenuItem } from './components/MentionsMenuItem';
 import { createMentionPageLoader } from './hooks/createMentionPageLoader';
 import { useBookingLinkMention } from './hooks/useBookingLinkMention';
@@ -442,8 +443,13 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     (contactsEnabled() &&
       'isLoading' in contactMention &&
       contactMention.isLoading());
+  const waitingForPeople = () =>
+    sourceEnabled('users') && userMention.waitingForPeople();
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
+    // Phones pin people above every other row and rank the rest around them,
+    // so the list waits for its people instead of moving when they land.
+    if (waitingForPeople()) return users;
     const combined: MentionItem[] = [
       ...(sourceEnabled('bookingLinks') ? bookingLinks() : []),
       ...users,
@@ -472,6 +478,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           label: 'All',
           windowKey: peopleWindowKey,
           getData: mobileAllItems,
+          // Everything below the people waits with them.
+          heldRows: () => (waitingForPeople() ? TARGET_ITEMS : 0),
           getFullCount: () =>
             (sourceEnabled('bookingLinks') ? bookingLinks().length : 0) +
             (sourceEnabled('users') ? mentionUsers().length : 0) +
@@ -528,6 +536,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         hasMore: userMention.hasMore,
         isLoadingMore: userMention.isLoadingMore,
         loadMore: userMention.loadMore,
+        heldRows: userMention.heldRows,
       },
       {
         id: 'documents',
@@ -612,7 +621,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       : buckets;
 
     return filtered.filter(
-      (bucket) => bucket.getFullCount() > 0 || bucket.hasMore?.()
+      (bucket) =>
+        bucket.getFullCount() > 0 ||
+        bucket.hasMore?.() ||
+        (bucket.heldRows?.() ?? 0) > 0
     );
   });
 
@@ -833,6 +845,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const mode = controller.viewAllMode();
     return mode ? controller.getBucket(mode) : undefined;
   };
+  const viewAllLoadingRows = () => {
+    const mode = controller.viewAllMode();
+    return mode ? controller.loadingRows(mode) : 0;
+  };
+  const viewAllEmpty = () =>
+    controller.combinedItems().length === 0 && viewAllLoadingRows() === 0;
 
   const visibleBuckets = createMemo(() => {
     const currentBins = controller.bins();
@@ -841,7 +859,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     return bucketConfigs()
       .filter(
-        (config) => (currentBins[config.id] || 0) > 0 || config.hasMore?.()
+        (config) =>
+          (currentBins[config.id] || 0) > 0 ||
+          config.hasMore?.() ||
+          controller.loadingRows(config.id) > 0
       )
       .map((config) => {
         const bucketLimit = currentBins[config.id] || 0;
@@ -972,6 +993,13 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                                 />
                               )}
                             </Key>
+                            <Show
+                              when={controller.loadingRows(bucket().config.id)}
+                            >
+                              {(count) => (
+                                <MentionLoadingRows count={count()} />
+                              )}
+                            </Show>
                           </ItemBin>
                         </>
                       )}
@@ -1007,7 +1035,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                   </div>
                 </div>
               </Show>
-              <Show when={controller.combinedItems().length === 0}>
+              <Show when={viewAllEmpty()}>
                 <div class="px-2 text-ink-extra-muted">{emptyLabel()}</div>
               </Show>
               <VirtualizedItemList
@@ -1030,6 +1058,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                   );
                 }}
               />
+              <Show when={viewAllLoadingRows()}>
+                {(count) => (
+                  <MentionLoadingRows count={count()} rowClass="h-9 sm:h-9" />
+                )}
+              </Show>
             </Show>
           </Surface>
         </div>

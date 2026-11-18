@@ -8,6 +8,7 @@ import { useUsersMention } from './useUsersMention';
 
 const mocks = vi.hoisted(() => ({
   users: (): UserItem[] => [],
+  loading: (): boolean => false,
   loadMore: vi.fn<() => Promise<void>>(),
 }));
 vi.mock('@core/context/quickAccess', () => ({
@@ -16,7 +17,7 @@ vi.mock('@core/context/quickAccess', () => ({
       items: () => (options.enabled?.() === false ? [] : mocks.users()),
       windowKey: () => 'window',
       hasMore: () => true,
-      isLoading: () => false,
+      isLoading: () => mocks.loading(),
       isLoadingMore: () => false,
       loadMore: mocks.loadMore,
     }),
@@ -90,6 +91,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-09-29T12:00:00Z'));
   mocks.loadMore.mockReset();
   mocks.loadMore.mockResolvedValue(undefined);
+  mocks.loading = () => false;
   mocks.users = () => [
     userItem(sean),
     userItem(alias),
@@ -166,6 +168,63 @@ it('lists Macro, then you, then people, then the other agents while browsing', (
       seamus.id,
       reviewCodex.id,
     ]);
+    dispose();
+  });
+});
+
+it('lists only the rows that lead the people until the directory lists them', () => {
+  createRoot((dispose) => {
+    const [loading, setLoading] = createSignal(true);
+    const [people, setPeople] = createSignal<UserItem[]>([]);
+    mocks.loading = loading;
+    mocks.users = people;
+    const [searchTerm, setSearchTerm] = createSignal('');
+    const directory = useUsersMention({
+      searchTerm,
+      transformUsers: (users) => [...users, reviewCodex, macroAgent],
+    });
+    const ids = () => directory.users().map((item) => item.id);
+
+    // Codex will follow the people, who have not arrived: it waits rather
+    // than take a row a person is about to take.
+    expect(ids()).toEqual([macroAgent.id]);
+    expect(directory.heldRows()).toBe(1);
+    expect(directory.waitingForPeople()).toBe(true);
+    setSearchTerm('rev');
+    expect(ids()).toEqual([]);
+    expect(directory.heldRows()).toBe(1);
+    setSearchTerm('mac');
+    expect(ids()).toEqual([macroAgent.id]);
+    expect(directory.heldRows()).toBe(0);
+
+    setSearchTerm('');
+    setPeople([
+      { ...userItem(sean), personOrder: 0 },
+      { ...userItem(viewer), personOrder: 1 },
+    ]);
+    expect(ids()).toEqual([macroAgent.id, viewer.id, sean.id, reviewCodex.id]);
+    expect(directory.heldRows()).toBe(0);
+    expect(directory.waitingForPeople()).toBe(false);
+
+    // A search that matches no one lists its agents once it has answered.
+    setPeople([]);
+    setLoading(false);
+    setSearchTerm('rev');
+    expect(ids()).toEqual([reviewCodex.id]);
+    expect(directory.heldRows()).toBe(0);
+
+    // A scoped roster is complete as given.
+    setLoading(true);
+    const scoped = useUsersMention({
+      searchTerm: () => '',
+      users: () => [reviewCodex, sean, macroAgent],
+    });
+    expect(scoped.users().map((item) => item.id)).toEqual([
+      macroAgent.id,
+      sean.id,
+      reviewCodex.id,
+    ]);
+    expect(scoped.heldRows()).toBe(0);
     dispose();
   });
 });

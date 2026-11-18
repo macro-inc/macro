@@ -30,6 +30,7 @@ export default {
   pleaseTryAgain: 'Please try again',
   loading: 'Loading…',
   loadingConversation: 'Loading conversation',
+  loadingPeople: 'Loading people',
   delete: 'Delete',
   rename: 'Rename',
   more: 'More',
