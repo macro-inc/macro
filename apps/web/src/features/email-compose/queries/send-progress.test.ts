@@ -346,13 +346,16 @@ it.each(inboxes)(
     // Started after the thread watcher, so its first read follows that one.
     const progress = follow(queued.uuid);
     await progress.reached('pending');
-    const delivered = { ...attempt(queued, 'SENT'), threadId: 'server-thread' };
     vi.mocked(readEmailSendStatus).mockImplementation(async (input) =>
       input.attemptId === queued.uuid && input.linkId === inbox.linkId
-        ? delivered
+        ? { ...attempt(queued, 'SENT'), threadId: 'server-thread' }
         : null
     );
-    await deliverInAnotherTab(session, queued, delivered);
+    // The retired row names no thread, so only the server's status can.
+    await deliverInAnotherTab(session, queued, {
+      ...attempt(queued, 'SENT'),
+      threadId: null,
+    });
 
     await expect(thread).resolves.toBe('server-thread');
   }

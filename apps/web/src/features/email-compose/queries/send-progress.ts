@@ -83,9 +83,14 @@ export function watchSentThread(
     if (!seen) return finish();
     // Another tab can deliver and retire the send before this one reads it.
     departing = true;
+    const departed = seen;
     let threadId: string | null | undefined;
     try {
-      const attempt = await fetchEmailSendStatus(seen);
+      const attempt = await traceEmailSend(
+        'status',
+        departed.metadata.payload.input.attempt,
+        () => fetchEmailSendStatus(departed)
+      );
       if (attempt?.status === 'SENT') threadId = attempt.threadId;
     } finally {
       finish(threadId);

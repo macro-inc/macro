@@ -835,8 +835,6 @@ export function createEmailComposer(props: EmailComposerOptions) {
     props.host?.showDraft?.(draftId);
   };
 
-  let stopFollowingSend: (() => void) | undefined;
-  onCleanup(() => stopFollowingSend?.());
   const showSentThread = (threadId: string) => {
     try {
       props.host?.showThread?.(threadId);
@@ -844,42 +842,67 @@ export function createEmailComposer(props: EmailComposerOptions) {
       props.notices.reportError(error);
     }
   };
+  let stopWatchingSend: (() => void) | undefined;
+  let disposed = false;
+  const stopFollowingSend = () => {
+    stopWatchingSend?.();
+    stopWatchingSend = undefined;
+  };
+  onCleanup(() => {
+    disposed = true;
+    stopFollowingSend();
+  });
   // A thread minted with a new draft has no server row to open until the
   // server accepts the send and names it.
   const followSentThread = (sendAttemptId: string) => {
-    stopFollowingSend?.();
-    stopFollowingSend = props.delivery.watchSentThread?.(
+    stopFollowingSend();
+    stopWatchingSend = props.delivery.watchSentThread?.(
       sendAttemptId,
       (threadId) => {
-        stopFollowingSend = undefined;
+        stopWatchingSend = undefined;
         showSentThread(threadId);
       }
     );
   };
 
   // Undo retains the inbox used by the send even after navigation.
-  const undoSend = (
+  const undoSend = async (
     draftId: string,
     threadId: string | undefined,
     inboxId: string | undefined,
     sendAttemptId?: string
   ) => {
-    stopFollowingSend?.();
-    return props.delivery.undoSend({
-      sendAttemptId,
-      threadId,
-      draftId,
-      inboxId,
-      onUndone: (result) =>
-        restoreAfterUndoSend(draftId, threadId, inboxId, result?.draftRestored),
-    });
+    // The thread waits while Undo runs; a send Undo could not stop still opens it.
+    const following = stopWatchingSend !== undefined;
+    stopFollowingSend();
+    let undone = false;
+    try {
+      await props.delivery.undoSend({
+        sendAttemptId,
+        threadId,
+        draftId,
+        inboxId,
+        onUndone: (result) => {
+          undone = true;
+          return restoreAfterUndoSend(
+            draftId,
+            threadId,
+            inboxId,
+            result?.draftRestored
+          );
+        },
+      });
+    } finally {
+      if (following && !undone && !disposed && sendAttemptId)
+        followSentThread(sendAttemptId);
+    }
   };
 
   const afterSend = (
     identity: PersistedEmailIdentity,
     inboxId: string | undefined,
-    /** The draft's thread id came from the server, not a handle this composer minted. */
-    savedThread: boolean
+    /** The thread handle the server had not confirmed when Send was pressed. */
+    unconfirmedThreadId: string | undefined
   ) => {
     const draftId = identity.draftId;
     const threadId = identity.threadId;
@@ -909,7 +932,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
       } catch (error) {
         props.notices.reportError(error);
       }
-    } else if (threadId && (savedThread || identity.persistence !== 'queued'))
+    } else if (
+      threadId &&
+      (identity.persistence !== 'queued' || threadId !== unconfirmedThreadId)
+    )
       showSentThread(threadId);
     else if (identity.sendAttemptId) followSentThread(identity.sendAttemptId);
   };
@@ -1122,7 +1148,11 @@ export function createEmailComposer(props: EmailComposerOptions) {
         setCompleted(true);
         session.dispatch({ type: 'reset' });
         setDraftGeneration(0);
-        afterSend(result, currentLink.id, identity.kind === 'server');
+        afterSend(
+          result,
+          currentLink.id,
+          identity.kind === 'handle' ? identity.threadId : undefined
+        );
         sent = true;
         sendUi.afterPaint();
       } finally {

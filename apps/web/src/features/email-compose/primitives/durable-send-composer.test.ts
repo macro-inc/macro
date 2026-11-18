@@ -748,7 +748,13 @@ function sendBeforeFirstServerSave() {
   });
   const host = { showThread: vi.fn(), showDraft: vi.fn() };
   const root = mountEmailComposer(context, host);
-  return { context, host, root, following, stopFollowing };
+  const undo = () =>
+    vi
+      .mocked(context.notices.feedback.success)
+      .mock.calls.find(([text]) => text === 'Sending…')?.[1]
+      ?.actions?.find(({ kind }) => kind === 'undo')
+      ?.onClick();
+  return { context, host, root, following, stopFollowing, undo };
 }
 
 it('opens a new email by the thread id the server gives its send', async () => {
@@ -772,27 +778,99 @@ it('opens a new email by the thread id the server gives its send', async () => {
   }
 });
 
-it.each(['undone', 'closed'] as const)(
-  'stops waiting for a new email’s thread once the send is %s',
-  async (outcome) => {
-    const { context, host, root, stopFollowing } = sendBeforeFirstServerSave();
-    try {
-      root.edit('Sent before autosave');
-      root.state.context.onSend();
-      await vi.advanceTimersByTimeAsync(0);
-      expect(stopFollowing).not.toHaveBeenCalled();
-
-      if (outcome === 'undone')
-        vi.mocked(context.notices.feedback.success)
-          .mock.calls.find(([text]) => text === 'Sending…')?.[1]
-          ?.actions?.find(({ kind }) => kind === 'undo')
-          ?.onClick();
-      else root.dispose();
-
-      expect(stopFollowing).toHaveBeenCalled();
-      expect(host.showThread).not.toHaveBeenCalled();
-    } finally {
-      root.dispose();
+it('stops waiting for a new email’s thread once the send is undone', async () => {
+  const { context, host, root, stopFollowing, undo } =
+    sendBeforeFirstServerSave();
+  vi.mocked(context.delivery.undoSend).mockImplementationOnce(
+    async ({ onUndone }) => {
+      await onUndone();
     }
+  );
+  try {
+    root.edit('Sent before autosave');
+    root.state.context.onSend();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(stopFollowing).not.toHaveBeenCalled();
+
+    undo();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(stopFollowing).toHaveBeenCalled();
+    expect(context.delivery.watchSentThread).toHaveBeenCalledOnce();
+    expect(host.showDraft).toHaveBeenCalled();
+    expect(host.showThread).not.toHaveBeenCalled();
+  } finally {
+    root.dispose();
   }
-);
+});
+
+it('still opens the thread when Undo comes too late to cancel the send', async () => {
+  const { context, host, root, following, undo } = sendBeforeFirstServerSave();
+  try {
+    root.edit('Sent before autosave');
+    root.state.context.onSend();
+    await vi.advanceTimersByTimeAsync(0);
+
+    undo();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(context.delivery.watchSentThread).toHaveBeenCalledTimes(2);
+    expect(host.showThread).not.toHaveBeenCalled();
+
+    following.found?.('server-thread');
+    expect(host.showThread).toHaveBeenCalledExactlyOnceWith('server-thread');
+  } finally {
+    root.dispose();
+  }
+});
+
+it('stops waiting for a new email’s thread when the composer closes', async () => {
+  const { root, stopFollowing } = sendBeforeFirstServerSave();
+  root.edit('Sent before autosave');
+  root.state.context.onSend();
+  await vi.advanceTimersByTimeAsync(0);
+
+  root.dispose();
+
+  expect(stopFollowing).toHaveBeenCalled();
+});
+
+it.each([
+  {
+    known: 'a draft the server already saved',
+    seed: {
+      draft: message('saved-draft', {
+        is_draft: true,
+        thread_db_id: 'server-thread',
+      }),
+    },
+  },
+  {
+    known: 'a draft whose server thread the outbox recorded',
+    seed: {},
+  },
+])('opens the thread of $known as soon as it is sent', async ({ seed }) => {
+  const context = queuedReplyContext();
+  vi.mocked(context.delivery.sendMessage).mockImplementationOnce(
+    async (input) => ({
+      draftId: input.clientHandles?.draftId,
+      threadId: 'server-thread',
+      inboxId: 'inbox',
+      sendAttemptId: 'attempt',
+      persistence: 'queued',
+    })
+  );
+  context.delivery.watchSentThread = vi.fn(() => () => {});
+  const host = { showThread: vi.fn(), showDraft: vi.fn() };
+  const root = mountEmailComposer(context, host, seed);
+  try {
+    root.edit('Saved draft');
+    root.state.context.onSend();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+    expect(host.showThread).toHaveBeenCalledExactlyOnceWith('server-thread');
+    expect(context.delivery.watchSentThread).not.toHaveBeenCalled();
+  } finally {
+    root.dispose();
+  }
+});
