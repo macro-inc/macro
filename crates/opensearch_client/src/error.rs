@@ -39,6 +39,7 @@ pub enum OpensearchOperation {
     UpdateCalendarEventProperties,
     BulkUpsertCallRecordSegments,
     UpdateCallRecordProperties,
+    ReadAgentSessionParent,
     ReconcileAgentSessionParent,
     ReconcileAgentSessionBulk,
     ReconcileAgentSessionPrune,

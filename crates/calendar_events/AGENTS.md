@@ -203,8 +203,8 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   changes that order. The cancelled row keeps its requests, as it keeps its
   grants, and a cancelled occurrence changes neither.
   An answer that changes the request reaches open clients through
-  `CalendarRefreshNotifier`, after it is stored (an acceptance's invite nudges
-  before that, too early to carry it): `calendar_changed` for the owner and
+  `CalendarRefreshNotifier`, after it is stored (the nudge for an acceptance's
+  invite can go out before that, too early to carry it): `calendar_changed` for the owner and
   delegates of the sharer's inbox, whose `refresh_calendar` refetches open
   request lists, and `join_request_answered` for the requester, who views the
   event through the share, so that signal names the event and never the
@@ -394,7 +394,10 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   through its `calendar_projection_outbox` row, whatever wrote them: the row's
   trigger raises the hint only when the event's typed `event_type` was or is
   out of office, a revision still waiting keeps the hint of every change it
-  carries, and `CalendarProjectionRelay` sends it. Outlook discovery refreshes
+  carries, and `CalendarProjectionRelay` sends it. An edit or deletion of an
+  Outlook event in Macro therefore sends no refresh of its own
+  (`persist_echo_as`, `announce_retirements`); the Google guest copies it aligns still hear it
+  from the mutation, since no relay announces them. Outlook discovery refreshes
   viewers only when a calendar was added, removed or changed, and raises the
   hint for the calendar changes Google's calendar list raises it for
   (`upsert_calendar_tx`).
