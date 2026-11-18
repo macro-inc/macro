@@ -47,21 +47,28 @@ export function createAgendaPaging(
   let anchor: ScrollAnchor | undefined;
   let anchoredScrollTop = 0;
   let observeWindows: (() => void) | undefined;
+  let initialPositioning = true;
 
   const captureAnchor = (element: HTMLElement) => {
     anchoredScrollTop = element.scrollTop;
     const day = visibleDay(element);
-    if (!day) {
+    const key = day?.dataset.agendaDay;
+    if (!day || !key) {
       anchor = undefined;
       return;
     }
+    const date = new Date(key);
     anchor = {
       top:
         day.getBoundingClientRect().top - element.getBoundingClientRect().top,
       measure: () => {
-        if (!element.contains(day)) return undefined;
+        // Query projection can replace the row, or merge it into an empty range.
+        // Resolve the logical date instead of retaining the detached element.
+        const current = findAgendaDayAnchor(element, date);
+        if (!current) return undefined;
         return (
-          day.getBoundingClientRect().top - element.getBoundingClientRect().top
+          current.getBoundingClientRect().top -
+          element.getBoundingClientRect().top
         );
       },
     };
@@ -70,10 +77,15 @@ export function createAgendaPaging(
   createEffect(
     on(viewport, (element) => {
       if (!element) return;
-      // Late query results change earlier days' heights. Keep the reader's day
-      // stable instead of letting the browser choose an unrelated text anchor.
+      // Keep initial navigation on its requested date until the reader takes over.
+      // Later resizes preserve that reader's logical day instead.
       const observer = new ResizeObserver(() => {
-        if (interaction || !anchor) return;
+        if (interaction) return;
+        if (initialPositioning) {
+          positionInitial();
+          return;
+        }
+        if (!anchor) return;
         restoreScrollAnchor(element, anchor);
         anchoredScrollTop = element.scrollTop;
         updateActiveWindow(element);
@@ -84,14 +96,24 @@ export function createAgendaPaging(
           observer.observe(window);
         }
       };
+      const releaseInitialPosition = () => {
+        initialPositioning = false;
+      };
+      element.addEventListener('pointerdown', releaseInitialPosition);
+      element.addEventListener('wheel', releaseInitialPosition, {
+        passive: true,
+      });
+      element.addEventListener('keydown', releaseInitialPosition);
       observeWindows();
       onCleanup(() => {
         observer.disconnect();
         observeWindows = undefined;
+        element.removeEventListener('pointerdown', releaseInitialPosition);
+        element.removeEventListener('wheel', releaseInitialPosition);
+        element.removeEventListener('keydown', releaseInitialPosition);
       });
     })
   );
-
   const updateActiveWindow = (element: HTMLElement) => {
     const window = visibleDay(element)?.closest<HTMLElement>(
       '[data-agenda-window]'
@@ -121,6 +143,7 @@ export function createAgendaPaging(
     const top =
       day.getBoundingClientRect().top - element.getBoundingClientRect().top;
     interaction = beginInteraction('calendar.agenda.load');
+    initialPositioning = false;
     setFirst((value) => value + direction);
     frame = requestAnimationFrame(() => {
       frame = undefined;
@@ -144,6 +167,19 @@ export function createAgendaPaging(
     if (!element) return;
     updateActiveWindow(element);
     if (interaction) return;
+    if (initialPositioning && element.scrollTop !== anchoredScrollTop) {
+      const maxScrollTop = Math.max(
+        0,
+        element.scrollHeight - element.clientHeight
+      );
+      // Layout shrinkage clamps scrollTop without reader intent. Other movement,
+      // including browser find and assistive navigation, hands control to the reader.
+      const clamped =
+        anchoredScrollTop > maxScrollTop &&
+        Math.abs(element.scrollTop - maxScrollTop) < 1;
+      if (!clamped) initialPositioning = false;
+    }
+    if (initialPositioning) return;
     if (element.scrollTop !== anchoredScrollTop) captureAnchor(element);
     if (element.scrollTop < 320) move(-1);
     else if (

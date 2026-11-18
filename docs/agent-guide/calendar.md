@@ -192,8 +192,11 @@ supported days in a partially covered window. Loading, failed, unsupported, and
 empty days remain distinct. Choosing an occurrence opens the same event details
 as the grid; event links retain occurrence identity and focus their list row.
 Today and date selection return to the requested day even when it is already
-selected. Changes that resize an Agenda window restore the visible day's offset;
-equal-height event moves between days can still shift it.
+selected. Changes that resize an Agenda window restore the visible logical day's
+offset, including when query results replace its row or merge it into an empty
+range. Initial positioning waits through late window loads until the reader
+scrolls or interacts; browser find and assistive navigation also take control.
+Equal-height event moves between days can still shift it.
 
 Opening a calendar row in Home clears its loaded reminder dots immediately;
 failed read writes restore them. Opening event details directly from the grid

@@ -127,6 +127,7 @@ host lives in `../block-calendar/`.
 - Keep Agenda on the navigation context, with five fourteen-day windows clipped
   to supported occurrence bounds; never pass Agenda to a FullCalendar API.
 - Keep the visible Agenda day anchored through late data and window rotation;
+  resolve its logical date again when query projection replaces or merges rows.
   `create-agenda-paging.ts` owns resize observation, and each explicit date request
   starts a fresh list even when its calendar day is unchanged. `create-agenda-grouping.ts`
   merges confirmed empty ranges across window boundaries without merging today;
