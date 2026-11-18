@@ -413,6 +413,14 @@ async fn sign_in_failures_carry_the_code_that_says_how_to_recover() {
         .await,
         (StatusCode::CONFLICT, Some("computer_busy".to_owned()))
     );
+    // A throttled computer is as busy as a held one: retry, not start over.
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::from(
+            harnesses::domain::ports::HarnessError::Throttled
+        ))
+        .await,
+        (StatusCode::CONFLICT, Some("computer_busy".to_owned()))
+    );
     assert_eq!(
         status_and_code(harnessd_error("timeout")).await,
         (StatusCode::GATEWAY_TIMEOUT, None)

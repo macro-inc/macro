@@ -530,9 +530,33 @@ impl From<HarnessError> for ComputerRouteError {
             HarnessError::NotFound(message) => Self::NotFound(message),
             HarnessError::Gone(message) => Self::Conflict(message),
             HarnessError::Unauthorized => Self::Forbidden,
-            HarnessError::Throttled => Self::Conflict("try again later".to_owned()),
+            HarnessError::Throttled => Self::ComputerBusy,
             error @ HarnessError::ComputerHarness => Self::Conflict(error.to_string()),
             HarnessError::Repo(error) => Self::Internal(rootcause::report!("{error:?}")),
+        }
+    }
+}
+
+impl ComputerRouteError {
+    /// What the web dialog reads to pick its way out, never the message.
+    /// Listed exhaustively, so a new variant has to choose.
+    fn recovery_code(&self) -> Option<&'static str> {
+        match self {
+            Self::InvalidCode => Some("invalid_code"),
+            Self::MalformedCode => Some("malformed_code"),
+            Self::SignInExpired => Some("sign_in_expired"),
+            Self::ComputerUnreachable(_) => Some("computer_unreachable"),
+            Self::ComputerBusy => Some("computer_busy"),
+            Self::BadRequest(_)
+            | Self::Forbidden
+            | Self::RolloutDisabled
+            | Self::Unavailable(_)
+            | Self::NotFound(_)
+            | Self::Conflict(_)
+            | Self::Failed(_)
+            | Self::Timeout
+            | Self::UntrustedSignInUrl
+            | Self::Internal(_) => None,
         }
     }
 }
@@ -557,16 +581,7 @@ impl IntoResponse for ComputerRouteError {
             tracing::error!(error = ?self, "computer route failed");
         }
         let mut body = serde_json::json!({ "message": self.to_string() });
-        // The web dialog picks its way out from this code, not the message.
-        let code = match &self {
-            Self::InvalidCode => Some("invalid_code"),
-            Self::MalformedCode => Some("malformed_code"),
-            Self::SignInExpired => Some("sign_in_expired"),
-            Self::ComputerUnreachable(_) => Some("computer_unreachable"),
-            Self::ComputerBusy => Some("computer_busy"),
-            _ => None,
-        };
-        if let Some(code) = code {
+        if let Some(code) = self.recovery_code() {
             body["code"] = serde_json::json!(code);
         }
         (status, Json(body)).into_response()
