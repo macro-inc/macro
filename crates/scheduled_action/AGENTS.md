@@ -423,7 +423,9 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   which builds its own `ScheduledAction`. `appearance` is the exception: an
   agent's pick, written through `ScheduledActionRepo::set_appearance`, not a
   stored configuration field. It is serialized only when set, because a
-  replica built before it rejects the key in a kept check or draft.
+  replica built before it rejects the key in a kept check or draft. A kept
+  routine suggestion drops it (`decode::drafted_pick`): suggestions outlive a
+  rollback, and one unreadable row fails the person's whole list.
 - A `once` trigger (stored as `trigger_type = 'once'`, or inside `multiple`)
   runs a single time at `at`, kept to whole seconds. A past `at` is due as soon
   as it is saved, unless the stored routine already consumed it (its
