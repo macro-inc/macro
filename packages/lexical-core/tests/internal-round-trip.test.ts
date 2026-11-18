@@ -225,6 +225,30 @@ describe('internal markdown round trip of stored documents', () => {
     ).toBe(markdown);
   });
 
+  it('keeps a line that opens with a display equation and ends with another', () => {
+    const markdown =
+      '<m-katex-equation>{"equation":"x","inline":false}</m-katex-equation> = <m-katex-equation>{"equation":"y","inline":true}</m-katex-equation>';
+
+    expect(
+      nodesOf(markdown, $isEquationNode).map((equation) =>
+        equation.getEquation()
+      )
+    ).toEqual(['x', 'y']);
+    expect(
+      exportState(importMarkdown(markdown).getEditorState().toJSON())
+    ).toBe(markdown);
+  });
+
+  it('imports a spaced display equation tag to the top level', () => {
+    const editor = importMarkdown(
+      '<m-katex-equation>{"equation": "x^2", "inline": false}</m-katex-equation>'
+    );
+    editor.read(() => {
+      const equation = $getRoot().getFirstChild();
+      expect($isEquationNode(equation)).toBe(true);
+    });
+  });
+
   it('keeps a stored top-level display equation', () => {
     const markdown = exportState(
       stateOf([
