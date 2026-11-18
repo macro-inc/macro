@@ -122,7 +122,7 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
 function splitBackFallback(content: SplitContent): SplitContent | undefined {
   if (content.type === 'agent' || (isTouchDevice() && content.type === 'chat'))
     return { type: 'component', id: 'agents' };
-  if (isMobile()) return projectBackFallback(content);
+  if (isTouchDevice()) return projectBackFallback(content);
 }
 
 export function SplitBackButton() {
@@ -373,7 +373,7 @@ export function SplitHeader(props: {
   const hideMobileBack = () => {
     const content = panel.handle.content();
     const project = projectLocation(content);
-    if (isMobile() && project && project.kind !== 'list') return false;
+    if (isTouchDevice() && project && project.kind !== 'list') return false;
     return (
       isListViewID(content.id) ||
       (content.type === 'component' &&

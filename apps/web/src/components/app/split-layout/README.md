@@ -63,7 +63,9 @@ Android system Back, and edge-swipe completion. Phone project details are one
 page: Back skips obsolete same-project Overview/Tasks entries and returns to the
 previous destination, preserving its scope, filters, and saved view. Direct links
 without another destination replace the current entry with Projects. The browser
-phone header uses the same operation. Detect project detail from route metadata,
+phone header uses the same operation. Touch tablets also keep a Projects fallback
+when a direct project link has no history; existing tablet section history stays
+unchanged. Detect project detail from route metadata,
 not the shared `tasks` component id, so the list-only rule does not hide its caret.
 A nested project task returns to its owning project before closing a pane,
 including direct task links; leaving that project skips its already-closed tasks.

@@ -1243,8 +1243,9 @@ sticky group headers are unchanged.
 One floating Task menu stays available at the bottom right, including at rest
 and in empty projects. No inline Add task remains on phones; empty states keep
 their explanation and Documentation link. The list reserves space below its last
-row for the floating chrome. Back returns to the previous destination or Projects for a direct link, skipping
-obsolete same-project section entries. Check 390px with a long name, expanded
+row for the floating chrome. Back returns to the previous destination or Projects
+for a direct link on both phones and touch tablets. Phones skip obsolete
+same-project section entries; tablets retain their section history. Check 390px with a long name, expanded
 description, grouped task scrolling, Back/Forward, Share, and Details. For a task
 opened inside a project's route, the header caret, Android Back, and edge swipe
 return to that project, including direct task links. Separately opened task panes
