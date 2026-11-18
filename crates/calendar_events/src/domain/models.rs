@@ -1952,11 +1952,14 @@ pub struct GoogleBackfillRunReport {
     pub team_ooo_changed: bool,
     /// Events written through the ingestion upsert this run.
     pub events_upserted: usize,
+    /// Those upserts that created or rewrote a row. A provider echo of what
+    /// Macro already stored, such as the sync after a Macro write, is not one.
+    pub events_changed: usize,
     /// Cancellation tombstones the change feed reported this run.
     pub cancellations_observed: usize,
     /// Events removed or rewritten because a source they relied on was
-    /// retired: unobserved by a full snapshot, or on a calendar the account
-    /// no longer lists.
+    /// retired: cancelled by a tombstone, unobserved by a full snapshot, or on
+    /// a calendar the account no longer lists.
     pub events_retired: usize,
     /// Guest copies in other inboxes whose guest policy changed to follow an
     /// organizer's copy this run wrote; their viewers need a refresh too.
@@ -1965,12 +1968,11 @@ pub struct GoogleBackfillRunReport {
 
 impl GoogleBackfillRunReport {
     /// Whether the run plausibly changed the local projection. Quiet
-    /// token-only polls report nothing and skip client notifications.
+    /// token-only polls report nothing and skip client notifications, and so
+    /// does a run that only read back what Macro had already stored: an
+    /// unchanged upsert, or a tombstone for a source already gone.
     pub fn changed(&self) -> bool {
-        self.team_ooo_changed
-            || self.events_upserted > 0
-            || self.cancellations_observed > 0
-            || self.events_retired > 0
+        self.team_ooo_changed || self.events_changed > 0 || self.events_retired > 0
     }
 }
 

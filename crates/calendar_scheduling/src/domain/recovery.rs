@@ -67,6 +67,41 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             }),
         };
         if let Err(error) = result {
+            // A refusal is decided before anything reaches the calendar, so a
+            // move refused on its first attempt left the event where it was:
+            // put the booking back at that time and release the time it asked
+            // for. A later attempt follows one whose outcome was never
+            // recorded and may have moved the event, so it is only abandoned.
+            if let (
+                Error::CalendarRejected,
+                CalendarOperationKind::Move {
+                    status,
+                    original_start,
+                },
+                0,
+            ) = (&error, &operation.kind, operation.attempt)
+            {
+                let pending = record.clone();
+                let length = record.booking.ends_at - record.booking.starts_at;
+                record.booking.starts_at = *original_start;
+                record.booking.ends_at = *original_start + length;
+                record.busy_start = record.booking.starts_at
+                    - Duration::minutes(i64::from(record.event.before_minutes));
+                record.busy_end = record.booking.ends_at
+                    + Duration::minutes(i64::from(record.event.after_minutes));
+                record.booking.status = *status;
+                tracing::warn!(booking_id = %record.booking.id, error = ?error, "scheduling move refused; booking kept at its original time");
+                // Only a saved revert answers the caller with the refusal; an
+                // unsaved one returns the move storage still holds.
+                return match self
+                    .repository
+                    .update_booking(record, BookingStatus::Processing)
+                    .await
+                {
+                    Ok(_) => Err(Error::CalendarRejected),
+                    Err(error) => self.unsaved_completion(pending, error).await,
+                };
+            }
             record.booking.status = BookingStatus::Failed;
             // A failure that may still clear is retried until the meeting
             // starts: an event in the past is not worth creating or moving.
@@ -90,14 +125,25 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         self.persist_completion(record).await
     }
 
-    async fn persist_completion(&self, mut record: BookingRecord) -> Result<BookingRecord, Error> {
+    async fn persist_completion(&self, record: BookingRecord) -> Result<BookingRecord, Error> {
         match self
             .repository
             .update_booking(record.clone(), BookingStatus::Processing)
             .await
         {
             Ok(saved) => Ok(saved),
-            Err(Error::Conflict) => {
+            Err(error) => self.unsaved_completion(record, error).await,
+        }
+    }
+    /// The receipt for a completion that was not saved: the stored row when a
+    /// later writer owns it, otherwise `record` still processing.
+    async fn unsaved_completion(
+        &self,
+        mut record: BookingRecord,
+        error: Error,
+    ) -> Result<BookingRecord, Error> {
+        match error {
+            Error::Conflict => {
                 // A recovery worker or later edit owns the revision now. The original
                 // reservation still exists, so this is not a rejected booking attempt.
                 if let Ok(Some(current)) = self.repository.booking(record.booking.id).await {
@@ -106,14 +152,14 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 record.booking.status = BookingStatus::Processing;
                 Ok(record)
             }
-            Err(Error::Unavailable) => {
+            Error::Unavailable => {
                 // The reservation and intent predate the provider call. Keep its private receipt
                 // available even when the completion write is uncertain; recovery owns convergence.
                 tracing::error!(booking_id = %record.booking.id, "scheduling completion persistence unavailable; intent retained");
                 record.booking.status = BookingStatus::Processing;
                 Ok(record)
             }
-            Err(error) => Err(error),
+            error => Err(error),
         }
     }
 }

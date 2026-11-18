@@ -203,8 +203,8 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   changes that order. The cancelled row keeps its requests, as it keeps its
   grants, and a cancelled occurrence changes neither.
   An answer that changes the request reaches open clients through
-  `CalendarRefreshNotifier`, after it is stored (an acceptance's invite nudges
-  before that, too early to carry it): `calendar_changed` for the owner and
+  `CalendarRefreshNotifier`, after it is stored (the nudge for an acceptance's
+  invite can go out before that, too early to carry it): `calendar_changed` for the owner and
   delegates of the sharer's inbox, whose `refresh_calendar` refetches open
   request lists, and `join_request_answered` for the requester, who views the
   event through the share, so that signal names the event and never the
@@ -394,7 +394,10 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   through its `calendar_projection_outbox` row, whatever wrote them: the row's
   trigger raises the hint only when the event's typed `event_type` was or is
   out of office, a revision still waiting keeps the hint of every change it
-  carries, and `CalendarProjectionRelay` sends it. Outlook discovery refreshes
+  carries, and `CalendarProjectionRelay` sends it. An edit or deletion of an
+  Outlook event in Macro therefore sends no refresh of its own
+  (`persist_echo_as`, `announce_retirements`); the Google guest copies it aligns still hear it
+  from the mutation, since no relay announces them. Outlook discovery refreshes
   viewers only when a calendar was added, removed or changed, and raises the
   hint for the calendar changes Google's calendar list raises it for
   (`upsert_calendar_tx`).
@@ -463,7 +466,16 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD` failures) appears or is reworded
   (`failure_changes_sync_error_badge`) and when the round that clears it
   commits, never on a routine round (Outlook polls every two minutes).
-  Neither nudges open clients for it, so a tab sees it on its next delta.
+  Outlook also nudges open clients at those same moments
+  (`fail_outlook_calendar` reports a shown or reworded badge,
+  `OutlookCheckpoint::RoundFinished` a cleared one), with the out-of-office
+  hint raised as for any coverage failure. Teammates' rows already move at the
+  first failure, below the threshold, since the overlay leaves out an account
+  or calendar with a stored error; their clients catch that up within the
+  60-second team cache. A repeat of the shown failure stays quiet, so an
+  outage does not refresh every client on every retry. Google nudges after a
+  run in which a calendar failed on its own (`report.team_ooo_changed`), not
+  on the badge itself, and not when the badge clears.
   Outlook logged none before November 2026;
   `20261105002046_log_outlook_calendars_for_their_sync_error.sql` logs every
   visible Outlook calendar once so caches that missed a change refetch it.

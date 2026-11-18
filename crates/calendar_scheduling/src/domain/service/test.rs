@@ -202,6 +202,7 @@ struct Calendar {
     create_attempts: AtomicUsize,
     reject_creates: AtomicBool,
     reject_cancels: AtomicBool,
+    reject_moves: AtomicBool,
     fail_creates: AtomicBool,
     lose_create_response: AtomicBool,
     lose_move_response: AtomicBool,
@@ -254,6 +255,9 @@ impl Calendars for Arc<Calendar> {
         Ok(())
     }
     async fn reschedule(&self, _: &BookingRecord) -> Result<(), Error> {
+        if self.reject_moves.load(Ordering::SeqCst) {
+            return Err(Error::CalendarRejected);
+        }
         if self.lose_move_response.swap(false, Ordering::SeqCst) {
             return Err(Error::CalendarUnavailable);
         }
@@ -1099,6 +1103,104 @@ async fn a_create_that_keeps_failing_retries_until_the_meeting_starts() {
     assert!(!service.recover_once().await.unwrap());
     // The booking request plus one provider call per claim.
     assert_eq!(calendars.create_attempts.load(Ordering::SeqCst), 1 + 41);
+}
+
+/// A move the host's calendar refuses never reached it, so the booking keeps
+/// its original time and status and the time it asked for is released.
+#[tokio::test]
+async fn a_refused_move_keeps_the_booking_at_its_original_time() {
+    let store = Arc::new(Memory::default());
+    let calendars = Arc::new(Calendar::default());
+    let service = TestService::new(store.clone(), calendars.clone(), Members);
+    let p = service.save("admin", None, profile(None)).await.unwrap();
+    let r = service
+        .book(p.id, p.event_types[0].id, request())
+        .await
+        .unwrap();
+    assert_eq!(r.booking.status, BookingStatus::Confirmed);
+    calendars.reject_moves.store(true, Ordering::SeqCst);
+    let next = r.booking.starts_at + Duration::hours(1);
+    assert!(matches!(
+        service.reschedule(r.booking.id, r.token, next).await,
+        Err(Error::CalendarRejected)
+    ));
+    let kept = service.receipt(r.booking.id, r.token).await.unwrap();
+    assert_eq!(kept.booking.status, BookingStatus::Confirmed);
+    assert_eq!(kept.booking.starts_at, r.booking.starts_at);
+    assert_eq!(kept.booking.ends_at, r.booking.ends_at);
+    assert_eq!(kept.busy_start, r.busy_start);
+    assert_eq!(kept.busy_end, r.busy_end);
+    assert_eq!(kept.booking.reschedule_count, 0);
+    make_due(&store, r.booking.id);
+    assert!(!service.recover_once().await.unwrap());
+    // Once the calendar accepts, the booking moves as usual.
+    calendars.reject_moves.store(false, Ordering::SeqCst);
+    let moved = service
+        .reschedule(r.booking.id, r.token, next)
+        .await
+        .unwrap();
+    assert_eq!(moved.booking.starts_at, next);
+    assert_eq!(moved.booking.reschedule_count, 1);
+}
+
+/// A move whose first attempt failed without a recorded outcome may have
+/// reached the calendar, so a later refusal must not put the booking back:
+/// it stays failed at the requested time, holding both intervals.
+#[tokio::test]
+async fn a_move_refused_after_an_uncertain_attempt_is_not_reverted() {
+    let store = Arc::new(Memory::default());
+    let calendars = Arc::new(Calendar::default());
+    let service = TestService::new(store.clone(), calendars.clone(), Members);
+    let p = service.save("admin", None, profile(None)).await.unwrap();
+    let r = service
+        .book(p.id, p.event_types[0].id, request())
+        .await
+        .unwrap();
+    calendars.lose_move_response.store(true, Ordering::SeqCst);
+    let next = r.booking.starts_at + Duration::hours(1);
+    let failed = service
+        .reschedule(r.booking.id, r.token, next)
+        .await
+        .unwrap();
+    assert_eq!(failed.booking.status, BookingStatus::Failed);
+    calendars.reject_moves.store(true, Ordering::SeqCst);
+    make_due(&store, r.booking.id);
+    assert!(service.recover_once().await.unwrap());
+    let stored = store.booking(r.booking.id).await.unwrap().unwrap();
+    assert_eq!(stored.booking.status, BookingStatus::Failed);
+    assert_eq!(stored.booking.starts_at, next);
+    assert!(
+        stored
+            .operation
+            .as_ref()
+            .is_some_and(|operation| operation.abandoned_at.is_some())
+    );
+}
+
+/// When a refused move's revert cannot be saved, recovery still owns the
+/// move, so the caller gets the processing receipt rather than a refusal.
+#[tokio::test]
+async fn a_refused_move_whose_revert_is_not_saved_returns_the_receipt() {
+    let store = Arc::new(Memory::default());
+    let calendars = Arc::new(Calendar::default());
+    let service = TestService::new(store.clone(), calendars.clone(), Members);
+    let p = service.save("admin", None, profile(None)).await.unwrap();
+    let r = service
+        .book(p.id, p.event_types[0].id, request())
+        .await
+        .unwrap();
+    calendars.reject_moves.store(true, Ordering::SeqCst);
+    store.fail_completion.store(true, Ordering::SeqCst);
+    let next = r.booking.starts_at + Duration::hours(1);
+    let receipt = service
+        .reschedule(r.booking.id, r.token, next)
+        .await
+        .unwrap();
+    assert_eq!(receipt.booking.status, BookingStatus::Processing);
+    let stored = store.booking(r.booking.id).await.unwrap().unwrap();
+    assert_eq!(stored.booking.starts_at, next);
+    assert_eq!(receipt.booking.starts_at, stored.booking.starts_at);
+    assert_eq!(receipt.booking.ends_at, stored.booking.ends_at);
 }
 
 #[tokio::test]

@@ -58,7 +58,13 @@ The settings signature browser suite also exercises real channel/link observers
 and the contact context publisher across account switches with delayed responses
 (`account-sources.browser.e2e.ts`). `queries/contacts/context-source.ts` reuses
 those keyed queries through ownership-tagged selectors; gate missing inputs rather
-than publishing an empty snapshot. `context-publisher.ts` caps pending IDs and
+than publishing an empty snapshot. Its cached-channel overlay rereads the cache only
+for `dm` changes while a contact window is enabled in any tab, and once when one
+opens after changes it missed: channel rows never reach contact facts, and every
+tab ranks from the leader's publication. `createContactDirectoryWindow` holds
+`openContactReader` while enabled, from its first settled page on, so the catch-up
+never races the picker's first rows; `queries/contacts/readers.ts` shares that
+across tabs, and a tab that vanishes stays counted as open. `context-publisher.ts` caps pending IDs and
 write batches at 500, replaces overflowing/uncertain snapshots with a new epoch,
 and never writes directory names or membership. `useContactContextPublisher`
 shares Soup's leader, rollout and generation lifecycle; do not add another leader.
@@ -266,6 +272,15 @@ regression renders the real row and float host with a stand-in for the task
 filters (the real phone filter trigger, one button on desktop) and for the
 Tasks view's pill:
 `bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
+
+The Reviews list header (the real `ReviewsListHeader`, status tabs, New and
+Search) has a backend-free regression for making room as the pane narrows:
+labelled tabs while everything fits, icon-only tabs and then no scope name only
+when the actions would overflow, each step undone once there is room again, an
+open search taking the tab labels, icon tabs keeping their names, tooltips
+and distinct icons, keyboard focus staying on a status as the tabs switch, and
+list/board switches:
+`bunx playwright test --config src/features/reviews-view/browser-test/playwright.config.ts`.
 
 Search facet chip sizing, text alignment, and filter interactions have a backend-free
 regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
@@ -1826,7 +1841,12 @@ you, other people, then agents with Macro first. @ menus pass `mention: true`, w
 Macro above everyone and keeps it first while its name starts with the query. While
 searching, rank with `NAME_MATCH_RANKING`; an agent needs the typed words, not scattered
 letters, and never ranks above a person who matches as well. Cap a list's people (`capPeople`), never its agents, and
-don't boost bots in a menu's search score.
+don't boost bots in a menu's search score. Until the contact directory answers for the
+first time after it opens, a directory-backed @ menu lists only the rows that lead every
+person (Macro) and keeps its People preview's rows as loading rows (`holdsRows`); phones list
+nothing below them yet. The hold ends at `UNANSWERED_SEARCH_LIMIT_MS`, when Cmd+K stops
+saying "Searching…". The menu reads a failed people window again once by itself, holding
+the rows meanwhile, and offers Retry only when that read fails too (`peopleFailed`).
 
 ### Tag picker selection and creation
 

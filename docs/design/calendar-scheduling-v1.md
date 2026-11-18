@@ -110,14 +110,17 @@ start time has passed, since an event in the past is not worth creating or movin
 abandoned. The booking stays failed, its due timestamp is cleared, and it is never claimed again. Completed claims
 clear their due timestamp. An abandoned booking keeps its reservations; recovery never interprets
 lost permission as a successful deletion. Cancelling it, which a failed booking otherwise refuses
-while recovery owns it, releases them once the calendar accepts the cancellation. An abandoned move
-stays at the requested time with both intervals held. Its calendar event may be at either time: a
-refusal leaves the original, but a move retried until its start time may have landed before its
-response was lost, so reconcile it against the host's calendar.
+while recovery owns it, releases them once the calendar accepts the cancellation. A move the calendar refuses
+on its first attempt never reached it, so the booking returns to its original time and status, its host
+reservation shrinks back to the original interval, and the reschedule request answers 422 once that is
+saved. A move refused after an earlier attempt that left no recorded outcome, or that keeps failing until
+its new start time, is abandoned at the requested time with both intervals held; its calendar event may
+be at either time, since an earlier attempt may have landed before its response was lost, so reconcile
+it against the host's calendar.
 
 Use the calendar-service logs for `scheduling operation queued for recovery`, `scheduling operation
-recovered`, `scheduling operation abandoned; booking left failed`, and `scheduling completion
-persistence unavailable`. Alert on abandoned operations, persistence errors and sustained scheduling
+recovered`, `scheduling operation abandoned; booking left failed`, `scheduling move refused; booking
+kept at its original time`, and `scheduling completion persistence unavailable`. Alert on abandoned operations, persistence errors and sustained scheduling
 5xx. During
 rollout, also check overdue rows so a stopped worker cannot hide behind missing logs:
 

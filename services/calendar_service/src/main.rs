@@ -209,7 +209,13 @@ async fn main() -> anyhow::Result<()> {
         redis_conn.clone(),
         Arc::new(auth_service_client.clone()),
     )));
-    if config.calendar_sync_enabled && config.outlook_sync_enabled {
+    let outlook_loops = config.outlook_loops();
+    tracing::info!(
+        outlook_sync = outlook_loops.sync,
+        outlook_projection_relay = outlook_loops.relay,
+        "starting the Outlook calendar loops this task runs"
+    );
+    if outlook_loops.sync {
         let sync = calendar_events::domain::outlook::OutlookCalendarSync::new(
             PgCalendarRepository::new(db.clone()),
             outlook_provider.clone(),
@@ -245,6 +251,8 @@ async fn main() -> anyhow::Result<()> {
                 let _ = sync.report_queue_depth().await;
             }
         });
+    }
+    if outlook_loops.relay {
         let relay = calendar_events::domain::outlook::CalendarProjectionRelay::new(
             PgCalendarRepository::new(db.clone()),
             macro_event_broker.clone(),

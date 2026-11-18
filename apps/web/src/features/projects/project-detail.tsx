@@ -1,4 +1,3 @@
-import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
 import { useTouchTopBarsFloat } from '@app/components/view-shell';
 import {
   makeCopyEntityIdAction,
@@ -66,6 +65,7 @@ import {
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
 import { useProjectShareModal } from './project-share';
+import { ProjectTopBar } from './project-top-bar';
 import { ProjectUnavailable } from './project-unavailable';
 import { Projects } from './projects';
 import { ProjectWorkspace } from './views/project-workspace';
@@ -280,7 +280,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
           />
         )}
       </Show>
-      <EntityDetailTopBar
+      <ProjectTopBar
         titleMenu={
           <Show when={source.project()}>
             {(project) => (
@@ -321,18 +321,19 @@ function ProjectDetailHost(props: ProjectDetailProps) {
             onChange={section}
           />
         )}
-      >
-        <Show when={source.project()}>
-          {(project) => (
-            <ShareTrigger
-              onClick={openShare}
-              id={project().id}
-              blockType="initiative"
-              hotkeyScope={panel.splitHotkeyScope}
-            />
-          )}
-        </Show>
-      </EntityDetailTopBar>
+        share={
+          <Show when={source.project()}>
+            {(project) => (
+              <ShareTrigger
+                onClick={openShare}
+                id={project().id}
+                blockType="initiative"
+                hotkeyScope={panel.splitHotkeyScope}
+              />
+            )}
+          </Show>
+        }
+      />
       <div
         class="relative min-h-0 min-w-0 flex-1"
         classList={{ 'touch:[--mobile-content-inset-top:0px]': !barFloats() }}

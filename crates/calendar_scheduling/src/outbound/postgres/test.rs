@@ -1,5 +1,5 @@
 use super::*;
-use chrono::Duration;
+use chrono::{Duration, SubsecRound};
 
 /// CI clones every test database from a `template1` that already holds the macrodb
 /// schema (`just setup_test_template`). These tests build their own schema, so they
@@ -262,6 +262,71 @@ async fn recovery_claims_are_exclusive_and_completion_is_fenced(pool: PgPool) {
     repo.update_booking(claimed, BookingStatus::Processing)
         .await
         .unwrap();
+}
+
+#[sqlx::test(migrations = false)]
+async fn a_reverted_move_restores_its_time_and_releases_the_new_interval(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PostgresRepository::new(pool.clone());
+    let p = repo.save_profile(owned()).await.unwrap();
+    let start = Utc::now().trunc_subsecs(0) + Duration::days(2);
+    let original = booking(p.id, start);
+    repo.reserve(original.clone(), None, start, start + Duration::days(1))
+        .await
+        .unwrap();
+    let mut moving = original.clone();
+    moving.booking.starts_at += Duration::hours(2);
+    moving.booking.ends_at += Duration::hours(2);
+    moving.busy_start += Duration::hours(2);
+    moving.busy_end += Duration::hours(2);
+    moving.operation = Some(CalendarOperation::new(CalendarOperationKind::Move {
+        status: original.booking.status,
+        original_start: start,
+    }));
+    moving.booking.status = BookingStatus::Processing;
+    let moved = repo
+        .move_booking(
+            moving,
+            original.booking.status,
+            start,
+            start + Duration::days(1),
+        )
+        .await
+        .unwrap();
+    let mut reverted = moved;
+    reverted.booking.starts_at = original.booking.starts_at;
+    reverted.booking.ends_at = original.booking.ends_at;
+    reverted.busy_start = original.busy_start;
+    reverted.busy_end = original.busy_end;
+    reverted.booking.status = original.booking.status;
+    let id = reverted.booking.id;
+    repo.update_booking(reverted, BookingStatus::Processing)
+        .await
+        .unwrap();
+    let row = sqlx::query!(
+        "SELECT starts_at, ends_at, recovery_at FROM scheduling_booking WHERE id = $1",
+        id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.starts_at, original.booking.starts_at);
+    assert_eq!(row.ends_at, original.booking.ends_at);
+    assert!(row.recovery_at.is_none());
+    // The time the move asked for is free again; the original is still held.
+    repo.reserve(
+        booking(p.id, start + Duration::hours(2)),
+        None,
+        start,
+        start + Duration::days(1),
+    )
+    .await
+    .unwrap();
+    assert!(matches!(
+        repo.reserve(booking(p.id, start), None, start, start + Duration::days(1))
+            .await,
+        Err(Error::Conflict)
+    ));
 }
 
 #[sqlx::test(migrations = false)]
