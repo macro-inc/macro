@@ -10,7 +10,7 @@ import { isTeamAgentComputer } from '@queries/harnesses/runnable';
 import type { ClaudeMode } from '@service-agent-harness/generated/schemas';
 import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import { ActionDialogShell, Button, Dialog } from '@ui';
-import { createEffect, createSignal, on, Show } from 'solid-js';
+import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ComputerPurchaseStep } from '../components/computer-purchase-dialog';
 import {
@@ -18,7 +18,10 @@ import {
   offersFailure,
 } from '../core/computer-display';
 import { useBuyComputer } from '../primitives/buy-computer';
-import { showComputerSetupNotice } from '../primitives/setup-notice';
+import {
+  holdSetupNotices,
+  showComputerSetupNotice,
+} from '../primitives/setup-notice';
 import { useTeamComputers } from '../primitives/team-computers';
 import {
   ComputerSetupSteps,
@@ -236,6 +239,12 @@ export function ComputerBuyFlow(props: {
     close();
     settings.openSettings('Billing');
   };
+
+  // The open dialog shows this computer's progress; no notice says it again.
+  createEffect(() => {
+    const id = computerId();
+    if (visible() && id) onCleanup(holdSetupNotices(id));
+  });
 
   // The link the user was waiting for is ready: say so, once.
   createEffect(() => {

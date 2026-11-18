@@ -1,5 +1,8 @@
+import { queryClient } from '@queries/client';
+import { computerKeys } from '@queries/computers/keys';
+import type { ComputerStatus } from '@service-auth/computers';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { showComputerSetupNotice } from './setup-notice';
+import { holdSetupNotices, showComputerSetupNotice } from './setup-notice';
 
 type Options = {
   subtext?: string;
@@ -26,6 +29,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 beforeEach(() => {
+  queryClient.removeQueries({ queryKey: computerKeys.list.queryKey });
   for (const notice of mocks.shown) notice.options.onDismiss?.();
   mocks.shown = [];
   mocks.dismissed = [];
@@ -89,4 +93,47 @@ it('shows one notice per computer and outcome while it is up', () => {
   mocks.shown[0]?.options.onDismiss?.();
   showComputerSetupNotice(ready, vi.fn());
   expect(mocks.shown).toHaveLength(2);
+});
+
+it('shows no ready notice while the computer is in its buy dialog, and takes one down', () => {
+  const ready = {
+    computerId: 'computer-1',
+    harnessId: 'harness-1',
+    computerName: "Maya's Agent Box",
+    outcome: { kind: 'ready' as const },
+  };
+  showComputerSetupNotice(ready, vi.fn());
+  expect(mocks.shown).toHaveLength(1);
+
+  const release = holdSetupNotices('computer-1');
+  expect(mocks.dismissed).toEqual([1]);
+  showComputerSetupNotice(ready, vi.fn());
+  expect(mocks.shown).toHaveLength(1);
+  // A failure is still said.
+  showComputerSetupNotice(
+    { ...ready, outcome: { kind: 'failed', failureReason: 'Disk full.' } },
+    vi.fn()
+  );
+  expect(mocks.shown).toHaveLength(2);
+
+  release();
+  showComputerSetupNotice(ready, vi.fn());
+  expect(mocks.shown).toHaveLength(3);
+});
+
+it('shows no ready notice for a computer whose setup is complete', () => {
+  queryClient.setQueryData<Partial<ComputerStatus>[]>(
+    computerKeys.list.queryKey,
+    [{ id: 'computer-1', setupCompletedAt: '2026-11-18T18:38:00Z' }]
+  );
+  showComputerSetupNotice(
+    {
+      computerId: 'computer-1',
+      harnessId: 'harness-1',
+      computerName: "Maya's Agent Box",
+      outcome: { kind: 'ready' },
+    },
+    vi.fn()
+  );
+  expect(mocks.shown).toHaveLength(0);
 });
