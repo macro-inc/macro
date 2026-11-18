@@ -314,8 +314,12 @@ impl DenoRunner {
         let stdin = child.stdin.take().expect("piped child stdin");
         let stdout = child.stdout.take().expect("piped child stdout");
         let stderr = child.stderr.take().expect("piped child stderr");
+        // Kept outside the run so a run the deadline, a cancellation or a
+        // protocol error cuts short still records how its child ended.
+        let mut usage = exit::ProcessUsage::default();
+        let mut answered = false;
+        let mut exited_by_itself = false;
         let execution = async {
-            let mut usage = exit::ProcessUsage::default();
             let bridged = bridge(
                 &job.environment,
                 stdin,
@@ -331,23 +335,18 @@ impl DenoRunner {
                 tokio::select! {
                     candidate = &mut bridged => break candidate?,
                     _ = samples.tick() => if let Some(pid) = pid {
-                        usage.sample(pid).await;
+                        usage.sample(pid);
                     },
                 }
             };
+            answered = candidate.is_some();
             // Both streams have closed, so the process is exiting; its CPU
             // time stays readable until it is reaped.
             if let Some(pid) = pid {
-                usage.sample(pid).await;
+                usage.sample(pid);
             }
             let status = child.wait().await.map_err(internal)?;
-            exit::ProcessExit {
-                status,
-                wall: spawned.elapsed(),
-                usage,
-                answered: candidate.is_some(),
-            }
-            .record(&tracing::Span::current());
+            exited_by_itself = true;
             if std::os::unix::process::ExitStatusExt::signal(&status)
                 == Some(rustix::process::Signal::XCPU.as_raw())
             {
@@ -373,7 +372,19 @@ impl DenoRunner {
             _ = sleep_until(job.deadline) => Ok(Outcome::TimedOut),
             result = execution => result,
         };
-        reap(&mut child).await;
+        if !exited_by_itself && let Some(pid) = pid {
+            usage.sample(pid);
+        }
+        if let Some(status) = reap(&mut child).await {
+            exit::ProcessExit {
+                status,
+                wall: spawned.elapsed(),
+                usage,
+                answered,
+                killed: !exited_by_itself,
+            }
+            .record(&tracing::Span::current());
+        }
         // Drop the directory only after the process is reaped.
         drop(directory);
         outcome
@@ -441,9 +452,10 @@ fn limit(child: &Child, limits: &Limits) -> Result<(), ExecutionFailure> {
 /// Niceness of background programs: below the host, above idle work.
 const BACKGROUND_NICENESS: i32 = 10;
 
-async fn reap(child: &mut Child) {
+/// Kill `child` if it still runs and wait for it; its exit status, once known.
+async fn reap(child: &mut Child) -> Option<std::process::ExitStatus> {
     let _ = child.start_kill();
-    let _ = child.wait().await;
+    child.wait().await.ok()
 }
 
 fn internal(_error: impl std::fmt::Display) -> ExecutionFailure {

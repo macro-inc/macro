@@ -49,6 +49,10 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for Captured {
 
 /// Run `script` in `sh` to its end and record its exit as a Deno child's.
 async fn record_exit(script: &str, answered: bool) -> Captured {
+    record_exit_of(script, answered, false).await
+}
+
+async fn record_exit_of(script: &str, answered: bool, killed: bool) -> Captured {
     let status = Command::new("sh")
         .args(["-c", script])
         .status()
@@ -64,6 +68,7 @@ async fn record_exit(script: &str, answered: bool) -> Captured {
         process.wall_ms = tracing::field::Empty,
         process.cpu_ms = tracing::field::Empty,
         process.peak_rss_kib = tracing::field::Empty,
+        process.killed = tracing::field::Empty,
     );
     ProcessExit {
         status,
@@ -73,6 +78,7 @@ async fn record_exit(script: &str, answered: bool) -> Captured {
             peak_rss_kib: Some(180_000),
         },
         answered,
+        killed,
     }
     .record(&span);
     captured
@@ -128,6 +134,19 @@ async fn a_finished_program_records_its_exit_quietly() {
 }
 
 #[tokio::test]
+async fn a_child_the_runner_killed_records_its_end_without_a_warning() {
+    let captured = record_exit_of("kill -KILL $$", false, true).await;
+    let span = captured.span.lock().unwrap().clone();
+    assert_eq!(span["process.signal"], "9", "{span:?}");
+    assert_eq!(span["process.killed"], "true");
+    assert_eq!(span["process.peak_rss_kib"], "180000");
+    assert!(
+        warnings(&captured).is_empty(),
+        "the outcome already says why"
+    );
+}
+
+#[tokio::test]
 async fn a_running_child_shows_its_cpu_time_and_peak_memory() {
     let mut child = Command::new("sh")
         .args([
@@ -139,7 +158,7 @@ async fn a_running_child_shows_its_cpu_time_and_peak_memory() {
         .unwrap();
     let pid = child.id().unwrap();
     let mut usage = ProcessUsage::default();
-    usage.sample(pid).await;
+    usage.sample(pid);
     assert!(usage.peak_rss_kib.is_some_and(|kib| kib > 0), "{usage:?}");
     assert!(usage.cpu.is_some(), "{usage:?}");
     child.start_kill().unwrap();
@@ -147,7 +166,7 @@ async fn a_running_child_shows_its_cpu_time_and_peak_memory() {
 
     // A reaped child has no procfs entry; what was seen is kept.
     let seen = usage;
-    usage.sample(pid).await;
+    usage.sample(pid);
     assert_eq!(usage, seen);
 }
 
@@ -212,4 +231,50 @@ async fn a_program_that_exhausts_its_heap_records_how_deno_died() {
     assert!(span.contains_key("process.cpu_ms"), "{span:?}");
     assert!(span.contains_key("process.wall_ms"), "{span:?}");
     assert_eq!(warnings(&captured).len(), 1);
+}
+
+/// A program the deadline stops is killed by the runner; its span still
+/// shows how it ended and what it used.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_program_the_deadline_stops_records_its_end() {
+    use crate::domain::{
+        EventKind, ExecuteRequest, ExecutionService, Limits, Outcome, RunEnvironment,
+    };
+    let captured = Captured::default();
+    let _guard =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(captured.clone()));
+    let root = tempfile::tempdir().unwrap();
+    let binary = Command::new("which").arg("deno").output().await.unwrap();
+    assert!(binary.status.success(), "Deno 2.9.6 must be on PATH");
+    let binary = PathBuf::from(String::from_utf8(binary.stdout).unwrap().trim());
+    let runner = super::super::DenoRunner::new(binary, root.path().to_owned(), 128)
+        .await
+        .unwrap();
+    let service = ExecutionService::new(Arc::new(runner), Limits::default()).unwrap();
+    let mut handle = service
+        .execute(
+            ExecuteRequest {
+                source: "export async function main() { for (;;) {} }".into(),
+                timeout_ms: 1_500,
+            },
+            RunEnvironment::default(),
+        )
+        .unwrap();
+    let outcome = loop {
+        let event = tokio::time::timeout(Duration::from_secs(30), handle.events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        if let EventKind::Finished { outcome } = event.kind {
+            break outcome;
+        }
+    };
+    assert!(matches!(outcome, Outcome::TimedOut), "{outcome:?}");
+    let span = captured.span.lock().unwrap().clone();
+    assert_eq!(span["process.signal"], "9", "{span:?}");
+    assert_eq!(span["process.killed"], "true");
+    assert!(span.contains_key("process.peak_rss_kib"), "{span:?}");
+    assert!(span.contains_key("process.cpu_ms"), "{span:?}");
+    assert!(warnings(&captured).is_empty());
 }

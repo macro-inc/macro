@@ -37,16 +37,18 @@ pub(super) struct ProcessUsage {
 impl ProcessUsage {
     /// Read the child's procfs entries, keeping the last value of each that
     /// is still there.
-    pub(super) async fn sample(&mut self, pid: u32) {
+    pub(super) fn sample(&mut self, pid: u32) {
+        // procfs reads are served from memory, so a plain read never waits
+        // for long, and the child's pipes keep being polled between samples.
         let directory = proc_dir(pid);
-        if let Ok(stat) = tokio::fs::read_to_string(directory.join("stat")).await
+        if let Ok(stat) = std::fs::read_to_string(directory.join("stat"))
             && let Some(ticks) = cpu_ticks(&stat)
         {
             self.cpu = Some(Duration::from_millis(
                 ticks.saturating_mul(1000) / CLOCK_TICKS_PER_SECOND,
             ));
         }
-        if let Ok(status) = tokio::fs::read_to_string(directory.join("status")).await
+        if let Ok(status) = std::fs::read_to_string(directory.join("status"))
             && let Some(kib) = peak_rss_kib(&status)
         {
             self.peak_rss_kib = Some(kib);
@@ -111,11 +113,15 @@ pub(super) struct ProcessExit {
     pub(super) usage: ProcessUsage,
     /// Whether the child wrote a terminal frame before it exited.
     pub(super) answered: bool,
+    /// Whether the runner killed it (deadline, cancellation, a protocol
+    /// error); its status then says nothing about the program.
+    pub(super) killed: bool,
 }
 
 impl ProcessExit {
-    /// Record the exit on `span` and warn when the child did not end the way
-    /// a finished program does: exit code 0 after its terminal frame.
+    /// Record the exit on `span` and warn when the child, on its own, did not
+    /// end the way a finished program does: exit code 0 after its terminal
+    /// frame.
     pub(super) fn record(&self, span: &tracing::Span) {
         let exit_code = self.status.code().map(i64::from);
         let signal = self.status.signal().map(i64::from);
@@ -130,7 +136,8 @@ impl ProcessExit {
         span.record("process.wall_ms", wall_ms);
         span.record("process.cpu_ms", cpu_ms);
         span.record("process.peak_rss_kib", peak_rss_kib);
-        if signal.is_some() || exit_code != Some(0) || !self.answered {
+        span.record("process.killed", self.killed);
+        if !self.killed && (signal.is_some() || exit_code != Some(0) || !self.answered) {
             tracing::warn!(
                 parent: span,
                 process.exit_code = exit_code,

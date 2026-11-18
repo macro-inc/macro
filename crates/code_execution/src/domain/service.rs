@@ -103,6 +103,7 @@ impl ExecutionService {
                                                 process.wall_ms = tracing::field::Empty,
                                                 process.cpu_ms = tracing::field::Empty,
                                                 process.peak_rss_kib = tracing::field::Empty,
+                                                process.killed = tracing::field::Empty,
                                             ))
                                             .await
                                     }
