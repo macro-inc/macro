@@ -1,6 +1,6 @@
 import { exec, execSync } from 'node:child_process';
 import { unwatchFile, watchFile } from 'node:fs';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import tailwind from '@tailwindcss/vite';
 import { Features } from 'lightningcss';
 import type { Plugin, Rolldown, UserConfigFn } from 'vite';
@@ -256,6 +256,92 @@ function acyclicStartupChunks(): Plugin {
       if (!cycle) return;
       this.error(
         `Startup chunks import each other in a cycle, so a module could read a binding before it is initialized: ${cycle.join(' -> ')}. Check the groups in startupChunks().`
+      );
+    },
+  };
+}
+
+/** Native editor code: the view package and the document-session ABI. */
+const NATIVE_EDITOR_MODULE =
+  /\/packages\/(lexical-wasm-view|collaboration\/src\/session)\//;
+/**
+ * The only lazy modules that may bring native editor code with them. Every
+ * other entry or lazy chunk loads for flag-off users too, so its static
+ * imports must stay free of native code.
+ */
+const NATIVE_EDITOR_BOUNDARIES = [
+  /\/features\/block-md\/component\/SessionMarkdownEditor\.tsx$/,
+];
+/**
+ * Source editors register their DOM roots so a native view can tell them
+ * apart; a 400-byte WeakMap registry with no wasm, ABI or listeners.
+ */
+const SHARED_NATIVE_EDITOR_MODULES = [
+  /\/packages\/lexical-wasm-view\/src\/view\/editor-roots\.ts$/,
+];
+
+/**
+ * An import chain by which code that flag-off users may load statically
+ * imports native editor code, or undefined. The walk starts at the entry
+ * modules and follows static and dynamic imports, but never enters a native
+ * boundary or follows a dynamic import into native code: that is lazy.
+ */
+export function nativeEditorLeak(
+  entries: Iterable<string>,
+  imports: (id: string) => {
+    readonly static: readonly string[];
+    readonly dynamic: readonly string[];
+  }
+): string[] | undefined {
+  const native = (id: string) => NATIVE_EDITOR_MODULE.test(id);
+  const boundary = (id: string) =>
+    NATIVE_EDITOR_BOUNDARIES.some((pattern) => pattern.test(id));
+  const shared = (id: string) =>
+    SHARED_NATIVE_EDITOR_MODULES.some((pattern) => pattern.test(id));
+  const parent = new Map<string, string | undefined>();
+  const queue: string[] = [];
+  const visit = (id: string, from: string | undefined) => {
+    if (parent.has(id) || boundary(id)) return;
+    parent.set(id, from);
+    queue.push(id);
+  };
+  for (const entry of entries) visit(entry, undefined);
+  for (let at = 0; at < queue.length; at++) {
+    const id = queue[at];
+    if (native(id) && !shared(id)) {
+      const chain = [id];
+      for (let up = parent.get(id); up !== undefined; up = parent.get(up))
+        chain.unshift(up);
+      return chain;
+    }
+    const next = imports(id);
+    for (const imported of next.static) visit(imported, id);
+    for (const lazy of next.dynamic) if (!native(lazy)) visit(lazy, id);
+  }
+  return undefined;
+}
+
+/** Fails the build if code every user may load statically imports the native editor. */
+function nativeEditorStaysLazy(): Plugin {
+  return {
+    name: 'native-editor-stays-lazy',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const entries = Object.values(bundle).flatMap((file) =>
+        file.type === 'chunk' && file.isEntry && file.facadeModuleId
+          ? [file.facadeModuleId]
+          : []
+      );
+      const chain = nativeEditorLeak(entries, (id) => {
+        const info = this.getModuleInfo(id);
+        return {
+          static: info?.importedIds ?? [],
+          dynamic: info?.dynamicallyImportedIds ?? [],
+        };
+      });
+      if (!chain) return;
+      this.error(
+        `Code that flag-off users load statically imports the native editor: ${chain.map((id) => relative(process.cwd(), id)).join(' -> ')}. Reach native code only through a native boundary (SessionMarkdownEditor) or a dynamic import behind RUST_EDITOR_ENGINE.`
       );
     },
   };
@@ -671,6 +757,7 @@ export const createAppViteConfig = (
         cloudFrontCompressionLimit(),
         posthogSourceMapLimit(),
         acyclicStartupChunks(),
+        nativeEditorStaysLazy(),
       ],
       define: defineEnv(ENV_MODE, command),
       clearScreen: false,

@@ -261,6 +261,10 @@ composers and `StaticMarkdown` remain upstream Lexical. Native body hosts share
 from `src/lib/core/document-session/editor-engine.tsx`. Wrap only native editor
 constructors in the readiness boundary, never shell chrome or routes, and retain the cached boot engine choice; construct synchronous handles only after the shared
 module is ready. See that directory's README for state and browser checks.
+Shared and flag-off code never statically imports `@macro-inc/lexical-wasm-view`
+or the session ABI: the native runtime brings native capabilities (such as its pin
+store), and `SessionMarkdownEditor` is the one lazy boundary. `vite.base.ts`'s
+`native-editor-stays-lazy` fails a production build that breaks this.
 
 `just test-functional` builds a production-like bundle of its fixtures and runs
 Playwright against it, not a dev server: each page otherwise fetches thousands of
