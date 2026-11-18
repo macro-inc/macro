@@ -480,6 +480,7 @@ F-016	the service counts mail held before connecting as imported without storing
 F-017	the service fetches a new message and does not store it
 F-018	new mail does not reach the open list until a reload
 F-019	the service does not apply a change made in the provider's client
+F-020	the email service's thread reads (messages_by_thread_id_paginated in crates/email, get_paginated_parsed_messages_by_thread_id in email_db_client) leave out a message missing at the provider only when it is a draft, as main had them, so an Outlook message deleted at the provider stays in its thread after the service marks it provider_missing
 F-021	the Drafts tab lists no drafts
 F-022	the service does not store mail sent from the provider's client
 F-023	Force sync starts nothing
