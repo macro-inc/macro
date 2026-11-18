@@ -42,7 +42,7 @@ it('preserves a locked end when the start date moves', async () => {
     screen.getByRole('button', { name: 'Go to previous month' })
   );
   const previousDay = screen
-    .getAllByRole('gridcell', { name: '31', exact: true })
+    .getAllByRole('gridcell', { name: '31' })
     .find((cell) => !cell.hasAttribute('disabled'));
   if (!previousDay)
     throw new Error('Expected an enabled day before the locked end');
