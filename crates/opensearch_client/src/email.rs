@@ -123,20 +123,24 @@ impl OpensearchClient {
 
     /// Starts deleting every email document of an inbox as a throttled
     /// background OpenSearch task and returns its id without waiting.
+    ///
+    /// Not resent after a lost connection: OpenSearch may already have started
+    /// the task, and a resend would start a second one over the same inbox.
     #[tracing::instrument(skip(self), err)]
     pub async fn start_email_link_delete(
         &self,
         link_id: &str,
         docs_per_second: i64,
-    ) -> Result<String> {
-        resend_on_lost_connection(|| {
-            delete::email::start_email_link_delete(&self.inner, link_id, docs_per_second)
-        })
-        .await
+    ) -> Result<delete::email::EmailDeleteTaskId> {
+        delete::email::start_email_link_delete(&self.inner, link_id, docs_per_second).await
     }
 
-    /// Reads a background email delete task's progress.
-    pub async fn email_delete_task(&self, task_id: &str) -> Result<delete::email::EmailDeleteTask> {
+    /// Reads a background email delete task's progress, or `None` when
+    /// OpenSearch knows no task by that id.
+    pub async fn email_delete_task(
+        &self,
+        task_id: &delete::email::EmailDeleteTaskId,
+    ) -> Result<Option<delete::email::EmailDeleteTask>> {
         resend_on_lost_connection(|| delete::email::email_delete_task(&self.inner, task_id)).await
     }
 

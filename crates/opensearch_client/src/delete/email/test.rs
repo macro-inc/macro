@@ -298,10 +298,9 @@ fn a_running_delete_task_reports_its_progress() {
     assert_eq!(
         task,
         EmailDeleteTask {
-            completed: false,
             deleted: 5,
             total: 40,
-            failure: None,
+            state: EmailDeleteState::Running,
         }
     );
 }
@@ -309,32 +308,91 @@ fn a_running_delete_task_reports_its_progress() {
 #[test]
 fn a_completed_delete_task_reports_its_response_counts() {
     let task = parse_email_delete_task(
-        r#"{"completed":true,"task":{"status":{"total":40,"deleted":39}},"response":{"total":40,"deleted":40,"failures":[]}}"#,
+        r#"{"completed":true,"task":{"status":{"total":40,"deleted":39}},"response":{"total":40,"deleted":40,"failures":[],"timed_out":false,"canceled":""}}"#,
     )
     .unwrap();
 
     assert_eq!(
         task,
         EmailDeleteTask {
-            completed: true,
             deleted: 40,
             total: 40,
-            failure: None,
+            state: EmailDeleteState::Completed,
         }
     );
 }
 
 #[test]
-fn a_delete_task_with_failures_or_an_error_reports_a_failure() {
-    let with_failures = parse_email_delete_task(
-        r#"{"completed":true,"response":{"deleted":3,"failures":[{"cause":{"type":"es_rejected_execution_exception"}}]}}"#,
+fn per_document_failures_fail_the_task_with_a_short_description() {
+    let task = parse_email_delete_task(
+        r#"{"completed":true,"response":{"total":40,"deleted":3,"failures":[{"cause":{"type":"es_rejected_execution_exception","reason":"rejected","caused_by":{"type":"nested"}}},{"cause":{"type":"other"}}]}}"#,
     )
     .unwrap();
-    assert!(with_failures.failure.is_some());
 
-    let with_error = parse_email_delete_task(
-        r#"{"completed":true,"error":{"type":"search_phase_execution_exception"}}"#,
+    assert_eq!(
+        task.state,
+        EmailDeleteState::Failed(
+            "2 failures, first: es_rejected_execution_exception: rejected".into()
+        )
+    );
+    assert_eq!((task.deleted, task.total), (3, 40));
+}
+
+#[test]
+fn a_task_error_fails_the_task() {
+    let task = parse_email_delete_task(
+        r#"{"completed":true,"error":{"type":"search_phase_execution_exception","reason":"all shards failed"}}"#,
     )
     .unwrap();
-    assert!(with_error.failure.is_some());
+
+    assert_eq!(
+        task.state,
+        EmailDeleteState::Failed("search_phase_execution_exception: all shards failed".into())
+    );
+}
+
+#[test]
+fn a_cancelled_task_is_not_completed() {
+    let task = parse_email_delete_task(
+        r#"{"completed":true,"response":{"total":40,"deleted":10,"failures":[],"canceled":"by user request"}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        task.state,
+        EmailDeleteState::Canceled("by user request".into())
+    );
+}
+
+#[test]
+fn a_timed_out_task_is_not_completed() {
+    let task = parse_email_delete_task(
+        r#"{"completed":true,"response":{"total":40,"deleted":10,"failures":[],"timed_out":true}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(task.state, EmailDeleteState::Failed("timed out".into()));
+}
+
+#[test]
+fn a_started_task_returns_its_id() {
+    assert_eq!(
+        parse_started_task(r#"{"task":"oTUltX4IQMOUUVeiohTt8A:12345"}"#)
+            .unwrap()
+            .as_str(),
+        "oTUltX4IQMOUUVeiohTt8A:12345"
+    );
+    assert!(parse_started_task(r#"{"deleted":0}"#).is_err());
+    assert!(parse_started_task(r#"{"task":"not-a-task"}"#).is_err());
+}
+
+#[test]
+fn task_ids_need_a_node_and_a_number() {
+    assert!(EmailDeleteTaskId::try_from("node:1".to_owned()).is_ok());
+    for bad in ["node", ":1", "node:", "node:x1"] {
+        assert!(
+            EmailDeleteTaskId::try_from(bad.to_owned()).is_err(),
+            "{bad}"
+        );
+    }
 }
