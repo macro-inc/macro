@@ -166,6 +166,7 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       timeout-minutes: 15
+      continue-on-error: true
     - name: Upload handoff artifact
       run: bun .github/scripts/upload-handoff-artifact.ts prebuilt-binaries.tar.gz "$DEST"
       shell: bash

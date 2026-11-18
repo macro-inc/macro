@@ -150,8 +150,9 @@ fn build_service_binaries() -> Job {
                 ".#deployCargoArtifacts .#deploy-service-binaries-${{ inputs.service-name }} ${{ steps.build-inputs.outputs.paths }}",
             )
             .if_condition(Expression::new(ON_MAIN))
-            // A stuck upload must not hold the deploy; the push is non-fatal.
-            .timeout_minutes(15u32),
+            // A stuck upload must not hold or fail the deploy.
+            .timeout_minutes(15u32)
+            .continue_on_error(true),
         )
         .add_step(steps::upload_handoff_artifact(
             "prebuilt-binaries.tar.gz",
