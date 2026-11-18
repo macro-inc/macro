@@ -576,7 +576,7 @@ test.describe('shared events in email on GMAIL', { tag: '@full-stack' }, () => {
 });
 
 test.describe('first calendar sync from email', { tag: '@full-stack' }, () => {
-  test.use({ provider: 'GMAIL', access: 'mail' });
+  test.use({ provider: 'GMAIL', access: 'mail', seedGoogleGrant: false });
 
   test('shared-event actions recover when the first writable calendar arrives', async ({
     page,
@@ -586,6 +586,14 @@ test.describe('first calendar sync from email', { tag: '@full-stack' }, () => {
     const address = 'calendar@example.com';
     const calendarAddress = mailbox.stack.address(address);
     const revisedTitle = `${TITLE} with notes`;
+    const links = await mailbox.api('/email/email/links');
+    expect(links.ok).toBe(true);
+    expect((await links.json()).links).toContainEqual(
+      expect.objectContaining({
+        id: mailbox.inbox.linkId,
+        needs_calendar_permission: true,
+      })
+    );
     await withoutExtraction(page);
     await deliverCalendarMail(
       mailbox,
