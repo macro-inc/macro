@@ -22,7 +22,10 @@ fn macrod_section_gives_the_current_setup_steps() {
         "On a cloud server",
         "https://macro.com/docs/AI/bring-your-own",
     ] {
-        assert!(about_macro().contains(step), "about page is missing {step:?}");
+        assert!(
+            about_macro().contains(step),
+            "about page is missing {step:?}"
+        );
     }
 }
 
