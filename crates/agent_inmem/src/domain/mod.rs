@@ -22,4 +22,6 @@ pub mod skill_routing;
 pub mod tool_gate;
 pub mod tool_mode;
 pub mod tool_stream;
+/// Where a turn's SDK documentation sits: on the request that asked for it.
+pub mod turn_docs;
 pub mod user_input;
