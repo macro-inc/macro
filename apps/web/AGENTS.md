@@ -62,8 +62,9 @@ than publishing an empty snapshot. Its cached-channel overlay rereads the cache 
 for `dm` changes while a contact window is enabled in any tab, and once when one
 opens after changes it missed: channel rows never reach contact facts, and every
 tab ranks from the leader's publication. `createContactDirectoryWindow` holds
-`openContactReader` while enabled; `queries/contacts/readers.ts` shares that across
-tabs, and a tab that vanishes stays counted as open. `context-publisher.ts` caps pending IDs and
+`openContactReader` while enabled, from its first settled page on, so the catch-up
+never races the picker's first rows; `queries/contacts/readers.ts` shares that
+across tabs, and a tab that vanishes stays counted as open. `context-publisher.ts` caps pending IDs and
 write batches at 500, replaces overflowing/uncertain snapshots with a new epoch,
 and never writes directory names or membership. `useContactContextPublisher`
 shares Soup's leader, rollout and generation lifecycle; do not add another leader.

@@ -178,8 +178,15 @@ export function createContactDirectoryWindow(
     return result.page;
   };
 
+  // Counted as a reader only once its first page settles, so the publisher's
+  // catch-up reread never competes with the read that lists the first rows.
   createEffect(() => {
-    if (enabled()) onCleanup(openContactReader());
+    if (!enabled()) return;
+    let release: (() => void) | undefined;
+    createEffect(() => {
+      if (!release && !query.isPending) release = openContactReader();
+    });
+    onCleanup(() => release?.());
   });
   createEffect(() => {
     const host = scope().host;
