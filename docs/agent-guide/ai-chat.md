@@ -1025,6 +1025,8 @@ with each knob in place: values underlined, and what AI decides dotted with a
 sparkle. A choice opens a menu that saves the option picked; a number opens a
 field with − and +, its range, and Enter to save (Esc cancels); text or the
 question AI is asked open an editor with **Save**; on/off flips in place.
+A text knob with no value shows a + and its label (**Not set** under
+**Settings**) with a dashed underline, and opens the same editor.
 Each change saves only that value, never the code. Knobs the sentence
 doesn't show are listed under **Settings**; a step without a sentence shows
 its summary. **Edit** in a code step's ⋯ menu opens **Change this step**
