@@ -65,10 +65,18 @@ export type NameQuery = {
 };
 
 /** Prepares a query for a ranking pass. Rows given the result skip
- * normalizing it, which costs a pasted query's length on every row. */
+ * normalizing it, which costs a pasted query's length on every row. Its
+ * words are split when first read. */
 export function nameQuery(query: string): NameQuery {
   const term = normalizedQuery(query);
-  return { term, parts: wordsIn(term) };
+  let parts: readonly string[] | undefined;
+  return {
+    term,
+    get parts() {
+      parts ??= wordsIn(term);
+      return parts;
+    },
+  };
 }
 
 const termOf = (query: string | NameQuery) =>

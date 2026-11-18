@@ -5,7 +5,11 @@ import {
   NAME_STARTS_WITH_QUERY_RANK,
 } from '@core/util/freshSort';
 import { ANY_SCRIPT_FUZZY_OPTIONS } from '@core/util/fuzzy';
-import { normalizeNameText, startsWordsOf } from '@core/util/name-match-score';
+import {
+  nameQuery,
+  normalizeNameText,
+  startsWordsOf,
+} from '@core/util/name-match-score';
 import { preservePersonOrder } from '@core/util/ordered-window';
 import uFuzzy from '@leeoniya/ufuzzy';
 import { match } from 'ts-pattern';
@@ -145,7 +149,9 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
     viewerId?: string;
   }
 ): T[] {
-  const term = normalizeNameText(query);
+  // Prepared once: each row would otherwise normalize the query again.
+  const prepared = nameQuery(query);
+  const term = prepared.term;
   const search = createFreshSearch<T>({
     config: {
       ...NAME_MATCH_RANKING,
@@ -202,7 +208,7 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   ) => {
     const startsWords =
       nameMatchRank >= NAME_STARTS_WITH_QUERY_RANK ||
-      startsWordsOf(displayName(item), term);
+      startsWordsOf(displayName(item), prepared);
     if (!startsWords) return 0;
     return stranger ? 1 : 2;
   };
