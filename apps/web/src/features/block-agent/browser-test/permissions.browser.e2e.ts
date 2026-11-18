@@ -1,6 +1,15 @@
 import { expect, test } from '@playwright/test';
 
 const SHOTS = process.env.PERMISSIONS_SCREENSHOT_DIR;
+/** `light` renders the fixture in Macro Light, for screenshots. */
+const THEME = process.env.PERMISSIONS_THEME;
+
+function fixture(query = '') {
+  const params = new URLSearchParams(query);
+  if (THEME) params.set('theme', THEME);
+  const search = params.toString();
+  return `/permissions.html${search ? `?${search}` : ''}`;
+}
 
 async function shot(
   page: import('@playwright/test').Page,
@@ -8,7 +17,7 @@ async function shot(
   isMobile: boolean
 ) {
   const path = SHOTS
-    ? `${SHOTS}/${name}-${isMobile ? 'mobile' : 'desktop'}.png`
+    ? `${SHOTS}/${name}-${isMobile ? 'mobile' : 'desktop'}-${THEME ?? 'dark'}.png`
     : test.info().outputPath(`${name}.png`);
   // The transcript scrolls inside the page, as in the app: grow the window
   // to the whole session for the picture, then put it back.
@@ -32,7 +41,7 @@ test('a blocked program says what was refused and links to the permissions', asy
   page,
   isMobile,
 }) => {
-  await page.goto('/permissions.html');
+  await page.goto(fixture());
   const blocked = page.getByRole('region', { name: 'Blocked by permissions' });
   await expect(blocked).toBeVisible();
   await expect(blocked).toContainText(
@@ -55,7 +64,7 @@ test('a blocked program says what was refused and links to the permissions', asy
 });
 
 test('the approver approves a held program', async ({ page, isMobile }) => {
-  await page.goto('/permissions.html');
+  await page.goto(fixture());
   const request = page.getByRole('region', {
     name: 'Permission approval request',
   });
@@ -71,7 +80,7 @@ test('the approver approves a held program', async ({ page, isMobile }) => {
 });
 
 test('a ShowPermissions card saves a change', async ({ page, isMobile }) => {
-  await page.goto('/permissions.html?pending=0');
+  await page.goto(fixture('pending=0'));
   const card = page.getByRole('region', { name: 'Scout’s permissions' });
   await expect(card).toContainText(
     '“I need to send the weekly report to the team, but sending email is set to Ask.”'
@@ -95,7 +104,7 @@ test('someone else sees the cards read-only and can only stop waiting', async ({
   page,
   isMobile,
 }) => {
-  await page.goto('/permissions.html?viewer=other');
+  await page.goto(fixture('viewer=other'));
   const request = page.getByRole('region', {
     name: 'Permission approval request',
   });
