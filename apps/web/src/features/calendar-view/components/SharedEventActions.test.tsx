@@ -11,7 +11,7 @@ import { SharedEventActions } from './SharedEventActions';
 const mocks = vi.hoisted(() => ({
   addSharedEvent: true,
   calendars: [] as VisibleCalendar[],
-  calendarListSucceeded: () => true,
+  calendarListSucceeded: (): boolean => true,
   copy: vi.fn(),
   ask: vi.fn(),
   download: vi.fn(),
