@@ -316,6 +316,17 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         draft.beforeSavedView = undefined;
       })
     );
+  if (savedViewSource && savedViewsList)
+    savedViewCreation = createSavedViewCreation({
+      kind: 'email',
+      viewerId: userId,
+      list: savedViewsList.items,
+      capture: () => {
+        const value = savedViews?.capture();
+        return value?.isOk() ? value.value : undefined;
+      },
+      equal: deepEqual,
+    });
   if (savedViewSource) {
     savedViews = createEmailSavedViewDraft({
       source: savedViewSource,
@@ -327,17 +338,6 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       apply: applySavedView,
     });
   }
-  if (savedViews && savedViewsList)
-    savedViewCreation = createSavedViewCreation({
-      kind: 'email',
-      viewerId: userId,
-      list: savedViewsList.items,
-      capture: () => {
-        const value = savedViews?.capture();
-        return value?.isOk() ? value.value : undefined;
-      },
-      equal: deepEqual,
-    });
   const savedViewScope = createMemo(() => ({
     id: selectedSavedViewId(),
     viewerId: userId(),
