@@ -89,6 +89,13 @@ vi.mock('../decorator/DocumentMention', () => ({
     <span data-mention={props.blockName} />
   ),
 }));
+vi.mock('@queries/preview', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/preview')>()),
+  useItemPreview: () => [
+    () => ({ loading: false, access: 'access', id: 'doc-3', type: 'document' }),
+  ],
+  isAccessiblePreviewItem: () => true,
+}));
 vi.mock('../decorator/LazyDecorator', () => ({
   LazyDecorator: (props: { render: () => JSX.Element }) => props.render(),
 }));
@@ -274,6 +281,22 @@ describe('static pull request mentions', () => {
         .querySelector('[data-pr-chip]')
         ?.getAttribute('data-pr-chip')
     ).toBe(target);
+    rendered.unmount();
+  });
+});
+
+describe('static snapshot chips', () => {
+  it('renders a snapshot chip without an editor host', () => {
+    const rendered = render(() => (
+      <StaticMarkdownContext lazy={false}>
+        <StaticMarkdown
+          markdown={
+            '<m-snapshot>{"documentId":"doc-3","documentName":"Spec","blockName":"md","content":"ignored","snapshotDate":"2025-01-01"}</m-snapshot>'
+          }
+        />
+      </StaticMarkdownContext>
+    ));
+    expect(rendered.container.textContent).toContain('Spec');
     rendered.unmount();
   });
 });
