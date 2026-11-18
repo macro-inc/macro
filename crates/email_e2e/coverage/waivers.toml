@@ -346,8 +346,3 @@ owner = "calendar"
 [[intermittent_bug]]
 scenario = "state_writes outlook_a_thread_can_be_archived_while_a_reply_is_sending"
 reason = "state-update-races-send: the change answers 500 about one run in twenty, when the reply's row changes between reading the messages to move and queueing the move"
-
-# Dormant policy history: no API initializes a consent generation yet.
-[[deferred]]
-entry = "queue backfill:PopulateCrmPolicy"
-reason = "Deferred to the member-rule API phase: no deployed caller initializes a consent incarnation or activates selected rules. Replace this deferral with a full-stack generation/retry scenario before enabling activation; private repository and worker tests cover the dormant contract."

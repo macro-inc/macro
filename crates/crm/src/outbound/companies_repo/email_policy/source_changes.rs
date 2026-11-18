@@ -10,7 +10,11 @@ impl CompaniesRepositoryImpl {
         contact: Uuid,
     ) -> Result<(), CrmError> {
         sqlx::query!(
-            r#"INSERT INTO crm_email_policy_source_events(event_id,team_id,source_kind,source_id,traceparent)
+            r#"WITH invalidated AS (
+                   UPDATE crm_email_policy_previews SET status='stale' WHERE team_id=$2
+                     AND request_hash IS NOT NULL AND status IN ('pending','running','complete','partial')
+               )
+               INSERT INTO crm_email_policy_source_events(event_id,team_id,source_kind,source_id,traceparent)
                SELECT $1,$2,'contact',$3,$4
                WHERE EXISTS (SELECT 1 FROM crm_email_rule_contacts WHERE contact_id=$3 AND team_id=$2)"#,
             Uuid::now_v7(),team,contact,Self::current_traceparent()
@@ -23,7 +27,11 @@ impl CompaniesRepositoryImpl {
         company: Uuid,
     ) -> Result<(), CrmError> {
         sqlx::query!(
-            r#"INSERT INTO crm_email_policy_source_events(event_id,team_id,source_kind,source_id,traceparent)
+            r#"WITH invalidated AS (
+                   UPDATE crm_email_policy_previews SET status='stale' WHERE team_id=$2
+                     AND request_hash IS NOT NULL AND status IN ('pending','running','complete','partial')
+               )
+               INSERT INTO crm_email_policy_source_events(event_id,team_id,source_kind,source_id,traceparent)
                SELECT $1,$2,'company',$3,$4
                WHERE EXISTS (SELECT 1 FROM crm_email_rule_companies WHERE company_id=$3 AND team_id=$2)"#,
             Uuid::now_v7(),team,company,Self::current_traceparent()
@@ -51,6 +59,9 @@ impl CompaniesRepositoryImpl {
         parent_changed: bool,
         hidden: bool,
     ) -> Result<(), CrmError> {
+        if !parent_changed {
+            Self::invalidate_email_previews(conn, team).await?;
+        }
         if !Self::has_contact_rule_references(conn, team).await? {
             return Ok(());
         }
@@ -75,30 +86,83 @@ impl CompaniesRepositoryImpl {
         // Probe sources for each team contact; a global anti-join otherwise
         // scans every mailbox source under fresh statistics.
         let ids = sqlx::query_scalar!(
-            r#"WITH removed AS (
-                DELETE FROM crm_contacts ct WHERE ct.team_id=$1 AND ct.manually_created=FALSE
-                AND NOT EXISTS(SELECT 1 FROM crm_contact_sources WHERE contact_id=ct.id OFFSET 0) RETURNING id
-            )
-            SELECT d.id FROM removed d
-            WHERE EXISTS(SELECT 1 FROM crm_email_rule_contacts r WHERE r.contact_id=d.id AND r.team_id=$1)"#,
+            r#"DELETE FROM crm_contacts ct WHERE ct.team_id=$1 AND ct.manually_created=FALSE
+               AND NOT EXISTS(SELECT 1 FROM crm_contact_sources WHERE contact_id=ct.id OFFSET 0)
+               RETURNING id"#,
             team
-        ).fetch_all(&mut *conn).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        Self::record_matching_changes(conn, team, "contact", &ids).await
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        // A fresh statement sees an activation that committed before DELETE
+        // acquired its target row lock. The DELETE statement's snapshot cannot.
+        if !ids.is_empty() {
+            Self::invalidate_email_previews(conn, team).await?;
+        }
+        for ids in ids.chunks(1000) {
+            let referenced = sqlx::query_scalar!(
+                r#"SELECT id AS "id!" FROM unnest($2::uuid[]) d(id)
+                   WHERE EXISTS(SELECT 1 FROM crm_email_rule_contacts r
+                       WHERE r.contact_id=d.id AND r.team_id=$1 OFFSET 0)"#,
+                team,
+                ids
+            )
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            Self::record_matching_changes(conn, team, "contact", &referenced).await?;
+        }
+        Ok(())
     }
     pub(in crate::outbound::companies_repo) async fn delete_referenced_orphan_companies(
         conn: &mut PgConnection,
         team: Uuid,
     ) -> Result<(), CrmError> {
         let ids = sqlx::query_scalar!(
-            r#"WITH removed AS (
-                DELETE FROM crm_companies co WHERE co.team_id=$1 AND co.email_sync=TRUE AND co.manually_created=FALSE
-                AND NOT EXISTS(SELECT 1 FROM crm_contacts WHERE company_id=co.id) RETURNING id
-            )
-            SELECT d.id FROM removed d
-            WHERE EXISTS(SELECT 1 FROM crm_email_rule_companies r WHERE r.company_id=d.id AND r.team_id=$1)"#,
+            r#"DELETE FROM crm_companies co WHERE co.team_id=$1 AND co.email_sync=TRUE AND co.manually_created=FALSE
+               AND NOT EXISTS(SELECT 1 FROM crm_contacts WHERE company_id=co.id) RETURNING id"#,
             team
         ).fetch_all(&mut *conn).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        Self::record_matching_changes(conn, team, "company", &ids).await
+        if !ids.is_empty() {
+            Self::invalidate_email_previews(conn, team).await?;
+        }
+        for ids in ids.chunks(1000) {
+            let referenced = sqlx::query_scalar!(
+                r#"SELECT id AS "id!" FROM unnest($2::uuid[]) d(id)
+                   WHERE EXISTS(SELECT 1 FROM crm_email_rule_companies r
+                       WHERE r.company_id=d.id AND r.team_id=$1 OFFSET 0)"#,
+                team,
+                ids
+            )
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            Self::record_matching_changes(conn, team, "company", &referenced).await?;
+        }
+        Ok(())
+    }
+
+    pub(in crate::outbound::companies_repo) async fn reconcile_new_teardown_references(
+        conn: &mut PgConnection,
+        team: Uuid,
+    ) -> Result<(), CrmError> {
+        // The unreferenced branch keeps its plain deletes. This new statement
+        // sees any first activation that committed before they took row locks,
+        // without returning every deleted ID on all-mail mailbox teardown.
+        sqlx::query!(
+            r#"WITH invalidated AS (
+                   UPDATE crm_email_policy_previews SET status='stale' WHERE team_id=$2
+                     AND request_hash IS NOT NULL AND status IN ('pending','running','complete','partial')
+               )
+               INSERT INTO crm_email_policy_source_events(event_id,team_id,source_kind,source_id,traceparent)
+               SELECT $1,$2,'team',$2,$3
+               WHERE COALESCE((SELECT TRUE FROM crm_email_rule_contacts WHERE team_id=$2
+                   ORDER BY user_id,revision,contact_id LIMIT 1),FALSE)
+                  OR COALESCE((SELECT TRUE FROM crm_email_rule_companies WHERE team_id=$2
+                   ORDER BY user_id,revision,company_id LIMIT 1),FALSE)"#,
+            Uuid::now_v7(),team,Self::current_traceparent()
+        ).execute(conn).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(())
     }
 
     // IDs are generated in the application so bulk and ordinary edits share

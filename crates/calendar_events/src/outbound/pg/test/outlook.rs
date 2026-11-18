@@ -295,10 +295,10 @@ async fn outlook_projection_uses_existing_reads_and_mutation_authorization(pool:
         CalendarSyncStatus::Ready
     );
     let change = repo
-        .claim_projection(Uuid::now_v7())
+        .claim_projections(Uuid::now_v7(), 1)
         .await
         .unwrap()
-        .unwrap();
+        .remove(0);
     assert_eq!(change.event_id, id);
 }
 
@@ -476,10 +476,10 @@ async fn calendar_opt_out_purges_and_fences_without_disconnecting_mail(pool: PgP
             .unwrap()
     );
     let change = repo
-        .claim_projection(Uuid::now_v7())
+        .claim_projections(Uuid::now_v7(), 1)
         .await
         .unwrap()
-        .unwrap();
+        .remove(0);
     assert_eq!(change.event_id, id);
     assert!(matches!(
         change.event,
@@ -493,10 +493,10 @@ async fn publication_ack_preserves_a_concurrent_projection_revision(pool: PgPool
     let lease = calendar(&repo).await;
     let id = store(&repo, &lease, "changing").await;
     let old = repo
-        .claim_projection(Uuid::now_v7())
+        .claim_projections(Uuid::now_v7(), 1)
         .await
         .unwrap()
-        .unwrap();
+        .remove(0);
     sqlx::query!(
         "UPDATE calendar_events SET title='New title' WHERE id=$1",
         id
@@ -506,18 +506,41 @@ async fn publication_ack_preserves_a_concurrent_projection_revision(pool: PgPool
     .unwrap();
     repo.complete_projection(&old).await.unwrap();
     let new = repo
-        .claim_projection(Uuid::now_v7())
+        .claim_projections(Uuid::now_v7(), 1)
         .await
         .unwrap()
-        .unwrap();
+        .remove(0);
     assert!(new.revision > old.revision);
     assert_eq!(new.event_id, id);
     repo.complete_projection(&new).await.unwrap();
     assert!(
-        repo.claim_projection(Uuid::now_v7())
+        repo.claim_projections(Uuid::now_v7(), 1)
             .await
             .unwrap()
-            .is_none()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_batch_claims_up_to_its_limit_under_one_lease(pool: PgPool) {
+    let (repo, _, _) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    store(&repo, &lease, "first").await;
+    store(&repo, &lease, "second").await;
+    store(&repo, &lease, "third").await;
+    let batch = repo.claim_projections(Uuid::now_v7(), 2).await.unwrap();
+    assert_eq!(batch.len(), 2);
+    assert_eq!(batch[0].lease_id, batch[1].lease_id, "one lease");
+    let rest = repo.claim_projections(Uuid::now_v7(), 2).await.unwrap();
+    assert_eq!(rest.len(), 1, "a leased change is not claimed twice");
+    for lease in batch.iter().chain(&rest) {
+        repo.complete_projection(lease).await.unwrap();
+    }
+    assert!(
+        repo.claim_projections(Uuid::now_v7(), 100)
+            .await
+            .unwrap()
+            .is_empty()
     );
 }
 
@@ -540,7 +563,12 @@ async fn projection_claims_take_due_changes_in_order_and_skip_backed_off_ones(po
     .await
     .unwrap();
     let mut claimed = Vec::new();
-    while let Some(lease) = repo.claim_projection(Uuid::now_v7()).await.unwrap() {
+    while let Some(lease) = repo
+        .claim_projections(Uuid::now_v7(), 1)
+        .await
+        .unwrap()
+        .pop()
+    {
         claimed.push(lease.event_id);
     }
     assert_eq!(claimed, [first, second]);
@@ -553,16 +581,16 @@ async fn publications_name_only_changes_that_touch_an_out_of_office_event(pool: 
     let id = store(&repo, &lease, "changing").await;
     let publish = async || {
         let lease = repo
-            .claim_projection(Uuid::now_v7())
+            .claim_projections(Uuid::now_v7(), 1)
             .await
             .unwrap()
-            .unwrap();
+            .remove(0);
         repo.complete_projection(&lease).await.unwrap();
         assert!(
-            repo.claim_projection(Uuid::now_v7())
+            repo.claim_projections(Uuid::now_v7(), 1)
                 .await
                 .unwrap()
-                .is_none()
+                .is_empty()
         );
         lease.team_ooo_changed
     };
