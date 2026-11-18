@@ -1,0 +1,23 @@
+apps/web/src/features/sidebar-promotion/components/promo-card.tsx
+  s_d3f666e272a3d2::t_0c4f7effaea263 22,59-61,65,75
+apps/web/src/features/sidebar-promotion/browser-test/promotions.tsx
+  s_d3f666e272a3d2::t_0c4f7effaea263 13-14,16,58-59
+apps/web/src/features/sidebar-promotion/browser-test/promotions.browser.e2e.ts
+  s_d3f666e272a3d2::t_0c4f7effaea263 42-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9735a3ba74b25ebcd59326c74f29ada059301dab",
+  "prompts": {},
+  "sessions": {
+    "s_d3f666e272a3d2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37b23517-517c-47c9-ba2d-04e18ed3061a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
