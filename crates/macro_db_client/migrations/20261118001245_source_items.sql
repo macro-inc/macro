@@ -36,6 +36,10 @@
 -- Function bodies name every permanent object with its schema, so a caller's search_path cannot
 -- change what they read or write.
 SET LOCAL lock_timeout = '5s';
+-- Creating a SQL function parses its body, which takes ACCESS SHARE on every table it names and
+-- so waits behind any ACCESS EXCLUSIVE request on the five inputs. Unparsed, the migration locks
+-- only the tables it creates; the tests call every function.
+SET LOCAL check_function_bodies = off;
 
 CREATE TABLE public.source_items (
     source_id text NOT NULL,
