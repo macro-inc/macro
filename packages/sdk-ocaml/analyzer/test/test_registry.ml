@@ -31,6 +31,14 @@ let () =
         to_assoc operations
         |> List.map (fun (operation, entry) -> ((service, operation), entry)))
   in
+  (* Yojson keeps a duplicated key twice; Rust's reader keeps the last one,
+     so a second line would silently win there. *)
+  let keys = List.map fst registry in
+  List.iter
+    (fun (service, operation) ->
+      if List.length (List.filter (( = ) (service, operation)) keys) > 1 then
+        fail "%s %s: classified more than once" service operation)
+    (List.sort_uniq compare keys);
   let sdk =
     List.sort_uniq compare
       (List.map
