@@ -51,6 +51,15 @@ impl MailboxGateway for Provider {
         self.reads.lock().unwrap().push("message".into());
         Ok(None)
     }
+    async fn received_since(
+        &self,
+        _: MailboxKey,
+        _: &ProviderId,
+        _: chrono::DateTime<chrono::Utc>,
+        _: u16,
+    ) -> Result<email_api_client::domain::models::ReceivedMessages, EmailApiError> {
+        Ok(Default::default())
+    }
     async fn admitted_requests(&self, _: MailboxKey) -> Option<u64> {
         None
     }

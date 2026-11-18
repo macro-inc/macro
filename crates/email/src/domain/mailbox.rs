@@ -1,8 +1,9 @@
 //! Durable mailbox enumeration independent from provider-specific notifications.
 
+use chrono::{DateTime, Utc};
 use email_api_client::domain::models::{
-    EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, StreamPosition,
-    StreamToken,
+    EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, ReceivedMessages,
+    StreamPosition, StreamToken,
 };
 use progress::{ImportCompleted, ImportTally};
 use std::future::Future;
@@ -161,6 +162,11 @@ pub struct StreamLease {
     /// checkpoint has read past yet, so a deferred or multi-page read keeps
     /// carrying it.
     pub notification: Option<Notification>,
+    /// While the folder's first delta round is under way: the time up to
+    /// which the folder has been checked for newly received mail, the start
+    /// of the round or of its latest sweep. A round lists only what the
+    /// folder held when it started.
+    pub swept_at: Option<DateTime<Utc>>,
 }
 
 /// A Graph change notification that made sync work due.
@@ -257,6 +263,14 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         queued: u32,
         retry_after_seconds: u32,
     ) -> impl Future<Output = Result<bool, MailboxError>> + Send;
+    /// Under the stream's lease, records that its folder was swept for new
+    /// mail as of the lease's start, and queues the `received` messages the
+    /// mailbox does not hold yet as live work. Returns how many it queued.
+    fn commit_sweep(
+        &self,
+        lease: &StreamLease,
+        received: &[ProviderId],
+    ) -> impl Future<Output = Result<u64, MailboxError>> + Send;
     fn claim_message(
         &self,
         lease_id: Uuid,
@@ -308,6 +322,15 @@ pub trait MailboxGateway: Send + Sync + 'static {
         message: &ProviderId,
         folders: &[MailFolder],
     ) -> impl Future<Output = Result<Option<MailboxMessage>, EmailApiError>> + Send;
+    /// The messages a folder received at or after `since`, newest first, at
+    /// most `limit` of them.
+    fn received_since(
+        &self,
+        mailbox: MailboxKey,
+        folder: &ProviderId,
+        since: DateTime<Utc>,
+        limit: u16,
+    ) -> impl Future<Output = Result<ReceivedMessages, EmailApiError>> + Send;
     /// Provider requests admitted for the mailbox's sync generation, when known.
     fn admitted_requests(&self, mailbox: MailboxKey) -> impl Future<Output = Option<u64>> + Send;
 }
@@ -461,6 +484,10 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             outlook.delta_advanced = tracing::field::Empty,
             outlook.folder_initial_complete = tracing::field::Empty,
             outlook.cursor_reset = tracing::field::Empty,
+            outlook.recent_listed = tracing::field::Empty,
+            outlook.recent_truncated = tracing::field::Empty,
+            outlook.recent_queued = tracing::field::Empty,
+            outlook.recent_failed = tracing::field::Empty,
             outlook.notification_wait_ms = lease
                 .notification
                 .as_ref()
@@ -476,6 +503,12 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
 
     async fn enumerate(&self, lease: &StreamLease) -> Result<bool, MailboxError> {
         let span = Span::current();
+        if let Some(since) = sweep_since(lease, Utc::now())
+            && let Err(error) = self.sweep(lease, since).await
+        {
+            record_failed(&span, lease.mailbox.link_id, &error);
+            return Err(error);
+        }
         if !lease.initial_complete {
             match self
                 .repo
@@ -552,6 +585,54 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             Err(error) => {
                 record_failed(&span, lease.mailbox.link_id, &error);
                 Err(error)
+            }
+        }
+    }
+
+    /// Lists the mail a folder in its first delta round received since
+    /// `since` and queues what the mailbox does not hold yet as live work,
+    /// which is claimed ahead of the import: the round never lists it. A
+    /// listing the provider refuses leaves the sweep due and the round goes
+    /// on, so a sweep can delay an import but never stop it.
+    async fn sweep(&self, lease: &StreamLease, since: DateTime<Utc>) -> Result<(), MailboxError> {
+        let span = Span::current();
+        let listed = maintain_lease(
+            async {
+                Ok(self
+                    .provider
+                    .received_since(lease.mailbox, &lease.folder, since, SWEEP_LIMIT)
+                    .await?)
+            },
+            || self.repo.renew(SyncLease::Stream(lease)),
+        )
+        .await;
+        let received = match listed {
+            Ok(received) => received,
+            Err(MailboxError::Provider(error)) => {
+                span.record("outlook.recent_failed", true);
+                if matches!(error, EmailApiError::RateLimited { .. }) {
+                    tracing::debug!(link_id = %lease.mailbox.link_id, error = %error, "outlook recent mail sweep deferred");
+                } else {
+                    tracing::warn!(link_id = %lease.mailbox.link_id, error = %error, "outlook recent mail sweep failed");
+                }
+                return Ok(());
+            }
+            Err(error) => return Err(error),
+        };
+        span.record("outlook.recent_listed", span_int(received.ids.len()));
+        span.record("outlook.recent_truncated", received.truncated);
+        match self.repo.commit_sweep(lease, &received.ids).await {
+            Ok(queued) => {
+                span.record("outlook.recent_queued", span_int(queued));
+                Ok(())
+            }
+            Err(MailboxError::Stale) => Err(MailboxError::Stale),
+            // The sweep stays due and the round reads on: a sweep may delay
+            // an import, never stop it.
+            Err(error) => {
+                span.record("outlook.recent_failed", true);
+                tracing::warn!(link_id = %lease.mailbox.link_id, error = %error, "outlook recent mail sweep not saved");
+                Ok(())
             }
         }
     }
@@ -713,6 +794,38 @@ const IMPORT_QUEUED_AHEAD: u32 = 200;
 /// How long such a folder waits before it checks again. A mailbox imports at
 /// most about 12 messages a second, so its two pages outlast the wait.
 const IMPORT_PACE_SECONDS: u32 = 10;
+
+/// How long a folder in its first delta round goes without a sweep for new
+/// mail when no change notification says some arrived: the poll interval of
+/// a folder whose import is done.
+const SWEEP_INTERVAL_SECONDS: i64 = 120;
+
+/// How far before the last sweep the next one looks back. Graph dates mail
+/// when Exchange received it, which can be before the mail shows in the
+/// folder, and by a clock other than Macro's.
+const SWEEP_OVERLAP_SECONDS: i64 = 300;
+
+/// The most messages one sweep lists. More is rare between two sweeps; the
+/// rest arrive with the round after the import.
+const SWEEP_LIMIT: u16 = 200;
+
+/// When the leased folder is due a sweep for new mail, the time it looks
+/// back to. Only a folder partway through its first delta round sweeps: the
+/// round lists only what the folder held when it started, and a later round
+/// lists what changed since the last.
+fn sweep_since(lease: &StreamLease, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    if lease.initial_complete || lease.position.is_none() {
+        return None;
+    }
+    let swept_at = lease.swept_at?;
+    let notified = lease
+        .notification
+        .as_ref()
+        .is_some_and(|notification| notification.received_at > swept_at);
+    let interval = chrono::Duration::seconds(SWEEP_INTERVAL_SECONDS);
+    (notified || now - swept_at >= interval)
+        .then(|| swept_at - chrono::Duration::seconds(SWEEP_OVERLAP_SECONDS))
+}
 
 /// Claims after which a message the provider keeps refusing outright
 /// (malformed, forbidden) is abandoned: 3 tries, 10 minutes apart.

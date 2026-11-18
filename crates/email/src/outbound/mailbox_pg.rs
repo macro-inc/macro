@@ -145,7 +145,7 @@ impl MailboxSyncRepository for PgMailboxSync {
                 notified_traceparent = NULL
             FROM candidate c, email_links l WHERE s.id = c.id AND l.id = s.link_id
             RETURNING s.id, s.link_id, s.generation, l.grant_generation, s.scope_id,
-                s.position, s.initial_complete, s.fence, s.notified_at, c.notified_traceparent
+                s.position, s.initial_complete, s.fence, s.notified_at, c.notified_traceparent, s.swept_at
         "#, lease_id).fetch_optional(&self.db).await.map_err(db_error)?;
         row.map(|row| {
             Ok(StreamLease {
@@ -161,6 +161,7 @@ impl MailboxSyncRepository for PgMailboxSync {
                 lease_id,
                 fence: row.fence,
                 notification: notification(row.notified_at, row.notified_traceparent),
+                swept_at: row.swept_at,
             })
         })
         .transpose()
@@ -191,6 +192,11 @@ impl MailboxSyncRepository for PgMailboxSync {
                 initial_complete = s.initial_complete OR $5,
                 -- A round's first page records the reader revision it started at.
                 reader_revision = CASE WHEN s.position IS NULL THEN $7 ELSE s.reader_revision END,
+                -- A first round sweeps for new mail from the time its first page
+                -- started reading (or, for a round begun before sweeps, its next
+                -- page did); its checkpoint ends the sweeps.
+                swept_at = CASE WHEN s.initial_complete OR $5 THEN NULL
+                    WHEN s.position IS NULL OR s.swept_at IS NULL THEN s.lease_started_at ELSE s.swept_at END,
                 last_completed_at = CASE WHEN $5 THEN now() ELSE last_completed_at END,
                 next_run_at = CASE WHEN $5 AND (s.notified_at IS NULL OR s.notified_at <= s.lease_started_at)
                     THEN now() + interval '2 minutes' ELSE now() END,
@@ -306,6 +312,68 @@ impl MailboxSyncRepository for PgMailboxSync {
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation,i64::from(queued),lease.id,lease.lease_id,lease.fence,f64::from(delay))
             .execute(&self.db).await.map_err(db_error)?;
         Ok(paced.rows_affected() == 1)
+    }
+
+    async fn commit_sweep(
+        &self,
+        lease: &StreamLease,
+        received: &[ProviderId],
+    ) -> Result<u64, MailboxError> {
+        let ids: Vec<&str> = received.iter().map(ProviderId::as_str).collect();
+        let mut tx = self.db.begin().await.map_err(db_error)?;
+        Self::lock_attachment_completion(&mut tx, lease.mailbox).await?;
+        let swept = sqlx::query!(
+            r#"
+            UPDATE email_sync_streams s SET swept_at = s.lease_started_at
+            FROM email_links l WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3
+                AND s.lease_until > now() AND s.link_id = l.id AND s.generation = l.sync_generation
+                AND l.is_sync_active AND l.grant_generation = $4
+        "#,
+            lease.id,
+            lease.lease_id,
+            lease.fence,
+            lease.mailbox.grant_generation
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
+        if swept.rows_affected() != 1 {
+            return Err(MailboxError::Stale);
+        }
+        // The probe reads `uq_messages_link_id_provider_id` once per listed
+        // id. Statistics that think the link holds no mail can't tell that
+        // index from `idx_email_messages_link_id` and read the whole mailbox
+        // instead, so the insert is bounded: it holds the link lock, and a
+        // healthy probe takes well under a second. Set after the lock, so
+        // waiting for it is not cut short.
+        sqlx::query!("SET LOCAL statement_timeout = '10s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        // Mail the mailbox already holds, or that is already queued (an
+        // import row stays one), is left alone; the rest is live work.
+        let queued = sqlx::query!(
+            r#"
+            INSERT INTO email_message_reconciliation (link_id,generation,provider_id,is_import,notified_at,notified_traceparent)
+            SELECT $1,$2,r.provider_id,false,$4,$5 FROM unnest($3::text[]) r(provider_id)
+            WHERE NOT EXISTS (SELECT 1 FROM email_messages m WHERE m.link_id = $1 AND m.provider_id = r.provider_id)
+            ON CONFLICT (link_id,generation,provider_id) DO NOTHING
+        "#,
+            lease.mailbox.link_id,
+            lease.mailbox.sync_generation,
+            &ids as &[&str],
+            lease.notification.as_ref().map(|notification| notification.received_at),
+            lease
+                .notification
+                .as_ref()
+                .and_then(|notification| notification.traceparent.as_deref())
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?
+        .rows_affected();
+        tx.commit().await.map_err(db_error)?;
+        Ok(queued)
     }
 
     async fn claim_message(&self, lease_id: Uuid) -> Result<Option<MessageLease>, MailboxError> {

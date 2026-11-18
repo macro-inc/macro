@@ -4,6 +4,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 mod import_pacing;
 mod import_reads;
+mod recent_mail;
 mod retries;
 
 pub(super) async fn fixture(db: &PgPool) -> (PgMailboxSync, Uuid) {

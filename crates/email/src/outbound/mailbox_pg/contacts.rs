@@ -40,6 +40,7 @@ impl AddressBookRepository for PgMailboxSync {
                     lease_id,
                     fence: row.fence,
                     notification: None,
+                    swept_at: None,
                 },
             })
         })

@@ -241,6 +241,18 @@ impl MailboxGateway for UncertainProvider {
     > {
         unreachable!("commands must not fetch bodies or attachments")
     }
+    async fn received_since(
+        &self,
+        _: MailboxKey,
+        _: &ProviderId,
+        _: chrono::DateTime<chrono::Utc>,
+        _: u16,
+    ) -> Result<
+        email_api_client::domain::models::ReceivedMessages,
+        email_api_client::domain::models::EmailApiError,
+    > {
+        Ok(Default::default())
+    }
     async fn admitted_requests(&self, _: MailboxKey) -> Option<u64> {
         None
     }

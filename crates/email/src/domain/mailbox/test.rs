@@ -65,3 +65,59 @@ fn a_message_failing_for_its_own_reasons_is_still_abandoned() {
         MessageRetry::Abandon
     );
 }
+
+fn lease_mid_round(swept_at: Option<DateTime<Utc>>) -> StreamLease {
+    StreamLease {
+        id: Uuid::now_v7(),
+        mailbox: MailboxKey {
+            link_id: Uuid::now_v7(),
+            sync_generation: 1,
+            grant_generation: 1,
+        },
+        folder: ProviderId::new("inbox").unwrap(),
+        position: Some(StreamToken::new("page-2".into())),
+        initial_complete: false,
+        lease_id: Uuid::now_v7(),
+        fence: 1,
+        notification: None,
+        swept_at,
+    }
+}
+
+#[test]
+fn a_first_round_sweeps_on_news_or_after_two_minutes_with_five_minutes_of_overlap() {
+    let swept = Utc::now();
+    let overlap = chrono::Duration::minutes(5);
+    let mut lease = lease_mid_round(Some(swept));
+    assert_eq!(
+        sweep_since(&lease, swept + chrono::Duration::seconds(119)),
+        None
+    );
+    assert_eq!(
+        sweep_since(&lease, swept + chrono::Duration::minutes(2)),
+        Some(swept - overlap)
+    );
+
+    lease.notification = Some(Notification {
+        received_at: swept,
+        traceparent: None,
+    });
+    assert_eq!(sweep_since(&lease, swept), None, "already swept for it");
+    lease.notification = Some(Notification {
+        received_at: swept + chrono::Duration::seconds(1),
+        traceparent: None,
+    });
+    assert_eq!(
+        sweep_since(&lease, swept + chrono::Duration::seconds(1)),
+        Some(swept - overlap)
+    );
+
+    let later = swept + chrono::Duration::hours(1);
+    assert_eq!(sweep_since(&lease_mid_round(None), later), None);
+    let mut first_page = lease_mid_round(Some(swept));
+    first_page.position = None;
+    assert_eq!(sweep_since(&first_page, later), None);
+    let mut caught_up = lease_mid_round(Some(swept));
+    caught_up.initial_complete = true;
+    assert_eq!(sweep_since(&caught_up, later), None);
+}

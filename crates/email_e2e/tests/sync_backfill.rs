@@ -471,7 +471,6 @@ async fn outlook_mail_arriving_during_the_import_is_kept_once() -> Result<(), Re
 /// fails, new mail waits until the whole of its folder is imported, and a
 /// large mailbox looks as if it stopped syncing after linking.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "known bug: outlook-new-mail-waits-for-folder-import"]
 async fn outlook_mail_arriving_mid_import_shows_before_the_import_ends() -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;

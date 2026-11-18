@@ -144,6 +144,17 @@ where
     ) -> Result<Option<MailboxMessage>, EmailApiError> {
         self.0.message(access(mailbox), id, folders).await
     }
+    async fn received_since(
+        &self,
+        mailbox: MailboxKey,
+        folder: &ProviderId,
+        since: chrono::DateTime<chrono::Utc>,
+        limit: u16,
+    ) -> Result<ReceivedMessages, EmailApiError> {
+        self.0
+            .received_since(access(mailbox), folder, since, limit)
+            .await
+    }
     async fn admitted_requests(&self, mailbox: MailboxKey) -> Option<u64> {
         self.0.admitted_requests(access(mailbox)).await
     }

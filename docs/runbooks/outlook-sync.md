@@ -34,6 +34,17 @@ fewer than 200 messages ready to import; until then its enumerate spans read
 `@outlook.outcome:paced`, which is the import keeping pace, not a stall.
 Messages backed off after their own failures don't count.
 
+A folder still in its first delta round lists only what it held when the
+round started, so mail that arrives meanwhile is found by a sweep instead:
+when a change notification is newer than the folder's last sweep, or every 2
+minutes, the enumerate span first lists the folder's mail received since that
+sweep (with 5 minutes of overlap, at most 200 messages) and queues what Macro
+doesn't hold yet as live work, which is claimed ahead of the import. The span
+records `@outlook.recent_listed`, `@outlook.recent_truncated` and
+`@outlook.recent_queued`; `@outlook.recent_failed:true` means Graph refused
+the listing or its result could not be saved (the warning says which), and
+the sweep stays due while the round reads on.
+
 A message whose own reads keep failing stops retrying: after 3 refusals Graph
 won't change (`permanent`, such as an undecodable response, or `forbidden`, a
 403 on that one message) or 50 failures of any other kind (about a day of

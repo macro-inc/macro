@@ -474,6 +474,21 @@ tools — hexagonal, heavily feature-gated.
   same reason. Live folder streams are never paced.
   A message released after a failed read is due at once when a newer
   revision arrived during the lease.
+- A folder stream in its first delta round can't list mail that arrives
+  while the round runs, so `MailboxSyncService::sweep` lists the folder's
+  mail received since `email_sync_streams.swept_at` (less 5 minutes of
+  overlap, at most 200, through the `Live` provider) before the page, when a
+  notification is newer than `swept_at` or 2 minutes have passed
+  (`sweep_since`), paced or not. `commit_sweep` queues what `email_messages`
+  doesn't hold as live rows (an import row stays one) and moves `swept_at` to
+  the lease's start, under the link lock and the stream's fence. The round's
+  first page stamps `swept_at` and its checkpoint clears it. A sweep Graph
+  refuses, or whose save fails for anything but a lost lease, leaves
+  `swept_at` and never fails the page. The insert holds the link lock, so
+  it runs under a 10 s `statement_timeout`: statistics that think a link
+  holds no mail can read the whole mailbox through
+  `idx_email_messages_link_id` instead of probing
+  `uq_messages_link_id_provider_id`.
 - "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
   under the link lock, once per import run: the folder-catalog stream's
   `import_completed_at` is stamped when every folder is enumerated and no
@@ -511,6 +526,9 @@ tools — hexagonal, heavily feature-gated.
   restarts streams whose round started at an older revision (or none), Inbox
   and Sent first, through the Outlook resync's reset limited to those folders;
   a new query that copies or resets streams keeps the column consistent.
+  `swept_at` (above) follows the same rule: `rebind_work` copies it, and a
+  reset needs nothing, since a stream with no position never sweeps and its
+  first page stamps it again.
   `PgMailboxSync::with_imports_paused` makes `claim_message` take only live
   rows (`is_import IN (false,$2)` keeps both values named for the claim index).
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
