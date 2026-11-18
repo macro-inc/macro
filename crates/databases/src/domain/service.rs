@@ -537,7 +537,7 @@ where
 {
     #[tracing::instrument(skip(self), err)]
     async fn create_database(&self, command: CreateDatabase) -> Result<Database, DatabaseError> {
-        self.create_database_at(command, None).await
+        self.create_database_at(command, None, None).await
     }
 
     #[tracing::instrument(skip(self, receipt), err)]

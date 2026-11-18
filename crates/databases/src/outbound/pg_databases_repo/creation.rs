@@ -14,12 +14,13 @@ where
         command: &CreateDatabase,
         first_table: FirstTable,
         project_id: Option<&str>,
+        database_id: DatabaseId,
     ) -> Result<Database, PgDatabasesRepoError> {
         let mut transaction = self.pool.begin().await?;
-        let table_id = TableId::new();
+        let table_id = first_table.ids.map(|ids| ids.table).unwrap_or_default();
         let mut database = insert_owned_database(
             &mut transaction,
-            DatabaseId::new(),
+            database_id,
             &command.name,
             command.owner_id.as_ref(),
             table_id,
@@ -44,7 +45,10 @@ where
             .map_err(|error| PgDatabasesRepoError::Properties(Box::new(error)))?;
         insert_column(
             &mut transaction,
-            ColumnId::new(),
+            first_table
+                .ids
+                .map(|ids| ids.title_column)
+                .unwrap_or_default(),
             table_id,
             title.definition.id,
             &position_after(None)?,

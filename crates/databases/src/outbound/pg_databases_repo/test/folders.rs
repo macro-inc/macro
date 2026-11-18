@@ -165,6 +165,7 @@ async fn create_database_in_project_rolls_back_when_the_folder_is_missing(pool: 
     ).fetch_one(&pool).await.unwrap();
     assert!(
         repo.create_database_in_project(
+            DatabaseId::new(),
             &CreateDatabase {
                 name: "Tasks".into(),
                 owner_id: user(),
@@ -172,6 +173,7 @@ async fn create_database_in_project_rolls_back_when_the_folder_is_missing(pool: 
                 first_table: None
             },
             FirstTable {
+                ids: None,
                 name: "Tasks".into(),
                 title_column: "Name"
             },

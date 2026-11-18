@@ -385,23 +385,26 @@ where
         self.query_by_id(id).await
     }
 
-    #[tracing::instrument(err, skip(self, command))]
+    #[tracing::instrument(err, skip(self, command, first_table))]
     async fn create_database(
         &self,
+        id: DatabaseId,
         command: &CreateDatabase,
         first_table: FirstTable,
     ) -> Result<Database, Self::Error> {
-        self.create_database_at(command, first_table, None).await
+        self.create_database_at(command, first_table, None, id)
+            .await
     }
 
-    #[tracing::instrument(err, skip(self, command))]
+    #[tracing::instrument(err, skip(self, command, first_table))]
     async fn create_database_in_project(
         &self,
+        id: DatabaseId,
         command: &CreateDatabase,
         first_table: FirstTable,
         project_id: &str,
     ) -> Result<Database, Self::Error> {
-        self.create_database_at(command, first_table, Some(project_id))
+        self.create_database_at(command, first_table, Some(project_id), id)
             .await
     }
 

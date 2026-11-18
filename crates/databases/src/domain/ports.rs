@@ -41,6 +41,7 @@ pub trait DatabasesRepo: Send + Sync + 'static {
     /// column, granting the creator owner access, all or nothing.
     fn create_database(
         &self,
+        id: DatabaseId,
         command: &CreateDatabase,
         first_table: FirstTable,
     ) -> impl Future<Output = Result<Database, Self::Error>> + Send;
@@ -49,6 +50,7 @@ pub trait DatabasesRepo: Send + Sync + 'static {
     /// sharing is deliberately not inherited by imported databases.
     fn create_database_in_project(
         &self,
+        id: DatabaseId,
         command: &CreateDatabase,
         first_table: FirstTable,
         project_id: &str,
@@ -395,10 +397,18 @@ pub trait TableEventPublisher: Send + Sync + 'static {
 
 /// Creation for imports that review database sharing independently of folders.
 pub trait DatabasesProjectService: DatabasesService {
+    /// Create a caller-reserved owner-only database at the top level.
+    fn create_database_with_id(
+        &self,
+        id: DatabaseId,
+        command: CreateDatabase,
+    ) -> impl Future<Output = Result<Database, DatabaseError>> + Send;
+
     /// Create atomically inside the owner's project, without inheriting its
     /// grants. Apply the database's reviewed sharing separately afterward.
     fn create_database_in_project(
         &self,
+        id: DatabaseId,
         command: CreateDatabase,
         project: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<Database, DatabaseError>> + Send;

@@ -13,7 +13,9 @@ use entity_access::outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use models_databases::{CellValue, CellWrite, DatabaseOp, OpResult, RowsChange, RowsResult};
+use models_databases::{
+    CellValue, CellWrite, DatabaseId, DatabaseOp, OpResult, RowsChange, RowsResult,
+};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel as ShareAccessLevel;
 use sqlx::PgPool;
@@ -349,6 +351,7 @@ async fn create_database_in_project_keeps_shared_folder_access_independent(pool:
         .unwrap();
     let database = service
         .create_database_in_project(
+            DatabaseId::new(),
             CreateDatabase {
                 name: "Tasks".into(),
                 owner_id: owner.user_id.clone(),
@@ -395,5 +398,145 @@ async fn create_database_in_project_keeps_shared_folder_access_independent(pool:
             .database
             .id,
         database.id
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn project_team_link_access_to_filed_databases_and_documents(pool: PgPool) {
+    let run = Uuid::now_v7();
+    let owner = insert_user(&pool, &format!("macro|link-owner-{run}@example.com")).await;
+    let teammate = insert_user(&pool, &format!("macro|link-member-{run}@example.com")).await;
+    let team = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id, seat_count) VALUES ($1, 'Team', $2, 2)",
+        team,
+        owner.user_id.as_ref()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, $2, 'owner'), ($1, $3, 'member')", team, owner.user_id.as_ref(), teammate.user_id.as_ref()).execute(&pool).await.unwrap();
+    let folder = Uuid::now_v7();
+    let permission = Uuid::now_v7().to_string();
+    sqlx::query!(
+        r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, 'Imported page', $2)"#,
+        folder.to_string(),
+        owner.user_id.as_ref()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(r#"INSERT INTO "SharePermission" (id, "linkShare", "linkShareAccessLevel") VALUES ($1, 'TEAM', 'edit')"#, permission).execute(&pool).await.unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "ProjectPermission" ("projectId", "sharePermissionId") VALUES ($1, $2)"#,
+        folder.to_string(),
+        permission
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let document = Uuid::now_v7();
+    let document_permission = Uuid::now_v7().to_string();
+    sqlx::query!(r#"INSERT INTO "Document" (id, name, owner, "fileType", uploaded, "projectId") VALUES ($1, 'Personal page', $2, 'md', true, $3)"#, document.to_string(), owner.user_id.as_ref(), folder.to_string()).execute(&pool).await.unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "SharePermission" (id) VALUES ($1)"#,
+        document_permission
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "DocumentPermission" ("documentId", "sharePermissionId") VALUES ($1, $2)"#,
+        document.to_string(),
+        document_permission
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut transaction = pool.begin().await.unwrap();
+    entity_access_db_utils::insert_entity_access_row(
+        &mut transaction,
+        &folder,
+        EntityType::Project,
+        owner.user_id.as_ref(),
+        entity_access_db_utils::EntityAccessSourceType::User,
+        AccessLevel::Owner,
+    )
+    .await
+    .unwrap();
+    entity_access_db_utils::insert_entity_access_row(
+        &mut transaction,
+        &document,
+        EntityType::Document,
+        owner.user_id.as_ref(),
+        entity_access_db_utils::EntityAccessSourceType::User,
+        AccessLevel::Owner,
+    )
+    .await
+    .unwrap();
+    transaction.commit().await.unwrap();
+    let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        pool.clone(),
+    )));
+    let service = build_service(
+        pool.clone(),
+        access.clone(),
+        NoOpTableEventPublisher,
+        NoopMacroEventBroker,
+    );
+    let receipt = access
+        .generate_entity_access_receipt::<OwnerAccessLevel>(
+            &owner.user_id,
+            None,
+            &folder.to_string(),
+            EntityType::Project,
+        )
+        .await
+        .unwrap();
+    let database = service
+        .create_database_in_project(
+            DatabaseId::new(),
+            CreateDatabase {
+                name: "Personal database".into(),
+                owner_id: owner.user_id.clone(),
+                acting_bot: None,
+                first_table: None,
+            },
+            receipt,
+        )
+        .await
+        .unwrap();
+    let folder_access = access
+        .get_access_level(
+            Some(&teammate.user_id),
+            &folder.to_string(),
+            EntityType::Project,
+        )
+        .await
+        .unwrap();
+    let document_access = access
+        .get_access_level(
+            Some(&teammate.user_id),
+            &document.to_string(),
+            EntityType::Document,
+        )
+        .await
+        .unwrap();
+    let database_access = access
+        .get_access_level(
+            Some(&teammate.user_id),
+            &database.id.to_string(),
+            EntityType::Database,
+        )
+        .await
+        .unwrap();
+    eprintln!(
+        "team-link access: folder={folder_access:?}, document={document_access:?}, database={database_access:?}"
+    );
+    assert_eq!(folder_access, Some(AccessLevel::Edit));
+    assert_eq!(database_access, None, "database grants remain independent");
+    assert_eq!(
+        document_access, None,
+        "folder link access does not replace the document's own grants"
     );
 }
