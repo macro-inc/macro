@@ -50,6 +50,11 @@ OpenSearch, and exposes backfill HTTP routes for each.
 - `changes_search_index` commits events that change nothing indexed before
   any reread claim; an event filtered later, in a worker, would hold the claim
   and absorb a later event that does change something.
+- Channel messages and agent-session prompts and replies are indexed through
+  `parsers::message_text::with_pastes_as_content`: `mention_utils`'
+  formatters drop `<m-paste>` (long pastes; in agent sessions also quoted
+  replies) with every tag they do not know, so a new message index writes its
+  pastes the same way.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
   already-deleted IDs — target specific IDs for those.
 - Run `POST /internal/backfill/email-attachment-status` on an environment only
