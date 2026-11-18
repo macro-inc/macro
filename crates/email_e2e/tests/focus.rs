@@ -278,13 +278,12 @@ async fn gmail_mail_of_an_owner_without_the_focus_flag_is_not_classified() -> Re
     let bobs = bob.link(Provider::Gmail, bob.email()).await?;
     let adas = ada.link(Provider::Gmail, ada.email()).await?;
 
-    let announced_before = announced(&stack, &bobs).await?;
     let left_out = arrives(&bobs, MALLORY, "Contract renewal for Bob").await?;
-    // Proof that the worker passed his mail over: it has been announced,
-    // and mail announced after it has been classified.
-    eventually("Bob's mail to be announced", DEFAULT_TIMEOUT, async || {
-        Ok((announced(&stack, &bobs).await? > announced_before).then_some(()))
-    })
+    eventually(
+        "the worker to leave Bob's mail for his flag",
+        DEFAULT_TIMEOUT,
+        async || Ok(stack.focus_skipped_without_flag(&left_out).then_some(())),
+    )
     .await?;
     let wanted = arrives(&adas, MALLORY, "Contract renewal for Ada").await?;
     let verdict = wait_until_classified(&ada, &wanted).await?;

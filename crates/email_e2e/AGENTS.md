@@ -157,7 +157,8 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   Focus flag: every owner has it unless the scenario turns it off with
   `turn_off_focus_flag_for(address)` before linking any inbox, since the
   worker reads the flag on its first look at the inboxes and again only
-  five minutes later. Classifying follows
+  five minutes later. `stack.focus_skipped_without_flag(thread_id)`
+  tells that the worker is done with a thread it left for that. Classifying follows
   the sync, so wait for the list or the thread's `focus`. Keep these
   scenarios in `tests/focus.rs`, whose tests nextest runs one at a time.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.

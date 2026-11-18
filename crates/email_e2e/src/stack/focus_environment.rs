@@ -42,6 +42,12 @@ pub(crate) fn focus_env(
         // Production's hour: the sweep at startup is the only one a
         // scenario sees, so mail is classified from its events.
         ("FOCUS_SWEEP_INTERVAL_SECS", "3600".to_owned()),
+        // The line that says a thread was left unclassified, and why, is
+        // debug: `Stack::focus_skipped_without_flag` reads it.
+        (
+            "RUST_LOG",
+            "info,email_focus_worker::inbound::kafka_consumer=debug".to_owned(),
+        ),
         ("OVERRIDE_TYPESAFE_API_URL", stand_ins.model_url()),
         (
             "OVERRIDE_AGENT_HARNESS_SERVICE_URL",
