@@ -1216,6 +1216,12 @@ its target again.
 
 ## Bulk delete
 
+**Delete** in a task row's context menu (right-click on desktop, long-press on
+touch, in lists, grouped lists, board, Gantt and Home) and in the open task's
+header menu opens the same confirmation, which stays open until you confirm or
+cancel. A menu item that opens a dialog must not dismiss its menu with a
+synthetic Escape, which the new dialog would take instead.
+
 Select task rows with their leading checkboxes, choose **Actions → Delete items**,
 then confirm **Delete**. On desktop the dialog opens with Delete focused, so Enter confirms
 and Escape cancels. Selected rows disappear while
