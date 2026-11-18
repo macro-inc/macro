@@ -300,19 +300,30 @@ pkgs.testers.runNixOSTest {
                 timeout=900,
             )
             # The control plane's limits carry the sold /home sizes; the
-            # agent is ready once their templates exist.
+            # agent is ready once the golden's snapshot holds an empty /home
+            # of each.
             curl = "curl --fail --silent --show-error --cert ${credentials}/client.crt --key ${credentials}/client.key --cacert /tmp/server.crt"
             controlPlane.succeed(
                 f"{curl} -X PUT -H 'content-type: application/json' https://192.168.1.2:8444/v1/host/limits"
                 " --data '{\"guestMemoryMaxBytes\": 2147483648, \"squeezeAboveBytes\": null, \"squeezeBelowBytes\": null, \"homeDiskGib\": [1]}'"
             )
             controlPlane.wait_until_succeeds(f"{curl} https://192.168.1.2:8444/health", timeout=300)
+            golden = "tank/firecracker/goldens/test/1v-512m"
+            snapshot = host.succeed(f"zfs list -H -t snapshot -o name -s creation {golden} | tail -n 1").strip()
+            host.succeed(
+                f"test -f \"$(zfs get -H -o value mountpoint {golden})/.zfs/snapshot/{snapshot.split('@')[1]}/home-1g.ext4\""
+            )
+            # A create is a dataset clone: it adds no block clones.
+            bclone_before = host.succeed("zpool get -H -p -o value bcloneused tank").strip()
             computer = json.loads(client(
                 "create ${computerId} --image test --vcpus 1 --memory-mib 512"
                 " --root-disk-gib 2 --home-disk-gib 1 --pairing-id ${pairingId}"
             ))
             assert computer["state"] == "running", computer
             host.succeed("zfs list -H -o name | grep -q 'computers/${computerId}'")
+            home = host.succeed("zfs get -H -o value mountpoint tank/firecracker/computers/${computerId}").strip()
+            host.succeed(f"test -f {home}/home.ext4 && ! ls {home} | grep -q '^home-'")
+            assert host.succeed("zpool get -H -p -o value bcloneused tank").strip() == bclone_before
             client("exec ${computerId} --root test -e /run/macro-restored")
             client("exec ${computerId} --root sh -c 'echo kept > /home/marker && sync'")
 

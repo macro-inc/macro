@@ -81,10 +81,10 @@ impl Disks for FakeDisks {
     async fn refill_spares(&self, _: &[GoldenKey], _: &[u32]) -> Result<(), FakeError> {
         Ok(())
     }
-    async fn prepare_home_templates(&self, _: &[u32]) -> Result<(), FakeError> {
+    async fn prepare_home_templates(&self, _: &[GoldenKey], _: &[u32]) -> Result<(), FakeError> {
         Ok(())
     }
-    fn home_templates_ready(&self, _: &[u32]) -> bool {
+    fn home_templates_ready(&self, _: &[GoldenKey], _: &[u32]) -> bool {
         true
     }
     fn backend(&self) -> DiskBackend {

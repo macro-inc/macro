@@ -3,7 +3,7 @@
 
 use std::sync::atomic::Ordering;
 
-use firecracker_host_api::{GoldenState, PowerState};
+use firecracker_host_api::{GoldenKey, GoldenState, PowerState};
 
 use super::{HostProbe, HostService};
 use crate::domain::health::{CheckOutcome, HealthCheck, HealthReport};
@@ -19,12 +19,12 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
         }
     }
 
-    /// Make every sold size's `/home` template; failures are logged and the
+    /// Make every sold size's empty `/home`; failures are logged and the
     /// readiness check stays failed.
     pub async fn prepare_home_templates(&self) {
         if let Err(error) = self
             .disks
-            .prepare_home_templates(&self.home_sizes_gib())
+            .prepare_home_templates(&self.restorable_goldens(), &self.home_sizes_gib())
             .await
         {
             tracing::error!(error = ?error, "making the /home templates failed");
@@ -34,21 +34,23 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
     /// Top up the ready disk sets of every restorable golden; failures are
     /// logged, creates clone instead.
     pub async fn refill_spares(&self) {
-        let ready: Vec<_> = self
-            .goldens
-            .list()
-            .into_iter()
-            .map(|golden| golden.key)
-            // Restorable: ready and its image still installed.
-            .filter(|key| self.goldens.availability(key) == GoldenAvailability::Ready)
-            .collect();
         if let Err(error) = self
             .disks
-            .refill_spares(&ready, &self.home_sizes_gib())
+            .refill_spares(&self.restorable_goldens(), &self.home_sizes_gib())
             .await
         {
             tracing::warn!(error = ?error, "refilling spare disk sets failed; creates clone meanwhile");
         }
+    }
+
+    /// Goldens a create can use: ready and their image still installed.
+    fn restorable_goldens(&self) -> Vec<GoldenKey> {
+        self.goldens
+            .list()
+            .into_iter()
+            .map(|golden| golden.key)
+            .filter(|key| self.goldens.availability(key) == GoldenAvailability::Ready)
+            .collect()
     }
 
     /// The host now.
@@ -124,7 +126,10 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
         } else {
             CheckOutcome::passed(HealthCheck::Swap)
         };
-        let home_templates = if self.disks.home_templates_ready(&self.home_sizes_gib()) {
+        let home_templates = if self
+            .disks
+            .home_templates_ready(&self.restorable_goldens(), &self.home_sizes_gib())
+        {
             CheckOutcome::passed(HealthCheck::HomeTemplates)
         } else {
             CheckOutcome::failed(
