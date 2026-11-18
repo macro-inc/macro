@@ -5,11 +5,15 @@ import type {
   SearchDocumentWire,
 } from '@graphql-cache/index';
 import {
+  type CacheResponseErrorCode,
   isCacheResponseErrorCode,
   isOwnerEpochLostError,
   isOwnerHandoffBlockedError,
 } from '@graphql-cache/protocol';
-import { classifyCacheError } from '@graphql-cache/telemetry';
+import {
+  type CacheErrorCode,
+  classifyCacheError,
+} from '@graphql-cache/telemetry';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -68,7 +72,9 @@ type Request = {
 /** A bounded name for why a search failed; its message never leaves. The
  * cache's own rejection code wins over the message, which for an owner
  * change says "timeout" without being the read timeout. */
-function searchFailureKind(error: unknown): string {
+function searchFailureKind(
+  error: unknown
+): CacheResponseErrorCode | CacheErrorCode {
   if (
     error instanceof Error &&
     'errorCode' in error &&

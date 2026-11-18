@@ -1505,11 +1505,16 @@ describe('Quick Access source integration', () => {
 
 describe('Soup search pool', () => {
   it('reads the cache only while a search holds the pool', async () => {
-    const [searching, setSearching] = createSignal(false);
+    const [text, setText] = createSignal('');
     const [mounted, setMounted] = createSignal(true);
     let pool: Accessor<SoupSearchPoolEntry[]> = () => [];
+    let idlePool: Accessor<SoupSearchPoolEntry[]> = () => [];
     const Search = () => {
-      pool = useSearchContext().entityPool(searching);
+      pool = useSearchContext().entityPool(() => text().trim() !== '');
+      return null;
+    };
+    const Idle = () => {
+      idlePool = useSearchContext().entityPool(() => false);
       return null;
     };
     const client = new QueryClient();
@@ -1521,14 +1526,17 @@ describe('Soup search pool', () => {
             get children() {
               return createComponent(SearchProvider, {
                 get children() {
-                  return createComponent(Show, {
-                    get when() {
-                      return mounted();
-                    },
-                    get children() {
-                      return createComponent(Search, {});
-                    },
-                  });
+                  return [
+                    createComponent(Idle, {}),
+                    createComponent(Show, {
+                      get when() {
+                        return mounted();
+                      },
+                      get children() {
+                        return createComponent(Search, {});
+                      },
+                    }),
+                  ];
                 },
               });
             },
@@ -1542,7 +1550,7 @@ describe('Soup search pool', () => {
       expect(pool()).toEqual([]);
 
       mocks.search.mockResolvedValue(page(0, 1));
-      setSearching(true);
+      setText('b');
       await vi.waitFor(() =>
         expect(pool().map((entry) => entry.id)).toEqual(['0'])
       );
@@ -1561,14 +1569,21 @@ describe('Soup search pool', () => {
         }),
         expect.anything()
       );
+      expect(idlePool()).toEqual([]);
 
-      setSearching(false);
-      mocks.changed?.();
+      setText('bu');
+      setText('bud');
+      expect(mocks.search).toHaveBeenCalledOnce();
+
+      setText('');
+      expect(mocks.unsubscribe).toHaveBeenCalledOnce();
       expect(pool()).toEqual([]);
 
-      setSearching(true);
-      await vi.waitFor(() => expect(mocks.search).toHaveBeenCalledTimes(2));
+      setText('c');
+      await vi.waitFor(() => expect(pool()).toHaveLength(1));
+      expect(mocks.search).toHaveBeenCalledTimes(2);
       setMounted(false);
+      expect(mocks.unsubscribe).toHaveBeenCalledTimes(2);
       mocks.changed?.();
       expect(mocks.search).toHaveBeenCalledTimes(2);
     } finally {

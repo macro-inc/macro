@@ -30,7 +30,7 @@ export function createEmbeddedSearchSource(options: {
     createSearchResultFilter(options.filters().type, query())
   );
   const entityPool = useOptionalSearchContext()?.entityPool(
-    () => !filtered() && Boolean(options.text().trim())
+    () => enabled() && !filtered() && Boolean(options.text().trim())
   );
   const search = createSearchState({
     surface: () => 'universal-input',

@@ -511,8 +511,8 @@ Phases you will see:
   class such as `timeout`, the host's 10 s read timeout) and the step that
   gave up in `search.failure_phase` (`search_page` or `materialize`).
   `search.buckets` names the list: `channel,dm,chat,document,note,project,task`
-  is the Soup local search pool behind Home, Drive and Tasks search, not
-  Command-K.
+  is the Soup local search pool behind the Home, Drive, Tasks, Soup view and
+  universal input searches, not Command-K.
   Only query lengths and counts are recorded. `email.drafts.discover` is
   event-driven local draft discovery, coalescing same-microtask notifications.
 - Preloading: block intent records `block.preload` with parallel

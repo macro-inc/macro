@@ -5,6 +5,7 @@ import { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
   type Accessor,
   createContext,
+  createMemo,
   createSignal,
   type FlowComponent,
   onCleanup,
@@ -31,9 +32,10 @@ export type SoupSearchPoolEntry = {
 interface SearchContextValue {
   /**
    * The rows Home, Drive, Tasks and Soup searches match locally, for a caller
-   * whose `searching` is true while its search has text. The pool reads the
-   * cache only while some caller is searching, and lists nothing otherwise:
-   * a loaded pool rereads its cache list on every cache change.
+   * whose `searching` is true while its search has text. Call it once while
+   * setting up; `searching` reads plain signals only. The pool reads the cache
+   * only while some caller is searching, and lists nothing to a caller that is
+   * not: a loaded pool rereads its cache list on every cache change.
    */
   entityPool: (searching: Accessor<boolean>) => Accessor<SoupSearchPoolEntry[]>;
   /**
@@ -55,20 +57,26 @@ export const useSearchContext = () => {
 
 export const useOptionalSearchContext = () => useContext(SearchContext);
 
+type PoolHold = { searching: Accessor<boolean> };
+
 export const SearchProvider: FlowComponent = (props) => {
-  const [searches, setSearches] = createSignal<Accessor<boolean>[]>([]);
+  const [holds, setHolds] = createSignal<PoolHold[]>([]);
+  // Only the flip matters: the list's effects would otherwise rerun, and
+  // replay the cache browse, on every keystroke of every search.
+  const anySearching = createMemo(() =>
+    holds().some((hold) => hold.searching())
+  );
   const { items } = useQuickAccessEntities(
     () => [...SEARCH_ENTITY_TYPES],
     () => '',
-    () => searches().some((searching) => searching())
+    anySearching
   );
   const routines = useQuickAccess().useList('routine').items;
   const entityPool = (searching: Accessor<boolean>) => {
-    setSearches((list) => [...list, searching]);
-    onCleanup(() =>
-      setSearches((list) => list.filter((entry) => entry !== searching))
-    );
-    return items;
+    const hold = { searching };
+    setHolds((list) => [...list, hold]);
+    onCleanup(() => setHolds((list) => list.filter((entry) => entry !== hold)));
+    return () => (searching() ? items() : []);
   };
 
   return (
