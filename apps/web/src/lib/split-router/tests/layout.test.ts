@@ -310,12 +310,12 @@ describe('parked layouts', () => {
       { park: ['pane-1' as PaneId] }
     );
     expect(result.status).toBe('committed');
-    // The parked pane keeps its entry and skips its guard; the other open
-    // pane shows the destination.
-    expect(router.panes()).toEqual(['pane-2']);
-    expect(router.retainedPanes()).toEqual(['pane-1', 'pane-2']);
+    // The parked pane keeps its entry and skips its guard; the destination
+    // gets a new pane rather than the one that moves into the parked slot.
+    expect(router.panes()).toEqual(['pane-3']);
+    expect(router.retainedPanes()).toEqual(['pane-1', 'pane-3']);
     expect(router.entry('pane-1' as PaneId)).toBe(home);
-    expect(routeIds(router.entry('pane-2' as PaneId))).toEqual(['mail']);
+    expect(routeIds(router.entry('pane-3' as PaneId))).toEqual(['mail']);
     expect(history.entries().at(-1)?.path).toBe('/mail');
     stop();
   });

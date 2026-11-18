@@ -348,16 +348,20 @@ export function createPanes<E extends PaneEntry, D>(
       diffOptions: Omit<DiffOptions<E>, 'createPaneId'>,
       park: readonly PaneId[] = []
     ): PanesDiff<E> {
-      // Panes to park count as parked already, so the diff neither reuses
-      // nor removes them; applying it leaves them retained and unshown.
-      const open = untrack(ids).filter((pane) => !park.includes(pane));
+      // The diff neither reuses nor removes panes to park, and the panes after
+      // them keep their slots; applying it leaves them retained and unshown.
+      const open = untrack(ids);
       const live: LivePanes<E> = {
         panes: open,
         parked: untrack(retained).filter((pane) => !open.includes(pane)),
         read: (pane) => untrack(() => store.read(pane)),
       };
 
-      return diffPanes(live, incoming, { ...diffOptions, createPaneId });
+      return diffPanes(live, incoming, {
+        ...diffOptions,
+        createPaneId,
+        reserved: park,
+      });
     },
 
     /**

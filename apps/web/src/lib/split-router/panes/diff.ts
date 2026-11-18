@@ -37,6 +37,11 @@ export type DiffOptions<E extends PaneEntry = PaneEntry> = {
   same(current: E, incoming: E): boolean;
   /** What to show when `incoming` is already in a pane's history as `stored`. */
   adopt?(stored: E, incoming: E): E;
+  /**
+   * Live panes the diff neither reuses nor removes (panes being parked); they
+   * keep their slots, so the other panes do not shift into them.
+   */
+  reserved?: readonly PaneId[];
 };
 
 /**
@@ -48,7 +53,7 @@ export function diffPanes<E extends PaneEntry>(
   incoming: readonly IncomingPane<E>[],
   options: DiffOptions<E>
 ): PanesDiff<E> {
-  const used: PaneId[] = [];
+  const used: PaneId[] = [...(options.reserved ?? [])];
   const isLive = (pane: PaneId) => live.panes.includes(pane);
   const isUsed = (pane: PaneId) => used.includes(pane);
 

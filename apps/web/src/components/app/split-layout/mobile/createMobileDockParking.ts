@@ -4,7 +4,6 @@ import type { PaneId, SplitRouter } from '@app/lib/split-router';
 import { enableMobileParkedDockViews } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, createComputed, on, untrack } from 'solid-js';
 import {
   type ReplaceAllSplitsOptions,
@@ -164,44 +163,39 @@ export function createMobileDockParking(options: {
     const parkable =
       rootView !== undefined && returnsTo(rootView) && open.length <= 2;
     const park = root && parkable ? [root] : [];
-    // An older parked copy of the view being parked is superseded by it.
-    const superseded =
-      park.length > 0
-        ? parked.filter((pane) => untrack(() => viewOfPane(pane)) === rootView)
-        : [];
-    discard(superseded);
 
-    const span = Telemetry.span('mobile_dock.switch');
-    span.setAttr('view.id', target);
-    span.setAttr('mobile_dock.restored', restore !== undefined);
-    span.setAttr('mobile_dock.evicted', evict(restore, park.length, limit));
+    // Panes that left parking another way (a link, a close) leave no order.
+    for (const pane of lastShown.keys())
+      if (!parked.includes(pane)) lastShown.delete(pane);
+    // Evicting first keeps the limit even while the switch runs; a switch a
+    // leave guard refuses has evicted views that resume as without parking.
+    const evicted = evict(restore, park.length, limit);
     for (const pane of park) lastShown.set(pane, ++showCount);
+    const attributes = {
+      'mobile_dock.evicted': evicted,
+      'mobile_dock.parked_count':
+        parked.length - evicted - (restore ? 1 : 0) + park.length,
+    };
 
     if (!restore) {
       manager.replaceAllSplits(content, {
         ...showOptions,
         park: park.map(splitOf),
-        attributes: { 'navigation.restored_from_parked': false },
+        attributes: { ...attributes, 'navigation.restored_from_parked': false },
       });
-      span.setAttr('mobile_dock.parked_count', untrack(parkedPanes).length);
-      span.end();
       return;
     }
 
     const showParked = async () => {
-      try {
-        const result = await router.showLayout([restore], {
-          closeOpen: true,
-          park,
-        });
-        span.setAttr('mobile_dock.outcome', result.status);
-        if (result.status === 'cancelled') return;
+      const result = await router.showLayout([restore], {
+        closeOpen: true,
+        park,
+        attributes,
+      });
+      if (result.status === 'cancelled') return;
 
-        manager.activateSplit(splitOf(restore));
-        span.setAttr('mobile_dock.parked_count', untrack(parkedPanes).length);
-      } finally {
-        span.end();
-      }
+      manager.activateSplit(splitOf(restore));
+      manager.unSpotlightSplit();
     };
     fireAndForget(showParked(), 'mobile-dock-parking');
   };
