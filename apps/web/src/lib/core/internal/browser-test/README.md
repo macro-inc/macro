@@ -137,6 +137,9 @@ URL: `groups` (named channels and group DMs), `dms`, `people` in the contact
 cache and its read `latency` in milliseconds. `share-recipient-adapters.ts`
 builds them from a fixed seed. The page shows the selected recipients
 (`data-testid="recipients"`) and counts contact reads (`data-testid="reads"`).
+Desktop/phone tests hold each read for 4 s and check that the people still
+matching the typed text stay listed while it is pending, nobody who stopped
+matching stays, and a listed person can be picked.
 
 `share-recipients.measure.mjs` times typing there over production builds of
 this fixture. Build each version you compare, then run it:
