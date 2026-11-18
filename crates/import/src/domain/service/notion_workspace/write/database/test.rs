@@ -175,6 +175,16 @@ const DATABASE: Uuid = Uuid::from_u128(500);
 const TABLE: Uuid = Uuid::from_u128(501);
 const TITLE_COLUMN: Uuid = Uuid::from_u128(502);
 
+impl crate::domain::ports::ImportedTargetReader for FakeWriter {
+    async fn target_exists(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: crate::domain::ports::SharedEntity,
+    ) -> anyhow::Result<bool> {
+        Ok(true)
+    }
+}
+
 impl WorkspaceWriter for FakeWriter {
     async fn create_tracker_project(
         &self,

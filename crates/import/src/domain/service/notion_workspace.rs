@@ -483,13 +483,14 @@ where
         tracing::Span::current().record("already_in_macro", already_imported.len());
         // The whole tree is staged before the decision model answers, so the
         // review shows it while each batch is decided.
-        self.repo
-            .replace_plan(
-                user,
-                self.workspace_source,
-                &tree.staged_rows(sharing, team, &already_imported),
-            )
-            .await?;
+        super::lifecycle::replace_plan(
+            &self.repo,
+            self.creator.as_ref(),
+            user,
+            self.workspace_source,
+            &tree.staged_rows(sharing, team, &already_imported),
+        )
+        .await?;
         self.notify(user).await;
         // Objects already in Macro need no decision, so they cost no model call.
         let items = tree.triage_items(&already_imported);
@@ -795,7 +796,10 @@ where
 
     /// The user's "Notion" folder: the one earlier imports made while it
     /// still exists, otherwise a new one.
-    async fn root_folder(&self, user: &MacroUserIdStr<'static>) -> Result<Uuid> {
+    pub(in crate::domain::service) async fn root_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<Uuid> {
         if let Some(folder) = self.repo.root_folder(user).await?
             && self.creator.folder_exists(user, folder).await?
         {

@@ -592,13 +592,20 @@ pub struct TeamMember {
     pub email: String,
 }
 
-/// Creates the Macro side of a workspace import: folders mirroring the
-/// source's tree, documents and tasks inside them, and databases.
-///
-/// Every entity is created as `user`, through the same services the app
-/// uses, so permissions, search and sync behave as for anything the user
-/// made by hand.
-pub trait WorkspaceWriter: Send + Sync + 'static {
+/// Reads lifecycle state through the imported entity's owning domain.
+pub trait ImportedTargetReader: Send + Sync + 'static {
+    /// Whether an imported target exists, is outside trash, and remains
+    /// readable by the caller. Transient read failures must be returned.
+    fn target_exists(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        target: SharedEntity,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
+}
+
+/// Creates workspace folders, documents, tasks and databases through their
+/// owning services, with the same permissions, search and sync as ordinary writes.
+pub trait WorkspaceWriter: ImportedTargetReader {
     /// Idempotently create a Macro project (initiative) with the ledger's
     /// stable id and the approved visibility, using attributed creation.
     fn create_tracker_project(
@@ -745,6 +752,26 @@ pub struct PlanRow {
 
 /// Ledger operations a workspace import needs beyond single-row staging.
 pub trait NotionPlanRepo: Send + Sync + 'static {
+    /// Before writing a replacement, remove a reviewed link's obsolete target
+    /// and record the replacement's actual sharing. CAS on the writing row.
+    fn clear_stale_link(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        shared: bool,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Replace a finished, deleted target's ledger generation after the domain
+    /// checked its liveness. CAS on the row and target id; never reset an
+    /// importing row. Preserve children, clear old written markers and claims.
+    /// The caller must own the row or belong to the holder's team.
+    fn renew_deleted_copy(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        entity_id: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
     /// Replace `user`'s current plan for `source`: drop the staged rows of the
     /// previous plan, then stage `rows` in order (parents before children),
     /// linking each to its parent row and to the review the `running` run

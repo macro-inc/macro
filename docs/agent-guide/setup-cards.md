@@ -30,6 +30,12 @@ Every other app opens Pipedream's Connect UI inside the dialog. A connected row
   **Open full review** uses the existing full-height sheet. Approve on the card,
   or say yes and let the agent submit it with `DecideReview`; planning must be ready.
   Stop affects the selected source only, and completed copies stay in Macro.
+  For Notion workspace imports, trash or permanently delete a completed copy,
+  then plan and approve again: it creates a new copy rather than linking the
+  deleted one or restoring trash. Verify this for the original importer, a
+  teammate's shared copy, and a personal copy. Deleting the Notion root folder
+  permits its deleted contents to be imported into a fresh root; re-importing
+  an active copy still reuses it. A teammate's active write keeps its claim.
 - Files also offers **Upload files** and **Upload a folder** (Drive's own
   uploads), and Customers offers **Upload a CSV** (the existing CSV import).
   Each closes the dialog first.

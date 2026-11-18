@@ -1,6 +1,7 @@
 //! Writing one object of a plan: claiming it for the team, linking it to a
 //! teammate's copy, or writing it and sharing what it became.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use import_notion::domain::inventory::full_markdown;
@@ -109,9 +110,15 @@ where
     ) -> Result<Written> {
         let claim = match target.team_id {
             Some(team_id) if item.shared || item.already_imported => {
-                self.repo
-                    .claim_team_object(user, item.import_id, team_id, item.shared)
-                    .await?
+                super::super::lifecycle::claim_team_object(
+                    &self.repo,
+                    self.creator.as_ref(),
+                    user,
+                    item.import_id,
+                    team_id,
+                    item.shared || item.already_imported,
+                )
+                .await?
             }
             _ => TeamClaim::Free,
         };
@@ -129,6 +136,16 @@ where
             TeamClaim::Held => true,
             TeamClaim::Free => false,
         };
+        if item.already_imported
+            && !self
+                .repo
+                .clear_stale_link(user, item.import_id, share)
+                .await?
+        {
+            return Err(ImportError::NotReady(
+                "The import stopped before its replacement was written.",
+            ));
+        }
         let (api, cancel) = (target.api, target.cancel);
         let (entity_id, entity_type) = match (item.kind, item.decision) {
             (ImportKind::DataSource, NotionDecision::Tasks) => {
@@ -174,14 +191,20 @@ where
             _ => {
                 let folder = target.place.folder_for(item, true);
                 let markdown = full_markdown(api, &item.notion_id).await?;
-                let id = target
-                    .links
-                    .pages
-                    .get(&item.notion_id)
-                    .map(|page| page.document_id)
-                    .ok_or_else(|| {
-                        ImportError::Other(anyhow::anyhow!("page {} has no id", item.notion_id))
-                    })?;
+                // A teammate's copy can disappear after the link snapshot.
+                // Once this row writes, its identity belongs to this generation.
+                let id = write::document_id(item.import_id);
+                let page = target.links.pages.get(&item.notion_id).ok_or_else(|| {
+                    ImportError::Other(anyhow::anyhow!("page {} has no id", item.notion_id))
+                })?;
+                let mut links = Cow::Borrowed(target.links);
+                if page.document_id != id {
+                    links
+                        .to_mut()
+                        .pages
+                        .entry(item.notion_id.clone())
+                        .and_modify(|page| page.document_id = id);
+                }
                 let (properties, dates) = match api.page(&item.notion_id).await {
                     Ok(page) => (
                         values::document_properties(&page),
@@ -199,7 +222,7 @@ where
                         id,
                         &item.title,
                         &markdown,
-                        target.links,
+                        links.as_ref(),
                         &properties,
                         Some(folder),
                         dates,
@@ -239,13 +262,16 @@ where
             .filter(|item| item.shared || item.already_imported)
             .map(|item| item.notion_id.as_str().to_string())
             .collect();
-        let copies: HashMap<String, ImportEntity> = self
-            .repo
-            .team_copies(user, &foreign_ids)
-            .await?
-            .into_iter()
-            .map(|copy| (copy.foreign_id.clone(), copy))
-            .collect();
+        let copies: HashMap<String, ImportEntity> = super::super::lifecycle::team_copies(
+            &self.repo,
+            self.creator.as_ref(),
+            user,
+            &foreign_ids,
+        )
+        .await?
+        .into_iter()
+        .map(|copy| (copy.foreign_id.clone(), copy))
+        .collect();
         let mut imported = HashMap::new();
         for item in pages {
             let own = self
@@ -253,6 +279,14 @@ where
                 .get(user, item.import_id)
                 .await?
                 .filter(|row| row.status == ImportStatus::Imported);
+            if let Some(row) = &own
+                && !super::super::lifecycle::live(&self.repo, self.creator.as_ref(), user, row)
+                    .await?
+            {
+                return Err(ImportError::NotReady(
+                    "A copied page was deleted during the write. Plan the import again.",
+                ));
+            }
             let document = match (own, copies.get(item.notion_id.as_str())) {
                 (Some(row), _) => imported_document(&row),
                 (None, Some(copy)) if copy.status == ImportStatus::Importing => {
@@ -280,7 +314,13 @@ where
             .iter()
             .map(|node| node.id.as_str().to_string())
             .collect();
-        let copies = self.repo.team_copies(user, &foreign_ids).await?;
+        let copies = super::super::lifecycle::team_copies(
+            &self.repo,
+            self.creator.as_ref(),
+            user,
+            &foreign_ids,
+        )
+        .await?;
         Ok(copies
             .into_iter()
             .filter(|copy| copy.status == ImportStatus::Imported)

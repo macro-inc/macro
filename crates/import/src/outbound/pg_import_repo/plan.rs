@@ -26,6 +26,24 @@ fn is_unique_violation(error: &sqlx::Error) -> bool {
 }
 
 impl NotionPlanRepo for PgImportRepo {
+    async fn clear_stale_link(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        shared: bool,
+    ) -> Result<bool> {
+        self.clear_stale_team_link(user, import_id, shared).await
+    }
+
+    async fn renew_deleted_copy(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        entity_id: &str,
+    ) -> Result<bool> {
+        self.renew_deleted_target(user, import_id, entity_id).await
+    }
+
     #[tracing::instrument(skip(self, rows), fields(rows = rows.len()), err)]
     async fn replace_plan(
         &self,
@@ -34,6 +52,9 @@ impl NotionPlanRepo for PgImportRepo {
         rows: &[PlanRow],
     ) -> Result<Vec<ImportEntity>> {
         let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *transaction)
+            .await?;
         // Locked until the plan is staged, so a review attached meanwhile
         // waits and then ties these rows too.
         let review_id = sqlx::query_scalar!(
@@ -48,15 +69,22 @@ impl NotionPlanRepo for PgImportRepo {
         .fetch_optional(&mut *transaction)
         .await?
         .flatten();
+        // Keep ancestors of finished children as well as resumable writes.
+        // OFFSET 0 keeps marker lookups correlated to these ledger rows;
+        // otherwise PostgreSQL can hash every user's written markers.
         sqlx::query!(
             r#"
             WITH RECURSIVE retained AS (
                 SELECT entity.id, entity.parent_id
                 FROM import_entity AS entity
                 WHERE entity.user_id = $1 AND entity.source = $2
-                  AND EXISTS (
-                      SELECT 1 FROM import_entity_written AS written
-                      WHERE written.import_id = entity.id
+                  AND (
+                      (entity.status IN ('importing', 'imported') AND entity.parent_id IS NOT NULL)
+                      OR EXISTS (
+                          SELECT 1 FROM import_entity_written AS written
+                          WHERE written.import_id = entity.id
+                          OFFSET 0
+                      )
                   )
                 UNION
                 SELECT parent.id, parent.parent_id

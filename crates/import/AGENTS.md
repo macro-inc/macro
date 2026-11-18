@@ -146,7 +146,7 @@ from this import's other databases into it are not linked.
   their database, and folders, databases, inserted rows, the Page column and
   relation columns are recorded in `import_entity_written` as they are made.
   Every import reuses the user's "Notion" folder (`import_run.root_folder_id`)
-  while it exists. Left open: a crash between creating a folder, a database
+  while it exists outside trash; a deleted root is replaced on the next write. Left open: a crash between creating a folder, a database
   or a row batch and recording it duplicates that one object or batch, and a
   crash between applying a schema op and recording it fails that database on
   resume (Macro refuses the column id).
@@ -156,7 +156,17 @@ from this import's other databases into it are not linked.
   personal copy never takes it, so teammates never see or link to it and
   import their own copy. Planning marks objects a teammate already imported
   and shared as `alreadyImported` (no decision-model call, not counted as
-  copies); the write links them. At write time `claim_team_object` decides per
+  copies); the write links them. `service/lifecycle.rs` checks finished targets
+  through `ImportedTargetReader` during planning and immediately before linking.
+  Missing or trashed documents, folders and database entities get a fresh ledger
+  generation and write ids on explicit re-import; the old trash copy stays
+  untouched. Renewal clears that generation's written markers and team claim,
+  preserves child rows, and never resets an `importing` row. Delete handlers
+  do not release claims eagerly: liveness checks repair stale claims, including
+  deletion between planning and writing. A replacement write uses its own
+  generation's document id even if the link snapshot still names the old team
+  copy, and clears the review's obsolete `alreadyImported` target. Transient
+  read errors preserve claims. At write time `claim_team_object` decides per
   shared object: hold the claim and write, link to a finished copy, take over a
   claim whose holder's run has no live lease, or wait. A waiting row is
   checked again after the rest is written, then parks with `waiting_on` the

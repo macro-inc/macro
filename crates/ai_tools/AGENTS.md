@@ -30,7 +30,9 @@ execution, display) that don't belong to a single domain.
   `ProjectService::create_project_dated_by_contents`, so the copy keeps
   Notion's dates. Notion tasks are created unshared and reached through their
   shared folder, while single tracked tasks (Linear) stay team-shared at
-  creation.
+  creation. `ImportedTargetReader` reads document/folder/database lifecycle
+  state through their owning domain ports; transient read failures propagate
+  so the import domain does not invalidate a live copy on an outage.
 - `src/import_jobs.rs`: `ImportJobs`, the shutdown token and tracker every
   host passes to `build_tool_service_context_from_env` (or its own import
   service) and calls `hand_over` on at shutdown, so running Notion imports

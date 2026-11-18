@@ -9,7 +9,7 @@ use databases::domain::receipt::database_receipt;
 use databases::domain::sharing::DatabaseSharingService as _;
 use documents::domain::models::DocumentError;
 use documents::domain::notion_markdown::{NotionMarkdown, NotionPageLink, NotionUserLink};
-use documents::domain::ports::DocumentService as _;
+use documents::domain::ports::{DocumentRepo as _, DocumentService as _};
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService as _;
 use import::domain::ports::{
@@ -106,6 +106,52 @@ fn new_database(detail: &DatabaseDetail) -> anyhow::Result<NewDatabase> {
         table: table.table.id,
         title_column: title_column.column.id,
     })
+}
+
+impl import::domain::ports::ImportedTargetReader for ToolEntityCreator {
+    #[tracing::instrument(skip(self, user), err)]
+    async fn target_exists(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        target: SharedEntity,
+    ) -> anyhow::Result<bool> {
+        let (id, kind) = match target {
+            SharedEntity::Document(id) => (id, model_entity::EntityType::Document),
+            SharedEntity::Folder(id) => (id, model_entity::EntityType::Project),
+            SharedEntity::Database(id) => (id, model_entity::EntityType::Database),
+        };
+        let receipt = match self
+            .entity_access_service
+            .generate_entity_access_receipt::<ViewAccessLevel>(user, None, &id.to_string(), kind)
+            .await
+        {
+            Ok(receipt) => receipt,
+            Err(error) if crate::tool_context::refuses_view(&error) => return Ok(false),
+            Err(error) => return Err(anyhow::Error::new(error)),
+        };
+        match target {
+            SharedEntity::Document(_) => match self
+                .document_service
+                .repo
+                .get_basic_document(&id.to_string())
+                .await
+            {
+                Ok(document) => Ok(document.deleted_at.is_none()),
+                Err(sqlx::Error::RowNotFound) => Ok(false),
+                Err(error) => Err(error.into()),
+            },
+            SharedEntity::Folder(_) => match self.project_service.get_project(receipt).await {
+                Ok(project) => Ok(project.project_metadata.deleted_at.is_none()),
+                Err(projects::domain::models::ProjectError::NotFound(_)) => Ok(false),
+                Err(error) => Err(error.into()),
+            },
+            SharedEntity::Database(_) => match self.databases_service.get_database(receipt).await {
+                Ok(database) => Ok(database.database.trashed_at.is_none()),
+                Err(databases::domain::models::DatabaseError::NotFound) => Ok(false),
+                Err(error) => Err(error.into()),
+            },
+        }
+    }
 }
 
 impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
@@ -227,25 +273,12 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         user: &MacroUserIdStr<'static>,
         folder: Uuid,
     ) -> anyhow::Result<bool> {
-        let Ok(receipt) = self
-            .entity_access_service
-            .generate_entity_access_receipt::<ViewAccessLevel>(
-                user,
-                None,
-                &folder.to_string(),
-                model_entity::EntityType::Project,
-            )
-            .await
-        else {
-            return Ok(false);
-        };
-        match self.project_service.get_project(receipt).await {
-            Ok(project) => Ok(project.project_metadata.deleted_at.is_none()),
-            Err(error) => {
-                tracing::warn!(error = ?error, %folder, "imported root folder was not read");
-                Ok(false)
-            }
-        }
+        import::domain::ports::ImportedTargetReader::target_exists(
+            self,
+            user,
+            SharedEntity::Folder(folder),
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self, user, name), err)]

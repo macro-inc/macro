@@ -12,6 +12,24 @@ use crate::domain::ports::{PlanRow, Result};
 struct Recorder(mpsc::UnboundedSender<(Instant, ScanCounts)>);
 
 impl NotionPlanRepo for Recorder {
+    async fn clear_stale_link(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: bool,
+    ) -> Result<bool> {
+        unreachable!("recording a scan never replaces links")
+    }
+
+    async fn renew_deleted_copy(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: &str,
+    ) -> Result<bool> {
+        unreachable!("recording a scan never renews copies")
+    }
+
     async fn replace_plan(
         &self,
         _: &MacroUserIdStr<'static>,
