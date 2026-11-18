@@ -54,8 +54,8 @@ call = { path = "../call", default-features = false, features = [
   "ports",
 ], optional = true }
 chrono = { workspace = true }
-connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 chrono-tz = { workspace = true }
+connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 email_utils = { path = "../email_utils" }
 futures = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [

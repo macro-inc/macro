@@ -43,7 +43,8 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 
 - Depends on: `call` (feature `call-meetings`, meeting links), `macro_user_id`,
   `notification` (feature `notify`), `model_notifications`, `aws-sdk-sqs`
-  (feature `dispatch-sqs`).
+  (feature `dispatch-sqs`), `connection_gateway_client` (feature
+  `gateway-refresh`).
 - Used by: `email`, `ai_tools`, `channel_bots`, `graphql_calendar`, `complete_graph`,
   `calendar_scheduling`, `search_service`.
 
