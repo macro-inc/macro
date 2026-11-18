@@ -71,6 +71,22 @@ export function rowIds(page: Page): Promise<string[]> {
     .catch(() => []); // The app redirects while it starts.
 }
 
+/**
+ * Each set of rows the list shows for `ms`, read every 100 ms, a set
+ * repeated in a row once: a list that stays put gives one. A single read
+ * can come before a late write reaches the list.
+ */
+export async function rowIdsFor(page: Page, ms: number): Promise<string[][]> {
+  const shown: string[][] = [];
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    const rows = await rowIds(page);
+    if (rows.join() !== shown.at(-1)?.join()) shown.push(rows);
+    await page.waitForTimeout(100);
+  }
+  return shown;
+}
+
 /** The thread id of the row the list's cursor is on. */
 export async function focusedRowId(page: Page): Promise<string | undefined> {
   const ids = await page

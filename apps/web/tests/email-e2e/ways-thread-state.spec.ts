@@ -6,7 +6,7 @@
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { trashFolder } from './harness/journeys';
-import { rowIds, seenRequestsInFlight } from './harness/list';
+import { rowIds, rowIdsFor, seenRequestsInFlight } from './harness/list';
 import { followup } from './harness/organise';
 import { anInbox, PROVIDERS } from './harness/providers';
 import { notice } from './harness/send';
@@ -67,7 +67,13 @@ for (const provider of PROVIDERS) {
         .toContain(trashFolder(provider));
       // The thread is gone, so the list is back, without its row.
       await expect(page).toHaveURL(/\/app\/mail$/);
-      await expect.poll(() => rowIds(page)).not.toContain(ids.Bin);
+      await expect
+        .poll(async () =>
+          (await rowIds(page)).filter(
+            (id) => id === ids.Bin || id === ids.Stays
+          )
+        )
+        .toEqual([ids.Stays]);
       saw('STL-990');
 
       // A thread marked done in its header, opened again from Archived.
@@ -137,7 +143,7 @@ for (const provider of PROVIDERS) {
       await marks.release();
       await allRead(mailbox, ids.Bin);
       await expect.poll(inFlight).toBe(0);
-      expect(await rowIds(page)).toEqual([ids.Stays]);
+      expect(await rowIdsFor(page, 3_000)).toEqual([[ids.Stays]]);
     });
 
     // When this fails, u in an open thread is not the thread's own mark
