@@ -51,8 +51,15 @@ export function SavedViewDialog(
     title?: string;
     submitLabel?: string;
     onSaved: (record: SavedView) => void;
+    onChange?: (fields: { name: string; sharedTeamId: string | null }) => void;
   } & (
-      | { mode: 'create'; id: string; name: string; config: unknown }
+      | {
+          mode: 'create';
+          id: string;
+          name: string;
+          config: unknown;
+          sharedTeamId?: string | null;
+        }
       // Edit renames and shares; a consumer that edits filters too passes
       // the replacement configuration, read when the form submits.
       | { mode: 'edit'; record: SavedView; config?: unknown }
@@ -106,7 +113,11 @@ export function SavedViewDialog(
       <SavedViewForm
         {...props}
         name={props.mode === 'edit' ? props.record.name : props.name}
-        sharedTeamId={props.mode === 'edit' ? props.record.sharedTeamId : null}
+        sharedTeamId={
+          props.mode === 'edit'
+            ? props.record.sharedTeamId
+            : (props.sharedTeamId ?? null)
+        }
         title={
           props.title ??
           (props.mode === 'edit' ? `Edit “${props.record.name}”` : 'Save view')

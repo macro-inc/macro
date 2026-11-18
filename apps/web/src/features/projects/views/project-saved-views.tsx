@@ -5,11 +5,11 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, openDialog } from '@ui';
 import { ok } from 'neverthrow';
-import { For, getOwner, Show } from 'solid-js';
-import { v4 as uuid } from 'uuid';
+import { getOwner, Show } from 'solid-js';
 import { SavedViewCreateButton } from '../../saved-views/components/saved-view-create-button';
 import {
   SavedViewList,
+  SavedViewListEntries,
   SavedViewListRow,
 } from '../../saved-views/components/saved-view-list';
 import { SavedViewMenuItems } from '../../saved-views/components/saved-view-menu';
@@ -105,40 +105,58 @@ function ProjectViewSummary(props: {
 }
 
 function createProjectViewDialogs(views: ProjectViews, owner = getOwner()) {
-  const create = (record?: SavedView) => {
-    const parsed = record ? readProjectSavedView(record.config) : undefined;
-    const captured = parsed ? ok(parsed.config) : views.draft.capture();
-    if (captured.isErr()) return toast.failure(captured.error);
-    const config = captured.value;
-    const id = uuid();
+  const open = () => {
+    const draft = views.creation.current();
+    if (!draft) return;
     const request = views.request();
     return openDialog(
       SavedViewDialog,
       () => ({
         mode: 'create' as const,
-        id,
-        name: record
-          ? t('viewMenus.copyName', { name: record.name.slice(0, 113) })
-          : t('viewMenus.newView'),
-        config,
-        title: record ? t('viewMenus.duplicateView') : t('viewMenus.saveView'),
-        submitLabel: record
-          ? t('viewMenus.duplicate')
-          : t('viewMenus.saveView'),
+        id: draft.id,
+        name: draft.name,
+        sharedTeamId: draft.sharedTeamId,
+        config: views.draft.capture().unwrapOr(draft.config),
+        title: t('viewMenus.saveView'),
+        submitLabel: t('viewMenus.saveView'),
         summary: (
           <ProjectViewSummary
-            config={config}
-            omitted={Boolean(parsed?.issues.length)}
+            config={readProjectSavedView(draft.config).config}
           />
         ),
         team: views.team(),
         viewerId: views.viewerId,
         refresh: views.list.refresh,
-        isCurrent: request.isCurrent,
-        onSaved: (created) => views.select(created.id),
+        isCurrent: () =>
+          request.isCurrent() && views.creation.current()?.id === draft.id,
+        onChange: (fields: { name: string; sharedTeamId: string | null }) =>
+          views.creation.update(fields),
+        onSaved: (created) => {
+          if (views.creation.confirm(created)) views.selectCreated(created.id);
+        },
       }),
       { owner }
     );
+  };
+  const create = (record?: SavedView) => {
+    if (!record && views.creation.current()) return open();
+    const captured = record
+      ? ok(readProjectSavedView(record.config).config)
+      : views.draft.capture();
+    if (captured.isErr()) return toast.failure(captured.error);
+    const name = record
+      ? t('viewMenus.copyName', { name: record.name.slice(0, 113) })
+      : t('viewMenus.newView');
+    let handle: ReturnType<typeof open>;
+    views.start(
+      captured.value,
+      name,
+      () => {
+        handle = open();
+      },
+      true
+    );
+    return handle;
   };
   const edit = (record: SavedView) => {
     const request = views.request();
@@ -182,29 +200,14 @@ export function ProjectSavedViewsList() {
   if (!views) return null;
   const dialogs = createProjectViewDialogs(views);
   const [attachCreateHotkeys] = useHotkeyDOMScope('create-project-view', true);
-  const items = () => {
-    const records = views.list.items();
-    const selected = views.draft.view();
-    if (
-      selected.kind !== 'saved' ||
-      selected.record.ownerId !== views.viewerId()
-    )
-      return records;
-    if (records?.some((record) => record.id === selected.record.id))
-      return records;
-    return [selected.record, ...(records ?? [])];
-  };
+  const items = views.creation.items;
   return (
     <>
       <SavedViewList.Items label={t('viewMenus.savedProjectViews')}>
-        <Show when={views.creating()}>
-          <SavedViewList.Draft
-            onSelect={() => {
-              // The draft is already active; let the sidebar close without cancelling it.
-            }}
-          />
-        </Show>
-        <For each={items()}>
+        <SavedViewListEntries
+          entries={views.creation.entries()}
+          onDraftSelect={() => {}}
+        >
           {(record) => (
             <SavedViewListRow
               view={record}
@@ -225,7 +228,7 @@ export function ProjectSavedViewsList() {
               )}
             />
           )}
-        </For>
+        </SavedViewListEntries>
       </SavedViewList.Items>
       <Show when={views.list.loading() && !items()}>
         <p role="status" class="px-3 py-2 text-xs text-ink-muted">
@@ -251,7 +254,10 @@ export function ProjectSavedViewsList() {
           {t('viewMenus.loadMoreViews')}
         </Button>
       </Show>
-      <SavedViewCreateButton ref={attachCreateHotkeys} onCreate={views.start} />
+      <SavedViewCreateButton
+        ref={attachCreateHotkeys}
+        onCreate={() => views.start()}
+      />
     </>
   );
 }

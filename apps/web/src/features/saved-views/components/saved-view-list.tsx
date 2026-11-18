@@ -16,13 +16,14 @@ import { Dropdown } from '@ui';
 import {
   createRenderEffect,
   createSignal,
+  For,
   type JSX,
   on,
   onCleanup,
   Show,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import type { SavedView } from '../core/saved-view';
+import type { SavedView, SavedViewEntry } from '../core/saved-view';
 
 function Root(props: {
   open: boolean;
@@ -91,7 +92,11 @@ function Items(props: {
   );
 }
 
-function Draft(props: { onSelect: () => void; mobile?: boolean }) {
+function Draft(props: {
+  onSelect: () => void;
+  mobile?: boolean;
+  name?: string;
+}) {
   return (
     <Show
       when={props.mobile}
@@ -99,13 +104,22 @@ function Draft(props: { onSelect: () => void; mobile?: boolean }) {
         <ViewSidebar.Item
           active
           onClick={props.onSelect}
-          title={t('viewMenus.newViewDraft')}
-          aria-label={t('viewMenus.newViewDraft')}
+          title={props.name ?? t('viewMenus.newViewDraft')}
+          aria-label={
+            props.name && props.name !== t('viewMenus.newView')
+              ? t('viewMenus.savedViewWithStatus', {
+                  name: props.name,
+                  status: t('viewMenus.draft'),
+                })
+              : t('viewMenus.newViewDraft')
+          }
         >
           <ViewSidebar.Icon>
             <BookmarkIcon class="size-4" />
           </ViewSidebar.Icon>
-          <span class="truncate italic">{t('viewMenus.newView')}</span>
+          <span class="truncate italic">
+            {props.name ?? t('viewMenus.newView')}
+          </span>
           <span class="ml-auto text-xs text-ink-muted">
             {t('viewMenus.draft')}
           </span>
@@ -115,11 +129,35 @@ function Draft(props: { onSelect: () => void; mobile?: boolean }) {
       <MobileDrawer.Item onClick={props.onSelect} class="h-12 text-accent">
         <BookmarkIcon class="size-5 shrink-0" />
         <span class="min-w-0 flex-1 truncate italic">
-          {t('viewMenus.newView')}
+          {props.name ?? t('viewMenus.newView')}
         </span>
         <span class="text-xs">{t('viewMenus.draft')}</span>
       </MobileDrawer.Item>
     </Show>
+  );
+}
+
+export function SavedViewListEntries(props: {
+  entries: readonly SavedViewEntry[];
+  onDraftSelect: () => void;
+  children: (record: SavedView) => JSX.Element;
+}) {
+  return (
+    <For each={props.entries}>
+      {(entry) => (
+        <Show
+          when={entry.kind === 'saved' ? entry.record : undefined}
+          fallback={
+            <Draft
+              name={entry.kind === 'draft' ? entry.draft.name : undefined}
+              onSelect={props.onDraftSelect}
+            />
+          }
+        >
+          {(record) => props.children(record())}
+        </Show>
+      )}
+    </For>
   );
 }
 

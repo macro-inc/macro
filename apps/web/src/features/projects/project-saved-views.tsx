@@ -1,9 +1,11 @@
+import { t } from '@app/lib/i18n';
 import { createSearchParams } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
+import deepEqual from 'fast-deep-equal';
 import {
   type Accessor,
   batch,
@@ -14,6 +16,7 @@ import {
   type ParentProps,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { createSavedViewCreation } from '../saved-views/primitives/create-saved-view-creation';
 import { createSavedViewDraft } from '../saved-views/primitives/create-saved-view-draft';
 import {
   useSavedView,
@@ -28,6 +31,7 @@ import {
 import {
   captureProjectSavedView,
   decodeProjectSavedView,
+  type ProjectSavedViewConfig,
   projectSavedViewsEqual,
   readProjectSavedView,
 } from './core/project-saved-view';
@@ -40,6 +44,7 @@ export function createProjectSavedViews(props: {
   enabled: Accessor<boolean>;
   location: Accessor<unknown>;
   onSelect: (id?: string, scope?: ProjectScope) => void;
+  registerLeave?: (run: (action: () => void) => void) => () => void;
 }) {
   const viewerId = useUserId();
   const panel = useSplitPanelOrThrow();
@@ -67,7 +72,8 @@ export function createProjectSavedViews(props: {
     viewerId: () => (props.enabled() ? viewerId() : undefined),
     kind: 'projects',
   });
-  const scope = () => (selectedId() ? state.scope : props.scope());
+  const scope = () =>
+    selectedId() || state.creating ? state.scope : props.scope();
   const draft = createSavedViewDraft({
     source,
     selectedId,
@@ -83,6 +89,21 @@ export function createProjectSavedViews(props: {
       setState({ settings: { ...config.settings }, scope: config.scope }),
     resetNew: () => setState('settings', { ...DEFAULT_PROJECT_SETTINGS }),
   });
+  const creation = createSavedViewCreation({
+    kind: 'projects',
+    viewerId,
+    list: list.items,
+    capture: () => {
+      const value = draft.capture();
+      return value.isOk() ? value.value : undefined;
+    },
+    equal: deepEqual,
+    confirmed: () => setState('creating', false),
+  });
+  const discardNew = () => {
+    creation.discard();
+    setState('creating', false);
+  };
   usePending(
     'projects.saved_views',
     () => props.active() && props.enabled() && list.loading()
@@ -121,7 +142,7 @@ export function createProjectSavedViews(props: {
           return;
         }
         createNavigationPending = false;
-        setState('creating', false);
+        discardNew();
         if (!id) setState('settings', { ...DEFAULT_PROJECT_SETTINGS });
       }
     )
@@ -131,25 +152,44 @@ export function createProjectSavedViews(props: {
       if (previous && selectedId()) draft.reset();
     })
   );
-  const select = (id?: string) => {
+  const selectCreated = (id: string) => {
     setState('creating', false);
     props.onSelect(id);
   };
-  const start = () =>
-    batch(() => {
-      createNavigationPending = true;
-      props.onSelect();
-      setState({
-        creating: true,
-        settings: { ...DEFAULT_PROJECT_SETTINGS },
-        scope: 'all',
+  const select = (id?: string) =>
+    creation.run(() => {
+      discardNew();
+      props.onSelect(id);
+    });
+  const start = (
+    config?: ProjectSavedViewConfig,
+    name = t('viewMenus.newView'),
+    afterStart?: () => void,
+    changed = false
+  ) =>
+    creation.run(() => {
+      batch(() => {
+        createNavigationPending = true;
+        creation.internalNavigation(() => props.onSelect());
+        setState({
+          creating: true,
+          settings: { ...(config?.settings ?? DEFAULT_PROJECT_SETTINGS) },
+          scope: config?.scope ?? 'all',
+        });
+        const captured = captureProjectSavedView(state.settings, state.scope);
+        if (captured.isOk()) creation.begin(captured.value, name, changed);
       });
+      afterStart?.();
     });
   return {
-    selectScope: (scope: ProjectScope) => {
-      setState('creating', false);
-      props.onSelect(undefined, scope);
-    },
+    selectScope: (scope: ProjectScope) =>
+      creation.run(() => {
+        discardNew();
+        props.onSelect(undefined, scope);
+      }),
+    creation,
+    discardNew,
+    selectCreated,
     viewerId,
     source,
     list,

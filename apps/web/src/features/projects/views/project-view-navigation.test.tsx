@@ -6,9 +6,11 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
+import deepEqual from 'fast-deep-equal';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { SavedView } from '../../saved-views/core/saved-view';
+import { createSavedViewCreation } from '../../saved-views/primitives/create-saved-view-creation';
 import type { ProjectScope } from '../core/project';
 import { ProjectSavedViewsList } from './project-saved-views';
 
@@ -38,7 +40,15 @@ function createViews() {
   const [selectedId, setSelectedId] = createSignal<string>();
   const [creating, setCreating] = createSignal(false);
   const [scope, setScope] = createSignal<ProjectScope>('all');
+  const creation = createSavedViewCreation({
+    kind: 'projects',
+    viewerId: () => 'viewer',
+    list: () => [record],
+    capture: () => ({}),
+    equal: deepEqual,
+  });
   return {
+    creation,
     selectedId,
     creating,
     scope,
@@ -48,6 +58,7 @@ function createViews() {
     team: () => undefined,
     select: vi.fn((id?: string) => {
       setCreating(false);
+      creation.discard();
       setSelectedId(id);
     }),
     selectScope: vi.fn((next: ProjectScope) => {
@@ -58,6 +69,7 @@ function createViews() {
     start: vi.fn(() => {
       setSelectedId(undefined);
       setCreating(true);
+      creation.begin({}, 'New view');
     }),
     draft: {
       view: () => {

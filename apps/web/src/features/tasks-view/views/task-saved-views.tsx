@@ -20,11 +20,11 @@ import {
   openDialog,
 } from '@ui';
 import { ok } from 'neverthrow';
-import { batch, For, getOwner, type Owner, onCleanup, Show } from 'solid-js';
-import { v4 as uuid } from 'uuid';
+import { For, getOwner, type Owner, onCleanup, Show } from 'solid-js';
 import { SavedViewCreateButton } from '../../saved-views/components/saved-view-create-button';
 import {
   SavedViewList,
+  SavedViewListEntries,
   SavedViewListRow,
 } from '../../saved-views/components/saved-view-list';
 import { SavedViewMenuItems } from '../../saved-views/components/saved-view-menu';
@@ -43,12 +43,10 @@ import { TASK_DUE_DATE_BUCKETS } from '../core/task-due-date';
 import { TASK_VIEWER } from '../filters/task-facets';
 import { useTaskProjectLabels } from '../filters/task-project-options';
 import {
-  decodeTaskSavedView,
   materializeTaskSavedView,
   readTaskSavedView,
   type TaskSavedViewConfig,
   type TaskSavedViewIssue,
-  withTaskTabFilters,
 } from '../filters/task-saved-view';
 import { useTaskFilters } from '../filters/use-task-filters';
 import { tasksTabSearch, tasksTabSearchCodec } from '../tasks-tab-search';
@@ -189,81 +187,74 @@ function useCreateTaskSavedViewDialog(owner = getOwner()) {
     savedViews,
     savedViewsList,
     savedViewTeam,
-    state,
-    setState,
+    savedViewCreation: creation,
+    startSavedView,
     selectCreatedSavedView,
   } = useTasksView();
   const captureRequest = useTaskSavedViewRequest();
   const viewerId = useUserId();
-  return (record?: SavedView) => {
-    if (!savedViews || !savedViewsList) return;
-    const selection = savedViews.view();
-    const stored = record ? readTaskSavedView(record.config) : undefined;
-    const definition =
-      stored &&
-      !(selection.kind === 'saved' && selection.record.id === record?.id)
-        ? ok(stored.config)
-        : savedViews.capture();
-    if (definition.isErr()) {
-      toast.failure(definition.error);
-      return;
-    }
-    const config = definition.value;
-    const id = uuid();
+  const open = (omittedFilters?: TaskSavedViewIssue[]) => {
+    const draft = creation?.current();
+    if (!savedViews || !savedViewsList || !draft) return;
     const request = captureRequest();
     return openDialog(
       SavedViewDialog,
       () => ({
         refresh: savedViewsList.refresh,
         viewerId,
-        isCurrent: request.isCurrent,
+        isCurrent: () =>
+          request.isCurrent() && creation?.current()?.id === draft.id,
         mode: 'create' as const,
-        id,
-        name: record ? `${record.name.slice(0, 113)} (copy)` : 'New view',
-        config,
-        title: record ? 'Duplicate saved view' : 'Save view',
-        submitLabel: record ? 'Duplicate' : 'Save view',
-        team: savedViewTeam?.(),
+        id: draft.id,
+        name: draft.name,
+        sharedTeamId: draft.sharedTeamId,
+        config: savedViews.capture().unwrapOr(draft.config),
+        title: 'Save view',
+        submitLabel: 'Save view',
         summary: (
           <TaskSavedViewSummary
-            config={config}
-            omittedFilters={stored?.issues}
+            config={readTaskSavedView(draft.config).config}
+            omittedFilters={omittedFilters}
           />
         ),
+        team: savedViewTeam?.(),
+        onChange: (fields: { name: string; sharedTeamId: string | null }) =>
+          creation?.update(fields),
         onSaved: (created: SavedView) => {
-          const decoded = decodeTaskSavedView(created.config);
-          if (decoded.isErr()) {
-            toast.failure(decoded.error);
-            return;
-          }
-          if (
-            !request.isCurrent() ||
-            savedViews.revision() !== request.revision
-          )
-            return;
-          const facets = withTaskTabFilters(state.tab, state.facets);
-          batch(() => {
-            if (!savedViews.acceptConfirmed(created)) return;
-            setState('tab', 'team-tasks');
-            setState(
-              'facets',
-              record ? materializeTaskSavedView(decoded.value).facets : facets
-            );
-            if (record) {
-              const restored = materializeTaskSavedView(decoded.value);
-              setState({
-                layout: restored.layout,
-                groupBy: restored.groupBy,
-                sort: restored.sort,
-                dueDate: restored.dueDate,
-              });
-            }
+          if (request.isCurrent() && creation?.confirm(created))
             selectCreatedSavedView(created.id);
-          });
         },
       }),
       { owner }
     );
+  };
+  return (record?: SavedView) => {
+    if (!savedViews || !creation) return;
+    if (!record && creation.current()) return open();
+    const selected = savedViews.view();
+    const copyStored =
+      record &&
+      !(selected.kind === 'saved' && selected.record.id === record.id);
+    const captured = copyStored
+      ? ok(readTaskSavedView(record.config).config)
+      : savedViews.capture();
+    if (captured.isErr()) {
+      toast.failure(captured.error);
+      return;
+    }
+    const name = record ? `${record.name.slice(0, 113)} (copy)` : 'New view';
+    let handle: DialogHandle | undefined;
+    startSavedView(
+      captured.value,
+      name,
+      () => {
+        handle = open(
+          record ? readTaskSavedView(record.config).issues : undefined
+        );
+      },
+      true
+    );
+    return handle;
   };
 }
 
@@ -345,34 +336,13 @@ function TaskSavedViewMenuItems(props: {
   );
 }
 
-function useTaskSavedViewListState() {
-  const { savedViews, savedViewsList } = useTasksView();
-  const viewerId = useUserId();
-  const creating = () => savedViews?.view().kind === 'new';
-  const items = () => {
-    const records = savedViewsList?.items();
-    const selection = savedViews?.view();
-    // Keep confirmed creations visible without restoring a revoked shared view.
-    if (
-      selection?.kind === 'saved' &&
-      selection.record.ownerId === viewerId() &&
-      !records?.some((record) => record.id === selection.record.id)
-    )
-      return [selection.record, ...(records ?? [])];
-    return records;
-  };
-  return {
-    creating,
-    items,
-  };
-}
-
 export function TaskSavedViewsList() {
   const {
     savedViews,
     savedViewsList,
     selectSavedView,
     startSavedView,
+    savedViewCreation,
     closeTask,
   } = useTasksView();
   const [attachCreateHotkeys] = useHotkeyDOMScope('create-saved-view', true);
@@ -382,16 +352,16 @@ export function TaskSavedViewsList() {
     const view = savedViews?.view();
     return view?.kind === 'saved' ? view.record.id : undefined;
   };
-  const { creating, items } = useTaskSavedViewListState();
+  const items = () => savedViewCreation?.items() ?? savedViewsList?.items();
+  const entries = () =>
+    savedViewCreation?.entries() ??
+    (items() ?? []).map((record) => ({ kind: 'saved' as const, record }));
   return (
     <Show when={savedViews && savedViewsList}>
       {(views) => (
         <>
           <SavedViewList.Items label={t('viewMenus.savedTaskViews')}>
-            <Show when={creating()}>
-              <SavedViewList.Draft onSelect={closeTask} />
-            </Show>
-            <For each={items()}>
+            <SavedViewListEntries entries={entries()} onDraftSelect={closeTask}>
               {(record) => (
                 <SavedViewListRow
                   view={record}
@@ -409,7 +379,7 @@ export function TaskSavedViewsList() {
                   )}
                 />
               )}
-            </For>
+            </SavedViewListEntries>
           </SavedViewList.Items>
           <Show when={views().loading() && !items()}>
             <p class="px-3 py-2 text-xs text-ink-muted" role="status">
@@ -437,7 +407,7 @@ export function TaskSavedViewsList() {
           </Show>
           <SavedViewCreateButton
             ref={attachCreateHotkeys}
-            onCreate={startSavedView}
+            onCreate={() => startSavedView()}
           />
         </>
       )}

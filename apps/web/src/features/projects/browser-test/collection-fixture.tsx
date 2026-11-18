@@ -7,8 +7,10 @@ import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { withApiValues } from '@property/utils/transforms';
 import { ImperativeDialogHost } from '@ui';
+import deepEqual from 'fast-deep-equal';
 import { batch, createMemo, createSignal, For } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { createSavedViewCreation } from '../../saved-views/primitives/create-saved-view-creation';
 import { createSavedViewDraft } from '../../saved-views/primitives/create-saved-view-draft';
 import { ProjectSavedViewsContext } from '../context/project-saved-views-context';
 import {
@@ -20,6 +22,7 @@ import {
   type ProjectFilters,
   type ProjectScope,
 } from '../core/project';
+import type { ProjectSavedViewConfig } from '../core/project-saved-view';
 import {
   captureProjectSavedView,
   decodeProjectSavedView,
@@ -112,12 +115,27 @@ export function CollectionFixture() {
       setState({ settings: { ...config.settings }, scope: config.scope }),
     resetNew: () => setState('settings', { ...DEFAULT_PROJECT_SETTINGS }),
   });
+  const creation = createSavedViewCreation({
+    kind: 'projects',
+    viewerId,
+    list: savedRecords,
+    capture: () => draft.capture().unwrapOr(undefined),
+    equal: deepEqual,
+    confirmed: () => setCreating(false),
+  });
+  const discardNew = () => {
+    creation.discard();
+    setCreating(false);
+  };
   const select = (id?: string) =>
     batch(() => {
       setCreating(false);
       setSelectedId(id);
     });
   const views = {
+    creation,
+    discardNew,
+    selectCreated: (id: string) => select(id),
     viewerId,
     source,
     draft,
@@ -142,12 +160,23 @@ export function CollectionFixture() {
       }),
     request: () => ({ revision: draft.revision(), isCurrent: () => true }),
     select,
-    start: () =>
+    start: (
+      config?: ProjectSavedViewConfig,
+      name = 'New view',
+      afterStart?: () => void,
+      changed = false
+    ) => {
       batch(() => {
         setSelectedId(undefined);
         setCreating(true);
-        setState({ settings: { ...DEFAULT_PROJECT_SETTINGS }, scope: 'all' });
-      }),
+        setState({
+          settings: { ...(config?.settings ?? DEFAULT_PROJECT_SETTINGS) },
+          scope: config?.scope ?? 'all',
+        });
+        creation.begin(draft.capture().unwrapOr(undefined), name, changed);
+      });
+      afterStart?.();
+    },
     creating,
     active: () => true,
     ready: () => {
