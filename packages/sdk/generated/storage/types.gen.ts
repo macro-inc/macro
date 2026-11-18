@@ -22821,6 +22821,20 @@ export type TeamAvailabilityRequest = {
 };
 
 /**
+ * Adapter error without internal/provider details.
+ */
+export type TeamCalendarApiError = {
+    /**
+     * The failure's kind.
+     */
+    code: TeamCalendarErrorCode;
+    /**
+     * What a person reads.
+     */
+    message: string;
+};
+
+/**
  * Disjoint busy/detail shapes prevent new event fields leaking by default.
  */
 export type TeamCalendarContent = {
@@ -22875,6 +22889,11 @@ export type TeamCalendarDetails = {
      */
     title: string;
 };
+
+/**
+ * What kind of failure a team calendar request met, for callers to branch on.
+ */
+export type TeamCalendarErrorCode = 'invalid_request' | 'not_found' | 'team_sharing_disabled' | 'internal';
 
 /**
  * A read-only team calendar occurrence.
@@ -25752,10 +25771,12 @@ export type GetTeamAvailabilityErrors = {
      */
     400: unknown;
     /**
-     * Team calendar sharing is disabled
+     * Team calendar sharing is disabled (code team_sharing_disabled)
      */
-    404: unknown;
+    404: TeamCalendarApiError;
 };
+
+export type GetTeamAvailabilityError = GetTeamAvailabilityErrors[keyof GetTeamAvailabilityErrors];
 
 export type GetTeamAvailabilityResponses = {
     200: TeamAvailability;

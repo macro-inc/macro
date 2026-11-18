@@ -1997,7 +1997,14 @@
             "description": "Invalid window or more than 100 teammates"
           },
           "404": {
-            "description": "Team calendar sharing is disabled"
+            "description": "Team calendar sharing is disabled (code team_sharing_disabled)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamCalendarApiError"
+                }
+              }
+            }
           }
         }
       }
@@ -66613,6 +66620,21 @@
           }
         }
       },
+      "TeamCalendarApiError": {
+        "type": "object",
+        "description": "Adapter error without internal/provider details.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/TeamCalendarErrorCode",
+            "description": "The failure's kind."
+          },
+          "message": {
+            "type": "string",
+            "description": "What a person reads."
+          }
+        }
+      },
       "TeamCalendarContent": {
         "oneOf": [
           {
@@ -66690,6 +66712,16 @@
             "description": "Display title."
           }
         }
+      },
+      "TeamCalendarErrorCode": {
+        "type": "string",
+        "description": "What kind of failure a team calendar request met, for callers to branch on.",
+        "enum": [
+          "invalid_request",
+          "not_found",
+          "team_sharing_disabled",
+          "internal"
+        ]
       },
       "TeamCalendarItem": {
         "allOf": [
