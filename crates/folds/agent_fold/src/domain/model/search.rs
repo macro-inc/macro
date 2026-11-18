@@ -1,9 +1,12 @@
-//! Searchable text derived from the same vocabulary a transcript renders.
+//! Text derived from the same vocabulary a transcript renders: everything a
+//! reader can open, and the part of it search indexes.
 //!
 //! This module deliberately starts from [`FoldedMessage`], never from ACP
 //! frames. The fold is the boundary that decides which protocol material is
-//! user-visible; search merely flattens that already-decided representation.
+//! user-visible; these functions merely flatten that already-decided
+//! representation.
 
+use dynamic_ui::{TagNode, View, Widget};
 use serde_json::Value;
 
 use super::{
@@ -16,7 +19,8 @@ use super::{
 mod test;
 
 impl FoldedMessage {
-    /// Flatten the content a transcript exposes into text suitable for full-text search.
+    /// Flatten everything a reader can open in the transcript: prose,
+    /// thoughts, and every tool call's paths, commands, outputs and errors.
     ///
     /// Stable UI labels such as "Permission requested" are omitted because they
     /// would make every message match the same boilerplate. Variable content—the
@@ -24,8 +28,28 @@ impl FoldedMessage {
     /// actually recognize—is retained in render order. Nested subagent parts are
     /// traversed recursively.
     #[must_use]
+    pub fn readable_text(&self) -> String {
+        self.text(TextScope::Readable)
+    }
+
+    /// Flatten what the transcript shows without expanding anything, for the
+    /// search index.
+    ///
+    /// Thoughts and the work inside tool calls stay collapsed in the
+    /// transcript, so a match there would land on text the reader cannot see.
+    /// What remains is the conversation itself, plus the few tool-derived
+    /// texts shown by default: a subagent's title, a user tool's subject or
+    /// title, a presented view's text, and approval wording.
+    #[must_use]
     pub fn searchable_text(&self) -> String {
-        let mut text = SearchText::default();
+        self.text(TextScope::Shown)
+    }
+
+    fn text(&self, scope: TextScope) -> String {
+        let mut text = SearchText {
+            value: String::new(),
+            scope,
+        };
         for part in self.parts.iter() {
             text.part(part);
         }
@@ -36,9 +60,18 @@ impl FoldedMessage {
     }
 }
 
-#[derive(Default)]
+/// How much of a message to flatten.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TextScope {
+    /// Everything a reader can open.
+    Readable,
+    /// Only what the transcript shows without expanding.
+    Shown,
+}
+
 struct SearchText {
     value: String,
+    scope: TextScope,
 }
 
 impl SearchText {
@@ -64,14 +97,25 @@ impl SearchText {
 
     fn part(&mut self, part: &MessagePart) {
         match part {
-            MessagePart::Text { text } | MessagePart::Thought { text } => self.push(text),
+            MessagePart::Text { text } => self.push(text),
+            MessagePart::Thought { text } => {
+                if self.scope == TextScope::Readable {
+                    self.push(text);
+                }
+            }
             // The file's name is what a person would recognize and search
             // for; its static file URL is opaque and would only add noise.
             MessagePart::Attachment { name, .. } => self.push(name),
-            MessagePart::ToolUse { name, detail, .. } => {
-                self.push(name.display());
-                self.tool(detail);
-            }
+            MessagePart::ToolUse { name, detail, .. } => match self.scope {
+                TextScope::Readable => {
+                    self.push(name.display());
+                    self.tool(detail);
+                }
+                TextScope::Shown => self.shown_tool(detail),
+            },
+            // The resolved row words the outcome from the option's kind, never
+            // its name, so the name is not shown.
+            MessagePart::Permission { .. } if self.scope == TextScope::Shown => {}
             MessagePart::Permission {
                 options, outcome, ..
             } => {
@@ -130,6 +174,121 @@ impl SearchText {
                 if let Some(outcome) = tool_outcome {
                     self.user_tool_outcome(outcome);
                 }
+            }
+        }
+    }
+
+    /// The text a collapsed transcript shows for a tool call. Calls grouped
+    /// under "Used N tools" show none; the ungrouped kinds show their title,
+    /// subject, or view.
+    fn shown_tool(&mut self, detail: &ToolDetail) {
+        match detail {
+            ToolDetail::Subagent {
+                title, agent_type, ..
+            } => {
+                self.push(title);
+                if let Some(agent_type) = agent_type {
+                    self.push(agent_type);
+                }
+            }
+            ToolDetail::UserTool { input, .. } => {
+                for field in ["subject", "title"] {
+                    if let Some(text) = input.get(field).and_then(Value::as_str) {
+                        self.push(text);
+                    }
+                }
+            }
+            ToolDetail::View { view, error } => {
+                if let Some(view) = view {
+                    self.view(view);
+                }
+                if let Some(error) = error {
+                    self.push(error);
+                }
+            }
+            ToolDetail::Terminal { .. }
+            | ToolDetail::Edit { .. }
+            | ToolDetail::Read { .. }
+            | ToolDetail::Delete { .. }
+            | ToolDetail::Move { .. }
+            | ToolDetail::Search { .. }
+            | ToolDetail::Fetch { .. }
+            | ToolDetail::Think { .. }
+            | ToolDetail::Other { .. }
+            | ToolDetail::Macro { .. } => {}
+        }
+    }
+
+    /// A view's own text. Widgets that name entities by id show titles loaded
+    /// live with the reader's access, which the fold does not hold.
+    fn view(&mut self, view: &View) {
+        if let Some(title) = &view.title {
+            self.push(title);
+        }
+        for widget in &view.widgets {
+            self.widget(widget);
+        }
+    }
+
+    fn widget(&mut self, widget: &Widget) {
+        match widget {
+            Widget::Md { markdown } => self.push(markdown),
+            Widget::Timeline { title, events } => {
+                if let Some(title) = title {
+                    self.push(title);
+                }
+                for event in events {
+                    self.push(&event.title);
+                    if let Some(description) = &event.description {
+                        self.push(description);
+                    }
+                }
+            }
+            Widget::List { title, .. }
+            | Widget::Events { title, .. }
+            | Widget::Cards { title, .. } => {
+                if let Some(title) = title {
+                    self.push(title);
+                }
+            }
+            Widget::Tags { title, tags } => {
+                if let Some(title) = title {
+                    self.push(title);
+                }
+                self.tags(tags);
+            }
+            Widget::AgentUpdates { items } => {
+                for item in items {
+                    self.push(&item.session_name);
+                }
+            }
+            Widget::BotCredential { label, .. } => {
+                if let Some(label) = label {
+                    self.push(label);
+                }
+            }
+            Widget::Container {
+                title, children, ..
+            } => {
+                if let Some(title) = title {
+                    self.push(title);
+                }
+                for child in children {
+                    self.widget(child);
+                }
+            }
+            Widget::ChannelMessage { .. } => {}
+        }
+    }
+
+    fn tags(&mut self, tags: &[TagNode]) {
+        for tag in tags {
+            self.push(&tag.label);
+            if let Some(description) = &tag.description {
+                self.push(description);
+            }
+            if let Some(children) = &tag.children {
+                self.tags(children);
             }
         }
     }

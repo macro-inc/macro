@@ -3,7 +3,7 @@
 This service owns the search-event pipeline:
 
 - **Live calls**: the `search-processing-service` Kafka consumer reads call lifecycle events from `macro.calls` and indexes them into OpenSearch.
-- **Agent sessions**: the same consumer subscribes to `macro.agent_session_lifecycle`, rereads the primary database, and indexes messages produced by `agent_fold`. Both user prompts and agent replies are searchable; raw ACP envelopes are not indexed. Agent-session backfills use this same direct indexing path, not SQS.
+- **Agent sessions**: the same consumer subscribes to `macro.agent_session_lifecycle`, rereads the primary database, and indexes messages produced by `agent_fold`. User prompts and agent replies are searchable as a collapsed transcript shows them (`FoldedMessage::searchable_text`): thoughts and the work inside tool calls are not indexed, and raw ACP envelopes never are. Changing what is indexed takes effect for a session on its next reconcile; `POST /internal/backfill/agent-sessions` with `{}` brings every session up to date. Agent-session backfills use this same direct indexing path, not SQS.
 - **Other live entities**: Kafka handlers and legacy SQS workers drain events for the remaining search entities.
 - **Backfills**: internal HTTP endpoints start tracked jobs. Most enqueue records onto SQS; agent sessions, properties, and the email attachment status index directly.
 
