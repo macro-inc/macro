@@ -23,3 +23,17 @@ test('an error with no stack is its name and message, and anything else is its s
   expect(describeError('plain')).toBe('plain');
   expect(errorMessage(error)).toBe('nope');
 });
+
+test('an error with an empty message is described by its name alone, never "Error: "', () => {
+  const error = new Error('');
+  error.stack = 'Error\n    at somewhere (x:1:1)';
+  expect(describeError(error)).toBe(error.stack);
+  error.stack = '    at somewhere (x:1:1)';
+  expect(describeError(error)).toBe('Error\n    at somewhere (x:1:1)');
+});
+
+test('an error whose stack is not a string is described without throwing', () => {
+  const error = new Error('boom');
+  Object.defineProperty(error, 'stack', { value: 42 });
+  expect(describeError(error)).toBe('Error: boom');
+});
