@@ -3,6 +3,7 @@ import {
   type HydrationSearchChanges,
   INITIAL_CACHE_REVISION,
 } from '@graphql-cache/protocol';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { subscribeToVisibleCacheChanges } from './subscribe-to-visible-cache-changes';
 
@@ -51,6 +52,32 @@ afterEach(() => {
 });
 
 describe('subscribeToVisibleCacheChanges', () => {
+  it('only remembers changes while not live, and refreshes once when live turns on', async () => {
+    const [live, setLive] = createSignal(false);
+    const { notify, refresh } = createRoot((disposeRoot) => {
+      const subscription = setup(undefined, { live });
+      const unsubscribe = dispose;
+      dispose = () => {
+        unsubscribe?.();
+        disposeRoot();
+      };
+      return subscription;
+    });
+    notify();
+    notify();
+    expect(refresh).not.toHaveBeenCalled();
+
+    setLive(true);
+    expect(refresh).toHaveBeenCalledOnce();
+    setLive(false);
+    setLive(true);
+    expect(refresh).toHaveBeenCalledOnce();
+
+    await vi.advanceTimersByTimeAsync(250);
+    notify();
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
   it('does no work for unrelated hydration, including while hidden', () => {
     const { notify, refresh } = setup(undefined, {
       searchBuckets: () => ['note', 'task'],

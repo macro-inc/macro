@@ -42,7 +42,10 @@ import {
 } from '@queries/email/quick-access';
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
-import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
+import {
+  type HistoryItem,
+  useHistoryQueryWhileRead,
+} from '@queries/history/history';
 import { materializeCachedGraphqlInitiatives } from '@queries/soup/graphql/initiatives';
 import { useQuickAccessAgentSessionsQuery } from '@queries/soup/quick-access-agent-sessions';
 import { useQuickAccessInitiativesQuery } from '@queries/soup/quick-access-initiatives';
@@ -385,8 +388,14 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
+  // History and the recent channel list reread the cache only while some list
+  // here reads it (an open menu, a typed search); otherwise every cache change
+  // in a busy workspace would reread them with nothing on screen.
+  const [cacheReaders, setCacheReaders] = createSignal(0);
+  const listsReadCache = createMemo(() => cacheReaders() > 0);
+
   // queries
-  const historyQuery = useHistoryQuery();
+  const historyQuery = useHistoryQueryWhileRead(listsReadCache);
   const { channels, isLoading: channelsLoading } = useChannelsContext();
   const directoryScope = useContactDirectoryScope();
   const rawDmActivityByUserId = useDmActivityByUserId();
@@ -415,6 +424,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         {
           searchBuckets: () => ['channel', 'dm'],
           intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
+          live: listsReadCache,
         }
       )
     );
@@ -1156,6 +1166,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       // again, so it has no use for change notifications meanwhile; in a busy
       // workspace they arrive constantly.
       if (!readsCache()) return;
+      setCacheReaders((count) => count + 1);
+      onCleanup(() => setCacheReaders((count) => count - 1));
       onCleanup(
         subscribeToVisibleCacheChanges(
           projectionHost,

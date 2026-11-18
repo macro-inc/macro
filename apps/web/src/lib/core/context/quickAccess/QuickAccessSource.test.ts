@@ -85,6 +85,7 @@ const mocks = vi.hoisted(() => ({
   databases: [] as ListedDatabase[],
   schedules: [] as ScheduledAction[],
   cacheEnabled: true,
+  historyReading: undefined as (() => boolean) | undefined,
   queries: {} as Partial<
     Record<
       'history' | 'channels' | 'recently-viewed',
@@ -153,13 +154,17 @@ vi.mock('@queries/channel/graphql', () => ({
     ),
 }));
 vi.mock('@queries/history/history', () => ({
-  useHistoryQuery: () =>
-    mocks.queries.history?.() ?? {
-      data: mocks.history,
-      isSuccess: true,
-      isLoading: false,
-      refetch: vi.fn(),
-    },
+  useHistoryQueryWhileRead: (reading: () => boolean) => {
+    mocks.historyReading = reading;
+    return (
+      mocks.queries.history?.() ?? {
+        data: mocks.history,
+        isSuccess: true,
+        isLoading: false,
+        refetch: vi.fn(),
+      }
+    );
+  },
 }));
 vi.mock('@queries/history/graphql', () => ({
   materializeCachedGraphqlHistoryItems: async (
@@ -590,7 +595,7 @@ describe('Quick Access source integration', () => {
         retry: false,
       })));
     const client = new QueryClient();
-    const rendered = renderRetainedList(client);
+    const rendered = renderRetainedList(client, { buckets: ['channel', 'dm'] });
     try {
       await vi.waitFor(() => expect(query?.isSuccess).toBe(true));
       vi.useFakeTimers();
@@ -1502,6 +1507,34 @@ describe('Quick Access source integration', () => {
     expect(list.totalCount()).toBe(81);
     expect(list.hasMore()).toBe(false);
     expect(mocks.search).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('Quick Access shared sources', () => {
+  it('rereads history and recent channels only while a list reads the cache', () => {
+    const [open, setOpen] = createSignal(false);
+    const client = new QueryClient();
+    const rendered = renderRetainedList(client, {
+      buckets: ['channel', 'dm', 'note'],
+      enabled: open,
+    });
+    try {
+      mocks.changed?.();
+      expect(mocks.historyReading?.()).toBe(false);
+      expect(mocks.channelRefetch).not.toHaveBeenCalled();
+
+      setOpen(true);
+      expect(mocks.historyReading?.()).toBe(true);
+      expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+
+      setOpen(false);
+      mocks.changed?.();
+      expect(mocks.historyReading?.()).toBe(false);
+      expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+    } finally {
+      rendered.unmount();
+      client.clear();
+    }
   });
 });
 
