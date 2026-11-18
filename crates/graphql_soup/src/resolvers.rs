@@ -19,7 +19,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::TypeEraseCursor;
 use soup::domain::{
-    models::{SoupPropertiesField, grouping::build_grouped_response},
+    models::{SoupPropertiesField, SoupQuery, grouping::build_grouped_response},
     ports::SoupService,
 };
 use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
@@ -310,13 +310,15 @@ where
     .await?;
     let team_receipt = team.entity_access_receipt;
 
-    let include_frecency = ctx
-        .look_ahead()
-        .field("items")
-        .field("frecencyScore")
-        .exists();
+    // Frecency comes from the enriched read, and so do notification stamps,
+    // which only notified pages have: other sorts keep the plain read even
+    // when the shared `Soup` document selects `notifiedAt`.
+    let look_ahead = ctx.look_ahead();
+    let include_enrichment = look_ahead.field("items").field("frecencyScore").exists()
+        || (look_ahead.field("notifiedAt").exists()
+            && matches!(request.cursor, SoupQuery::Notified(_)));
 
-    if include_frecency {
+    if include_enrichment {
         let page = service
             .get_user_soup_with_frecency_and_projection(request, team_receipt)
             .await?;
