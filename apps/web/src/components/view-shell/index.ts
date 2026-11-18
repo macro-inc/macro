@@ -9,7 +9,6 @@ export {
   setSidebarSectionCollapsed,
 } from './collapsed-sections';
 export {
-  filterLabel,
   type ListControlOption,
   ListFilterDropdown,
   type ListFilterDropdownProps,

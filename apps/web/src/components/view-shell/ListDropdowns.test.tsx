@@ -139,9 +139,7 @@ it('toggles checkboxes without closing a multiselect submenu', async () => {
   );
   expect(selected()).toEqual(['bob']);
   expect(open()).toBe(true);
-  expect(
-    screen.getByLabelText('Filter tasks, 1 filter applied').textContent
-  ).toBe('1');
+  expect(screen.getByLabelText('Filter tasks').textContent).toBe('1');
 });
 
 it.each(['Alice', 'Bob'])(
@@ -977,7 +975,7 @@ it('ties each group row to its id rather than its position', async () => {
   expect(screen.getByRole('menuitem', { name: 'Assignee' })).toBe(assigneeRow);
 });
 
-it('shows and names the applied filter count inside the trigger only while filters are active', () => {
+it('shows the applied filter count inside the trigger only while filters are active', () => {
   const [count, setCount] = createSignal(0);
   render(() => (
     <ListFilterDropdown
@@ -993,9 +991,6 @@ it('shows and names the applied filter count inside the trigger only while filte
 
   setCount(12);
   expect(trigger.textContent).toBe('12');
-  expect(trigger.getAttribute('aria-label')).toBe(
-    'Filter tasks, 12 filters applied'
-  );
 
   setCount(0);
   expect(trigger.textContent).toBe('');
