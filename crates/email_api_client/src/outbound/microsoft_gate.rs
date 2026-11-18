@@ -74,9 +74,8 @@ local cooldown = redis.call('PTTL', KEYS[3])
 if cooldown > 0 then return refuse(1, cooldown, false) end
 redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now)
 redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', now - tonumber(ARGV[4]))
-if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then
-    return refuse(2, tonumber(ARGV[8]), true)
-end
+-- The window comes first: while it is full, a free slot would not admit the
+-- request, so a retry in a second would only be refused again.
 local sent = redis.call('ZCARD', KEYS[2])
 local allowed = tonumber(ARGV[3])
 if sent >= allowed then
@@ -84,6 +83,9 @@ if sent >= allowed then
     -- left the window.
     local last = redis.call('ZRANGE', KEYS[2], sent - allowed, sent - allowed, 'WITHSCORES')
     return refuse(3, math.max(1, tonumber(last[2]) + tonumber(ARGV[4]) - now), false)
+end
+if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then
+    return refuse(2, tonumber(ARGV[8]), true)
 end
 redis.call('ZADD', KEYS[1], now + tonumber(ARGV[5]), ARGV[1])
 redis.call('PEXPIRE', KEYS[1], ARGV[5])

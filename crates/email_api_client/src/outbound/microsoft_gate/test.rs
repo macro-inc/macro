@@ -180,6 +180,23 @@ async fn import_leaves_a_slot_and_part_of_the_window_to_calendar_and_other_live_
 
 #[tokio::test]
 #[ignore = "requires local Redis on port 6379; uses only unique mailbox keys"]
+async fn a_full_window_sets_the_retry_even_while_every_slot_is_taken() {
+    let (live, mailbox) = fixture().await;
+    let import = RedisMicrosoftRequestGate::new(live.connection.clone(), RequestBudget::Import);
+    for _ in 0..CONCURRENT_REQUESTS {
+        live.acquire(mailbox).await.unwrap();
+    }
+    fill_window(&live, mailbox, REQUESTS_PER_WINDOW, Duration::from_secs(1)).await;
+    for gate in [&live, &import] {
+        let (limit, delay) = refusal(gate.acquire(mailbox).await);
+        assert_eq!(limit, GateLimit::Window);
+        assert!(delay > Duration::from_secs(590), "retry after {delay:?}");
+    }
+    cleanup(&live, mailbox).await;
+}
+
+#[tokio::test]
+#[ignore = "requires local Redis on port 6379; uses only unique mailbox keys"]
 async fn an_import_request_waits_only_until_the_window_has_room_for_it() {
     let (live, mailbox) = fixture().await;
     let import = RedisMicrosoftRequestGate::new(live.connection.clone(), RequestBudget::Import);
@@ -253,6 +270,12 @@ async fn an_import_request_takes_a_slot_freed_while_it_waits() {
             .is_err(),
         "a mailbox at its import share holds the import request instead of refusing it"
     );
+    let places: u32 = redis::cmd("ZCARD")
+        .arg(&keys(mailbox)[4])
+        .query_async(&mut live.connection.clone())
+        .await
+        .unwrap();
+    assert_eq!(places, 1, "the request holds a waiter's place");
     import.finish(mailbox, first, None).await;
     let admitted = tokio::time::timeout(Duration::from_secs(5), waiting)
         .await
