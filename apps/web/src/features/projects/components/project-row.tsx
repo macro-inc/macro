@@ -28,6 +28,18 @@ export const PROJECT_GRID_COLUMNS = [
   'timestamp',
 ] as const satisfies readonly TaskGridColumnId[];
 
+/**
+ * Phones drop the header, the hover checkbox and the columns hidden at their
+ * width, as the Tasks list does, so the name gets the room they took.
+ */
+export const PROJECT_PHONE_GRID_COLUMNS = [
+  'content',
+  'status',
+  'priority',
+  'assignees',
+  'dueDate',
+] as const satisfies readonly TaskGridColumnId[];
+
 const gridStyle = taskGridTemplate(PROJECT_GRID_COLUMNS);
 const columns = [
   { area: 'content', label: 'Project' },
@@ -71,6 +83,7 @@ export function ProjectListHeader() {
 export function ProjectRow(props: {
   rowId: string;
   row: ProjectRowData;
+  columns: readonly TaskGridColumnId[];
   highlighted: boolean;
   checked: boolean;
   onFocus(): void;
@@ -79,6 +92,8 @@ export function ProjectRow(props: {
   onSave(property: Property, value: PropertyApiValues): Promise<void>;
 }) {
   const canEdit = () => canEditProject(props.row.project);
+  const hasColumn = (column: TaskGridColumnId) =>
+    props.columns.includes(column);
   const properties = () => [...props.row.properties];
   const propertyFor = (id: string) =>
     props.row.properties.find(
@@ -131,14 +146,16 @@ export function ProjectRow(props: {
       >
         <Entity.Layout
           class="task-grid-row grid min-h-[inherit] w-full grid-rows-[1fr] items-center gap-2 px-2 text-sm"
-          style={gridStyle}
+          style={taskGridTemplate(props.columns)}
         >
-          <Entity.Slot placement="indicator" class="size-full">
-            <MultiSelectCheckbox
-              checked={props.checked}
-              onChecked={props.onChecked}
-            />
-          </Entity.Slot>
+          <Show when={hasColumn('indicator')}>
+            <Entity.Slot placement="indicator" class="size-full">
+              <MultiSelectCheckbox
+                checked={props.checked}
+                onChecked={props.onChecked}
+              />
+            </Entity.Slot>
+          </Show>
           <Entity.Slot
             placement="content"
             class="flex min-w-0 items-center gap-2 truncate font-medium"
@@ -169,31 +186,35 @@ export function ProjectRow(props: {
               </Entity.Slot>
             )}
           </For>
-          <Entity.Slot
-            placement="createdBy"
-            class="min-w-0 text-xs text-ink-muted @max-[1220px]/u-list:hidden"
-          >
-            <Switch fallback={<span>—</span>}>
-              <Match
-                when={
-                  props.row.project.taskCount !== undefined &&
-                  props.row.project.completedTaskCount !== undefined
-                }
-              >
-                <ProgressPill
-                  label={progressLabel()}
-                  value={props.row.project.completedTaskCount ?? 0}
-                  max={props.row.project.taskCount ?? 0}
-                />
-              </Match>
-            </Switch>
-          </Entity.Slot>
-          <Entity.Slot
-            placement="timestamp"
-            class="text-right text-xs font-light text-ink-extra-muted @max-[840px]/u-list:hidden"
-          >
-            <time dateTime={props.row.project.updatedAt}>{updated()}</time>
-          </Entity.Slot>
+          <Show when={hasColumn('createdBy')}>
+            <Entity.Slot
+              placement="createdBy"
+              class="min-w-0 text-xs text-ink-muted @max-[1220px]/u-list:hidden"
+            >
+              <Switch fallback={<span>—</span>}>
+                <Match
+                  when={
+                    props.row.project.taskCount !== undefined &&
+                    props.row.project.completedTaskCount !== undefined
+                  }
+                >
+                  <ProgressPill
+                    label={progressLabel()}
+                    value={props.row.project.completedTaskCount ?? 0}
+                    max={props.row.project.taskCount ?? 0}
+                  />
+                </Match>
+              </Switch>
+            </Entity.Slot>
+          </Show>
+          <Show when={hasColumn('timestamp')}>
+            <Entity.Slot
+              placement="timestamp"
+              class="text-right text-xs font-light text-ink-extra-muted @max-[840px]/u-list:hidden"
+            >
+              <time dateTime={props.row.project.updatedAt}>{updated()}</time>
+            </Entity.Slot>
+          </Show>
         </Entity.Layout>
       </div>
       <Suspense>
