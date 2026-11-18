@@ -137,7 +137,9 @@ test('parseAgentFace rejects bad pins', () => {
 });
 
 test('FACE_PARTS lists every part with its number of options', () => {
-  expect(FACE_PARTS).toEqual([
+  const counts = FACE_PARTS.map(({ part, options }) => ({ part, options }));
+
+  expect(counts).toEqual([
     { part: 'head', options: 5 },
     { part: 'skin', options: 8 },
     { part: 'hair', options: 15 },
@@ -156,4 +158,38 @@ test('FACE_PARTS lists every part with its number of options', () => {
     { part: 'shirtColor', options: 12 },
     { part: 'background', options: 15 },
   ]);
+});
+
+test('only colour parts carry swatches, one colour per option', () => {
+  const withSwatches = FACE_PARTS.filter((entry) => entry.swatches);
+
+  expect(withSwatches.map((entry) => entry.part)).toEqual([
+    'skin',
+    'hairColor',
+    'accent',
+    'shirtColor',
+    'background',
+  ]);
+  for (const { options, swatches } of withSwatches) {
+    expect(swatches).toHaveLength(options);
+  }
+  expect(FACE_PARTS.find((entry) => entry.part === 'skin')?.swatches).toEqual([
+    '#FCE4D2',
+    '#F6CFAE',
+    '#EDB98A',
+    '#DBA06C',
+    '#C4875A',
+    '#A56B42',
+    '#845232',
+    '#653E27',
+  ]);
+});
+
+test('a pinned background swatch is the colour the face is drawn on', () => {
+  const svg = renderFace({ v: 1, seed: 'ada', pins: { background: 12 } });
+  const navy = FACE_PARTS.find((entry) => entry.part === 'background')
+    ?.swatches?.[12];
+
+  expect(navy).toBe('#2E3A66');
+  expect(svg).toContain('<rect width="100" height="100" fill="#2E3A66"/>');
 });

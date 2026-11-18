@@ -20,11 +20,24 @@ const MAX_SEED_LENGTH = 64;
 const isFacePart = (name: string): name is FacePart =>
   Object.hasOwn(OPTIONS, name);
 
-/** Every part that can be pinned, with how many options it has. */
-export const FACE_PARTS: ReadonlyArray<{ part: FacePart; options: number }> =
-  Object.keys(OPTIONS)
-    .filter(isFacePart)
-    .map((part) => ({ part, options: OPTIONS[part].length }));
+/**
+ * Every part that can be pinned, with how many options it has. Colour parts
+ * also list the colour of each option, as "#rrggbb", for drawing swatches.
+ */
+export const FACE_PARTS: ReadonlyArray<{
+  part: FacePart;
+  options: number;
+  swatches?: readonly string[];
+}> = Object.keys(OPTIONS)
+  .filter(isFacePart)
+  .map((part) => {
+    const options = OPTIONS[part];
+    const swatches = options.flatMap((option) =>
+      'hex' in option ? [option.hex] : []
+    );
+    if (swatches.length === 0) return { part, options: options.length };
+    return { part, options: options.length, swatches };
+  });
 
 function randomSeed(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(8));
