@@ -18,7 +18,7 @@ export function MobileRoutinesListHeader(props: {
             <Button
               variant="ghost"
               size="icon-md"
-              aria-label="Search routines"
+              aria-label={t('agentWork.searchRoutines')}
               onClick={props.onSearch}
             >
               <SearchIcon class="size-5" />
@@ -28,7 +28,7 @@ export function MobileRoutinesListHeader(props: {
             <Button
               variant="ghost"
               size="icon-md"
-              aria-label="Create Routine"
+              aria-label={t('agentWork.createRoutine')}
               onClick={props.onCreate}
             >
               <PlusIcon class="size-5" />
@@ -47,7 +47,7 @@ export function MobileRoutinesListHeader(props: {
           <ArrowLeftIcon class="size-5" />
         </Button>
       </MobileHeader.Island>
-      <MobileHeader.Title label="Routines" />
+      <MobileHeader.Title label={t('agentWork.routines')} />
     </MobileHeader>
   );
 }

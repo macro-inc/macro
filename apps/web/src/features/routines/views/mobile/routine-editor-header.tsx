@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
@@ -36,7 +37,7 @@ export function MobileRoutineEditorHeader(props: {
         <Button
           variant="ghost"
           size="icon-md"
-          aria-label="Back to routines"
+          aria-label={t('agentWork.backToRoutines')}
           onClick={props.onBack}
         >
           <ArrowLeftIcon class="size-5" />

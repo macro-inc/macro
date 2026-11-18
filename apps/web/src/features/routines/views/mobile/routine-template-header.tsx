@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import PlayIcon from '@icon/system/regular/play.svg';
@@ -17,7 +18,7 @@ export function MobileRoutineTemplateHeader(props: {
           <MobileHeader.Island class="!px-1">
             <Button variant="ghost" size="sm" onClick={props.onActivate}>
               <PlayIcon class="size-4" />
-              Activate for me
+              {t('agentWork.activateRoutine')}
             </Button>
           </MobileHeader.Island>
         </Show>
@@ -27,7 +28,7 @@ export function MobileRoutineTemplateHeader(props: {
         <Button
           variant="ghost"
           size="icon-md"
-          aria-label="Back to routines"
+          aria-label={t('agentWork.backToRoutines')}
           onClick={props.onBack}
         >
           <ArrowLeftIcon class="size-5" />
