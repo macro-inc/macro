@@ -472,6 +472,36 @@ async fn company_sync_reaches_a_further_address_held_outside_its_domain(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn company_sync_reuses_the_manual_unfiled_contact(pool: PgPool) -> anyhow::Result<()> {
+    let (team, link, service) = team_with_mailbox(&pool).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let email = "jane@acme.example.com";
+    let manual = repo
+        .create_contact_for_team(&team, Some(email), "Jane", Utc::now())
+        .await?;
+
+    sync(&pool, &service, team, link, email, true).await?;
+
+    assert_eq!(team_contact_count(&pool, team).await?, 1);
+    let contact = repo
+        .get_contact_for_team(&team, &manual.id, true)
+        .await?
+        .expect("manual contact remains on the team");
+    assert_eq!(contact.company_id, None);
+    assert_eq!(contact.name.as_deref(), Some("Jane"));
+    assert_eq!(source_count(&pool, manual.id, link).await?, 1);
+    let company = fetch_company_for_domain(&pool, team, "acme.example.com")
+        .await?
+        .expect("sent mail still creates the domain company");
+    assert_eq!(count_contacts(&pool, company).await?, 0);
+
+    sync(&pool, &service, team, link, email, false).await?;
+    assert_eq!(team_contact_count(&pool, team).await?, 1);
+    assert_eq!(source_count(&pool, manual.id, link).await?, 1);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn company_sync_without_further_addresses_files_as_before(
     pool: PgPool,
 ) -> anyhow::Result<()> {
