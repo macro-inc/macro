@@ -35,8 +35,12 @@ const packageJson = Package.parse(
 /** Every file the package's `exports` patterns reach, tests left out. */
 const exportedFiles = (): string[] => {
   const files = new Set<string>();
+  // A pattern's `*` may span directories (`utilities/*` reaches
+  // `utilities/macro/chat`), as package exports resolve it.
   for (const target of Object.values(packageJson.exports))
-    for (const file of new Bun.Glob(target.replace(/^\.\//, '')).scanSync({
+    for (const file of new Bun.Glob(
+      target.replace(/^\.\//, '').replace('*', '**/*')
+    ).scanSync({
       cwd: root,
     }))
       if (!file.split('/').includes('test')) files.add(join(root, file));
