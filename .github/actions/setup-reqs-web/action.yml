@@ -18,9 +18,24 @@ runs:
         echo "[run]" >> bunfig.toml
         echo "bun = true" >> bunfig.toml
 
+    # The web PR checks keep the root node_modules on their cache volume
+    # (NODE_MODULES_VOLUME_DIR in xtask_workflows), so there this only checks
+    # the tree against bun.lock. Bun adds and updates packages but never removes
+    # one the lockfile dropped, so a tree another lockfile installed is emptied
+    # first: a package left over from another PR must not make imports resolve.
+    # node_modules can be a mount point, so it is emptied rather than removed.
     - name: Install Dependencies
       shell: bash
-      run: bun install --frozen-lockfile
+      run: |
+        set -euo pipefail
+        key=$( { bun --version; cat bun.lock apps/web/patches/*; } | sha256sum | cut -d" " -f1)
+        marker=node_modules/.macro-install-key
+        if [ -d node_modules ] && [ "$(cat "$marker" 2>/dev/null)" != "$key" ]; then
+          find node_modules -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+        fi
+        rm -f "$marker"
+        bun install --frozen-lockfile
+        echo "$key" > "$marker"
 
     - name: Get Playwright version (for caching)
       if: inputs.playwright == 'true'

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.id FROM email_links l JOIN team_user member ON member.user_id=l.macro_id AND member.team_id=$1\n               WHERE l.id=$3 AND l.macro_id=$2 AND l.is_primary AND l.deleting_at IS NULL\n                 AND l.disconnect_requested_at IS NULL AND NOT l.needs_reauth FOR SHARE OF l,member",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "777661b7df70e9fef4c14f98f935a90e5cf646ad8cb6cd98f482ce109417bee5"
+}

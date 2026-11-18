@@ -52,6 +52,7 @@ mod deploy_web_app;
 mod deploy_website;
 mod desktop_qa_macos;
 mod email_e2e;
+mod email_e2e_alert;
 mod email_e2e_browser;
 mod email_e2e_full_stack;
 mod ensure_daytona_snapshot;

@@ -55,6 +55,16 @@ pub struct OutlookCalendar {
     pub online_meeting_providers: Vec<String>,
 }
 
+/// What committing a discovery changed, for the account's viewers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OutlookCalendarsChange {
+    /// A calendar was added, removed or changed, so viewers refetch.
+    pub changed: bool,
+    /// A calendar changed in a way that may move teammates' out-of-office
+    /// rows, by the rule Google's calendar list follows.
+    pub team_ooo_changed: bool,
+}
+
 /// Every calendar one Outlook account can see.
 pub struct OutlookDiscovery {
     /// The account's calendars, each in the mailbox's time zone.
@@ -237,12 +247,13 @@ pub trait OutlookCalendarRepository: CalendarRepository {
         &self,
         lease: &OutlookCalendarLease,
     ) -> impl Future<Output = Result<(), Report>> + Send;
-    /// Commit complete calendar discovery, retiring removed calendars.
+    /// Commit complete calendar discovery, retiring removed calendars, and
+    /// report what it changed.
     fn commit_outlook_calendars(
         &self,
         lease: &OutlookCalendarLease,
         calendars: Vec<OutlookCalendar>,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<OutlookCalendarsChange, Report>> + Send;
     /// Whole-snapshot fixture helper; production uses staged checkpoints.
     #[cfg(test)]
     fn commit_outlook_calendar(
@@ -264,7 +275,32 @@ pub trait OutlookCalendarRepository: CalendarRepository {
         lease: &OutlookCalendarLease,
         kind: CalendarProviderErrorKind,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// Release a matching lease to retry after `delay`, recording no failure:
+    /// Macro's own request admission refused a call, so nothing reached
+    /// Microsoft.
+    fn defer_outlook_calendar(
+        &self,
+        lease: &OutlookCalendarLease,
+        delay: std::time::Duration,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// How much claimable work is waiting.
+    fn outlook_queue_depth(&self)
+    -> impl Future<Output = Result<OutlookQueueDepth, Report>> + Send;
 }
+
+/// The claimable work waiting for an Outlook sync loop.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OutlookQueueDepth {
+    /// Due, unleased work rows of accounts a claim may take.
+    pub due_items: i64,
+    /// How long the longest-waiting of them has been due, when any is.
+    pub oldest_due_seconds: Option<i64>,
+}
+
+/// The wait before retrying a deferred claim when the admission names none.
+const DEFERRAL: std::time::Duration = std::time::Duration::from_secs(5);
+/// The longest a deferred claim waits, the same cap as a failure's backoff.
+const MAX_DEFERRAL: std::time::Duration = std::time::Duration::from_secs(900);
 
 /// Domain coordinator for discovery, backfill, delta and bounded polling.
 pub struct OutlookCalendarSync<R, P, T, N> {
@@ -297,6 +333,28 @@ impl<
         self.writes_enabled = enabled;
         self
     }
+    /// Log how much claimable work is waiting, so a monitor can read queue
+    /// depth and the longest wait directly. Spans are sampled; the log is not.
+    #[tracing::instrument(
+        name = "calendar.outlook_queue_depth",
+        skip_all,
+        fields(due_items = tracing::field::Empty, oldest_due_seconds = tracing::field::Empty),
+        err
+    )]
+    pub async fn report_queue_depth(&self) -> Result<OutlookQueueDepth, Report> {
+        let depth = self.repository.outlook_queue_depth().await?;
+        let span = tracing::Span::current();
+        span.record("due_items", depth.due_items);
+        if let Some(oldest) = depth.oldest_due_seconds {
+            span.record("oldest_due_seconds", oldest);
+        }
+        tracing::info!(
+            due_items = depth.due_items,
+            oldest_due_seconds = depth.oldest_due_seconds,
+            "Outlook calendar sync queue depth"
+        );
+        Ok(depth)
+    }
     /// Claim and perform one bounded job. Heartbeats also revalidate custody.
     pub async fn run_once(&self) -> Result<bool, Report> {
         let Some(lease) = self
@@ -311,15 +369,36 @@ impl<
             return Ok(false);
         };
         let result = self.run_claim(&lease).await;
-        if let Err(error) = &result {
-            self.repository
-                .fail_outlook_calendar(&lease, error.kind())
-                .await?;
+        match &result {
+            Err(error) if error.kind() == CalendarProviderErrorKind::Deferred => {
+                let delay = error
+                    .retry_after()
+                    .unwrap_or(DEFERRAL)
+                    .clamp(std::time::Duration::from_secs(1), MAX_DEFERRAL);
+                self.repository
+                    .defer_outlook_calendar(&lease, delay)
+                    .await?;
+                return Ok(true);
+            }
+            Err(error) => {
+                self.repository
+                    .fail_outlook_calendar(&lease, error.kind())
+                    .await?;
+            }
+            Ok(_) => {}
         }
-        result.map_err(|error| rootcause::report!(error))?;
-        if lease.target.is_none() {
+        let discovered = result.map_err(|error| rootcause::report!(error))?;
+        // As on Google, a discovery that found the calendars as stored sends
+        // nothing. Each event it retired announces itself through the relay.
+        if let Some(change) = discovered
+            && change.changed
+        {
             self.notifier
-                .calendar_changed(&lease.owner_id, lease.binding.link_id, true)
+                .calendar_changed(
+                    &lease.owner_id,
+                    lease.binding.link_id,
+                    change.team_ooo_changed,
+                )
                 .await;
         }
         Ok(true)
@@ -340,11 +419,15 @@ impl<
             rejected_field = tracing::field::Empty,
             skipped_occurrences = tracing::field::Empty,
             unmapped_time_zone = tracing::field::Empty,
+            calendars_changed = tracing::field::Empty,
             error_kind = tracing::field::Empty,
         ),
         err(level = tracing::Level::DEBUG)
     )]
-    async fn run_claim(&self, lease: &OutlookCalendarLease) -> Result<(), CalendarProviderError> {
+    async fn run_claim(
+        &self,
+        lease: &OutlookCalendarLease,
+    ) -> Result<Option<OutlookCalendarsChange>, CalendarProviderError> {
         let span = tracing::Span::current();
         let token = self
             .tokens
@@ -469,6 +552,7 @@ impl<
                     .await
                     .map_err(storage_error)?;
                 record_milestone(&span, lease, target, checkpoint);
+                Ok(None)
             } else {
                 span.record("step", "discover");
                 let discovery = self.provider.calendars(&token, lease.binding).await?;
@@ -480,12 +564,14 @@ impl<
                         "ignoring an Outlook mailbox time zone Macro cannot map"
                     );
                 }
-                self.repository
+                let change = self
+                    .repository
                     .commit_outlook_calendars(lease, discovery.calendars)
                     .await
                     .map_err(storage_error)?;
+                span.record("calendars_changed", change.changed);
+                Ok(Some(change))
             }
-            Ok(())
         };
         let heartbeat = async {
             loop {
@@ -496,7 +582,7 @@ impl<
                     .map_err(storage_error)?;
             }
             #[allow(unreachable_code)]
-            Ok(())
+            Ok(None)
         };
         futures::pin_mut!(work, heartbeat);
         match futures::future::select(work, heartbeat).await {
@@ -538,7 +624,14 @@ fn record_milestone(
 }
 
 fn record_failure(span: &tracing::Span, error: &CalendarProviderError) {
-    span.record("outcome", "failed");
+    span.record(
+        "outcome",
+        if error.kind() == CalendarProviderErrorKind::Deferred {
+            "deferred"
+        } else {
+            "failed"
+        },
+    );
     span.record("error_kind", tracing::field::debug(error.kind()));
 }
 
@@ -559,17 +652,26 @@ pub struct CalendarProjectionLease {
     pub lease_id: Uuid,
     /// Owning connected inbox, used for viewer refresh.
     pub link_id: Uuid,
+    /// Whether teammates' out-of-office rows may have changed: the event was
+    /// or is out of office in a change this revision carries.
+    pub team_ooo_changed: bool,
     /// Committed change metadata.
     pub event: super::events::CalendarTopicEvent,
 }
 
+/// The most revisions one relay round publishes. A round that claims fewer
+/// has taken everything due, so the relay waits for its next poll, and the
+/// changes that arrive meanwhile share one refresh per inbox.
+pub const PROJECTION_BATCH: u16 = 100;
+
 /// Transactional projection publication journal.
 pub trait CalendarProjectionOutbox: Send + Sync + 'static {
-    /// Claim one pending change.
-    fn claim_projection(
+    /// Claim up to `limit` pending changes under one lease, earliest due first.
+    fn claim_projections(
         &self,
         lease_id: Uuid,
-    ) -> impl Future<Output = Result<Option<CalendarProjectionLease>, Report>> + Send;
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<CalendarProjectionLease>, Report>> + Send;
     /// Acknowledge exactly the published revision, preserving concurrent updates.
     fn complete_projection(
         &self,
@@ -597,18 +699,88 @@ impl<
             notifier,
         }
     }
-    /// Publish one committed revision; a crash or failure retains it for replay.
-    pub async fn run_once(&self) -> Result<bool, Report> {
-        let Some(lease) = self.repository.claim_projection(Uuid::now_v7()).await? else {
-            return Ok(false);
-        };
-        self.publish(&lease).await?;
-        Ok(true)
-    }
+    /// Publish one batch of committed revisions, then refresh each inbox the
+    /// published ones changed once, however many of its events changed. A
+    /// revision that fails to publish keeps its lease and is claimed again
+    /// once the lease expires, as a crash leaves it; the rest still complete.
+    /// Returns whether the batch was full, so more may be due.
     #[tracing::instrument(
         name = "calendar.projection_relay",
         skip_all,
-        fields(event_id = %lease.event_id, revision = lease.revision, link_id = %lease.link_id),
+        fields(
+            claimed = tracing::field::Empty,
+            failed = tracing::field::Empty,
+            refreshes = tracing::field::Empty,
+        ),
+        err(level = tracing::Level::DEBUG)
+    )]
+    pub async fn run_once(&self) -> Result<bool, Report> {
+        let leases = self
+            .repository
+            .claim_projections(Uuid::now_v7(), PROJECTION_BATCH)
+            .await?;
+        let span = tracing::Span::current();
+        let claimed = leases.len();
+        span.record("claimed", claimed as i64);
+        if leases.is_empty() {
+            return Ok(false);
+        }
+
+        let outcomes =
+            futures::future::join_all(leases.iter().map(|lease| self.publish(lease))).await;
+        if let Some(error) = outcomes.iter().find_map(|outcome| outcome.as_ref().err()) {
+            tracing::warn!(
+                error = ?error,
+                failed = outcomes.iter().filter(|outcome| outcome.is_err()).count(),
+                "Calendar projection publication will retry"
+            );
+        }
+        let published: Vec<_> = leases
+            .into_iter()
+            .zip(outcomes)
+            .filter_map(|(lease, outcome)| outcome.is_ok().then_some(lease))
+            .collect();
+        span.record("failed", (claimed - published.len()) as i64);
+
+        // An inbox's refresh may change teammates' out-of-office rows when
+        // any of its published revisions may.
+        let mut inboxes = std::collections::BTreeMap::<_, bool>::new();
+        for lease in &published {
+            *inboxes
+                .entry((lease.event.metadata().owner_id.as_str(), lease.link_id))
+                .or_default() |= lease.team_ooo_changed;
+        }
+        span.record("refreshes", inboxes.len() as i64);
+        for ((owner_id, link_id), team_ooo_changed) in inboxes {
+            self.notifier
+                .calendar_changed(owner_id, link_id, team_ooo_changed)
+                .await;
+        }
+        // One revision per transaction: the outbox trigger locks these rows
+        // from writes that change several events, so a batch that locked
+        // many at once could deadlock with them. One that fails stays leased
+        // for its retry; the others are still acknowledged, so they are not
+        // published again.
+        let mut acknowledgement_error = None;
+        for lease in &published {
+            if let Err(error) = self.repository.complete_projection(lease).await {
+                acknowledgement_error.get_or_insert(error);
+            }
+        }
+        match acknowledgement_error {
+            Some(error) => Err(error),
+            None => Ok(claimed == usize::from(PROJECTION_BATCH)),
+        }
+    }
+    #[tracing::instrument(
+        name = "calendar.projection_publish",
+        skip_all,
+        fields(
+            event_id = %lease.event_id,
+            revision = lease.revision,
+            link_id = %lease.link_id,
+            team_ooo_changed = lease.team_ooo_changed,
+        ),
         err(level = tracing::Level::DEBUG)
     )]
     async fn publish(&self, lease: &CalendarProjectionLease) -> Result<(), Report> {
@@ -619,9 +791,6 @@ impl<
             .await
             .map_err(|e| rootcause::report!(e))?
             .map_err(|e| rootcause::report!(e))?;
-        self.notifier
-            .calendar_changed(&lease.event.metadata().owner_id, lease.link_id, true)
-            .await;
-        self.repository.complete_projection(lease).await
+        Ok(())
     }
 }

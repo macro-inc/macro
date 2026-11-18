@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT current_setting('statement_timeout') AS \"statement!\",\n                      current_setting('lock_timeout') AS \"lock!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "statement!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "lock!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "bae008023140857a801ff16fd6ff2ab01514fd86d12870bcca9a310b1f3ef5d1"
+}

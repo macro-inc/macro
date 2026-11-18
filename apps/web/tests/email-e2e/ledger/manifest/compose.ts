@@ -178,10 +178,8 @@ export const compose = {
       fn: ['F-097'],
       action: 'load next window of suggestions, or retry a failed window',
       trigger: 'PageDown, or ArrowDown on the last option',
-      source: [
-        'src/lib/core/component/RecipientSelector.tsx',
-        'src/lib/core/component/RecipientSourceControls.tsx',
-      ],
+      note: 'tested: PageDown. ArrowDown on the last option is not driven apart: reaching the last option also scrolls the list to its end (AC-917), which reads the next window too, so a test cannot tell which of the two read it',
+      source: ['src/lib/core/component/RecipientSelector.tsx'],
     },
     {
       id: 'AC-009',
@@ -196,10 +194,18 @@ export const compose = {
       id: 'AC-317',
       surface: 'SC-06',
       fn: ['F-097'],
-      action:
-        'load the next window of suggestions, or retry a failed one, from the menu',
-      trigger: 'menu button Next options / Retry options',
+      action: 'retry a failed window of suggestions from the menu',
+      trigger: 'menu button Retry options, shown after a window failed',
       source: ['src/lib/core/component/RecipientSourceControls.tsx'],
+    },
+    {
+      id: 'AC-917',
+      surface: 'SC-06',
+      fn: ['F-097'],
+      action: 'load the next window of suggestions by scrolling to the end',
+      trigger:
+        'the list of suggestions scrolled to within three rows of its end',
+      source: ['src/lib/core/component/RecipientSelector.tsx'],
     },
     {
       id: 'AC-010',
@@ -1231,9 +1237,9 @@ export const compose = {
       fn: ['F-135'],
       state:
         'header label (subject, else Draft email) with badge draft / scheduled / sent / missing and its tooltip',
-      trigger: 'draft lifecycle state; not on phones',
+      trigger: 'draft lifecycle state; not on touch devices',
       source: ['src/features/email-compose/views/email-compose.tsx'],
-      note: 'tested: on a touch tablet, the label and the draft badge; tooltips are off on touch, and the Mail page on a desktop shows no such header, so the tooltip and the other badges are not asserted',
+      note: 'touch composes with the phone composer at every width, which has no such header, and the Mail page on a desktop shows none: see the waiver',
     },
     {
       id: 'STC-005',
@@ -1249,10 +1255,10 @@ export const compose = {
       surface: 'SC-06',
       fn: ['F-097'],
       state:
-        'suggestion menu status: Loading options… / Options unavailable. Selected values are kept. / Cached options or selected names may be incomplete. / No matches in this page or cached snapshot.',
+        'suggestion menu status: Loading options… / Options unavailable. Selected values are kept. / Cached options or selected names may be incomplete. / No matching options.',
       trigger: 'suggestion window loading, failed, partial or empty',
       source: ['src/lib/core/component/RecipientSourceControls.tsx'],
-      note: 'tested: the "No matches" variant only',
+      note: 'tested: the "No matching options" variant only',
     },
     {
       id: 'STC-314',

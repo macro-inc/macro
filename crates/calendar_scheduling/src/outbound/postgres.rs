@@ -263,7 +263,7 @@ impl Repository for PostgresRepository {
             status(record.booking.status),
             json,
             status(expected),
-            if matches!(record.booking.status, BookingStatus::Processing | BookingStatus::Failed) { record.operation.as_ref().map(|o| o.retry_at) } else { None },
+            if matches!(record.booking.status, BookingStatus::Processing | BookingStatus::Failed) { record.operation.as_ref().filter(|o| o.abandoned_at.is_none()).map(|o| o.retry_at) } else { None },
             record.operation.as_ref().map(|o| o.id.to_string()),
             record.operation.as_ref().map(|o| o.attempt.to_string()),
             expected_revision

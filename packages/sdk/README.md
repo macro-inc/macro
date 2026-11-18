@@ -468,6 +468,10 @@ await macro.channels
   .send(msg`Deploy ${sha} finished. ${here}`);
 ```
 
+Pass `{ silent: true }` to `send` or `reply` for a routine update that should
+notify nobody, mentioned people included; the message still appears in the
+channel. It works with every credential.
+
 ### Routines
 
 Create scheduled or event-triggered routines through `macro.routines`. A
@@ -880,7 +884,9 @@ const stop = await macro.events.listen();
 model as persisted webhooks. If you omit `filters`, it derives one filter from
 the event names already registered with `.on()`. Pass `scope: 'team'` for a
 team workspace (defaults to `'user'`). Delivery is best-effort: there is no
-replay if you disconnect.
+replay if you disconnect. Reconnecting sends `Last-Event-ID`, but the service
+replays only for clients that also ask `resume=true`, which `listen()` does
+not, so a reconnected listener gets the live stream as before.
 
 Handlers receive the same hydrated payloads as webhook deliveries — ORM
 handles for every entity the event names.

@@ -2,3 +2,4 @@
 
 pub mod fake;
 pub mod posthog;
+pub mod posthog_local;

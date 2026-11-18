@@ -2644,9 +2644,11 @@ export const rewriteSuggestion = async (
 /**
  * @summary The caller, or someone acting for them, acts on a suggestion: a background
 prompt suggestion starts its run when the person accepts it in the app (anyone
-else only takes it on); a note or prompt is done once they act on it (open its
-item or the composer), and shows in the feed's `done`. A routine suggestion is
-refused: the person saves its routine in the app, which makes it done.
+else only takes it on); a reply suggestion is only taken on, and is done once
+the person replies on its item; any other note or prompt is done once they act
+on it (open its item or the composer), and shows in the feed's `done`. A
+routine suggestion is refused: the person saves its routine in the app, which
+makes it done.
  */
 export type acceptSuggestionResponse204 = {
   data: void;
