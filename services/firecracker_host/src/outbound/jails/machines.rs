@@ -280,7 +280,7 @@ impl Machines for Jails {
         Some(Usage {
             resident_memory_bytes,
             private_memory_bytes,
-            swap_bytes,
+            swap_bytes: Some(swap_bytes),
             cpu_usage_microseconds,
         })
     }

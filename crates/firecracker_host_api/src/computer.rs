@@ -158,7 +158,9 @@ pub struct Usage {
     /// Memory of this VM the host moved to swap (cgroup
     /// `memory.swap.current`): the zram squeeze of an idle computer lands
     /// here, so `private_memory_bytes` plus this is what the VM holds.
-    pub swap_bytes: u64,
+    /// Absent from an agent older than the field: unknown, not zero.
+    #[serde(default)]
+    pub swap_bytes: Option<u64>,
     /// CPU time used since the process started (cgroup `cpu.stat`
     /// `usage_usec`); two readings give its recent activity.
     pub cpu_usage_microseconds: u64,
@@ -270,3 +272,6 @@ pub struct LaunchTimings {
     /// bookkeeping, scheduling.
     pub other_ms: Option<u64>,
 }
+
+#[cfg(test)]
+mod test;

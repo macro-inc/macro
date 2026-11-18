@@ -53,7 +53,7 @@ read it before changing behaviour.
   hold the cgroup's CPU counter, so CPU is its growth between two readings
   of one run (absent on a run's first reading; memory is on every reading).
   Memory is what only the computer holds (`anon` + swap), not what it shares
-  with its image.
+  with its image; a host agent that reports no swap gives no reading.
 - `src/domain/moves.rs` + `src/domain/operator/moves.rs`: moving a computer to
   another host (seed rounds while it runs, cutover, flip, verify, rollback),
   advanced by the move pass. The agents copy the ZFS dataset between
