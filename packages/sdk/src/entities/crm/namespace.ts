@@ -149,6 +149,8 @@ export class CrmNamespace {
    *
    * @destructive
    * @idempotent
+   * @throws When the domain equals or covers a member's connected primary
+   * mailbox domain. The error preserves the server's explanation.
    */
   async blockDomain(domain: string): Promise<void> {
     unwrap(await this.client.storage.blockCrmDomain({ path: { domain } }));

@@ -45,13 +45,16 @@ signed out does. `touch-layout.browser.e2e.ts` runs against it in the touch
 project: the tools above the dock, uncovered and at least 44px; the grouped
 tools; the selection's actions and their undo steps; the inspector sheet
 resting under the shape and closing with the selection kept; the long-press
-menu outliving the lift (and a drag not opening it); the zoom sheet; the
+menu outliving the lift (and a drag not opening it), with Select inside group
+for an item in a group; the zoom sheet, and its Keep tool after drawing
+switch drawing several rectangles from one choice of the tool; the
 in-canvas placement without the app's chrome; a corner taken from 12px outside
 it and the shape moved from its middle; an outlined shape selected by a tap
 near its stroke; the Attach sheet, whose Upload media row reaches the file
 picker and hands over the chosen file after the sheet has closed; Zoom to fit
-keeping the scene clear of the bottom chrome; and a turn of the device keeping
-the middle of the view. The long-press cases advance Playwright's clock rather than
+keeping the scene clear of the bottom chrome; a turn of the device keeping
+the middle of the view; and a fill picked from the sheet's swatches with the
+shape still in view. The long-press cases advance Playwright's clock rather than
 waiting.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an installed Chromium.
 

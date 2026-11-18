@@ -639,8 +639,9 @@ beside the calendar on desktop, as the full-screen composer on touch devices, in
 composer even when another one is open. Deleting an event asks first, and says guests will be
 notified only when someone besides you is on it.
 Guest pickers in event creation/editing, invitations/forwarding and AI drafts use
-paged personal suggestions. Type to find contacts outside the first window; Next
-options or PageDown replaces the page. Selected guests, their supplied/chosen
+paged personal suggestions. Type to find contacts outside the first page; scrolling
+to the end of the list, or PageDown on desktop, lists the next page below the
+earlier ones, and a failed page offers Retry options. Selected guests, their supplied/chosen
 names and custom addresses survive searches and paging. Known event guests are
 scoped extras, not personal-directory membership. Add-only editors exclude current
 and newly added guests case-insensitively without changing their stored address
