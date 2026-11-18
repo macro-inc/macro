@@ -1053,3 +1053,33 @@ fn saved_view_contract_is_composed_under_authenticated_user_and_mutations() {
         "membership tokens are internal"
     );
 }
+
+#[test]
+fn tag_sets_hang_off_the_authenticated_user() {
+    let sdl = crate::build_schema().sdl();
+    let user = sdl
+        .split_once("type GraphqlUser {")
+        .unwrap()
+        .1
+        .split_once("\n}")
+        .unwrap()
+        .0;
+    assert!(user.contains("tagSets: [GraphqlTagSet!]!"));
+    for expected in [
+        "scope: GraphqlTagScope!",
+        "definition: GraphqlPropertyDefinition\n",
+        "options: [GraphqlPropertyOption!]!",
+    ] {
+        let tag_set = sdl
+            .split_once("type GraphqlTagSet {")
+            .unwrap()
+            .1
+            .split_once("\n}")
+            .unwrap()
+            .0;
+        assert!(tag_set.contains(expected), "missing {expected}");
+    }
+    // A tag set is embedded in the viewer, never a normalized entity.
+    let tag_set = sdl.split_once("type GraphqlTagSet {").unwrap().1;
+    assert!(!tag_set.split_once("\n}").unwrap().0.contains("\tid:"));
+}

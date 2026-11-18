@@ -11,6 +11,8 @@ mod loaders;
 mod mutations;
 /// GraphQL property objects, values, and edge resolver.
 mod objects;
+/// The viewer's tag sets.
+mod tags;
 
 pub use definitions::{
     GraphqlNumberPropertyOptionValue, GraphqlPropertyDefinition, GraphqlPropertyDefinitionOwner,
@@ -36,3 +38,4 @@ pub use objects::{
     GraphqlPropertyEntityReference, GraphqlPropertyValue, GraphqlSelectOptionPropertyValue,
     GraphqlStringPropertyValue, load_entity_properties,
 };
+pub use tags::{GraphqlTagScope, GraphqlTagSet, load_tag_sets};

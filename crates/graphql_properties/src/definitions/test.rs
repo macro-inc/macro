@@ -76,6 +76,13 @@ impl EntityPropertyReader for TestReader {
             .collect())
     }
 
+    async fn get_tag_sets(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<properties::domain::model::TagSet>, rootcause::Report> {
+        Ok(Vec::new())
+    }
+
     async fn get_properties(
         &self,
         _user_id: &MacroUserIdStr<'static>,
