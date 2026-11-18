@@ -1,6 +1,7 @@
 import { DraftTransferAborted } from '@app/features/email-compose/context/compose-capabilities';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throwOnErr } from '@core/util/result';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
+import { sleep } from '@core/util/sleep';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
@@ -134,28 +135,26 @@ export function useDeleteDraftMutation(
   }));
 }
 
-/** Moving creates a new server identity; old queued mutations retain their old target. */
-export function transferEmailDraft(input: {
+type TransferEmailDraftInput = {
   operationId: string;
   draftId: string;
   draftGeneration?: number;
   sourceInboxId: string;
   destinationInboxId: string;
-}) {
+};
+
+/** How long a refused move waits for the draft's last save to reach its provider. */
+const TRANSFER_SYNC_WAIT_MS = 30_000;
+/** Requests one move makes when the draft keeps syncing between them. */
+const TRANSFER_ATTEMPTS = 3;
+const SYNC_POLL_DELAYS_MS = [250, 500, 1000];
+
+/** Moving creates a new server identity; old queued mutations retain their old target. */
+export function transferEmailDraft(input: TransferEmailDraftInput) {
   return Telemetry.span('email.draft_transfer.request', async (span) => {
     let result: TransferDraftResponse;
     try {
-      result = await throwOnErr(() =>
-        emailClient.transferDraft(
-          input.draftId,
-          {
-            operation_id: input.operationId,
-            draft_generation: input.draftGeneration ?? 0,
-            destination_link_id: input.destinationInboxId,
-          },
-          input.sourceInboxId
-        )
-      );
+      result = await requestDraftTransfer(input, span);
       span.setAttr('email.draft_transfer.committed_by', 'response');
     } catch (originalError) {
       const recovery = await span.span(
@@ -198,6 +197,84 @@ export function transferEmailDraft(input: {
     );
     return result;
   });
+}
+
+/**
+ * The service refuses to move a draft while its last save is still being
+ * written to the provider. An Outlook draft is written after the save
+ * returns, and the composer saves just before it asks for the move, so the
+ * move often arrives during that write. A refusal then waits for the write
+ * and asks again with the same operation ID: a refused move commits nothing,
+ * and the service treats a repeated ID as the same move.
+ */
+async function requestDraftTransfer(
+  input: TransferEmailDraftInput,
+  span: Span
+): Promise<TransferDraftResponse> {
+  const deadline = Date.now() + TRANSFER_SYNC_WAIT_MS;
+  let attempts = 0;
+  try {
+    while (true) {
+      attempts += 1;
+      const result = await emailClient.transferDraft(
+        input.draftId,
+        {
+          operation_id: input.operationId,
+          draft_generation: input.draftGeneration ?? 0,
+          destination_link_id: input.destinationInboxId,
+        },
+        input.sourceInboxId
+      );
+      if (result.isOk()) return result.value;
+      const refused = result.error.some((error) => error.code === 'CONFLICT');
+      const retry =
+        refused &&
+        attempts < TRANSFER_ATTEMPTS &&
+        (await span.span('email.draft_transfer.await_sync', (wait) =>
+          awaitDraftSynchronized(input.draftId, deadline, wait)
+        ));
+      if (!retry) throw new ThrownResultError(result.error);
+    }
+  } finally {
+    span.setAttr('email.draft_transfer.attempts', attempts);
+  }
+}
+
+/**
+ * True once the provider holds the draft's last save. False when the draft
+ * has no provider write (a Gmail draft), the write ended in some other state,
+ * or it is still running at `deadline`: the refusal was not the write's.
+ */
+async function awaitDraftSynchronized(
+  draftId: string,
+  deadline: number,
+  span: Span
+): Promise<boolean> {
+  let polls = 0;
+  let outcome: string;
+  while (true) {
+    polls += 1;
+    const read = await emailClient.messageOperation(draftId);
+    if (read.isErr()) {
+      outcome = 'read_failed';
+      break;
+    }
+    const state = read.value.operation?.state;
+    if (state !== 'PENDING') {
+      outcome = state ?? 'none';
+      break;
+    }
+    const delay =
+      SYNC_POLL_DELAYS_MS[Math.min(polls, SYNC_POLL_DELAYS_MS.length) - 1];
+    if (Date.now() + delay > deadline) {
+      outcome = 'timed_out';
+      break;
+    }
+    await sleep(delay);
+  }
+  span.setAttr('email.draft_transfer.sync_polls', polls);
+  span.setAttr('email.draft_transfer.sync_outcome', outcome);
+  return outcome === 'SYNCHRONIZED';
 }
 
 async function refreshTransferredThreads(
