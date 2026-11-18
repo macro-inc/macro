@@ -10,12 +10,15 @@ import {
   DocumentFileSidePanelSections,
   SidePanel,
 } from '@components/app/side-panel';
+import type { BlockName } from '@core/block';
 import { toEntityLoadError } from '@core/component/EntityLoadGate';
 import {
   getPermissions,
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
+import { useIsAuthenticated } from '@core/context/user';
+import { trackOpen } from '@core/internal/track-open';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { Span } from '@macro-inc/observability';
@@ -107,7 +110,7 @@ export function FileDetailLoadGate<
 >(props: {
   documentId: string;
   /** The block the document opens as, reported on `open_entity`. */
-  entityType: string;
+  entityType: BlockName;
   label: string;
   load: (documentId: string, parentSpan?: Span) => Promise<T>;
   /**
@@ -120,6 +123,7 @@ export function FileDetailLoadGate<
   children: (data: T) => JSX.Element;
 }) {
   const analytics = useAnalytics();
+  const authenticated = useIsAuthenticated();
   const flow = useFlow();
   // Shown results are released when their content is disposed (after the
   // editor it rendered); the rest here. Each result is released once.
@@ -165,14 +169,16 @@ export function FileDetailLoadGate<
     load
   );
   usePending('document.resource', () => document.loading);
-  // Counts the open once per document, as BlockLoader does for blocks; access
-  // changes and retries reload the same document without reopening it.
+  // Counts and records the open once per document, as BlockLoader does for
+  // blocks; access changes and retries reload the same document without
+  // reopening it.
   let trackedDocumentId: string | undefined;
   createEffect(() => {
     if (document.state !== 'ready') return;
     const documentId = props.documentId;
     if (trackedDocumentId === documentId) return;
     trackedDocumentId = documentId;
+    trackOpen(documentId, props.entityType, authenticated);
     analytics.pageView(props.entityType);
     analytics.track('open_entity', {
       entityType: props.entityType,

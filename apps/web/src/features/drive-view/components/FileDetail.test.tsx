@@ -10,6 +10,9 @@ const analytics = vi.hoisted(() => ({ pageView: vi.fn(), track: vi.fn() }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => analytics,
 }));
+const trackOpen = vi.hoisted(() => vi.fn());
+vi.mock('@core/internal/track-open', () => ({ trackOpen }));
+vi.mock('@core/context/user', () => ({ useIsAuthenticated: () => () => true }));
 vi.mock('@components/app/side-panel', () => ({}));
 vi.mock('@core/mobile/native-network-status', () => ({
   nativeNetworkStatus: () => 'online',
@@ -61,6 +64,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   analytics.track.mockClear();
+  trackOpen.mockClear();
   dispose?.();
   disposeTelemetry?.();
   vi.restoreAllMocks();
@@ -73,14 +77,15 @@ type Loaded = {
 };
 function mount(
   load: (id: string) => Promise<Loaded>,
-  cleanupEditor?: () => void
+  cleanupEditor?: () => void,
+  documentId: Accessor<string> = () => 'private-document'
 ) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   dispose = render(
     () => (
       <FileDetailLoadGate
-        documentId="private-document"
+        documentId={documentId()}
         entityType="md"
         label="document"
         load={load}
@@ -189,6 +194,29 @@ describe('file access errors', () => {
     expect(analytics.track.mock.calls).toEqual([
       ['open_entity', { entityType: 'md', entityId: 'private-document' }],
     ]);
+    expect(trackOpen.mock.calls).toEqual([
+      ['private-document', 'md', expect.any(Function)],
+    ]);
+  });
+
+  it('records each document opened in the same view once', async () => {
+    const [documentId, setDocumentId] = createSignal('private-document');
+    const container = mount(
+      async () => ({ userAccessLevel: 'view' }),
+      undefined,
+      documentId
+    );
+    await vi.waitFor(() => expect(trackOpen).toHaveBeenCalledTimes(1));
+    setDocumentId('next-document');
+    await vi.waitFor(() => expect(trackOpen).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain('Document content')
+    );
+
+    expect(trackOpen.mock.calls.map(([id, block]) => [id, block])).toEqual([
+      ['private-document', 'md'],
+      ['next-document', 'md'],
+    ]);
   });
 
   it('counts no open for a document that failed to load', async () => {
@@ -200,6 +228,7 @@ describe('file access errors', () => {
     );
 
     expect(analytics.track).not.toHaveBeenCalled();
+    expect(trackOpen).not.toHaveBeenCalled();
   });
 
   it.each(['NETWORK_ERROR', 'NOT_FOUND', 'GONE'])(
