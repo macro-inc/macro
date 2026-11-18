@@ -7,29 +7,31 @@ import {
   useClaudeSignOutMutation,
 } from '@queries/computers/claude';
 import { ActionDialogShell, Dialog } from '@ui';
-import type { JSX } from 'solid-js';
 import { ClaudeSignInFlow } from './claude-sign-in-flow';
 
-/** Sign in with Claude from a computer's or agent's row, outside guided setup. */
+/**
+ * Sign in with Claude from a computer's or agent's row, outside guided setup.
+ * Its one secondary action is Macro credits: on credits already, it only
+ * closes; signed in (or expired), it signs the computer out first.
+ */
 export function ClaudeSignInDialog(props: {
   harnessId: string;
   entry: ClaudeSignInEntry;
   onClose: () => void;
-  /** Replaces the default title, e.g. "Bring your AI to Ada". */
+  /** Replaces the default title, e.g. "Connect Ada to your Claude plan". */
   title?: string;
-  /** Shown above the title, e.g. the computer's setup progress. */
-  header?: JSX.Element;
+  /** Replaces the default line under the title. */
+  description?: string;
+  /** Replaces the default small print about who can use the sign-in. */
+  footnote?: string;
   /** Replaces the default toast once signed in. */
   onSignedIn?: () => void;
 }) {
   const signOut = useClaudeSignOutMutation();
   const mode = useClaudeModeQuery(() => props.harnessId);
-  const useCredits = async () => {
-    // Already on credits: nothing to sign out of.
-    if (mode.data?.mode === 'macro_credits') {
-      props.onClose();
-      return;
-    }
+  // Unknown until the mode loads: closing is the safe reading.
+  const onCredits = () => !mode.isSuccess || mode.data.mode === 'macro_credits';
+  const switchToCredits = async () => {
     try {
       await signOut.mutateAsync(props.harnessId);
       props.onClose();
@@ -50,14 +52,25 @@ export function ClaudeSignInDialog(props: {
           harnessId={props.harnessId}
           entry={props.entry}
           title={props.title}
-          header={props.header}
-          onClose={props.onClose}
+          description={props.description}
+          footnote={props.footnote ?? t('computers.claudeSharedAccount')}
+          secondary={
+            onCredits()
+              ? {
+                  label: t('computers.claudeKeepCredits'),
+                  onClick: props.onClose,
+                }
+              : {
+                  label: t('computers.claudeSwitchToCredits'),
+                  onClick: () =>
+                    fireAndForget(switchToCredits(), 'computer-claude'),
+                }
+          }
           onSignedIn={() => {
             props.onClose();
             if (props.onSignedIn) props.onSignedIn();
             else toast.success(t('computers.claudeSignedIn'));
           }}
-          onUseCredits={() => fireAndForget(useCredits(), 'computer-claude')}
         />
       </ActionDialogShell>
     </Dialog>

@@ -25,29 +25,37 @@ export default {
   cancels: 'Cancels {{date}}',
   keptUntil: 'Kept until {{date}}',
   pastDue: 'Payment past due',
-  claudeSignInConflict:
-    'Another sign-in is in progress on this computer — try again shortly',
-  claudeStartFailed: 'Could not start Claude sign-in. Please try again.',
-  claudeCompleteFailed:
-    'Could not complete Claude sign-in. Check the code and try again.',
   claudeCreditsFailed: 'Could not switch to Macro credits. Please try again.',
   claudeSignIn: 'Sign in with Claude',
-  claudeInvalidCode: "That code didn't work. Try again to get a new one.",
-  claudeSignInExpired:
-    'This sign-in link expired. Start over to get a new one.',
-  claudeStartOver: 'Start over',
+  claudeInvalidCode:
+    "Claude didn't accept that code. Get a new link and sign in again.",
+  claudeSignInExpired: 'This sign-in timed out. Get a new link to try again.',
   claudeTryAgain: 'Try again',
   openClaudeSignIn: 'Open claude.ai',
   claudeSignInTitle: 'Sign in with Claude',
-  claudeSignInSteps:
-    "We'll open claude.ai in a new tab. Sign in, copy the code it shows, then come back here and paste it.",
+  claudeSignInDescription:
+    'Use your Claude Pro or Max plan on this computer instead of Macro credits.',
+  claudeStepOpen: 'Sign in on claude.ai',
+  claudeStepPaste: 'Paste the code Claude shows you',
+  claudeCodePlaceholder: 'Paste code',
+  openClaudeAgain: 'Open again',
+  claudeNewLink: 'Get a new link',
+  claudeMalformedCode:
+    "That doesn't look like the whole code. Copy it again from claude.ai.",
+  claudeUnreachable:
+    "Can't reach the computer right now. Try again in a moment.",
+  claudeBusy: 'The computer is busy. Try again in a moment.',
+  claudeTimedOut: "Claude didn't answer in time. Get a new link to try again.",
+  claudeFailed: 'Something went wrong signing in. Try again.',
+  claudeKeepCredits: 'Keep using Macro credits',
+  claudeSwitchToCredits: 'Switch to Macro credits',
   claudeUseCreditsInstead: 'Use Macro credits instead',
   claudeCodeLabel: 'Paste the code Claude showed you',
   completeSignIn: 'Complete sign-in',
   claudeSignedIn: 'Signed in with Claude',
   claudeNotSignedIn: 'Claude: not signed in',
   claudeSharedAccount:
-    'Everyone using this computer can use this Claude sign-in. Signing out removes it from the computer; to revoke it, go to claude.ai settings.',
+    'Everyone using this computer can use this sign-in. Revoke it any time in claude.ai settings.',
   claudeCredits: 'Claude: Macro credits',
   buying: 'Buying',
   standard: 'Standard',
@@ -161,7 +169,6 @@ export default {
   setupFailedTitle: 'Setup failed',
   signInSkipped: 'Not needed: the agent runs on Macro credits.',
   tryItAfterSetup: 'Try it and creating agents unlock once setup finishes.',
-  pasteCodeToContinue: 'Paste the code from claude.ai to complete sign-in.',
   buyAfterSizesLoad: 'Buy unlocks once the sizes have loaded.',
   setupContinuesInBackground:
     'You can close this; setup carries on and the computer’s row shows its progress.',
@@ -170,8 +177,6 @@ export default {
   setupSteps: 'Setup steps',
   signInToClaude: 'Sign in to Claude',
   signInTabTitle: '● Sign in to Claude — Macro',
-  claudeHarnessNote:
-    'We run the real Claude Code on your computer. The code you paste here goes right into the harness on your computer.',
   almostReady: 'Almost ready',
   almostReadyBody: 'Finishing setup on {{computer}}.',
   setupAgentTitle: "Let's set up an agent on it",

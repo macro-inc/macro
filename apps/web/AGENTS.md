@@ -455,8 +455,9 @@ Discussion link scrolling has a backend-free browser regression:
 Inviting an agent teammate from Team → Members (People | Agent in Invite to
 Team, behind `enable-agent-teammates`): the dialog closing with its notice, a
 refused invite's error in view, its row's Setting up step → Running and failed
-Retry, the ready and failed notifications (Message, Bring your AI for admins
-only, Retry), Bring your AI with Close, its row's Claude sign-in and switch
+Retry, the ready and failed notifications (Message, Connect Claude plan for
+admins only, Retry), Connect Claude plan's one-screen sign-in with its
+expired, rejected and unreachable states, its row's Claude sign-in and switch
 back to credits, the DM status banner, and its removal have a backend-free
 browser regression at desktop 1440 and phone 390 over a scripted auth
 service. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there. It launches Chromium with

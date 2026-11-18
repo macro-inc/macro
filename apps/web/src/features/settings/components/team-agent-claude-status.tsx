@@ -29,7 +29,7 @@ export function TeamAgentClaudeStatus(props: {
     return match(props.state)
       .with('loading', () => undefined)
       .with('credits', 'expired', () => ({
-        label: t('teamAgents.signInToClaude'),
+        label: t('teamAgents.connectClaude'),
         onClick: props.onSignIn,
       }))
       .with('signed_in', () => ({
