@@ -200,7 +200,7 @@ export default defineDoc({
       id: 'track',
       title: 'Legacy track reference',
       description:
-        '`variant="track"` retains the previous composer treatment for reference. Production Auto/Chat/Code switches use the shared grouped Tabs pill.',
+        '`variant="track"` preserves Home’s existing composer tabs. Other production Auto/Chat/Code switches use the shared grouped Tabs pill.',
       render: TrackDemo,
     },
   ],

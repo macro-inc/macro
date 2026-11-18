@@ -73,9 +73,9 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   `aria-pressed`, and expansion triggers with `aria-expanded`. A toggle whose
   label and icon flip with its state (call mic and camera: Mute/Unmute) omits
   `aria-pressed` and keeps one fill. Do not restyle buttons as tabs. Use the same
-  grouped `Tabs` pill for the agent composer's Auto/Chat/Code switch on desktop
-  and in the phone drawer. Keep all tab treatments flat: use borders and
-  selected fills, not raised edges, gradients, or shadows.
+  grouped `Tabs` pill for the Agents composer's Auto/Chat/Code switch on desktop
+  and in the phone drawer; preserve Home's existing track tabs. Keep all tab
+  treatments flat: use borders and selected fills, not raised edges, gradients, or shadows.
 - **FE-65** Let `Tabs` own its touch styling: set its `touch` prop instead of
   swapping tab components or variants. For overflowing touch header sections,
   use a shared `MobileDrawer` selector instead of a scrolling tab strip.

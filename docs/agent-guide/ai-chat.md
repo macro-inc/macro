@@ -704,7 +704,8 @@ the shimmer.
   vertical center. The heading stays anchored while the composer expands downward,
   with controls inside the composer. Only the plus attachment action stays on the
   left of the bottom row. The right group contains mode/repository controls on
-  desktop, then the agent/model selector, dictation, and Send. Mode/repository
+  the Agents desktop composer, then the agent/model selector, dictation, and Send.
+  Home keeps mode and repository controls in its existing drawer below. Mode/repository
   controls can wrap above the final model, dictation, and Send controls.
   On mobile, grouped Auto/Chat/Code stays above the composer with repository
   controls; both pickers open standard bottom drawers. Selecting Chat hides
