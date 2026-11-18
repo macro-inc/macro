@@ -28,28 +28,18 @@ function createRandom(seed: number) {
   };
 }
 
-const FIRST_NAMES = [
-  'Sarah', 'James', 'Maria', 'David', 'Aisha', 'Wei', 'Olivia', 'Liam',
-  'Sofia', 'Noah', 'Emma', 'Lucas', 'Mia', 'Ethan', 'Ava', 'Mateo', 'Chloe',
-  'Daniel', 'Grace', 'Samuel', 'Nora', 'Henry', 'Zoe', 'Jack', 'Lily',
-  'Owen', 'Hannah', 'Leo', 'Ella', 'Isaac', 'Priya', 'Ravi', 'Yuki', 'Kenji',
-  'Fatima', 'Omar', 'Elena', 'Ivan', 'Camila', 'Diego', 'Anna', 'Peter',
-  'Julia', 'Marco', 'Laura', 'Tom', 'Rachel', 'Ben', 'Teresa', 'Victor',
-];
-const LAST_NAMES = [
-  'Smith', 'Johnson', 'Garcia', 'Chen', 'Patel', 'Kim', 'Nguyen', 'Brown',
-  'Martinez', 'Lee', 'Walker', 'Hall', 'Young', 'King', 'Wright', 'Lopez',
-  'Hill', 'Scott', 'Green', 'Adams', 'Baker', 'Nelson', 'Carter', 'Mitchell',
-  'Perez', 'Roberts', 'Turner', 'Phillips', 'Campbell', 'Parker', 'Evans',
-  'Edwards', 'Collins', 'Stewart', 'Sanchez', 'Morris', 'Rogers', 'Reed',
-  'Cook', 'Morgan', 'Bell', 'Murphy', 'Bailey', 'Rivera', 'Cooper',
-];
-const WORDS = [
-  'design', 'launch', 'growth', 'billing', 'infra', 'mobile', 'sales',
-  'support', 'hiring', 'roadmap', 'marketing', 'ops', 'finance', 'legal',
-  'research', 'partners', 'onboarding', 'release', 'security', 'data',
-  'platform', 'brand', 'events', 'customers', 'product', 'quality', 'docs',
-];
+const FIRST_NAMES =
+  'Sarah James Maria David Aisha Wei Olivia Liam Sofia Noah Emma Lucas Mia Ethan Ava Mateo Chloe Daniel Grace Samuel Nora Henry Zoe Jack Lily Owen Hannah Leo Ella Isaac Priya Ravi Yuki Kenji Fatima Omar Elena Ivan Camila Diego Anna Peter Julia Marco Laura Tom Rachel Ben Teresa Victor'.split(
+    ' '
+  );
+const LAST_NAMES =
+  'Smith Johnson Garcia Chen Patel Kim Nguyen Brown Martinez Lee Walker Hall Young King Wright Lopez Hill Scott Green Adams Baker Nelson Carter Mitchell Perez Roberts Turner Phillips Campbell Parker Evans Edwards Collins Stewart Sanchez Morris Rogers Reed Cook Morgan Bell Murphy Bailey Rivera Cooper'.split(
+    ' '
+  );
+const WORDS =
+  'design launch growth billing infra mobile sales support hiring roadmap marketing ops finance legal research partners onboarding release security data platform brand events customers product quality docs'.split(
+    ' '
+  );
 const DOMAINS = ['example.com', 'acme.io', 'globex.com', 'initech.co'];
 
 type Person = { id: string; email: string; name: string; recentMs: number };
@@ -170,6 +160,7 @@ export const useChannelsContext = () => {
 export const useIsConnectedSecondaryInbox = () => () => false;
 
 const [reads, setReads] = createSignal(0);
+
 export { reads };
 
 /** Ranked like the cache: names starting with the query, then other names or

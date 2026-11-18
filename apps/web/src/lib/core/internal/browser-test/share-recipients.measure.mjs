@@ -138,7 +138,7 @@ const quantile = (values, p) => {
 };
 const round = (value) => (value == null ? null : Math.round(value * 10) / 10);
 
-async function measure(browser, port, label, groups, throttle) {
+async function open(browser, port, groups, throttle) {
   const context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
   });
@@ -155,74 +155,65 @@ async function measure(browser, port, label, groups, throttle) {
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttle });
   await input.click();
   await page.waitForTimeout(SETTLE_MS);
+  return { context, page, cdp, errors, runs: [] };
+}
 
-  const runs = [];
-  const profileRun = throttle === Math.max(...THROTTLES);
-  for (let rep = 0; rep < REPS; rep++)
-    for (const query of QUERIES) {
-      const profile = profileRun && rep === 0 && query === QUERIES[0];
-      if (profile) {
-        await cdp.send('Profiler.enable');
-        await cdp.send('Profiler.setSamplingInterval', { interval: 200 });
-        await cdp.send('Profiler.start');
-      }
-      await page.evaluate(() => {
-        const m = window.__share;
-        m.keys = [];
-        m.changes = [];
-        m.frames = [];
-        m.recording = true;
-      });
-      const start = Date.now();
-      for (let index = 0; index < query.length; index++) {
-        const wait = start + index * CADENCE_MS - Date.now();
-        if (wait > 0) await page.waitForTimeout(wait);
-        await page.keyboard.press(query[index] === ' ' ? 'Space' : query[index]);
-      }
-      await page.waitForTimeout(SETTLE_MS);
-      const run = await page.evaluate(() => {
-        const m = window.__share;
-        m.recording = false;
-        return { keys: m.keys, changes: m.changes, frames: m.frames };
-      });
-      if (profile) {
-        const { profile: cpu } = await cdp.send('Profiler.stop');
-        fs.writeFileSync(
-          `${out}/${label}-groups-${groups}-x${throttle}.cpuprofile`,
-          JSON.stringify(cpu)
-        );
-      }
-      const last = run.keys.at(-1);
-      const final = run.changes.at(-1);
-      // The list is final at the paint after the last keystroke, or at its
-      // last change after that keystroke when results land later.
-      const lastChange = final && last && final.t >= last.t0 ? final.t : 0;
-      const settledAt = last ? Math.max(last.painted, lastChange) : undefined;
-      const finalRows = final?.rows ?? last?.rows ?? [];
-      runs.push({
-        query,
-        keys: run.keys.map((key) => ({
-          key: key.key,
-          toPaint: key.painted - key.t0,
-          queued: key.handled - key.t0,
-          people: key.rows.filter((row) => row.person).length,
-          rows: key.rows.length,
-        })),
-        settledAfterLastKey:
-          settledAt != null && last ? settledAt - last.t0 : null,
-        finalRows,
-        longFrames: run.frames,
-      });
-      await page.keyboard.press('ControlOrMeta+a');
-      await page.keyboard.press('Backspace');
-      await page.waitForTimeout(SETTLE_MS);
-    }
-  await context.close();
-  if (errors.length) throw new Error(errors.join('\n'));
-  fs.writeFileSync(
-    `${out}/${label}-groups-${groups}-x${throttle}.json`,
-    JSON.stringify({ label, groups, throttle, runs })
-  );
+/** Types `query` at the set cadence, waits for results, and clears it. */
+async function type(session, query, profilePath) {
+  const { page, cdp } = session;
+  if (profilePath) {
+    await cdp.send('Profiler.enable');
+    await cdp.send('Profiler.setSamplingInterval', { interval: 200 });
+    await cdp.send('Profiler.start');
+  }
+  await page.evaluate(() => {
+    const m = window.__share;
+    m.keys = [];
+    m.changes = [];
+    m.frames = [];
+    m.recording = true;
+  });
+  const start = Date.now();
+  for (let index = 0; index < query.length; index++) {
+    const wait = start + index * CADENCE_MS - Date.now();
+    if (wait > 0) await page.waitForTimeout(wait);
+    await page.keyboard.press(query[index] === ' ' ? 'Space' : query[index]);
+  }
+  await page.waitForTimeout(SETTLE_MS);
+  const run = await page.evaluate(() => {
+    const m = window.__share;
+    m.recording = false;
+    return { keys: m.keys, changes: m.changes, frames: m.frames };
+  });
+  if (profilePath) {
+    const { profile } = await cdp.send('Profiler.stop');
+    fs.writeFileSync(profilePath, JSON.stringify(profile));
+  }
+  const last = run.keys.at(-1);
+  const final = run.changes.at(-1);
+  // The list is final at the paint after the last keystroke, or at its last
+  // change after that keystroke when results land later.
+  const lastChange = final && last && final.t >= last.t0 ? final.t : 0;
+  const settledAt = last ? Math.max(last.painted, lastChange) : undefined;
+  session.runs.push({
+    query,
+    keys: run.keys.map((key) => ({
+      key: key.key,
+      toPaint: key.painted - key.t0,
+      queued: key.handled - key.t0,
+      people: key.rows.filter((row) => row.person).length,
+      rows: key.rows.length,
+    })),
+    settledAfterLastKey: settledAt != null && last ? settledAt - last.t0 : null,
+    finalRows: final?.rows ?? last?.rows ?? [],
+    longFrames: run.frames,
+  });
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.press('Backspace');
+  await page.waitForTimeout(SETTLE_MS);
+}
+
+function summarize(label, groups, throttle, runs) {
   const keys = runs.flatMap((run) => run.keys);
   const toPaint = keys.map((key) => key.toPaint);
   const settled = runs
@@ -239,7 +230,7 @@ async function measure(browser, port, label, groups, throttle) {
     settledP50: round(quantile(settled, 0.5)),
     settledMax: round(Math.max(...settled)),
     // Keystrokes after which the list painted empty although the query ends
-    // with results: the rows blinked out while the next read was pending.
+    // with results: no listed row matched the text until its read landed.
     emptyKeys: runs
       .filter((run) => run.finalRows.length > 0)
       .flatMap((run) => run.keys)
@@ -259,19 +250,42 @@ const browser = await chromium.launch({
 });
 const summary = [];
 try {
-  let turn = 0;
   for (const groups of SIZES)
     for (const throttle of THROTTLES) {
-      const order = builds.map((build, index) => ({ build, index }));
-      if (turn++ % 2) order.reverse();
-      for (const { build, index } of order) {
-        const row = await measure(
-          browser,
-          servers[index].address().port,
-          build.label,
-          groups,
-          throttle
+      // Every build's page stays open, and each repetition types into them
+      // in turn, alternating which goes first.
+      const sessions = [];
+      for (const [index, build] of builds.entries())
+        sessions.push(
+          await open(browser, servers[index].address().port, groups, throttle)
         );
+      for (let rep = 0; rep < REPS; rep++) {
+        const order = [...builds.keys()];
+        if (rep % 2) order.reverse();
+        for (const index of order)
+          for (const query of QUERIES) {
+            const profile =
+              rep === 0 &&
+              query === QUERIES[0] &&
+              throttle === Math.max(...THROTTLES);
+            await type(
+              sessions[index],
+              query,
+              profile
+                ? `${out}/${builds[index].label}-groups-${groups}-x${throttle}.cpuprofile`
+                : undefined
+            );
+          }
+      }
+      for (const [index, build] of builds.entries()) {
+        const session = sessions[index];
+        await session.context.close();
+        if (session.errors.length) throw new Error(session.errors.join('\n'));
+        fs.writeFileSync(
+          `${out}/${build.label}-groups-${groups}-x${throttle}.json`,
+          JSON.stringify({ label: build.label, groups, throttle, runs: session.runs })
+        );
+        const row = summarize(build.label, groups, throttle, session.runs);
         summary.push(row);
         console.log(JSON.stringify(row));
       }
