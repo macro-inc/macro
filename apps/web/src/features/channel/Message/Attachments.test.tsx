@@ -30,6 +30,7 @@ vi.mock('@channel/Media/media-items', () => ({
   }),
   mapMediaItems: () => [],
 }));
+vi.mock('./DocumentImagePreview', () => ({ DocumentImagePreview: () => null }));
 vi.mock('./MediaPreview', () => ({ MediaPreview: () => null }));
 vi.mock('@ui', () => ({ cn: () => '' }));
 vi.mock('./context', () => ({

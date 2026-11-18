@@ -7,6 +7,7 @@ import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { AttachmentChip } from './AttachmentChip';
 import { useMessage } from './context';
+import { DocumentImagePreview } from './DocumentImagePreview';
 import { MediaPreview } from './MediaPreview';
 
 type AttachmentsProps = {
@@ -20,6 +21,13 @@ export function Attachments(props: AttachmentsProps) {
   );
   const mediaItems = createMemo<MediaItem[]>((previous = []) =>
     mapMediaItems(buckets().mediaAttachments, previous)
+  );
+  const documentIds = createMemo(() =>
+    buckets()
+      .documentAttachments.filter(
+        (attachment) => attachment.entity_type === 'document'
+      )
+      .map((attachment) => attachment.entity_id)
   );
   const hasAttachments = createMemo(
     () =>
@@ -36,6 +44,10 @@ export function Attachments(props: AttachmentsProps) {
         <Show when={mediaItems().length > 0}>
           <MediaPreview items={mediaItems()} />
         </Show>
+
+        <For each={documentIds()}>
+          {(documentId) => <DocumentImagePreview documentId={documentId} />}
+        </For>
 
         <Show when={buckets().documentAttachments.length > 0}>
           <div class="flex flex-row mt-2 gap-2 flex-wrap max-w-full">
