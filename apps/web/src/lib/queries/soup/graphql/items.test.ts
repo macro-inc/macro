@@ -2886,6 +2886,51 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('keeps the newest notification time when two loaded pages list an item', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'notified_at' }, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    const notifiedAtOf = (id: string) =>
+      (
+        query.data()?.entities as
+          | { id: string; notified_at?: string }[]
+          | undefined
+      )?.find((entity) => entity.id === id)?.notified_at;
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ id: 'moved' }],
+          next_cursor: 'page-2',
+          notified_at: [
+            { entityId: 'moved', notifiedAt: '2026-11-18T12:00:00Z' },
+          ],
+        })
+      );
+      const more = query.fetchNextPage();
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
+      // A later page still listing the item at its older time.
+      fake.executions[1].next(
+        graphqlSoupPage({
+          items: [{ id: 'moved' }],
+          next_cursor: null,
+          notified_at: [
+            { entityId: 'moved', notifiedAt: '2026-11-18T09:00:00Z' },
+          ],
+        })
+      );
+      await more;
+      expect(notifiedAtOf('moved')).toBe('2026-11-18T12:00:00Z');
+    } finally {
+      dispose();
+    }
+  });
+
   it('reprojects retained pages when projection inputs change', () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

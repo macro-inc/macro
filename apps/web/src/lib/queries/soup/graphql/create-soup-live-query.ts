@@ -99,7 +99,9 @@ const hasSoupPage = (page: SoupQuery | ChannelListSoupQuery): boolean =>
 
 const NO_NOTIFIED_AT: ReadonlyMap<string, string> = new Map();
 
-/** Notification times a NOTIFIED_AT page lists for its items, by record key. */
+/** Notification times NOTIFIED_AT pages list for their items, by record key.
+ * An item two loaded pages list (a refresh that kept a stale later page) keeps
+ * the newest time, so its row never moves back. */
 function pageNotifiedAt(
   pages: readonly (SoupQuery | ChannelListSoupQuery)[]
 ): ReadonlyMap<string, string> {
@@ -107,8 +109,12 @@ function pageNotifiedAt(
   for (const page of pages) {
     const soup = page.user?.soup;
     if (!soup || !('notifiedAt' in soup)) continue;
-    for (const { graphqlTypeName, entityId, notifiedAt } of soup.notifiedAt)
-      stamps.set(`${graphqlTypeName}:${entityId}`, notifiedAt);
+    for (const { graphqlTypeName, entityId, notifiedAt } of soup.notifiedAt) {
+      const key = `${graphqlTypeName}:${entityId}`;
+      const known = stamps.get(key);
+      if (known === undefined || Date.parse(notifiedAt) > Date.parse(known))
+        stamps.set(key, notifiedAt);
+    }
   }
   return stamps.size ? stamps : NO_NOTIFIED_AT;
 }
