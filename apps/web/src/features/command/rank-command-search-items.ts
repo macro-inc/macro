@@ -4,10 +4,7 @@ import {
   NAME_MATCH_RANKING,
   NAME_STARTS_WITH_QUERY_RANK,
 } from '@core/util/freshSort';
-import {
-  normalizeNameText,
-  startsWordsOf,
-} from '@core/util/name-match-score';
+import { normalizeNameText, startsWordsOf } from '@core/util/name-match-score';
 import { preservePersonOrder } from '@core/util/ordered-window';
 import uFuzzy from '@leeoniya/ufuzzy';
 import { match } from 'ts-pattern';
