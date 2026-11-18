@@ -137,6 +137,10 @@ read it before changing behaviour.
   `Rejected::PaymentPending`, releases queue `Effect::SettleCharge`, and
   `TimerKind::ChargeUnsettled` (`CHARGE_TAKEOVER`) hands a charge the request
   never answered to the billing worker (`Effect::Charge`, never abandoned).
+  A billing effect turned away by `BillingError::ChangeInFlight` (another
+  change to the subscription still settling, e.g. a release's item removal)
+  is deferred `CHANGE_IN_FLIGHT_RETRY` (`ComputerRepo::defer_effect`), not
+  backed off, and spends no attempt.
 - Each host's capacity comes from its own row (NOT NULL settings, measured
   defaults); registration only reports hardware (`HostRegistration`: vCPUs and
   memory), and recomputes the row's units from its settings.

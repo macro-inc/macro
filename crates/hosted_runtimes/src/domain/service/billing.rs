@@ -621,6 +621,16 @@ impl<
                 // Not the removal's failure: it runs again once its lease
                 // expires, without spending an attempt.
                 Err(error) if error.is_storage_unavailable() => Err(error),
+                // Turned away, not failed: nothing was sent while another
+                // change to the subscription settles.
+                Err(ComputerError::Billing(BillingError::ChangeInFlight)) => {
+                    tracing::info!(effect_id = pending.id,
+                        "another subscription change is in flight; billing effect deferred");
+                    self.repo
+                        .defer_effect(pending.id, now + CHANGE_IN_FLIGHT_RETRY)
+                        .await
+                        .map_err(internal)
+                }
                 Err(error) => {
                     super::super::telemetry::effect_failed("billing");
                     tracing::Span::current().record("otel.status_code", "ERROR");

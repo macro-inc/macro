@@ -343,6 +343,14 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Run the effect again at `run_after` without counting an attempt: it
+    /// was turned away, not failed.
+    fn defer_effect(
+        &self,
+        id: i64,
+        run_after: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Record a failed attempt and run the effect again at `retry_at`.
     fn retry_effect(
         &self,

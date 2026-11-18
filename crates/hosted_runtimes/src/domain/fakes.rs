@@ -710,6 +710,12 @@ impl ComputerRepo for FakeRepo {
         self.complete_effect(id).await
     }
 
+    async fn defer_effect(&self, id: i64, run_after: DateTime<Utc>) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.effect_run_after.lock().unwrap().insert(id, run_after);
+        Ok(())
+    }
+
     async fn retry_effect(
         &self,
         id: i64,
