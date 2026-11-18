@@ -404,6 +404,8 @@ export const storageExcluded = [
   'getPendingProjectsHandler',
   'getProjectsHandler',
   'getRingStatus',
+  // Membership-scoped channel rows used by the email Share dialog.
+  'getThreadChannelShares',
   // Status of the web app's own folder upload; uploads aren't an SDK surface.
   'getUploadExtractStatusHandler',
   'getUserDocumentViewLocation',
