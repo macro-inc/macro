@@ -950,3 +950,37 @@ async fn maintenance_is_off_until_installed(pool: PgPool) -> Result<(), sqlx::Er
     assert_eq!(rows(&mut conn, DOC).await?.len(), 2);
     Ok(())
 }
+
+/// Turning maintenance on must not wait for readers of the inputs or block new ones: it needs only
+/// the lock writers conflict with, never ACCESS EXCLUSIVE. Checked with a reader holding
+/// `"Document"` open, both with no triggers installed and with them already in place.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
+async fn installing_does_not_wait_for_readers(pool: PgPool) -> Result<(), sqlx::Error> {
+    sqlx::query!("SELECT source_items_remove_triggers()")
+        .execute(&pool)
+        .await?;
+    for already_installed in [false, true] {
+        let mut reader = pool.begin().await?;
+        sqlx::query!(r#"SELECT count(*) AS "count!" FROM "Document""#)
+            .fetch_one(&mut *reader)
+            .await?;
+        let mut install = pool.begin().await?;
+        sqlx::query!("SET LOCAL lock_timeout = '1s'")
+            .execute(&mut *install)
+            .await?;
+        sqlx::query!("SELECT source_items_install_triggers()")
+            .execute(&mut *install)
+            .await
+            .inspect_err(|error| eprintln!("already installed: {already_installed}: {error}"))?;
+        install.commit().await?;
+        reader.commit().await?;
+    }
+    let mut conn = pool.acquire().await?;
+    insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
+    grant(&mut conn, "document", DOC, OWNER, "user").await?;
+    assert_eq!(rows(&mut conn, DOC).await?.len(), 1);
+    assert_exact(&pool).await
+}
