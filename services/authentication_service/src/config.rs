@@ -166,9 +166,6 @@ pub struct Config {
     /// The environment we are in
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
-    /// Dev only: comma-separated Macro user ids that get computers without the
-    /// PostHog flag. Refused in production.
-    pub computers_rollout_allowlist: Option<String>,
     /// The internal auth key used by other services
     pub service_internal_auth_key: ServiceInternalAuthKey,
     /// The github client id
@@ -311,16 +308,6 @@ impl Config {
             }
         }
         Ok(())
-    }
-
-    /// The computers rollout allowlist; refused in production.
-    pub fn computer_rollout_allowlist(
-        &self,
-    ) -> anyhow::Result<hosted_runtimes::domain::rollout::RolloutAllowlist> {
-        Ok(hosted_runtimes::outbound::rollout_allowlist::configured(
-            self.computers_rollout_allowlist.as_deref(),
-            self.environment,
-        )?)
     }
 
     /// Macro computers' retention and past-due grace.

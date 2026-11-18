@@ -935,9 +935,8 @@ Macro computers are hosted machines a team buys for its agents, billed on the
 team subscription. They never sleep. They sit in `Machines`, behind the
 `enable-macro-computers` flag for purchases and Claude account controls, and
 need a team: without one the page shows nothing about them. The web asks the
-backend (`GET /team/computers/rollout`), which evaluates the PostHog flag and,
-in dev only, `COMPUTERS_ROLLOUT_ALLOWLIST`. With the
-flag off, the computer UI is hidden (the Macro computers section, Billing,
+backend (`GET /team/computers/rollout`), which evaluates the PostHog flag. With
+the flag off, the computer UI is hidden (the Macro computers section, Billing,
 Agents and settings search show nothing about computers; a team owner or admin
 still sees an existing computer under Your machines as an ordinary machine
 they can rename), while existing computers keep running and billing. Turning the flag off is a sales kill switch, not a way to manage
