@@ -2,8 +2,6 @@
 const REMEMBERED_TEXT_LENGTH = 1_000;
 /** Remembered text past this many characters in all is forgotten. */
 const REMEMBERED_CHARACTERS = 4_000_000;
-/** Longer queries kept at once: a paste and its normalized text. */
-const KEPT_PASTES = 2;
 
 /** A string that shares no memory with the one it came from: text trimmed
  * from a long paste can, which a remembered key or its words would keep
@@ -12,32 +10,14 @@ const KEPT_PASTES = 2;
 const copyOf = (value: string) => value.split('').join('');
 
 /** Remembers a pure string function's answers. Ranking thousands of rows
- * reads the same names on every keystroke; the bounds only cap memory. A
- * query is read once for every row ranked against it, so a query's function
- * also keeps the latest texts too long to remember with the others, until a
- * timer queued when the first is kept runs: about as long as the keystroke
- * that ranks against them, though other tasks can run first. */
-function rememberText<R>(
-  compute: (value: string) => R,
-  of: 'names' | 'queries'
-) {
+ * reads the same names on every keystroke; the bounds only cap memory.
+ * Longer text is computed each time; a ranking pass prepares a long query
+ * once instead (`nameQuery`). */
+function rememberText<R>(compute: (value: string) => R) {
   const known = new Map<string, R>();
   let characters = 0;
-  let pastes: { text: string; result: R }[] = [];
-  const forgetPastes = () => {
-    pastes = [];
-  };
   return (value: string): R => {
-    if (value.length > REMEMBERED_TEXT_LENGTH) {
-      if (of === 'names') return compute(value);
-      const kept = pastes.find((paste) => paste.text === value);
-      if (kept) return kept.result;
-      const text = copyOf(value);
-      const paste = { text, result: compute(text) };
-      if (!pastes.length) setTimeout(forgetPastes, 0);
-      pastes = [paste, ...pastes].slice(0, KEPT_PASTES);
-      return paste.result;
-    }
+    if (value.length > REMEMBERED_TEXT_LENGTH) return compute(value);
     const hit = known.get(value);
     if (hit !== undefined) return hit;
     const text = copyOf(value);
@@ -61,8 +41,8 @@ const normalize = (value: string) =>
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
-const normalizedText = rememberText(normalize, 'names');
-const normalizedQuery = rememberText(normalize, 'queries');
+const normalizedText = rememberText(normalize);
+const normalizedQuery = rememberText(normalize);
 
 /** Mirrors subsequence_match::ranking; shared fixtures freeze this per-row rule.
  * It never normalizes a score against the other rows in a result window. */
@@ -70,33 +50,39 @@ export function normalizeNameText(value: string): string {
   return normalizedText(value);
 }
 
-/** `normalizeNameText` for a query each row is ranked against: a longer
- * query, such as a paste, is kept too. */
-export function normalizeQueryText(value: string): string {
-  return normalizedQuery(value);
-}
-
 const WORD_BREAK = /[^\p{Alphabetic}\p{Number}]+/u;
 
-const wordsOf = rememberText(
-  (text): readonly string[] =>
-    text.toLowerCase().split(WORD_BREAK).filter(Boolean),
-  'names'
-);
+const wordsIn = (text: string): readonly string[] =>
+  text.split(WORD_BREAK).filter(Boolean);
+const wordsOf = rememberText((text) => wordsIn(text.toLowerCase()));
+const queryParts = rememberText((query) => wordsIn(normalizedQuery(query)));
 
-const queryParts = rememberText(
-  (query): readonly string[] =>
-    normalizedQuery(query).split(WORD_BREAK).filter(Boolean),
-  'queries'
-);
+/** A query read for every row of a ranking pass, normalized once: its text
+ * as `normalizeNameText` gives it, and that text's words. */
+export type NameQuery = {
+  readonly term: string;
+  readonly parts: readonly string[];
+};
+
+/** Prepares a query for a ranking pass. Rows given the result skip
+ * normalizing it, which costs a pasted query's length on every row. */
+export function nameQuery(query: string): NameQuery {
+  const term = normalizedQuery(query);
+  return { term, parts: wordsIn(term) };
+}
+
+const termOf = (query: string | NameQuery) =>
+  typeof query === 'string' ? normalizedQuery(query) : query.term;
 
 /** Whether every query term starts a word of the text, as the native people
  * ranker's word-prefix tier decides it: punctuation separates words. */
-export function startsWordsOf(text: string, query: string): boolean {
+export function startsWordsOf(
+  text: string,
+  query: string | NameQuery
+): boolean {
   const words = wordsOf(text);
-  return queryParts(query).every((part) =>
-    words.some((word) => word.startsWith(part))
-  );
+  const parts = typeof query === 'string' ? queryParts(query) : query.parts;
+  return parts.every((part) => words.some((word) => word.startsWith(part)));
 }
 
 function span(
@@ -124,8 +110,11 @@ function span(
   return { start: first, length: last - first };
 }
 
-export function nameMatchRank(label: string, query: string): number {
-  const term = normalizedQuery(query);
+export function nameMatchRank(
+  label: string,
+  query: string | NameQuery
+): number {
+  const term = termOf(query);
   if (!term) return 0;
   const name = normalizeNameText(label);
   if (name === term) return 2;
@@ -135,11 +124,11 @@ export function nameMatchRank(label: string, query: string): number {
 export function nameMatchQuality(
   label: string,
   text: string,
-  query: string,
+  query: string | NameQuery,
   gapWeight: number,
   startDecay: number
 ): number | undefined {
-  const term = normalizedQuery(query);
+  const term = termOf(query);
   if (!term) return 1;
   const textSpan = span(normalizeNameText(text), term);
   if (!textSpan) return undefined;

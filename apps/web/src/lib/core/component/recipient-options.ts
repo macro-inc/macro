@@ -1,5 +1,6 @@
 import type { CombinedRecipientItem } from '@core/user/combinedRecipient';
 import type { IUser } from '@core/user/types';
+import { nameQuery } from '@core/util/name-match-score';
 import { recipientMatchRank } from '@core/util/recipient-match-rank';
 import { match, P } from 'ts-pattern';
 
@@ -134,10 +135,11 @@ export function rankRecipientMatches<T extends CombinedRecipientItem>(
 ): T[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return found;
+  const prepared = nameQuery(normalized);
   return found
     .map((option) => {
       const { text, email } = fields(option);
-      return { option, rank: recipientMatchRank(text, email, normalized) };
+      return { option, rank: recipientMatchRank(text, email, prepared) };
     })
     .sort((a, b) => b.rank - a.rank)
     .map(({ option }) => option);

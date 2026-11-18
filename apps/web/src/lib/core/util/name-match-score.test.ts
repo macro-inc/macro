@@ -5,8 +5,8 @@ import { createFreshSearch, NAME_MATCH_RANKING } from './freshSort';
 import {
   nameMatchQuality,
   nameMatchRank,
+  nameQuery,
   normalizeNameText,
-  normalizeQueryText,
   startsWordsOf,
 } from './name-match-score';
 import { recipientMatchRank } from './recipient-match-rank';
@@ -68,12 +68,24 @@ it('scores text longer than a name as it scores the same words padded short', ()
   }
 });
 
-it('normalizes a query as it normalizes a name, at every length', () => {
+it('ranks a prepared query as it ranks the text, at every length', () => {
   for (const words of [1, 200, 200_001]) {
     const text = ` Sam\tLEE${' x'.repeat(words)} `;
-    for (let pass = 0; pass < 2; pass++) {
-      expect(normalizeQueryText(text)).toBe(normalizeNameText(text));
-      expect(recipientMatchRank(text, undefined, text)).toBe(1);
+    const prepared = nameQuery(text);
+    expect(prepared.term).toBe(normalizeNameText(text));
+    expect(prepared.parts).toEqual(['sam', 'lee', ...Array(words).fill('x')]);
+    for (const label of ['Sam Lee', prepared.term, `${prepared.term} more`]) {
+      for (const query of [text, prepared]) {
+        expect(recipientMatchRank(label, undefined, query)).toBe(
+          recipientMatchRank(label, undefined, text)
+        );
+        expect(nameMatchRank(label, query)).toBe(nameMatchRank(label, text));
+        expect(startsWordsOf(label, query)).toBe(startsWordsOf(label, text));
+        expect(nameMatchQuality(label, label, query, 0.5, 0.1)).toBe(
+          nameMatchQuality(label, label, text, 0.5, 0.1)
+        );
+      }
     }
+    expect(recipientMatchRank(text, undefined, prepared)).toBe(1);
   }
 });
