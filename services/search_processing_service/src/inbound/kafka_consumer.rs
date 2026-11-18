@@ -134,6 +134,9 @@ const WORKER_CHANNEL_CAPACITY: usize = 16;
 /// commits each partition it still owns back to its first record no worker
 /// started, which its next owner redelivers.
 const SHUTDOWN_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
+/// How long aborted workers get to stop, so their last start and finish
+/// reports reach the ledger before it decides what to rewind.
+const ABORT_GRACE: Duration = Duration::from_millis(500);
 /// Delay before polling Kafka again after a receive error.
 const RECEIVE_ERROR_RETRY_DELAY: Duration = Duration::from_secs(1);
 /// Total processing attempts before an event is dropped.
@@ -734,7 +737,7 @@ fn track_handoff<E>(
         HandoffOutcome::HandedOff | HandoffOutcome::WorkerClosed => {}
         HandoffOutcome::Coalesced
         | HandoffOutcome::NoIndexChange
-        | HandoffOutcome::MalformedRecord(_) => ledger.done(position),
+        | HandoffOutcome::MalformedRecord(_) => ledger.skipped(position),
     }
 }
 
@@ -847,9 +850,12 @@ async fn poll_events(
 struct Rewind {
     /// Partitions committed back to these records, which are redelivered.
     rewound: Vec<RecordPosition>,
-    /// Queued records left behind: their partition is no longer this
-    /// consumer's, or the assignment or the commit failed.
+    /// Queued records on partitions this consumer no longer owns.
     not_rewound: Vec<RecordPosition>,
+    /// Queued records whose rewind failed, because the assignment or the
+    /// commit did; whether the next owner reads them depends on the offset
+    /// committed last.
+    unconfirmed: Vec<RecordPosition>,
 }
 
 /// Commits each partition this consumer still owns back to its first record
@@ -865,8 +871,8 @@ fn rewind_queued(consumer: &SearchProcessingKafkaConsumer, ledger: &OffsetLedger
         Err(error) => {
             tracing::error!(error = ?error, "could not read the consumer's assignment");
             return Rewind {
-                rewound: Vec::new(),
-                not_rewound: queued,
+                unconfirmed: queued,
+                ..Rewind::default()
             };
         }
     };
@@ -886,23 +892,26 @@ fn rewind_queued(consumer: &SearchProcessingKafkaConsumer, ledger: &OffsetLedger
             }
         }
     }
+    let mut unconfirmed = Vec::new();
     if !rewound.is_empty()
         && let Err(error) = consumer.inner().commit_offsets(&offsets, CommitMode::Sync)
     {
         tracing::error!(error = ?error, "could not commit search processing partitions back to their queued events");
-        rewound.clear();
+        unconfirmed = std::mem::take(&mut rewound);
     }
-    let not_rewound = queued
+    let covered = |position: &RecordPosition, points: &[RecordPosition]| {
+        points
+            .iter()
+            .any(|point| point.topic == position.topic && point.partition == position.partition)
+    };
+    let (unconfirmed, not_rewound) = queued
         .into_iter()
-        .filter(|position| {
-            !rewound
-                .iter()
-                .any(|point| point.topic == position.topic && point.partition == position.partition)
-        })
-        .collect();
+        .filter(|position| !covered(position, &rewound))
+        .partition(|position| covered(position, &unconfirmed));
     Rewind {
         rewound,
         not_rewound,
+        unconfirmed,
     }
 }
 
@@ -951,14 +960,26 @@ async fn drain_workers(
             }
         }
     }
-    while let Ok(report) = reports.try_recv() {
-        ledger.report(report);
-    }
     let aborted = if timed_out { running.len() } else { 0 };
     if timed_out {
         for abort in aborts {
             abort.abort();
         }
+        // An aborted worker stops at its next await; until then it can still
+        // report, so wait briefly before the ledger is read.
+        let _ = tokio::time::timeout(ABORT_GRACE, async {
+            while let Some(finished) = running.next().await {
+                if let Err(error) = finished
+                    && error.is_panic()
+                {
+                    panic.get_or_insert(error);
+                }
+            }
+        })
+        .await;
+    }
+    while let Ok(report) = reports.try_recv() {
+        ledger.report(report);
     }
     Drained { panic, aborted }
 }
@@ -1012,6 +1033,7 @@ pub(crate) async fn run_event_consumer(
         lost = field::Empty,
         rewound_partitions = field::Empty,
         not_rewound = field::Empty,
+        unconfirmed = field::Empty,
     );
     let drained = async {
         let drain_started = std::time::Instant::now();
@@ -1032,13 +1054,14 @@ pub(crate) async fn run_event_consumer(
         if !lost.is_empty() {
             tracing::warn!(
                 events = %display_positions(&lost),
-                "search processing events a worker had started were cut off by the stop; they are not redelivered"
+                "search processing events a worker had started were cut off by the stop; they are replayed only when a queued event before them on their partition is"
             );
         }
         if graceful && drained.panic.is_none() {
             let rewind = rewind_queued(&consumer, &ledger);
             span.record("rewound_partitions", rewind.rewound.len());
             span.record("not_rewound", rewind.not_rewound.len());
+            span.record("unconfirmed", rewind.unconfirmed.len());
             if !rewind.rewound.is_empty() {
                 tracing::info!(
                     partitions = %display_positions(&rewind.rewound),
@@ -1048,7 +1071,13 @@ pub(crate) async fn run_event_consumer(
             if !rewind.not_rewound.is_empty() {
                 tracing::warn!(
                     events = %display_positions(&rewind.not_rewound),
-                    "queued search processing events were not committed back and are not redelivered"
+                    "queued search processing events on partitions this consumer no longer owns were not committed back"
+                );
+            }
+            if !rewind.unconfirmed.is_empty() {
+                tracing::warn!(
+                    events = %display_positions(&rewind.unconfirmed),
+                    "queued search processing events could not be committed back; check the group's committed offsets before a backfill"
                 );
             }
         } else {

@@ -51,7 +51,8 @@ pub(super) struct OffsetLedger {
 }
 
 impl OffsetLedger {
-    /// Marks a record taken; it stays open until [`done`](Self::done).
+    /// Marks a record taken; it stays open until a worker finishes it or its
+    /// handoff skips it.
     pub(super) fn received(&mut self, position: RecordPosition) {
         self.open
             .entry((position.topic, position.partition))
@@ -65,7 +66,7 @@ impl OffsetLedger {
     pub(super) fn report(&mut self, report: WorkerReport) {
         match report {
             WorkerReport::Started(position) => self.started(position),
-            WorkerReport::Done(position) => self.done(position),
+            WorkerReport::Done(position) => self.finished(position),
         }
     }
 
@@ -80,8 +81,20 @@ impl OffsetLedger {
         }
     }
 
-    /// Marks one delivery of a record finished, whatever its outcome.
-    pub(super) fn done(&mut self, position: RecordPosition) {
+    /// Marks a delivery a worker started as finished, whatever its outcome.
+    pub(super) fn finished(&mut self, position: RecordPosition) {
+        self.close(position, |record| {
+            record.started = record.started.saturating_sub(1);
+        });
+    }
+
+    /// Marks a delivery finished at handoff, without a worker: coalesced,
+    /// irrelevant to the index, or malformed.
+    pub(super) fn skipped(&mut self, position: RecordPosition) {
+        self.close(position, |_| {});
+    }
+
+    fn close(&mut self, position: RecordPosition, release: impl FnOnce(&mut OpenRecord)) {
         let hash_map::Entry::Occupied(mut partition) =
             self.open.entry((position.topic, position.partition))
         else {
@@ -89,7 +102,8 @@ impl OffsetLedger {
         };
         if let Entry::Occupied(mut open) = partition.get_mut().entry(position.offset) {
             let record = open.get_mut();
-            record.deliveries -= 1;
+            release(record);
+            record.deliveries = record.deliveries.saturating_sub(1);
             record.started = record.started.min(record.deliveries);
             if record.deliveries == 0 {
                 open.remove();
@@ -101,7 +115,10 @@ impl OffsetLedger {
     }
 
     /// For each partition `assigned` accepts, the offset of its first record
-    /// with a delivery no worker started: where its next owner must start.
+    /// no worker has started: where its next owner must start. An offset with
+    /// any started delivery is never a target, even when a second delivery of
+    /// it is queued, since Kafka cannot replay one delivery without the other.
+    /// Started records at later offsets are still replayed from the target.
     pub(super) fn rewind_points(
         &self,
         assigned: impl Fn(&str, i32) -> bool,
@@ -112,7 +129,7 @@ impl OffsetLedger {
             .filter(|((topic, partition), _)| assigned(topic, *partition))
             .filter_map(|(&(topic, partition), open)| {
                 open.iter()
-                    .find(|(_, record)| record.deliveries > record.started)
+                    .find(|(_, record)| record.started == 0)
                     .map(|(&offset, _)| RecordPosition {
                         topic,
                         partition,
@@ -130,9 +147,9 @@ impl OffsetLedger {
         self.positions(|record| record.started > 0)
     }
 
-    /// Records no worker started.
+    /// Records no worker has started.
     pub(super) fn queued(&self) -> Vec<RecordPosition> {
-        self.positions(|record| record.deliveries > record.started)
+        self.positions(|record| record.started == 0)
     }
 
     fn positions(&self, keep: impl Fn(&OpenRecord) -> bool) -> Vec<RecordPosition> {

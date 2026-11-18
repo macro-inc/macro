@@ -21,14 +21,14 @@ fn a_stop_rewinds_to_the_first_queued_record_even_after_later_ones_finish() {
         ledger.received(at(0, offset));
     }
     ledger.started(at(0, 12));
-    ledger.done(at(0, 12));
+    ledger.finished(at(0, 12));
     ledger.started(at(0, 11));
-    ledger.done(at(0, 11));
+    ledger.finished(at(0, 11));
 
     assert_eq!(ledger.rewind_points(any_partition), [at(0, 10)]);
 
     ledger.started(at(0, 10));
-    ledger.done(at(0, 10));
+    ledger.finished(at(0, 10));
     assert!(ledger.rewind_points(any_partition).is_empty());
 }
 
@@ -62,32 +62,51 @@ fn only_partitions_still_assigned_are_rewound() {
 }
 
 #[test]
-fn a_record_delivered_twice_stays_open_until_both_deliveries_finish() {
+fn a_record_delivered_twice_is_never_a_target_while_one_delivery_runs() {
     let mut ledger = OffsetLedger::default();
     ledger.received(at(0, 3));
     ledger.received(at(0, 3));
+    ledger.received(at(0, 4));
     ledger.started(at(0, 3));
 
     assert_eq!(
         ledger.rewind_points(any_partition),
-        [at(0, 3)],
-        "the second delivery is still queued"
+        [at(0, 4)],
+        "offset 3 has a started delivery; Kafka cannot replay only its queued one"
     );
 
-    ledger.done(at(0, 3));
+    ledger.finished(at(0, 3));
+    assert_eq!(
+        ledger.rewind_points(any_partition),
+        [at(0, 3)],
+        "the second delivery of 3 is queued again"
+    );
+
     ledger.started(at(0, 3));
-    ledger.done(at(0, 3));
-    assert!(ledger.queued().is_empty());
+    ledger.finished(at(0, 3));
+    assert_eq!(ledger.queued(), [at(0, 4)]);
     assert!(ledger.started_unfinished().is_empty());
+}
+
+#[test]
+fn a_record_skipped_at_handoff_leaves_a_started_delivery_started() {
+    let mut ledger = OffsetLedger::default();
+    ledger.received(at(0, 7));
+    ledger.started(at(0, 7));
+    ledger.received(at(0, 7));
+    ledger.skipped(at(0, 7));
+
+    assert_eq!(ledger.started_unfinished(), [at(0, 7)]);
+    assert!(ledger.rewind_points(any_partition).is_empty());
 }
 
 #[test]
 fn reports_for_unknown_records_change_nothing() {
     let mut ledger = OffsetLedger::default();
-    ledger.done(at(0, 1));
+    ledger.finished(at(0, 1));
     ledger.started(at(0, 1));
     ledger.received(at(0, 2));
-    ledger.done(at(0, 1));
+    ledger.finished(at(0, 1));
 
     assert_eq!(ledger.rewind_points(any_partition), [at(0, 2)]);
 }
