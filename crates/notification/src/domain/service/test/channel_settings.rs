@@ -158,3 +158,47 @@ async fn a_fallback_alone_still_sends_the_message() {
 
     assert_eq!(result.notified_recipients, HashSet::from([mentions_off]));
 }
+
+/// A document mention, which follows the setting of the message carrying it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct DocumentMention {
+    message: String,
+}
+
+impl Notification for DocumentMention {
+    const TYPE_NAME: &'static str = "document_mention";
+}
+
+#[tokio::test]
+async fn a_notification_can_name_the_setting_that_decides_it() {
+    let replies_off = test_user_id("replies-off@example.com");
+    let messages_off = test_user_id("messages-off@example.com");
+    let service = NotificationIngressService::new(
+        MockRepository::new()
+            .with_channel_settings(
+                replies_off.clone(),
+                disabled(&[ChannelNotificationKind::ThreadReply]),
+            )
+            .with_channel_settings(
+                messages_off.clone(),
+                disabled(&[ChannelNotificationKind::TopLevelMessage]),
+            ),
+        MockQueue::new(),
+        MockStateMachine,
+    );
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Channel.with_entity_string(CHANNEL_ID.to_string()),
+        secondary_notification_entity: None,
+        notification: DocumentMention {
+            message: "See the spec".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([replies_off, messages_off.clone()]),
+    }
+    .into_request()
+    .with_channel_settings_kind(ChannelNotificationKind::ThreadReply);
+
+    let result = service.send_notification(request).await.unwrap().unwrap();
+
+    assert_eq!(result.notified_recipients, HashSet::from([messages_off]));
+}

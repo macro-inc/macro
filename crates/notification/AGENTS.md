@@ -107,6 +107,9 @@ through the same service.
   (`ExclusionReason::DisabledForChannel`), alongside mute and the global type
   preferences. A new channel event type users should control needs a
   `ChannelNotificationKind` variant; channel invites are deliberately not one.
+  A notification decided by another kind's setting names it with
+  `with_channel_settings_kind`: a document mention follows its message's
+  kind, top-level outside a thread and thread reply inside one.
 - A channel message or reply leaves the users it @mentions out of its own
   recipients; the producer names them with `with_mention_fallback`, and
   ingress adds back each one whose channel settings turn mentions off, so

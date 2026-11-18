@@ -1,5 +1,6 @@
 //! Request and response models for the notification service.
 
+use crate::domain::channel_settings::ChannelNotificationKind;
 use crate::domain::models::{
     ExclusionReason, FilteredRecipient, MobilePushRecipients, Notification, NotificationExtEmail,
     NotificationExtIos, RecipientExclusion, TaggedContent,
@@ -88,6 +89,7 @@ where
             send_conn_gateway: false,
             mobile_push_exclusions: MobilePushRecipients::default(),
             mention_fallback_recipient_ids: HashSet::new(),
+            channel_settings_kind: None,
         }
     }
 }
@@ -121,6 +123,10 @@ pub struct SendNotificationRequest<'a, T, U> {
     /// for the channel, so they still hear about the message.
     #[serde(default, skip_serializing_if = "HashSet::is_empty")]
     pub(crate) mention_fallback_recipient_ids: HashSet<MacroUserIdStr<'a>>,
+    /// The channel notification setting that decides who receives this
+    /// notification, when it is not the one named by its event type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) channel_settings_kind: Option<ChannelNotificationKind>,
 }
 
 impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
@@ -134,6 +140,7 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             send_conn_gateway,
             mobile_push_exclusions,
             mention_fallback_recipient_ids,
+            channel_settings_kind,
         } = self;
 
         let sender = req.sender_id.clone().map(CowLike::into_owned);
@@ -166,6 +173,7 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             send_conn_gateway,
             mobile_push_exclusions,
             mention_fallback_recipient_ids,
+            channel_settings_kind,
         }
     }
 }
@@ -219,6 +227,13 @@ impl<'a, T, U> SendNotificationRequest<'a, T, U> {
     /// [`SendNotificationRequest::mention_fallback_recipient_ids`].
     pub fn with_mention_fallback(mut self, recipients: HashSet<MacroUserIdStr<'a>>) -> Self {
         self.mention_fallback_recipient_ids = recipients;
+        self
+    }
+
+    /// Let this channel setting, not the one its event type names, decide
+    /// who receives the notification.
+    pub fn with_channel_settings_kind(mut self, kind: ChannelNotificationKind) -> Self {
+        self.channel_settings_kind = Some(kind);
         self
     }
 

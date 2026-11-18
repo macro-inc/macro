@@ -351,8 +351,11 @@ where
         mut req: SendNotificationRequest<'a, T, U>,
     ) -> Result<SendNotificationRequest<'a, T, U>, Report> {
         let notification_type = req.req.notification.tag.as_ref().to_owned();
-        let channel_kind =
-            channel_settings_target(&req.req.notification_entity, &notification_type);
+        let channel_kind = channel_settings_target(
+            &req.req.notification_entity,
+            &notification_type,
+            req.channel_settings_kind,
+        );
         let mention_fallback = std::mem::take(&mut req.mention_fallback_recipient_ids);
         let lookup_ids: Vec<_> = req
             .req
@@ -514,12 +517,13 @@ where
 fn channel_settings_target(
     entity: &Entity<'_>,
     event_type: &str,
+    kind: Option<ChannelNotificationKind>,
 ) -> Option<(Uuid, ChannelNotificationKind)> {
     if entity.entity_type != EntityType::Channel {
         return None;
     }
 
-    let kind = event_type.parse().ok()?;
+    let kind = kind.or_else(|| event_type.parse().ok())?;
     let channel_id = entity.entity_id.parse().ok()?;
     Some((channel_id, kind))
 }

@@ -18,8 +18,11 @@ use uuid::Uuid;
 /// A channel notification a user can turn off for one channel.
 ///
 /// Each kind is one notification event type, which is also its wire form.
-/// Channel invites are not here: they reach people as they join, before they
-/// could have chosen anything.
+/// A message that mentions a document follows the kind of its message: a
+/// top-level message outside a thread, a thread reply inside one (its
+/// producer says which, see [`crate::domain::models::request`]). Channel
+/// invites are not here: they reach people as they join, before they could
+/// have chosen anything.
 #[derive(
     Debug,
     Clone,
@@ -53,10 +56,6 @@ pub enum ChannelNotificationKind {
     #[serde(rename = "channel_message_reaction")]
     #[strum(serialize = "channel_message_reaction")]
     Reaction,
-    /// A message that mentions a document.
-    #[serde(rename = "document_mention")]
-    #[strum(serialize = "document_mention")]
-    DocumentMention,
     /// A call started in the channel.
     #[serde(rename = "call_started")]
     #[strum(serialize = "call_started")]
