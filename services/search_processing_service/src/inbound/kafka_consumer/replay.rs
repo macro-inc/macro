@@ -27,6 +27,10 @@ pub(crate) const REPLAY_DELAY: Duration = Duration::from_secs(60);
 /// (`infra/stacks/search-event-queue/index.ts`): a replay that fails on this
 /// delivery moves to the dead-letter queue instead of being delivered again.
 pub(crate) const REPLAY_MAX_RECEIVES: u32 = 2;
+/// How long a worker waits to queue a replay before dropping the event, so an
+/// unreachable queue cannot hold the worker. Shorter than the drain a stop
+/// allows, so a stopping worker still finishes queueing.
+const REPLAY_QUEUE_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Where events whose attempts failed wait to be applied again.
 pub(crate) trait ReplayQueue: Send + Sync {
@@ -105,10 +109,13 @@ pub(super) async fn conclude_kafka_attempts<Q: ReplayQueue>(
         Err(exhausted) => exhausted,
     };
     let failure = <&'static str>::from(exhausted.diagnosis.failure);
-    match replays
-        .replay_later(replay_of(received, &exhausted), REPLAY_DELAY)
-        .await
-    {
+    let queued = tokio::time::timeout(
+        REPLAY_QUEUE_TIMEOUT,
+        replays.replay_later(replay_of(received, &exhausted), REPLAY_DELAY),
+    )
+    .await
+    .unwrap_or_else(|_| Err(anyhow::anyhow!("queueing the replay timed out")));
+    match queued {
         Ok(()) => {
             tracing::warn!(
                 error = %exhausted.error,
@@ -133,7 +140,14 @@ pub(super) async fn conclude_kafka_attempts<Q: ReplayQueue>(
     }
 }
 
-/// The original record a replay carries, to decode it as the consumer did.
+/// Decode a replay's original record as the consumer decoded it.
+pub(super) fn decode(
+    replay: &ReplayBrokerEvent,
+) -> Result<DeclaredMacroEvent, macro_event_broker::EventBrokerError> {
+    DeclaredMacroEvent::decode(&ReplayRecord(replay))
+}
+
+/// The original record a replay carries.
 struct ReplayRecord<'a>(&'a ReplayBrokerEvent);
 
 impl MessageParts for ReplayRecord<'_> {
@@ -181,7 +195,7 @@ pub(crate) async fn replay_broker_event(
         otel.status_description = field::Empty,
     );
     adopt_traceparent(&span, replay.traceparent.as_deref());
-    let decoded = span.in_scope(|| DeclaredMacroEvent::decode(&ReplayRecord(replay)));
+    let decoded = span.in_scope(|| decode(replay));
     let (event, topic) = match (decoded, subscribed_topic(&replay.topic)) {
         (Ok(event), Some(topic)) => (event, topic),
         (decoded, _) => {

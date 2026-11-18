@@ -48,7 +48,7 @@ fn a_failed_replay_is_delivered_again_and_lost_only_on_its_last_delivery() {
 }
 
 #[test]
-fn a_replay_decodes_its_original_record() {
+fn a_replay_is_read_from_its_original_record() {
     let replay = ReplayBrokerEvent {
         event_id: "event-1".to_owned(),
         topic: "macro.chats".to_owned(),
@@ -66,5 +66,5 @@ fn a_replay_decodes_its_original_record() {
 
     assert_eq!(MessageParts::key(&record), Some("chat-1"));
     assert_eq!(MessageParts::topic(&record), "macro.chats");
-    assert!(DeclaredMacroEvent::decode(&record).is_err());
+    assert!(decode(&replay).is_err(), "a payload that is not an event");
 }

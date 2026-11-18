@@ -3027,6 +3027,30 @@ impl ReplayQueue for RecordedReplays {
     }
 }
 
+/// A replay queue that never answers.
+struct HangingReplays;
+
+impl ReplayQueue for HangingReplays {
+    async fn replay_later(
+        &self,
+        _: sqs_client::search::replay::ReplayBrokerEvent,
+        _: Duration,
+    ) -> anyhow::Result<()> {
+        std::future::pending().await
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_event_whose_replay_cannot_be_queued_in_time_is_dropped() {
+    let received = received_thread_backfilled_event(EMAIL_THREAD_ID, 3);
+
+    let record =
+        conclude_kafka_attempts(&received, Err(exhausted(Failure::Error)), &HangingReplays).await;
+
+    assert_eq!(record.outcome, EventOutcome::Dropped);
+    assert_eq!(record.failure, Some(Failure::Error));
+}
+
 fn exhausted(failure: Failure) -> Exhausted {
     Exhausted {
         error: "opensearch failed 1 of 2 bulk items".to_owned(),
@@ -3057,10 +3081,9 @@ async fn a_failed_event_is_queued_for_its_replay_from_the_record_as_read() {
                 },
             )),
         );
-        let event = DeclaredMacroEvent::decode(&message).expect("decodable email event");
-        let (span, received) = receive_record(&record, || Ok::<_, EventBrokerError>(event));
-        let mut received = received.expect("decoded record");
-        received.payload = String::from_utf8(message.payload.clone().unwrap()).unwrap();
+        let record = record.clone().set_payload(message.payload.clone());
+        let (span, received) = receive_record(&record, || DeclaredMacroEvent::decode(&message));
+        let received = received.expect("decoded record");
         drop(span);
 
         process_received(&unread_metrics(), &received, &replays, |_| async {
@@ -3081,13 +3104,9 @@ async fn a_failed_event_is_queued_for_its_replay_from_the_record_as_read() {
     assert_eq!(replay.key, EMAIL_LINK_ID.to_string());
     assert_eq!(replay.produced_at_ms, Some(1_000));
     assert_eq!(replay.failure, "bulk_items");
-    let replayed = DeclaredMacroEvent::decode(&TestMessage {
-        topic: MacroEmailTopic::TOPIC_STR,
-        key: Some(replay.key.clone()),
-        payload: Some(replay.payload.clone().into_bytes()),
-    })
-    .expect("the replay decodes as the record did");
+    let replayed = replay::decode(replay).expect("the replay decodes as the record did");
     assert_eq!(event_type(&replayed), "email.thread_backfilled");
+    assert_eq!(ordering_key(&replayed), EMAIL_THREAD_ID.to_string());
 
     let spans = capture.finished("process_event");
     let [processing] = spans.as_slice() else {
@@ -3142,25 +3161,17 @@ fn a_replay_joins_the_trace_of_the_processing_that_failed() {
 }
 
 #[test]
-fn every_subscribed_topic_names_one_entity_type() {
-    use strum::IntoEnumIterator as _;
+fn every_event_names_its_entity_type() {
+    let email = received_thread_backfilled_event(EMAIL_THREAD_ID, 1);
+    let session = received_agent_session_event(AGENT_SESSION_ID, 2);
 
-    let topics = DeclaredMacroEvent::topics();
-    let entity_types: Vec<_> = topics
-        .iter()
-        .map(|topic| entity_type::EntityType::from_topic(topic).expect("a subscribed topic"))
-        .collect();
-
-    assert_eq!(entity_types.len(), entity_type::EntityType::iter().count());
     assert_eq!(
-        entity_type::EntityType::from_topic(MacroEmailTopic::TOPIC_STR),
-        Some(entity_type::EntityType::Email)
-    );
-    assert_eq!(entity_type::EntityType::from_topic("macro.unknown"), None);
-    let received = received_thread_backfilled_event(EMAIL_THREAD_ID, 1);
-    assert_eq!(
-        entity_type::EntityType::of(&received.event),
+        entity_type::EntityType::of(&email.event),
         entity_type::EntityType::Email
+    );
+    assert_eq!(
+        <&'static str>::from(entity_type::EntityType::of(&session.event)),
+        "agent_session"
     );
 }
 

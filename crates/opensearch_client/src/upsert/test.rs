@@ -254,6 +254,17 @@ fn refusals_are_read_from_the_bodies_other_requests_fail_with() {
             .refusal(),
         Some(WriteRefusal::TooManyRequests)
     );
+    // `parse_deleted_by_query` and the update-by-query path keep the list alone.
+    assert_eq!(
+        unknown(r#"[{"index":"emails_v1","status":429,"cause":{"type":"rejected_execution_exception"}}]"#)
+            .refusal(),
+        Some(WriteRefusal::TooManyRequests)
+    );
+    assert_eq!(
+        unknown(r#"[{"status":409,"cause":{"type":"version_conflict_engine_exception"}}]"#)
+            .refusal(),
+        None
+    );
     assert_eq!(
         unknown(r#"{"error":{"type":"mapper_parsing_exception"},"status":400}"#).refusal(),
         None

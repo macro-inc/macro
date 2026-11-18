@@ -343,9 +343,10 @@ fn refusal_in_body(body: &str) -> Option<WriteRefusal> {
             .and_then(|status| u16::try_from(status).ok())
             .unwrap_or_default()
     };
+    // A by-query error keeps its `failures` list, alone or in the response.
+    let failures = body.as_array().or_else(|| body["failures"].as_array());
     write_refusal(status_of(&body), &body["error"]).or_else(|| {
-        body["failures"]
-            .as_array()?
+        failures?
             .iter()
             .find_map(|failure| write_refusal(status_of(failure), &failure["cause"]))
     })
