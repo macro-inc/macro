@@ -1,0 +1,36 @@
+apps/web/src/features/agent-permissions/views/agent-permissions-page.test.tsx
+  s_ce4c4fb10e3875::t_a43df53c285087 127-128,135-139,141-156
+  s_ce4c4fb10e3875::t_7dc9e4e1493681 129-134,140
+apps/web/src/features/settings/Agents.tsx
+  s_ce4c4fb10e3875::t_0c281b02dcc932 352-380,382,561
+apps/web/src/features/agent-permissions/core/model.ts
+  s_ce4c4fb10e3875::t_ca8b8cf7b4082a 77-78,82,88
+apps/web/src/features/agent-permissions/views/agent-permissions-section.tsx
+  s_ce4c4fb10e3875::t_44cb0471b3984a 33,35-37
+apps/web/src/features/agent-permissions/queries/permissions.ts
+  s_ce4c4fb10e3875::t_44cb0471b3984a 37-38,40,95-99,115-119
+apps/web/src/features/agent-permissions/views/agent-permissions-list.tsx
+  s_ce4c4fb10e3875::t_44cb0471b3984a 164,196-203
+  s_ce4c4fb10e3875::t_798256bdbc017e 204
+  s_ce4c4fb10e3875::t_3ca51a4adc8c48 12-19,98,106-108,302-304,306
+  s_ce4c4fb10e3875::t_ca8b8cf7b4082a 227-228,230,233-237,240,242-246
+  s_ce4c4fb10e3875::t_0c281b02dcc932 99-101
+apps/web/src/features/agent-permissions/core/model.test.ts
+  s_ce4c4fb10e3875::t_ca8b8cf7b4082a 34,41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "35d03bd6fb221a21986a90c527336ecf5065c98e",
+  "prompts": {},
+  "sessions": {
+    "s_ce4c4fb10e3875": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b6b57a6-b78c-40d9-9d42-b7ccad1c549b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
