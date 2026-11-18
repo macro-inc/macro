@@ -504,18 +504,12 @@ export type AppEvents = {
 
   // --- Email Focus ---------------------------------------------------------
   /**
-   * A visit to the Focus tab, counted once when the read it started returns.
-   * `rows` is how many threads it showed (0 is an empty tab), `threads` how
-   * many the Focus list holds before the view's filters and search. A visit
-   * that ends before its read returns, or whose read fails, is not counted.
+   * A visit to the Focus tab, sent when the server answers the read the tab
+   * makes as it opens. `threads` is how many the Focus list holds, before the
+   * view's filters and search; 0 is an empty tab. A visit whose read fails,
+   * or that ends before the answer, is not counted.
    */
-  email_focus_tab_opened: {
-    rows: number;
-    threads: number;
-    narrowed: boolean;
-    /** The list's order: `recent` or `importance`. */
-    sort: string;
-  };
+  email_focus_tab_opened: { threads: number };
   /**
    * A thread opened from the Focus list by click, tap or Enter, in the pane or
    * a split. `position` is its 0-based place among the listed threads. Not

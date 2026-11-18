@@ -22,7 +22,6 @@ import { createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { EmailFocusSort } from '../constants';
 import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
-import { isFocusListNarrowed, trackFocusTabVisits } from '../focus-analytics';
 import { useEmailTabAvailability } from '../tab-availability';
 import { buildFocusDateRows } from './email-results';
 import type {
@@ -111,9 +110,11 @@ export function useFocusEmailSource(
 ): EmailDataSource {
   const notificationSource = useGlobalNotificationSource();
   const tabAvailability = useEmailTabAvailability();
+  const analytics = useAnalytics();
   // Never read Focus while its flags are off or still loading.
   const focus = useEmailFocusQuery(
-    () => state.tab === 'focus' && tabAvailability('focus') === 'on'
+    () => state.tab === 'focus' && tabAvailability('focus') === 'on',
+    (threads) => analytics.track('email_focus_tab_opened', { threads })
   );
   const pendingDone = usePendingGraphqlSoupDone();
   const projectDone = createGraphqlSoupDoneProjection();
@@ -148,25 +149,6 @@ export function useFocusEmailSource(
     );
   });
   const items = createSoupRowStore(built);
-
-  const analytics = useAnalytics();
-  trackFocusTabVisits(
-    {
-      showing: () => state.tab === 'focus',
-      fetching: () => focus.isFetching,
-      failed: () => focus.error != null,
-      loaded: () =>
-        tabAvailability('focus') === 'on' &&
-        focus.data !== undefined &&
-        ready(),
-      // Threads marked Done here stay in the projection until the next read.
-      threads: () => emails().filter((email) => email.done !== true).length,
-      rows: () => built().filter((row) => row.kind === 'entity').length,
-      narrowed: () => isFocusListNarrowed(state),
-      sort: () => state.focusSort,
-    },
-    (payload) => analytics.track('email_focus_tab_opened', payload)
-  );
 
   return {
     items,
