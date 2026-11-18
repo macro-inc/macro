@@ -48,7 +48,8 @@ soft delete/restore/purge, and bulk upload into a project tree.
 - Copy a folder tree in from elsewhere (an import): create each folder with
   `ProjectService::create_project_dated_by_contents`. It starts never edited
   and leaves its parent alone; documents created in it with their own dates
-  date it and the folders above it.
+  date it and the folders above it. Pass an exact initial link-share override
+  for personal imports; `None` retains the entity/team default.
 
 ## Tool contracts
 

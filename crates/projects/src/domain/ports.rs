@@ -489,10 +489,12 @@ pub trait ProjectService: Send + Sync + 'static {
     /// it: it starts never edited and does not mark its parent updated, and
     /// documents created in it with their own dates date it and the projects
     /// above it. For importers, so a copied tree keeps its source's dates.
+    /// `initial_link_share` overrides entity/team defaults when supplied.
     fn create_project_dated_by_contents(
         &self,
         principal: &CreationPrincipal,
         args: CreateProjectRequest,
+        initial_link_share: Option<models_permissions::share_permission::LinkShareState>,
     ) -> impl Future<Output = Result<Project, ProjectError>> + Send;
 
     /// Edit project metadata and sharing settings.

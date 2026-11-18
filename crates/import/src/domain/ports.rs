@@ -592,6 +592,15 @@ pub struct TeamMember {
     pub email: String,
 }
 
+/// Approved visibility of an entity written by a reviewed workspace import.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportVisibility {
+    /// Disable link sharing and omit explicit team grants.
+    Personal,
+    /// Retain entity/team link defaults and allow explicit team sharing.
+    Shared,
+}
+
 /// Creates the Macro side of a workspace import: folders mirroring the
 /// source's tree, documents and tasks inside them, and databases.
 ///
@@ -607,11 +616,12 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         id: Uuid,
         name: &str,
         markdown: &str,
-        shared: bool,
+        visibility: ImportVisibility,
     ) -> impl Future<Output = anyhow::Result<Uuid>> + Send;
 
     /// Idempotently create a task from ordinary markdown, applying normalized
-    /// task properties and approved visibility. Never uses Notion conversion.
+    /// task properties and approved visibility. Explicit team grants are deferred
+    /// until relationship enrichment succeeds. Never uses Notion conversion.
     fn create_tracker_task(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -619,7 +629,7 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         name: &str,
         markdown: &str,
         properties: &ImportedTaskProperties,
-        shared: bool,
+        visibility: ImportVisibility,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Apply project, parent/subtask relationships and labels after all tasks
@@ -638,6 +648,7 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         name: &str,
         parent: Option<Uuid>,
+        visibility: ImportVisibility,
     ) -> impl Future<Output = anyhow::Result<Uuid>> + Send;
 
     /// Whether `folder` still exists and `user` can create inside it.
@@ -664,6 +675,7 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         properties: &ImportedDocumentProperties,
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
+        visibility: ImportVisibility,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Create task `id` from a Notion page (as for [`Self::create_document`],
@@ -684,6 +696,7 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         properties: &ImportedTaskProperties,
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
+        visibility: ImportVisibility,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Create an empty database named `name`.

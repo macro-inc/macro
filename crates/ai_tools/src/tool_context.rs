@@ -1638,6 +1638,30 @@ pub struct ToolEntityCreator {
     pub document_service: Arc<ToolDocumentService>,
 }
 
+/// Build imported metadata before any document creation side effect.
+fn imported_document_metadata(
+    name: &str,
+    visibility: import::domain::ports::ImportVisibility,
+) -> documents::domain::create::NewDocumentMetadataBuilder {
+    let metadata = documents::domain::create::NewDocumentMetadata::builder(name);
+    match imported_link_share(visibility) {
+        Some(state) => metadata.initial_link_share(state),
+        None => metadata,
+    }
+}
+
+/// Translate the reviewed import policy into an exact link override when needed.
+pub(crate) fn imported_link_share(
+    visibility: import::domain::ports::ImportVisibility,
+) -> Option<models_permissions::share_permission::LinkShareState> {
+    match visibility {
+        import::domain::ports::ImportVisibility::Personal => {
+            Some(models_permissions::share_permission::LinkShareState::Off)
+        }
+        import::domain::ports::ImportVisibility::Shared => None,
+    }
+}
+
 impl ToolEntityCreator {
     pub(crate) fn creation_principal(
         user: &MacroUserIdStr<'static>,
@@ -1677,9 +1701,10 @@ impl ToolEntityCreator {
         subtype: documents::domain::create::MarkdownSubtype,
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         use std::str::FromStr as _;
-        let mut metadata = documents::domain::create::NewDocumentMetadata::builder(name);
+        let mut metadata = imported_document_metadata(name, visibility);
         if let Some(id) = id {
             metadata = metadata.id(id);
         }
@@ -1778,6 +1803,7 @@ impl ToolEntityCreator {
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
         share_with_team: bool,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         // Same team resolution as the CreateDocument tool, so imported tasks
         // number correctly within the user's team; the roster doubles as the
@@ -1789,7 +1815,7 @@ impl ToolEntityCreator {
             team_id,
         };
         let task_id = self
-            .create_doc(user, id, name, content, subtype, folder, dates)
+            .create_doc(user, id, name, content, subtype, folder, dates, visibility)
             .await?;
         self.apply_task_properties(user, &task_id, properties, &roster)
             .await;
@@ -1811,6 +1837,7 @@ impl ToolEntityCreator {
         properties: &import::domain::ports::ImportedDocumentProperties,
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         let document_id = self
             .create_doc(
@@ -1821,6 +1848,7 @@ impl ToolEntityCreator {
                 documents::domain::create::MarkdownSubtype::Note,
                 folder,
                 dates,
+                visibility,
             )
             .await?;
         let access = match self
@@ -2030,6 +2058,7 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             // Single tracked tasks (Linear) are shared with the team, as
             // tasks the user makes are.
             true,
+            import::domain::ports::ImportVisibility::Shared,
         )
         .await
     }
@@ -2050,6 +2079,7 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             properties,
             None,
             None,
+            import::domain::ports::ImportVisibility::Shared,
         )
         .await
     }

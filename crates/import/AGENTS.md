@@ -50,11 +50,16 @@ which. Each
 plan item records `shared`, `sharedReason` and `shareable`
 (`notion_workspace/sharing.rs`). The owner can flip items on the review card;
 the draft's `shared`/`personal` lists are written onto the rows before the
-write starts. Users without a team keep everything personal. The write
-shares documents, databases (with their row bodies' folder) and task-list
-folders it makes (`WorkspaceWriter::share_with_team`), and a page's folder only
-when everything written inside it is shared, since sharing a folder shares its
-contents. A teammate's shared database is linked like a page, but relations
+write starts. Users without a team keep everything personal. Personal pages,
+row bodies and tasks cross `WorkspaceWriter` with `ImportVisibility::Personal`
+and are created with link sharing explicitly off, even when the owner team
+defaults to TEAM or PUBLIC. Shared verdicts keep the entity/team defaults. New
+root and mixed-content folders also start with link sharing off; folders that
+contain only shared content retain defaults. Existing entities are not changed.
+The write shares documents, databases (with their row bodies' folder) and
+task-list folders it makes (`WorkspaceWriter::share_with_team`), and a page's
+folder only when everything written inside it is shared, since explicitly
+sharing a folder grants access to its contents. A teammate's shared database is linked like a page, but relations
 from this import's other databases into it are not linked.
 
 ## Start here
@@ -212,10 +217,13 @@ and group projects are initiatives. Project and Parent Task properties link only
 targets available in Macro. Assignees match team emails. Source values without a
 Macro property equivalent stay in the body.
 
+Personal tracker tasks and projects use the same `ImportVisibility::Personal`
+policy as Notion items; shared verdicts retain ordinary link defaults.
 Tasks and projects use UUIDv5 identities derived from ledger rows. Tasks record a
-written marker before relationship enrichment and stay private until it
-succeeds; only then are they shared with the team and marked imported. Failures remain staged and appear in the report; replanning preserves
-rows with written markers, so retrying a partial write reuses its identity.
+written marker before relationship enrichment and defer explicit team sharing
+until it succeeds; only then are they shared with the team and marked imported.
+Failures remain staged and appear in the report; replanning preserves rows with
+written markers, so retrying a partial write reuses its identity.
 Teammate copies are linked without editing them; only the holder keeps `team_id`.
 A selected parent/project that failed or is still waiting is reported for retry.
 Optional task properties and tags follow the existing best-effort enrichment

@@ -31,8 +31,8 @@ use crate::domain::models::{
     NotionJob, NotionSharing, NotionWriteChoices, RunStatus, ScanCounts, WrittenKind,
 };
 use crate::domain::ports::{
-    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, NotionPlanRepo, NotionRunRepo,
-    Result, SharedEntity, SlackWorkspaceSource, WorkspaceWriter, WrittenObjects,
+    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility, NotionPlanRepo,
+    NotionRunRepo, Result, SharedEntity, SlackWorkspaceSource, WorkspaceWriter, WrittenObjects,
 };
 use mcp_select::ConnectorSelect;
 use object::{Outcome, Target};
@@ -686,7 +686,16 @@ where
                     let parent = write::folder_for(item, false, &folders, &parents, root);
                     let folder = self
                         .creator
-                        .create_folder(user, &item.title, Some(parent))
+                        .create_folder(
+                            user,
+                            &item.title,
+                            Some(parent),
+                            if shared_folders.contains(folder_row) {
+                                ImportVisibility::Shared
+                            } else {
+                                ImportVisibility::Personal
+                            },
+                        )
                         .await?;
                     progress.record(WrittenKind::Folder, folder).await?;
                     folder
@@ -803,7 +812,7 @@ where
         }
         let folder = self
             .creator
-            .create_folder(user, write::ROOT_FOLDER, None)
+            .create_folder(user, write::ROOT_FOLDER, None, ImportVisibility::Personal)
             .await?;
         self.repo.set_root_folder(user, folder).await?;
         Ok(folder)

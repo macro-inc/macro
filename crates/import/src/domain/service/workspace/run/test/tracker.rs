@@ -88,15 +88,6 @@ async fn failed_relationships_are_reported_and_retry_reuses_the_created_task(poo
     assert_eq!(service.creator.tracker_tasks.lock().unwrap().len(), 1);
     let created = service.creator.tracker_tasks.lock().unwrap()[0];
     assert!(service.creator.shares.lock().unwrap().is_empty());
-    assert!(
-        service
-            .creator
-            .tracker_task_sharing
-            .lock()
-            .unwrap()
-            .iter()
-            .all(|shared| !shared)
-    );
     let staged = repo
         .list(
             &owner,
@@ -336,4 +327,42 @@ async fn failed_projects_keep_child_relationships_retryable(pool: PgPool) {
         service.creator.tracker_links.lock().unwrap().as_slice(),
         [created]
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn personal_tracker_items_use_owner_only_links(pool: PgPool) {
+    for source in [ImportSource::Linear, ImportSource::Jira] {
+        let owner = teammate(&pool, source.as_ref(), Uuid::now_v7()).await;
+        let tracker = TaskTracker::new();
+        let service = service(
+            &pool,
+            Writer::default(),
+            CancellationToken::new(),
+            tracker.clone(),
+        )
+        .scoped(source);
+        let repo = service.repo.clone();
+        let rows = tracker_plan::rows(source, &snapshot(), NotionSharing::Personal, true).unwrap();
+        let rows = tracker_plan::decide(&rows, &Default::default(), NotionSharing::Personal, true)
+            .unwrap();
+        repo.start_run(&owner, source, &[]).await.unwrap();
+        let (review, _) = approved_source(&pool, &owner, &rows, source).await;
+        repo.finish_run(&owner, source, RunStatus::Ready, None)
+            .await
+            .unwrap();
+        service
+            .start_workspace_write(&owner, source, review, NotionWriteChoices::default())
+            .await
+            .unwrap();
+        tracker.close();
+        tracker.wait().await;
+        let policies = service.creator.visibilities.lock().unwrap();
+        assert_eq!(policies.len(), 2, "one project and one task");
+        assert!(
+            policies
+                .iter()
+                .all(|(_, policy)| *policy == crate::domain::ports::ImportVisibility::Personal)
+        );
+        assert!(service.creator.shares.lock().unwrap().is_empty());
+    }
 }

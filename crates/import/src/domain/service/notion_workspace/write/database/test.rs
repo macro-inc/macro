@@ -155,6 +155,7 @@ struct WrittenDocument {
     markdown: String,
     links: NotionLinks,
     dates: Option<SourceDates>,
+    visibility: crate::domain::ports::ImportVisibility,
 }
 
 /// Records what the import asks Macro to create. `fail_at_batch` makes that
@@ -163,6 +164,8 @@ struct WrittenDocument {
 #[derive(Default)]
 struct FakeWriter {
     databases: Mutex<usize>,
+    tasks: Mutex<Vec<crate::domain::ports::ImportVisibility>>,
+    folder_visibilities: Mutex<Vec<crate::domain::ports::ImportVisibility>>,
     folders: Mutex<Vec<(String, Option<Uuid>)>>,
     documents: Mutex<Vec<WrittenDocument>>,
     batches: Mutex<Vec<Vec<DatabaseOp>>>,
@@ -182,7 +185,7 @@ impl WorkspaceWriter for FakeWriter {
         _: Uuid,
         _: &str,
         _: &str,
-        _: bool,
+        _visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
         unreachable!("Notion-only test writer")
     }
@@ -193,7 +196,7 @@ impl WorkspaceWriter for FakeWriter {
         _: &str,
         _: &str,
         _: &ImportedTaskProperties,
-        _: bool,
+        _visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         unreachable!("Notion-only test writer")
     }
@@ -211,7 +214,9 @@ impl WorkspaceWriter for FakeWriter {
         _user: &MacroUserIdStr<'static>,
         name: &str,
         parent: Option<Uuid>,
+        visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
+        self.folder_visibilities.lock().unwrap().push(visibility);
         let mut folders = self.folders.lock().unwrap();
         folders.push((name.to_string(), parent));
         Ok(Uuid::from_u128(900 + folders.len() as u128))
@@ -244,6 +249,7 @@ impl WorkspaceWriter for FakeWriter {
         _properties: &ImportedDocumentProperties,
         _folder: Option<Uuid>,
         dates: Option<SourceDates>,
+        visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         let mut documents = self.documents.lock().unwrap();
         // Like Macro: a document id already in use is the earlier attempt's.
@@ -254,6 +260,7 @@ impl WorkspaceWriter for FakeWriter {
                 markdown: markdown.to_string(),
                 links: links.clone(),
                 dates,
+                visibility,
             });
         }
         Ok(id.to_string())
@@ -262,15 +269,17 @@ impl WorkspaceWriter for FakeWriter {
     async fn create_task(
         &self,
         _user: &MacroUserIdStr<'static>,
-        _id: Uuid,
+        id: Uuid,
         _name: &str,
         _markdown: &str,
         _links: &NotionLinks,
         _properties: &ImportedTaskProperties,
         _folder: Option<Uuid>,
         _dates: Option<SourceDates>,
+        visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
-        unimplemented!("a copied database writes no tasks")
+        self.tasks.lock().unwrap().push(visibility);
+        Ok(id.to_string())
     }
 
     async fn create_database(
@@ -434,6 +443,18 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
     .await
     .unwrap();
 
+    assert!(
+        writer
+            .documents
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|doc| doc.visibility == crate::domain::ports::ImportVisibility::Personal)
+    );
+    assert_eq!(
+        *writer.folder_visibilities.lock().unwrap(),
+        vec![crate::domain::ports::ImportVisibility::Personal]
+    );
     let batches = writer.batches.lock().unwrap();
     // Schema first: rename the starter table and title and add the select;
     // the relation waits, and the Page column comes once a row has content.
@@ -615,6 +636,18 @@ async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
     .await
     .unwrap();
 
+    assert!(
+        writer
+            .documents
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|doc| doc.visibility == crate::domain::ports::ImportVisibility::Shared)
+    );
+    assert_eq!(
+        *writer.folder_visibilities.lock().unwrap(),
+        vec![crate::domain::ports::ImportVisibility::Shared]
+    );
     assert_eq!(
         writer.folders.lock().unwrap().as_slice(),
         [("Bugs pages".to_string(), Some(Uuid::from_u128(42)))]
@@ -927,4 +960,51 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
         panic!("expected the Page links, got {:?}", batches.last());
     };
     assert_eq!(linked.len(), 2);
+}
+
+#[tokio::test]
+async fn task_lists_apply_the_reviewed_link_policy_to_each_task_and_folder() {
+    use crate::domain::{ports::ImportVisibility, service::notion_workspace::write::write_tasks};
+    for (shared, expected) in [
+        (false, ImportVisibility::Personal),
+        (true, ImportVisibility::Shared),
+    ] {
+        let notion = FakeNotion {
+            fetched: Mutex::new(0),
+            source: NotionDataSource {
+                id: id('e'),
+                database_id: id('f'),
+                title: "Tasks".into(),
+                database_parent: NotionParent::Workspace,
+                in_trash: false,
+                properties: Vec::new(),
+            },
+            rows: vec![
+                notion_row('1', "First task", vec![]),
+                notion_row('2', "Second task", vec![]),
+            ],
+            bodies: [(id('1'), "Task body".into())].into(),
+        };
+        let writer = FakeWriter::default();
+        let store = FakeStore::default();
+        let user = user();
+        let item = source_item("Tasks");
+        let progress = Progress::new(&store, &user, item.import_id, &[]);
+        write_tasks(
+            &notion,
+            &writer,
+            &user,
+            &item,
+            Uuid::from_u128(42),
+            shared,
+            &PeopleMap::new(),
+            &NotionLinks::default(),
+            &progress,
+            &Cancel::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(*writer.tasks.lock().unwrap(), vec![expected, expected]);
+        assert_eq!(*writer.folder_visibilities.lock().unwrap(), vec![expected]);
+    }
 }

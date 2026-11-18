@@ -173,6 +173,7 @@ where
         principal: &CreationPrincipal,
         args: CreateProjectRequest,
         updated_at: Option<chrono::DateTime<chrono::Utc>>,
+        initial_link_share: Option<models_permissions::share_permission::LinkShareState>,
     ) -> Result<Project, ProjectError> {
         validate_project_name(&args.name)?;
 
@@ -192,7 +193,10 @@ where
                 owner: owner.clone(),
                 name: args.name,
                 parent_id: parent_id.clone(),
-                share_permission: SharePermissionV2::new_project_share_permission(team_default),
+                share_permission: match initial_link_share {
+                    Some(state) => SharePermissionV2::from_link_share_state(state),
+                    None => SharePermissionV2::new_project_share_permission(team_default),
+                },
                 updated_at,
             })
             .await
@@ -458,16 +462,22 @@ where
         principal: &CreationPrincipal,
         args: CreateProjectRequest,
     ) -> Result<Project, ProjectError> {
-        self.insert_project(principal, args, None).await
+        self.insert_project(principal, args, None, None).await
     }
 
     async fn create_project_dated_by_contents(
         &self,
         principal: &CreationPrincipal,
         args: CreateProjectRequest,
+        initial_link_share: Option<models_permissions::share_permission::LinkShareState>,
     ) -> Result<Project, ProjectError> {
-        self.insert_project(principal, args, Some(chrono::DateTime::UNIX_EPOCH))
-            .await
+        self.insert_project(
+            principal,
+            args,
+            Some(chrono::DateTime::UNIX_EPOCH),
+            initial_link_share,
+        )
+        .await
     }
 
     async fn edit_project(

@@ -24,8 +24,8 @@ use uuid::Uuid;
 use super::{BODY_CONCURRENCY, Cancel, Progress, WriteItem, folder_once};
 use crate::domain::models::{WrittenKind, WrittenObject};
 use crate::domain::ports::{
-    ImportedDocumentProperties, NewDatabase, NotionLinks, SharedEntity, SourceDates,
-    WorkspaceWriter, WrittenObjects,
+    ImportVisibility, ImportedDocumentProperties, NewDatabase, NotionLinks, SharedEntity,
+    SourceDates, WorkspaceWriter, WrittenObjects,
 };
 
 #[cfg(test)]
@@ -412,6 +412,11 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
 ) -> anyhow::Result<()> {
+    let visibility = if share {
+        ImportVisibility::Shared
+    } else {
+        ImportVisibility::Personal
+    };
     let bodies_folder: tokio::sync::OnceCell<Uuid> = tokio::sync::OnceCell::new();
     let bodies_name = capped_name(&format!("{} pages", item.title));
     let linked: Vec<anyhow::Result<Option<RowChange>>> = stream::iter(rows.iter().cloned())
@@ -449,6 +454,7 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                             WrittenKind::BodiesFolder,
                             bodies_name,
                             folder,
+                            visibility,
                         )
                         .await?;
                         // A shared database's row bodies are shared with it,
@@ -477,6 +483,7 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                         &ImportedDocumentProperties::default(),
                         Some(folder),
                         Some(SourceDates::from(&row)),
+                        visibility,
                     )
                     .await?
                     .parse()?;

@@ -115,9 +115,9 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         id: Uuid,
         name: &str,
         markdown: &str,
-        shared: bool,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
-        self.create_tracker_project_impl(user, id, name, markdown, shared)
+        self.create_tracker_project_impl(user, id, name, markdown, visibility)
             .await
     }
     async fn create_tracker_task(
@@ -127,9 +127,9 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         name: &str,
         markdown: &str,
         properties: &ImportedTaskProperties,
-        shared: bool,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
-        self.create_tracker_task_impl(user, id, name, markdown, properties, shared)
+        self.create_tracker_task_impl(user, id, name, markdown, properties, visibility)
             .await
     }
     async fn link_tracker_task(
@@ -147,6 +147,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         user: &MacroUserIdStr<'static>,
         name: &str,
         parent: Option<Uuid>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
         // Mirrors the CreateProject tool: creating inside a parent requires
         // edit access to it.
@@ -161,6 +162,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                     name: name.to_string(),
                     project_parent_id: parent,
                 },
+                crate::tool_context::imported_link_share(visibility),
             )
             .await
             .map_err(|error| anyhow::anyhow!("failed to create imported folder: {error:?}"))?;
@@ -178,6 +180,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         properties: &ImportedDocumentProperties,
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         let created = self
             .create_imported_document(
@@ -188,6 +191,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 properties,
                 folder,
                 dates,
+                visibility,
             )
             .await;
         already_created(created, id)
@@ -204,6 +208,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         properties: &ImportedTaskProperties,
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         let created = self
             .create_imported_task(
@@ -216,6 +221,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 dates,
                 // A shared task list shares its folder, which reaches its tasks.
                 false,
+                visibility,
             )
             .await;
         already_created(created, id)

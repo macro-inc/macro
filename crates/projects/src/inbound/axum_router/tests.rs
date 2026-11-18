@@ -191,6 +191,7 @@ impl ProjectService for FakeProjectService {
         &self,
         _principal: &CreationPrincipal,
         _args: CreateProjectRequest,
+        _initial_link_share: Option<models_permissions::share_permission::LinkShareState>,
     ) -> Result<Project, ProjectError> {
         panic!("dated projects are not created by these tests")
     }

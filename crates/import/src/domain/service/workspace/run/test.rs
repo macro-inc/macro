@@ -138,11 +138,12 @@ impl NotionConnections for Connected {
 #[derive(Default)]
 struct Writer {
     folders: Mutex<Vec<String>>,
+    folder_visibilities: Mutex<Vec<(String, crate::domain::ports::ImportVisibility)>>,
     documents: Mutex<Vec<(Uuid, String, NotionLinks)>>,
     shares: Mutex<Vec<SharedEntity>>,
     hold: Option<(Arc<Notify>, tokio_util::sync::CancellationToken)>,
     tracker_tasks: Mutex<Vec<Uuid>>,
-    tracker_task_sharing: Mutex<Vec<bool>>,
+    visibilities: Mutex<Vec<(Uuid, crate::domain::ports::ImportVisibility)>>,
     tracker_projects: Mutex<Vec<Uuid>>,
     tracker_links: Mutex<Vec<Uuid>>,
     reject_tracker_links: std::sync::atomic::AtomicBool,
@@ -158,8 +159,9 @@ impl WorkspaceWriter for Writer {
         id: Uuid,
         _: &str,
         _: &str,
-        _: bool,
+        visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
+        self.visibilities.lock().unwrap().push((id, visibility));
         if self
             .reject_tracker_projects
             .load(std::sync::atomic::Ordering::SeqCst)
@@ -179,9 +181,9 @@ impl WorkspaceWriter for Writer {
         _: &str,
         _: &str,
         _: &ImportedTaskProperties,
-        shared: bool,
+        visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
-        self.tracker_task_sharing.lock().unwrap().push(shared);
+        self.visibilities.lock().unwrap().push((id, visibility));
         let mut tasks = self.tracker_tasks.lock().unwrap();
         if !tasks.contains(&id) {
             tasks.push(id);
@@ -209,7 +211,12 @@ impl WorkspaceWriter for Writer {
         _: &MacroUserIdStr<'static>,
         name: &str,
         _: Option<Uuid>,
+        visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
+        self.folder_visibilities
+            .lock()
+            .unwrap()
+            .push((name.to_string(), visibility));
         self.folders.lock().unwrap().push(name.to_string());
         Ok(Uuid::now_v7())
     }
@@ -237,7 +244,9 @@ impl WorkspaceWriter for Writer {
         _: &ImportedDocumentProperties,
         _: Option<Uuid>,
         dates: Option<SourceDates>,
+        visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
+        self.visibilities.lock().unwrap().push((id, visibility));
         self.document_dates.lock().unwrap().push((id, dates));
         if let Some((entered, shutdown)) = &self.hold {
             entered.notify_one();
@@ -261,6 +270,7 @@ impl WorkspaceWriter for Writer {
         _: &ImportedTaskProperties,
         _: Option<Uuid>,
         _: Option<SourceDates>,
+        _visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         unimplemented!("only pages here")
     }
@@ -730,6 +740,21 @@ async fn a_write_shares_what_the_plan_shares_and_keeps_the_rest_with_the_owner(p
         [SharedEntity::Document(write::document_id(rows[0]))],
         "only the Wiki is shared"
     );
+    assert_eq!(
+        *writer.folder_visibilities.lock().unwrap(),
+        vec![(
+            "Notion".to_string(),
+            crate::domain::ports::ImportVisibility::Personal
+        )],
+    );
+    let policies = writer.visibilities.lock().unwrap();
+    for (row, expected) in [
+        (rows[0], crate::domain::ports::ImportVisibility::Shared),
+        (rows[1], crate::domain::ports::ImportVisibility::Personal),
+        (rows[2], crate::domain::ports::ImportVisibility::Personal),
+    ] {
+        assert!(policies.contains(&(write::document_id(row), expected)));
+    }
     let wiki = repo.get(&owner, rows[0]).await.unwrap().unwrap();
     assert_eq!(wiki.status, ImportStatus::Imported);
     assert_eq!(wiki.team_id, Some(team), "the team's copy of the Wiki");

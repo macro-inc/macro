@@ -28,9 +28,12 @@ execution, display) that don't belong to a single domain.
   are created with their page's dates (`NewDocumentMetadata::created_at` /
   `updated_at`), and folders through
   `ProjectService::create_project_dated_by_contents`, so the copy keeps
-  Notion's dates. Notion tasks are created unshared and reached through their
-  shared folder, while single tracked tasks (Linear) stay team-shared at
-  creation.
+  Notion's dates. Reviewed workspace imports carry a typed `ImportVisibility`
+  through document, task, folder and tracker-project creation: personal items
+  get an exact OFF override before insertion; shared items retain defaults.
+  Notion tasks have no direct team grant; shared lists grant team access
+  through their folder, while single tracked tasks (Linear) stay team-shared
+  at creation.
 - `src/import_jobs.rs`: `ImportJobs`, the shutdown token and tracker every
   host passes to `build_tool_service_context_from_env` (or its own import
   service) and calls `hand_over` on at shutdown, so running Notion imports

@@ -23,8 +23,8 @@ use crate::domain::models::{
     WrittenObject,
 };
 use crate::domain::ports::{
-    NotionLinks, NotionPageLink, NotionUserLink, SharedEntity, SourceDates, WorkspaceWriter,
-    WrittenObjects,
+    ImportVisibility, NotionLinks, NotionPageLink, NotionUserLink, SharedEntity, SourceDates,
+    WorkspaceWriter, WrittenObjects,
 };
 
 use super::values::{task_body, task_properties};
@@ -341,11 +341,14 @@ pub(super) async fn folder_once<Writer: WorkspaceWriter, Store: WrittenObjects>(
     kind: WrittenKind,
     name: &str,
     parent: Uuid,
+    visibility: crate::domain::ports::ImportVisibility,
 ) -> anyhow::Result<Uuid> {
     if let Some(folder) = progress.get(kind) {
         return Ok(folder);
     }
-    let folder = writer.create_folder(user, name, Some(parent)).await?;
+    let folder = writer
+        .create_folder(user, name, Some(parent), visibility)
+        .await?;
     progress.record(kind, folder).await?;
     Ok(folder)
 }
@@ -369,6 +372,11 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
 ) -> anyhow::Result<Uuid> {
+    let visibility = if share {
+        ImportVisibility::Shared
+    } else {
+        ImportVisibility::Personal
+    };
     let rows = all_rows(api, &item.notion_id).await?.rows;
     let tasks_folder = folder_once(
         writer,
@@ -377,6 +385,7 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
         WrittenKind::TasksFolder,
         &capped_name(&item.title),
         folder,
+        visibility,
     )
     .await?;
     // Shared before the tasks are made, so each is shared as it lands in
@@ -418,6 +427,7 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                             &properties,
                             Some(tasks_folder),
                             Some(SourceDates::from(&row)),
+                            visibility,
                         )
                         .await?;
                     progress.record_for(WrittenKind::Task, &row.id, id).await?;

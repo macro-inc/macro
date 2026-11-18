@@ -19,9 +19,9 @@ use crate::domain::models::{
     WrittenObject,
 };
 use crate::domain::ports::{
-    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, NotionLinks, NotionPlanRepo,
-    NotionRunRepo, Result, SharedEntity, SlackWorkspaceSource, SourceDates, WorkspaceWriter,
-    WrittenObjects,
+    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility, NotionLinks,
+    NotionPlanRepo, NotionRunRepo, Result, SharedEntity, SlackWorkspaceSource, SourceDates,
+    WorkspaceWriter, WrittenObjects,
 };
 
 /// Times a waiting object is checked again before it is given up on: each
@@ -203,6 +203,11 @@ where
                         &properties,
                         Some(folder),
                         dates,
+                        if share {
+                            ImportVisibility::Shared
+                        } else {
+                            ImportVisibility::Personal
+                        },
                     )
                     .await?;
                 if share {

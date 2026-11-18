@@ -20,9 +20,9 @@ use crate::domain::models::{
     WrittenKind, WrittenObject,
 };
 use crate::domain::ports::{
-    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportedTaskProperties,
-    NotionPlanRepo, NotionRunRepo, PlanRow, Result, SharedEntity, SlackWorkspaceSource,
-    TrackerTaskRelations, WorkspaceWriter, WrittenObjects,
+    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility,
+    ImportedTaskProperties, NotionPlanRepo, NotionRunRepo, PlanRow, Result, SharedEntity,
+    SlackWorkspaceSource, TrackerTaskRelations, WorkspaceWriter, WrittenObjects,
 };
 
 mod claim;
@@ -444,6 +444,11 @@ where
                 TeamClaim::Held | TeamClaim::Free => {}
             }
         }
+        let visibility = if meta.plan.shared && team.is_some() {
+            ImportVisibility::Shared
+        } else {
+            ImportVisibility::Personal
+        };
         let id = values::target_id(row.id);
         match &meta.object {
             TrackerObject::Group(group) => {
@@ -454,7 +459,7 @@ where
                         id,
                         &group.title,
                         &values::group_body(group),
-                        meta.plan.shared && team.is_some(),
+                        visibility,
                     )
                     .await?;
                 self.repo
@@ -475,7 +480,7 @@ where
                         &issue.title,
                         &values::task_body(issue),
                         &values::properties(issue),
-                        false,
+                        visibility,
                     )
                     .await?;
                 self.repo
