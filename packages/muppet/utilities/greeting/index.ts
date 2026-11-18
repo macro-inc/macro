@@ -221,14 +221,17 @@ export type Greeter = {
   readonly model: () => GreetingModel;
   readonly chat: GreetingChat;
   readonly store: GreetingStore;
-  /** Waits before trying again after a failure before the model was asked. */
-  readonly clock: Pick<Clock, 'sleep'>;
+  readonly clock: GreetingClock;
+  readonly trace: GreetingTrace;
+};
+
+/** Time, as the greeting needs it. */
+export type GreetingClock = Pick<Clock, 'sleep'> & {
   /**
    * Calls `run` once after `ms`, unless the returned function is called
    * first: an attempt's deadline.
    */
   readonly after: (ms: number, run: () => void) => () => void;
-  readonly trace: GreetingTrace;
   /** How long ago the agent's process started. */
   readonly sinceStartMs: () => number;
 };
@@ -270,13 +273,18 @@ const onlyOnce = (run: () => Promise<void>): (() => Promise<void>) => {
   };
 };
 
-/** Runs `run` until it succeeds once; a rejection lets the next call try again. */
+/**
+ * Runs `run` until it succeeds once. A call while one is in flight waits for
+ * that one; a rejection lets the next call try again.
+ */
 const untilDone = (run: () => Promise<void>): (() => Promise<void>) => {
-  let done = false;
-  return async () => {
-    if (done) return;
-    await run();
-    done = true;
+  let pending: Promise<void> | undefined;
+  return () => {
+    pending ??= run().catch((error: unknown) => {
+      pending = undefined;
+      throw error;
+    });
+    return pending;
   };
 };
 
@@ -380,6 +388,8 @@ const attempt = async (
   if (dmSettled.status === 'rejected') throw dmSettled.reason;
   live();
   const { dm, written } = dmSettled.value;
+  // A deadline during the mark reports a failure though the marker may land;
+  // the next start then reads it as greeted, and posts nothing.
   const standDown = async (): Promise<Greeted> => {
     live();
     span.set('agent.greeting.outcome', 'conversation_started');
@@ -411,7 +421,10 @@ const attempt = async (
     chat.send(dm, text)
   );
   // Measured as the post lands, before the marker is written.
-  span.set('agent.greeting.since_start_ms', Math.round(greeter.sinceStartMs()));
+  span.set(
+    'agent.greeting.since_start_ms',
+    Math.round(greeter.clock.sinceStartMs())
+  );
   span.set('agent.greeting.message_id', posted.messageId);
   span.set('agent.greeting.outcome', 'posted');
   await store.markGreeted();
@@ -437,7 +450,7 @@ const bounded = (
     };
     let cancelDeadline: () => void = () => {};
     const deadline = new Promise<never>((_, reject) => {
-      cancelDeadline = greeter.after(attemptDeadlineMs, () => {
+      cancelDeadline = greeter.clock.after(attemptDeadlineMs, () => {
         held.abandoned = true;
         span.set('agent.greeting.timed_out', true);
         reject(new Error(abandonedError));
@@ -525,7 +538,7 @@ export const greet = async (greeter: Greeter): Promise<Greeted> => {
       // How long after start the greeting ended, posted or not.
       span.set(
         'agent.greeting.ended_since_start_ms',
-        Math.round(greeter.sinceStartMs())
+        Math.round(greeter.clock.sinceStartMs())
       );
     }
   });

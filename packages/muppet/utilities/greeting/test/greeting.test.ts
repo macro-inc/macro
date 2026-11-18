@@ -9,6 +9,7 @@ import {
   type Failures,
   type Greeter,
   type GreetingChat,
+  type GreetingClock,
   type GreetingStore,
   greet,
   greeting,
@@ -117,10 +118,10 @@ type Flat = {
   readonly markGreeted: GreetingStore['markGreeted'];
   readonly failures: GreetingStore['failures'];
   readonly recordFailure: GreetingStore['recordFailure'];
-  readonly sleep: (ms: number) => Promise<void>;
-  readonly after: Greeter['after'];
+  readonly sleep: GreetingClock['sleep'];
+  readonly after: GreetingClock['after'];
   readonly trace: Greeter['trace'];
-  readonly sinceStartMs: Greeter['sinceStartMs'];
+  readonly sinceStartMs: GreetingClock['sinceStartMs'];
 };
 
 const grouped = (flat: Flat): Greeter => ({
@@ -142,10 +143,12 @@ const grouped = (flat: Flat): Greeter => ({
     failures: flat.failures,
     recordFailure: flat.recordFailure,
   },
-  clock: { sleep: flat.sleep },
-  after: flat.after,
+  clock: {
+    sleep: flat.sleep,
+    after: flat.after,
+    sinceStartMs: flat.sinceStartMs,
+  },
   trace: flat.trace,
-  sinceStartMs: flat.sinceStartMs,
 });
 
 const fakeGreeter = ({
@@ -170,7 +173,8 @@ const fakeGreeter = ({
   const asked: string[] = [];
   const sent: [string, string][] = [];
   const typing: string[] = [];
-  const spans: Record<string, string | number | boolean> = {};
+  /** Each span's attributes, by the span's name: the last span of that name. */
+  const spans = new Map<string, Record<string, string | number | boolean>>();
   const traced: string[] = [];
   let marked = greetedAlready;
   let failed: Failures = failures;
@@ -250,9 +254,11 @@ const fakeGreeter = ({
     },
     trace: (name, run) => {
       traced.push(name);
+      const attributes: Record<string, string | number | boolean> = {};
+      spans.set(name, attributes);
       const result = run({
         set: (key, value) => {
-          spans[key] = value;
+          attributes[key] = value;
         },
       });
       runs.push({ name, result });
@@ -267,7 +273,8 @@ const fakeGreeter = ({
     asked,
     sent,
     typing,
-    spans,
+    /** The attributes of the last span named `name` (`agent.greeting` for the whole greeting). */
+    span: (name = 'agent.greeting') => spans.get(name) ?? {},
     traced,
     slept,
     deadlines,
@@ -303,13 +310,22 @@ test('a new agent greets its owner in their DM, typing while it writes, and is m
     'agent.greeting.write',
     'agent.greeting.post',
   ]);
-  expect(fake.spans).toMatchObject({
+  // The whole greeting's span has its outcome; the attempt's, what it did.
+  expect(fake.span()).toMatchObject({
+    'agent.greeting.outcome': 'posted',
+    'agent.greeting.ended_since_start_ms': 2_400,
+  });
+  expect(fake.span('agent.greeting.attempt')).toMatchObject({
+    'agent.greeting.attempt': 1,
     'agent.greeting.since_start_ms': 2_400,
     'agent.greeting.drafts': 1,
     'agent.greeting.outcome': 'posted',
     'agent.greeting.channel_id': 'dm-1',
     'agent.greeting.message_id': 'm-1',
     'agent.greeting.owner_named': true,
+  });
+  expect(fake.span('agent.greeting.dm')).toEqual({
+    'agent.greeting.dm_written': false,
   });
 });
 
@@ -326,7 +342,7 @@ test('a DM that already has messages is past the hello: nothing is written, and 
   expect(fake.asked).toEqual([]);
   expect(fake.sent).toEqual([]);
   expect(fake.marked()).toBe(true);
-  expect(fake.spans['agent.greeting.outcome']).toBe('conversation_started');
+  expect(fake.span()['agent.greeting.outcome']).toBe('conversation_started');
 });
 
 test('an owner who writes while the greeting is written gets a reply, not a late hello', async () => {
@@ -355,10 +371,10 @@ test('a draft that names its machinery is written again, and never posted', asyn
   expect(fake.asked).toHaveLength(2);
   expect(fake.asked[1]).toContain('RunCapabilityScript, dmOwner');
   expect(fake.sent).toEqual([['dm-1', hello]]);
-  expect(fake.spans['agent.greeting.drafts']).toBe(2);
-  expect(fake.spans['agent.greeting.rejected_words']).toBe(
-    'RunCapabilityScript,dmOwner'
-  );
+  expect(fake.span('agent.greeting.attempt')['agent.greeting.drafts']).toBe(2);
+  expect(
+    fake.span('agent.greeting.attempt')['agent.greeting.rejected_words']
+  ).toBe('RunCapabilityScript,dmOwner');
 });
 
 test('a greeting that keeps naming its machinery fails unposted and unmarked, and is counted', async () => {
@@ -371,9 +387,11 @@ test('a greeting that keeps naming its machinery fails unposted and unmarked, an
   expect(fake.marked()).toBe(false);
   expect(fake.failed()).toEqual({ paid: 1, unpaid: 0 });
   expect(fake.typing.at(-1)).toBe('stop dm-1');
-  expect(fake.spans['agent.greeting.outcome']).toBe('failed');
-  expect(fake.spans['agent.greeting.since_start_ms']).toBeUndefined();
-  expect(fake.spans['agent.greeting.ended_since_start_ms']).toBe(2_400);
+  expect(fake.span()['agent.greeting.outcome']).toBe('failed');
+  expect(
+    fake.span('agent.greeting.attempt')['agent.greeting.since_start_ms']
+  ).toBeUndefined();
+  expect(fake.span()['agent.greeting.ended_since_start_ms']).toBe(2_400);
 });
 
 test('an answer that comes back empty was paid for: counted, not retried within the start', async () => {
@@ -389,7 +407,7 @@ test('a failure before the model answers is tried again within the start, with a
   const fake = fakeGreeter({ answers: [hello], dmFailures: 1 });
   expect(await greet(fake.greeter)).toMatchObject({ kind: 'posted' });
   expect(fake.slept).toEqual([1_000]);
-  expect(fake.spans['agent.greeting.retries']).toBe(1);
+  expect(fake.span()['agent.greeting.retries']).toBe(1);
   // The model was asked once, so the start counted as paid then; no unpaid.
   expect(fake.failed()).toEqual({ paid: 1, unpaid: 0 });
 });
@@ -403,7 +421,7 @@ test('a model call that fails was asked, so may have been charged: counted as pa
   expect(fake.marked()).toBe(false);
   expect(fake.failed()).toEqual({ paid: 1, unpaid: 0 });
   expect(fake.typing.at(-1)).toBe('stop dm-1');
-  expect(fake.spans['agent.greeting.outcome']).toBe('failed');
+  expect(fake.span()['agent.greeting.outcome']).toBe('failed');
 });
 
 test('Macro that stays unreachable fails the start after its waits, counted as unpaid', async () => {
@@ -424,7 +442,7 @@ test('after enough failed starts of either kind the agent stops trying, without 
     expect(fake.asked).toEqual([]);
     expect(fake.sent).toEqual([]);
     expect(fake.marked()).toBe(true);
-    expect(fake.spans['agent.greeting.outcome']).toBe('gave_up');
+    expect(fake.span()['agent.greeting.outcome']).toBe('gave_up');
   }
 });
 
@@ -556,7 +574,9 @@ test('a typing stop that rejects is recorded, and the greeting still posts', asy
   });
   expect(await greet(greeter)).toMatchObject({ kind: 'posted' });
   expect(stops).toBe(1);
-  expect(fake.spans['agent.greeting.typing_stop_failed']).toBe(true);
+  expect(
+    fake.span('agent.greeting.attempt')['agent.greeting.typing_stop_failed']
+  ).toBe(true);
 });
 
 test('facts that keep failing on an empty DM fail the start unpaid, after its waits', async () => {
@@ -663,7 +683,9 @@ test('an attempt past its deadline drops the model, stops typing, and never post
   await expect(greeting).rejects.toThrow('past its deadline');
   expect(cancelled).toBe(1);
   expect(fake.typing).toEqual(['start dm-1', 'stop dm-1']);
-  expect(fake.spans['agent.greeting.timed_out']).toBe(true);
+  expect(fake.span('agent.greeting.attempt')['agent.greeting.timed_out']).toBe(
+    true
+  );
   // Paid: the model had been asked. Not retried within the start.
   expect(fake.failed()).toEqual({ paid: 1, unpaid: 0 });
   // The model answering late changes nothing: the write step ends, abandoned.
@@ -674,7 +696,7 @@ test('an attempt past its deadline drops the model, stops typing, and never post
   expect(fake.marked()).toBe(false);
 });
 
-test('an attempt that hangs before the model is asked is tried again, unpaid', async () => {
+test('an attempt that hangs before the model is asked is tried again, and only the try that asks is counted', async () => {
   let checks = 0;
   const fake = fakeGreeter({ answers: [hello] });
   let checking: () => void = () => {};
@@ -709,7 +731,7 @@ test('a failure count that can not be written does not hide why the start failed
     },
   });
   await expect(greet(greeter)).rejects.toThrow('Macro is unreachable');
-  expect(fake.spans['agent.greeting.failure_not_recorded']).toBe(true);
+  expect(fake.span()['agent.greeting.failure_not_recorded']).toBe(true);
 });
 
 test('an agent with nothing to mention is told so, and empty words are never banned', () => {
@@ -779,7 +801,9 @@ test('a post in flight at the deadline is never abandoned: the hello is reported
   fake.deadlines[0]?.run();
   land();
   expect(await greeting).toMatchObject({ kind: 'posted', messageId: 'm-1' });
-  expect(fake.spans['agent.greeting.timed_out']).toBeUndefined();
+  expect(
+    fake.span('agent.greeting.attempt')['agent.greeting.timed_out']
+  ).toBeUndefined();
   expect(fake.marked()).toBe(true);
 });
 
@@ -798,5 +822,38 @@ test('a paid count that can not be written is tried again before the model is as
   // Not asked until the count was on record; asked once.
   expect(fake.asked).toHaveLength(1);
   expect(fake.slept).toEqual([1_000]);
+  expect(fake.failed()).toEqual({ paid: 1, unpaid: 0 });
+});
+
+test('a paid count still being written when the deadline fires is written once, not twice', async () => {
+  const fake = fakeGreeter({ answers: [hello] });
+  let writes = 0;
+  let land: () => void = () => {};
+  let writing: () => void = () => {};
+  const isWriting = new Promise<void>((resolve) => {
+    writing = resolve;
+  });
+  const greeter: Greeter = grouped({
+    ...fake.flat,
+    recordFailure: async (kind) => {
+      writes += 1;
+      writing();
+      await new Promise<void>((resolve) => {
+        land = resolve;
+      });
+      await fake.flat.recordFailure(kind);
+    },
+  });
+  const greeting = greet(greeter);
+  await isWriting;
+  // The first attempt hangs on writing its count, past its deadline; the
+  // retry waits on the same write instead of starting another.
+  fake.deadlines[0]?.run();
+  await fake.runs
+    .find(({ name }) => name === 'agent.greeting.attempt')
+    ?.result.catch(() => undefined);
+  land();
+  expect(await greeting).toMatchObject({ kind: 'posted' });
+  expect(writes).toBe(1);
   expect(fake.failed()).toEqual({ paid: 1, unpaid: 0 });
 });
