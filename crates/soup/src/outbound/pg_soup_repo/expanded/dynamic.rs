@@ -12,7 +12,7 @@ mod property_filter;
 
 use database_row::{build_database_row_filter, database_row_opted_in, database_row_top_clause};
 pub(in crate::outbound::pg_soup_repo) use document_ids::DocumentIdArrays;
-use feed::{Feed, FeedArm, OrderedScans};
+use feed::{Feed, FeedArm, FeedReads, OrderedScans};
 use initiative::initiative_top_clause;
 pub(in crate::outbound::pg_soup_repo) use initiative::{
     build_initiative_filter, initiative_access_clause, initiative_opted_in,
@@ -2073,7 +2073,8 @@ const SOURCE_SCAN_ROWS: i64 = 5_000;
 /// held up to 354 sources; past this many the query reads the item tables.
 const SOURCE_SCAN_SOURCES: i64 = 400;
 
-/// What decides whether a page may read `source_items` in order.
+/// What decides whether a page may read `source_items`: asked once, on the page's connection,
+/// before any page with a projected arm, and never with the projection disabled.
 struct ScanBound {
     /// How many sources `fetch_user_source_ids` returned for the user.
     sources: i64,
@@ -2081,15 +2082,22 @@ struct ScanBound {
     /// `timestamp` values, which order like the item-table path's `timestamptz` casts only
     /// where no daylight-saving jump reorders them.
     utc: bool,
+    /// Whether the table is maintained and was backfilled since (`source_items_exact()`). Without
+    /// it the table can be empty or stale, so the page reads the item tables: a revoked grant
+    /// must not keep listing an item.
+    exact: bool,
 }
 
 impl ScanBound {
-    fn allows(&self, scans: OrderedScans, limit: i64) -> bool {
-        self.utc
-            && match scans {
-                OrderedScans::Owner => true,
-                OrderedScans::Sources => {
-                    self.sources <= SOURCE_SCAN_SOURCES && self.sources * limit <= SOURCE_SCAN_ROWS
+    fn allows(&self, reads: FeedReads, limit: i64) -> bool {
+        self.exact
+            && match reads.ordered {
+                None => true,
+                Some(OrderedScans::Owner) => self.utc,
+                Some(OrderedScans::Sources) => {
+                    self.utc
+                        && self.sources <= SOURCE_SCAN_SOURCES
+                        && self.sources * limit <= SOURCE_SCAN_ROWS
                 }
             }
     }
@@ -2103,16 +2111,23 @@ async fn scan_bound(
     let span = tracing::info_span!(
         "soup.source_items.bound",
         sources,
-        utc = tracing::field::Empty
+        utc = tracing::field::Empty,
+        exact = tracing::field::Empty
     );
-    let utc = sqlx::query_scalar!(
-        r#"SELECT current_setting('TimeZone') IN ('UTC', 'Etc/UTC') AS "utc!""#
+    let state = sqlx::query!(
+        r#"SELECT current_setting('TimeZone') IN ('UTC', 'Etc/UTC') AS "utc!",
+            source_items_exact() AS "exact!""#
     )
     .fetch_one(connection)
     .instrument(span.clone())
     .await?;
-    span.record("utc", utc);
-    Ok(ScanBound { sources, utc })
+    span.record("utc", state.utc);
+    span.record("exact", state.exact);
+    Ok(ScanBound {
+        sources,
+        utc: state.utc,
+        exact: state.exact,
+    })
 }
 
 /// Where `build_query` finds documents, chats and projects.
@@ -2152,7 +2167,7 @@ fn build_query_from<'a>(
     item_source: ItemSource,
     viewer: &str,
     document_ids: &mut DocumentIdArrays,
-) -> (QueryBuilder<'a, Postgres>, Option<OrderedScans>) {
+) -> (QueryBuilder<'a, Postgres>, Option<FeedReads>) {
     let sort_method = sort.timestamp_method();
     let source_ids = source_ids_slot(sort, false);
     let property_sort = matches!(sort, DynamicSort::Property { .. });
@@ -2551,7 +2566,7 @@ fn build_query_from<'a>(
     ));
     builder.push(" LIMIT $3");
 
-    (builder, feed.as_ref().and_then(Feed::ordered_scans))
+    (builder, feed.as_ref().map(Feed::reads))
 }
 
 #[derive(Debug, FromRow)]
@@ -2903,11 +2918,11 @@ async fn expanded_dynamic_cursor_soup_hydrated(
             document_ids,
         )
     };
-    let (mut builder, ordered_scans) = build(item_source, &mut document_ids);
-    if let Some(scans) = ordered_scans
+    let (mut builder, feed_reads) = build(item_source, &mut document_ids);
+    if let Some(reads) = feed_reads
         && !scan_bound(&mut transaction, &source_ids)
             .await?
-            .allows(scans, query_limit)
+            .allows(reads, query_limit)
     {
         document_ids = DocumentIdArrays::starting_at(first_document_ids);
         (builder, _) = build(ItemSource::ItemTables, &mut document_ids);
@@ -2987,9 +3002,16 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
     let item_tables =
         expanded_dynamic_cursor_soup_hydrated(db, args.clone(), ItemSource::ItemTables).await?;
-    // The migrations install no maintenance triggers, so rebuild the projection from what the
-    // fixtures wrote; `crates/source_items` tests the triggers that keep it current.
-    source_items::backfill::run(db).await?;
+    // The migrations install no maintenance triggers: turn them on and rebuild the projection
+    // from what the fixtures wrote, so reads trust it; `crates/source_items` tests the triggers.
+    sqlx::query!("SELECT source_items_install_triggers()")
+        .execute(db)
+        .await?;
+    let backfill = source_items::backfill::run(db).await?;
+    assert!(
+        backfill.readable,
+        "the projection was not maintained while backfilled"
+    );
     let mismatches = source_items::audit::run(db).await?;
     assert!(
         mismatches.is_empty(),

@@ -19,8 +19,14 @@ holds the backfill, the audit and the tests.
    DESC)` for the owner driver, `"UserHistory"("userId", "itemType",
    "updatedAt" DESC, "itemId" DESC)` for view-time sorts), install the triggers
    (`source_items_install_triggers()`), backfill, audit, then turn on reads.
-   `source_items_remove_triggers()` turns maintenance off again; the table is
+   `source_items_remove_triggers()` disables the triggers again; the table is
    then stale until the next backfill.
+
+Reads fail closed: before any page with a projected arm, soup asks
+`source_items_exact()` in the same round trip as the scan bound, and reads the
+item tables unless the triggers are all enabled and a backfill finished after
+they last came on. So turning reads on early, or leaving them on after removing
+the triggers, costs speed, never access.
 
 The backfill (`cargo run --release -p source_items --features cli --bin
 source_items -- backfill`) rewrites every document, chat and project in

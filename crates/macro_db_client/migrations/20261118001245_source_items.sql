@@ -61,6 +61,17 @@ CREATE INDEX source_items_read
 -- and the table grows to about one row per item ever written.
 CREATE TABLE public.source_items_mutex (bucket int PRIMARY KEY);
 
+-- Whether the table can be read. maintained_since is when the triggers were last turned on, NULL
+-- while they are off; backfilled_at is when a backfill that began after that finished. Only the
+-- functions below and the backfill write it. source_items_exact() reads it.
+CREATE TABLE public.source_items_control (
+    singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+    maintained_since timestamptz,
+    backfilled_at timestamptz,
+    CHECK (backfilled_at IS NULL OR maintained_since IS NOT NULL)
+);
+INSERT INTO public.source_items_control DEFAULT VALUES;
+
 CREATE FUNCTION public.source_items_bucket(p_type text, p_id text) RETURNS int
 LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
     SELECT pg_catalog.hashtext(p_type || ':' || p_id)
@@ -406,18 +417,51 @@ BEGIN
     RETURN NULL;
 END $$;
 
--- Turns maintenance on: installs the triggers on the five inputs, after taking their locks in one
--- statement so the caller's lock_timeout bounds a single wait rather than one per table. SHARE ROW
--- EXCLUSIVE is all CREATE OR REPLACE TRIGGER and ENABLE ALWAYS need: it waits for writers, not for
--- readers, and never upgrades. Running it again replaces the triggers in place. The triggers fire
--- in replica mode too, so fixtures and scripts that skip foreign-key checks keep the projection
--- current. Rows of items written before this call stay missing or stale until the
--- backfill rewrites them.
+-- How many of the 20 maintenance triggers on the five inputs are enabled in every mode.
+CREATE FUNCTION public.source_items_enabled_triggers() RETURNS bigint
+LANGUAGE sql STABLE AS $$
+    SELECT count(*) FROM pg_catalog.pg_trigger t
+    WHERE t.tgrelid IN ('public.entity_access'::regclass, 'public.document_sub_type'::regclass,
+                        'public."Document"'::regclass, 'public."Chat"'::regclass,
+                        'public."Project"'::regclass)
+      AND t.tgname LIKE 'source\_items\_%' AND t.tgenabled = 'A'
+$$;
+
+-- Whether reads may trust the table: every trigger is on and a backfill finished after they last
+-- came on. Soup asks before every page that would read the table, and reads the item tables
+-- otherwise, so a stale or empty table costs speed, never access.
+CREATE FUNCTION public.source_items_exact() RETURNS boolean
+LANGUAGE sql STABLE AS $$
+    SELECT c.backfilled_at IS NOT NULL AND public.source_items_enabled_triggers() = 20
+    FROM public.source_items_control c
+$$;
+
+-- Records that a backfill which began while maintenance was on since p_since has finished. False,
+-- and nothing recorded, when maintenance was turned off or on again meanwhile.
+CREATE FUNCTION public.source_items_mark_backfilled(p_since timestamptz) RETURNS boolean
+LANGUAGE sql AS $$
+    UPDATE public.source_items_control SET backfilled_at = pg_catalog.now()
+    WHERE maintained_since = p_since AND public.source_items_enabled_triggers() = 20
+    RETURNING true
+$$;
+
+-- Turns maintenance on: creates or replaces the triggers on the five inputs and enables them in
+-- every mode, so fixtures and scripts that skip foreign-key checks keep the projection current.
+-- SHARE ROW EXCLUSIVE is all CREATE OR REPLACE TRIGGER and ENABLE ALWAYS need: it waits for
+-- writers, not for readers, and never upgrades. LOCK TABLE takes the five locks one after another
+-- and lock_timeout bounds each wait, so writes to a table already locked can wait for up to four
+-- more timeouts; the call either gets every lock or fails, safe to retry. Unless every trigger was
+-- already on, the table must be backfilled again before reads trust it. Rows of items written
+-- while maintenance was off stay missing or stale until then.
 CREATE FUNCTION public.source_items_install_triggers() RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN
     LOCK TABLE public.entity_access, public.document_sub_type, public."Document", public."Chat",
         public."Project" IN SHARE ROW EXCLUSIVE MODE;
+    IF public.source_items_enabled_triggers() < 20 THEN
+        UPDATE public.source_items_control
+        SET maintained_since = pg_catalog.now(), backfilled_at = NULL;
+    END IF;
     CREATE OR REPLACE TRIGGER source_items_grants_inserted AFTER INSERT ON public.entity_access
         REFERENCING NEW TABLE AS new_rows
         FOR EACH STATEMENT EXECUTE FUNCTION public.source_items_grants_changed();
@@ -504,33 +548,27 @@ BEGIN
     ALTER TABLE public."Project" ENABLE ALWAYS TRIGGER source_items_truncated;
 END $$;
 
--- Turns maintenance off. DROP TRIGGER needs ACCESS EXCLUSIVE, so this takes it on all five inputs
--- in one statement: it waits for open readers and writers of any of them and blocks both until it
--- commits, which is brief. The table then drifts from its inputs, so reads must already be off,
--- and turning maintenance back on needs a backfill and an audit before reads return.
+-- Turns maintenance off by disabling the triggers, which, like installing them, takes SHARE ROW
+-- EXCLUSIVE on the five inputs: it waits for writers, not for readers. Reads stop trusting the
+-- table at once (source_items_exact), and turning maintenance back on needs a backfill before
+-- they trust it again. Dropping the triggers would need ACCESS EXCLUSIVE.
 CREATE FUNCTION public.source_items_remove_triggers() RETURNS void
 LANGUAGE plpgsql AS $$
+DECLARE
+    trigger_row record;
 BEGIN
     LOCK TABLE public.entity_access, public.document_sub_type, public."Document", public."Chat",
-        public."Project" IN ACCESS EXCLUSIVE MODE;
-    DROP TRIGGER IF EXISTS source_items_grants_inserted ON public.entity_access;
-    DROP TRIGGER IF EXISTS source_items_grants_deleted ON public.entity_access;
-    DROP TRIGGER IF EXISTS source_items_grants_updated ON public.entity_access;
-    DROP TRIGGER IF EXISTS source_items_truncated ON public.entity_access;
-    DROP TRIGGER IF EXISTS source_items_sub_type_inserted ON public.document_sub_type;
-    DROP TRIGGER IF EXISTS source_items_sub_type_deleted ON public.document_sub_type;
-    DROP TRIGGER IF EXISTS source_items_sub_type_updated ON public.document_sub_type;
-    DROP TRIGGER IF EXISTS source_items_truncated ON public.document_sub_type;
-    DROP TRIGGER IF EXISTS source_items_inserted ON public."Document";
-    DROP TRIGGER IF EXISTS source_items_deleted ON public."Document";
-    DROP TRIGGER IF EXISTS source_items_updated ON public."Document";
-    DROP TRIGGER IF EXISTS source_items_truncated ON public."Document";
-    DROP TRIGGER IF EXISTS source_items_inserted ON public."Chat";
-    DROP TRIGGER IF EXISTS source_items_deleted ON public."Chat";
-    DROP TRIGGER IF EXISTS source_items_updated ON public."Chat";
-    DROP TRIGGER IF EXISTS source_items_truncated ON public."Chat";
-    DROP TRIGGER IF EXISTS source_items_inserted ON public."Project";
-    DROP TRIGGER IF EXISTS source_items_deleted ON public."Project";
-    DROP TRIGGER IF EXISTS source_items_updated ON public."Project";
-    DROP TRIGGER IF EXISTS source_items_truncated ON public."Project";
+        public."Project" IN SHARE ROW EXCLUSIVE MODE;
+    UPDATE public.source_items_control SET maintained_since = NULL, backfilled_at = NULL;
+    FOR trigger_row IN
+        SELECT t.tgrelid::regclass AS relation, t.tgname AS name
+        FROM pg_catalog.pg_trigger t
+        WHERE t.tgrelid IN ('public.entity_access'::regclass, 'public.document_sub_type'::regclass,
+                            'public."Document"'::regclass, 'public."Chat"'::regclass,
+                            'public."Project"'::regclass)
+          AND t.tgname LIKE 'source\_items\_%' AND t.tgenabled <> 'D'
+    LOOP
+        EXECUTE pg_catalog.format('ALTER TABLE %s DISABLE TRIGGER %I', trigger_row.relation,
+            trigger_row.name);
+    END LOOP;
 END $$;

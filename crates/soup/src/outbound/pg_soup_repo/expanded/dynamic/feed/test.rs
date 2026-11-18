@@ -51,7 +51,7 @@ const SORTS: [SimpleSortMethod; 3] = [
 #[sqlx::test(
     fixtures(
         path = "../../../../../../fixtures",
-        scripts("source_items_triggers", "source_items_feed", "source_items_empty")
+        scripts("source_items_feed", "source_items_empty")
     ),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
@@ -73,7 +73,13 @@ async fn source_items_rollout_defaults_to_existing_records(pool: PgPool) -> anyh
         !existing.is_empty(),
         "disabled rollout must use domain records"
     );
-    assert!(pending.is_empty(), "enabled rollout must use source_items");
+    // Maintenance is off and the table empty, so reads with the projection enabled still list
+    // what the item tables hold.
+    assert_eq!(
+        pending.iter().map(|item| item.id()).collect::<Vec<_>>(),
+        existing.iter().map(|item| item.id()).collect::<Vec<_>>(),
+        "an enabled read of an unbackfilled table must fall back to the item tables"
+    );
 
     // Reads with the projection disabled must not need its table.
     sqlx::query!("ALTER TABLE source_items RENAME TO source_items_pending_rollout")
@@ -653,8 +659,8 @@ async fn source_items_pages_like_the_item_tables(pool: PgPool) -> anyhow::Result
     Ok(())
 }
 
-/// Only in-order scans depend on the session's time zone and the user's sources, so only they
-/// make a page ask for them.
+/// Every page with a projected arm asks whether the table is exact; only in-order scans also
+/// depend on the session's time zone and the user's sources.
 #[test]
 fn only_ordered_scans_need_the_bound() {
     let ordered = |document_filter: Expr<DocumentLiteral>| {
@@ -673,28 +679,49 @@ fn only_ordered_scans_need_the_bound() {
             &mut DocumentIdArrays::starting_at(10),
         )
         .1
+        .map(|reads| reads.ordered)
     };
     let doc = |literal| Expr::val(literal);
     assert_eq!(
         ordered(doc(DocumentLiteral::SubType(DocumentSubType::Task))),
-        Some(OrderedScans::Sources)
+        Some(Some(OrderedScans::Sources))
     );
     assert_eq!(
         ordered(doc(DocumentLiteral::Owner(
             Owner::from_principal_str(USER).unwrap()
         ))),
-        Some(OrderedScans::Owner)
+        Some(Some(OrderedScans::Owner))
     );
     assert_eq!(
         ordered(doc(DocumentLiteral::Id(document(1)))),
-        None,
-        "lookup"
+        Some(None),
+        "a lookup checks exactness only"
     );
     assert_eq!(
         ordered(doc(DocumentLiteral::NameContains("plan".into()))),
         None,
-        "item tables"
+        "item tables only: no round trip"
     );
+}
+
+/// With the projection disabled no arm reads `source_items`, so a page makes no round trip
+/// beyond main's: nothing asks for the scan bound or the table's state.
+#[test]
+fn disabled_projection_builds_main_query_and_asks_nothing() {
+    for (name, filter) in shapes() {
+        for sort in SORTS {
+            let (query, reads) = build_query_from(
+                &filter,
+                false,
+                sort.into(),
+                ItemSource::ItemTables,
+                USER,
+                &mut DocumentIdArrays::starting_at(10),
+            );
+            assert_eq!(reads, None, "{name} {sort:?}");
+            assert!(!query.sql().contains("source_items"), "{name} {sort:?}");
+        }
+    }
 }
 
 /// Each literal a `*_literal_constant` function fixes renders as that constant, so an arm it
@@ -1125,4 +1152,49 @@ fn selective_filters_read_the_item_tables() {
         .is_some(),
         "a disjunct can still match"
     );
+}
+
+/// Turning maintenance off leaves the table stale. A grant revoked afterwards must stop listing its
+/// item at once, with the projection enabled: the page reads the item tables until a backfill.
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../../fixtures",
+        scripts("source_items_triggers", "source_items_feed")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_revoke_after_maintenance_stops_hides_the_item(pool: PgPool) -> anyhow::Result<()> {
+    let request = || SimpleSortRequest {
+        user_id: MacroUserIdStr::parse_from_str(USER).unwrap(),
+        limit: 100,
+        cursor: SimpleSortQuery::ItemsFilter(Query::Sort(
+            SimpleSortMethod::UpdatedAt,
+            EntityFilterAst::default(),
+        )),
+    };
+    let projection =
+        PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone())).with_source_items_enabled(true);
+    let listed = |page: Vec<SoupItem<()>>| page.iter().map(|item| item.id()).collect::<Vec<_>>();
+    let before = listed(projection.expanded_generic_cursor_soup(request()).await?);
+    let shared = *before
+        .first()
+        .expect("the fixture lists items for the user");
+
+    sqlx::query!("SELECT source_items_remove_triggers()")
+        .execute(&pool)
+        .await?;
+    sqlx::query!("DELETE FROM entity_access WHERE entity_id = $1", shared)
+        .execute(&pool)
+        .await?;
+    let after = listed(projection.expanded_generic_cursor_soup(request()).await?);
+    assert!(
+        !after.contains(&shared),
+        "{shared} lost its grants but still lists"
+    );
+    let legacy = PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone()));
+    assert_eq!(
+        after,
+        listed(legacy.expanded_generic_cursor_soup(request()).await?)
+    );
+    Ok(())
 }

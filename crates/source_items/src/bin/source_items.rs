@@ -31,8 +31,15 @@ async fn main() -> Result<(), rootcause::Report> {
         .await?;
     match args.command {
         Command::Backfill => {
-            let count = source_items::backfill::run(&pool).await?;
-            println!("Backfilled {count} item keys. Run the audit before enabling reads.");
+            let backfill = source_items::backfill::run(&pool).await?;
+            println!("Backfilled {} item keys.", backfill.items);
+            if !backfill.readable {
+                return Err(rootcause::report!(
+                    "maintenance was off or turned on again during the backfill, so reads will \
+                     not trust the table: install the triggers and run the backfill again"
+                ));
+            }
+            println!("Reads may now trust the table. Run the audit before enabling them.");
         }
         Command::Audit => {
             let mismatches = source_items::audit::run(&pool).await?;

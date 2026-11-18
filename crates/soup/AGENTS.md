@@ -154,16 +154,20 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   (`expanded/dynamic/feed.rs`) instead of the item tables, per arm, under a timestamp sort `source_items`
   can order (not `CreatedAt`, property or name sorts) when the arm's filter lets a source scan stop at the page (`served_by_scan`) and does
   not fold to false (`matches_nothing`, over the `*_literal_constant` functions
-  beside each renderer). A page with owner or source scans asks for the bound
-  first (`ScanBound`): the whole query reads the item tables when the session
-  is not UTC or, for source scans, the user's sources exceed
-  `SOURCE_SCAN_SOURCES` or `SOURCE_SCAN_ROWS` / page size. The projected arms
+  beside each renderer). A page with a projected arm first asks for the bound
+  (`ScanBound`, one query): the whole query reads the item tables unless
+  `source_items_exact()` holds (triggers on, backfilled since), so a stale or
+  empty table costs speed, never access; and, for in-order scans, when the
+  session is not UTC or, for source scans, the user's sources exceed
+  `SOURCE_SCAN_SOURCES` or `SOURCE_SCAN_ROWS` / page size. With the projection
+  disabled no arm is projected and nothing extra runs. The projected arms
   check access against the same bound source ids as the item-table arms
   (`fetch_user_source_ids`); never restate the source rule in SQL. Both paths
-  must return identical pages: the query test helper backfills the table from
-  the fixture, audits it, and runs every case on both. The migrations install no
-  maintenance triggers; feed tests load `fixtures/source_items_triggers.sql`
-  first. Rollout: `SOURCE_ITEMS_ROLLOUT.md`.
+  must return identical pages: the query test helper installs the triggers,
+  backfills the table from the fixture, audits it, and runs every case on both.
+  The migrations install no maintenance triggers; feed tests load
+  `fixtures/source_items_triggers.sql` first, which also marks the empty table
+  backfilled. Rollout: `SOURCE_ITEMS_ROLLOUT.md`.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.
 - Keep the notified feed's notification lookup behind a lateral `OFFSET 0`

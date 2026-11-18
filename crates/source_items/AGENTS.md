@@ -17,6 +17,10 @@ The migrations leave the triggers off: `source_items_install_triggers()` and
   rewrite rows at commit under per-bucket mutex rows (header comment).
 - `fixtures/triggers.sql`: installs the triggers; every test that writes inputs
   loads it first.
+- `source_items_control` and `source_items_exact()`: whether reads may trust
+  the table. Install records when maintenance came on, remove (which disables
+  the triggers) clears it, and a backfill that ran wholly under maintenance
+  marks it backfilled (`Backfill::readable`).
 - `src/backfill.rs`: fills rows for items that predate the triggers, through
   `source_items_refresh`, which locks buckets and rebuilds the way a commit does.
 - `src/audit.rs`, `src/audit.sql`: counts rows that differ from the inputs, in

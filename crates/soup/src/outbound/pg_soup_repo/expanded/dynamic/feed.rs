@@ -798,6 +798,13 @@ pub(super) enum OrderedScans {
     Sources,
 }
 
+/// What a query with projected arms checks before it runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct FeedReads {
+    /// The in-order scans it reads, if any.
+    pub(super) ordered: Option<OrderedScans>,
+}
+
 /// The `TopItems` members for documents, chats and projects.
 pub(super) struct Feed {
     arms: Vec<FeedArm>,
@@ -836,8 +843,14 @@ impl Feed {
         })
     }
 
+    pub(super) fn reads(&self) -> FeedReads {
+        FeedReads {
+            ordered: self.ordered_scans(),
+        }
+    }
+
     /// `None` when every arm sorts its few matches whole.
-    pub(super) fn ordered_scans(&self) -> Option<OrderedScans> {
+    fn ordered_scans(&self) -> Option<OrderedScans> {
         let reads = |driver| self.arms.iter().any(|arm| arm.driver == driver);
         if reads(Driver::Sources) {
             Some(OrderedScans::Sources)

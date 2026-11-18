@@ -631,9 +631,9 @@ async fn backfill_repairs_drift_across_batches_and_reruns(pool: PgPool) -> Resul
     assert_eq!(drift.missing_or_wrong, 2);
     assert_eq!(drift.extra_or_wrong, 2);
 
-    assert_eq!(backfill::run(&pool).await?, 1201);
+    assert_eq!(backfill::run(&pool).await?.items, 1201);
     assert_exact(&pool).await?;
-    assert_eq!(backfill::run(&pool).await?, 1200);
+    assert_eq!(backfill::run(&pool).await?.items, 1200);
     assert_exact(&pool).await
 }
 
@@ -909,33 +909,61 @@ async fn savepoints_rolled_back_record_nothing(pool: PgPool) -> Result<(), sqlx:
     assert_exact(&pool).await
 }
 
-/// The migrations leave maintenance off: no trigger on any input, so writes cost what they did.
-/// Installing turns it on, removing turns it off, and either can run again.
+/// The migrations leave maintenance off: no trigger on any input, so writes cost what they did,
+/// and reads do not trust the table. Installing turns maintenance on; reads trust the table only
+/// after a backfill that ran with it on. Removing disables the triggers and withdraws that trust,
+/// and installing again needs another backfill. Install and remove can each run twice.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn maintenance_is_off_until_installed(pool: PgPool) -> Result<(), sqlx::Error> {
+async fn reads_trust_the_table_only_while_maintained_and_backfilled(
+    pool: PgPool,
+) -> Result<(), sqlx::Error> {
     let mut conn = pool.acquire().await?;
     let installed = async |conn: &mut PgConnection| {
-        sqlx::query_scalar!(
-            r#"SELECT count(*) AS "count!" FROM pg_trigger
-               WHERE tgname LIKE 'source_items%'
-                 AND tgrelid IN ('entity_access'::regclass, 'document_sub_type'::regclass,
-                     '"Document"'::regclass, '"Chat"'::regclass, '"Project"'::regclass)"#
-        )
-        .fetch_one(conn)
-        .await
+        sqlx::query_scalar!(r#"SELECT source_items_enabled_triggers() AS "count!""#)
+            .fetch_one(conn)
+            .await
     };
-    assert_eq!(installed(&mut conn).await?, 0);
+    let exact = async |conn: &mut PgConnection| {
+        sqlx::query_scalar!(r#"SELECT source_items_exact() AS "exact!""#)
+            .fetch_one(conn)
+            .await
+    };
+    let defined = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM pg_trigger
+           WHERE tgname LIKE 'source_items%'
+             AND tgrelid IN ('entity_access'::regclass, 'document_sub_type'::regclass,
+                 '"Document"'::regclass, '"Chat"'::regclass, '"Project"'::regclass)"#
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+    assert_eq!(defined, 0, "the migrations install no trigger");
+    assert!(!exact(&mut conn).await?);
     insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
     grant(&mut conn, "document", DOC, OWNER, "user").await?;
     assert_eq!(rows(&mut conn, DOC).await?, []);
+    assert_eq!(
+        backfill::run(&pool).await?.readable,
+        false,
+        "a backfill without maintenance proves nothing"
+    );
+    assert!(!exact(&mut conn).await?);
 
     for _ in 0..2 {
         sqlx::query!("SELECT source_items_install_triggers()")
             .execute(&mut *conn)
             .await?;
         assert_eq!(installed(&mut conn).await?, 20);
+        assert!(!exact(&mut conn).await?, "installed but not backfilled");
     }
-    backfill::run(&pool).await?;
+    assert!(backfill::run(&pool).await?.readable);
+    assert!(exact(&mut conn).await?);
+    sqlx::query!("SELECT source_items_install_triggers()")
+        .execute(&mut *conn)
+        .await?;
+    assert!(
+        exact(&mut conn).await?,
+        "reinstalling while on keeps the backfill"
+    );
     grant(&mut conn, "document", DOC, MEMBER, "user").await?;
     assert_eq!(rows(&mut conn, DOC).await?.len(), 2);
     assert_exact(&pool).await?;
@@ -945,9 +973,46 @@ async fn maintenance_is_off_until_installed(pool: PgPool) -> Result<(), sqlx::Er
             .execute(&mut *conn)
             .await?;
         assert_eq!(installed(&mut conn).await?, 0);
+        assert!(!exact(&mut conn).await?);
     }
     grant(&mut conn, "document", DOC, TEAM, "team").await?;
-    assert_eq!(rows(&mut conn, DOC).await?.len(), 2);
+    assert_eq!(
+        rows(&mut conn, DOC).await?.len(),
+        2,
+        "removed triggers record nothing"
+    );
+
+    sqlx::query!("SELECT source_items_install_triggers()")
+        .execute(&mut *conn)
+        .await?;
+    assert!(
+        !exact(&mut conn).await?,
+        "turning maintenance back on needs a backfill"
+    );
+    assert!(backfill::run(&pool).await?.readable);
+    assert!(exact(&mut conn).await?);
+    assert_exact(&pool).await
+}
+
+/// Turning maintenance off must not wait for readers either.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("triggers"))
+)]
+async fn removing_does_not_wait_for_readers(pool: PgPool) -> Result<(), sqlx::Error> {
+    let mut reader = pool.begin().await?;
+    sqlx::query!(r#"SELECT count(*) AS "count!" FROM "Document""#)
+        .fetch_one(&mut *reader)
+        .await?;
+    let mut remove = pool.begin().await?;
+    sqlx::query!("SET LOCAL lock_timeout = '1s'")
+        .execute(&mut *remove)
+        .await?;
+    sqlx::query!("SELECT source_items_remove_triggers()")
+        .execute(&mut *remove)
+        .await?;
+    remove.commit().await?;
+    reader.commit().await?;
     Ok(())
 }
 
