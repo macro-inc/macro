@@ -120,6 +120,11 @@ bun $B/bench.ts run routines --label main-a && bun $B/bench.ts run routines --la
 bun $B/bench.ts noise <main-a run.json> <main-b run.json>
 ```
 
+A side of `compare`, `noise` or `report` may be several runs of one section
+joined by commas (`a1.json,a2.json`): their reps follow on and pair up rep for
+rep, so two runs a side narrow the interval when a change is close to the
+margin.
+
 ### Held-out personas
 
 Tune on `personas/`. To confirm a change on people nobody tuned against,

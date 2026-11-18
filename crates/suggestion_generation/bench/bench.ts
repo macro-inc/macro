@@ -221,6 +221,23 @@ async function runSection(section: Section, values: Record<string, string | unde
 
 const readRun = (path: string) => JSON.parse(readFileSync(path, 'utf8')) as RunFile;
 
+/**
+ * One side of a comparison: a run file, or several of the same section
+ * joined with commas, read as one run whose reps follow on (the second
+ * file's rep 1 is rep 4 after a 3-rep run), so runs pair up rep for rep.
+ */
+function readSide(arg: string): RunFile {
+  const runs = arg.split(',').map(readRun);
+  if (new Set(runs.map((run) => run.section)).size > 1) throw new Error(`${arg} mixes sections`);
+  let offset = 0;
+  const attempts = runs.flatMap((run) => {
+    const shifted = run.attempts.map((attempt) => ({ ...attempt, rep: attempt.rep + offset }));
+    offset += Math.max(0, ...run.attempts.map((attempt) => attempt.rep));
+    return shifted;
+  });
+  return { ...runs[0], label: runs.map((run) => run.label).join('+'), attempts };
+}
+
 /** Judge and score a run again, without generating: for a changed judge or answer key. */
 async function rejudge(path: string, values: Record<string, string | undefined>) {
   const run = readRun(path);
@@ -253,10 +270,10 @@ async function main() {
       break;
     }
     case 'report':
-      console.log(reportLines(rest.map(readRun)).join('\n'));
+      console.log(reportLines(rest.map(readSide)).join('\n'));
       break;
     case 'compare': {
-      const [a, b] = rest.map(readRun);
+      const [a, b] = rest.map(readSide);
       if (a.section !== b.section) throw new Error('compare two runs of the same section');
       const margin = values.margin ? Number(values.margin) : MARGINS[a.section];
       const v = verdict(a.attempts, b.attempts, margin);
@@ -268,7 +285,7 @@ async function main() {
       break;
     }
     case 'noise': {
-      const [a, b] = rest.map(readRun);
+      const [a, b] = rest.map(readSide);
       const n = noiseMargin(a.attempts, b.attempts);
       console.log(`${a.section}: ${n.pairs} pairs of the same build moved ${n.delta.toFixed(1)} (95% ${n.interval[0].toFixed(1)} to ${n.interval[1].toFixed(1)}): margin ${n.margin.toFixed(1)}`);
       break;
@@ -295,6 +312,7 @@ async function main() {
   report <run.json…>   the summary table of runs
   compare <a> <b>      B against A: win, loss or noise, with the parts
   noise <a> <b>        the margin two runs of the same build set
+                       (a side may be several run.json joined by commas)
   rejudge <run.json…>  judge and score again without generating
   stub [stop]          start or stop the stand-in
   heldout make <name> [count] | heldout list
