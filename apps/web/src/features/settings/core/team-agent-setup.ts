@@ -25,16 +25,19 @@ export function teamAgentRunState(
   agent: Pick<TeamAgent, 'status'>,
   harness: Pick<Harness, 'connected'> | undefined
 ): TeamAgentRunState {
-  return match(agent.status)
-    .returnType<TeamAgentRunState>()
-    .with('provisioning', () => 'setting_up')
-    .with('failed', () => 'setup_failed')
-    .with('paused', () => 'offline')
-    .with('released', () => 'not_running')
-    .with('running', () =>
-      harness && !harness.connected ? 'offline' : 'running'
-    )
-    .exhaustive();
+  return (
+    match(agent.status)
+      .returnType<TeamAgentRunState>()
+      .with('provisioning', 'starting', () => 'setting_up')
+      .with('failed', () => 'setup_failed')
+      .with('paused', () => 'offline')
+      .with('released', () => 'not_running')
+      .with('running', () =>
+        harness && !harness.connected ? 'offline' : 'running'
+      )
+      // A status a newer server sends reads as not running, never a crash.
+      .exhaustive(() => 'not_running')
+  );
 }
 
 /**

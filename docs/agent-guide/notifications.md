@@ -119,8 +119,10 @@ Calendar, Access requests, and Agents. Unchecking a type hides its rows (Mention
 covers both channel and comment mentions, Replies both channel and comment
 threads). A row that is two kinds shows while either is checked, once: a thread
 whose reply mentions you is under Mentions and Replies, a top-level message that
-mentions you and has replies likewise, and an entity's comments that mention you
-under Mentions and Comments. Clearing either kind takes such a row whole. The trigger counts hidden types, and **Reset filters** shows them all
+mentions you and has replies likewise, an entity's comments that mention you
+under Mentions and Comments, and a pull request or agent session that mentions
+you under Mentions and Pull requests or Agents. Clearing either kind takes such
+a row whole. The trigger counts hidden types, and **Reset filters** shows them all
 again without changing All or Unread. Choices persist per user across reloads.
 Hiding every type shows **Every kind of notification is hidden** with Reset
 filters; types that hide every row show **No notifications match these filters**. The gear beside
@@ -409,7 +411,7 @@ computer id, name, and outcome; opening one reopens that computer's setup
 dialog on Bring your AI (see the Macro computers walkthrough in
 [settings.md](settings.md)). An agent teammate's computer notifies its
 inviter with the agent instead (`agent { userId, name }`): "<name> is ready",
-with **Message <name>** and, for owners and admins, **Bring your AI**, or
+with **Message <name>** and, for owners and admins, **Connect Claude plan**, or
 "<name> couldn't be set up" with **Retry**; opening it goes to the DM or to
 Team → Members (see Agent teammates in [settings.md](settings.md)).
 

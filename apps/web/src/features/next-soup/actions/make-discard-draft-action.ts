@@ -3,7 +3,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { type EmailEntity, type EntityData, isEmailEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
 import { useDeleteDraftMutation } from '@queries/email/draft';
-import { markThreadDraftSaved } from '@queries/email/draft-cache';
 import { publishDraftLifecycleChange } from '@queries/email/draft-lifecycle-events';
 import {
   deleteEmailDraftQueued,
@@ -69,7 +68,6 @@ export const makeDiscardDraftAction = () => {
         deleteFailed
       );
       if (removed.isErr()) return err(removed.error);
-      markThreadDraftSaved(threadId);
     }
     // An open composer on this draft rereads it and closes.
     publishDraftLifecycleChange(draft.draftId, draft.inboxId);

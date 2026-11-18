@@ -19,6 +19,7 @@ import {
 import { type Accessor, createEffect, onCleanup, type Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
+import { intervalWhileRead } from '../visible-refresh';
 import {
   HISTORY_SEARCH_BUCKETS,
   readCachedGraphqlHistoryItems,
@@ -130,14 +131,14 @@ export function useHistoryQuery() {
 
 /**
  * History for Quick Access, which lists it only while one of its lists reads
- * the cache: cache changes reread it only while `reading` is true, and once
- * when it turns true after changes it missed.
+ * the cache: cache changes reread it promptly while `reading` is true and at
+ * most once a minute otherwise, so a list opening never has to read it.
  */
 export function useHistoryQueryWhileRead(reading: Accessor<boolean>) {
   return createHistoryQuery(reading);
 }
 
-function createHistoryQuery(live?: Accessor<boolean>) {
+function createHistoryQuery(reading?: Accessor<boolean>) {
   const authenticated = useIsAuthenticated();
   const activeQueryClient = useQueryClient();
   const graphqlCacheHost = () => {
@@ -156,7 +157,10 @@ function createHistoryQuery(live?: Accessor<boolean>) {
             { queryKey: historyKeys.graphqlList.queryKey },
             { cancelRefetch: false }
           ),
-        { searchBuckets: () => HISTORY_SEARCH_BUCKETS, live }
+        {
+          searchBuckets: () => HISTORY_SEARCH_BUCKETS,
+          intervalMs: reading ? intervalWhileRead(reading) : undefined,
+        }
       )
     );
   });

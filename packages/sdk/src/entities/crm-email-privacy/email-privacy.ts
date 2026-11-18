@@ -12,6 +12,7 @@ import type {
 import { MacroError, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { rejectUnknownOptions } from '../../utils/options';
+import { type IterationOptions, iterate } from '../../utils/pagination';
 import { AgentSession } from '../agent-sessions/agent-session';
 import { Agent } from '../agents/agent';
 import { Link } from '../email/link';
@@ -306,12 +307,18 @@ export class CrmEmailPrivacyNamespace {
   }
 
   /**
-   * Iterate your audit history lazily, fifty events per page; definitions are separate revision handles.
+   * Iterate your audit history lazily, fifty events per page; `maxItems` caps the total. Definitions are separate revision handles.
    * Agent and session handles identify verified provenance and never fetch their content automatically.
    *
    * @readonly
    */
-  history(): AsyncGenerator<CrmEmailPolicyHistoryEvent> {
+  history(opts?: IterationOptions): AsyncGenerator<CrmEmailPolicyHistoryEvent> {
+    return iterate('crm.emailPrivacy.history', opts, {}, () =>
+      this.historyEvents(),
+    );
+  }
+
+  private historyEvents(): AsyncGenerator<CrmEmailPolicyHistoryEvent> {
     return paginate(async (before) => {
       const page = unwrap(
         await this.client.storage.listCrmEmailPolicyHistory({
@@ -442,11 +449,19 @@ export class CrmEmailPrivacyNamespace {
   }
 
   /**
-   * Iterate only your private thread exceptions lazily; subjects come from your own mailbox.
+   * Iterate only your private thread exceptions lazily; `maxItems` caps the total. Subjects come from your own mailbox.
    *
    * @readonly
    */
-  excludedThreads(): AsyncGenerator<CrmExcludedEmailThread> {
+  excludedThreads(
+    opts?: IterationOptions,
+  ): AsyncGenerator<CrmExcludedEmailThread> {
+    return iterate('crm.emailPrivacy.excludedThreads', opts, {}, () =>
+      this.excludedThreadPages(),
+    );
+  }
+
+  private excludedThreadPages(): AsyncGenerator<CrmExcludedEmailThread> {
     return paginate(async (after) => {
       const page = unwrap(
         await this.client.storage.listCrmExcludedEmailThreads({

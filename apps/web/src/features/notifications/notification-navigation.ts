@@ -799,6 +799,24 @@ export function openRuntimesSettings(
   );
 }
 
+/** Settings → Billing, where a declined card is updated. */
+export function openBillingSettings(
+  layoutManager: SplitManager,
+  options: OpenOptions
+) {
+  openContent(
+    layoutManager,
+    {
+      type: 'component',
+      id: 'settings',
+      entryMetadata: {
+        route: paneRoute({ id: 'settings', params: { tab: 'billing' } }),
+      },
+    },
+    options
+  );
+}
+
 /** Settings → Members, where an agent teammate's row shows its setup. */
 export function openTeamMembersSettings(
   layoutManager: SplitManager,
