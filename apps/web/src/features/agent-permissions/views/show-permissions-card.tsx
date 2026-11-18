@@ -1,6 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
@@ -150,14 +149,11 @@ export function ShowPermissionsCard(props: {
               <Button
                 type="button"
                 variant="ghost"
-                size={isTouchDevice() ? 'icon-sm' : 'sm'}
+                size="sm"
                 class="-mt-1 shrink-0 gap-1.5"
-                aria-label={t('agentPermissionsChat.allPermissions')}
                 onClick={openAll}
               >
-                <span class="touch:hidden">
-                  {t('agentPermissionsChat.allPermissions')}
-                </span>
+                {t('agentPermissionsChat.allPermissions')}
                 <ArrowSquareOutIcon
                   aria-hidden="true"
                   class="size-3.5 touch:size-4 shrink-0 pointer-events-none"
