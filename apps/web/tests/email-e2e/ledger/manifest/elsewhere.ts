@@ -209,8 +209,12 @@ export const elsewhere = {
       surface: 'SX-20',
       fn: ['F-166'],
       action: 'Universal input: open the saved draft or sent thread',
-      trigger: 'open action on the "Email draft saved" / "Email sent" result',
-      source: ['src/features/universal-input/actions.ts'],
+      trigger:
+        'by itself once the save or send finishes: the host closes the universal input and runs the open of its result',
+      source: [
+        'src/features/universal-input/actions.ts',
+        'src/features/universal-input/universal-input.tsx',
+      ],
       flag: 'enable-universal-input',
     },
     {
@@ -575,14 +579,11 @@ export const elsewhere = {
       id: 'STX-303',
       surface: 'SX-20',
       fn: ['F-166'],
-      state:
-        'Result "Email draft saved" / "Email sent"; buttons "Saving…" / "Working…" while pending',
-      trigger: 'save or send finished / pending',
-      source: [
-        'src/features/universal-input/actions.ts',
-        'src/features/universal-input/views/universal-composer.tsx',
-      ],
+      state: 'Buttons "Saving…" / "Working…" while the save or send is pending',
+      trigger: 'save or send pending',
+      source: ['src/features/universal-input/views/universal-composer.tsx'],
       flag: 'enable-universal-input',
+      note: 'the result line ("Email draft saved" / "Email sent" and its Open) is never on screen: every host closes the universal input in the step that sets it, and opens what was made (AX-307)',
     },
     {
       id: 'STX-034',
