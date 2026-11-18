@@ -6,10 +6,7 @@ import {
   GUEST_INVITES_RESTRICTED,
 } from '../../calendar/utils/event-guest-editing';
 
-export {
-  calendarDescriptionPreviewHtml,
-  sanitizeCalendarDescription,
-} from '../../calendar/utils/calendar-description-sanitizer';
+export { sanitizeCalendarDescription } from '../../calendar/utils/calendar-description-sanitizer';
 export const parseMacroAppLink = () => undefined;
 export const recipientEntityMapper =
   <K extends string>(kind: K) =>
