@@ -211,6 +211,12 @@ reads each connected inbox's place in the rollout (`inboxes`, `enrolled`,
 "focus backfill pass finished" carries `pass`, `waited_secs` (found to started),
 `took_secs` and `since_found_secs`, the time from being found to the pass's end.
 
+The rollout's numbers are CloudWatch metrics, not spans: the worker publishes
+`Macro/EmailFocus` once a minute under `email_focus.metrics_publish`, whose log
+line "focus usage this minute" carries that minute's tokens and dollars. The
+**Email Focus rollout** Grafana dashboard draws them; see
+[the runbook](../runbooks/email-focus.md).
+
 ## Contact searches
 
 Contact pickers read directory pages as they scroll, and read on by themselves

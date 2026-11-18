@@ -728,16 +728,15 @@ test.describe('shared events in email on OUTLOOK', {
     confirmed('F-156');
   });
 
-  // When this fails, someone whose only calendar is Outlook's is offered an
-  // Add to calendar that the calendar service refuses: shared events can be
-  // added to Google calendars only.
-  test('Add to calendar cannot be pressed with only an Outlook calendar', async ({
+  // When this fails, a reader whose only calendar is Outlook's has no way to
+  // tell why the shared event cannot be saved directly from the card.
+  test('a shared event explains the calendar requirement to an Outlook-only reader', async ({
     page,
     mailbox,
   }) => {
     await calendarReady(mailbox);
-    // The button is also disabled while the page has no answer about the
-    // user's calendars: the test looks at it after that answer is drawn.
+    // Check the response as well as the card so a disconnected reader cannot
+    // satisfy the test.
     const calendars = page.waitForResponse(
       (response) =>
         (response.request().postData() ?? '').includes(
@@ -746,14 +745,12 @@ test.describe('shared events in email on OUTLOOK', {
     );
     const card = await sharedEvent(page, mailbox);
     expect(await (await calendars).text()).toMatch(/"provider":"outlook"/i);
-    await page.evaluate(
-      () =>
-        new Promise<void>((drawn) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => drawn()))
-        )
+    await expect(card.getByRole('status')).toHaveText(
+      'Adding shared events requires a writable Google calendar.'
     );
     await expect(
       card.getByRole('button', { name: 'Add to calendar' })
-    ).toBeDisabled();
+    ).toHaveCount(0);
+    saw('STL-522');
   });
 });

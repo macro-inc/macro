@@ -854,8 +854,10 @@ instead of opening the calendar; on a touch device, tapping it opens the same ca
 sheet. That card also offers `Add to calendar` (behind the `enable-calendar-add-shared-event`
 flag, on in dev only until a real Google import has passed there), which imports a snapshot of
 the meeting onto the viewer's only writable Google calendar, or onto one they pick from a menu
-when they have several; Outlook calendars are not offered, since Microsoft cannot keep the
-meeting's iCalendar UID. Google imports an event only for its organizer or an attendee, so the
+when they have several. Microsoft cannot keep the meeting's iCalendar UID, so viewers
+with an Outlook calendar and no writable Google calendar see `Adding shared events
+requires a writable Google calendar.` beside the download. Google imports an event
+only for its organizer or an attendee, so the
 snapshot keeps the real organizer and lists the viewer, already accepted, as its only guest: the
 meeting's other guests and join link stay out and nobody is notified. If Google refuses anyway,
 the card says Google won't add the event to that calendar and points to `Download .ics`. The agent
@@ -1501,11 +1503,12 @@ file carries, through email service's
 The server reads the event from the saved email, never from the request. The card then
 resolves to the snapshot. A single occurrence, a cancelled event, a time that cannot be read,
 and mail saved before recurrence was recorded on the snapshot get no `Add to calendar`.
-Nor does a card whose check is not confirmed: it says `Checking your connected calendar…`
-while loading, `Connect a calendar to add this event.` without a calendar, and
-`Calendar unavailable. Saved event details are shown.` when the check fails; a failed
-refresh after an earlier `Not on your calendar.` keeps that line under the unavailable notice
-but withholds the button.
+An Outlook calendar without an eligible Google destination shows `Adding shared events
+requires a writable Google calendar.` with the shared event details.
+A card whose check is pending says `Checking your connected calendar…`. A reader without
+a calendar sees `Connect a calendar to add this event.` A failed check shows `Calendar
+unavailable. Saved event details are shown.` A failed refresh after an earlier `Not on your
+calendar.` keeps that line under the unavailable notice and withholds the button.
 
 A connected, resolved invitation shows the responding address and Yes / Maybe / No.
 Calendars connected through a linked inbox also resolve here, using that inbox's
