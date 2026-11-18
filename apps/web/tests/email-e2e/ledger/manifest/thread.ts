@@ -1483,6 +1483,20 @@ export const thread = {
       ],
     },
     {
+      id: 'STL-996',
+      surface: 'SL-35',
+      fn: ['F-117'],
+      state:
+        'result: the reader’s synced reply draft reopens in the shared thread',
+      trigger:
+        'reload a thread shared at Edit after a reply saves in the reader’s inbox',
+      source: [
+        'src/features/email-thread/primitives/thread-reply-area.ts',
+        'src/features/email-thread/queries/thread-source.ts',
+      ],
+      viewports: ['desktop'],
+    },
+    {
       id: 'STL-966',
       surface: 'SL-28',
       fn: ['F-177'],
