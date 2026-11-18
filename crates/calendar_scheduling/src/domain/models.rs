@@ -338,6 +338,10 @@ pub enum Error {
     /// A host's calendar is not available for reliable conflict checking.
     #[error("A host's calendar is unavailable or still syncing. Please try again later.")]
     CalendarUnavailable,
+    /// A host's calendar refused the change for good, such as a host with no
+    /// writable calendar; retrying the same change cannot succeed.
+    #[error("A host's calendar cannot take this booking.")]
+    CalendarRejected,
     /// Public scheduling budget is exhausted for this profile.
     #[error("Too many scheduling requests. Please try again later.")]
     RateLimited,
@@ -399,6 +403,10 @@ pub struct CalendarOperation {
     pub retry_at: DateTime<Utc>,
     /// Intended provider change, retained through failures.
     pub kind: CalendarOperationKind,
+    /// When recovery stopped retrying: the calendar refused the change or it
+    /// ran out of attempts. The booking stays failed and is never claimed again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub abandoned_at: Option<DateTime<Utc>>,
 }
 /// Provider changes that can be retried without creating a second event.
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -79,3 +79,4 @@ futures = { workspace = true }
 rmcp = { workspace = true, features = ["auth"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 tower = { workspace = true }
+tracing-subscriber = { workspace = true }

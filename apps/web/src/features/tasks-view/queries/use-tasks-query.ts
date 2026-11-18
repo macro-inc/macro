@@ -266,7 +266,9 @@ export function useTasksDataSource(
     );
   }, []);
 
-  const { entityPool } = useSearchContext();
+  const entityPool = useSearchContext().entityPool(
+    () => !options.crm && Boolean(state.search.trim())
+  );
   const localPool = createMemo(() => {
     if (!state.search.trim()) return [];
     const pool = entityPool();
