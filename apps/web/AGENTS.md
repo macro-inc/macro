@@ -855,6 +855,9 @@ margins, which the compact single-row layout measures.
 
 Keep native Pipedream consent in the system browser: the desktop navigation
 plugin redirects external popups and breaks the embedded iframe's return path.
+The native webviews load only the app's own origins; never add an exception
+for a third-party page (WebKit asks the navigation plugin about iframes and
+pages alike, so one would also let that page replace the app).
 `pipedream-connect.html` is a separate Vite entry, served at
 `/app/pipedream-connect.html`, without a Macro browser login. The Connect token
 and one-time state travel only in its URL fragment, which the page removes on
