@@ -473,7 +473,7 @@ test('inviting an agent closes the dialog at once and its row shows the setup st
   await expect(voice).toHaveValue('Arcas');
 
   await invite.click();
-  // No Bring your AI step: the dialog closes and says what happens next.
+  // No Claude sign-in step: the dialog closes and says what happens next.
   await expect(dialog).toBeHidden();
   await expect(
     page.getByText("Ada is being set up. We'll let you know when it's ready.")
@@ -552,7 +552,7 @@ test('a refused invite brings its error into view and keeps its purchase key', a
   expect(retried?.purchaseKey).toBe(refused?.purchaseKey);
 });
 
-test('the inviter hears when the agent is ready: Message Ada, and Bring your AI with a Close', async ({
+test('the inviter hears when the agent is ready: Message Ada, and Connect Claude plan, closable', async ({
   page,
 }, testInfo) => {
   const backend = await scriptAuthService(page, 0, {
@@ -572,29 +572,33 @@ test('the inviter hears when the agent is ready: Message Ada, and Bring your AI 
   await expect(page.getByText('Message Ada to get started.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Message Ada' })).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Bring your AI' })
+    page
+      .getByLabel('Ada is ready')
+      .getByRole('button', { name: 'Connect Claude plan' })
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try it' })).toHaveCount(0);
   await screenshot(page, testInfo, 'ready-notification-admin');
 
-  // Bring your AI opens the sign-in on Ada's row, never blocking, with Close.
-  await page.getByRole('button', { name: 'Bring your AI' }).click();
+  // Connect Claude plan opens the sign-in on Ada's row, never blocking; the
+  // agent stays on Macro credits when it closes.
+  await page
+    .getByLabel('Ada is ready')
+    .getByRole('button', { name: 'Connect Claude plan' })
+    .click();
   const signIn = page.getByRole('dialog');
   await expect(
-    signIn.getByRole('heading', { name: 'Bring your AI to Ada' })
+    signIn.getByRole('heading', { name: 'Connect Ada to your Claude plan' })
   ).toBeVisible();
   await expect(
     signIn.getByRole('link', { name: 'Open claude.ai' })
-  ).toBeVisible();
-  // The setup progress line is collapsed, as in computer setup; it opens.
-  const progressList = signIn.getByRole('list', { name: 'Setup progress' });
-  await expect(progressList).toHaveCount(0);
-  await screenshot(page, testInfo, 'bring-your-ai-from-notification');
-  await signIn.locator('button[aria-expanded="false"]').first().click();
-  await expect(progressList).toBeVisible();
+  ).toHaveAttribute('href', /claude\.com/);
+  await screenshot(page, testInfo, 'connect-claude-from-notification');
   expect(backend.claudeCalls).toContain('harness-ada claude-sign-in');
-  await signIn.getByRole('button', { name: 'Close' }).click();
+  await signIn
+    .getByRole('button', { name: 'Keep using Macro credits' })
+    .click();
   await expect(signIn).toBeHidden();
+  expect(backend.claudeCalls).not.toContain('harness-ada claude-sign-out');
 
   // Message Ada opens the DM with the agent.
   await notify(page, 'ready');
@@ -625,7 +629,7 @@ test("an admin signs the agent's computer in to Claude from its row", async ({
   const agentRow = page.locator('[data-member-kind="agent"]');
   const claude = agentRow.locator('[data-agent-claude]');
   await expect(claude).toContainText('Claude: Macro credits');
-  await claude.getByRole('button', { name: 'Sign in to Claude' }).click();
+  await claude.getByRole('button', { name: 'Connect Claude plan' }).click();
   const dialog = page.getByRole('dialog');
   const open = dialog.getByRole('link', { name: 'Open claude.ai' });
   await expect(open).toHaveAttribute(
@@ -645,15 +649,216 @@ test("an admin signs the agent's computer in to Claude from its row", async ({
   await expect(claude).toContainText('Claude: your plan');
   await screenshot(page, testInfo, 'row-signed-in');
 
-  await claude.getByRole('button', { name: 'Use Macro credits' }).click();
+  await claude.getByRole('button', { name: 'Switch to Macro credits' }).click();
   const confirm = page.getByRole('dialog');
   await expect(confirm).toContainText('Switch Ada to Macro credits?');
-  await confirm.getByRole('button', { name: 'Use Macro credits' }).click();
+  await confirm
+    .getByRole('button', { name: 'Switch to Macro credits' })
+    .click();
   await expect(claude).toContainText('Claude: Macro credits');
   expect(backend.claudeCalls).toContain('harness-ada claude-sign-out');
 });
 
-test('a member hears the agent is ready, without Bring your AI', async ({
+/**
+ * Answers the next sign-in call at `action` with `status` and `body` once,
+ * then lets the scripted harness answer again.
+ */
+async function failClaudeOnce(
+  page: Page,
+  action: 'claude-sign-in' | 'claude-sign-in/complete',
+  status: number,
+  body: unknown
+) {
+  let failed = false;
+  await page.route(`**/harnesses/harness-ada/${action}`, (route) => {
+    if (failed) return route.fallback();
+    failed = true;
+    return route.fulfill({
+      status,
+      contentType: 'application/json',
+      body: JSON.stringify(body),
+    });
+  });
+}
+
+async function openConnectClaude(page: Page) {
+  await page
+    .context()
+    .route('https://claude.com/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'text/html', body: '' })
+    );
+  await page.goto('/');
+  await page
+    .locator('[data-agent-claude]')
+    .getByRole('button', { name: 'Connect Claude plan' })
+    .click();
+  return page.getByRole('dialog');
+}
+
+async function pasteCode(page: Page, code: string) {
+  const dialog = page.getByRole('dialog');
+  const claudeTab = page.context().waitForEvent('page');
+  await dialog
+    .getByRole('link', { name: /Open claude\.ai|Open again/ })
+    .click();
+  await (await claudeTab).close();
+  await dialog
+    .getByRole('textbox', { name: 'Paste the code Claude showed you' })
+    .fill(code);
+  await dialog.getByRole('button', { name: 'Complete sign-in' }).click();
+}
+
+test('a sign-in that expired on the computer offers a new link, which signs in', async ({
+  page,
+}, testInfo) => {
+  const backend = await scriptAuthService(page, 0, {
+    agents: [ada('running')],
+    computerConnected: true,
+  });
+  // The computer's pending sign-in is gone (too old, or another tab's).
+  await failClaudeOnce(page, 'claude-sign-in/complete', 410, {
+    message: 'no Claude sign-in is waiting; start one first',
+    code: 'sign_in_expired',
+  });
+  const dialog = await openConnectClaude(page);
+  await pasteCode(page, 'stale#code');
+
+  const alert = dialog.getByRole('alert');
+  await expect(alert).toContainText('This link expired');
+  await expect(
+    dialog.getByRole('textbox', { name: 'Paste the code Claude showed you' })
+  ).toBeDisabled();
+  await screenshot(page, testInfo, 'connect-claude-expired');
+
+  await alert.getByRole('button', { name: 'Get a new link' }).click();
+  await expect(alert).toBeHidden();
+  await expect
+    .poll(
+      () =>
+        backend.claudeCalls.filter(
+          (call) => call === 'harness-ada claude-sign-in'
+        ).length
+    )
+    .toBe(2);
+  await pasteCode(page, 'fresh#code');
+  await expect(dialog).toBeHidden();
+  expect(backend.claudeCodes).toEqual(['fresh#code']);
+  await expect(page.locator('[data-agent-claude]')).toContainText(
+    'Claude: your plan'
+  );
+  await expect(page.getByText('Ada now uses your Claude plan')).toBeVisible();
+});
+
+test('a code Claude rejects asks for a new link; a malformed one keeps the field', async ({
+  page,
+}, testInfo) => {
+  await scriptAuthService(page, 0, {
+    agents: [ada('running')],
+    computerConnected: true,
+  });
+  await failClaudeOnce(page, 'claude-sign-in/complete', 400, {
+    message: 'paste the code Claude showed you',
+    code: 'malformed_code',
+  });
+  const dialog = await openConnectClaude(page);
+  await pasteCode(page, 'half-a-code');
+  // Back from claude.ai, the tab title asks for the code.
+  await expect(page).toHaveTitle(/Paste your Claude code/);
+  const alert = dialog.getByRole('alert');
+  await expect(alert).toContainText("doesn't look like the whole code");
+  const field = dialog.getByRole('textbox', {
+    name: 'Paste the code Claude showed you',
+  });
+  await expect(field).toBeEnabled();
+  await expect(field).toHaveValue('half-a-code');
+  await expect(alert.getByRole('button')).toHaveCount(0);
+
+  await failClaudeOnce(page, 'claude-sign-in/complete', 422, {
+    message: "That code didn't work — sign in again to get a new one",
+    code: 'invalid_code',
+  });
+  await field.fill('wrong#code');
+  await dialog.getByRole('button', { name: 'Complete sign-in' }).click();
+  await expect(alert).toContainText("Claude didn't accept that code");
+  await expect(
+    alert.getByRole('button', { name: 'Get a new link' })
+  ).toBeVisible();
+  // That sign-in is over, so the tab no longer asks for its code.
+  await expect(page).not.toHaveTitle(/Paste your Claude code/);
+  await screenshot(page, testInfo, 'connect-claude-rejected');
+});
+
+test('a code that finishes after the dialog closed toasts, and leaves a reopened dialog open', async ({
+  page,
+}) => {
+  const backend = await scriptAuthService(page, 0, {
+    agents: [ada('running')],
+    computerConnected: true,
+  });
+  // The computer answers the code only when the test says so.
+  let answer: () => void = () => {};
+  const answered = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  await page.route(
+    '**/harnesses/harness-ada/claude-sign-in/complete',
+    async (route) => {
+      await answered;
+      return route.fallback();
+    }
+  );
+  const dialog = await openConnectClaude(page);
+  await pasteCode(page, 'slow#code');
+  await expect(
+    dialog.getByRole('button', { name: 'Complete sign-in' })
+  ).toHaveAttribute('aria-busy', 'true');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
+  // Opened again while the first code is still being checked.
+  await page
+    .locator('[data-agent-claude]')
+    .getByRole('button', { name: 'Connect Claude plan' })
+    .click();
+  const reopened = page.getByRole('dialog');
+  await expect(
+    reopened.getByRole('heading', { name: 'Connect Ada to your Claude plan' })
+  ).toBeVisible();
+
+  answer();
+  await expect(page.getByText('Ada now uses your Claude plan')).toBeVisible();
+  expect(backend.claudeCodes).toEqual(['slow#code']);
+  // The late answer belongs to the closed dialog; the reopened one stays.
+  await expect(reopened).toBeVisible();
+});
+
+test('an unreachable computer says so, and Try again starts the sign-in', async ({
+  page,
+}, testInfo) => {
+  const backend = await scriptAuthService(page, 0, {
+    agents: [ada('running')],
+    computerConnected: true,
+  });
+  await failClaudeOnce(page, 'claude-sign-in', 503, {
+    message: 'the computer is not reachable; is it running?',
+    code: 'computer_unreachable',
+  });
+  const dialog = await openConnectClaude(page);
+  const alert = dialog.getByRole('alert');
+  await expect(alert).toContainText("Can't reach the computer");
+  await screenshot(page, testInfo, 'connect-claude-unreachable');
+  await alert.getByRole('button', { name: 'Try again' }).click();
+  await expect(
+    dialog.getByRole('link', { name: 'Open claude.ai' })
+  ).toHaveAttribute('href', /claude\.com/);
+  await expect(alert).toBeHidden();
+  // The first, refused start never reached the scripted computer.
+  expect(
+    backend.claudeCalls.filter((call) => call === 'harness-ada claude-sign-in')
+  ).toHaveLength(1);
+});
+
+test('a member hears the agent is ready, without Connect Claude plan', async ({
   page,
 }, testInfo) => {
   await scriptAuthService(page, 0, {
@@ -667,9 +872,11 @@ test('a member hears the agent is ready, without Bring your AI', async ({
   await notify(page, 'ready');
   await expect(page.getByText('Ada is ready')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Message Ada' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Bring your AI' })).toHaveCount(
-    0
-  );
+  await expect(
+    page
+      .getByLabel('Ada is ready')
+      .getByRole('button', { name: 'Connect Claude plan' })
+  ).toHaveCount(0);
   await screenshot(page, testInfo, 'ready-notification-member');
 });
 

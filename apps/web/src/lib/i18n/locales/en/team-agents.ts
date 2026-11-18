@@ -77,7 +77,8 @@ export default {
   failedNotice: "{{name}} couldn't be set up",
   failedNoticeBody: "Retry from {{name}}'s row in Members.",
   messageAgent: 'Message {{name}}',
-  bringAi: 'Bring your AI',
+  connectClaude: 'Connect Claude plan',
+  reconnectClaude: 'Reconnect Claude plan',
   dmSettingUp: "{{name}} is still being set up. It'll answer once it's ready.",
   dmSetupFailed: "{{name}} isn't running: setup failed.",
   dmOffline: "{{name}} isn't running: its computer is offline.",
@@ -87,13 +88,15 @@ export default {
   removeBody: "Its computer and files are deleted. This can't be undone.",
   removeConfirm: 'Remove',
   removeFailed: "Couldn't remove {{name}}. Try again.",
-  bringAiTitle: 'Bring your AI to {{name}}',
+  connectClaudeTitle: 'Connect {{name}} to your Claude plan',
+  connectClaudeBody:
+    '{{name}} uses your Claude Pro or Max plan instead of Macro credits, starting with its next task.',
+  connectClaudeFootnote:
+    "Only {{name}}'s computer keeps this sign-in. Revoke it any time in claude.ai settings.",
   claudeSignedIn: '{{name}} now uses your Claude plan',
   claudeCredits: 'Claude: Macro credits',
   claudeSignedInState: 'Claude: your plan',
   claudeExpired: 'Claude sign-in expired',
-  signInToClaude: 'Sign in to Claude',
-  useCredits: 'Use Macro credits',
   useCreditsTitle: 'Switch {{name}} to Macro credits?',
   useCreditsBody:
     "{{name}} signs out of Claude and runs on your team's Macro credits.",

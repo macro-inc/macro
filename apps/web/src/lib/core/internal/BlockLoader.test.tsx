@@ -367,6 +367,29 @@ it('drops a revoked open document, cleans its source, and loads fresh credential
   expect(blockLoadRetrySignal.get()).toBe(1);
 });
 
+it('records an open of a block that tracks history', async () => {
+  nested = false;
+  render(() => (
+    <BlockLoader
+      id="01a1460f-3198-7650-9b32-a43b49108e47"
+      source={{ type: 'dss', id: '01a1460f-3198-7650-9b32-a43b49108e47' }}
+      definition={{
+        name: 'md',
+        description: 'Document',
+        accepted: {},
+        component: () => null,
+        load: async () => ok({ id: 'md' }),
+      }}
+    />
+  ));
+  await vi.waitFor(() => expect(trackBlockOpened).toHaveBeenCalledOnce());
+  expect(trackBlockOpened).toHaveBeenCalledWith({
+    itemId: '01a1460f-3198-7650-9b32-a43b49108e47',
+    blockName: 'md',
+    client: expect.any(Function),
+  });
+});
+
 it('reports an open for a block without open history that asks for it', async () => {
   nested = false;
   render(() => (

@@ -184,7 +184,9 @@ instrumentation skill explains each primitive.
 
 For Android, measure on an emulator with the benchmark harness
 ([README](../../../apps/web/scripts/android-benchmark/README.md)): it reads these same
-spans from a release build, so its numbers compare with the field.
+spans from a release build, so its numbers compare with the field. Run it with
+`--cpu-throttle 4` for main-thread-bound flows such as view switches: the
+emulator's WebView CPU is several times faster than an Android phone's.
 
 Before relying on a new or renamed span in Datadog, run the flow on a local
 stack and find it in Tempo (`live-debug` skill): `{ span.flow.kind != nil }`

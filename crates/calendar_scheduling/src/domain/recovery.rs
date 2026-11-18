@@ -12,6 +12,7 @@ impl CalendarOperation {
             retry_at: Utc::now() + Duration::minutes(5),
             kind,
             abandoned_at: None,
+            unsent: false,
         }
     }
 }
@@ -106,9 +107,14 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             // A failure that may still clear is retried until the meeting
             // starts: an event in the past is not worth creating or moving.
             if matches!(error, Error::CalendarRejected) || record.booking.starts_at <= Utc::now() {
+                let now = Utc::now();
                 if let Some(op) = &mut record.operation {
-                    op.abandoned_at = Some(Utc::now());
+                    op.abandoned_at = Some(now);
+                    // A refusal is decided before anything reaches the
+                    // calendar, and a first attempt has nothing before it.
+                    op.unsent = operation.attempt == 0 && matches!(error, Error::CalendarRejected);
                 }
+                record.booking.abandoned_at = Some(now);
                 tracing::error!(booking_id = %record.booking.id, attempt = operation.attempt, error = ?error, "scheduling operation abandoned; booking left failed");
                 return self.persist_completion(record).await;
             }
@@ -150,13 +156,17 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                     return Ok(current);
                 }
                 record.booking.status = BookingStatus::Processing;
+                record.booking.abandoned_at = None;
                 Ok(record)
             }
             Error::Unavailable => {
                 // The reservation and intent predate the provider call. Keep its private receipt
                 // available even when the completion write is uncertain; recovery owns convergence.
                 tracing::error!(booking_id = %record.booking.id, "scheduling completion persistence unavailable; intent retained");
+                // The stored row is still processing; an unsaved abandonment
+                // must not reach the receipt.
                 record.booking.status = BookingStatus::Processing;
+                record.booking.abandoned_at = None;
                 Ok(record)
             }
             error => Err(error),

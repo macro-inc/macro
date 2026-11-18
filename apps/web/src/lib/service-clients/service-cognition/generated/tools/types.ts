@@ -6082,6 +6082,12 @@ export interface Booking {
    */
   rescheduledAt?: string | null;
   /**
+   * When Macro stopped trying to update the host's calendar for the
+   * booking's latest change. A failed booking with this set is not being
+   * retried, and cancelling it is the way to release its time.
+   */
+  abandonedAt?: string | null;
+  /**
    * Final location or conference URL.
    */
   location: string;
@@ -16401,7 +16407,7 @@ export interface UpdateSharingResponse {
  * - Star: add `STARRED` (add=true) / Unstar: remove (add=false)
  * - Move to trash: add `TRASH` (add=true) / Restore: remove (add=false)
  * - Mark important: add `IMPORTANT` (add=true) / Mark unimportant: remove (add=false)
- * - Report spam: add `SPAM` (add=true) / Not spam: remove (add=false)
+ * - Report spam: add `SPAM` (add=true), which also takes the thread out of the inbox / Not spam: remove (add=false), which puts mail that was in Spam back in the inbox
  * - Apply custom user label: add the label with that display name (add=true) / Remove: (add=false)
  *
  * In an Outlook inbox the same system label names set the matching mailbox state (archive, read, flag, trash, junk); IMPORTANT has no Outlook equivalent, and other names are Outlook categories.

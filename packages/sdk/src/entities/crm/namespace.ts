@@ -11,6 +11,7 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { CrmEmailPrivacyNamespace } from '../crm-email-privacy/email-privacy';
 import type { Document } from '../documents/document';
+import type { SearchOpts } from '../search/options';
 import { Team } from '../teams/team';
 import { User } from '../users/user';
 import { Company } from './company';
@@ -267,8 +268,10 @@ export class CrmNamespace {
   }
 
   /**
-   * Create the companies a CSV lists (CSV text, or a CSV document), keyed by
-   * domain; companies the team already has are counted, not duplicated. When
+   * Create the companies a CSV lists, keyed by domain.
+   *
+   * The CSV is text or a CSV document. Companies the team already has are
+   * counted, not duplicated. When
    * the CSV has Stage, Owner or Revenue columns, those go on entries of
    * `pipeline` (a company pipeline), or of a new pipeline (private unless
    * `newPipeline.sharing` is `team`, named after the file unless named).
@@ -354,11 +357,11 @@ export class CrmNamespace {
   }
 
   /**
-   * Search CRM companies by name/domain, most relevant first, auto-paginated.
+   * Search CRM companies by name/domain, most relevant first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
-  searchCompanies(query: string): AsyncGenerator<Company> {
-    return Company.search(this.client, query);
+  searchCompanies(query: string, opts?: SearchOpts): AsyncGenerator<Company> {
+    return Company.search(this.client, query, opts);
   }
 }
