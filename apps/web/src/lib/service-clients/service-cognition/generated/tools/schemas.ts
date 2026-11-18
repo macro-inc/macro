@@ -1044,6 +1044,9 @@ export const Booking = z.object({
   rescheduledAt: z
     .union([z.string().datetime({ offset: true }), z.null()])
     .optional(),
+  abandonedAt: z
+    .union([z.string().datetime({ offset: true }), z.null()])
+    .optional(),
   location: z.string(),
   answers: z.record(z.string()),
   questionLabels: z.record(z.string()).optional(),
@@ -12175,6 +12178,9 @@ export const BookingsResult = z.object({
         .optional(),
       rescheduleCount: z.number().int().gte(0).lte(65535).optional(),
       rescheduledAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      abandonedAt: z
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),
       location: z.string(),

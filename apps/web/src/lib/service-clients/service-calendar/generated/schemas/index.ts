@@ -10,6 +10,7 @@ export * from './availabilityCalendar';
 export * from './availabilityCalendarBody';
 export * from './availabilityCalendarsResponse';
 export * from './booking';
+export * from './bookingAbandonedAt';
 export * from './bookingAnswers';
 export * from './bookingAttendance';
 export * from './bookingChange';
