@@ -169,12 +169,11 @@ test.describe('the read notices of a thread in the reading pane', () => {
 
   // When this fails, the reading pane's envelope does not offer Mark as
   // read once its thread is unread, or marks it read again without saying
-  // so, or a refused mark read is not reported. Today the unread's own write
-  // clears the toggle, which goes back to Mark as unread (handoff
-  // thread-unread-toggle-resets-on-own-write).
-  test('known bug: thread-unread-toggle-resets-on-own-write: marking read again says so, and says when it is refused @known-bug', {
-    tag: '@known-bug',
-  }, async ({ page, mailbox }) => {
+  // so, or a refused mark read is not reported.
+  test('marking read again says so, and says when it is refused', async ({
+    page,
+    mailbox,
+  }) => {
     const ids = await deliverEach(mailbox, ['Minutes', 'Budget']);
     const header = await readingPane(page, mailbox, ids);
     const seenInFlight = seenRequestsInFlight(page);
@@ -187,6 +186,10 @@ test.describe('the read notices of a thread in the reading pane', () => {
     const unreadWithU = async () => {
       await page.getByRole('heading', { name: 'Minutes', level: 1 }).click();
       await page.keyboard.press('u');
+      const unreadNotice = notice(page, 'Marked as unread');
+      await expect(unreadNotice).toBeVisible();
+      await unreadNotice.getByRole('button', { name: 'Close' }).click();
+      await expect(unreadNotice).toHaveCount(0);
       await expect
         .poll(async () => (await held(mailbox, 'Minutes'))?.read)
         .toBe(false);
@@ -197,6 +200,8 @@ test.describe('the read notices of a thread in the reading pane', () => {
     await read.click();
     await expect(notice(page, 'Marked as read')).toBeVisible();
     saw('STL-077');
+    await allRead(mailbox, ids.Minutes);
+    await expect.poll(seenInFlight).toBe(0);
 
     refusing = true;
     await unreadWithU();

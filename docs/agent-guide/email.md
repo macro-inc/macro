@@ -802,8 +802,10 @@ device archives it), they step from its former neighbours. Mark done advances in
 that list. In a list, the Mark done, Mark as not done and Delete keys act once per
 press: a held key auto-repeats, and those repeats are ignored. Mark as unread (in
 the header or title menu) returns to the originating list with its tab, inbox, and
-filters preserved. Mark as not done and Mark as read
-stay on the current thread.
+filters preserved. Pressing `u` with focus in the desktop reading pane keeps
+the thread open. Its envelope then offers **Mark as read**, including after
+the unread write reaches the mailbox. Mark as not done and Mark as read stay
+on the current thread.
 Opening a saved draft from **Drafts** shows the title menu beside Back, since
 the composer has no subject line above it, and keeps the applicable header
 controls. Verify these remain

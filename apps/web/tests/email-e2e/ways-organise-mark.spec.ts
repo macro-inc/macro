@@ -75,14 +75,11 @@ for (const provider of PROVIDERS) {
     // When this fails, Mark as read on the envelope button of a thread in
     // the reading pane, or Mark Read in the menu after its subject, leaves
     // the message unread at the mailbox, or is not offered once u has marked
-    // it unread. Only the reading pane's thread keeps the keys to itself, so
-    // only there does u leave a thread open and unread (a thread open in the
-    // list's place hands u to the list: inline-thread-read-keys-reach-the-
-    // list). Known bug: the unread's own write clears the thread's toggle,
-    // which goes back to offering Mark as unread.
-    test('known bug: thread-unread-toggle-resets-on-own-write: the reading pane marks an unread thread read again @known-bug', {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    // it unread.
+    test('the reading pane marks an unread thread read again', async ({
+      page,
+      mailbox,
+    }) => {
       const ids = await deliverAll(mailbox, ['Minutes', 'Budget']);
       const read = (subject: string) => readAt(mailbox, subject);
       const header = page
@@ -96,7 +93,10 @@ for (const provider of PROVIDERS) {
         await expect.poll(seenInFlight).toBe(0);
         await page.getByRole('heading', { name: subject, level: 1 }).click();
         await page.keyboard.press('u');
-        await expect(notice(page, 'Marked as unread')).toBeVisible();
+        const unreadNotice = notice(page, 'Marked as unread');
+        await expect(unreadNotice).toBeVisible();
+        await unreadNotice.getByRole('button', { name: 'Close' }).click();
+        await expect(unreadNotice).toHaveCount(0);
         await expect.poll(read(subject)).toBe(false);
         await expect(
           header.getByRole('button', { name: 'Mark as read' })

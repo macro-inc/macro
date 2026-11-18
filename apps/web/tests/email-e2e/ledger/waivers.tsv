@@ -17,7 +17,6 @@ AL-503	-	needs	needs the static file service, and no test on the full-stack tier
 AL-512	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
 AL-181	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
 STL-070	-	no-user-path	the header that would show the draft badge is never told that its thread is a draft
-STL-077	-	bug	the read toggle of an open thread goes back to Mark as unread after the app's own write (thread-unread-toggle-resets-on-own-write); its test is kept as a known bug
 STL-504	-	needs	needs live updates over the websocket, and no test on the full-stack tier does it yet
 STL-100	-	needs	needs the calendar service (the day agenda), and no test on the full-stack tier does it yet
 STL-518	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
