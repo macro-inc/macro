@@ -66,6 +66,11 @@ const SHELLCHECK_IGNORES: &[(&str, &str, &str)] = &[
         "`[[ $file == $stack_path ]]` is a deliberate glob match against the stack path pattern.",
     ),
     (
+        "code_check_cloud_storage.yml",
+        "SC2044",
+        "The loop over `find` counts the crates it dates in the shell itself; workspace `.env` paths have no spaces.",
+    ),
+    (
         "deploy_all_services.yml",
         "SC2129",
         "Each matrix output is its own `>> \"$GITHUB_OUTPUT\"` line, kept for readability.",

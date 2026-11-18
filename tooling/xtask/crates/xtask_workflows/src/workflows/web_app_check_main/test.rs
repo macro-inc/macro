@@ -264,7 +264,7 @@ fn generated_code_alone_keeps_a_cargo_target() {
             );
             if workflow.file_name == "web-app-check-main.yml" {
                 assert_eq!(
-                    text.contains(vars::CARGO_TARGET_VOLUME_DIR),
+                    text.contains(&vars::cargo_target_volume_dir()),
                     owner,
                     "web job {id}: only generated-code mounts a cargo target"
                 );

@@ -772,9 +772,9 @@ mod cargo_target_tests {
             .as_str()
             .is_some_and(|uses| uses.starts_with("namespacelabs/nscloud-cache-action@"))
             && step["with"]["path"].as_str().is_some_and(|paths| {
-                paths
-                    .lines()
-                    .any(|path| path == "./target" || path == super::vars::CARGO_TARGET_VOLUME_DIR)
+                paths.lines().any(|path| {
+                    path == "./target" || *path == super::vars::cargo_target_volume_dir()
+                })
             })
     }
 
@@ -824,7 +824,15 @@ mod cargo_target_tests {
                         "{place} seals its target last"
                     );
                 }
-                let runs_on = serde_yaml::to_string(&job["runs-on"]).expect("runs-on serializes");
+                let runs_on = match &job["runs-on"] {
+                    serde_yaml::Value::String(label) => label.clone(),
+                    serde_yaml::Value::Sequence(labels) => labels
+                        .iter()
+                        .filter_map(serde_yaml::Value::as_str)
+                        .collect::<Vec<_>>()
+                        .join(","),
+                    other => format!("{other:?}"),
+                };
                 let volume = runs_on
                     .split_once("cache-tag=")
                     .map(|(_, tag)| tag.trim().to_owned())

@@ -415,7 +415,7 @@ pub fn mount_web_codegen_cache_volume() -> Step<Use> {
         vars::node_modules_volume_dir(),
         "/home/runner/.cargo/registry".to_string(),
         "/home/runner/.cargo/git".to_string(),
-        vars::CARGO_TARGET_VOLUME_DIR.to_string(),
+        vars::cargo_target_volume_dir(),
     ];
     nscloud_cache_action("Mount Namespace cache volume", |cache| {
         cache.cache("nix").path(paths.join("\n"))

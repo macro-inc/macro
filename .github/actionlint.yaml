@@ -42,6 +42,10 @@ paths:
       - 'SC2016:'
       # The shared Android helper prelude defines functions this step does not call.
       - 'SC2329:'
+  .github/workflows/code_check_cloud_storage.yml:
+    ignore:
+      # The loop over `find` counts the crates it dates in the shell itself; workspace `.env` paths have no spaces.
+      - 'SC2044:'
   .github/workflows/deploy_all_services.yml:
     ignore:
       # Each matrix output is its own `>> "$GITHUB_OUTPUT"` line, kept for readability.

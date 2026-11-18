@@ -37,6 +37,8 @@ struct PathCheckOutputs {
     rust_packages: JobOutput<Str>,
     /// Whether the change needs no tests run.
     skip_tests: JobOutput<Flag>,
+    /// Whether the change touches sqlx query data (`.sqlx`).
+    query_data: JobOutput<Flag>,
 }
 
 const PATH_CHECK: JobHandle<PathCheckOutputs> = JobHandle::new(
@@ -47,6 +49,7 @@ const PATH_CHECK: JobHandle<PathCheckOutputs> = JobHandle::new(
         graphql_schema: JobOutput::new("path-check", "graphql_schema"),
         rust_packages: JobOutput::new("path-check", "rust_packages"),
         skip_tests: JobOutput::new("path-check", "skip_tests"),
+        query_data: JobOutput::new("path-check", "query_data"),
     },
 );
 
@@ -63,6 +66,8 @@ struct FilterOutputs {
     doppler_candidates: StepOutput<Flag>,
     /// The `graphql_schema` filter's match.
     graphql_schema: StepOutput<Flag>,
+    /// The `query_data` filter's match.
+    query_data: StepOutput<Flag>,
 }
 
 const FILTER: StepHandle<FilterOutputs> = StepHandle::new(
@@ -71,6 +76,7 @@ const FILTER: StepHandle<FilterOutputs> = StepHandle::new(
         should_run: StepOutput::new("filter", "should_run"),
         doppler_candidates: StepOutput::new("filter", "doppler_candidates"),
         graphql_schema: StepOutput::new("filter", "graphql_schema"),
+        query_data: StepOutput::new("filter", "query_data"),
     },
 );
 
@@ -135,7 +141,10 @@ fn path_check() -> Job {
             PATH_CHECK.outputs.doppler_candidates.name(),
             FILTER.outputs.doppler_candidates.read(),
         )
-        .add_output("query_data", "${{ steps.filter.outputs.query_data }}")
+        .add_output(
+            PATH_CHECK.outputs.query_data.name(),
+            FILTER.outputs.query_data.read(),
+        )
         .add_output(
             PATH_CHECK.outputs.graphql_schema.name(),
             FILTER.outputs.graphql_schema.read(),
@@ -172,14 +181,21 @@ fn path_check() -> Job {
 /// anyway (`CARGO_TARGET_REBUILD_ALL`, `scripts/cargo_target_reuse.ts`): sqlx
 /// reads `.sqlx` data without telling cargo, so a kept unit can outlive the
 /// data its queries need when the pull request removes it.
-const REBUILD_ALL_REASON: &str = "${{ needs.path-check.outputs.query_data == 'true' && 'the pull request changes query data' || '' }}";
+fn rebuild_all_reason() -> Expr<Str> {
+    PATH_CHECK
+        .outputs
+        .query_data
+        .read()
+        .is_set()
+        .then_else("the pull request changes query data", "")
+}
 
 /// fmt + unused dependencies + clippy.
 fn check() -> Job {
     steps::gated_job(&PATH_CHECK.outputs.should_run)
         .timeout_minutes(20u32)
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_env(("CARGO_TARGET_REBUILD_ALL", REBUILD_ALL_REASON))
+        .add_env(("CARGO_TARGET_REBUILD_ALL", rebuild_all_reason()))
         .map(with_check_env)
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
@@ -222,7 +238,7 @@ fn doppler_config() -> Job {
                 .and(PATH_CHECK.outputs.doppler_candidates.read().is_set()),
         )
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_env(("CARGO_TARGET_REBUILD_ALL", REBUILD_ALL_REASON))
+        .add_env(("CARGO_TARGET_REBUILD_ALL", rebuild_all_reason()))
         .map(with_check_env)
         .add_step(steps::checkout_action(false, false).fetch_depth(2))
         // Before the dev shell: its LD_LIBRARY_PATH points the runner's
@@ -278,7 +294,7 @@ fn test() -> Job {
                 .and(PATH_CHECK.outputs.skip_tests.read().is_unset()),
         )
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_env(("CARGO_TARGET_REBUILD_ALL", REBUILD_ALL_REASON))
+        .add_env(("CARGO_TARGET_REBUILD_ALL", rebuild_all_reason()))
         .add_env(("RUST_PACKAGES", PATH_CHECK.outputs.rust_packages.read()))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
         .add_env(("REDIS_URI", "redis://127.0.0.1:6379"))
@@ -324,7 +340,7 @@ fn build_service_bins() -> Job {
         .timeout_minutes(20u32)
         .cond(build_service_bins_condition())
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_env(("CARGO_TARGET_REBUILD_ALL", REBUILD_ALL_REASON))
+        .add_env(("CARGO_TARGET_REBUILD_ALL", rebuild_all_reason()))
         .add_env(("RUST_PACKAGES", PATH_CHECK.outputs.rust_packages.read()))
         .map(with_test_compile_env)
         .add_env(("SQLX_OFFLINE", "true"))

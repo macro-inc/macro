@@ -103,7 +103,7 @@ pub const NIX_CHECKS_CACHE_TAG: &str = "nix-checks";
 pub const WEB_SCCACHE_NAME: &str = "web-ci";
 
 /// Namespace cache tag for the web Generated Code Check alone. Its volume keeps
-/// cargo's `target` directory ([`CARGO_TARGET_VOLUME_DIR`]) and the times its
+/// cargo's `target` directory ([`cargo_target_volume_dir`]) and the times its
 /// sources' contents first appeared. The last job to finish on a tag replaces the
 /// volume, so on a shared tag another job would put back a `target` that never
 /// saw this job's build.
@@ -111,7 +111,9 @@ pub const WEB_CODEGEN_CACHE_TAG: &str = "web-codegen";
 
 /// Cargo's `target` directory, kept on the [`WEB_CODEGEN_CACHE_TAG`] volume and
 /// made reusable by `steps::reuse_cargo_target`.
-pub const CARGO_TARGET_VOLUME_DIR: &str = "${{ github.workspace }}/target";
+pub fn cargo_target_volume_dir() -> String {
+    format!("{}/target", github().workspace())
+}
 
 /// Namespace cache tag for the sync-service worker deploy. Its own pool: this
 /// job compiles for `wasm32-unknown-unknown`, so nothing in the host-target
