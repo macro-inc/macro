@@ -21,7 +21,6 @@ export function createThreadReadAdapter(
   | 'isThreadMarkedRead'
 > {
   const markSeenMutation = useMarkThreadAsSeenMutation();
-  const markUnreadMutation = useMarkThreadAsUnreadMutation();
 
   // Viewing a thread marks it read (EmailReadMarker), so each thread
   // starts with the toggle offering Mark Unread.
@@ -33,6 +32,25 @@ export function createThreadReadAdapter(
     setThreadMarkedRead(false);
   });
 
+  // The inline thread can close before the unread write settles.
+  const markUnreadMutation = useMarkThreadAsUnreadMutation({
+    onSuccess: () => {
+      toast.success('Marked as unread', {
+        duration: 3_000,
+        stack: true,
+        hideOnMobile: true,
+      });
+    },
+    onError: (_error, { threadId: unreadThreadId }) => {
+      if (threadId() === unreadThreadId) setThreadMarkedUnread(false);
+      toast.failure('Failed to mark as unread');
+      fireAndForget(
+        refetchSoupEntity(unreadThreadId, 'emailThread'),
+        'email-thread'
+      );
+    },
+  });
+
   const markThreadUnread = () => {
     const thread = threadSource();
     if (!thread?.db_id) return false;
@@ -42,29 +60,9 @@ export function createThreadReadAdapter(
       return false;
     }
 
-    const threadId = thread.db_id;
     setThreadMarkedUnread(true);
     setThreadMarkedRead(false);
-    markUnreadMutation.mutate(
-      { threadId },
-      {
-        onSuccess: () => {
-          toast.success('Marked as unread', {
-            duration: 3_000,
-            stack: true,
-            hideOnMobile: true,
-          });
-        },
-        onError: () => {
-          setThreadMarkedUnread(false);
-          toast.failure('Failed to mark as unread');
-          fireAndForget(
-            refetchSoupEntity(threadId, 'emailThread'),
-            'email-thread'
-          );
-        },
-      }
-    );
+    markUnreadMutation.mutate({ threadId: thread.db_id });
     return true;
   };
 

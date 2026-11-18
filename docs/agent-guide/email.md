@@ -810,6 +810,10 @@ press: a held key auto-repeats, and those repeats are ignored. Mark as unread (i
 the header or title menu) returns to the originating list with its tab, inbox, and
 filters preserved. Mark as not done and Mark as read
 stay on the current thread.
+
+On desktop, Mail shows whether the unread write succeeded or failed after
+returning to the list.
+
 Opening a saved draft from **Drafts** shows the title menu beside Back, since
 the composer has no subject line above it, and keeps the applicable header
 controls. Verify these remain

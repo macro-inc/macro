@@ -990,7 +990,7 @@ export const thread = {
         'src/features/email-thread/thread-read-adapter.ts#Marked as unread',
         'src/features/email-thread/thread-read-adapter.ts#Failed to mark as unread',
       ],
-      note: 'the success toast is hidden on mobile; the same toasts are raised from the unread toggle and the title menu (was STL-609, STL-610)',
+      note: 'the unread toggle and title menu raise these toasts after the thread closes; the success toast is hidden on mobile (was STL-609, STL-610)',
     },
     {
       id: 'STL-077',
