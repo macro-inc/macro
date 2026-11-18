@@ -841,11 +841,16 @@ export function ThreadList(props: ThreadListProps) {
     if (!element || !props.holdOnDisclosure) return;
     const holdOnDisclosure = (target: EventTarget | null) => {
       if (
-        target instanceof Element &&
-        contentRef?.contains(target) &&
-        target.closest('[aria-expanded]')
+        !(target instanceof Element) ||
+        !contentRef?.contains(target) ||
+        !target.closest('[aria-expanded]')
       )
-        setHolding(true);
+        return;
+      setHolding(true);
+      // A scroll to the end may still be settling (a message just arrived).
+      // Retarget it to where the reader is, or its reconciliation would
+      // follow the row as it is measured and carry the disclosure away.
+      virtualizer.scrollToOffset(logicalScrollOffset(element.scrollTop));
     };
     const onPointerDown = (event: PointerEvent) =>
       holdOnDisclosure(event.target);

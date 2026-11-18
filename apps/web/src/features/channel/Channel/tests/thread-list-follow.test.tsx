@@ -95,6 +95,14 @@ describe('following messages that arrive while pinned to the end', () => {
   });
 
   it('does not follow the second message once the reader holds a disclosure', async () => {
+    // Animation frames run on demand, so the virtualizer's scroll
+    // reconciliation can be stepped after the rows are measured.
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => {});
     const [keys, setKeys] = createSignal(
       Array.from({ length: 20 }, (_, index) => String(index))
     );
@@ -131,6 +139,10 @@ describe('following messages that arrive while pinned to the end', () => {
     setKeys((current) => [...current, '21']);
 
     await waitFor(() => expect(element.scrollHeight).toBe(20 * 96 + 300 + 300));
+    for (let frame = 0; frame < 5; frame++) {
+      for (const callback of frames.splice(0)) callback(performance.now());
+      await new Promise((resolve) => queueMicrotask(() => resolve(undefined)));
+    }
     expect(element.scrollTop).toBe(held);
   });
 });
