@@ -107,6 +107,7 @@ export function createAlreadySentSettlement(options: {
       );
       return;
     }
+    const epoch = session.epoch();
     const threadId = session.threadId();
     const read =
       options.read && threadId
@@ -117,9 +118,10 @@ export function createAlreadySentSettlement(options: {
         : undefined;
     if (read?.isErr()) notices.reportError(read.error);
     // A discard, send or restore that settled the draft meanwhile stands,
-    // and so does a discard still under way.
+    // and so does a discard still under way. Each of those starts a new
+    // epoch; the server's ids for this draft arriving meanwhile do not.
     if (
-      session.draftId() !== draftId ||
+      session.epoch() !== epoch ||
       !session.alreadySent() ||
       options.superseded()
     )
@@ -129,7 +131,9 @@ export function createAlreadySentSettlement(options: {
       'This scheduled email was sent. Your composer has been updated.'
     );
     const kept = options.settle(
-      observed?.type === 'sent' ? observed : { type: 'sent', threadId }
+      observed?.type === 'sent'
+        ? observed
+        : { type: 'sent', threadId: session.threadId() }
     );
     keptAt = kept ? session.epoch() : undefined;
   };
