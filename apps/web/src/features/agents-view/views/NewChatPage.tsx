@@ -598,7 +598,7 @@ export function NewChatPage(props: {
           : {
               variant: 'grouped' as const,
               touch: 'inset' as const,
-              size: 'sm' as const,
+              size: isTouchDevice() ? ('md' as const) : ('sm' as const),
             })}
         // Phones keep the icons; the name stays for assistive tech.
         iconOnly={isTouchDevice()}
