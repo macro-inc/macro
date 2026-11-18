@@ -1,4 +1,5 @@
 import { ENABLE_MARKDOWN_SEARCH_TEXT } from '@core/constant/featureFlags';
+import { deepEqual } from '@core/util/compareUtils';
 import { $isCodeNode } from '@lexical/code';
 import {
   $createListItemNode,
@@ -51,6 +52,7 @@ import {
   $isLineBreakNode,
   $isParagraphNode,
   $isRangeSelection,
+  $isRootNode,
   $isRootOrShadowRoot,
   $isTextNode,
   $normalizeSelection__EXPERIMENTAL,
@@ -863,18 +865,30 @@ function cleanState(state: SerializedEditorState): SerializedEditorState {
   ]);
 }
 
+type LoroSyncOptions = {
+  /** The state stored in Loro now. */
+  stored?: SerializedEditorState;
+  /**
+   * Keys of the top-level blocks that changed since the last write, from
+   * `recordChangedBlocks`. Only these are compared with the stored state;
+   * without it every block is.
+   */
+  changedBlocks?: ReadonlySet<NodeKey>;
+};
+
+type SerializedBlock = SerializedLexicalNode & {
+  $?: Record<string, unknown>;
+};
+
 /**
  * Transform a serialized editor state into one that is safe to the LORO sync plugin.
  */
-export function loroSyncState(state: EditorState): SerializedEditorState {
-  let serializedState;
-  if (ENABLE_MARKDOWN_SEARCH_TEXT) {
-    serializedState = serializedSateWithSearchText(state);
-  } else {
-    serializedState = state.toJSON();
-  }
-  return transformSerializedEditorState(
-    stripDraftCommentMarks(serializedState),
+export function loroSyncState(
+  state: EditorState,
+  options: LoroSyncOptions = {}
+): SerializedEditorState {
+  const serializedState = transformSerializedEditorState(
+    stripDraftCommentMarks(state.toJSON()),
     [
       // completion nodes should not be saved.
       (node) => {
@@ -883,31 +897,82 @@ export function loroSyncState(state: EditorState): SerializedEditorState {
       },
     ]
   );
+  if (ENABLE_MARKDOWN_SEARCH_TEXT) {
+    addSearchText(state, serializedState, options);
+  }
+  return serializedState;
 }
 
-function serializedSateWithSearchText(
-  state: EditorState
-): SerializedEditorState {
-  const nodeIdToSearchText = new Map<string, string>();
+/** Adds the top-level blocks an update changed to `changed`. */
+export function recordChangedBlocks(
+  state: EditorState,
+  dirtyElements: ReadonlyMap<NodeKey, unknown>,
+  changed: Set<NodeKey>
+) {
   state.read(() => {
-    const root = $getRoot();
-    const children = root.getChildren();
-    for (const child of children) {
-      if ($isElementNode(child)) {
-        const id = $getId(child);
-        if (id) nodeIdToSearchText.set(id, child.getTextContent());
-      }
+    for (const key of dirtyElements.keys()) {
+      const parent = $getNodeByKey(key)?.getParent();
+      if (parent && $isRootNode(parent)) changed.add(key);
     }
   });
-  const result = state.toJSON();
-  const root = result.root;
-  for (const child of root.children) {
-    const id = child.$?.id as string | undefined;
-    if (id && nodeIdToSearchText.has(id)) {
-      child.$!.searchText = nodeIdToSearchText.get(id)!;
-    }
+}
+
+// searchText is derived from a block's content, so it is written only with a
+// change to that block. A block whose content matches its stored copy keeps the
+// stored value, including none: documents created through the API store none,
+// and writing one would count as an edit by whoever had the document open.
+function addSearchText(
+  state: EditorState,
+  serialized: SerializedEditorState,
+  { stored, changedBlocks }: LoroSyncOptions
+) {
+  const storedBlocks = new Map<string, SerializedBlock>();
+  for (const block of (stored?.root?.children ?? []) as SerializedBlock[]) {
+    const id = block.$?.id;
+    if (typeof id === 'string') storedBlocks.set(id, block);
   }
-  return result;
+
+  const texts = new Map<string, string>();
+  state.read(() => {
+    for (const child of $getRoot().getChildren()) {
+      if (!$isElementNode(child)) continue;
+      const id = $getId(child);
+      if (!id) continue;
+      const unchanged =
+        changedBlocks !== undefined &&
+        !changedBlocks.has(child.getKey()) &&
+        storedBlocks.has(id);
+      if (!unchanged) texts.set(id, child.getTextContent());
+    }
+  });
+
+  for (const block of serialized.root.children as SerializedBlock[]) {
+    const meta = block.$;
+    const id = meta?.id;
+    if (!meta || typeof id !== 'string') continue;
+    const prior = storedBlocks.get(id);
+    const text = texts.get(id);
+    const { searchText: _derived, ...rest } = meta;
+    if (
+      text !== undefined &&
+      (!prior ||
+        (prior.$?.searchText !== text && !sameExceptSearchText(prior, block)))
+    ) {
+      block.$ = { ...rest, searchText: text };
+      continue;
+    }
+    const storedText = prior?.$?.searchText;
+    block.$ =
+      storedText === undefined ? rest : { ...rest, searchText: storedText };
+  }
+}
+
+function sameExceptSearchText(a: SerializedBlock, b: SerializedBlock) {
+  const { $: aMeta, ...aContent } = a;
+  const { $: bMeta, ...bContent } = b;
+  const { searchText: _a, ...aRest } = aMeta ?? {};
+  const { searchText: _b, ...bRest } = bMeta ?? {};
+  return deepEqual(aRest, bRest) && deepEqual(aContent, bContent);
 }
 
 /**
@@ -915,7 +980,8 @@ function serializedSateWithSearchText(
  * better plain text search.
  */
 export function getSaveState(state: EditorState): SerializedEditorState {
-  const serializedState = serializedSateWithSearchText(state);
+  const serializedState = state.toJSON();
+  addSearchText(state, serializedState, {});
   return cleanState(serializedState);
 }
 
