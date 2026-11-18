@@ -8,6 +8,7 @@ import { useItemPreviewData } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
+import { referenceMenuGroups } from '@core/menu/reference-menu';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { getDisplayName, tryMacroId } from '@core/user';
@@ -55,6 +56,7 @@ import {
   createMemo,
   createRoot,
   createSignal,
+  For,
   getOwner,
   Match,
   onCleanup,
@@ -624,52 +626,80 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
               <CardActionsIcon />
             </Dropdown.Trigger>
             <Dropdown.Content mount={portalMount()}>
-              <Dropdown.Group>
-                <Show when={editable()}>
-                  <Dropdown.Item onSelect={convertToMention}>
-                    <Minimize class="size-4 shrink-0" />
-                    <span class="flex-1 truncate">
-                      Convert to Inline Mention
-                    </span>
-                  </Dropdown.Item>
-                </Show>
-                <Show when={canOpenInChat()}>
-                  <Dropdown.Item onSelect={handleOpenInChat}>
-                    <Sparkle class="size-4 shrink-0" />
-                    <span class="flex-1 truncate">Ask Macro</span>
-                  </Dropdown.Item>
-                </Show>
-                <Dropdown.CopyItem
-                  icon={<LinkIcon class="size-4" />}
-                  onCopy={handleCopy}
-                >
-                  <span class="flex-1 truncate">Copy Link</span>
-                </Dropdown.CopyItem>
-                <Show when={props.blockName === 'task'}>
-                  <Dropdown.CopyItem
-                    icon={<GitBranchIcon class="size-4" />}
-                    onCopy={() =>
-                      copyBranchNameToClipboard(props.item.id, { silent: true })
-                    }
-                  >
-                    <span class="flex-1 truncate">Copy Branch Name</span>
-                  </Dropdown.CopyItem>
-                </Show>
-                <Show when={!isSplitAlreadyOpen()}>
-                  <Dropdown.Item onSelect={openInNewSplit}>
-                    <SplitIcon class="size-4 shrink-0" />
-                    <span class="flex-1 truncate">Open in New Split</span>
-                  </Dropdown.Item>
-                </Show>
-              </Dropdown.Group>
-              <Show when={editable()}>
-                <Dropdown.Group>
-                  <Dropdown.Item onSelect={deleteCard}>
-                    <TrashSimple class="size-4 shrink-0" />
-                    <span class="flex-1 truncate">Delete</span>
-                  </Dropdown.Item>
-                </Dropdown.Group>
-              </Show>
+              <For
+                each={referenceMenuGroups({
+                  host: 'card',
+                  openInNewSplit: !isSplitAlreadyOpen(),
+                  askMacro: canOpenInChat(),
+                  copyBranchName: props.blockName === 'task',
+                  convertToMention: editable(),
+                  delete: editable(),
+                })}
+              >
+                {(group) => (
+                  <Dropdown.Group>
+                    <For each={group.items}>
+                      {(action) => (
+                        <Switch>
+                          <Match when={action === 'open-new-split'}>
+                            <Dropdown.Item onSelect={openInNewSplit}>
+                              <SplitIcon class="size-4 shrink-0" />
+                              <span class="flex-1 truncate">
+                                Open in New Split
+                              </span>
+                            </Dropdown.Item>
+                          </Match>
+                          <Match when={action === 'ask-macro'}>
+                            <Dropdown.Item onSelect={handleOpenInChat}>
+                              <Sparkle class="size-4 shrink-0" />
+                              <span class="flex-1 truncate">Ask Macro</span>
+                            </Dropdown.Item>
+                          </Match>
+                          <Match when={action === 'copy-link'}>
+                            <Dropdown.CopyItem
+                              icon={<LinkIcon class="size-4" />}
+                              onCopy={handleCopy}
+                            >
+                              <span class="flex-1 truncate">Copy Link</span>
+                            </Dropdown.CopyItem>
+                          </Match>
+                          <Match when={action === 'copy-branch-name'}>
+                            <Dropdown.CopyItem
+                              icon={<GitBranchIcon class="size-4" />}
+                              onCopy={() =>
+                                copyBranchNameToClipboard(props.item.id, {
+                                  silent: true,
+                                })
+                              }
+                            >
+                              <span class="flex-1 truncate">
+                                Copy Branch Name
+                              </span>
+                            </Dropdown.CopyItem>
+                          </Match>
+                          <Match when={action === 'convert-mention'}>
+                            <Dropdown.Item onSelect={convertToMention}>
+                              <Minimize class="size-4 shrink-0" />
+                              <span class="flex-1 truncate">
+                                Convert to Inline Mention
+                              </span>
+                            </Dropdown.Item>
+                          </Match>
+                          <Match when={action === 'delete'}>
+                            <Dropdown.Item
+                              class="text-failure-ink"
+                              onSelect={deleteCard}
+                            >
+                              <TrashSimple class="size-4 shrink-0" />
+                              <span class="flex-1 truncate">Delete</span>
+                            </Dropdown.Item>
+                          </Match>
+                        </Switch>
+                      )}
+                    </For>
+                  </Dropdown.Group>
+                )}
+              </For>
             </Dropdown.Content>
           </Dropdown>
         }
