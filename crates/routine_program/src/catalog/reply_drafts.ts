@@ -34,8 +34,9 @@ export async function main({ macro, run, trigger, knobs }: StepContext) {
   if (outcome.status !== 'completed') throw new Error(`The reply couldn't be written: ${outcome.reason}`);
   const body = (outcome.result as { body?: string }).body?.trim();
   if (!body) return { draft: null };
-  // Making a reply draft replaces one already there: look again, now that AI has taken its time.
-  if ((await thread.drafts()).length > 0) return { draft: null };
+  // Making a reply draft replaces one already there: look again, now that AI has taken its time,
+  // through a new handle, since `thread` keeps the detail it read first.
+  if ((await macro.email.byId(trigger.item.entity_id).drafts()).length > 0) return { draft: null };
   const subject = String(email.subject ?? '');
   const draft = await macro.email.createDraft(
     {

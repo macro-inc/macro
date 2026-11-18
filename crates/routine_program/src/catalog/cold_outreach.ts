@@ -13,8 +13,9 @@ export async function main({ macro, run, trigger, knobs }: StepContext) {
   });
   if ((probabilities.cold ?? 0) < 0.5) return { draft: null };
   if (run.dryRun) return { draft: null, wouldDraft: true };
-  // Making a reply draft replaces one already there: look again, now that AI has taken its time.
-  if ((await thread.drafts()).length > 0) return { draft: null };
+  // Making a reply draft replaces one already there: look again, now that AI has taken its time,
+  // through a new handle, since `thread` keeps the detail it read first.
+  if ((await macro.email.byId(trigger.item.entity_id).drafts()).length > 0) return { draft: null };
   const subject = String(email.subject ?? '');
   const draft = await macro.email.createDraft(
     {
