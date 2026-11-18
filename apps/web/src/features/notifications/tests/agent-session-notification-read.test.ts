@@ -5,7 +5,6 @@ import type { AgentSessionEntity } from '@entity/types/entity';
 import { unreadFilterFn } from '@entity/utils/filter';
 import { Telemetry } from '@macro-inc/observability';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
-import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createNotificationSource } from '../notification-source';
@@ -19,18 +18,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_DOCUMENT_MENTION_NOTIFICATIONS: true,
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => true,
-}));
-vi.mock('@macro-inc/collaboration/websocket', () => ({
-  createSocketEffect: vi.fn(),
 }));
 vi.mock('@queries/notification/user-notifications', () => ({
-  optimisticInsertNotification: vi.fn(),
   useMarkNotificationsAsSeenMutation: () => ({ mutateAsync: mocks.seen }),
   useMarkNotificationsAsDoneMutation: () => ({ mutateAsync: vi.fn() }),
   useUserNotificationsQuery: () => ({
-    transport: 'graphql',
     isLoading: false,
     get data() {
       return mocks.feed();
@@ -102,7 +94,7 @@ const settled: UnifiedNotification = {
 
 function createSource() {
   return createRoot((dispose) => ({
-    source: createNotificationSource({} as ConnectionGatewayWebsocket),
+    source: createNotificationSource(),
     dispose,
   }));
 }

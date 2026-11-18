@@ -381,7 +381,54 @@ pub fn mount_web_cache_volume(with_rust: bool) -> Step<Use> {
         })
 }
 
-/// [`mount_web_cache_volume`] plus Vitest's module cache, so the web `Test`
+/// [`mount_web_cache_volume`] for PR check jobs, which also keep the
+/// workspace's [`vars::NODE_MODULES_VOLUME_DIR`] on the volume, so their
+/// `bun install` finds the tree in place. Never for deploy jobs.
+pub fn mount_web_check_cache_volume(with_rust: bool) -> Step<Use> {
+    let mut paths = vec![vars::BUN_CACHE_VOLUME_DIR, vars::NODE_MODULES_VOLUME_DIR];
+    if with_rust {
+        paths.extend(["/home/runner/.cargo/registry", "/home/runner/.cargo/git"]);
+    }
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "nix"))
+        .add_with(("path", paths.join("\n")))
+}
+
+/// [`mount_web_check_cache_volume`] with Rust, plus cargo's `target` directory.
+/// Only for a job on its own cache tag ([`vars::WEB_CODEGEN_CACHE_TAG`]), followed
+/// by [`reuse_cargo_target`] before anything builds.
+pub fn mount_web_codegen_cache_volume() -> Step<Use> {
+    let paths = [
+        vars::BUN_CACHE_VOLUME_DIR,
+        vars::NODE_MODULES_VOLUME_DIR,
+        "/home/runner/.cargo/registry",
+        "/home/runner/.cargo/git",
+        vars::CARGO_TARGET_VOLUME_DIR,
+    ];
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "nix"))
+        .add_with(("path", paths.join("\n")))
+}
+
+/// Date the checkout's files by when their contents first appeared, so cargo
+/// rebuilds only the workspace crates whose sources differ from the builds the
+/// kept `target` directory holds (`scripts/cargo_target_reuse.ts`).
+pub fn reuse_cargo_target() -> Step<Run> {
+    Step::new("Reuse the kept cargo target")
+        .run(node_script(include_str!("scripts/cargo_target_reuse.ts")))
+}
+
+/// The last step of every job that runs [`reuse_cargo_target`]: marks every unit
+/// the job built as described by the record, so a job that later builds into
+/// the same `target` without dating its checkout is caught.
+pub fn seal_cargo_target() -> Step<Run> {
+    Step::new("Seal the kept cargo target").run(node_script_calling(
+        include_str!("scripts/cargo_target_reuse.ts"),
+        "seal",
+    ))
+}
+
+/// [`mount_web_check_cache_volume`] plus Vitest's module cache, so the web `Test`
 /// job reuses transforms from earlier runs instead of redoing them all.
 pub fn mount_web_test_cache_volume() -> Step<Use> {
     nscloud_cache_action("Mount Namespace cache volume")
@@ -389,8 +436,9 @@ pub fn mount_web_test_cache_volume() -> Step<Use> {
         .add_with((
             "path",
             format!(
-                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}\n{}",
+                "{}\n{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}\n{}",
                 vars::BUN_CACHE_VOLUME_DIR,
+                vars::NODE_MODULES_VOLUME_DIR,
                 xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
                 vars::VITEST_MODULE_CACHE_VOLUME_DIR,
                 vars::WASM_PKG_CACHE_DIR,
@@ -398,24 +446,27 @@ pub fn mount_web_test_cache_volume() -> Step<Use> {
         ))
 }
 
-/// [`mount_web_cache_volume`] for the PR build, which compiles the browser wasm
-/// packages (`just build-*`). Cargo registry/git feed wasm-pack; `.wasm-pack`
+/// [`mount_web_cache_volume`] for the PR jobs that compile the browser wasm
+/// packages (`just build-*`). `node_modules` adds [`vars::NODE_MODULES_VOLUME_DIR`]
+/// for a job that holds no deploy credentials. Cargo registry/git feed wasm-pack; `.wasm-pack`
 /// is the downloaded `wasm-opt` the same way [`mount_wasm_cache_volume`] keeps
 /// the worker build warm; [`vars::WASM_PKG_CACHE_DIR`] holds the unchanged
 /// packages it reuses. Deploy builds keep theirs in an Actions cache instead
 /// (`build_web_app`) and mount none of these, since PR jobs write this volume.
-pub fn mount_web_build_check_cache_volume() -> Step<Use> {
+pub fn mount_web_build_check_cache_volume(node_modules: bool) -> Step<Use> {
+    let mut paths = vec![vars::BUN_CACHE_VOLUME_DIR];
+    if node_modules {
+        paths.push(vars::NODE_MODULES_VOLUME_DIR);
+    }
+    paths.extend([
+        "/home/runner/.cargo/registry",
+        "/home/runner/.cargo/git",
+        xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
+        vars::WASM_PKG_CACHE_DIR,
+    ]);
     nscloud_cache_action("Mount Namespace cache volume")
         .add_with(("cache", "nix"))
-        .add_with((
-            "path",
-            format!(
-                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}",
-                vars::BUN_CACHE_VOLUME_DIR,
-                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
-                vars::WASM_PKG_CACHE_DIR,
-            ),
-        ))
+        .add_with(("path", paths.join("\n")))
 }
 
 /// The web-app composite: Nix dev shell (bun, biome, just) + `bun install`.
@@ -449,9 +500,41 @@ pub fn start_sccache_server() -> Step<Run> {
 /// itself, so the step needs no checkout, build or dependency. The script
 /// exports `main`.
 pub fn node_script(source: &str) -> String {
+    node_script_calling(source, "main")
+}
+
+/// [`node_script`], calling another exported function.
+pub fn node_script_calling(source: &str, function: &str) -> String {
     format!(
-        "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'\n{source}\nawait main();\nNODE_SCRIPT\n"
+        "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'\n{source}\nawait {function}();\nNODE_SCRIPT\n"
     )
+}
+
+/// Post to the Macro Alerts channel through its webhook
+/// ([`vars::MACRO_BUILD_ALERT_WEBHOOK_URL`], with
+/// [`vars::MACRO_BUILD_ALERT_BOT_TOKEN`]). `set_message` is bash that sets
+/// `message`, which the channel renders as markdown. Needs `jq` and `curl`,
+/// which [`runners::Runner::Small`] has.
+pub fn post_to_macro_alerts(name: &str, set_message: &str) -> Step<Run> {
+    let post = indoc::indoc! {r#"
+        if [[ -z "$MACRO_WEBHOOK_URL" || -z "$MACRO_BOT_TOKEN" ]]; then
+          echo 'Configure the Macro Alerts webhook URL and bot token' >&2
+          exit 1
+        fi
+        jq -n --arg content "$message" '{content: $content}' |
+          curl --fail-with-body --silent --show-error --retry 3 \
+            --header 'Content-Type: application/json' \
+            --header "x-macro-channel-bot-token: $MACRO_BOT_TOKEN" \
+            --data-binary @- "$MACRO_WEBHOOK_URL"
+    "#};
+    Step::new(name)
+        .run(format!(
+            "set -euo pipefail\n{}\n{post}",
+            set_message.trim_end()
+        ))
+        .shell("bash")
+        .add_env(("MACRO_WEBHOOK_URL", vars::MACRO_BUILD_ALERT_WEBHOOK_URL))
+        .add_env(("MACRO_BOT_TOKEN", vars::MACRO_BUILD_ALERT_BOT_TOKEN))
 }
 
 /// `sccache --show-stats` at the end of a job (never fails the job).
@@ -646,6 +729,20 @@ pub fn upload_release_artifacts(path: RuntimePath<'_>) -> Step<Use> {
         .add_with(("tag_name", "${{ steps.metadata.outputs.tag }}"))
         .add_with(("files", path.as_str()))
         .add_with(("fail_on_unmatched_files", true))
+}
+
+/// After a blobless checkout (`filter: blob:none`):
+/// - older git marks the repository with `extensions.partialclone`, which
+///   Nix's libgit2 refuses to open; `remote.origin.promisor` alone still lets
+///   git fetch missing blobs on demand;
+/// - `git diff` finds renames by reading the merge base's blobs, and `biome
+///   --changed` ignores its exit status, so a failed fetch there would check
+///   no files. Without rename detection, `--name-only` lists the same paths
+///   and reads no blob.
+pub fn prepare_blobless_checkout() -> Step<Run> {
+    Step::new("Prepare the blobless checkout").run(
+        "if git config extensions.partialclone >/dev/null; then git config --unset extensions.partialclone; fi\ngit config diff.renames false\n",
+    )
 }
 
 /// Teardown Nix (always runs).

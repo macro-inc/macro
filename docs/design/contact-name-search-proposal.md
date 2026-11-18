@@ -46,7 +46,8 @@ projections have explicit streaming paths. At most K+1 DM targets need prior-ali
 lookups; no earlier-page identity catalog is retained.
 
 A 100k native **in-memory Turso** test of this actual reader measured roughly 2–3 ms
-for broad/exact/empty reads, 20 ms for a late sparse prefix and 27 ms for no match,
+for broad/exact/empty reads, 20 ms for a late sparse prefix and 27 ms for no match
+(about 60 ms once a final address stage also scans addresses),
 with each answer checked against a complete streaming reference. These are engine
 measurements, not browser/OPFS latency or whole-app acceptance.
 
@@ -56,13 +57,21 @@ Use **name-prefix-first search with an indexable recent-first order**, not simpl
 replace the wildcard pattern or add a standalone text index.
 
 - Prefer exact normalized full-name matches, then contacts whose name words start
-  with every query word. `jo sm` finds a name with John and Smith; query-word order
+  with every query word. Policy 6 puts people the viewer has a direct message with
+  above everyone else among those matches, however exactly a stranger's name
+  matches, keeping these tiers inside each group; it also counts a one-term query
+  equal to the first name (the first space-separated term of a name without a
+  comma) as exact, as the browser menus already ranked people. `jo sm` finds a name with John and Smith; query-word order
   need not match display order.
 - Within a matching tier, order primarily by the existing published interaction
   recency, with a deterministic identity tie-break. This deliberately replaces the
   current weighted fuzzy/brevity blend; it is not the same ranking contract.
 - Keep full email addresses on the exact identity path, never name aliases. An
   explicitly typed address prefix can use an indexed email-prefix path.
+- A query with no `@` that matches no name tier still matches a contact whose
+  address contains every term (a domain, or a local part unlike the name), in a
+  last tier below name contains. Name-only matching hid people whose address was the only thing
+  the user remembered; the server fallback always matched addresses.
 - Offer contiguous substring matches as a lower-priority fallback when prefixes
   are exhausted. This matters for middle-of-word queries and names without spaces.
   Do not silently restore arbitrary-gap subsequence scans on every query.

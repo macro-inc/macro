@@ -7066,6 +7066,12 @@ export const postChannelBotWebhookHeader = zod.object({
 export const postChannelBotWebhookBody = zod
   .object({
     content: zod.string().describe('Message body.'),
+    notification_policy: zod
+      .enum(['Default', 'MentionsOnly', 'Silent'])
+      .optional()
+      .describe(
+        'Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.'
+      ),
   })
   .describe('Request to post a channel webhook message.');
 
@@ -7438,17 +7444,17 @@ export const listCrmBlockedDomainsResponse = zod.array(
 );
 
 /**
- * @summary Block a domain: email sync stops creating or updating CRM records for
-it, and the company and contacts the CRM holds for it are hidden.
-Idempotent. Requires an admin/owner team role (403).
+ * @summary Block a domain and its subdomains from email contributions, preserving records.
+Refuses a domain covering any member's connected primary mailbox (400).
+Idempotent for permitted domains. Requires an admin/owner team role (403).
  */
 export const blockCrmDomainParams = zod.object({
   domain: zod.string().describe('A bare domain like acme.com'),
 });
 
 /**
- * @summary Unblock a domain: email sync resumes for it, and what blocking hid is
-shown again. Idempotent. Requires an admin/owner team role (403).
+ * @summary Remove a team domain exclusion and schedule eligible email backfill,
+preserving record visibility. Idempotent. Requires an admin/owner role (403).
  */
 export const unblockCrmDomainParams = zod.object({
   domain: zod.string().describe('A bare domain like acme.com'),
@@ -9074,38 +9080,96 @@ export const setCrmContactNameBody = zod
 /**
  * @summary Read the caller's mailbox consent and both exclusion lists.
  */
+export const getCrmEmailPrivacyQueryParams = zod.object({
+  consent_only: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Return only consent and mailbox fields, without querying domain lists.'
+    ),
+});
+
 export const getCrmEmailPrivacyResponse = zod
-  .object({
-    can_remove_team_domains: zod
-      .boolean()
-      .describe('Whether the caller can remove a team exclusion.'),
-    enabled: zod
-      .boolean()
+  .union([
+    zod
+      .object({
+        can_remove_team_domains: zod
+          .boolean()
+          .describe('Whether the caller can remove a team exclusion.'),
+        enabled: zod
+          .boolean()
+          .describe(
+            'Whether this exact mailbox has explicit contribution consent.'
+          ),
+        mailbox_email: zod
+          .string()
+          .nullish()
+          .describe(
+            'The primary mailbox that would contribute; absent before email connection.'
+          ),
+        mailbox_link_id: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Exact current primary connection; clients bind opt-in to this identifier.'
+          ),
+        personal_domain_warnings: zod
+          .record(
+            zod.string(),
+            zod
+              .enum(['company', 'personal_provider'])
+              .describe(
+                "Why a domain exclusion would hide an affected mailbox's entire history."
+              )
+          )
+          .describe(
+            "Existing personal exclusions that cover the caller's whole mailbox."
+          ),
+        personal_domains: zod
+          .array(zod.string())
+          .describe("Domains excluded only for the caller's contributions."),
+        team_domain_warnings: zod
+          .record(
+            zod.string(),
+            zod
+              .enum(['company', 'personal_provider'])
+              .describe(
+                "Why a domain exclusion would hide an affected mailbox's entire history."
+              )
+          )
+          .describe(
+            "Existing team exclusions that cover a connected member's whole mailbox."
+          ),
+        team_domains: zod
+          .array(zod.string())
+          .describe(
+            'Domains excluded across the team, including legacy company exclusions.'
+          ),
+      })
+      .describe('Current consent and exclusions, readable by any team member.'),
+    zod
+      .object({
+        enabled: zod
+          .boolean()
+          .describe(
+            'Whether this exact mailbox has explicit contribution consent.'
+          ),
+        mailbox_email: zod
+          .string()
+          .nullish()
+          .describe('The primary mailbox that would contribute, if connected.'),
+        mailbox_link_id: zod
+          .uuid()
+          .nullish()
+          .describe('Exact current primary mailbox connection.'),
+      })
       .describe(
-        'Whether this exact mailbox has explicit contribution consent.'
+        'Current mailbox consent without loading domain exclusion lists.'
       ),
-    mailbox_email: zod
-      .string()
-      .nullish()
-      .describe(
-        'The primary mailbox that would contribute; absent before email connection.'
-      ),
-    mailbox_link_id: zod
-      .uuid()
-      .nullish()
-      .describe(
-        'Exact current primary connection; clients bind opt-in to this identifier.'
-      ),
-    personal_domains: zod
-      .array(zod.string())
-      .describe("Domains excluded only for the caller's contributions."),
-    team_domains: zod
-      .array(zod.string())
-      .describe(
-        'Domains excluded across the team, including legacy company exclusions.'
-      ),
-  })
-  .describe('Current consent and exclusions, readable by any team member.');
+  ])
+  .describe(
+    'Full settings by default, or mailbox consent when explicitly requested.'
+  );
 
 /**
  * @summary Apply one consent, domain, or thread exclusion change as the member.
@@ -9192,9 +9256,33 @@ export const updateCrmEmailPrivacyResponse = zod
       .describe(
         'Exact current primary connection; clients bind opt-in to this identifier.'
       ),
+    personal_domain_warnings: zod
+      .record(
+        zod.string(),
+        zod
+          .enum(['company', 'personal_provider'])
+          .describe(
+            "Why a domain exclusion would hide an affected mailbox's entire history."
+          )
+      )
+      .describe(
+        "Existing personal exclusions that cover the caller's whole mailbox."
+      ),
     personal_domains: zod
       .array(zod.string())
       .describe("Domains excluded only for the caller's contributions."),
+    team_domain_warnings: zod
+      .record(
+        zod.string(),
+        zod
+          .enum(['company', 'personal_provider'])
+          .describe(
+            "Why a domain exclusion would hide an affected mailbox's entire history."
+          )
+      )
+      .describe(
+        "Existing team exclusions that cover a connected member's whole mailbox."
+      ),
     team_domains: zod
       .array(zod.string())
       .describe(
@@ -9204,10 +9292,1142 @@ export const updateCrmEmailPrivacyResponse = zod
   .describe('Current consent and exclusions, readable by any team member.');
 
 /**
+ * @summary Read sharing state without initializing consent or scheduling work.
+ */
+export const getCrmEmailPolicyResponseRulesSchemaVersionMin = 0;
+
+export const getCrmEmailPolicyResponse = zod
+  .object({
+    authoring_available: zod
+      .boolean()
+      .describe('Whether new rule authoring is available for this caller.'),
+    effect: zod
+      .string()
+      .describe(
+        'Explain whole-thread sharing, live targets and overriding exclusions.'
+      ),
+    enabled: zod.boolean().describe('Current effective grant.'),
+    link_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Exact mailbox represented by the consent or prospective first grant.'
+      ),
+    mailbox_email: zod
+      .string()
+      .nullish()
+      .describe("The caller's mailbox address."),
+    mode: zod
+      .enum(['all', 'selected'])
+      .describe('The scope of an explicitly granted mailbox contribution.'),
+    revision: zod
+      .number()
+      .nullish()
+      .describe('Active immutable definition revision.'),
+    rules: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            include: zod
+              .array(
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['thread']),
+                        thread_id: zod
+                          .uuid()
+                          .describe(
+                            'Internal thread ID, never a provider thread ID.'
+                          ),
+                      })
+                      .describe(
+                        'A mailbox-local thread owned by the contributor.'
+                      ),
+                    zod
+                      .object({
+                        address: zod
+                          .string()
+                          .describe(
+                            'Address to normalize and validate before activation.'
+                          ),
+                        kind: zod.enum(['address']),
+                      })
+                      .describe(
+                        'An exact sender or recipient address, without alias inference.'
+                      ),
+                    zod
+                      .object({
+                        contact_id: zod
+                          .uuid()
+                          .describe(
+                            'Stable contact ID, resolved live rather than expanded on activation.'
+                          ),
+                        kind: zod.enum(['contact']),
+                      })
+                      .describe(
+                        'All current addresses of an authorized contact in the same team.'
+                      ),
+                    zod
+                      .object({
+                        domain: zod
+                          .string()
+                          .describe(
+                            'Bare domain to normalize and validate before activation.'
+                          ),
+                        kind: zod.enum(['domain']),
+                      })
+                      .describe('A domain and its dot-boundary subdomains.'),
+                    zod
+                      .object({
+                        company_id: zod
+                          .uuid()
+                          .describe(
+                            'Stable company ID, resolved live rather than expanded on activation.'
+                          ),
+                        kind: zod.enum(['company']),
+                      })
+                      .describe(
+                        'All current domains of an authorized company in the same team.'
+                      ),
+                  ])
+                  .describe(
+                    'One positive whole-thread selector; denials always take precedence.'
+                  )
+              )
+              .describe(
+                'OR-combined positive selectors over all non-draft thread participants.'
+              ),
+            schema_version: zod
+              .number()
+              .min(getCrmEmailPolicyResponseRulesSchemaVersionMin)
+              .describe(
+                'Wire-format version, not a contribution grant or revision number.'
+              ),
+          })
+          .describe(
+            'A complete replacement definition; an empty list selects no mail.\nContact\/company edits affect matching without rewriting this definition.'
+          ),
+      ])
+      .optional(),
+    token: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                fingerprint: zod
+                  .string()
+                  .describe(
+                    'Opaque observation; the first write compares it before initialization.'
+                  ),
+                kind: zod.enum(['legacy']),
+              })
+              .describe(
+                'A read-only fingerprint of legacy consent, mailbox and membership.'
+              ),
+            zod
+              .object({
+                authority_fingerprint: zod
+                  .string()
+                  .describe(
+                    'Explicit mailbox and membership authority, excluding sync state.'
+                  ),
+                consent_incarnation: zod
+                  .uuid()
+                  .describe(
+                    'Never reused after deletion and recreation of consent.'
+                  ),
+                kind: zod.enum(['policy']),
+                policy_version: zod
+                  .number()
+                  .describe('Database-owned version observed by the caller.'),
+              })
+              .describe(
+                'Identity and version of an initialized consent lifetime.'
+              ),
+          ])
+          .describe(
+            'An observed consent state, not an authorization credential. Never refresh\nthis token automatically after a conflict and replay a sharing command.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    'Owner-only view. GET never initializes identity or transfers historical work.'
+  );
+
+/**
+ * @summary Direct member/agent activation with CAS, idempotency and verified audit.
+ */
+export const updateCrmEmailPolicyBodyChangeRulesSchemaVersionMin = 0;
+
+export const updateCrmEmailPolicyBody = zod
+  .object({
+    change: zod
+      .union([
+        zod
+          .object({
+            action: zod.enum(['replace_rules']),
+            rules: zod
+              .object({
+                include: zod
+                  .array(
+                    zod
+                      .union([
+                        zod
+                          .object({
+                            kind: zod.enum(['thread']),
+                            thread_id: zod
+                              .uuid()
+                              .describe(
+                                'Internal thread ID, never a provider thread ID.'
+                              ),
+                          })
+                          .describe(
+                            'A mailbox-local thread owned by the contributor.'
+                          ),
+                        zod
+                          .object({
+                            address: zod
+                              .string()
+                              .describe(
+                                'Address to normalize and validate before activation.'
+                              ),
+                            kind: zod.enum(['address']),
+                          })
+                          .describe(
+                            'An exact sender or recipient address, without alias inference.'
+                          ),
+                        zod
+                          .object({
+                            contact_id: zod
+                              .uuid()
+                              .describe(
+                                'Stable contact ID, resolved live rather than expanded on activation.'
+                              ),
+                            kind: zod.enum(['contact']),
+                          })
+                          .describe(
+                            'All current addresses of an authorized contact in the same team.'
+                          ),
+                        zod
+                          .object({
+                            domain: zod
+                              .string()
+                              .describe(
+                                'Bare domain to normalize and validate before activation.'
+                              ),
+                            kind: zod.enum(['domain']),
+                          })
+                          .describe(
+                            'A domain and its dot-boundary subdomains.'
+                          ),
+                        zod
+                          .object({
+                            company_id: zod
+                              .uuid()
+                              .describe(
+                                'Stable company ID, resolved live rather than expanded on activation.'
+                              ),
+                            kind: zod.enum(['company']),
+                          })
+                          .describe(
+                            'All current domains of an authorized company in the same team.'
+                          ),
+                      ])
+                      .describe(
+                        'One positive whole-thread selector; denials always take precedence.'
+                      )
+                  )
+                  .describe(
+                    'OR-combined positive selectors over all non-draft thread participants.'
+                  ),
+                schema_version: zod
+                  .number()
+                  .min(updateCrmEmailPolicyBodyChangeRulesSchemaVersionMin)
+                  .describe(
+                    'Wire-format version, not a contribution grant or revision number.'
+                  ),
+              })
+              .describe(
+                'A complete replacement definition; an empty list selects no mail.\nContact\/company edits affect matching without rewriting this definition.'
+              ),
+          })
+          .describe(
+            'Directly activate a full replacement, including an empty rule list.'
+          ),
+        zod
+          .object({
+            action: zod.enum(['enable_all']),
+          })
+          .describe('Explicitly share all eligible past and future mail.'),
+        zod
+          .object({
+            action: zod.enum(['withdraw']),
+          })
+          .describe(
+            'Withdraw contribution, retaining CRM records and interaction dates.'
+          ),
+      ])
+      .describe(
+        'One explicit sharing command; member and team never come from the body.'
+      ),
+    if_policy: zod
+      .union([
+        zod
+          .object({
+            fingerprint: zod
+              .string()
+              .describe(
+                'Opaque observation; the first write compares it before initialization.'
+              ),
+            kind: zod.enum(['legacy']),
+          })
+          .describe(
+            'A read-only fingerprint of legacy consent, mailbox and membership.'
+          ),
+        zod
+          .object({
+            authority_fingerprint: zod
+              .string()
+              .describe(
+                'Explicit mailbox and membership authority, excluding sync state.'
+              ),
+            consent_incarnation: zod
+              .uuid()
+              .describe(
+                'Never reused after deletion and recreation of consent.'
+              ),
+            kind: zod.enum(['policy']),
+            policy_version: zod
+              .number()
+              .describe('Database-owned version observed by the caller.'),
+          })
+          .describe('Identity and version of an initialized consent lifetime.'),
+      ])
+      .describe(
+        'An observed consent state, not an authorization credential. Never refresh\nthis token automatically after a conflict and replay a sharing command.'
+      ),
+    request_id: zod
+      .uuid()
+      .describe(
+        'One UUID per intended operation, reused only for its retries.'
+      ),
+  })
+  .describe('Retry-safe command with the exact state observed by the caller.');
+
+export const updateCrmEmailPolicyResponse = zod
+  .object({
+    audit_event_id: zod
+      .uuid()
+      .describe('Owner history entry identifying this operation.'),
+    effect: zod
+      .string()
+      .describe('Sharing and retention effects of the committed operation.'),
+    enabled: zod
+      .boolean()
+      .describe('Whether this commit granted contribution.'),
+    mode: zod
+      .enum(['all', 'selected'])
+      .describe('The scope of an explicitly granted mailbox contribution.'),
+    replayed: zod
+      .boolean()
+      .describe(
+        'True means the stored result was returned without repeating any effects.'
+      ),
+    revision: zod
+      .number()
+      .nullish()
+      .describe('Committed definition revision, if selected.'),
+    token: zod
+      .union([
+        zod
+          .object({
+            fingerprint: zod
+              .string()
+              .describe(
+                'Opaque observation; the first write compares it before initialization.'
+              ),
+            kind: zod.enum(['legacy']),
+          })
+          .describe(
+            'A read-only fingerprint of legacy consent, mailbox and membership.'
+          ),
+        zod
+          .object({
+            authority_fingerprint: zod
+              .string()
+              .describe(
+                'Explicit mailbox and membership authority, excluding sync state.'
+              ),
+            consent_incarnation: zod
+              .uuid()
+              .describe(
+                'Never reused after deletion and recreation of consent.'
+              ),
+            kind: zod.enum(['policy']),
+            policy_version: zod
+              .number()
+              .describe('Database-owned version observed by the caller.'),
+          })
+          .describe('Identity and version of an initialized consent lifetime.'),
+      ])
+      .describe(
+        'An observed consent state, not an authorization credential. Never refresh\nthis token automatically after a conflict and replay a sharing command.'
+      ),
+  })
+  .describe(
+    'Recorded outcome. A replay describes the original commit, not current state.'
+  );
+
+/**
+ * @summary Read only the acting member's audit history.
+ */
+export const listCrmEmailPolicyHistoryQueryParams = zod.object({
+  before: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'Exclusive audit event cursor; pages contain at most fifty events.'
+    ),
+});
+
+export const listCrmEmailPolicyHistoryResponse = zod
+  .object({
+    events: zod
+      .array(
+        zod
+          .object({
+            consent_incarnation: zod
+              .uuid()
+              .nullish()
+              .describe('Absent only for a legacy audit row.'),
+            created_at: zod.iso
+              .datetime({})
+              .describe("Database commit transaction's creation time."),
+            entry: zod
+              .object({
+                action: zod
+                  .enum([
+                    'rules_activated',
+                    'all_mail_enabled',
+                    'withdrawn',
+                    'mailbox_revoked',
+                    'live_targets_changed',
+                  ])
+                  .describe(
+                    'Events in the member-only policy history; records never contain mail content.'
+                  ),
+                actor_kind: zod
+                  .enum(['member', 'agent', 'api', 'system'])
+                  .describe(
+                    'Provenance established by authenticated credentials, never a request field.'
+                  ),
+                agent_id: zod
+                  .uuid()
+                  .nullish()
+                  .describe('Verified agent identity, if available.'),
+                agent_session_id: zod
+                  .uuid()
+                  .nullish()
+                  .describe(
+                    'Verified session identity, if available; never inferred from a request.'
+                  ),
+                details: zod
+                  .unknown()
+                  .describe(
+                    'Bounded metadata, never email IDs, addresses, subjects or bodies.'
+                  ),
+                event_id: zod
+                  .uuid()
+                  .describe(
+                    'Server-generated UUIDv7, stable for a retried system event.'
+                  ),
+                next_revision: zod
+                  .number()
+                  .nullish()
+                  .describe('New immutable definition.'),
+                previous_revision: zod
+                  .number()
+                  .nullish()
+                  .describe('Previous immutable definition.'),
+              })
+              .describe(
+                'Audit data supplied by the authorized use case, without mail content.'
+              ),
+            link_id: zod
+              .uuid()
+              .describe('Exact mailbox at the time of the event.'),
+            policy_version: zod
+              .number()
+              .describe(
+                'Committed policy version within the recorded lifetime.'
+              ),
+          })
+          .describe('An audit record may predate incarnation-aware writers.')
+      )
+      .describe(
+        'Audit entries without mailbox contents or expanded source identities.'
+      ),
+    next_cursor: zod
+      .uuid()
+      .nullish()
+      .describe('Exclusive UUID cursor for the next page.'),
+  })
+  .describe('Owner history has a fixed fifty-event page.');
+
+/**
+ * @summary Inspect the owner's current count preview; no email content is returned.
+ */
+export const getCrmEmailRulePreviewResponseCountsAddedDefault = 0;
+export const getCrmEmailRulePreviewResponseCountsAddedMin = 0;
+
+export const getCrmEmailRulePreviewResponseCountsCurrentDefault = 0;
+export const getCrmEmailRulePreviewResponseCountsCurrentMin = 0;
+
+export const getCrmEmailRulePreviewResponseCountsDeniedDefault = 0;
+export const getCrmEmailRulePreviewResponseCountsDeniedMin = 0;
+
+export const getCrmEmailRulePreviewResponseCountsProposedDefault = 0;
+export const getCrmEmailRulePreviewResponseCountsProposedMin = 0;
+
+export const getCrmEmailRulePreviewResponseCountsRemovedDefault = 0;
+export const getCrmEmailRulePreviewResponseCountsRemovedMin = 0;
+
+export const getCrmEmailRulePreviewResponseCountsRetainedDefault = 0;
+export const getCrmEmailRulePreviewResponseCountsRetainedMin = 0;
+
+export const getCrmEmailRulePreviewResponse = zod.union([
+  zod.null(),
+  zod
+    .object({
+      as_of: zod.iso
+        .datetime({})
+        .nullish()
+        .describe('Time of the stable read snapshot, once a worker starts.'),
+      context_id: zod
+        .uuid()
+        .describe(
+          'A new worker attempt gets a new context; old completions cannot overwrite it.'
+        ),
+      counts: zod
+        .object({
+          added: zod
+            .number()
+            .min(getCrmEmailRulePreviewResponseCountsAddedMin)
+            .optional()
+            .describe('Threads newly included by the proposal.'),
+          current: zod
+            .number()
+            .min(getCrmEmailRulePreviewResponseCountsCurrentMin)
+            .optional()
+            .describe('Currently included threads encountered so far.'),
+          denied: zod
+            .number()
+            .min(getCrmEmailRulePreviewResponseCountsDeniedMin)
+            .optional()
+            .describe('Matching threads vetoed by other privacy settings.'),
+          proposed: zod
+            .number()
+            .min(getCrmEmailRulePreviewResponseCountsProposedMin)
+            .optional()
+            .describe('Proposed included threads encountered so far.'),
+          removed: zod
+            .number()
+            .min(getCrmEmailRulePreviewResponseCountsRemovedMin)
+            .optional()
+            .describe('Threads held back by the proposal.'),
+          retained: zod
+            .number()
+            .min(getCrmEmailRulePreviewResponseCountsRetainedMin)
+            .optional()
+            .describe('Threads included by both policies.'),
+        })
+        .describe(
+          'Count-only preview output; no mailbox contents or target identities.'
+        ),
+      created_at: zod.iso
+        .datetime({})
+        .describe('Enqueue time, used to explain queue delay.'),
+      expires_at: zod.iso
+        .datetime({})
+        .describe(
+          'Five-minute work deadline; results remain inspectable after the deadline.'
+        ),
+      preview_id: zod
+        .uuid()
+        .describe("The member's current preview slot occupant."),
+      scanned_threads: zod
+        .number()
+        .describe(
+          'Progress counts contain no identities, subjects, participants or bodies.'
+        ),
+      status: zod
+        .enum([
+          'pending',
+          'running',
+          'complete',
+          'partial',
+          'cancelled',
+          'stale',
+        ])
+        .describe('Preview state is independent of the contribution grant.'),
+    })
+    .describe(
+      'Count-only result. Complete counts describe one stable snapshot; every other\nstatus is incomplete and must not be presented as the total mailbox count.'
+    ),
+]);
+
+/**
+ * @summary Start optional count-only work; this never initializes or activates consent.
+ */
+export const previewCrmEmailRulesBodyRulesSchemaVersionMin = 0;
+
+export const previewCrmEmailRulesBody = zod
+  .object({
+    if_policy: zod
+      .union([
+        zod
+          .object({
+            fingerprint: zod
+              .string()
+              .describe(
+                'Opaque observation; the first write compares it before initialization.'
+              ),
+            kind: zod.enum(['legacy']),
+          })
+          .describe(
+            'A read-only fingerprint of legacy consent, mailbox and membership.'
+          ),
+        zod
+          .object({
+            authority_fingerprint: zod
+              .string()
+              .describe(
+                'Explicit mailbox and membership authority, excluding sync state.'
+              ),
+            consent_incarnation: zod
+              .uuid()
+              .describe(
+                'Never reused after deletion and recreation of consent.'
+              ),
+            kind: zod.enum(['policy']),
+            policy_version: zod
+              .number()
+              .describe('Database-owned version observed by the caller.'),
+          })
+          .describe('Identity and version of an initialized consent lifetime.'),
+      ])
+      .describe(
+        'An observed consent state, not an authorization credential. Never refresh\nthis token automatically after a conflict and replay a sharing command.'
+      ),
+    if_preview_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Current preview ID from inspection, or null before the first preview.'
+      ),
+    rules: zod
+      .object({
+        include: zod
+          .array(
+            zod
+              .union([
+                zod
+                  .object({
+                    kind: zod.enum(['thread']),
+                    thread_id: zod
+                      .uuid()
+                      .describe(
+                        'Internal thread ID, never a provider thread ID.'
+                      ),
+                  })
+                  .describe('A mailbox-local thread owned by the contributor.'),
+                zod
+                  .object({
+                    address: zod
+                      .string()
+                      .describe(
+                        'Address to normalize and validate before activation.'
+                      ),
+                    kind: zod.enum(['address']),
+                  })
+                  .describe(
+                    'An exact sender or recipient address, without alias inference.'
+                  ),
+                zod
+                  .object({
+                    contact_id: zod
+                      .uuid()
+                      .describe(
+                        'Stable contact ID, resolved live rather than expanded on activation.'
+                      ),
+                    kind: zod.enum(['contact']),
+                  })
+                  .describe(
+                    'All current addresses of an authorized contact in the same team.'
+                  ),
+                zod
+                  .object({
+                    domain: zod
+                      .string()
+                      .describe(
+                        'Bare domain to normalize and validate before activation.'
+                      ),
+                    kind: zod.enum(['domain']),
+                  })
+                  .describe('A domain and its dot-boundary subdomains.'),
+                zod
+                  .object({
+                    company_id: zod
+                      .uuid()
+                      .describe(
+                        'Stable company ID, resolved live rather than expanded on activation.'
+                      ),
+                    kind: zod.enum(['company']),
+                  })
+                  .describe(
+                    'All current domains of an authorized company in the same team.'
+                  ),
+              ])
+              .describe(
+                'One positive whole-thread selector; denials always take precedence.'
+              )
+          )
+          .describe(
+            'OR-combined positive selectors over all non-draft thread participants.'
+          ),
+        schema_version: zod
+          .number()
+          .min(previewCrmEmailRulesBodyRulesSchemaVersionMin)
+          .describe(
+            'Wire-format version, not a contribution grant or revision number.'
+          ),
+      })
+      .describe(
+        'A complete replacement definition; an empty list selects no mail.\nContact\/company edits affect matching without rewriting this definition.'
+      ),
+  })
+  .describe(
+    'A bounded preview request. The slot token fences delayed starts after replacement.'
+  );
+
+export const previewCrmEmailRulesResponseCountsAddedDefault = 0;
+export const previewCrmEmailRulesResponseCountsAddedMin = 0;
+
+export const previewCrmEmailRulesResponseCountsCurrentDefault = 0;
+export const previewCrmEmailRulesResponseCountsCurrentMin = 0;
+
+export const previewCrmEmailRulesResponseCountsDeniedDefault = 0;
+export const previewCrmEmailRulesResponseCountsDeniedMin = 0;
+
+export const previewCrmEmailRulesResponseCountsProposedDefault = 0;
+export const previewCrmEmailRulesResponseCountsProposedMin = 0;
+
+export const previewCrmEmailRulesResponseCountsRemovedDefault = 0;
+export const previewCrmEmailRulesResponseCountsRemovedMin = 0;
+
+export const previewCrmEmailRulesResponseCountsRetainedDefault = 0;
+export const previewCrmEmailRulesResponseCountsRetainedMin = 0;
+
+export const previewCrmEmailRulesResponse = zod
+  .object({
+    as_of: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Time of the stable read snapshot, once a worker starts.'),
+    context_id: zod
+      .uuid()
+      .describe(
+        'A new worker attempt gets a new context; old completions cannot overwrite it.'
+      ),
+    counts: zod
+      .object({
+        added: zod
+          .number()
+          .min(previewCrmEmailRulesResponseCountsAddedMin)
+          .optional()
+          .describe('Threads newly included by the proposal.'),
+        current: zod
+          .number()
+          .min(previewCrmEmailRulesResponseCountsCurrentMin)
+          .optional()
+          .describe('Currently included threads encountered so far.'),
+        denied: zod
+          .number()
+          .min(previewCrmEmailRulesResponseCountsDeniedMin)
+          .optional()
+          .describe('Matching threads vetoed by other privacy settings.'),
+        proposed: zod
+          .number()
+          .min(previewCrmEmailRulesResponseCountsProposedMin)
+          .optional()
+          .describe('Proposed included threads encountered so far.'),
+        removed: zod
+          .number()
+          .min(previewCrmEmailRulesResponseCountsRemovedMin)
+          .optional()
+          .describe('Threads held back by the proposal.'),
+        retained: zod
+          .number()
+          .min(previewCrmEmailRulesResponseCountsRetainedMin)
+          .optional()
+          .describe('Threads included by both policies.'),
+      })
+      .describe(
+        'Count-only preview output; no mailbox contents or target identities.'
+      ),
+    created_at: zod.iso
+      .datetime({})
+      .describe('Enqueue time, used to explain queue delay.'),
+    expires_at: zod.iso
+      .datetime({})
+      .describe(
+        'Five-minute work deadline; results remain inspectable after the deadline.'
+      ),
+    preview_id: zod
+      .uuid()
+      .describe("The member's current preview slot occupant."),
+    scanned_threads: zod
+      .number()
+      .describe(
+        'Progress counts contain no identities, subjects, participants or bodies.'
+      ),
+    status: zod
+      .enum(['pending', 'running', 'complete', 'partial', 'cancelled', 'stale'])
+      .describe('Preview state is independent of the contribution grant.'),
+  })
+  .describe(
+    'Count-only result. Complete counts describe one stable snapshot; every other\nstatus is incomplete and must not be presented as the total mailbox count.'
+  );
+
+/**
+ * @summary Cancel the owner's current named preview, including while rollout is off.
+ */
+export const cancelCrmEmailRulePreviewParams = zod.object({
+  preview_id: zod.uuid(),
+});
+
+/**
+ * @summary Fetch one saved definition, independently of live CRM viewing permission.
+ */
+export const getCrmEmailRuleRevisionParams = zod.object({
+  revision: zod.number(),
+});
+
+export const getCrmEmailRuleRevisionResponseRulesSchemaVersionMin = 0;
+
+export const getCrmEmailRuleRevisionResponse = zod.union([
+  zod.null(),
+  zod
+    .object({
+      created_at: zod.iso
+        .datetime({})
+        .describe('Time this definition was committed.'),
+      link_id: zod.uuid().describe('Mailbox the saved definition refers to.'),
+      revision: zod
+        .number()
+        .describe("Revision in this member's rule history."),
+      rules: zod
+        .object({
+          include: zod
+            .array(
+              zod
+                .union([
+                  zod
+                    .object({
+                      kind: zod.enum(['thread']),
+                      thread_id: zod
+                        .uuid()
+                        .describe(
+                          'Internal thread ID, never a provider thread ID.'
+                        ),
+                    })
+                    .describe(
+                      'A mailbox-local thread owned by the contributor.'
+                    ),
+                  zod
+                    .object({
+                      address: zod
+                        .string()
+                        .describe(
+                          'Address to normalize and validate before activation.'
+                        ),
+                      kind: zod.enum(['address']),
+                    })
+                    .describe(
+                      'An exact sender or recipient address, without alias inference.'
+                    ),
+                  zod
+                    .object({
+                      contact_id: zod
+                        .uuid()
+                        .describe(
+                          'Stable contact ID, resolved live rather than expanded on activation.'
+                        ),
+                      kind: zod.enum(['contact']),
+                    })
+                    .describe(
+                      'All current addresses of an authorized contact in the same team.'
+                    ),
+                  zod
+                    .object({
+                      domain: zod
+                        .string()
+                        .describe(
+                          'Bare domain to normalize and validate before activation.'
+                        ),
+                      kind: zod.enum(['domain']),
+                    })
+                    .describe('A domain and its dot-boundary subdomains.'),
+                  zod
+                    .object({
+                      company_id: zod
+                        .uuid()
+                        .describe(
+                          'Stable company ID, resolved live rather than expanded on activation.'
+                        ),
+                      kind: zod.enum(['company']),
+                    })
+                    .describe(
+                      'All current domains of an authorized company in the same team.'
+                    ),
+                ])
+                .describe(
+                  'One positive whole-thread selector; denials always take precedence.'
+                )
+            )
+            .describe(
+              'OR-combined positive selectors over all non-draft thread participants.'
+            ),
+          schema_version: zod
+            .number()
+            .min(getCrmEmailRuleRevisionResponseRulesSchemaVersionMin)
+            .describe(
+              'Wire-format version, not a contribution grant or revision number.'
+            ),
+        })
+        .describe(
+          'A complete replacement definition; an empty list selects no mail.\nContact\/company edits affect matching without rewriting this definition.'
+        ),
+    })
+    .describe(
+      'One immutable owner-only definition, fetched separately from history pages.'
+    ),
+]);
+
+/**
+ * @summary Canonicalize and authorize a definition without sharing mail.
+ */
+export const validateCrmEmailRulesBodySchemaVersionMin = 0;
+
+export const validateCrmEmailRulesBody = zod
+  .object({
+    include: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['thread']),
+                thread_id: zod
+                  .uuid()
+                  .describe('Internal thread ID, never a provider thread ID.'),
+              })
+              .describe('A mailbox-local thread owned by the contributor.'),
+            zod
+              .object({
+                address: zod
+                  .string()
+                  .describe(
+                    'Address to normalize and validate before activation.'
+                  ),
+                kind: zod.enum(['address']),
+              })
+              .describe(
+                'An exact sender or recipient address, without alias inference.'
+              ),
+            zod
+              .object({
+                contact_id: zod
+                  .uuid()
+                  .describe(
+                    'Stable contact ID, resolved live rather than expanded on activation.'
+                  ),
+                kind: zod.enum(['contact']),
+              })
+              .describe(
+                'All current addresses of an authorized contact in the same team.'
+              ),
+            zod
+              .object({
+                domain: zod
+                  .string()
+                  .describe(
+                    'Bare domain to normalize and validate before activation.'
+                  ),
+                kind: zod.enum(['domain']),
+              })
+              .describe('A domain and its dot-boundary subdomains.'),
+            zod
+              .object({
+                company_id: zod
+                  .uuid()
+                  .describe(
+                    'Stable company ID, resolved live rather than expanded on activation.'
+                  ),
+                kind: zod.enum(['company']),
+              })
+              .describe(
+                'All current domains of an authorized company in the same team.'
+              ),
+          ])
+          .describe(
+            'One positive whole-thread selector; denials always take precedence.'
+          )
+      )
+      .describe(
+        'OR-combined positive selectors over all non-draft thread participants.'
+      ),
+    schema_version: zod
+      .number()
+      .min(validateCrmEmailRulesBodySchemaVersionMin)
+      .describe(
+        'Wire-format version, not a contribution grant or revision number.'
+      ),
+  })
+  .describe(
+    'A complete replacement definition; an empty list selects no mail.\nContact\/company edits affect matching without rewriting this definition.'
+  );
+
+export const validateCrmEmailRulesResponseBroadRuleIndicesItemMin = 0;
+
+export const validateCrmEmailRulesResponseInactiveRuleIndicesItemMin = 0;
+
+export const validateCrmEmailRulesResponseRulesSchemaVersionMin = 0;
+
+export const validateCrmEmailRulesResponse = zod
+  .object({
+    broad_rule_indices: zod
+      .array(
+        zod.number().min(validateCrmEmailRulesResponseBroadRuleIndicesItemMin)
+      )
+      .describe(
+        'Indices that may select most mail because they match the owner or domain.'
+      ),
+    effect: zod
+      .string()
+      .describe(
+        'Human-readable effect to show before an agent changes sharing.'
+      ),
+    inactive_rule_indices: zod
+      .array(
+        zod
+          .number()
+          .min(validateCrmEmailRulesResponseInactiveRuleIndicesItemMin)
+      )
+      .describe(
+        'Indices into the canonical list that currently have no live targets.'
+      ),
+    rules: zod
+      .object({
+        include: zod
+          .array(
+            zod
+              .union([
+                zod
+                  .object({
+                    kind: zod.enum(['thread']),
+                    thread_id: zod
+                      .uuid()
+                      .describe(
+                        'Internal thread ID, never a provider thread ID.'
+                      ),
+                  })
+                  .describe('A mailbox-local thread owned by the contributor.'),
+                zod
+                  .object({
+                    address: zod
+                      .string()
+                      .describe(
+                        'Address to normalize and validate before activation.'
+                      ),
+                    kind: zod.enum(['address']),
+                  })
+                  .describe(
+                    'An exact sender or recipient address, without alias inference.'
+                  ),
+                zod
+                  .object({
+                    contact_id: zod
+                      .uuid()
+                      .describe(
+                        'Stable contact ID, resolved live rather than expanded on activation.'
+                      ),
+                    kind: zod.enum(['contact']),
+                  })
+                  .describe(
+                    'All current addresses of an authorized contact in the same team.'
+                  ),
+                zod
+                  .object({
+                    domain: zod
+                      .string()
+                      .describe(
+                        'Bare domain to normalize and validate before activation.'
+                      ),
+                    kind: zod.enum(['domain']),
+                  })
+                  .describe('A domain and its dot-boundary subdomains.'),
+                zod
+                  .object({
+                    company_id: zod
+                      .uuid()
+                      .describe(
+                        'Stable company ID, resolved live rather than expanded on activation.'
+                      ),
+                    kind: zod.enum(['company']),
+                  })
+                  .describe(
+                    'All current domains of an authorized company in the same team.'
+                  ),
+              ])
+              .describe(
+                'One positive whole-thread selector; denials always take precedence.'
+              )
+          )
+          .describe(
+            'OR-combined positive selectors over all non-draft thread participants.'
+          ),
+        schema_version: zod
+          .number()
+          .min(validateCrmEmailRulesResponseRulesSchemaVersionMin)
+          .describe(
+            'Wire-format version, not a contribution grant or revision number.'
+          ),
+      })
+      .describe(
+        'A complete replacement definition; an empty list selects no mail.\nContact\/company edits affect matching without rewriting this definition.'
+      ),
+  })
+  .describe(
+    'Canonical rules and bounded warnings; validation does not grant contribution.'
+  );
+
+/**
  * @summary List only the authenticated member's thread exclusions.
  */
 export const listCrmExcludedEmailThreadsQueryParams = zod.object({
   after: zod.uuid().nullish().describe('Read entries after this thread ID.'),
+  thread_id: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'Look up one thread instead of paging. Cannot be combined with `after`.'
+    ),
 });
 
 export const listCrmExcludedEmailThreadsResponse = zod
@@ -25567,7 +26787,15 @@ export const getDocumentByTeamSlugResponse = zod.object({
             }),
           ])
         )
-        .describe('The items returned from the call'),
+        .describe(
+          'The items returned from the call, most recently trashed first'
+        ),
+      next_cursor: zod
+        .string()
+        .nullish()
+        .describe(
+          'Pass as `cursor` to get the next page; absent on the last page'
+        ),
     })
     .describe('Data to be returned'),
   error: zod.boolean().describe('Indicates if an error occurred'),
@@ -40725,6 +41953,12 @@ export const externalChatDeliveryResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -41961,6 +43195,12 @@ export const externalChatSendsResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -42046,6 +43286,12 @@ export const externalChatSendBody = zod
       .uuid()
       .nullish()
       .describe('Message being quoted, within this chat.'),
+    userConfirmation: zod
+      .string()
+      .nullish()
+      .describe(
+        "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+      ),
   })
   .describe(
     'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -42123,6 +43369,12 @@ export const externalChatSendResponse = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -49903,7 +51155,7 @@ export const getInitiativeDescriptionResponse = zod
     markdown: zod
       .string()
       .describe(
-        'GitHub-flavored markdown; empty while no one has opened or written it.'
+        'Internal markdown, chips as XML tags such as `<m-user-mention>`; empty while no one has opened or written it.'
       ),
   })
   .describe("An initiative's description.");
@@ -54742,6 +55994,18 @@ export const postItemsSoupBody = zod
       ),
     email_filters: zod
       .object({
+        attachments: zod
+          .array(
+            zod
+              .enum(['pdf', 'image', 'document'])
+              .describe(
+                "A kind of attachment a thread's messages carry, by MIME type."
+              )
+          )
+          .optional()
+          .describe(
+            'Only threads with at least one attachment of one of these kinds, by\nMIME type, on any of their messages. Empty applies no constraint.'
+          ),
         bcc: zod
           .array(zod.string())
           .optional()
@@ -54764,13 +56028,19 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "CRM-scoped address filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\nfully-qualified addresses. Each address is authorized against\n`crm_contacts` + `crm_companies` (contact must not be hidden, company\nmust not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_domains`."
+            "CRM-scoped address filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\nfully-qualified addresses. Each address is authorized against\n`crm_contacts` + `crm_companies` (contact must not be hidden, company\nmust not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_domains`. Listing email only: search\nrejects a request that sets it with a 400."
           ),
         crm_domains: zod
           .array(zod.string())
           .optional()
           .describe(
-            "CRM-scoped domain filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\ndomains (in any of sender\/cc\/bcc\/recipient). Each domain is authorized\nagainst `crm_domains` + `crm_companies` (must exist for the caller's\nteam, company must not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_addresses`."
+            "CRM-scoped domain filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\ndomains (in any of sender\/cc\/bcc\/recipient). Each domain is authorized\nagainst `crm_domains` + `crm_companies` (must exist for the caller's\nteam, company must not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_addresses`. Listing email only: search\nrejects a request that sets it with a 400."
+          ),
+        done: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Filter by whether the thread is done: true for threads out of the\ninbox (archived), false for threads still in it. This is the mailbox\nstate the Email view's Done filter uses, independent of notifications."
           ),
         email_thread_ids: zod
           .array(zod.string())
@@ -54829,7 +56099,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            'A list of project ids to search within. Empty to ignore project filtering.'
+            "Drive folder (project) ids to search within: threads filed in any of\nthese folders. Besides the caller's own threads, it reaches every\nthread in a folder shared with the caller, whoever's inbox holds it,\nas the folder's list does. Search takes at most 50 folders and\nrejects more with a 400, and matches the query against at most 10,000\nof their threads in all; threads past that are not searched, unless\n`email_thread_ids` names them, and at most 10,000 named threads are\nsearched in all. Empty to ignore project filtering."
           ),
         recipients: zod
           .array(zod.string())
@@ -54849,6 +56119,16 @@ export const postItemsSoupBody = zod
           .describe(
             'Controls whether shared email threads are included in results.'
           ),
+        view: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['sent', 'drafts'])
+              .describe(
+                'A mailbox view the Email list scopes a search to, as its tabs do.'
+              ),
+          ])
+          .optional(),
       })
       .optional()
       .describe(
@@ -74757,6 +76037,12 @@ export const entityMessageCreateBody = zod
       .string()
       .nullish()
       .describe('Client nonce for optimistic reconciliation.'),
+    notification_policy: zod
+      .enum(['Default', 'MentionsOnly', 'Silent'])
+      .optional()
+      .describe(
+        'Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.'
+      ),
     thread_id: zod
       .uuid()
       .nullish()
@@ -82530,8 +83816,20 @@ export const revertDeleteProjectResponse = zod.object({
 });
 
 /**
- * @summary Gets the users recently deleted items.
+ * @summary Gets one page of the user's trashed documents, chats and folders, most
+recently trashed first.
  */
+export const recentlyDeletedQueryLimitMin = 0;
+
+export const recentlyDeletedQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(recentlyDeletedQueryLimitMin)
+    .optional()
+    .describe('Page size (1-500, default 100)'),
+  cursor: zod.string().optional().describe("The previous page's next_cursor"),
+});
+
 export const recentlyDeletedResponse = zod.object({
   data: zod
     .object({
@@ -82686,7 +83984,15 @@ export const recentlyDeletedResponse = zod.object({
             }),
           ])
         )
-        .describe('The items returned from the call'),
+        .describe(
+          'The items returned from the call, most recently trashed first'
+        ),
+      next_cursor: zod
+        .string()
+        .nullish()
+        .describe(
+          'Pass as `cursor` to get the next page; absent on the last page'
+        ),
     })
     .describe('Data to be returned'),
   error: zod.boolean().describe('Indicates if an error occurred'),

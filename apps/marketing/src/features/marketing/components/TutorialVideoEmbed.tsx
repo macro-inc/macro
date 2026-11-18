@@ -140,7 +140,16 @@ export function TutorialVideoEmbed(props: {
           tabIndex={-1}
           controls={started()}
           onPlaying={recordPlay}
-        />
+        >
+          <Show when={'captions' in tutorial()}>
+            <track
+              kind="captions"
+              src={`/video/tutorials/${props.tutorial}.vtt`}
+              srclang="en"
+              label="English"
+            />
+          </Show>
+        </video>
         <Show when={!started()}>
           <Show when={showsBenefitPoster()}>
             <BenefitVideoPoster tutorial={props.tutorial} />

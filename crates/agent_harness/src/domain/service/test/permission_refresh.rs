@@ -63,6 +63,7 @@ async fn a_withdrawn_bypass_reaches_a_live_session_before_its_next_prompt() {
                 actor: Some(staff_sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await

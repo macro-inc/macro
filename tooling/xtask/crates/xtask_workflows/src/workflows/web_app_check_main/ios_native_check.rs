@@ -1,6 +1,6 @@
 //! `iOS Native Check` — merge gate for PRs that change native iOS (Tauri)
-//! code, as a job of the web app PR checks so that `Web App Status Check`
-//! (the required status check) covers it without a ruleset change. Web
+//! code, as a job of the web app PR checks so that `CI gate` (the required
+//! status) covers it without a ruleset change. Web
 //! bundles ship over the air, but native changes only reach users through
 //! the App Store, so a PR whose bundle depends on new native code must not
 //! merge before Apple has approved that native build; the prod deploy that

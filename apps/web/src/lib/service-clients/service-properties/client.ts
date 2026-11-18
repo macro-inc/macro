@@ -25,7 +25,6 @@ import type { PropertyDefinitionResponse } from './generated/schemas/propertyDef
 import type { PropertyOption } from './generated/schemas/propertyOption';
 import type { PropertyOptionResponse } from './generated/schemas/propertyOptionResponse';
 import type { PropertyTargetEntityType } from './generated/schemas/propertyTargetEntityType';
-import type { SetEntityPropertyRequest } from './generated/schemas/setEntityPropertyRequest';
 import type { TagPromotionConflictResponse } from './generated/schemas/tagPromotionConflictResponse';
 import type { TagSetResponse } from './generated/schemas/tagSetResponse';
 import type { UpdatePropertyOptionRequest } from './generated/schemas/updatePropertyOptionRequest';
@@ -90,12 +89,6 @@ type GetEntityPropertiesArgs = {
   entity_type: PropertyTargetEntityType;
   entity_id: string;
   query: GetEntityPropertiesParams;
-};
-type SetEntityPropertyArgs = {
-  entity_type: PropertyTargetEntityType;
-  entity_id: string;
-  property_id: string;
-  body: SetEntityPropertyRequest;
 };
 type DeleteEntityPropertyArgs = {
   entity_property_id: string;
@@ -212,17 +205,6 @@ export const propertiesServiceClient = {
     return await propertiesFetch<EntityPropertiesResponse>(url, {
       method: 'GET',
     });
-  },
-
-  setEntityProperty: async (args: SetEntityPropertyArgs) => {
-    const url = `/properties/entities/${args.entity_type}/${args.entity_id}/${args.property_id}`;
-
-    const result = await propertiesFetch<{}>(url, {
-      method: 'PUT',
-      body: JSON.stringify(args.body),
-    });
-
-    return result.map(() => ({ success: true }));
   },
 
   deleteEntityProperty: async (args: DeleteEntityPropertyArgs) => {

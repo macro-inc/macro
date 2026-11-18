@@ -17,7 +17,7 @@ import { createRefresh } from './primitives/refresh';
 import { SUGGESTION_ITEM_PARTS } from './suggestion-items';
 import { useSuggestions } from './suggestions';
 import { useSuggestionsFlag } from './use-suggestions-flag';
-import { ForYouView } from './views/for-you-view';
+import { ForYouRefresh, ForYouView } from './views/for-you-view';
 
 function ForYouPage() {
   usePageViewTracking('for-you');
@@ -38,12 +38,13 @@ function ForYouPage() {
       <ViewShell.Main>
         <ViewShell.TopBar>
           <ViewSidebar.Title caret={false}>{t('nav.forYou')}</ViewSidebar.Title>
+          <div class="ml-auto">
+            <ForYouRefresh refresh={refresh} />
+          </div>
         </ViewShell.TopBar>
         <ForYouView
           feed={feed}
-          actions={actions}
           parts={SUGGESTION_ITEM_PARTS}
-          refresh={refresh}
           focusedId={search.suggestion}
           onRetry={source.retry}
         />

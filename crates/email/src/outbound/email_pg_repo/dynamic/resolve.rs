@@ -1,11 +1,14 @@
 use filter_ast::Expr;
 use item_filters::ast::email::{Email, EmailLiteral};
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use std::collections::HashMap;
+use std::time::Instant;
+
+use super::query::limit_statement_time;
 use uuid::Uuid;
 
 /// Cache mailbox-scoped contact identities for address predicates and team scope.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(super) struct ResolvedFilters {
     /// Only the explicit Trash view may admit present messages in trash.
     pub(super) include_trash: bool,
@@ -25,10 +28,15 @@ pub(super) struct ResolvedFilters {
     /// (`crm_email_thread_allowed`'s mailbox conditions). `Some` only for
     /// team-scoped queries. The query rechecks them as it reads.
     contributing_link_ids: Option<Vec<Uuid>>,
+    /// Contributing links in selected mode. Optimized Team reads resolve this
+    /// partition in the same snapshot as their candidate and eligibility SQL.
+    selected_link_ids: Option<Vec<Uuid>>,
     /// The inboxes whose contacts a domain or partial address matches on a
     /// message, or `None` for every inbox. Complete addresses resolve to
     /// contacts of the queried inboxes already.
     text_match_links: Option<Vec<Uuid>>,
+    /// Selected Team reads fence the known contact ID before testing its text.
+    fenced_text_matches: bool,
 }
 
 impl ResolvedFilters {
@@ -67,9 +75,25 @@ impl ResolvedFilters {
         }
     }
 
+    pub(super) fn fenced_text_matches_within(&self, links: &[Uuid]) -> Self {
+        Self {
+            text_match_links: Some(links.to_vec()),
+            fenced_text_matches: true,
+            ..self.clone()
+        }
+    }
+
+    pub(super) fn fenced_text_matches(&self) -> bool {
+        self.fenced_text_matches
+    }
+
     /// The team links that contributed to CRM when this resolution ran.
     pub(super) fn contributing_link_ids(&self) -> Option<&[Uuid]> {
         self.contributing_link_ids.as_deref()
+    }
+
+    pub(super) fn selected_link_ids(&self) -> Option<&[Uuid]> {
+        self.selected_link_ids.as_deref()
     }
 
     /// This resolution with only the contacts of `links`' inboxes. A message
@@ -100,7 +124,9 @@ impl ResolvedFilters {
                 .collect(),
             team_link_ids: self.team_link_ids.clone(),
             contributing_link_ids: self.contributing_link_ids.clone(),
+            selected_link_ids: self.selected_link_ids.clone(),
             text_match_links: self.text_match_links.clone(),
+            fenced_text_matches: self.fenced_text_matches,
         }
     }
 
@@ -115,14 +141,7 @@ impl ResolvedFilters {
 
     #[cfg(test)]
     pub(super) fn empty() -> Self {
-        Self {
-            include_trash: false,
-            contact_ids: HashMap::new(),
-            contact_links: HashMap::new(),
-            team_link_ids: None,
-            contributing_link_ids: None,
-            text_match_links: None,
-        }
+        Self::default()
     }
 
     #[cfg(test)]
@@ -235,57 +254,84 @@ pub(super) fn can_short_circuit(ast: &Expr<EmailLiteral>, resolved: &ResolvedFil
 }
 
 /// Resolve complete addresses within the requested links or the team's primary inboxes.
-#[tracing::instrument(skip(pool, ast), err)]
 pub(super) async fn resolve_filters(
     pool: &PgPool,
     link_ids: &[Uuid],
     team_id: Option<Uuid>,
     ast: &Expr<EmailLiteral>,
 ) -> Result<ResolvedFilters, sqlx::Error> {
+    if team_id.is_none() && collect_complete_emails(ast).is_empty() {
+        return Ok(ResolvedFilters::default());
+    }
+    let mut connection = pool.acquire().await?;
+    resolve_filters_on(&mut connection, link_ids, team_id, ast, None).await
+}
+
+/// Resolve on the caller's connection so mode selection shares its snapshot.
+#[tracing::instrument(name = "resolve_filters", skip(connection, ast), err)]
+pub(super) async fn resolve_filters_on(
+    connection: &mut PgConnection,
+    link_ids: &[Uuid],
+    team_id: Option<Uuid>,
+    ast: &Expr<EmailLiteral>,
+    deadline: Option<Instant>,
+) -> Result<ResolvedFilters, sqlx::Error> {
+    let emails = collect_complete_emails(ast);
     // Team scope resolves to a concrete link-id set once, so every
     // downstream lookup (and the main query's candidate WHERE / CTE link
     // scope) is a direct `link_id = ANY($ids)` instead of re-joining
     // email_links/team_user per query.
-    let (team_link_ids, contributing_link_ids) = match team_id {
-        None => (None, None),
+    let (team_link_ids, contributing_link_ids, selected_link_ids) = match team_id {
+        None => (None, None, None),
         Some(team_id) => {
+            if let Some(deadline) = deadline {
+                limit_statement_time(connection, deadline).await?;
+            }
             // `contributing` restates crm_email_thread_allowed's mailbox
             // conditions; the team-scoped CRM query reads only these inboxes.
             let links = sqlx::query!(
                 r#"
             SELECT el.id,
-                   (el.deleting_at IS NULL AND EXISTS (
-                       SELECT 1 FROM crm_email_consent consent
-                       WHERE consent.team_id = $1
-                         AND consent.user_id = el.macro_id
-                         AND consent.link_id = el.id
-                         AND consent.enabled
-                   )) AS "contributing!"
+                   (el.deleting_at IS NULL AND COALESCE(
+                       consent.enabled OR consent.selected_enabled, FALSE
+                   )) AS "contributing!",
+                   COALESCE(consent.selected_enabled, FALSE) AS "selected!"
             FROM email_links el
             JOIN team_user tu ON tu.user_id = el.macro_id
+            LEFT JOIN crm_email_consent consent
+              ON consent.team_id = $1 AND consent.user_id = el.macro_id
+             AND consent.link_id = el.id
             WHERE tu.team_id = $1 AND el.is_primary
             "#,
                 team_id,
             )
-            .fetch_all(pool)
+            .fetch_all(&mut *connection)
             .await?;
             let contributing = links
                 .iter()
                 .filter(|link| link.contributing)
                 .map(|link| link.id)
                 .collect();
+            let selected = links
+                .iter()
+                .filter(|link| link.contributing && link.selected)
+                .map(|link| link.id)
+                .collect();
             (
                 Some(links.into_iter().map(|link| link.id).collect()),
                 Some(contributing),
+                Some(selected),
             )
         }
     };
     let scope_link_ids: &[Uuid] = team_link_ids.as_deref().unwrap_or(link_ids);
 
-    let emails = collect_complete_emails(ast);
     let mut contact_ids: HashMap<String, Vec<Uuid>> = HashMap::new();
     let mut contact_links: HashMap<Uuid, Uuid> = HashMap::new();
     if !emails.is_empty() {
+        if let Some(deadline) = deadline {
+            limit_statement_time(connection, deadline).await?;
+        }
         let rows = sqlx::query!(
             r#"
                 SELECT id, link_id, LOWER(email_address) AS "email_lower!"
@@ -295,7 +341,7 @@ pub(super) async fn resolve_filters(
             scope_link_ids,
             &emails,
         )
-        .fetch_all(pool)
+        .fetch_all(&mut *connection)
         .await?;
 
         for row in rows {
@@ -310,6 +356,8 @@ pub(super) async fn resolve_filters(
         contact_links,
         team_link_ids,
         contributing_link_ids,
+        selected_link_ids,
         text_match_links: None,
+        fenced_text_matches: false,
     })
 }

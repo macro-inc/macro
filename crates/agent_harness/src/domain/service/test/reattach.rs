@@ -657,6 +657,7 @@ async fn a_redial_dispatches_the_queue_an_earlier_attach_failed_to_load() {
         context: None,
         announced: None,
         client: None,
+        prompter: agent_session::domain::model::PrompterKind::User,
         created_at: chrono::Utc::now(),
     };
     repo.replace_queued_actions(session, &[waiting.to_stored().unwrap()])
@@ -921,6 +922,7 @@ async fn a_redial_restores_every_session_with_waiting_work_past_its_cap() {
             announce: None,
             context: None,
             client: None,
+            prompter: agent_session::domain::model::PrompterKind::User,
             announced: None,
             created_at: chrono::Utc::now(),
         };

@@ -35,6 +35,12 @@ export type ListSearchKeysOptions = {
   trigger: () => HTMLElement | undefined;
   suggestions?: () => ListSearchSuggestions | undefined;
   /**
+   * Whether the results hold a row to land on. Without it the list's own "go
+   * to first item" answers, which is any list in the split that registered
+   * one last, so a view sharing its split with another list passes this.
+   */
+  hasResults?: () => boolean;
+  /**
    * Whether an Escape pressed away from the field is this search's to clear;
    * without it, any Escape in the split that nothing else takes is.
    */
@@ -52,7 +58,9 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
   const panel = useSplitPanel();
 
   // Escape leaves the list where it was; ArrowDown and Enter start at the top.
-  const leave = (row: 'first' | 'current') => {
+  // A picked suggestion has started a new search, so its rows are still on
+  // their way: the view lands on them when they arrive.
+  const leave = (row: 'first' | 'current', rowsPending = false) => {
     const input = options.input();
     // An empty field has no search to keep on screen.
     const collapses = !options.value().trim();
@@ -69,6 +77,10 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
       return;
     }
 
+    // With no rows to land on, ArrowDown and Enter stay with the field, as in
+    // a view without a list, so typing goes on.
+    if (row === 'first' && !landsOnFirstRow(rowsPending)) return;
+
     focusResults();
     // A view whose results are not on screen (a tab without a list) has
     // nowhere to send the keyboard: ArrowDown and Enter stay with the field,
@@ -84,10 +96,14 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
     }
 
     if (collapses) options.clear();
-    // The list's own "go to first item" also scrolls that row into view.
-    if (row !== 'first') return;
-    const goToFirst = getActiveCommandByToken(TOKENS.entity.jump.home);
-    if (goToFirst?.condition?.() ?? true) goToFirst?.keyDownHandler?.();
+  };
+
+  // Moves the list to its first row, unless it has none to land on.
+  const landsOnFirstRow = (rowsPending: boolean) => {
+    if (!rowsPending && options.hasResults?.() === false) return false;
+
+    const landed = goToFirstRow();
+    return rowsPending || Boolean(options.hasResults) || landed !== false;
   };
 
   // Returns whether a suggestion took the key instead of the results.
@@ -106,7 +122,7 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
     }
     if (event.key === 'Enter' && active >= 0) {
       suggestions.pick(active);
-      leave('first');
+      leave('first', true);
       return true;
     }
 
@@ -164,4 +180,13 @@ function isComposing(event: KeyboardEvent) {
 
 function hasModifier(event: KeyboardEvent) {
   return event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
+}
+
+// The list's own "go to first item" also scrolls that row into view. It
+// answers false when the list has no rows.
+function goToFirstRow() {
+  const goToFirst = getActiveCommandByToken(TOKENS.entity.jump.home);
+  if (!goToFirst || !(goToFirst.condition?.() ?? true)) return undefined;
+
+  return goToFirst.keyDownHandler?.();
 }

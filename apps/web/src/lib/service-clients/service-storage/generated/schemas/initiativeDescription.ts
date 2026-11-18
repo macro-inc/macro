@@ -9,6 +9,6 @@
  * An initiative's description.
  */
 export interface InitiativeDescription {
-  /** GitHub-flavored markdown; empty while no one has opened or written it. */
+  /** Internal markdown, chips as XML tags such as `<m-user-mention>`; empty while no one has opened or written it. */
   markdown: string;
 }

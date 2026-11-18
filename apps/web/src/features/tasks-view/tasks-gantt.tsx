@@ -46,7 +46,6 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
   const queries = createTaskGanttQueries({
     rows: source.boardRows ?? source.items,
     grouping: () => state.groupBy,
-    projectsEnabled: context.projectsEnabled,
   });
   const viewContext = () =>
     resolveEntityActionViewContext({

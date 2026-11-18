@@ -50,6 +50,7 @@ pub const GENERIC_EMAIL_DOMAINS: &[&str] = &[
     "orange.fr",
     "outlook.com",
     "pm.me",
+    "privaterelay.appleid.com",
     "proton.me",
     "protonmail.com",
     "qq.com",

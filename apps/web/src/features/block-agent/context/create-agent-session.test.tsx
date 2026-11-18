@@ -40,9 +40,12 @@ const harness = vi.hoisted(() => ({
   get: vi.fn(),
   control: vi.fn(),
 }));
+type LogFollow = { rows: (rows: AgentSessionLogEntryDto[]) => void };
 const logSource = vi.hoisted(() => ({
   cached: vi.fn(),
   fetched: vi.fn(),
+  /** The latest load's log subscription, which delivers live rows. */
+  follow: undefined as LogFollow | undefined,
 }));
 
 vi.mock('@core/agent-fold/client', () => fold);
@@ -54,13 +57,15 @@ vi.mock('@queries/agent-session/queue-sync', () => ({
 }));
 vi.mock('@queries/agent-session/log', () => ({
   AgentSessionLogUnavailable: class extends Error {},
-  watchAgentSessionLog: () => ({
-    cached: logSource.cached(),
-    cacheMiss: () => undefined,
-    fetched: logSource.fetched(),
-    stop: () => {},
-  }),
-  canFollowAgentSessionLog: () => false,
+  watchAgentSessionLog: (_id: string, _policy?: string, follow?: LogFollow) => {
+    if (follow) logSource.follow = follow;
+    return {
+      cached: logSource.cached(),
+      cacheMiss: () => undefined,
+      fetched: logSource.fetched(),
+      stop: () => {},
+    };
+  },
   forgetAgentSessionLog: vi.fn(async () => undefined),
 }));
 vi.mock('@queries/agent-session/session-metadata-sync', () => ({
@@ -352,7 +357,8 @@ describe('the transcript store', () => {
     };
     const publish = async (events: FoldedStreamEvent[]) => {
       fold.pushSession.mockResolvedValueOnce(events);
-      AgentSession.ingest({ agentSessionId: SESSION, entries: [row] });
+      if (!logSource.follow) throw new Error('the log is not followed');
+      logSource.follow.rows([row]);
       await shared.snapshot();
     };
     return { messages: handle.messages, publish };
