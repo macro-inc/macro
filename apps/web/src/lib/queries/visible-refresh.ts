@@ -22,10 +22,11 @@ export function intervalWhileRead(
 /**
  * Throttles refreshes while visible: a change after a quiet `intervalMs`
  * refreshes at once, and refreshes never start closer together than that. A
- * function `intervalMs` is read whenever a refresh is scheduled, and a later
- * schedule moves a pending refresh earlier if it has shrunk. Hidden tabs retain one dirty bit instead
- * of repeatedly reading; becoming visible refreshes once against the latest
- * state. Async refreshes finish before one dirty follow-up runs, so a busy
+ * function `intervalMs` is read whenever a refresh is scheduled and again when
+ * a pending one is due: a later schedule moves it earlier if the interval has
+ * shrunk, and it waits out the rest if the interval has grown. Hidden tabs
+ * retain one dirty bit instead of repeatedly reading; becoming visible
+ * refreshes once against the latest state. Async refreshes finish before one dirty follow-up runs, so a busy
  * source cannot continually cancel its readers. With `refreshOnShow`, becoming
  * visible refreshes even if nothing marked it dirty, for a source whose change
  * signal can be lost.
@@ -73,6 +74,8 @@ export function createVisibleRefresh(
     timer = undefined;
     dueAt = Number.POSITIVE_INFINITY;
   };
+  const currentInterval = () =>
+    typeof intervalMs === 'number' ? intervalMs : untrack(intervalMs);
   const startLater = (waitMs: number) => {
     const at = performance.now() + waitMs;
     if (timer !== undefined && dueAt <= at) return;
@@ -81,12 +84,13 @@ export function createVisibleRefresh(
     timer = setTimeout(() => {
       timer = undefined;
       dueAt = Number.POSITIVE_INFINITY;
-      start();
+      const remainingMs = lastStartedAt + currentInterval() - performance.now();
+      if (remainingMs > 0) startLater(remainingMs);
+      else start();
     }, waitMs);
   };
   const scheduled = () => {
-    const waitMs =
-      typeof intervalMs === 'number' ? intervalMs : untrack(intervalMs);
+    const waitMs = currentInterval();
     if (performance.now() - lastStartedAt < waitMs) {
       startLater(waitMs);
       return;

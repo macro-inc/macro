@@ -85,6 +85,28 @@ it('reads a function interval when it schedules, moving a pending refresh earlie
   visible.dispose();
 });
 
+it('waits out a grown interval before a pending refresh starts', () => {
+  vi.useFakeTimers();
+  const refresh = vi.fn();
+  const [reading, setReading] = createSignal(true);
+  const visible = createVisibleRefresh(refresh, {
+    intervalMs: intervalWhileRead(reading, 2_000),
+  });
+
+  visible.markDirty();
+  vi.advanceTimersByTime(100);
+  visible.markDirty();
+  vi.advanceTimersByTime(900);
+  setReading(false);
+  vi.advanceTimersByTime(1_100);
+  expect(refresh).toHaveBeenCalledOnce();
+  vi.advanceTimersByTime(57_899);
+  expect(refresh).toHaveBeenCalledOnce();
+  vi.advanceTimersByTime(1);
+  expect(refresh).toHaveBeenCalledTimes(2);
+  visible.dispose();
+});
+
 it('runs every request synchronously while visible', () => {
   const run = vi.fn();
   const deferral = createHiddenDeferral(run);
