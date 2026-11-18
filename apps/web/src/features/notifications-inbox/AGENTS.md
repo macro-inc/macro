@@ -7,6 +7,7 @@ adapters. `core/` owns row/category semantics, `primitives/` owns reactive state
 ## Filters
 
 - Store `selectedCategories`: no selection shows every kind, including future kinds; selected kinds form a union.
+- Carry the empty-selection intent in `InboxScope.allKinds`; selecting every known category still sends an explicit type list.
 - Keep All/Unread independent of the category selection and its badge count.
 - Keep checkbox selection separate from effective visibility: `isSelected` drives filters, while `isShown` limits clear-by-kind actions.
 - Convert legacy `hiddenCategories` on read using the existing per-user storage key, and write only the new shape.

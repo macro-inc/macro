@@ -185,10 +185,10 @@ export function parseInboxFilters(raw: string | null): InboxFilters {
   const selected =
     'selectedCategories' in value ? value.selectedCategories : undefined;
   let selectedCategories: InboxCategory[];
-  if ('selectedCategories' in value) {
-    selectedCategories = Array.isArray(selected)
-      ? INBOX_CATEGORIES.filter((category) => selected.includes(category))
-      : [];
+  if (Array.isArray(selected)) {
+    selectedCategories = INBOX_CATEGORIES.filter((category) =>
+      selected.includes(category)
+    );
   } else {
     // Preserve the kinds a legacy filter showed. With nothing hidden, keep
     // the empty selection so newly introduced categories also stay visible.

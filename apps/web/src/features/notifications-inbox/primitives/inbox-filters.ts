@@ -36,6 +36,7 @@ export function createInboxFilters(storage: {
     /** The rows the feed reads: these kinds, and only unread ones under Unread. */
     scope: () => ({
       rowTypes: rowTypesFor(filters()),
+      allKinds: filters().selectedCategories.length === 0,
       unreadOnly: filters().status === 'unread',
     }),
     setStatus: (status: InboxStatus) => save({ ...filters(), status }),

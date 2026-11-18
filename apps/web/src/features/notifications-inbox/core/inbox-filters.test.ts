@@ -147,6 +147,19 @@ describe('saved filters', () => {
     ).toEqual(DEFAULT_INBOX_FILTERS);
   });
 
+  it('falls back to the legacy filter when the selected field is malformed', () => {
+    const filters = parseInboxFilters(
+      JSON.stringify({
+        status: 'unread',
+        selectedCategories: false,
+        hiddenCategories: ['email'],
+      })
+    );
+    expect(filters.status).toBe('unread');
+    expect(filters.selectedCategories).toHaveLength(9);
+    expect(rowTypesFor(filters)).not.toContain('email');
+  });
+
   it('prefers selected categories when both shapes are stored', () => {
     expect(
       parseInboxFilters(

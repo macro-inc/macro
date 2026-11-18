@@ -125,8 +125,10 @@ clear is left alone.
 unchecked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
 Calendar, Access requests, and Agents. Nothing selected shows every kind;
 selecting kinds narrows the feed to those kinds, and unchecking the last one
-restores everything. Mentions covers both channel and comment mentions, Replies
-both channel and comment threads. A row that is two kinds shows when either is
+restores everything. Selecting every current kind still excludes kinds added by
+a newer server; only no selection automatically includes those new kinds.
+Mentions covers both channel and comment mentions, Replies both channel and
+comment threads. A row that is two kinds shows when either is
 selected, once: a thread whose reply mentions you is under Mentions and Replies,
 a top-level message that mentions you and has replies likewise, an entity's
 comments that mention you under Mentions and Comments, and a pull request or

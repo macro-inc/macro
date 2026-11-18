@@ -1,6 +1,6 @@
 import { createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
-import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
+import { ALL_INBOX_ROW_TYPES, INBOX_CATEGORIES } from '../core/inbox-filters';
 import { createInboxFilters } from './inbox-filters';
 
 const memoryStorage = () => {
@@ -38,6 +38,7 @@ describe('createInboxFilters', () => {
       filters.setSelected('email', true);
       expect(filters.scope()).toEqual({
         rowTypes: filters.rowTypes(),
+        allKinds: false,
         unreadOnly: true,
       });
       dispose();
@@ -94,12 +95,27 @@ describe('createInboxFilters', () => {
       expect(filters.isShown('email')).toBe(true);
       expect(filters.scope()).toEqual({
         rowTypes: ALL_INBOX_ROW_TYPES,
+        allKinds: true,
         unreadOnly: true,
       });
       expect(JSON.parse(storage.read()!)).toEqual({
         status: 'unread',
         selectedCategories: [],
       });
+      dispose();
+    });
+  });
+
+  it('distinguishes an empty selection from explicitly selecting every known kind', () => {
+    createRoot((dispose) => {
+      const filters = createInboxFilters(memoryStorage());
+      expect(filters.scope().allKinds).toBe(true);
+      for (const category of INBOX_CATEGORIES)
+        filters.setSelected(category, true);
+      expect(filters.rowTypes()).toEqual(ALL_INBOX_ROW_TYPES);
+      expect(filters.scope().allKinds).toBe(false);
+      filters.reset();
+      expect(filters.scope().allKinds).toBe(true);
       dispose();
     });
   });
