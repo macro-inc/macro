@@ -53,7 +53,7 @@ impl FleetEnrollment for TestEnrollment {
             name: ComputerName::try_new("Fixture computer").unwrap(),
             deployment: crate::domain::fakes::deployment(),
             traceparent: None,
-            agent: None,
+            role: crate::domain::enrollment::ComputerRole::Person,
         })
     }
 }
@@ -72,17 +72,15 @@ async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() 
         });
         let mut fleet = DockerFleet::new(
             DockerFleetConfig {
-                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
                 images: GuestImages {
                     regular: GuestImage::try_new("fixture-image").unwrap(),
                     agent: GuestImage::try_new("macro-box-agent:latest").unwrap(),
                 },
                 network: "fixture-network".to_owned(),
                 enrollment_dir: root.path().to_owned(),
-                host_name: "fixture-host".to_owned(),
+                host_name: crate::domain::models::HostName::try_new("fixture-host").unwrap(),
                 memory_gb: 31,
-                reserve_gb: 7,
-                oversell_factor: 3,
             },
             Environment::Local,
         )
@@ -180,17 +178,15 @@ async fn docker_destroy_removes_the_container_then_its_volumes() {
     let runner = Arc::new(RecordingDocker::default());
     let mut fleet = DockerFleet::new(
         DockerFleetConfig {
-            control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+            control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
             images: GuestImages {
                 regular: GuestImage::try_new("macro-box:2026-11-01").unwrap(),
                 agent: GuestImage::try_new("macro-box-agent:latest").unwrap(),
             },
             network: "fixture-network".to_owned(),
             enrollment_dir: root.path().to_owned(),
-            host_name: "fixture-host".to_owned(),
+            host_name: crate::domain::models::HostName::try_new("fixture-host").unwrap(),
             memory_gb: 31,
-            reserve_gb: 7,
-            oversell_factor: 3,
         },
         Environment::Local,
     )
@@ -251,17 +247,15 @@ async fn an_agent_computer_is_created_and_recreated_from_the_agent_image() {
         let runner = Arc::new(EmptyDocker::default());
         let mut fleet = DockerFleet::new(
             DockerFleetConfig {
-                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
                 images: GuestImages {
                     regular: GuestImage::try_new("macro-box:latest").unwrap(),
                     agent: GuestImage::try_new("macro-box-agent:latest").unwrap(),
                 },
                 network: "fixture-network".to_owned(),
                 enrollment_dir: root.path().to_owned(),
-                host_name: "fixture-host".to_owned(),
+                host_name: crate::domain::models::HostName::try_new("fixture-host").unwrap(),
                 memory_gb: 31,
-                reserve_gb: 7,
-                oversell_factor: 3,
             },
             Environment::Local,
         )

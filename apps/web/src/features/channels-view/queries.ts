@@ -32,6 +32,7 @@ import {
 import { type Accessor, createEffect, createMemo } from 'solid-js';
 import { sortChannels } from './core/channel-sort';
 import { channelThreadsQueryArgs } from './core/channel-threads-query';
+import { channelTypesShownBy } from './core/channel-types';
 import type {
   ChannelListSort,
   ChannelsGroup,
@@ -324,7 +325,10 @@ function useChannelsDataSource(
       graphqlProjection: 'channel-list',
     })
   );
-  registerChannelListNotificationRefresh(query);
+  registerChannelListNotificationRefresh(
+    query,
+    channelTypesShownBy(CHANNELS_QUERY_DEFINITIONS[scope].filters)
+  );
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (!query.isEnabled || query.isPending) return previous;
 

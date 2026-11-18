@@ -2048,6 +2048,18 @@ export const list = {
       ],
     },
     {
+      id: 'STL-990',
+      surface: 'SL-01',
+      fn: ['F-075'],
+      state: 'result: the thread leaves the list it was trashed from',
+      trigger:
+        'after the trash succeeds, also while the mark read of a thread just opened is on its way',
+      source: [
+        'src/features/email-view/components/EmailList.tsx',
+        'src/features/next-soup/utils.ts',
+      ],
+    },
+    {
       id: 'STL-954',
       surface: 'SL-24',
       fn: ['F-072'],

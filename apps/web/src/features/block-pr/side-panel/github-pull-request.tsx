@@ -13,6 +13,7 @@ import type {
 } from '@service-storage/generated/schemas';
 import { cn, Layer } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
+import { checkOutcome, orderChecks, summarizeChecks } from '../data/checks';
 
 type GithubPullRequestWithPanelDetails = GithubPullRequest & {
   authorLogin?: string | null;
@@ -47,10 +48,6 @@ function githubAvatarUrl(login: string): string {
   return `https://github.com/${githubDisplayLogin(login)}.png?size=48`;
 }
 
-function checksPassedCount(checks: GithubPullRequestCheckRun[]): number {
-  return checks.filter((check) => check.conclusion === 'success').length;
-}
-
 function checkDuration(check: GithubPullRequestCheckRun): string | null {
   if (!check.startedAt || !check.completedAt) return null;
   const ms = Date.parse(check.completedAt) - Date.parse(check.startedAt);
@@ -65,24 +62,18 @@ function GithubPullRequestCheckStatusIcon(props: {
 }) {
   return (
     <Switch fallback={<Circle class="size-3.5 text-ink-placeholder" />}>
-      <Match when={props.check.status !== 'completed'}>
+      <Match when={checkOutcome(props.check) === 'pending'}>
         <CircleNotch class="size-3.5 text-ink-placeholder animate-spin" />
       </Match>
-      <Match when={props.check.conclusion === 'success'}>
+      <Match when={checkOutcome(props.check) === 'passed'}>
         <CheckCircle class="size-3.5 text-success" />
       </Match>
-      <Match
-        when={
-          props.check.conclusion === 'failure' ||
-          props.check.conclusion === 'timed_out'
-        }
-      >
+      <Match when={checkOutcome(props.check) === 'failed'}>
         <XCircle class="size-3.5 text-failure" />
       </Match>
       <Match
         when={
           props.check.conclusion === 'skipped' ||
-          props.check.conclusion === 'cancelled' ||
           props.check.conclusion === 'neutral'
         }
       >
@@ -223,16 +214,23 @@ export function GithubPullRequestChecksContent(props: {
   enrichment?: GithubPullRequestWithPanelDetails;
 }) {
   const checks = () => props.enrichment?.checks ?? [];
+  const summary = () => summarizeChecks(checks());
   return (
     <Show
       when={checks().length > 0}
       fallback={<div class="text-ink-placeholder">No checks</div>}
     >
       <div class="flex flex-col gap-1 text-xs">
-        <div class="text-xs text-ink-muted">
-          {checksPassedCount(checks())} passed
+        <div class="flex flex-wrap gap-x-2 text-xs text-ink-muted">
+          <Show when={summary().failed}>
+            {(count) => <span class="text-failure">{count()} failed</span>}
+          </Show>
+          <Show when={summary().pending}>
+            {(count) => <span>{count()} pending</span>}
+          </Show>
+          <span>{summary().passed} passed</span>
         </div>
-        <For each={checks()}>
+        <For each={orderChecks(checks())}>
           {(check) => (
             <div class="flex items-center gap-2 min-w-0 h-6">
               <GithubPullRequestCheckStatusIcon check={check} />

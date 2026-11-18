@@ -15,6 +15,9 @@ soft delete/restore/purge, and bulk upload into a project tree.
   Soft delete trashes a folder's documents and chats; its databases and forms
   return to the root through the `FiledItemsUnfiler` port, which DSS
   implements over the databases and forms repositories.
+- `src/domain/service/lifecycle.rs`: `ProjectLifecycleReads` supplies physical
+  folder existence/trash facts independently of viewer permissions; read
+  failures propagate through the owning repository capability.
 - `src/domain/events.rs`: the `ProjectMacroEvent` variants published to the
   event broker.
 - `src/domain/duplicate.rs`: folder duplication (`ProjectDuplicator`, the

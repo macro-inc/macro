@@ -325,6 +325,12 @@ the flag from definitions it polls from PostHog every 5 minutes) and backfills t
 the last 3 days first, then the rest of the 30 without due dates (an older
 thread gets one with its next mail). With nothing classified the tab
 shows the empty state `You're caught up`, whose **See the rest of your inbox** opens Signal.
+PostHog counts each visit to the tab when the server answers the read it
+makes as it opens (`email_focus_tab_opened`, with the threads the list holds,
+so an empty tab reads as `threads: 0`; refreshes are not counted) and each
+thread opened from it by click, tap or Enter (`email_focus_thread_opened`,
+with its position); a thread the reading pane opens as the keyboard cursor
+moves is not counted.
 
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the
@@ -380,10 +386,17 @@ while selected tag sets are pending. Background refreshes retain the current lis
 
 While the search field has text the list shows only search states: no Watch
 tutorial row, a spinner while the search runs (from the first character), and
-`No results` when nothing matches. `Load More` appears only under
-result rows: a page whose hits the tab or a client-side filter drops (Archived
-keeps only archived hits) pages on by itself until a row shows or results run
-out. To check the tab switch,
+`No results` when nothing matches. `Load More` appears under result
+rows. A page that adds no row (an alias, saved view or client-side filter drops
+its hits, or the service's done check for Archived read its bound of index pages
+without keeping one) is read past by itself, after the first page and after each
+Load More, up to five pages per load (`MAX_PAGES_PER_LOAD`). A load stops at
+a new row, at the end of the results (Load More goes away), on an error, or at
+that cap; one that reaches the cap without a row leaves `No matches in the next
+pages. Search further`, which reads up to five more. Check with a term that
+matches many inbox threads and few archived ones: every Load More adds a row,
+ends the results, or ends on that label, never a click that adds nothing. To
+check the tab switch,
 rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
 network read must not leave the old rows visible or expose their Load more action.
 
@@ -484,6 +497,8 @@ continuation pages. Once replay commits (even after a reload), only those querie
 refresh from the server; they should not refetch over the optimistic state merely
 because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
+Press # right after opening a thread, while its mark read is still on its way:
+the row must leave the list and stay out once the mark read lands.
 Archive-based
 Mark Done, Mark Not Done, and Undo/Redo use `setEmailThreadArchived`: `inboxVisible`
 updates optimistically in the normalized cache, and each reversal is a distinct
@@ -575,8 +590,13 @@ Spam and Trash order threads by their latest message in that folder. Reading a t
 
 Use **Not spam** on a Spam row or **Restore** on a Trash row. The same
 action appears in the selection toolbar for bulk restores, including on mobile.
-Outlook restores received mail to Inbox and provider drafts to Drafts. Gmail removes
-the Spam or Trash label and preserves the remaining labels; it does not add Inbox.
+Outlook restores received mail to Inbox and provider drafts to Drafts. Gmail Restore
+removes the Trash label and preserves the remaining labels; it does not add Inbox.
+Gmail Not spam moves the thread from Spam to the inbox, as Gmail's own button does:
+it adds Inbox when received mail in the thread is in Spam (the user's own sent
+mail, even addressed to themselves, only leaves Spam), then removes Spam. Report
+spam on Gmail files the thread under Spam, then takes it out of the inbox. The
+assistant adding or removing the SPAM label does the same.
 Gmail restores update the canonical preview and ordering immediately, before the
 queued provider write completes.
 Outlook uses pending mailbox operations, and the thread's operation notice shows
@@ -658,9 +678,14 @@ that match its supported view/filter but are missing inside its covered sort
 range (including timestamp/ID ties). An exhausted page covers the remaining
 matching range, including an empty result. This checks at most 500 local matches
 per write; larger stale sets converge over refreshes. It preserves normalized
-threads and pending optimistic edits, and does not use cursor pages or backfill
-gaps as negative evidence. An older open view's server snapshot cannot restore
-explicitly invalidated membership; pending local edits still take precedence.
+threads, and keeps a row with queued writes unless its stored facts and each
+prefix of those writes all still match the page (a queued mark read does not
+keep a thread the page left out; a queued Undo of an archive keeps its row). It
+does not use cursor pages or backfill gaps as negative evidence. An older open
+view's server snapshot cannot restore
+explicitly invalidated membership; pending local edits still take precedence,
+so an older view can list a thread its first page dropped (the trashed thread
+with a queued mark read) until that write settles.
 Invalidated facts stay unqueryable until a full canonical snapshot arrives,
 rather than guessing whether a thread was moved or
 deleted. Verification: seed stale Noise matches between returned rows, apply a
@@ -967,7 +992,8 @@ as `person+tag@example.com`, whether or not it is a saved contact. That holds
 when contacts or their names load after typing starts and reorder the list,
 including under a resting pointer, and when the address was typed or pasted
 before suggestions loaded. Name-word prefixes outrank substring matches;
-`jo sm` and `sm jo` both find John Smith. Within each name tier, and on empty
+`jo sm` and `sm jo` both find John Smith. A domain (`gmail.com`) or a local part
+unlike the name finds the contact, below name matches. Within each name tier, and on empty
 input, personal suggestions are recent-first rather than domain/brevity-weighted.
 A chip shows the name followed by the address in muted ink.
 Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal
@@ -1070,8 +1096,9 @@ edit once more, unless send, discard, or a reset already cancelled it; if that
 write also fails, a brief warning shows after the composer closes. A later
 failure shows a new warning.
 Retry preserves the original draft handle. An already-sent rejection drops the
-local copy rather than recreating the sent message. The REST compose path keeps
-its existing behavior.
+local copy rather than recreating the sent message; an open composer keeps only
+the text the sent message lacks, as a new draft (see below). The REST compose
+path keeps its existing behavior.
 
 Native draft recovery requires a full app update containing queue inspection and
 durable mutation metadata support. An older app receiving an OTA bundle opens
@@ -1302,6 +1329,13 @@ selected inbox after reconnect, even when the intermediate draft save is still
 queued. Uploaded files remain attached. Forwarded and imported provider attachments retain their source-inbox access checks.
 Provider-bound drafts use the explicit inbox-transfer flow. Accepted Outlook
 sends remain owned by its provider coordinator; ambiguity is reconciled there.
+Choosing another inbox saves the draft first. The service refuses to move an
+Outlook draft while that save is still being written to Outlook, so the move
+waits for the write (up to 30 seconds) and asks again with the same operation:
+From keeps the chosen inbox. A refusal with no write in flight (a Gmail draft),
+a write that ends in a conflict, or a write still running after the wait cancels
+the move with **Retry inbox change**; a refusal of a draft whose write has just
+finished is asked once more first.
 
 Verify: queue a new message and a reply offline, close and reopen the app, and
 check their persistent status and read-only content. Cancel one before reconnect
@@ -1366,8 +1400,15 @@ Further typing saves locally without retrying the rejected write. Verify that
 pending attachment bytes survive reopening and that a reply stays in its
 conversation.
 An already-sent rejection after reconnect follows the same path as an immediate
-already-sent response: announce that the email or reply was sent, clear the local
-composer, and cancel pending autosave. It must never offer Retry for that draft.
+already-sent response: cancel pending autosave, announce that the email or reply
+was sent, then keep any text the sent message lacks as a new draft (saying it
+was not sent), or else leave the sent draft. Edits made meanwhile count toward
+that text; autosave, Send and the From switch wait until the composer has
+settled it, and it must never offer Retry for that draft. A discard pressed
+before it settles takes precedence: no notice and no kept draft, even when its
+delete fails, because the draft was sent either way. A composer that closes
+first shows nothing and keeps nothing: the text the sent message lacks is lost,
+a known gap, since the queue drops the refused working copy.
 Verify this in standalone and reply composers, including a queued edit awaiting
 its debounce and a failure racing the first identity read. A settlement for a
 previous or different draft must not clear the current editor.

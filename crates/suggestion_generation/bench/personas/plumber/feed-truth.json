@@ -1,0 +1,119 @@
+{
+  "planted": [
+    {
+      "id": "p1",
+      "what": "Q4 goal 2 (launch the $149/yr drain maintenance plan, 25 signups by Dec 31) has no owner and no task. The setup steps (Dispatchly recurring job, flyer, card on file) aren't started. Dan promised Luis the flyer and the recurring job by Nov 15. Customers keep asking for it (Sandra Whitlock; Kevin's customer in #jobs).",
+      "evidence": [
+        "document:q4-goals",
+        "call:dan-luis-huddle",
+        "channel:jobs",
+        "document:price-book",
+        "inbox subject: Re: Drain cleaning appointment"
+      ],
+      "ideal_suggestion": "Make the maintenance plan a task with an owner (set up the Dispatchly recurring job type, flyer and invoice line) and sign up Sandra Whitlock first, since she has asked twice."
+    },
+    {
+      "id": "p2",
+      "what": "Techs keep asking pricing questions in #jobs (gas leak check, cancel-at-door trip charge, weekend flush, tankless range, toilet price, plan price) that the price book answers. Dan answers 'check the price book' by hand, and the weekend flush rule from the Oct 26 crew meeting was never added to it.",
+      "evidence": [
+        "channel:jobs",
+        "document:price-book",
+        "document:crew-meeting-oct26"
+      ],
+      "ideal_suggestion": "Set up a price-book agent in #jobs that answers techs' quoting questions from the Price book 2026 doc, and passes anything not in it to Dan (starting with the weekend flush rule)."
+    },
+    {
+      "id": "p3",
+      "what": "On the Nov 2 crew call, Dan committed to registering the replacement Thermacrest serial and mailing back the old rating plate (claim WC-77812). Luis installed it Nov 5 and left the plate and receipt on Dan's desk. There's no task and no registration, and the $150 labor reimbursement needs registration within 30 days of install (by about Dec 5).",
+      "evidence": [
+        "call:crew-meeting",
+        "channel:jobs"
+      ],
+      "ideal_suggestion": "Make a task to register the WC-77812 replacement serial in the Thermacrest Pro portal and mail back the rating plate before Dec 5, so the shop collects the $150 labor reimbursement."
+    },
+    {
+      "id": "p4",
+      "what": "The 'Open estimates & follow-ups' list was last updated Oct 17 and is wrong: Pham, Kapoor, Whitlock and Feeney are done; the Greer repipe (won), Feld tankless, Lindholm spring replacement, Whitlock cleanout cap and Building C quote aren't tracked, and the 3-day follow-up rule isn't happening.",
+      "evidence": [
+        "document:estimates-tracker",
+        "call:dan-luis-huddle",
+        "channel:dm-dan-luis",
+        "channel:jobs",
+        "task:building-c-quote"
+      ],
+      "ideal_suggestion": "Replace the stale estimates doc with an estimates database (customer, job, amount, sent date, next follow-up, status), seed it with the current open quotes, and have a routine flag anything 3 days without a follow-up."
+    },
+    {
+      "id": "p5",
+      "what": "Paid tools that overlap or nobody uses: JobTimer ($45/mo, nobody uses it since September, and Dispatchly Pro already has a time clock), TrakVan ($50/mo for old GPS boxes, already replaced by Fleetwise), and Yelp Ads ($300/mo, about 1 tracked lead since July).",
+      "evidence": [
+        "document:software-spend",
+        "channel:parts-and-vans",
+        "channel:crew"
+      ],
+      "ideal_suggestion": "Cancel JobTimer and TrakVan, move timesheets to the Dispatchly time clock you already pay for, and pause Yelp Ads. That saves about $395 a month."
+    },
+    {
+      "id": "p6",
+      "what": "Duplicate, conflicting effort on the Building C quote: Dan drafted a proposal at $489 x 24 = $11,736, and Kevin is separately writing one at $475 x 24 = $11,400 (the price book's supplied-toilet price). Luis asks which number is right.",
+      "evidence": [
+        "document:building-c-proposal",
+        "task:building-c-quote",
+        "channel:jobs",
+        "document:price-book"
+      ],
+      "ideal_suggestion": "Merge Dan's Building C proposal draft and Kevin's quote into one, settle on one per-toilet price (the price book says $475), and send it to Brian before his December budget lock."
+    },
+    {
+      "id": "p7",
+      "what": "The crew handbook is half-finished: on-call rotation, vans, tools and the on-call stipend are all TODO. Dan said on the crew call he'd write the on-call schedule 'this week', and the crew is confused about who's on call. Journeyman candidate Dwayne Carter asked exactly how on-call works and whether techs take vans home.",
+      "evidence": [
+        "document:crew-handbook",
+        "call:crew-meeting",
+        "channel:crew",
+        "task:hire-journeyman",
+        "inbox subject: Re: Interview Thursday?"
+      ],
+      "ideal_suggestion": "Finish the handbook's on-call rotation and van sections (and post the November and December on-call schedule) so the crew knows who's on and Dan can answer Dwayne before the second interview."
+    },
+    {
+      "id": "p8",
+      "what": "Expansion signal: the Lakeshore notes say Buildings A (18 units) and B (20 units) also have original 3.5 gpf toilets, the regional manager wants to 'do all three buildings eventually', the city rebate is $75 per toilet through June 2027, and Brian's budget locks in December. Kevin reports about 38 more toilets and asks about pricing.",
+      "evidence": [
+        "document:lakeshore-notes",
+        "channel:jobs",
+        "call:crew-meeting"
+      ],
+      "ideal_suggestion": "Quote Buildings A and B (about 38 toilets, roughly $18k at $475) alongside Building C this month, so Lakeshore can put the whole program in their 2027 budget before the December lock."
+    },
+    {
+      "id": "p9",
+      "what": "Greer repipe risk: the drywall contractor starts closing walls Thu Nov 12 at 8am, but the rough-in inspection hasn't been requested. Dan has the portal login, said he'd book it once the permit was issued (it was issued Nov 6), and the portal needs 24 hours' notice. The permit process doc says closing walls before rough-in cost $1,400 in 2024.",
+      "evidence": [
+        "document:greer-repipe-plan",
+        "task:greer-repipe",
+        "call:crew-meeting",
+        "channel:jobs",
+        "document:permit-process"
+      ],
+      "ideal_suggestion": "Request the Greer rough-in inspection in the Brennerton permit portal today for Wed Nov 11, and confirm with Paul that the drywall crew waits until it passes."
+    }
+  ],
+  "decoys": [
+    {
+      "id": "d1",
+      "what": "Kevin says the jetter foot pedal sticks and someone will get hurt before the Nov 12 bakery job",
+      "why_stale": "The jetter was repaired Nov 6 (new pedal switch, $86). The jetter-pedal task is completed and Kevin confirmed in #parts-and-vans."
+    },
+    {
+      "id": "d2",
+      "what": "Rachel Okoro's sink is still leaking after the first visit and she wants it covered",
+      "why_stale": "Kevin did the return visit Nov 5 at no charge, the leak is fixed, and Dan called her (okoro-return task completed, #jobs). Her updated Yelp review confirms it."
+    },
+    {
+      "id": "d3",
+      "what": "Oakmont needs its 4 annual backflow tests scheduled and certificates sent by Nov 30",
+      "why_stale": "All four passed and the reports were sent to Renee and the city on Nov 6 (oakmont-backflow task completed, #jobs). Renee thanked Dan for the certificates."
+    }
+  ]
+}
