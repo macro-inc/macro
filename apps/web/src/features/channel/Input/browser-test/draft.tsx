@@ -137,7 +137,7 @@ function Fixture() {
                       <Match when={search.has('edit')}>
                         <EditFixture onSave={setSent} />
                       </Match>
-                      <Match when={search.has('tabs')}>
+                      <Match when={search.has('tabs') && open()}>
                         <ChannelTab
                           label="First tab"
                           autofocus
