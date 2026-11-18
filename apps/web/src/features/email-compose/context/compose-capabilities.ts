@@ -64,8 +64,9 @@ export class DraftPersistRejected extends Error {
 
 /**
  * Client-minted identity for a draft the server has not confirmed. Carried
- * apart from `draft.db_id` (a server id) because only the durable queue can
- * resolve handles; a REST save ignores them and mints server ids instead.
+ * apart from `draft.db_id` (a server id) because only the GraphQL save, queued
+ * or foreground, resolves handles to the server's row; a REST save ignores
+ * them and mints server ids instead.
  */
 export interface DraftClientHandles {
   draftId: string;

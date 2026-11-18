@@ -75,10 +75,12 @@ import {
 import { createDraftAutosave } from './draft-autosave';
 import { observeDraftIdentity } from './draft-identity';
 import {
+  createAlreadySentSettlement,
   createDraftPersistence,
   deleteDraftForDiscard,
   type KeptAsNewDraftReason,
   recordKeptAsNewDraft,
+  type SentDraft,
 } from './draft-persistence';
 import { observeDraftRestoration } from './draft-restoration';
 import { createDraftSaveNotice } from './draft-save-notice';
@@ -437,9 +439,11 @@ export function createEmailComposer(props: EmailComposerOptions) {
   }
 
   function handleAlreadySent() {
+    // Abort an awaiting Send directly, as a failed save that reads the draft
+    // as sent does.
     identityVersion += 1;
     autosave.cancel();
-    resetState();
+    fireAndForget(settleAlreadySent(), 'email-compose');
   }
 
   const persistence = createDraftPersistence({
@@ -527,7 +531,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
     completed() ||
     schedule?.pending() ||
     schedule?.state().type === 'scheduled';
-  const persistencePaused = () => operationBlocked() || composerBusy();
+  const editingPaused = () => operationBlocked() || composerBusy();
+  // Until the composer settles a draft the server says was sent, edits still
+  // count, so it can keep what the sent message lacks, but nothing is saved.
+  const persistencePaused = () => editingPaused() || session.alreadySent();
   // A mailbox conflict or unconfirmed write locks editing, not discarding.
   const discardBlocked = () =>
     composerBusy() ||
@@ -658,7 +665,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     return true;
   };
   const markDirtyAndScheduleSave = () => {
-    if (persistencePaused()) return;
+    if (editingPaused()) return;
     editVersion += 1;
     setDraftDirty(true);
     autosave.schedule();
@@ -952,7 +959,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
       draftTransfer?.pending() ||
       completed() ||
       terminalState() ||
-      sendLocked()
+      sendLocked() ||
+      // The composer is settling a draft the server says was sent.
+      session.alreadySent()
     )
       return;
     const refused = sendRequirements.find((requirement) => !requirement.met());
@@ -1239,10 +1248,15 @@ export function createEmailComposer(props: EmailComposerOptions) {
             inboxId: activeInboxId(),
           });
         } catch (error) {
-          await reportPersistenceFailure(error, 'delete');
-          setDiscarding(false);
-          void lifecycle.refresh().catch(props.notices.reportError);
-          throw error;
+          // The draft went out meanwhile, so nothing is left to discard: the
+          // discard drops the text as asked instead of failing.
+          if (!session.alreadySent()) {
+            await reportPersistenceFailure(error, 'delete');
+            setDiscarding(false);
+            void lifecycle.refresh().catch(props.notices.reportError);
+            throw error;
+          }
+          props.notices.reportError(error);
         }
       }
       identityVersion += 1;
@@ -1354,43 +1368,65 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
       if (handledTerminalIdentity === `${state.draftId}:${state.type}`) return;
       handledTerminalIdentity = `${state.draftId}:${state.type}`;
-      // Only a confirmed schedule makes a delivery "the scheduled email"; any
-      // other draft was sent from another tab or device.
-      const wasScheduled = schedule.state().type === 'scheduled';
-      const unsavedEdits = persistence.unsavedEdits(
-        editVersion,
-        state.type === 'sent' ? state.sentCopy : undefined
-      );
-      if (unsavedEdits > 0) {
-        detachFromObsoleteDraft(
-          state.type === 'sent' ? 'sent-elsewhere' : 'changed-elsewhere',
-          unsavedEdits,
-          state.type !== 'sent'
-            ? 'The draft changed elsewhere. Your newer text was kept as a new draft.'
-            : wasScheduled
-              ? 'The scheduled email was sent while you were editing. Your newer text was kept as a new draft and was not sent.'
-              : 'This email was already sent. Your newer text was kept as a new draft and was not sent.'
-        );
-        return;
-      }
-
-      identityVersion += 1;
-      autosave.cancel();
-      session.dispatch({ type: 'reset' });
-      setDraftGeneration(0);
-      schedule.detach();
-      setCompleted(true);
-      setTerminalState(state.type);
-      if (state.type === 'sent') {
-        if (wasScheduled)
-          props.notices.feedback.success('Scheduled email sent');
-        props.host?.showThread?.(state.threadId);
-      } else {
-        props.notices.feedback.alert('This draft is no longer available.');
-        props.host?.goBack?.();
-      }
+      settleTerminal(state);
     })
   );
+
+  /**
+   * The draft was sent or deleted elsewhere. Edits it lacks are kept as a
+   * new draft (true); without any, the composer leaves the draft.
+   */
+  function settleTerminal(state: SentDraft | { type: 'missing' }): boolean {
+    // Only a confirmed schedule makes a delivery "the scheduled email"; any
+    // other draft was sent from another tab or device.
+    const wasScheduled = schedule.state().type === 'scheduled';
+    const unsavedEdits = persistence.unsavedEdits(
+      editVersion,
+      state.type === 'sent' ? state.sentCopy : undefined
+    );
+    // Edits that emptied the draft leave nothing to keep. Without its editor
+    // the composer cannot tell, and keeps them.
+    if (unsavedEdits > 0 && (!editor() || collectDraft())) {
+      detachFromObsoleteDraft(
+        state.type === 'sent' ? 'sent-elsewhere' : 'changed-elsewhere',
+        unsavedEdits,
+        state.type !== 'sent'
+          ? 'The draft changed elsewhere. Your newer text was kept as a new draft.'
+          : wasScheduled
+            ? 'The scheduled email was sent while you were editing. Your newer text was kept as a new draft and was not sent.'
+            : 'This email was already sent. Your newer text was kept as a new draft and was not sent.'
+      );
+      return true;
+    }
+
+    identityVersion += 1;
+    autosave.cancel();
+    session.dispatch({ type: 'reset' });
+    setDraftGeneration(0);
+    schedule.detach();
+    setCompleted(true);
+    setTerminalState(state.type);
+    if (state.type === 'sent') {
+      if (wasScheduled) props.notices.feedback.success('Scheduled email sent');
+      if (state.threadId) props.host?.showThread?.(state.threadId);
+    } else {
+      props.notices.feedback.alert('This draft is no longer available.');
+      props.host?.goBack?.();
+    }
+    return false;
+  }
+
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  const settleAlreadySent = createAlreadySentSettlement({
+    session,
+    read: lifecycle.refreshIdentity,
+    notices: props.notices,
+    superseded: () => disposed || discarding(),
+    settle: settleTerminal,
+  });
 
   draftTransfer = createDraftTransfer({
     draftGeneration,
@@ -1424,7 +1460,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
       movingInbox() ||
       completed() ||
       schedule.state().type === 'scheduled' ||
-      scheduling()
+      scheduling() ||
+      session.alreadySent()
     )
       return;
     setMovingInbox(true);
@@ -1549,12 +1586,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
     // Form state (write)
     setRecipients: (field, value) => {
-      if (persistencePaused() || scheduling()) return;
+      if (editingPaused() || scheduling()) return;
       form.setRecipients(field, value);
       markDirtyAndScheduleSave();
     },
     setSubject: (value) => {
-      if (persistencePaused() || scheduling()) return;
+      if (editingPaused() || scheduling()) return;
       form.setSubject(value);
       markDirtyAndScheduleSave();
     },
@@ -1611,7 +1648,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
       terminalState() !== undefined ||
       scheduling() ||
       attachmentLinks.uploading() ||
-      schedule.action() === 'unavailable',
+      schedule.action() === 'unavailable' ||
+      session.alreadySent(),
     isSending: () =>
       submitting() || scheduling() || operationSending(currentOperation()),
     hasDraft: () => currentDraftId() != null,

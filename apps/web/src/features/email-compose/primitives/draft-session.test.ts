@@ -134,17 +134,33 @@ describe('reduceDraftSession', () => {
     expect(next.epoch).toBe(handle.epoch);
   });
 
-  it('already-sent drops the draft like a reset', () => {
+  it('already-sent latches the draft and keeps it for the composer to settle', () => {
     const next = reduceDraftSession(seeded, {
       type: 'rejected',
       epoch: seeded.epoch,
       code: 'DRAFT_ALREADY_SENT',
     });
     expect(next).toEqual({
-      identity: { kind: 'none' },
-      policy: { kind: 'autosaving' },
+      identity: seeded.identity,
+      policy: { kind: 'latched', code: 'DRAFT_ALREADY_SENT' },
       epoch: seeded.epoch + 1,
     });
+    // A second refusal of the same draft changes nothing.
+    expect(
+      reduceDraftSession(next, {
+        type: 'rejected',
+        epoch: next.epoch,
+        code: 'DRAFT_ALREADY_SENT',
+      })
+    ).toBe(next);
+    // Neither does a later rejection of another kind.
+    expect(
+      reduceDraftSession(next, {
+        type: 'rejected',
+        epoch: next.epoch,
+        code: 'INVALID',
+      })
+    ).toBe(next);
   });
 
   it('emptied and reset start a fresh draft and lift the latch', () => {

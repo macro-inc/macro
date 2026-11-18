@@ -888,6 +888,21 @@ pub struct ChannelMetadata {
     pub channel_type: ChannelType,
     /// Resolved display name.
     pub channel_name: String,
+    /// Whether the channel has a name of its own. DMs and group chats have
+    /// none and show their members' names.
+    pub named: bool,
+}
+
+impl ChannelMetadata {
+    /// A DM or an unnamed group chat: a conversation its first message creates,
+    /// as opposed to a channel people are invited to.
+    pub fn is_dm_or_group_chat(&self) -> bool {
+        match self.channel_type {
+            ChannelType::DirectMessage => true,
+            ChannelType::Private => !self.named,
+            ChannelType::Public | ChannelType::Team => false,
+        }
+    }
 }
 
 /// Persisted channel message returned by mutation operations.
@@ -930,6 +945,16 @@ pub struct ChannelInfo {
     pub org_id: Option<i64>,
     /// Team id.
     pub team_id: Option<Uuid>,
+}
+
+impl ChannelInfo {
+    /// Whether the channel has a name of its own. A blank name counts as none,
+    /// as it does for display names.
+    pub fn named(&self) -> bool {
+        self.name
+            .as_deref()
+            .is_some_and(|name| !name.trim().is_empty())
+    }
 }
 
 /// Request for a batched channel preview lookup.

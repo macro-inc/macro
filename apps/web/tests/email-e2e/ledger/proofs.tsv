@@ -145,7 +145,6 @@ AL-001	the sidebar's Inbox item does not reopen the Inbox tab that was last open
 AL-002	A press on a desktop sidebar tab returns before setTab in EmailSidebar.tsx, so the sidebar's Favorites (and other tabs) no longer switch the list. Run on touch as well: the sidebar sheet lists the same `Tab` rows, and with setTab skipped the sheet still closes but All leaves Noise open, so the header never names All.
 AL-003	The header's Inbox view tabs (Signal / Noise) ignore a change instead of calling setTab in EmailHeader.tsx.
 AL-004	The touch header's Inbox pills (the PillTabs onChange in email-view.tsx) return before setTab, so a tap on Noise leaves Signal open.
-AL-005	pressing g and a letter opens no tab
 AL-006	the number keys do not switch tabs
 AL-007	pressing Tab or Shift+Tab does not move between the Inbox tabs
 AL-008	pressing Escape does not go back to the Signal tab
@@ -381,6 +380,7 @@ AL-904	The Undo button of the "Sender block queued" toast in thread.ts returns b
 AL-905	The "Grant access" button of a permission request in PermissionRequestsView.tsx no longer calls resolve with the chosen level.
 AL-910	opening a thread from its address loads no thread
 AL-911	The touch header's Show sidebar pill (ViewSidebarToggle in ViewNavigationControls.tsx) returns before expanding when the aside is a sheet, so no sheet opens; the desktop's Show navigation is untouched.
+AL-912	The Sent go-to link's handler in GoToHotkeys (sidebar.tsx) returns before navigating, so g then s leaves Email on the tab it was on. The AL-400 test goes to Sent the same way before it leaves for Tasks, so it fails at that step too.
 AX-001	Connect on the Google Workspace row of Settings › Email does nothing: its onClick no longer calls onConnectEmail('GMAIL') in Email.tsx.
 AX-002	Connect on the Outlook row of Settings › Email does nothing: its onClick no longer calls onConnectEmail('OUTLOOK') in Email.tsx.
 AX-003	Enable on the disabled primary inbox row does nothing: the button in DisabledPrimaryRow no longer calls props.onEnable in Email.tsx.
@@ -424,6 +424,8 @@ AX-042	The onboarding email step's onConnectWork handler in email-step.tsx retur
 AX-043	The onboarding step's "Continue with Microsoft" button in google-accounts-step.tsx no longer calls onConnectMicrosoft, so the Outlook work inbox connection never starts.
 AX-044	no Try again is offered when the connected accounts fail to load during onboarding
 AX-048	picking Email in the Create menu opens no new message
+AX-049	The universal input's Save as draft button (ComposerFooter in universal-composer.tsx) no longer calls saveEmailDraft, so it saves nothing.
+AX-050	The universal input's primary button (ComposerFooter in universal-composer.tsx) does nothing for an email, so Send email sends nothing.
 AX-051	the universal input's Connect Google starts no connection when no inbox is connected
 AX-052	The review composer's subject setter in DraftComposer.tsx ignores typed subject edits, so the drafted email is sent with its original subject. The field keeps the typed text, so the first assertion that can see the edit is the subject of the sent message at the provider, right after the send; the test fails there.
 AX-054	The review composer's onSend wiring in DraftComposer.tsx no longer calls handleSend, so "Send email" (and Cmd+Enter) on the review card does nothing.
@@ -614,6 +616,7 @@ F-162	the New email switch saves nothing
 F-163	a notification row opens nothing
 F-164	Mark done on Home does nothing
 F-165	New email on a contact's record does nothing
+F-166	The universal input builds its email (emailMessage in actions.ts) with an empty body, so the saved draft and the sent message lose their text: the send test fails at the provider's copy, the draft test at the opened draft's text.
 F-167	Create task on a thread opens no task composer, and Ask Macro opens a conversation without the thread attached
 F-168	the card of an email the assistant drafted sends the assistant's subject, not the one the user typed
 F-174	the refusal of a third inbox is not told
@@ -703,6 +706,7 @@ STC-072	not shown as the row says (toast: Email scheduled for <time>. Cancel the
 STC-073	not shown as the row says (toast: Cancel the schedule before deleting this draft.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-074	not shown as the row says (toast: This email was scheduled in another tab. Your newer text was kept as a new draft.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-075	not shown as the row says (toast: Scheduled email sent): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-076	not shown as the row says (toast: This scheduled email was sent. Your composer has been updated.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-persistence.ts
 STC-078	not shown as the row says (toast: <reason> with action Retry inbox change (Could not change inbox. Retry the same inbox to recover. when there is no reason)): its rendering is switched off or changed in src/lib/queries/email/draft.ts
 STC-079	not shown as the row says (toast: Retry the previous inbox change before choosing another inbox.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
 STC-080	not shown as the row says (toast: Previously saved attachments could not be copied to the new draft. Please attach those files again.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
@@ -756,6 +760,7 @@ STC-406	not shown as the row says (toast: This email is scheduled for <time>. Ch
 STC-407	not shown as the row says (toast: These attachments exceed the destination inbox’s size limit.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
 STC-408	not shown as the row says (toast: Reconnect and let the draft finish saving before changing inboxes.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
 STC-409	not shown as the row says (toast: The draft changed elsewhere. Your newer text was kept as a new draft.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-411	not shown as the row says (toast: This email was already sent. Your newer text was kept as a new draft and was not sent.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-412	not shown as the row says (toast: This draft is no longer available.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
 STC-413	not shown as the row says (toast: Draft could not be synced): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-415	not shown as the row says (No dates match "<query>"): its rendering is switched off or changed in src/features/email-compose/components/date-selector.tsx
@@ -1034,6 +1039,7 @@ STL-986	The Reminders row's clock label in email-row-schedule.tsx keeps the firs
 STL-987	The mail list's rows while searching (`rawEntities` in use-email-query.ts) leave out what the search service found, so the list shows none of the threads the search matched.
 STL-988	The event composer opened from a thread with b gets an empty subject instead of the thread's title, in EmailThreadHostView.tsx.
 STL-989	The touch list header in email-view.tsx shows an empty name outside the Inbox, so it does not name All once All is open.
+STL-990	The Mail first-page reconciliation in mail/reconciliation.rs (soup_filter_cache_adapter) skips every thread with a queued write, so a thread trashed while its mark read is on its way stays in the list.
 STX-001	the text of "Loading accounts…" in the Read receipts list is changed in src/features/settings/email-settings.tsx
 STX-002	The Read receipts section's load error says "Accounts unavailable" instead of "Couldn't load accounts" in email-settings.tsx.
 STX-003	not shown as the row says ("Loading signatures…" / "Loading signature…"): its rendering is switched off or changed in src/features/settings/email-settings.tsx
@@ -1082,6 +1088,7 @@ STX-214	The onboarding step's connected line "Work email connected" reads "Work 
 STX-300	The composer skips putting the initialTo addresses into To (email-composer.ts), so a composer opened from a mailto link has an empty To field.
 STX-301	not shown as the row says ("Connect Google to send email and create calendar events. Then return here to compose."): its rendering is switched off or changed in src/features/universal-input/views/universal-composer.tsx
 STX-302	the text of the notice of a consent screen that cannot open is changed in src/features/universal-input/actions.ts
+STX-303	The pending labels of the universal input's buttons are switched off in universal-composer.tsx, so Save as draft and Send email keep their names while the save or send is pending.
 STX-311	not shown as the row says (Empty Home "Welcome home": "… Connect email to include your inbox, too." with "Connect email"): its rendering is switched off or changed in src/features/home/components/HomeEmptyState.tsx
 STX-312	The same break as STX-971: the unread dot of a Home row in HomeListEntity.tsx loses its "Unread" label; the returned reminder shows as a notification on its Home row only through that dot, the one line that renders it for every row.
 STX-313	The kind badge on the sender avatar of a Notifications row (inbox-sender-avatar.tsx) loses its "Email" label for email notifications.
@@ -1110,3 +1117,4 @@ STX-973	The desktop Home view in home-view.tsx hides its list pane while a previ
 STX-974	The Home list's rows in HomeList.tsx keep every email row that has left the source, so a thread marked done stays listed on Home.
 STX-975	The activity row of a program step in CodeExecutionToolCall.tsx shows an empty title instead of the operation's label.
 STX-976	The review composer's disabled accessor in DraftComposer.tsx always returns false, so the fields of a sent review card stay editable.
+STX-977	The open of an email result in actions.ts returns without navigating, so once the save or send finishes the universal input closes and opens neither the draft nor the sent thread.

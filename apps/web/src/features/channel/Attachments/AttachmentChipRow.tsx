@@ -14,7 +14,7 @@ export function AttachmentChipRow(props: { attachment: ApiChannelAttachment }) {
       <div class="flex-1 min-w-0">
         <AttachmentChip
           attachment={props.attachment}
-          previewClass="max-w-full"
+          previewClass="w-fit max-w-full"
         />
       </div>
       <div class="shrink-0">

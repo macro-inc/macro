@@ -282,6 +282,32 @@ impl MailboxSyncRepository for PgMailboxSync {
         Ok(())
     }
 
+    async fn pace_import(
+        &self,
+        lease: &StreamLease,
+        queued: u32,
+        delay: u32,
+    ) -> Result<bool, MailboxError> {
+        // The count reads `email_message_reconciliation_import_queued`, whose
+        // predicate it repeats, and stops at `queued` rows. Rows backed off
+        // after failures of their own don't count: they would hold the walk
+        // while nothing could be claimed.
+        let paced = sqlx::query!(r#"
+            WITH queued AS (
+                SELECT count(*) AS rows FROM (
+                    SELECT 1 FROM email_message_reconciliation
+                    WHERE link_id = $1 AND generation = $2 AND is_import AND available_at <> 'infinity'
+                        AND available_at <= now()
+                    LIMIT $3
+                ) q
+            )
+            UPDATE email_sync_streams s SET lease_id = NULL, lease_until = NULL, next_run_at = now() + make_interval(secs => $7)
+            FROM queued WHERE queued.rows >= $3 AND s.id = $4 AND s.lease_id = $5 AND s.fence = $6
+        "#,lease.mailbox.link_id,lease.mailbox.sync_generation,i64::from(queued),lease.id,lease.lease_id,lease.fence,f64::from(delay))
+            .execute(&self.db).await.map_err(db_error)?;
+        Ok(paced.rows_affected() == 1)
+    }
+
     async fn claim_message(&self, lease_id: Uuid) -> Result<Option<MessageLease>, MailboxError> {
         // Naming both `is_import` values lets `available_at <= now()` end the claim index scan.
         // Without it, Postgres before 18 reads every backed-off row on each poll.
@@ -376,12 +402,16 @@ impl MailboxSyncRepository for PgMailboxSync {
         retry: MessageRetry,
     ) -> Result<(), MailboxError> {
         match retry {
+            // A revision queued during the lease (new mail on a message an
+            // import was reading) is due at once: the delay was the leased
+            // read's, and an import's refusal can leave live reads room.
             MessageRetry::After { seconds, counted } => {
                 sqlx::query!(r#"
-                    UPDATE email_message_reconciliation SET lease_id = NULL,lease_until = NULL,available_at = now() + make_interval(secs => $5),
+                    UPDATE email_message_reconciliation SET lease_id = NULL,lease_until = NULL,
+                        available_at = CASE WHEN revision = $7 THEN now() + make_interval(secs => $5) ELSE now() END,
                         attempts = attempts - CASE WHEN $6 THEN 0 ELSE 1 END
                     WHERE link_id = $1 AND generation = $2 AND provider_id = $3 AND lease_id = $4
-                "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id,f64::from(seconds),counted)
+                "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id,f64::from(seconds),counted,lease.revision)
                     .execute(&self.db).await.map_err(db_error)?;
             }
             // `available_at = 'infinity'` is the abandoned state: claims stop at
