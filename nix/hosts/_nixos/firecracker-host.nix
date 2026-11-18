@@ -8,7 +8,8 @@
 # kernel and sysctl hardening, the host's own input firewall (the agent adds
 # its guest tables, prefix `fch`, at start), an optional WireGuard tunnel to
 # the control plane, TLS as root-only credentials, the Datadog agent the
-# agent's OTLP goes to, and a health check. Security findings it implements
+# agent's OTLP goes to, Grafana Alloy shipping host and per-computer cgroup
+# metrics to Macro's Prometheus, and a health check. Security findings it implements
 # are named S-<n> (docs/architecture/firecracker-computers-security.md).
 {
   config,
@@ -387,6 +388,24 @@ in
         description = "Path of the Datadog API key (root 0400, outside the Nix store).";
       };
     };
+    alloy = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Run Grafana Alloy: host metrics and each computer's CPU, memory and disk IO from its VM's cgroup, written to Macro's Prometheus for the fleet dashboard. Nothing runs in guests.";
+      };
+      remoteWriteUrl = lib.mkOption {
+        type = lib.types.str;
+        default = "https://otlp.macro-internal.com/api/v1/write";
+        description = "Prometheus remote-write endpoint of the observability stack (infra/stacks/observability).";
+      };
+      passwordFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "/var/lib/macro/metrics-remote-write-password";
+        description = "Path of the remote-write password (root 0400, outside the Nix store).";
+      };
+    };
     environment = lib.mkOption {
       type = lib.types.enum [
         "local"
@@ -425,6 +444,14 @@ in
         {
           assertion = cfg.datadog.apiKeyFile == null || !(lib.hasPrefix "/nix/store/" cfg.datadog.apiKeyFile);
           message = "The Datadog API key must not be in the Nix store.";
+        }
+        {
+          assertion = cfg.alloy.enable -> cfg.alloy.passwordFile != null;
+          message = "macro.firecrackerHost.alloy.passwordFile is required with Alloy on.";
+        }
+        {
+          assertion = cfg.alloy.passwordFile == null || !(lib.hasPrefix "/nix/store/" cfg.alloy.passwordFile);
+          message = "The remote-write password must not be in the Nix store.";
         }
       ]
       ++ lib.optionals (cfg.moves != null) [
@@ -860,6 +887,37 @@ in
         ];
       };
       users.users.datadog.extraGroups = [ "systemd-journal" ];
+    })
+
+    (lib.mkIf cfg.alloy.enable {
+      services.alloy = {
+        enable = true;
+        configPath = pkgs.writeText "firecracker-host.alloy" (
+          lib.replaceStrings
+            [
+              "@HOST@"
+              "@ENVIRONMENT@"
+              "@REMOTE_WRITE_URL@"
+            ]
+            [
+              config.networking.hostName
+              cfg.environment
+              cfg.alloy.remoteWriteUrl
+            ]
+            (builtins.readFile ./firecracker-host.alloy)
+        );
+        extraFlags = [
+          "--server.http.listen-addr=127.0.0.1:12345"
+          "--disable-reporting"
+        ];
+      };
+      systemd.services.alloy.serviceConfig = {
+        # The password reaches Alloy as a root-only credential, like the
+        # agent's keys (S-18).
+        LoadCredential = [ "remote-write-password:${cfg.alloy.passwordFile}" ];
+        # Metrics never starve computers of memory.
+        MemoryMax = "512M";
+      };
     })
   ];
 }

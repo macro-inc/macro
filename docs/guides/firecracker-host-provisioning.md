@@ -51,6 +51,8 @@ A host file next to the module sets what is particular to it, and is added to
     };
     clientCertificates = [ ./certs/control-plane-<env>.crt ];
     datadog.apiKeyFile = "/var/lib/macro/datadog-api-key";
+    # Host and per-computer metrics for the Grafana fleet dashboard.
+    alloy = { enable = true; passwordFile = "/var/lib/macro/metrics-remote-write-password"; };
     # ROOT_DISK_GIB in crates/hosted_runtimes/src/domain/size.rs.
     storage.goldenRootDiskGib = 32;
     environment = "production";
@@ -110,7 +112,7 @@ metal, so KVM needs no nesting. What differs from GCP:
   record the server in the resources ledger.
 - **No service account or metadata server.** S-11 does not apply; the host
   holds no cloud credentials at all. Logs and metrics leave only through the
-  Datadog agent.
+  Datadog agent and, when enabled, Alloy's remote write.
 - **No cloud firewall.** The module's nftables input chain is the only wall:
   keep `apiSources` to the tunnel peer, set `sshSources` to the administration
   bastion's addresses (the default is GCP's IAP range), and optionally mirror
