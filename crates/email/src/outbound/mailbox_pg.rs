@@ -288,7 +288,8 @@ impl MailboxSyncRepository for PgMailboxSync {
         queued: u32,
         delay: u32,
     ) -> Result<bool, MailboxError> {
-        // The count stops at `queued` rows of the mailbox's primary-key range.
+        // The count reads `email_message_reconciliation_import_queued`, whose
+        // predicate it repeats, and stops at `queued` rows.
         let paced = sqlx::query!(r#"
             WITH queued AS (
                 SELECT count(*) AS rows FROM (
