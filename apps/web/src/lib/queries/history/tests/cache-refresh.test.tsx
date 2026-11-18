@@ -5,8 +5,9 @@ import type {
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useHistoryQuery } from '../history';
+import { useHistoryQuery, useHistoryQueryWhileRead } from '../history';
 
 const mocks = vi.hoisted(() => ({
   readHistory: vi.fn(),
@@ -46,6 +47,44 @@ afterEach(() => {
 });
 
 describe('cache-backed history refresh', () => {
+  it('rereads for a reader only while it reads, catching up once', async () => {
+    let notify: (() => void) | undefined;
+    mocks.subscribe.mockImplementation((callback: () => void) => {
+      notify = callback;
+      return mocks.unsubscribe;
+    });
+    const item = { id: 'doc', name: 'Doc', type: 'document', ownerId: 'owner' };
+    mocks.readHistory.mockResolvedValue([item]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const [reading, setReading] = createSignal(false);
+    let query: ReturnType<typeof useHistoryQueryWhileRead> | undefined;
+    const Probe = () => {
+      query = useHistoryQueryWhileRead(reading);
+      return null;
+    };
+    const view = render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(query?.isSuccess).toBe(true));
+    const initialCalls = mocks.readHistory.mock.calls.length;
+
+    notify?.();
+    notify?.();
+    await Promise.resolve();
+    expect(mocks.readHistory).toHaveBeenCalledTimes(initialCalls);
+
+    setReading(true);
+    await waitFor(() =>
+      expect(mocks.readHistory).toHaveBeenCalledTimes(initialCalls + 1)
+    );
+    view.unmount();
+    client.clear();
+  });
+
   it('coalesces hidden cache changes without hiding the previous history', async () => {
     const visibility = vi.spyOn(document, 'visibilityState', 'get');
     let notify: (() => void) | undefined;
