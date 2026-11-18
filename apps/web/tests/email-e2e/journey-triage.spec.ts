@@ -222,7 +222,8 @@ for (const provider of PROVIDERS) {
       await expect
         .poll(async () => (await held())?.labels)
         .not.toContain(spamFolder(provider));
-      expect((await held())?.inInbox).toBe(true);
+      // On Gmail Not spam is two label writes, which can land in either order.
+      await expect.poll(async () => (await held())?.inInbox).toBe(true);
       confirmed('F-078');
 
       // Back in Macro's inbox too.
