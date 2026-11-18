@@ -4289,6 +4289,55 @@
         }
       }
     },
+    "/team/computers/purchase-offers": {
+      "get": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Every size with its price and availability, what buying it charges\ntoday, the renewal date and the card charged: what the buy dialog shows.",
+        "operationId": "list_team_computer_purchase_offers",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOffers"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/computers/rollout": {
       "get": {
         "tags": ["hosted_runtimes::inbound::axum_router"],
@@ -7654,6 +7703,21 @@
           "comped"
         ]
       },
+      "CardBrand": {
+        "type": "string",
+        "description": "A card network.",
+        "enum": [
+          "amex",
+          "diners",
+          "discover",
+          "eftpos_au",
+          "jcb",
+          "mastercard",
+          "unionpay",
+          "visa",
+          "unknown"
+        ]
+      },
       "ChangePlanRequest": {
         "type": "object",
         "description": "Request body for switching plans",
@@ -9646,6 +9710,21 @@
           }
         }
       },
+      "PaymentCard": {
+        "type": "object",
+        "description": "A card as its owner recognizes it: \"Visa ending 4242\".",
+        "required": ["brand", "last4"],
+        "properties": {
+          "brand": {
+            "$ref": "#/components/schemas/CardBrand",
+            "description": "Card network."
+          },
+          "last4": {
+            "type": "string",
+            "description": "Last four digits."
+          }
+        }
+      },
       "Permission": {
         "type": "object",
         "required": ["id", "description"],
@@ -9848,6 +9927,36 @@
         },
         "additionalProperties": false
       },
+      "PurchaseOffers": {
+        "type": "object",
+        "description": "What the buy dialog shows before a purchase: each size with what buying\nit charges today, when the full price bills from, and the card charged.",
+        "required": ["sizes", "renewsAt"],
+        "properties": {
+          "card": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PaymentCard",
+                "description": "The card purchases are charged to; `None` when there is no card on\nfile or the team pays another way."
+              }
+            ]
+          },
+          "renewsAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the current billing period ends: each computer bills its full\n`quote.amount` every `quote.interval` from then."
+          },
+          "sizes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseSizeOffer"
+            },
+            "description": "Every size some host can run awake."
+          }
+        }
+      },
       "PurchaseRefusalCode": {
         "type": "string",
         "description": "Why a purchase was refused, as a stable code the buy and add-agent dialogs\nshow their own way. One vocabulary for `/team/computers` and\n`/team_agents`.",
@@ -9857,6 +9966,26 @@
           "no_room",
           "invite_in_progress"
         ]
+      },
+      "PurchaseSizeOffer": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SizeOffer",
+            "description": "The size, its price and availability, as `/team/computers/offers` lists it."
+          },
+          {
+            "type": "object",
+            "required": ["dueToday"],
+            "properties": {
+              "dueToday": {
+                "type": "integer",
+                "format": "int64",
+                "description": "The prorated rest of the current period, invoiced at purchase, in the\ncurrency's smallest unit; 0 when the computer is included. The charge\nitself is prorated to the second it is bought."
+              }
+            }
+          }
+        ],
+        "description": "A size on sale and what buying it charges today."
       },
       "PurchaseState": {
         "type": "string",

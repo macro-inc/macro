@@ -91,6 +91,7 @@ import type {
   PublicGtmInviteLink,
   PurchaseBody,
   Purchased,
+  PurchaseOffers,
   PutAgentApiKeyRequest,
   PutCursorApiKeyRequest,
   PutCursorDefaultModelRequest,
@@ -4992,6 +4993,70 @@ export const listTeamComputerOffers = async (
     status: res.status,
     headers: res.headers,
   } as listTeamComputerOffersResponse;
+};
+
+/**
+ * @summary Every size with its price and availability, what buying it charges
+today, the renewal date and the card charged: what the buy dialog shows.
+ */
+export type listTeamComputerPurchaseOffersResponse200 = {
+  data: PurchaseOffers;
+  status: 200;
+};
+
+export type listTeamComputerPurchaseOffersResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listTeamComputerPurchaseOffersResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type listTeamComputerPurchaseOffersResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type listTeamComputerPurchaseOffersResponseSuccess =
+  listTeamComputerPurchaseOffersResponse200 & {
+    headers: Headers;
+  };
+export type listTeamComputerPurchaseOffersResponseError = (
+  | listTeamComputerPurchaseOffersResponse403
+  | listTeamComputerPurchaseOffersResponse422
+  | listTeamComputerPurchaseOffersResponse503
+) & {
+  headers: Headers;
+};
+
+export type listTeamComputerPurchaseOffersResponse =
+  | listTeamComputerPurchaseOffersResponseSuccess
+  | listTeamComputerPurchaseOffersResponseError;
+
+export const getListTeamComputerPurchaseOffersUrl = () => {
+  return `/team/computers/purchase-offers`;
+};
+
+export const listTeamComputerPurchaseOffers = async (
+  options?: RequestInit
+): Promise<listTeamComputerPurchaseOffersResponse> => {
+  const res = await fetch(getListTeamComputerPurchaseOffersUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamComputerPurchaseOffersResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamComputerPurchaseOffersResponse;
 };
 
 /**

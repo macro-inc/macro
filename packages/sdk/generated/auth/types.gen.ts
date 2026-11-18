@@ -136,6 +136,11 @@ export type BillingInterval = 'month' | 'year';
 export type BillingStatus = 'purchasing' | 'active' | 'past_due' | 'ending' | 'ended' | 'comped';
 
 /**
+ * A card network.
+ */
+export type CardBrand = 'amex' | 'diners' | 'discover' | 'eftpos_au' | 'jcb' | 'mastercard' | 'unionpay' | 'visa' | 'unknown';
+
+/**
  * Request body for switching plans
  */
 export type ChangePlanRequest = {
@@ -1676,6 +1681,20 @@ export type PatchUserTutorialRequest = {
     tutorialComplete: boolean;
 };
 
+/**
+ * A card as its owner recognizes it: "Visa ending 4242".
+ */
+export type PaymentCard = {
+    /**
+     * Card network.
+     */
+    brand: CardBrand;
+    /**
+     * Last four digits.
+     */
+    last4: string;
+};
+
 export type Permission = {
     /**
      * The description of the permission
@@ -1825,11 +1844,40 @@ export type PurchaseBody = {
 };
 
 /**
+ * What the buy dialog shows before a purchase: each size with what buying
+ * it charges today, when the full price bills from, and the card charged.
+ */
+export type PurchaseOffers = {
+    card?: null | PaymentCard;
+    /**
+     * When the current billing period ends: each computer bills its full
+     * `quote.amount` every `quote.interval` from then.
+     */
+    renewsAt: string;
+    /**
+     * Every size some host can run awake.
+     */
+    sizes: Array<PurchaseSizeOffer>;
+};
+
+/**
  * Why a purchase was refused, as a stable code the buy and add-agent dialogs
  * show their own way. One vocabulary for `/team/computers` and
  * `/team_agents`.
  */
 export type PurchaseRefusalCode = 'team_on_trial' | 'payment_declined' | 'no_room' | 'invite_in_progress';
+
+/**
+ * A size on sale and what buying it charges today.
+ */
+export type PurchaseSizeOffer = SizeOffer & {
+    /**
+     * The prorated rest of the current period, invoiced at purchase, in the
+     * currency's smallest unit; 0 when the computer is included. The charge
+     * itself is prorated to the second it is bought.
+     */
+    dueToday: number;
+};
 
 /**
  * Where a purchase stands when its request returns.
@@ -4636,6 +4684,27 @@ export type ListTeamComputerOffersResponses = {
 };
 
 export type ListTeamComputerOffersResponse = ListTeamComputerOffersResponses[keyof ListTeamComputerOffersResponses];
+
+export type ListTeamComputerPurchaseOffersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers/purchase-offers';
+};
+
+export type ListTeamComputerPurchaseOffersErrors = {
+    403: ErrorResponse;
+    422: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type ListTeamComputerPurchaseOffersError = ListTeamComputerPurchaseOffersErrors[keyof ListTeamComputerPurchaseOffersErrors];
+
+export type ListTeamComputerPurchaseOffersResponses = {
+    200: PurchaseOffers;
+};
+
+export type ListTeamComputerPurchaseOffersResponse = ListTeamComputerPurchaseOffersResponses[keyof ListTeamComputerPurchaseOffersResponses];
 
 export type GetTeamComputerRolloutData = {
     body?: never;
