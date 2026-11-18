@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { Telemetry } from '@macro-inc/observability/core';
 import {
   context,
@@ -15,14 +15,25 @@ import {
 } from '@opentelemetry/sdk-trace-base';
 import { setupTraceparentVariable, traceStart } from '../telemetry.ts';
 
-context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
-propagation.setGlobalPropagator(new W3CTraceContextPropagator());
 const exporter = new InMemorySpanExporter();
-trace.setGlobalTracerProvider(
-  new BasicTracerProvider({
-    spanProcessors: [new SimpleSpanProcessor(exporter)],
-  })
-);
+const contextManager = new AsyncLocalStorageContextManager();
+
+// The OTel API is global: register for these tests only, and leave nothing behind.
+beforeAll(() => {
+  context.setGlobalContextManager(contextManager.enable());
+  propagation.setGlobalPropagator(new W3CTraceContextPropagator());
+  trace.setGlobalTracerProvider(
+    new BasicTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    })
+  );
+});
+
+afterAll(() => {
+  trace.disable();
+  propagation.disable();
+  context.disable();
+});
 
 test("the start joins the computer's setup trace, its steps and work begun in it are its children, and the event loop stays outside", async () => {
   exporter.reset();
@@ -62,12 +73,28 @@ test("the start joins the computer's setup trace, its steps and work begun in it
 
 test('without a setup trace the start is a trace of its own, timed from the process start', async () => {
   exporter.reset();
-  const before = Date.now() - process.uptime() * 1000;
-  await traceStart({}, async () => undefined);
+  // The process has been running a while, so its start is well before now.
+  await Bun.sleep(5);
+  const called = Date.now();
+  const before = called - process.uptime() * 1000;
+  await traceStart({}, async (phase) =>
+    phase('agent.start.checks', async () => undefined)
+  );
 
-  const [start] = exporter.getFinishedSpans();
-  expect(start?.name).toBe('agent.start');
+  const spans = Object.fromEntries(
+    exporter.getFinishedSpans().map((span) => [span.name, span])
+  );
+  const start = spans['agent.start'];
   expect(start?.parentSpanContext).toBeUndefined();
+  const checks = spans['agent.start.checks'];
+  const checksMs = checks
+    ? checks.startTime[0] * 1000 + checks.startTime[1] / 1e6
+    : 0;
+  const startMs = start
+    ? start.startTime[0] * 1000 + start.startTime[1] / 1e6
+    : 0;
+  // Loading the code before the call counts toward the start.
+  expect(checksMs - startMs).toBeGreaterThanOrEqual(called - before - 50);
   const startedMs = start
     ? start.startTime[0] * 1000 + start.startTime[1] / 1e6
     : 0;
@@ -91,4 +118,16 @@ test('a failed step marks it and the start failed, and still ends both', async (
   );
   expect(spans['agent.start.checks']?.status.code).toBe(SpanStatusCode.ERROR);
   expect(spans['agent.start']?.status.code).toBe(SpanStatusCode.ERROR);
+});
+
+test('the start ends while the event loop it began keeps running', async () => {
+  exporter.reset();
+  const forever = new Promise<void>(() => undefined);
+
+  const { running } = await traceStart({}, async () => ({ running: forever }));
+
+  expect(running).toBe(forever);
+  expect(exporter.getFinishedSpans().map((span) => span.name)).toEqual([
+    'agent.start',
+  ]);
 });
