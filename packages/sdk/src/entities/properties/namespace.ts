@@ -91,7 +91,11 @@ export class PropertiesNamespace {
   }
 
   /**
-   * Get properties for multiple entities in a single request.
+   * Get properties for multiple entities in a single request. Name the
+   * property definitions to read in `property_ids`: with none, nothing comes
+   * back. `entity_type` is upper case, `DOCUMENT` for a document or a task.
+   * For tasks' due dates and Statuses, `macro.tasks.list` needs no property
+   * ids.
    *
    * @readonly
    */
