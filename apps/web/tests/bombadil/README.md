@@ -11,9 +11,9 @@ positioned (`data-scroll-phase="ready"`), nothing but the reader moves it.
 
 Movement right after scrolling input is excused for 150 ms, and longer while
 the scroll is still moving. Scrolling input is the wheel, touch, scrolling
-keys outside a text field, Enter (a send jumps to the latest message), a
-press on the timeline's scrollbar for as long as it lasts, and a
-scroll-to-bottom button. Other clicks and typing excuse no movement. Resizes are excused for 800 ms after typing or a window
+keys on the page or in the timeline, Enter in the composer (a send jumps to
+the latest message), and a scroll-to-bottom button. Other clicks and keys,
+and typing, excuse no movement. Resizes are excused for 800 ms after typing or a window
 resize. A navigation starts over.
 
 ## How it checks

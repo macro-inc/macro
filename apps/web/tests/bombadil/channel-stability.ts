@@ -71,18 +71,17 @@ const probe = extract((state): ProbeReport => {
 
     // Any input explains a height change for a while (typing grows the
     // composer). Only input that scrolls explains motion: the wheel, touch,
-    // scrolling keys, Enter (sending jumps to the latest message), a press on
-    // the timeline's scrollbar, or a scroll-to-bottom button. Any other click
-    // or key (opening a pane, typing) keeps the reading position under check.
+    // a scrolling key where the browser scrolls with it, Enter in the
+    // composer (a send jumps to the latest message), or a scroll-to-bottom
+    // button. Any other click or key (opening a pane, typing) keeps the
+    // reading position under check. The timeline hides its scrollbar, so
+    // there is no scrollbar to press.
     // Nothing has happened yet: a page fresh from load excuses nothing.
     let lastInputAt = Number.NEGATIVE_INFINITY;
     let lastScrollInputAt = Number.NEGATIVE_INFINITY;
     let lastScrollAt = Number.NEGATIVE_INFINITY;
     let lastResizeAt = Number.NEGATIVE_INFINITY;
     let scrollInputPending = false;
-    // The timeline whose scrollbar is pressed: its scrolls are the reader's
-    // until the press ends.
-    let heldScroller: HTMLElement | null = null;
     const SCROLL_KEYS = [
       'ArrowUp',
       'ArrowDown',
@@ -93,53 +92,27 @@ const probe = extract((state): ProbeReport => {
       ' ',
     ];
     const scrollsWithKey = (event: KeyboardEvent) => {
-      if (event.key === 'Enter') return true;
       const target = event.target;
-      const editing =
-        target instanceof HTMLElement &&
-        (target.isContentEditable ||
-          target instanceof HTMLInputElement ||
-          target instanceof HTMLTextAreaElement);
-      return !editing && SCROLL_KEYS.includes(event.key);
-    };
-    // A press inside the timeline's scrollbar, not its border or content.
-    const onTimelineScrollbar = (event: PointerEvent) => {
-      const target = event.target;
-      if (
-        !(target instanceof HTMLElement) ||
-        !target.matches('main [data-channel-scroll]')
-      ) {
-        return false;
+      if (!(target instanceof HTMLElement)) return false;
+      if (event.key === 'Enter') {
+        return target.isContentEditable && target.closest('main') !== null;
       }
-      const style = getComputedStyle(target);
-      const barWidth =
-        target.offsetWidth -
-        target.clientLeft -
-        target.clientWidth -
-        Number.parseFloat(style.borderRightWidth);
-      const barHeight =
-        target.offsetHeight -
-        target.clientTop -
-        target.clientHeight -
-        Number.parseFloat(style.borderBottomWidth);
-      const inBar = (offset: number, start: number, size: number) =>
-        size > 0 && offset >= start && offset < start + size;
-      return (
-        inBar(event.offsetX, target.clientWidth, barWidth) ||
-        inBar(event.offsetY, target.clientHeight, barHeight)
-      );
+      // The browser scrolls by key only when focus is on the page or in the
+      // timeline, outside its buttons, links and widgets.
+      const onPage = target === document.body;
+      const inTimeline =
+        target.closest('main [data-channel-scroll]') !== null &&
+        target.closest('button, a, input, textarea, [role]') === null &&
+        !target.isContentEditable;
+      return SCROLL_KEYS.includes(event.key) && (onPage || inTimeline);
     };
-    const onScrollControl = (event: PointerEvent) =>
-      event.target instanceof Element &&
-      event.target.closest('[data-scroll-to-bottom]') !== null;
     const scrolls = (event: Event) => {
       if (event instanceof KeyboardEvent) return scrollsWithKey(event);
       if (event instanceof PointerEvent) {
-        heldScroller =
-          onTimelineScrollbar(event) && event.target instanceof HTMLElement
-            ? event.target
-            : null;
-        return heldScroller !== null || onScrollControl(event);
+        return (
+          event.target instanceof Element &&
+          event.target.closest('[data-scroll-to-bottom]') !== null
+        );
       }
       return event.type !== 'beforeinput';
     };
@@ -159,32 +132,15 @@ const probe = extract((state): ProbeReport => {
     ]) {
       page.addEventListener(type, onInput, { capture: true, passive: true });
     }
-    // Chromium may not deliver pointerup after a scrollbar drag, so any sign
-    // that the button is up ends the press.
-    const release = () => {
-      heldScroller = null;
-    };
-    for (const type of ['pointerup', 'pointercancel', 'mouseup', 'blur']) {
-      page.addEventListener(type, release, { capture: true, passive: true });
-    }
-    page.addEventListener(
-      'pointermove',
-      (event) => {
-        if (event.buttons === 0) release();
-      },
-      { capture: true, passive: true }
-    );
     page.addEventListener('resize', () => {
       lastResizeAt = performance.now();
     });
     page.addEventListener(
       'scroll',
-      (event) => {
+      () => {
         const now = performance.now();
         const answersInput =
-          (heldScroller !== null && event.target === heldScroller) ||
-          (scrollInputPending &&
-            now - lastScrollInputAt < INPUT_SCROLL_DELAY_MS);
+          scrollInputPending && now - lastScrollInputAt < INPUT_SCROLL_DELAY_MS;
         if (
           answersInput ||
           now - Math.max(lastScrollInputAt, lastScrollAt) < MOTION_GRACE_MS
