@@ -227,13 +227,21 @@ pub(crate) async fn get_documents_access(
     if document_ids.is_empty() {
         return Ok(highest);
     }
+    // A project read waits on this statement, and the services' pools set no
+    // timeout, so a bad plan (the attachment sources once hashed whole tables)
+    // fails the read instead of holding it and a connection.
+    let mut transaction = pool.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *transaction)
+        .await?;
     let rows = sqlx::query_file!(
         "src/outbound/pg_access_repo/queries/document_access/documents_access.sql",
         document_ids,
         user_id,
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *transaction)
     .await?;
+    transaction.commit().await?;
 
     for row in rows {
         highest
