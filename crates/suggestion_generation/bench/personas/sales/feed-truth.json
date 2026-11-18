@@ -1,0 +1,114 @@
+{
+  "planted": [
+    {
+      "id": "p1",
+      "what": "Territory goal 6 (open expansion opps at customers adding sites by Dec 15) has no owner and no task. The Coastal handoff notes record Danielle's Savannah site (May, about 30 doors, same pricing, prefers 3-year terms), which isn't in Stratus. On the Ironbridge prep call Derek told Tessa not to wait until January because a 3-year co-term earns a SPIFF and counts as Q1 bookings.",
+      "evidence": [
+        "document:territory-plan",
+        "document:coastal-handoff",
+        "call:ironbridge-prep"
+      ],
+      "ideal_suggestion": "Open a Coastal Crossdock Savannah expansion opportunity now and send Danielle a 3-year co-termed price for the May site (and do the same for Halbrook's Peoria DC)."
+    },
+    {
+      "id": "p2",
+      "what": "On the Nov 6 Ironbridge prep call, Derek committed to filing the 13% approval with deal desk on Friday and answering by Monday (48-hour approvals this month). Nothing about it shows in #legal-desk or the tasks, and the Ironbridge task still lists the approval as open with the final on Nov 12. Marcus's Pellston written quote is also unconfirmed.",
+      "evidence": [
+        "call:ironbridge-prep",
+        "task:ironbridge-final",
+        "document:ironbridge-plan"
+      ],
+      "ideal_suggestion": "Check with Derek today that the 13% Ironbridge approval was filed with deal desk (it needs 48 hours before Thursday's final), and chase Marcus for the Pellston quote."
+    },
+    {
+      "id": "p3",
+      "what": "#se-requests gets the same packaging and integration questions again and again (Routewise TMS, per-site vs per-user, yard standalone twice, SSO, REST effort), and Priyanka says it's all in the Integrations & packaging FAQ while she has 3 questionnaires open.",
+      "evidence": [
+        "channel:se-requests",
+        "document:integrations-faq"
+      ],
+      "ideal_suggestion": "Set up an SE-FAQ agent in #se-requests that answers integration and packaging questions from the Integrations & packaging FAQ and only escalates real SE work to Priyanka."
+    },
+    {
+      "id": "p4",
+      "what": "The reference customer list was last updated Sep 14 and is wrong: Pellston is listed as a prospect but signed Oct 16, went live Nov 2 and is referenceable (it just did Ironbridge), Summit Grain is lost, Halbrook's issues were fixed in August (a possible cold-storage reference nobody has asked), Coastal is missing, and the call log has no entries since September. Marcus can't find references.",
+      "evidence": [
+        "document:reference-list",
+        "channel:deals",
+        "document:territory-plan"
+      ],
+      "ideal_suggestion": "Turn the reference list into a maintained references database (status, last used, good for), fix Pellston and Summit Grain, and ask Halbrook to become the cold-storage reference that Marcus and the goal-7 plan need."
+    },
+    {
+      "id": "p5",
+      "what": "Team tool spend: Callsight ($960/mo, 1 active user, replaced by Convoq in August) auto-renews Dec 1 and the 30-day notice may already have passed. Prospectra uses 3 of 8 seats ($2,000/mo) and already includes intent signals, so Tessa's planned Intently purchase would duplicate it.",
+      "evidence": [
+        "document:tool-spend",
+        "channel:deals"
+      ],
+      "ideal_suggestion": "Tell Derek to cancel or negotiate out of the Callsight renewal before Dec 1 ($11.5k/yr), and turn on Prospectra's intent topics instead of buying Intently."
+    },
+    {
+      "id": "p6",
+      "what": "The Meridian pilot proposal draft is half-finished: the pilot-fee credit language (never sent to deal desk), the success criteria and the SSO/API doc links for Tasha are all TODO. Alicia needs exactly those two confirmations to take the pilot to her VP this week.",
+      "evidence": [
+        "document:meridian-pilot",
+        "task:meridian-pilot",
+        "document:integrations-faq",
+        "inbox subject: Re: Discovery recap + proposed pilot"
+      ],
+      "ideal_suggestion": "Get deal desk to approve the Meridian pilot-fee credit language and send Alicia the SSO doc and the API reference (from the integrations FAQ) today, so she can take the pilot to her VP this week."
+    },
+    {
+      "id": "p7",
+      "what": "Duplicate, conflicting contract language for Bluegate: Lena's rider has Hannah's approved wording (60-day certified deletion, 72-hour subprocessor notice, don't paraphrase), but Priyanka separately wrote 'special terms' with 30-day deletion and 5-business-day notice. Tessa plans to build the envelope from Priyanka's notes Monday, which would reopen Bluegate's security review.",
+      "evidence": [
+        "document:bluegate-rider",
+        "document:bluegate-order-notes",
+        "call:bluegate-huddle",
+        "channel:legal-desk",
+        "channel:dm-tessa-priyanka",
+        "task:bluegate-order-form"
+      ],
+      "ideal_suggestion": "Build the Bluegate order form from Lena's rider (60 days, 72 hours), not Priyanka's notes (30 days, 5 business days), so Hannah doesn't have to redo the security review."
+    },
+    {
+      "id": "p8",
+      "what": "Northstar Drayage signed Nov 6, but none of the handoff steps exist: no handoff task, no CSM, no handoff call. The process requires them within 2 business days, and CS has a ready-made training video. Gabe is asking who sets up tablets and carriers and still wants the training video for his dispatcher.",
+      "evidence": [
+        "document:handoff-process",
+        "task:coastal-handoff",
+        "channel:deals",
+        "inbox subject: Signed order form attached"
+      ],
+      "ideal_suggestion": "Create the Northstar handoff (task, cs-handoffs email, CSM intro) today, and send Gabe CS's gate check-in training video and the tablet checklist so he can tell his carriers before Thanksgiving."
+    },
+    {
+      "id": "p9",
+      "what": "Tessa writes the same 'Monday update' in #deals every week by hand from Stratus (stage, blocker, next date), and Derek wants it posted before the commit call. It's a repetitive weekly report.",
+      "evidence": [
+        "channel:deals",
+        "document:territory-plan",
+        "document:forecast-notes"
+      ],
+      "ideal_suggestion": "Set up a Monday 7:30am routine that drafts Tessa's deal update (stage, blocker, next date per open opp) from her tasks, docs and email, for her to review and post in #deals before the commit call."
+    }
+  ],
+  "decoys": [
+    {
+      "id": "d1",
+      "what": "Set up the Coastal Crossdock CS handoff by Friday (Derek's ask in the Coastal closed email)",
+      "why_stale": "The handoff is done. The coastal-handoff task is completed, the handoff call was Oct 30, and kickoff is booked for Nov 16."
+    },
+    {
+      "id": "d2",
+      "what": "Share Corvana's full pen test report with Bluegate through TrustGate (Hannah's Oct 28 ask)",
+      "why_stale": "Priyanka shared it Oct 29 and Hannah confirmed access (pen-test-bluegate task completed, DM)."
+    },
+    {
+      "id": "d3",
+      "what": "Get risk to issue a $5M cyber insurance certificate for Harborline (Mike Tanaka's Nov 2 ask)",
+      "why_stale": "Risk issued it and Tessa sent it to Mike on Nov 6 (harborline-coi task completed, #legal-desk)."
+    }
+  ]
+}
