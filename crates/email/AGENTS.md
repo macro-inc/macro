@@ -457,10 +457,11 @@ tools — hexagonal, heavily feature-gated.
   lifecycle event logs "outlook subscription lifecycle event".
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
-  `MailboxError::Persistence` for stored data that cannot be decoded. Both go
-  through `MailboxError::database`, which reports a value the database will
-  never accept (`is_unstorable_sqlstate`) as `Unstorable`
-  (`defer_reason=unstorable`) rather than `Database` (`persistence`).
+  `MailboxError::Persistence` for stored data that cannot be decoded. Both,
+  and email-service's `database_failed`, build a database failure with
+  `MailboxError::database`, which reports a value the database will never
+  accept (`is_unstorable_sqlstate`) as `Unstorable` (`defer_reason=unstorable`)
+  rather than `Database` (`persistence`).
   `MailboxError::Effect` (`defer_reason=effect`) is for a projection effect
   that fails outside the database; email-service's `MailboxEffects` maps its
   database steps with `database_failed` and everything else with `failed`.

@@ -77,11 +77,11 @@ async fn a_message_with_nul_characters_is_stored_without_them(db: PgPool) {
     let service = sync(&repo, Provider::answering(vec![Ok(Some(second))]));
     assert!(service.reconcile_once().await.unwrap());
 
-    let outcomes = outcomes(&telemetry);
     assert_eq!(
-        outcomes
+        telemetry
+            .spans("outlook.sync.reconcile")
             .iter()
-            .map(|(outcome, _, _)| outcome.as_str())
+            .map(|span| span["outlook.outcome"].as_str())
             .collect::<Vec<_>>(),
         ["imported", "imported"]
     );
@@ -158,8 +158,10 @@ async fn a_message_the_database_refuses_is_abandoned_at_once(db: PgPool) {
     let _guard = telemetry.install();
     let (repo, link) = fixture(&db).await;
     let mut refused = snapshot(link, "refused", inbox(), "v1");
-    // `email_labels.name` holds 255 characters, so the category fails with 22001.
-    refused.tags = vec!["c".repeat(256)];
+    // PostgreSQL timestamps start in 4713 BC, so the insert fails with 22008.
+    refused.content.message.internal_date_ts = chrono::NaiveDate::from_ymd_opt(-10_000, 1, 1)
+        .and_then(|date| date.and_hms_opt(0, 0, 0))
+        .map(|date| date.and_utc());
     queue(&db, link, "refused", 0).await;
     let service = sync(&repo, Provider::answering(vec![Ok(Some(refused))]));
 
@@ -167,7 +169,7 @@ async fn a_message_the_database_refuses_is_abandoned_at_once(db: PgPool) {
 
     assert_eq!(
         error.to_string(),
-        "mailbox data cannot be stored: sqlstate 22001"
+        "mailbox data cannot be stored: sqlstate 22008"
     );
     assert_eq!(
         outcomes(&telemetry),

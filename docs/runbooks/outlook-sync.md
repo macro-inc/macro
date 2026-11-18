@@ -40,7 +40,8 @@ won't change (`permanent`, such as an undecodable response, or `forbidden`, a
 backoff). A value the database refuses (`unstorable`: SQLSTATE class 22, a NOT
 NULL or CHECK violation) is refused the same way every time, so the message
 stops after its first failure. NUL characters, which no PostgreSQL text holds,
-are removed before the write. It is
+are removed from a message's text, headers, names and attachment metadata
+before the write. It is
 then `abandoned`: the span records `@outlook.outcome:abandoned`, a
 `"mailbox message abandoned"` WARN names its `@defer_reason` and attempts, and
 the health snapshot counts it in `abandoned` instead of `queued`. The next
@@ -145,7 +146,9 @@ token that works again clears the flag.
 More than 500 units of Outlook sync work in 15 minutes were deferred because
 their database writes failed. Failed Kafka, SQS or HTTP effects are deferred
 as `effect` instead and don't count here, and neither do values the database
-refuses (`unstorable`), whose messages are abandoned.
+refuses (`unstorable`). A message reconciliation that hits one is abandoned;
+other sync work (catalogs, folder streams, projections) keeps retrying it, and
+no monitor counts it: search the deferral logs for `unstorable`.
 
 - Group the deferral logs (`"mailbox sync work deferred"`) for
   `persistence` by their database error kind or SQLSTATE: lock timeouts and

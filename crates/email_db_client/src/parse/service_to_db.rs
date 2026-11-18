@@ -8,6 +8,12 @@ use models_email::service::message::HasContactInfo;
 use sqlx::types::Uuid;
 use std::mem;
 
+/// A provider value as its `varchar` column can hold it: without NUL
+/// characters, then clamped to the column's width.
+fn storable_varchar(value: Option<String>, limit: usize, column: &'static str) -> Option<String> {
+    column_limits::clamp_opt(nul_characters::remove_opt(value, column), limit, column)
+}
+
 /// Maps a ContactInfo to an EmailAddress, dropping it when the address cannot
 /// be stored.
 ///
@@ -34,8 +40,8 @@ fn map_contact_to_db(contact: &service::address::ContactInfo) -> Option<address:
     Some(address::EmailAddress {
         id: macro_uuid::generate_uuid_v7(), // this value doesn't actually matter as we will be setting it later again
         email_address: contact.email.clone(),
-        name: column_limits::clamp_opt(
-            nul_characters::remove_opt(contact.name.clone(), "email_contacts.name"),
+        name: storable_varchar(
+            contact.name.clone(),
             column_limits::CONTACT_NAME,
             "email_contacts.name",
         ),
@@ -110,11 +116,8 @@ pub fn map_service_message_to_db(
         snippet: nul_characters::remove_opt(service_msg.snippet.clone(), "email_messages.snippet"),
         size_estimate: service_msg.size_estimate,
         subject: nul_characters::remove_opt(service_msg.subject.clone(), "email_messages.subject"),
-        from_name: column_limits::clamp_opt(
-            nul_characters::remove_opt(
-                service_msg.from.as_ref().and_then(|f| f.name.clone()),
-                "email_messages.from_name",
-            ),
+        from_name: storable_varchar(
+            service_msg.from.as_ref().and_then(|f| f.name.clone()),
             column_limits::CONTACT_NAME,
             "email_messages.from_name",
         ),
@@ -174,25 +177,19 @@ pub fn map_service_attachments_to_db(
                 id: service_attachment.db_id,
                 message_id: message_db_id,
                 provider_attachment_id: service_attachment.provider_id.clone(),
-                filename: column_limits::clamp_opt(
-                    nul_characters::remove_opt(filename, "email_attachments.filename"),
+                filename: storable_varchar(
+                    filename,
                     column_limits::ATTACHMENT_FILENAME,
                     "email_attachments.filename",
                 ),
-                mime_type: column_limits::clamp_opt(
-                    nul_characters::remove_opt(
-                        service_attachment.mime_type.clone(),
-                        "email_attachments.mime_type",
-                    ),
+                mime_type: storable_varchar(
+                    service_attachment.mime_type.clone(),
                     column_limits::ATTACHMENT_MIME_TYPE,
                     "email_attachments.mime_type",
                 ),
                 size_bytes: service_attachment.size_bytes,
-                content_id: column_limits::clamp_opt(
-                    nul_characters::remove_opt(
-                        service_attachment.content_id.clone(),
-                        "email_attachments.content_id",
-                    ),
+                content_id: storable_varchar(
+                    service_attachment.content_id.clone(),
                     column_limits::ATTACHMENT_CONTENT_ID,
                     "email_attachments.content_id",
                 ),
@@ -207,7 +204,7 @@ pub fn map_new_contact_to_db(service_contact: &Contact) -> db::contact::Contact 
     db::contact::Contact {
         id: service_contact.id,
         link_id: service_contact.link_id,
-        name: column_limits::clamp_opt(
+        name: storable_varchar(
             service_contact.name.clone(),
             column_limits::CONTACT_NAME,
             "email_contacts.name",
