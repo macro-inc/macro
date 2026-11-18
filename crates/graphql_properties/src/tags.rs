@@ -1,6 +1,7 @@
 //! The viewer's tag sets: TAG-typed property definitions whose options are labels.
 
 use async_graphql::{Context, Enum, Object, dataloader::DataLoader};
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use properties::domain::model::{TagScope, TagSet};
 
 use crate::{
@@ -40,7 +41,15 @@ impl<R> From<TagSet> for GraphqlTagSet<R> {
     fn from(set: TagSet) -> Self {
         Self {
             scope: set.scope.into(),
-            definition: set.definition.map(GraphqlPropertyDefinition::new),
+            // The set read its labels already; hand them to the definition so
+            // `definition { options }` reads nothing more.
+            definition: set.definition.map(|definition| {
+                PropertyDefinitionWithOptions {
+                    definition,
+                    property_options: set.options.clone(),
+                }
+                .into()
+            }),
             options: set.options.into_iter().map(Into::into).collect(),
         }
     }
