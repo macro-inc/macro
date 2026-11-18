@@ -31,7 +31,14 @@ import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Tabs } from '@ui';
-import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
@@ -67,30 +74,30 @@ type ProjectDetailProps = {
   route: ProjectRoute;
   navigationRequest?: number;
   breadcrumb?: ProjectBreadcrumbProps;
-  /**
-   * Where the project's entity commands register; a host whose list stays
-   * beside the project in the same split passes a scope of its own.
-   */
-  hotkeyScope?: string;
   onDelete?(): void;
   onSectionChange?(section: ProjectSection): void;
 };
 
 /** The project's Cmd+K entity commands (Copy link, Copy ID) and their keys. */
 function ProjectEntityCommands(props: {
-  project: ProjectDetailData;
+  projectId: string;
+  project: Accessor<ProjectDetailData | undefined>;
   scopeId: string;
 }) {
   useBlockEntityCommands({
-    id: props.project.id,
+    id: props.projectId,
     scopeId: props.scopeId,
-    resolveEntity: () => ({
-      type: 'initiative',
-      id: props.project.id,
-      name: props.project.name,
-      ownerId: props.project.ownerId,
-      appearance: props.project.appearance,
-    }),
+    resolveEntity: () => {
+      const project = props.project();
+      if (!project) return undefined;
+      return {
+        type: 'initiative',
+        id: project.id,
+        name: project.name,
+        ownerId: project.ownerId,
+        appearance: project.appearance,
+      };
+    },
   });
   return null;
 }
@@ -258,14 +265,18 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       </Show>
       {/* Overview only: the Tasks section's list registers the same commands
           for its rows on the split's scope, and a second registration there
-          would replace theirs. */}
+          would replace theirs. Keyed by id, which the commands read once. */}
       <Show
-        when={props.route.section === 'overview' ? source.project() : undefined}
+        when={
+          props.route.section === 'overview' ? source.project()?.id : undefined
+        }
+        keyed
       >
-        {(project) => (
+        {(projectId) => (
           <ProjectEntityCommands
-            project={project()}
-            scopeId={props.hotkeyScope ?? panel.splitHotkeyScope}
+            projectId={projectId}
+            project={source.project}
+            scopeId={panel.splitHotkeyScope}
           />
         )}
       </Show>
