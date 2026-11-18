@@ -1,11 +1,11 @@
-import CheckIcon from '@icon/system/regular/check.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Popover } from '@kobalte/core/popover';
-import { Button, cn, Dropdown, TextField } from '@ui';
+import { Button, cn, RadioGroup, TextField } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import {
   type Knob,
+  knobIsEmpty,
   knobText,
   knobValueProblem,
   type SentencePart,
@@ -104,6 +104,8 @@ export function KnobSettings(props: { knobs: Knob[]; onKnob: KnobChange }) {
             <dd class="min-w-0 text-right">
               <KnobControl
                 knob={knob}
+                // The label is beside it already.
+                emptyText="Not set"
                 onChange={(value) => props.onKnob(knob.name, value)}
               />
             </dd>
@@ -115,123 +117,82 @@ export function KnobSettings(props: { knobs: Knob[]; onKnob: KnobChange }) {
 }
 
 /**
- * One knob's value: on/off flips in place, a choice opens a menu that saves
- * the option picked, and the rest open an editor.
+ * One knob's value: on/off flips in place, and the rest open an editor whose
+ * change applies only on Save.
  */
 function KnobControl(props: {
   knob: Knob;
   /** In a card's smaller sentence: a thinner, closer underline. */
   compact?: boolean;
+  /** What a knob with no value shows; its label by default. */
+  emptyText?: string;
   onChange(value: Knob['value']): void;
 }) {
   return (
-    <Switch
+    <Show
+      when={props.knob.type === 'boolean' && props.knob}
       fallback={
         <KnobPopover
           knob={props.knob}
           compact={props.compact}
+          emptyText={props.emptyText}
           onChange={props.onChange}
         />
       }
     >
-      <Match when={props.knob.type === 'choice' && props.knob}>
-        {(knob) => (
-          <KnobChoiceMenu
-            knob={knob()}
-            compact={props.compact}
-            onChange={props.onChange}
-          />
-        )}
-      </Match>
-      <Match when={props.knob.type === 'boolean' && props.knob}>
-        {(knob) => (
-          <button
-            type="button"
-            class={cn(
-              VALUE,
-              props.compact && 'px-px decoration-[1.5px] underline-offset-3'
-            )}
-            aria-pressed={knob().value}
-            aria-label={`${knob().label}: ${knob().value ? 'on' : 'off'}`}
-            onClick={() => props.onChange(!knob().value)}
-          >
-            {knobText(knob())}
-          </button>
-        )}
-      </Match>
-    </Switch>
+      {(knob) => (
+        <button
+          type="button"
+          class={cn(
+            VALUE,
+            props.compact && 'px-px decoration-[1.5px] underline-offset-3'
+          )}
+          aria-pressed={knob().value}
+          aria-label={`${knob().label}: ${knob().value ? 'on' : 'off'}`}
+          onClick={() => props.onChange(!knob().value)}
+        >
+          {knobText(knob())}
+        </button>
+      )}
+    </Show>
   );
 }
 
-function KnobChoiceMenu(props: {
-  knob: Extract<Knob, { type: 'choice' }>;
-  compact?: boolean;
-  onChange(value: Knob['value']): void;
-}) {
-  const [open, setOpen] = createSignal(false);
-  let trigger: HTMLButtonElement | undefined;
-  return (
-    <Dropdown
-      open={open()}
-      onOpenChange={setOpen}
-      placement="bottom-start"
-      modal={false}
-    >
-      {/* The menu's own trigger, so the value stays an underlined word. */}
-      <DropdownMenu.Trigger
-        ref={trigger}
-        class={cn(
-          VALUE,
-          props.compact && 'px-px decoration-[1.5px] underline-offset-3'
-        )}
-        aria-label={`${props.knob.label}: ${props.knob.value}. Change it`}
-      >
-        {props.knob.value}
-      </DropdownMenu.Trigger>
-      <Dropdown.Content
-        portalScope="local"
-        mount={menuMount(trigger)}
-        class="min-w-44"
-      >
-        <Dropdown.Group>
-          <Dropdown.GroupLabel>{props.knob.label}</Dropdown.GroupLabel>
-          <Dropdown.RadioGroup
-            value={props.knob.value}
-            onChange={(value) => {
-              setOpen(false);
-              if (value !== props.knob.value) props.onChange(value);
-            }}
-          >
-            <For each={props.knob.options}>
-              {(option) => (
-                <Dropdown.RadioItem value={option}>
-                  <span class="flex-1">{option}</span>
-                  <Dropdown.ItemIndicator>
-                    <CheckIcon class="size-3.5 text-accent" />
-                  </Dropdown.ItemIndicator>
-                </Dropdown.RadioItem>
-              )}
-            </For>
-          </Dropdown.RadioGroup>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
-  );
+/** A knob's value with nothing in it: no text, or no number. */
+function blankValue(knob: Knob): Knob['value'] {
+  return knob.type === 'number' ? Number.NaN : '';
 }
 
+function isBlank(value: Knob['value']) {
+  return value === '' || (typeof value === 'number' && Number.isNaN(value));
+}
+
+/**
+ * A knob's value, opening its editor. The editor changes a draft: Clear
+ * empties it, Save applies it, and Cancel, Escape or a click away drop it.
+ * Enter never saves, so a stray one can't apply a half-typed value.
+ */
 function KnobPopover(props: {
   knob: Knob;
   compact?: boolean;
+  emptyText?: string;
   onChange(value: Knob['value']): void;
 }) {
+  const empty = () => knobIsEmpty(props.knob);
   const [open, setOpen] = createSignal(false);
   const [draft, setDraft] = createSignal<Knob['value']>(props.knob.value);
   const problem = () => knobValueProblem(props.knob, draft());
   let trigger: HTMLElement | undefined;
+  let editor: HTMLDivElement | undefined;
   const save = () => {
     if (problem()) return;
-    props.onChange(draft());
+    if (draft() !== props.knob.value) props.onChange(draft());
     setOpen(false);
+  };
+  // The field keeps focus, so typing can start again at once.
+  const clear = () => {
+    setDraft(blankValue(props.knob));
+    editor?.querySelector<HTMLElement>('input, textarea')?.focus();
   };
   return (
     <Popover
@@ -257,64 +218,90 @@ function KnobPopover(props: {
         class={cn(
           'cursor-pointer',
           props.knob.type === 'question' ? QUESTION : VALUE,
+          // Still to fill in: dashed, as a template reference that fills in.
+          empty() && 'decoration-dashed',
           props.compact && 'px-px decoration-[1.5px] underline-offset-3'
         )}
         aria-label={
           props.knob.type === 'question'
             ? `AI decides whether ${props.knob.label}. Change the question`
-            : `${props.knob.label}: ${knobText(props.knob)}. Change it`
+            : empty()
+              ? `${props.knob.label}: not set. Set it`
+              : `${props.knob.label}: ${knobText(props.knob)}. Change it`
         }
       >
-        <Show when={props.knob.type === 'question'}>
-          <SparkleIcon class="mr-1 inline size-3.5 align-[-2px] text-accent" />
-        </Show>
-        {knobText(props.knob)}
+        <Switch fallback={knobText(props.knob)}>
+          <Match when={props.knob.type === 'question'}>
+            <SparkleIcon class="mr-1 inline size-3.5 align-[-2px] text-accent" />
+            {knobText(props.knob)}
+          </Match>
+          <Match when={empty()}>
+            <PlusIcon class="mr-0.5 inline size-3.5 align-[-2px]" />
+            {props.emptyText ?? props.knob.label}
+          </Match>
+        </Switch>
       </Popover.Trigger>
       <Popover.Portal mount={menuMount(trigger)}>
         <Popover.Content
           class={cn(
-            'menu-surface z-modal max-w-[calc(100vw-1rem)] p-3',
-            props.knob.type === 'number' ? 'w-auto' : 'w-80'
+            'menu-surface z-modal flex max-h-[var(--kb-popper-content-available-height)] max-w-[calc(100vw-1rem)] flex-col overflow-hidden p-3',
+            props.knob.type === 'text' || props.knob.type === 'question'
+              ? 'w-80'
+              : 'w-auto min-w-64'
           )}
           onKeyDown={(event) => event.stopPropagation()}
+          // A choice opens on its picked option, not the first one, so
+          // Space and the arrows start from it.
+          onOpenAutoFocus={(event) => {
+            const picked = editor?.querySelector<HTMLElement>(
+              'input[type="radio"]:checked'
+            );
+            if (!picked) return;
+            event.preventDefault();
+            picked.focus();
+          }}
         >
-          <form
-            class="grid gap-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              save();
-            }}
-          >
-            <KnobEditor
-              knob={props.knob}
-              value={draft()}
-              problem={problem()}
-              onInput={setDraft}
-            />
-            {/* A number is one field: Enter saves it, as in a form. */}
-            <Show
-              when={props.knob.type !== 'number'}
-              fallback={
-                <span class="text-xs text-ink-muted">
-                  Enter saves · Esc cancels
-                </span>
-              }
-            >
-              <div class="flex justify-end gap-2">
-                <Popover.CloseButton
-                  as={Button}
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                >
-                  Cancel
-                </Popover.CloseButton>
-                <Button type="submit" size="sm" disabled={!!problem()}>
-                  Save
-                </Button>
-              </div>
-            </Show>
-          </form>
+          <div ref={editor} class="flex min-h-0 flex-col gap-3">
+            {/* Only the field scrolls, so Save stays in reach; its padding
+                keeps focus rings inside the scroller. */}
+            <div class="-m-1 min-h-0 overflow-y-auto p-1">
+              <KnobEditor
+                knob={props.knob}
+                value={draft()}
+                problem={problem()}
+                onInput={setDraft}
+              />
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={isBlank(draft())}
+                onClick={clear}
+              >
+                Clear
+              </Button>
+              <Popover.CloseButton
+                as={Button}
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="ml-auto"
+              >
+                Cancel
+              </Popover.CloseButton>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                disabled={!!problem()}
+                onClick={save}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
         </Popover.Content>
       </Popover.Portal>
     </Popover>
@@ -446,6 +433,34 @@ function KnobEditor(props: {
               {props.problem}
             </TextField.ErrorMessage>
           </TextField>
+        )}
+      </Match>
+      <Match when={props.knob.type === 'choice' && props.knob}>
+        {(knob) => (
+          <RadioGroup
+            class="text-sm text-ink"
+            // Cleared, no option is picked.
+            value={typeof props.value === 'string' ? props.value : ''}
+            validationState={invalid()}
+            onChange={props.onInput}
+          >
+            <RadioGroup.Label class="text-xs font-medium text-ink-muted">
+              {knob().label}
+            </RadioGroup.Label>
+            <For each={knob().options}>
+              {(option) => (
+                <RadioGroup.Item value={option} class="touch:min-h-11">
+                  <RadioGroup.ItemControl />
+                  <RadioGroup.ItemLabel class="flex flex-1 items-center self-stretch">
+                    {option}
+                  </RadioGroup.ItemLabel>
+                </RadioGroup.Item>
+              )}
+            </For>
+            <RadioGroup.ErrorMessage class="text-xs text-failure">
+              {props.problem}
+            </RadioGroup.ErrorMessage>
+          </RadioGroup>
         )}
       </Match>
     </Switch>

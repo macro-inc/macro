@@ -4,7 +4,8 @@ import { useNavigate } from '@app/lib/split-router';
 import { homeSplitRoute } from '@app/routes/routes';
 import { ChannelLoading } from '@channel/Channel/ChannelLoading';
 import { enableWhatsappLinked } from '@core/constant/featureFlags';
-import { type JSX, lazy, onMount, Show, Suspense } from 'solid-js';
+import { lazy } from '@core/util/lazy';
+import { type JSX, onMount, Show, Suspense } from 'solid-js';
 import { ExternalChatHeader } from './components/chat-header';
 
 const Chat = lazy(async () => ({

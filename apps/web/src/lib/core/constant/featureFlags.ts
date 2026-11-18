@@ -524,8 +524,8 @@ export const enableEmailWideSearch = defineFlag({
 });
 
 // The Focus tab in Mail: signal threads the email focus worker classified as
-// worth the owner's attention. Only allowlisted inboxes are classified, so the
-// tab is empty for everyone else.
+// worth the owner's attention. The worker reads this same flag for each inbox
+// owner and classifies only theirs, so a rollout step changes both together.
 export const enableEmailFocus = defineFlag({
   key: 'enable-email-focus',
   env: 'ENABLE_EMAIL_FOCUS',

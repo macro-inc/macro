@@ -50,11 +50,11 @@ even if the viewer switches boards while saving. The adapter supplies the select
 view ID so switching boards also retires unfinished visual moves and sort prompts.
 `browser-test/board.tsx` exercises shared cards, lane composition, and saved ordering with synthetic data.
 
-Successful domain block and unblock mutations evict indexed company rows and
-contact suggestions from the GraphQL cache before refreshing CRM and Soup
-queries. Refresh mounted GraphQL lists that can contain CRM records too: the
-REST mutation returns no changed rows, and hidden records are absent from the
-search index. Failed mutations leave those cached records intact.
+Successful domain block and unblock mutations refresh CRM and Soup email
+readers without archiving or restoring records. Failed mutations leave cached
+records intact. Privacy settings show the server's mailbox-domain refusal
+beside its input and existing-entry warning categories as row descriptions;
+company-domain and personal-provider explanations remain distinct.
 Company selection snapshots and deduplicates the company's domains, waits for
 every domain request, and retains failed domains for retry after the company
 disappears from suggestions. Keep successful blocks when another domain fails.

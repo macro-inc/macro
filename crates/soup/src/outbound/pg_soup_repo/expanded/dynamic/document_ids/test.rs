@@ -1,9 +1,9 @@
 use super::DocumentIdArrays;
 use crate::domain::models::{DynamicSort, SoupSortDirection, grouping::ItemGroupingInfo};
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, ItemSource, MAX_NAMED_CANDIDATES,
-    build_document_filter, build_grouped_query, build_query_from, expanded_dynamic_cursor_soup,
-    expanded_dynamic_cursor_soup_grouped, first_document_id_slot,
+    DocumentGrants, ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, ItemSource,
+    MAX_NAMED_CANDIDATES, build_document_filter, build_grouped_query, build_query_from,
+    expanded_dynamic_cursor_soup, expanded_dynamic_cursor_soup_grouped, first_document_id_slot,
 };
 use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
@@ -204,6 +204,7 @@ fn arrays_follow_fixed_binds(item_source: ItemSource) {
                 &filter,
                 false,
                 sort,
+                DocumentGrants::Estimated,
                 item_source,
                 "macro|viewer@example.com",
                 &mut flat_ids,
@@ -217,8 +218,14 @@ fn arrays_follow_fixed_binds(item_source: ItemSource) {
                 per_group_limit: None,
             };
             let mut grouped_ids = DocumentIdArrays::starting_at(grouped_first);
-            let (grouped, _) =
-                build_grouped_query(&filter, false, &grouping, sort, &mut grouped_ids);
+            let (grouped, _) = build_grouped_query(
+                &filter,
+                false,
+                &grouping,
+                sort,
+                DocumentGrants::Estimated,
+                &mut grouped_ids,
+            );
             (
                 flat,
                 flat_ids.into_binds().len(),
@@ -472,6 +479,7 @@ async fn grouped_pages_match_bound_id_sets(pool: PgPool) -> anyhow::Result<()> {
             false,
             &grouping,
             SimpleSortMethod::UpdatedAt.into(),
+            DocumentGrants::Estimated,
             &mut document_ids,
         );
         assert_eq!(document_ids.into_binds().len(), arrays, "{label}");

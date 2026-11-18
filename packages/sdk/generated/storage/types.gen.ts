@@ -9307,6 +9307,11 @@ export type EmailContributionConsent = {
 };
 
 /**
+ * The scope of an explicitly granted mailbox contribution.
+ */
+export type EmailContributionMode = 'all' | 'selected';
+
+/**
  * The email filters used to filter down what emails you search over.
  */
 export type EmailFilters = {
@@ -9494,6 +9499,334 @@ export type EmailFollowupResponse = {
 };
 
 /**
+ * One positive whole-thread selector; denials always take precedence.
+ */
+export type EmailInclusionRule = {
+    kind: 'thread';
+    /**
+     * Internal thread ID, never a provider thread ID.
+     */
+    thread_id: string;
+} | {
+    /**
+     * Address to normalize and validate before activation.
+     */
+    address: string;
+    kind: 'address';
+} | {
+    /**
+     * Stable contact ID, resolved live rather than expanded on activation.
+     */
+    contact_id: string;
+    kind: 'contact';
+} | {
+    /**
+     * Bare domain to normalize and validate before activation.
+     */
+    domain: string;
+    kind: 'domain';
+} | {
+    /**
+     * Stable company ID, resolved live rather than expanded on activation.
+     */
+    company_id: string;
+    kind: 'company';
+};
+
+/**
+ * Provenance established by authenticated credentials, never a request field.
+ */
+export type EmailPolicyActorKind = 'member' | 'agent' | 'api' | 'system';
+
+/**
+ * An audit record may predate incarnation-aware writers.
+ */
+export type EmailPolicyAudit = {
+    /**
+     * Absent only for a legacy audit row.
+     */
+    consent_incarnation?: string | null;
+    /**
+     * Database commit transaction's creation time.
+     */
+    created_at: string;
+    /**
+     * Stored event and provenance.
+     */
+    entry: NewEmailPolicyAudit;
+    /**
+     * Exact mailbox at the time of the event.
+     */
+    link_id: string;
+    /**
+     * Committed policy version within the recorded lifetime.
+     */
+    policy_version: number;
+};
+
+/**
+ * Events in the member-only policy history; records never contain mail content.
+ */
+export type EmailPolicyAuditAction = 'rules_activated' | 'all_mail_enabled' | 'withdrawn' | 'mailbox_revoked' | 'live_targets_changed';
+
+/**
+ * One explicit sharing command; member and team never come from the body.
+ */
+export type EmailPolicyChange = {
+    action: 'replace_rules';
+    /**
+     * Positive selectors for eligible past and future whole threads.
+     */
+    rules: EmailRuleSet;
+} | {
+    action: 'enable_all';
+} | {
+    action: 'withdraw';
+};
+
+/**
+ * Retry-safe command with the exact state observed by the caller.
+ */
+export type EmailPolicyCommand = {
+    /**
+     * The explicit sharing operation.
+     */
+    change: EmailPolicyChange;
+    /**
+     * State returned by inspection; stale tokens produce a conflict.
+     */
+    if_policy: EmailPolicyToken;
+    /**
+     * One UUID per intended operation, reused only for its retries.
+     */
+    request_id: string;
+};
+
+/**
+ * Owner history has a fixed fifty-event page.
+ */
+export type EmailPolicyHistory = {
+    /**
+     * Audit entries without mailbox contents or expanded source identities.
+     */
+    events: Array<EmailPolicyAudit>;
+    /**
+     * Exclusive UUID cursor for the next page.
+     */
+    next_cursor?: string | null;
+};
+
+/**
+ * Recorded outcome. A replay describes the original commit, not current state.
+ */
+export type EmailPolicyOutcome = {
+    /**
+     * Owner history entry identifying this operation.
+     */
+    audit_event_id: string;
+    /**
+     * Sharing and retention effects of the committed operation.
+     */
+    effect: string;
+    /**
+     * Whether this commit granted contribution.
+     */
+    enabled: boolean;
+    /**
+     * Committed scope.
+     */
+    mode: EmailContributionMode;
+    /**
+     * True means the stored result was returned without repeating any effects.
+     */
+    replayed: boolean;
+    /**
+     * Committed definition revision, if selected.
+     */
+    revision?: number | null;
+    /**
+     * State token produced by this commit.
+     */
+    token: EmailPolicyToken;
+};
+
+/**
+ * Count-only preview output; no mailbox contents or target identities.
+ */
+export type EmailPolicyPreviewCounts = {
+    /**
+     * Threads newly included by the proposal.
+     */
+    added?: number;
+    /**
+     * Currently included threads encountered so far.
+     */
+    current?: number;
+    /**
+     * Matching threads vetoed by other privacy settings.
+     */
+    denied?: number;
+    /**
+     * Proposed included threads encountered so far.
+     */
+    proposed?: number;
+    /**
+     * Threads held back by the proposal.
+     */
+    removed?: number;
+    /**
+     * Threads included by both policies.
+     */
+    retained?: number;
+};
+
+/**
+ * Preview state is independent of the contribution grant.
+ */
+export type EmailPolicyPreviewStatus = 'pending' | 'running' | 'complete' | 'partial' | 'cancelled' | 'stale';
+
+/**
+ * One immutable owner-only definition, fetched separately from history pages.
+ */
+export type EmailPolicyRevision = {
+    /**
+     * Time this definition was committed.
+     */
+    created_at: string;
+    /**
+     * Mailbox the saved definition refers to.
+     */
+    link_id: string;
+    /**
+     * Revision in this member's rule history.
+     */
+    revision: number;
+    /**
+     * Stored selectors; no expanded contact details or mail content.
+     */
+    rules: EmailRuleSet;
+};
+
+/**
+ * An observed consent state, not an authorization credential. Never refresh
+ * this token automatically after a conflict and replay a sharing command.
+ */
+export type EmailPolicyToken = {
+    /**
+     * Opaque observation; the first write compares it before initialization.
+     */
+    fingerprint: string;
+    kind: 'legacy';
+} | {
+    /**
+     * Explicit mailbox and membership authority, excluding sync state.
+     */
+    authority_fingerprint: string;
+    /**
+     * Never reused after deletion and recreation of consent.
+     */
+    consent_incarnation: string;
+    kind: 'policy';
+    /**
+     * Database-owned version observed by the caller.
+     */
+    policy_version: number;
+};
+
+/**
+ * Owner-only view. GET never initializes identity or transfers historical work.
+ */
+export type EmailPolicyView = {
+    /**
+     * Whether new rule authoring is available for this caller.
+     */
+    authoring_available: boolean;
+    /**
+     * Explain whole-thread sharing, live targets and overriding exclusions.
+     */
+    effect: string;
+    /**
+     * Current effective grant.
+     */
+    enabled: boolean;
+    /**
+     * Exact mailbox represented by the consent or prospective first grant.
+     */
+    link_id?: string | null;
+    /**
+     * The caller's mailbox address.
+     */
+    mailbox_email?: string | null;
+    /**
+     * Current scope of contribution.
+     */
+    mode: EmailContributionMode;
+    /**
+     * Active immutable definition revision.
+     */
+    revision?: number | null;
+    rules?: null | EmailRuleSet;
+    token?: null | EmailPolicyToken;
+};
+
+/**
+ * A bounded preview request. The slot token fences delayed starts after replacement.
+ */
+export type EmailPreviewRequest = {
+    /**
+     * Observed sharing state; never refreshed automatically after a conflict.
+     */
+    if_policy: EmailPolicyToken;
+    /**
+     * Current preview ID from inspection, or null before the first preview.
+     */
+    if_preview_id?: string | null;
+    /**
+     * Hypothetical selected contribution; validation never activates it.
+     */
+    rules: EmailRuleSet;
+};
+
+/**
+ * Count-only result. Complete counts describe one stable snapshot; every other
+ * status is incomplete and must not be presented as the total mailbox count.
+ */
+export type EmailPreviewView = {
+    /**
+     * Time of the stable read snapshot, once a worker starts.
+     */
+    as_of?: string | null;
+    /**
+     * A new worker attempt gets a new context; old completions cannot overwrite it.
+     */
+    context_id: string;
+    /**
+     * Distinct counts of this member's mailbox-local threads, never team conversations.
+     */
+    counts: EmailPolicyPreviewCounts;
+    /**
+     * Enqueue time, used to explain queue delay.
+     */
+    created_at: string;
+    /**
+     * Five-minute work deadline; results remain inspectable after the deadline.
+     */
+    expires_at: string;
+    /**
+     * The member's current preview slot occupant.
+     */
+    preview_id: string;
+    /**
+     * Progress counts contain no identities, subjects, participants or bodies.
+     */
+    scanned_threads: number;
+    /**
+     * Pending, running, complete, partial, cancelled or stale.
+     */
+    status: EmailPolicyPreviewStatus;
+};
+
+/**
  * One explicit privacy change, avoiding lost updates to whole blocklists.
  */
 export type EmailPrivacyChange = {
@@ -9564,9 +9897,21 @@ export type EmailPrivacySettings = {
      */
     mailbox_link_id?: string | null;
     /**
+     * Existing personal exclusions that cover the caller's whole mailbox.
+     */
+    personal_domain_warnings: {
+        [key: string]: MailboxDomainConflict;
+    };
+    /**
      * Domains excluded only for the caller's contributions.
      */
     personal_domains: Array<string>;
+    /**
+     * Existing team exclusions that cover a connected member's whole mailbox.
+     */
+    team_domain_warnings: {
+        [key: string]: MailboxDomainConflict;
+    };
     /**
      * Domains excluded across the team, including legacy company exclusions.
      */
@@ -9604,6 +9949,43 @@ export type EmailReminderSummary = {
      * Original email identity, never a mirror reminder identity.
      */
     threadId: string;
+};
+
+/**
+ * A complete replacement definition; an empty list selects no mail.
+ * Contact/company edits affect matching without rewriting this definition.
+ */
+export type EmailRuleSet = {
+    /**
+     * OR-combined positive selectors over all non-draft thread participants.
+     */
+    include: Array<EmailInclusionRule>;
+    /**
+     * Wire-format version, not a contribution grant or revision number.
+     */
+    schema_version: number;
+};
+
+/**
+ * Canonical rules and bounded warnings; validation does not grant contribution.
+ */
+export type EmailRuleValidation = {
+    /**
+     * Indices that may select most mail because they match the owner or domain.
+     */
+    broad_rule_indices: Array<number>;
+    /**
+     * Human-readable effect to show before an agent changes sharing.
+     */
+    effect: string;
+    /**
+     * Indices into the canonical list that currently have no live targets.
+     */
+    inactive_rule_indices: Array<number>;
+    /**
+     * Normalized, sorted and deduplicated, without expanding live references.
+     */
+    rules: EmailRuleSet;
 };
 
 /**
@@ -13399,7 +13781,7 @@ export type InitiativeActivityRecord = {
  */
 export type InitiativeDescription = {
     /**
-     * GitHub-flavored markdown; empty while no one has opened or written it.
+     * Internal markdown, chips as XML tags such as `<m-user-mention>`; empty while no one has opened or written it.
      */
     markdown: string;
 };
@@ -14079,6 +14461,11 @@ export type LocationResponseV3 = {
 };
 
 export type MacroUserIdStr = string;
+
+/**
+ * Why a domain exclusion would hide an affected mailbox's entire history.
+ */
+export type MailboxDomainConflict = 'company' | 'personal_provider';
 
 /**
  * Mark messages through this message read.
@@ -15005,6 +15392,44 @@ export type NewColumn = {
      */
     property: string;
     source: 'existing';
+};
+
+/**
+ * Audit data supplied by the authorized use case, without mail content.
+ */
+export type NewEmailPolicyAudit = {
+    /**
+     * The operation that committed.
+     */
+    action: EmailPolicyAuditAction;
+    /**
+     * Provenance derived from authenticated credentials.
+     */
+    actor_kind: EmailPolicyActorKind;
+    /**
+     * Verified agent identity, if available.
+     */
+    agent_id?: string | null;
+    /**
+     * Verified session identity, if available; never inferred from a request.
+     */
+    agent_session_id?: string | null;
+    /**
+     * Bounded metadata, never email IDs, addresses, subjects or bodies.
+     */
+    details: unknown;
+    /**
+     * Server-generated UUIDv7, stable for a retried system event.
+     */
+    event_id: string;
+    /**
+     * New immutable definition.
+     */
+    next_revision?: number | null;
+    /**
+     * Previous immutable definition.
+     */
+    previous_revision?: number | null;
 };
 
 /**
@@ -28594,6 +29019,126 @@ export type UpdateCrmEmailPrivacyResponses = {
 };
 
 export type UpdateCrmEmailPrivacyResponse = UpdateCrmEmailPrivacyResponses[keyof UpdateCrmEmailPrivacyResponses];
+
+export type GetCrmEmailPolicyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy';
+};
+
+export type GetCrmEmailPolicyResponses = {
+    200: EmailPolicyView;
+};
+
+export type GetCrmEmailPolicyResponse = GetCrmEmailPolicyResponses[keyof GetCrmEmailPolicyResponses];
+
+export type UpdateCrmEmailPolicyData = {
+    body: EmailPolicyCommand;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy';
+};
+
+export type UpdateCrmEmailPolicyErrors = {
+    /**
+     * Consent changed; inspect before deciding again
+     */
+    409: unknown;
+};
+
+export type UpdateCrmEmailPolicyResponses = {
+    200: EmailPolicyOutcome;
+};
+
+export type UpdateCrmEmailPolicyResponse = UpdateCrmEmailPolicyResponses[keyof UpdateCrmEmailPolicyResponses];
+
+export type ListCrmEmailPolicyHistoryData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Exclusive audit event cursor; pages contain at most fifty events.
+         */
+        before?: string | null;
+    };
+    url: '/crm/email-privacy/policy/history';
+};
+
+export type ListCrmEmailPolicyHistoryResponses = {
+    200: EmailPolicyHistory;
+};
+
+export type ListCrmEmailPolicyHistoryResponse = ListCrmEmailPolicyHistoryResponses[keyof ListCrmEmailPolicyHistoryResponses];
+
+export type GetCrmEmailRulePreviewData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy/preview';
+};
+
+export type GetCrmEmailRulePreviewResponses = {
+    200: null | EmailPreviewView;
+};
+
+export type GetCrmEmailRulePreviewResponse = GetCrmEmailRulePreviewResponses[keyof GetCrmEmailRulePreviewResponses];
+
+export type PreviewCrmEmailRulesData = {
+    body: EmailPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy/preview';
+};
+
+export type PreviewCrmEmailRulesResponses = {
+    200: EmailPreviewView;
+};
+
+export type PreviewCrmEmailRulesResponse = PreviewCrmEmailRulesResponses[keyof PreviewCrmEmailRulesResponses];
+
+export type CancelCrmEmailRulePreviewData = {
+    body?: never;
+    path: {
+        preview_id: string;
+    };
+    query?: never;
+    url: '/crm/email-privacy/policy/preview/{preview_id}';
+};
+
+export type CancelCrmEmailRulePreviewResponses = {
+    204: void;
+};
+
+export type CancelCrmEmailRulePreviewResponse = CancelCrmEmailRulePreviewResponses[keyof CancelCrmEmailRulePreviewResponses];
+
+export type GetCrmEmailRuleRevisionData = {
+    body?: never;
+    path: {
+        revision: number;
+    };
+    query?: never;
+    url: '/crm/email-privacy/policy/revisions/{revision}';
+};
+
+export type GetCrmEmailRuleRevisionResponses = {
+    200: null | EmailPolicyRevision;
+};
+
+export type GetCrmEmailRuleRevisionResponse = GetCrmEmailRuleRevisionResponses[keyof GetCrmEmailRuleRevisionResponses];
+
+export type ValidateCrmEmailRulesData = {
+    body: EmailRuleSet;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy/validate';
+};
+
+export type ValidateCrmEmailRulesResponses = {
+    200: EmailRuleValidation;
+};
+
+export type ValidateCrmEmailRulesResponse = ValidateCrmEmailRulesResponses[keyof ValidateCrmEmailRulesResponses];
 
 export type ListCrmExcludedEmailThreadsData = {
     body?: never;

@@ -98,6 +98,7 @@ fn emits_required_keys() {
         // Boot-blocking stubs — service config loaders require these even in a
         // no-doppler stack (see `BootStubEnv`).
         "POSTHOG_API_KEY",
+        "POSTHOG_FEATURE_FLAGS_SECURE_API_KEY",
         "REDIS_HOST",
         "MACRO_DB_URL",
         "INTERNAL_API_KEY",

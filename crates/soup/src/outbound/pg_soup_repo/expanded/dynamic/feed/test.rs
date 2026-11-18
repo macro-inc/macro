@@ -1,5 +1,5 @@
 use super::super::{
-    DocumentIdArrays, ExpandedDynamicCursorArgs, ItemSource, build_chat_filter,
+    DocumentGrants, DocumentIdArrays, ExpandedDynamicCursorArgs, ItemSource, build_chat_filter,
     build_document_filter, build_project_filter, build_query_from, chat_literal_constant,
     document_literal_constant, expanded_dynamic_cursor_soup_hydrated, project_literal_constant,
 };
@@ -581,6 +581,7 @@ fn shapes_reach_every_driver_and_phase() {
                     filter,
                     false,
                     sort.into(),
+                    DocumentGrants::Estimated,
                     ItemSource::SourceItems,
                     USER,
                     &mut DocumentIdArrays::starting_at(10),
@@ -674,6 +675,7 @@ fn only_ordered_scans_need_the_bound() {
             &filter,
             false,
             SimpleSortMethod::UpdatedAt.into(),
+            DocumentGrants::Estimated,
             ItemSource::SourceItems,
             USER,
             &mut DocumentIdArrays::starting_at(10),
@@ -714,6 +716,7 @@ fn disabled_projection_builds_main_query_and_asks_nothing() {
                 &filter,
                 false,
                 sort.into(),
+                DocumentGrants::Estimated,
                 ItemSource::ItemTables,
                 USER,
                 &mut DocumentIdArrays::starting_at(10),
