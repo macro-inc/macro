@@ -645,6 +645,17 @@ async fn discovery_reports_calendar_changes_as_google_does(pool: PgPool) {
         "the same calendars"
     );
 
+    let mut without_teams = discovered_calendar("secondary");
+    without_teams.online_meeting_providers = vec![];
+    assert_eq!(
+        discover(vec![discovered_calendar("primary"), without_teams]).await,
+        OutlookCalendarsChange {
+            changed: true,
+            team_ooo_changed: false
+        },
+        "a calendar that can no longer add Teams meetings"
+    );
+
     let mut renamed = discovered_calendar("secondary");
     renamed.calendar.name = "Renamed".into();
     assert_eq!(

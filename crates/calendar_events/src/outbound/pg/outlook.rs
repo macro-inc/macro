@@ -468,16 +468,20 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                 Some(CalendarProvider::Outlook),
             )
             .await?;
-            change.changed |= calendar_changed;
             change.team_ooo_changed |= calendar_changed;
-            sqlx::query!(
-                "UPDATE calendars SET online_meeting_providers=$2 WHERE id=$1",
+            // Which meetings a calendar can add changes what its viewers can
+            // do, but no out-of-office row.
+            let providers_changed = sqlx::query!(
+                "UPDATE calendars SET online_meeting_providers=$2 WHERE id=$1 AND online_meeting_providers IS DISTINCT FROM $2",
                 c.id,
                 &calendar.online_meeting_providers
             )
             .execute(&mut *tx)
             .await
-            .map_err(report)?;
+            .map_err(report)?
+            .rows_affected()
+                > 0;
+            change.changed |= calendar_changed || providers_changed;
             sqlx::query!(r#"INSERT INTO calendar_outlook_work(id,account_id,calendar_id,sync_generation,grant_generation,starts_at,ends_at)
                 VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(account_id,calendar_id) WHERE calendar_id IS NOT NULL DO NOTHING"#,
                 Uuid::now_v7(),lease.account_id,c.id,lease.binding.sync_generation,lease.binding.grant_generation,range.starts_at,range.ends_at).execute(&mut *tx).await.map_err(report)?;
