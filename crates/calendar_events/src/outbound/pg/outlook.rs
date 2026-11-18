@@ -766,17 +766,17 @@ async fn has_unreadable_events(
 }
 
 /// Schedules the full scan that certifies a calendar for team reads: every
-/// event read again under the calendar's current role. A role change
-/// restarts a scan in progress, whose earlier reads carry the old role.
-/// Otherwise a scan already in progress certifies the calendar when it
-/// finishes, and a calendar holding an event Macro cannot read gets none,
-/// since no scan would certify it and its discovery would start one every
-/// few minutes.
+/// event read again under the calendar's current role. `restart` (a role
+/// change, whose earlier reads carry the old role, or the calendar's removal)
+/// discards a scan in progress. Otherwise a scan already in progress
+/// certifies the calendar when it finishes, and a calendar holding an event
+/// Macro cannot read gets none, since no scan would certify it and its
+/// discovery would start one every few minutes.
 async fn rescan_for_verification(
     tx: &mut Transaction<'_, Postgres>,
     account_id: Uuid,
     calendar_id: Uuid,
-    role_changed: bool,
+    restart: bool,
 ) -> Result<(), Report> {
     let work = sqlx::query!(
         "SELECT id,full_scan FROM calendar_outlook_work WHERE account_id=$1 AND calendar_id=$2",
@@ -790,7 +790,7 @@ async fn rescan_for_verification(
         return Ok(());
     };
 
-    let rescan = role_changed
+    let rescan = restart
         || (!work.full_scan
             && !has_unreadable_events(tx, work.id, account_id, calendar_id).await?);
     if rescan {
