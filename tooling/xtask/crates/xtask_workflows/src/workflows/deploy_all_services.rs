@@ -44,7 +44,13 @@ pub fn deploy_all_services() -> Workflow {
                 "Warm shared binary deps onto sticky disk",
                 "binaries",
                 "Warm shared release deps",
-                ".#deployCargoArtifacts",
+                // The deps' many small inputs and the assets build side by
+                // side; the assets are a Bun script, light next to rustc.
+                "auto",
+                // The assets too, so the service jobs that embed them
+                // substitute them instead of holding their compile to build
+                // them first.
+                ".#deployCargoArtifacts .#code-mode-assets",
                 "Shared release deps realised into /nix/store; committed on job exit.",
             ),
         )
@@ -54,6 +60,9 @@ pub fn deploy_all_services() -> Workflow {
                 "Warm shared lambda deps onto sticky disk",
                 "lambdas",
                 "Warm shared lambda dep closure",
+                // One at a time: the lambda deps and the ffmpeg layer each
+                // use every core, and both at once risk the runner's memory.
+                "1",
                 ".#lambdaDeployCargoArtifacts .#callRecordingPreviewFfmpegLayer",
                 "Shared lambda deps realised into /nix/store; committed on job exit.",
             ),
@@ -143,16 +152,19 @@ fn set_matrix() -> Step<Run> {
         .id("set-matrix")
 }
 
-/// Warm one shared dep closure onto the /nix sticky disk, then push it to the
-/// S3 binary cache so every matrix job that drew a cold/stale volume from the
+/// Warm what one build matrix shares (its dep closure, and for the binaries
+/// the code-mode assets) onto the /nix sticky disk, then push it to the S3
+/// binary cache so every matrix job that drew a cold/stale volume from the
 /// pool can substitute it instead of rebuilding. The two warm jobs run in
 /// parallel and each build matrix depends only on its own warm job, so a slow
 /// lambda-closure warm never blocks binary builds and vice versa. The /nix
 /// cache volume is provided by Namespace's native Nix integration.
+/// `max_jobs` is how many derivations build at once.
 fn warm_job(
     name: &str,
     gate_output: &str,
     build_step_name: &str,
+    max_jobs: &str,
     targets: &str,
     done_msg: &str,
 ) -> Job {
@@ -173,7 +185,7 @@ fn warm_job(
         .add_step(steps::setup_nix_with_cache())
         .add_step(steps::nix_build(
             build_step_name,
-            "1",
+            max_jobs,
             &quoted_targets,
             done_msg,
         ))
