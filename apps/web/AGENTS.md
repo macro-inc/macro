@@ -1270,10 +1270,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Include unsynced email working copies in Drafts and mobile name search even
   before a GraphQL save, and warm sending accounts alongside backfill. Preserve
   inbox, alias, and facet scope.
-- Draft autosaves preserve active email thread messages; evict inactive legacy
-  caches on save and the active cache on thread exit. Revalidate GraphQL thread
-  pages only when a save cannot patch the message list (missing snapshot or a
-  move between inboxes).
+- Draft autosaves patch GraphQL thread pages in place; revalidate them only
+  when a save cannot patch the message list (missing snapshot or a move
+  between inboxes).
 - Keep email card resize motion on its content wrapper so message and inline
   reply transitions preserve the card's focus target and return to natural height.
 - Task composer submissions retain an account/context-scoped local copy until
