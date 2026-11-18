@@ -1,12 +1,28 @@
-import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import { throwOnErr } from '@core/util/result';
+import {
+  compileToAst,
+  defineQueryFilters,
+  queryStateFrom,
+} from '@app/features/next-soup/filters/filter-store';
 import { type CrmCompanyEntity, isCrmCompanyEntity } from '@entity';
-import type { storageServiceClient } from '@service-storage/client';
+import { fetchGraphqlSoupPage } from '@queries/soup/graphql/fetch-page';
+import type { SoupAstItemsQueryArgs } from '@queries/soup/items';
 import { mapApiSoupItemToEntity } from '../../../lib/queries/soup/transform-utils';
+
+/** Every visible company, in pages of 500. */
+export const CRM_EXPORT_COMPANIES_ARGS: SoupAstItemsQueryArgs = {
+  params: { limit: 500, sort_method: 'updated_at' },
+  body: compileToAst(
+    queryStateFrom(
+      defineQueryFilters(
+        { include: { crmCompanyHidden: false } },
+        { skipTargets: ['ccf'] }
+      )
+    )
+  ),
+};
 
 /** Read every visible company, without changing the active CRM view. */
 export async function fetchCrmExportCompanies(
-  storage: typeof storageServiceClient,
   signal: AbortSignal,
   onProgress: (count: number) => void
 ) {
@@ -15,16 +31,10 @@ export async function fetchCrmExportCompanies(
   const cursors = new Set<string>();
   do {
     signal.throwIfAborted();
-    const page = await throwOnErr(() =>
-      storage.getSoupItems({
-        params: { cursor },
-        body: {
-          ...QUERY_FILTERS_BASE,
-          crm_company_filters: { hidden: false },
-          limit: 500,
-          sort_method: 'updated_at',
-        },
-      })
+    const page = await fetchGraphqlSoupPage(
+      { ...CRM_EXPORT_COMPANIES_ARGS, cursor },
+      // An export reads the server's list, never a cached or offline copy.
+      { signal, requestPolicy: 'network-only', allowOfflineFallback: false }
     );
     signal.throwIfAborted();
     for (const item of page.items) {

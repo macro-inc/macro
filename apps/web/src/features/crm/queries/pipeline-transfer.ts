@@ -27,7 +27,7 @@ export function createPipelineTransfer(
 ): PipelineTransfer {
   const { storage } = deps;
   const companies = (signal: AbortSignal) =>
-    fetchCrmExportCompanies(storage, signal, () => {});
+    fetchCrmExportCompanies(signal, () => {});
   /**
    * The company for a domain, created when the team lacks it. Contacts at one
    * new domain share a single creation rather than racing to a conflict.

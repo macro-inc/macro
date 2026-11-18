@@ -330,8 +330,7 @@ export function createAppCrmContext(): CrmContext {
       }),
     createReplaceStages: () => useReplaceCrmStagesMutation(deps),
     createResetStages: () => useResetCrmStagesMutation(deps),
-    exportCompanies: (...args) =>
-      fetchCrmExportCompanies(deps.storage, ...args),
+    exportCompanies: fetchCrmExportCompanies,
     createCompanySuggestions: useQuickAccessCrmCompaniesQuery,
     createContactSuggestions: useQuickAccessCrmContactsQuery,
     hydrateCompany(company) {
