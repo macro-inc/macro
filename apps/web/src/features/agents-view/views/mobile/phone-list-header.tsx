@@ -12,11 +12,9 @@ import AgentIcon from '@icon/system/regular/sparkle.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
-import {
-  ConversationFiltersControl,
-  type ConversationFiltersProps,
-} from '../../components/conversation-filters/conversation-filters';
+import type { ConversationFiltersProps } from '../../components/conversation-filters/conversation-filters';
 import type { AgentsPage } from '../../core/pages';
+import { ConversationFiltersDrawer } from './filters/filters';
 
 export function PhoneListHeader(
   props: ConversationFiltersProps & {
@@ -61,15 +59,13 @@ export function PhoneListHeader(
               </Button>
             </MobileHeader.Island>
             <Show when={!props.archived}>
-              <MobileHeader.Island class="size-10 justify-center !px-0">
-                <ConversationFiltersControl
-                  filters={props.filters}
-                  onFilterChange={props.onFilterChange}
-                  onClearFilters={props.onClearFilters}
-                  showUnlistedRuns={props.showUnlistedRuns}
-                  onShowUnlistedRunsChange={props.onShowUnlistedRunsChange}
-                />
-              </MobileHeader.Island>
+              <ConversationFiltersDrawer
+                filters={props.filters}
+                onFilterChange={props.onFilterChange}
+                onClearFilters={props.onClearFilters}
+                showUnlistedRuns={props.showUnlistedRuns}
+                onShowUnlistedRunsChange={props.onShowUnlistedRunsChange}
+              />
             </Show>
           </Show>
           <Show when={searchOpen()}>

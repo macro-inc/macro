@@ -105,7 +105,7 @@ const PR_OPTIONS: ListControlOption<PullRequestFilter>[] = [
     icon: () => <GitPullRequestIcon class="size-3.5 text-ink-extra-muted" />,
   },
 ];
-const FILTER_GROUPS: ListFilterGroup<
+export const FILTER_GROUPS: ListFilterGroup<
   ConversationFilterCategory,
   FilterValue
 >[] = [
