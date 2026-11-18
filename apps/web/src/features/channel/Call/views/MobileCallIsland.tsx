@@ -19,6 +19,7 @@ export function MobileCallIsland() {
     isMobile() &&
     !!call?.isInCall() &&
     !companion.inCallView() &&
+    !companion.inChannel() &&
     !virtualKeyboardVisible();
   const record = useLiveCallRecordQuery(() =>
     visible() ? (call?.activeCallId() ?? '') : ''

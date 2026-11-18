@@ -1,4 +1,5 @@
 import { useMeetingSessionOwnerOptional } from '@app/features/meetings/context/meeting-session-owner';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { Telemetry } from '@macro-inc/observability';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { useCallContextOptional } from '../CallContext';
@@ -25,6 +26,13 @@ export function useActiveCallCompanion() {
       return getMeetingShareToken(location.pathname) === active.shareToken;
     return call?.isCallPage() ?? false;
   };
+  const inChannel = () => {
+    if (meeting()) return false;
+    const channelId = call?.activeChannelId();
+    if (!channelId) return false;
+    const content = globalSplitManager()?.activeSplit()?.content();
+    return content?.type === 'channel' && content.id === channelId;
+  };
   const open = async () => {
     const active = meeting();
     if (active) {
@@ -50,5 +58,5 @@ export function useActiveCallCompanion() {
       span.setAttr('call.leave.ended', result?.callEnded ?? false);
     });
   };
-  return { open, canLeave, leave, inCallView };
+  return { open, canLeave, leave, inCallView, inChannel };
 }

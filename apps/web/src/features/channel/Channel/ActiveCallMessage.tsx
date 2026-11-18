@@ -16,12 +16,13 @@ import { useChannelTab } from './ChannelTabContext';
 
 export function ActiveCallMessage(props: { channelId: string }) {
   const active = useActiveCallQuery(() => props.channelId);
-  const record = useLiveCallRecordQuery(() =>
-    active.isSuccess ? (active.data?.callId ?? '') : ''
-  );
   const { setActiveTab } = useChannelTab();
   const call = useCall(() => props.channelId, {
     onJoin: () => setActiveTab(getCallJoinTab()),
+  });
+  const record = useLiveCallRecordQuery(() => {
+    if (call.isInThisChannel()) return call.callCtx.activeCallId() ?? '';
+    return active.isSuccess ? (active.data?.callId ?? '') : '';
   });
   const isSpeaking = useParticipantSpeaking(() => ({
     channelId: props.channelId,
@@ -33,7 +34,20 @@ export function ActiveCallMessage(props: { channelId: string }) {
           .map((participant) => participant.userId)
       : [];
 
+  const showBanner = () => {
+    if (call.isInThisChannel()) return isMobile();
+    return active.isSuccess && !!active.data;
+  };
+  const startedAt = () => {
+    if (active.isSuccess && active.data) return active.data.createdAt;
+    if (record.isSuccess) return record.data.startedAt;
+    return undefined;
+  };
   async function handleJoin() {
+    if (call.isInThisChannel()) {
+      setActiveTab(getCallJoinTab());
+      return;
+    }
     analytics.track('call_action', {
       action: 'join_clicked',
       channelId: props.channelId,
@@ -46,7 +60,7 @@ export function ActiveCallMessage(props: { channelId: string }) {
   }
 
   return (
-    <Show when={active.isSuccess && active.data && !call.isInThisChannel()}>
+    <Show when={showBanner()}>
       <div class="mb-2 flex w-full justify-center touch:px-(--mobile-chrome-gutter) touch:pointer-events-auto">
         <div class="macro-message-width flex w-full min-w-0 items-center gap-3 rounded-2xl border border-success/20 bg-success/10 p-2.5">
           <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-success/10">
@@ -56,11 +70,7 @@ export function ActiveCallMessage(props: { channelId: string }) {
             <span class="truncate text-sm font-medium">
               {t('calls.inProgress')}
             </span>
-            <CallLiveChip
-              bare
-              hideWave
-              startedAt={active.isSuccess ? active.data?.createdAt : undefined}
-            />
+            <CallLiveChip bare hideWave startedAt={startedAt()} />
           </div>
           <UserGroup
             isHighlighted={isSpeaking}
@@ -76,7 +86,7 @@ export function ActiveCallMessage(props: { channelId: string }) {
             onClick={() => fireAndForget(handleJoin(), 'channel-call')}
           >
             <PhoneIcon class="size-4" />
-            {t('calls.join')}
+            {call.isInThisChannel() ? t('nav.returnToCall') : t('calls.join')}
           </Button>
         </div>
       </div>
