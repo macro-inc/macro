@@ -1,5 +1,5 @@
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
-import { lazy } from 'solid-js';
 
 /**
  * Every view except Home (the default landing) loads as its own chunk. The

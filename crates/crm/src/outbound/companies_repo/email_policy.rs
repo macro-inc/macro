@@ -1,6 +1,9 @@
 //! Dormant owner-bound metadata transactions; no caller can activate consent here.
 
 mod envelopes;
+mod history;
+mod population;
+mod source_changes;
 mod sources;
 
 use super::CompaniesRepositoryImpl;

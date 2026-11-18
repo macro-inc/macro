@@ -1381,7 +1381,7 @@ with existing DM peers/inboxes; full channel sources are still in memory.
 The web full-list query/hooks, shared recipient pool and manual contacts GET
 wrapper are removed. Message/native-share/websocket invalidations now issue only
 coalesced `requestContactRefresh()` hints; deployed backend and SDK APIs remain
-compatible. Quick Access reads a replaceable person window rather than a global
+compatible. Quick Access reads a bounded, growing person list rather than a global
 contact item index. Commands/mentions forward typed queries; CRM alias matching
 uses exact lookup for only the current 50-row CRM window. Soup facets and property
 pickers preserve selections separately. General Soup creator menus and chips use

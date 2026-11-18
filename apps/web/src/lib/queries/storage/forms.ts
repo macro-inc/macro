@@ -1,7 +1,5 @@
 /** Forms: their detail, layout, metadata, responses and tallies (RFC 02 §1). */
 import { analytics } from '@app/lib/analytics';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableForms } from '@core/constant/featureFlags';
 import {
   catchToResult,
   type ResultError,
@@ -40,8 +38,7 @@ function formsQueryOptions(enabled: boolean) {
 
 /** Every form the viewer can open, for Drive and Quick Access. */
 export function useFormsQuery() {
-  const flag = useFeatureFlag(enableForms);
-  return useQuery(() => formsQueryOptions(flag().enabled));
+  return useQuery(() => formsQueryOptions(true));
 }
 
 /**

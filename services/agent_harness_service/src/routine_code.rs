@@ -156,6 +156,8 @@ pub struct SdkRoutineCode<Credentials = MacroApiTokenSigner> {
     /// before its credential is minted, rather than queueing in the executor,
     /// so its credential and time limit start when it runs.
     slots: Arc<Semaphore>,
+    /// How each step's requests reach the SDK hosts, by its owner's flag.
+    egress: crate::code_mode::EgressRollout,
 }
 
 impl<Credentials> SdkRoutineCode<Credentials> {
@@ -180,7 +182,15 @@ impl<Credentials> SdkRoutineCode<Credentials> {
             cognition,
             time_zones,
             slots: Arc::new(Semaphore::new(Semaphore::MAX_PERMITS)),
+            egress: crate::code_mode::EgressRollout::new(None),
         }
+    }
+
+    /// Send each step's requests as its owner's egress flag says; without
+    /// this, every step goes directly.
+    pub fn with_egress(mut self, egress: crate::code_mode::EgressRollout) -> Self {
+        self.egress = egress;
+        self
     }
 
     /// Run at most `slots` programs at once, the executor's running limit;
@@ -319,6 +329,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                 arguments,
                 dry_run: run.dry_run,
             }),
+            egress: self.egress.egress(owner).await,
         };
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let started = Instant::now();

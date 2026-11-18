@@ -21,7 +21,6 @@ use axum::{Json, Router};
 use chrono::NaiveDate;
 use rootcause::prelude::*;
 use serde_json::{Value, json};
-use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
@@ -118,7 +117,7 @@ impl FocusStandIns {
     /// Starts the server both stand-ins answer on.
     pub(crate) async fn start() -> Result<Self, Report> {
         let classifier = FocusClassifier::default();
-        let listener = TcpListener::bind("127.0.0.1:0")
+        let listener = crate::host::local_listener()
             .await
             .context("could not bind the Focus stand-ins")?;
         let address = listener.local_addr()?;

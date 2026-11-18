@@ -2,6 +2,7 @@ import { TraceFlow, useFlow } from '@app/observability/flow';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { RUST_EDITOR_ENGINE } from '@core/document-session/engine-selection';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazy } from '@core/util/lazy';
 import type { DocumentEntity } from '@entity';
 import {
   createLoroManager,
@@ -27,7 +28,6 @@ import type { ResultAsync } from 'neverthrow';
 import {
   createEffect,
   createSignal,
-  lazy,
   Match,
   on,
   type ParentProps,

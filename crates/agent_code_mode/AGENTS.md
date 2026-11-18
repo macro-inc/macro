@@ -62,6 +62,9 @@ stacks. Process isolation belongs to
   (`OwnerApprovals::hold_in_process`), like a direct MCP call. `discover`
   and `servers` serve `DiscoverConnectors` and `ConnectMcpServer` through
   the native tool gate, so both tools are in `covered_by_code_sdk`.
+  `CodeModeError::ConnectedAppRateLimited` (HTTP 429 with `Retry-After`) is
+  a call egress's budget (`agent_egress::outbound::budgeted_mcp`) could not
+  get through; it did not run.
 - `src/domain/ui_commands.rs`: a running execution's `macro.ui.open`.
   `POST /agent-sessions/{id}/ui-commands` admits the same way connected apps
   do, then sends only for a turn a person prompted from an app tab
@@ -77,8 +80,7 @@ stacks. Process isolation belongs to
   dropped, so a command never starts what a link from outside the app does.
   Budgets (5 commands and 3 panes a turn, 30 a person a minute) live in Redis; the
   harness adapters (`agent_harness_service/src/code_mode/ui_commands.rs`) send a
-  `ui_command` frame to `user/{prompter}` through the connection gateway behind
-  the `enable-agent-navigation` flag. No acknowledgement yet: `sent` is the
+  `ui_command` frame to `user/{prompter}` through the connection gateway. No acknowledgement yet: `sent` is the
   gateway receipt.
 - `src/domain/documentation.rs`: the build-time SDK catalog (per entity a
   `@routing` description, an `@agent` guide and an index; a reference per

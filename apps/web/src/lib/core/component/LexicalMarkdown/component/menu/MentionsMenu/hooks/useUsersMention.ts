@@ -128,21 +128,23 @@ export function useUsersMention(
     });
   };
 
-  // People come before agents and bots, as in assignee menus. The directory's
-  // personal window keeps its own order among people: its rows take the slots
-  // the ranking gives people, and search ranks only the rows outside it.
+  // Macro leads, then people come before the other agents and bots, as in
+  // assignee menus. The directory's personal window keeps its own order among
+  // people: its rows take the slots the ranking gives people, and search ranks
+  // only the rows outside it.
   const users = createLazyMemo(() => {
     const term = searchTerm().trim();
     const list = usersList();
     const results = userSearch()(list, term);
+    const order = { viewerId: currentUserId(), mention: true };
     if (!usesDirectory()) {
       if (term) {
-        return rankAgentsAfterPeople(results, (item) => item.id);
+        return rankAgentsAfterPeople(results, (item) => item.id, order);
       }
       return peopleBeforeAgents(
         results.map(({ item }) => item),
         (item) => item.id,
-        currentUserId()
+        order
       );
     }
 
@@ -163,7 +165,7 @@ export function useUsersMention(
       return peopleBeforeAgents(
         [...orderedPeople, ...agents],
         (item) => item.id,
-        currentUserId()
+        order
       );
     }
 
@@ -174,7 +176,9 @@ export function useUsersMention(
     return placeAgentsAfterPeople(
       orderedPeople,
       agents.filter((item) => rank(item) >= 0),
-      rank
+      rank,
+      (item) => item.id,
+      order
     );
   });
 

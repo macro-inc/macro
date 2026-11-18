@@ -1,6 +1,5 @@
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
 import { externalChatContent } from '@app/features/external-view/hosted-content';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import {
@@ -16,7 +15,6 @@ import { InlineTaskProperties } from '@core/component/InlineTaskProperties';
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
 import { verifyBlockName } from '@core/constant/allBlocks';
-import { enableDatabases } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { formatDate } from '@core/util/date';
@@ -707,10 +705,7 @@ function DatabaseMention(props: DocumentMentionProps) {
     setEditable(value);
   });
   if (release) onCleanup(release);
-  const enabled = useFeatureFlag(enableDatabases);
-  const detail = useDatabaseDetailQuery(() =>
-    enabled().enabled ? props.documentId : undefined
-  );
+  const detail = useDatabaseDetailQuery(() => props.documentId);
   const name = () =>
     detail.isSuccess ? detail.data.database.name : props.documentName;
   const expand = (event: MouseEvent) => {
@@ -748,7 +743,7 @@ function DatabaseMention(props: DocumentMentionProps) {
               if (result && result.status !== 'unavailable') props.onOpened?.();
             }}
           />
-          <Show when={enabled().enabled && editable() && host.isInteractable()}>
+          <Show when={editable() && host.isInteractable()}>
             <Button
               variant="ghost"
               size="icon-xs"

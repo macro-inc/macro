@@ -3,7 +3,6 @@ F-020	outlook	bug	a message deleted at Outlook stays in the thread (outlook-dele
 F-057	both	needs	the image proxy refuses the private addresses of a stack, so what it fetched cannot be checked at the service; the UI half is tested
 F-078	gmail	bug	not spam on Gmail does not bring the thread back; its test is kept as a known bug
 F-100	outlook	bug	the From choice is dropped while the draft syncs (outlook-from-choice-dropped-while-draft-syncs); its test is kept as a known bug
-F-136	outlook	bug	retrying a rejected send conflicts (outlook-retry-send-after-rejection-conflicts); its test is kept as a known bug
 F-166	both	bug	the universal input cannot make an email without a draft id (universal-input-email-needs-draft-id); its test is kept as a known bug
 AL-401	-	no-user-path	The token is only declared in tokens.ts; no hotkey is registered with it.
 AL-041	-	no-user-path	EmailInboxFilter is exported but no component imports or renders it.
@@ -12,6 +11,7 @@ AL-074	-	no-user-path	The hotkey is registered only when every selected row is a
 STL-005	-	no-user-path	the empty state needs an empty inbox selection, and every write of that selection turns an empty one into all inboxes
 STL-409	-	needs	shown only with the GraphQL list off: with it on, the check before this notice always passes and a server error shows "Failed to mark as not done" (STL-075); the suite's bundle turns the list on and has no flag service
 STL-400	-	needs	shown only when a failed next page reaches the list. The Mail list pages from the local cache, which often drops a failed page first: a test that failed the request saw the notice in about half of its runs, and Next item did nothing in the others. Needs a way to fail the cache host's paging
+AC-317	-	needs	shown only after a window of recipient suggestions failed. They are read from the local contacts cache, which no stack makes fail: needs a way to fail the cache host's directory reads
 STL-410	-	needs	the tour is off unless the flag service or the build turns in-app tours on, and the suite's bundle does neither
 AL-139	-	bug	u and Shift+U in a thread opened inline reach the list behind it and not the thread (inline-thread-read-keys-reach-the-list); its test is kept as a known bug
 AL-140	-	bug	u and Shift+U in a thread opened inline reach the list behind it and not the thread (inline-thread-read-keys-reach-the-list); its test is kept as a known bug
@@ -85,6 +85,6 @@ STX-309	-	needs	needs the AI service, and no test on the full-stack tier does it
 STX-310	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 STX-035	-	needs	needs the calendar service (a calendar sync error), and no test on the full-stack tier does it yet
 STX-319	-	needs	the tour is off unless the flag service turns on enable-in-app-tours, and the suite's bundle has no flag service
-AL-085	-	bug	Share in a row's menu opens the Share dialog and closes it at once (row-menu-dialogs-close-at-once); its test is kept as a known bug. Share in the phone's long-press drawer works and is not marked for this row
-AL-082	-	bug	Remind me in a row's menu opens the menu and closes it at once (row-menu-dialogs-close-at-once); its test is kept as a known bug
-AL-091	-	bug	Move to folder in a row's menu opens the picker and closes it at once (row-menu-dialogs-close-at-once); its test is kept as a known bug
+AL-115	-	bug	a touch device lists saved views in the sidebar sheet, whose rows drag with a mouse alone and whose menus have no Move up or Move down, so a touch cannot reorder views (touch-saved-views-reorder); its tests are kept as known bugs
+STL-704	-	bug	the touch list header names the tab a saved view runs on (All) instead of the view (touch-header-saved-view-name); its test is kept as a known bug
+STC-004	-	no-user-path	a touch device composes with the phone composer at every width, which draws no header label; the desktop Mail page shows a new email and a draft from Drafts without a split header, so nothing draws the label or its badges

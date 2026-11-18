@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { writeFileSync } from 'node:fs';
-import * as flags from '@core/constant/featureFlags';
 import { registerRichText } from '@lexical/rich-text';
 import { EditorInputMsg } from '@macro-inc/collaboration/session/abi.generated';
 import { DatabaseQueryNode } from '@macro-inc/lexical-core/nodes/DatabaseQueryNode';
@@ -211,7 +210,6 @@ function nativeSelection(runtime: Runtime) {
 }
 type SourceMode = 'caret' | 'null' | 'committed-null-sequence' | 'queued-caret';
 async function sourceOracle(mode: SourceMode, own: Own) {
-  expect(flags.isFeatureEnabled(flags.enableDatabases)).toBe(true);
   const wrapper = createRoot((dispose) => {
     own(dispose);
     const created = createLexicalWrapper({
@@ -677,25 +675,6 @@ for (const error of [undefined, null, { opaque: 'query-observer' }])
       await act(host);
       expect(queryCount(runtime)).toBe(2);
     }));
-test('Source flag OFF sends no native Query; Database remains unsupported', async () =>
-  control('flag-off', async (own) => {
-    const runtime = mount(own);
-    const host = hostFor(runtime, own);
-    const actual = flags.isFeatureEnabled;
-    const flag = vi.spyOn(flags, 'isFeatureEnabled');
-    own(() => flag.mockRestore());
-    flag.mockImplementation((value) =>
-      value === flags.enableDatabases ? false : actual(value)
-    );
-    const entry = vi.spyOn(runtime.port, 'inputSettledIfSessionEdit');
-    own(() => entry.mockRestore());
-    await act(host);
-    expect(entry).not.toHaveBeenCalled();
-    expect(queryCount(runtime)).toBe(0);
-    const database = ACTIONS.find((action) => action.id === 'database');
-    if (!database) throw new Error('Source Database absent');
-    expect(host.supports(database)).toBe(false);
-  }));
 // Fixture lifecycle controls, not native behavior REDs or receipt evidence.
 test('protected setup drains every resource and retains opaque primary and secondary', async () => {
   const releases: string[] = [];

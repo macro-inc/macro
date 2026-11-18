@@ -1,5 +1,5 @@
 // The ways into a thread's Remind me menu besides the shortcut and the
-// header button, and the ways out of it: the row's context menu (a known bug), the menu
+// header button, and the ways out of it: the row's context menu, the menu
 // after the open thread's subject, the menu's Cancel, and its Retry after
 // the reminder failed to load. Each for a Gmail and an Outlook inbox.
 
@@ -21,13 +21,13 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
-    // Known bug (row-menu-dialogs-close-at-once): the Remind me menu opened
-    // from a row's menu closes at once, because the row's menu dismisses
-    // itself with an Escape that the new menu receives. When this passes, the bug is fixed: remove
-    // the tag and the row's line in `ledger/waivers.tsv`.
-    test("known bug: row-menu-dialogs-close-at-once: Remind me in a row's menu sets a reminder on the thread @known-bug", {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    // When this fails, Remind me in a row's menu opens no reminder menu, one
+    // that closes at once (the row menu's own dismissal reaching it), or
+    // one whose time saves no reminder for the thread.
+    test("Remind me in a row's menu sets a reminder on the thread", async ({
+      page,
+      mailbox,
+    }) => {
       const ids = await deliverAll(mailbox, ['Agenda']);
       await mailbox.open();
       await expect.poll(() => rowIds(page)).toEqual([ids.Agenda]);

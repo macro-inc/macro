@@ -91,7 +91,7 @@ tools/HTTP/GraphQL surfaces over them.
   Private rule controls use the membership boundary of `/crm/email-privacy`,
   including after CRM viewing denial; resolving CRM details still needs record access.
 
-- Dormant policy storage lives in `domain/email_policy.rs` and
+- Private policy storage lives in `domain/email_policy.rs` and
   `outbound/companies_repo/email_policy/`. Initialize consent identity only via
   `OpenEmailPolicy::Initialize`; `Existing` never creates a row and checks the
   incarnation before idempotency lookup. The later API owns version CAS and
@@ -99,9 +99,16 @@ tools/HTTP/GraphQL surfaces over them.
   generation, never substitute the transaction's current version. Preview IDs
   are immutable retry identities; a new ID replaces the member's slot.
   Source events page raw contact/company rule references before filtering active
-  revisions. Wire event insertion inside the source edit's existing transaction,
-  under its privacy lock; do not call it as a separate post-commit effect.
-  No selected activation or policy worker is wired by this storage layer.
+  revisions. Wire event insertion inside the source edit's existing transaction;
+  preserve its lock order and never enqueue as a separate post-commit effect.
+  Bulk teardown must keep withdrawal available; close its first-activation race
+  with target locking/fresh reference checks before the policy API can activate.
+  `domain/email_policy_work.rs` and its service own generation-bound history:
+  raw contact pages of 100, sent-first passes, effect reauthorization and exact
+  cursor completion. Source reconciliation uses stable retry receipts and system
+  audit entries; matching edit hooks live in `email_policy/source_changes.rs`.
+  Add the same transactional hook to any new address/domain/visibility writer.
+  No worker initializes consent or activates selected contribution.
 
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
@@ -226,6 +233,12 @@ tools/HTTP/GraphQL surfaces over them.
   preserves records and prior interaction dates, like personal blocked domains.
 - Domain exclusions affect contribution and CRM email reads, never record
   visibility. Preserve archive state on block/unblock and consent withdrawal.
+  Apply `domain/email_privacy/mailbox_domains` before every new exclusion:
+  team blocks (including company sync-off/archive) protect all members' connected
+  primary mailboxes; personal blocks protect the caller's. The adapter gathers
+  and locks mailbox facts before domain/entity locks and invokes domain policy
+  within the write transaction. Full settings report existing matches without
+  removing them; consent-only and the three eligibility readers stay independent.
 - Keep ambiguous CSV contact lookups unresolved without creating records for
   them; continue valid rows, but propagate lookup storage and authorization failures.
 

@@ -26,7 +26,7 @@ import {
 } from '@app/routes/routes';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createComponent, createRoot } from 'solid-js';
+import { batch, createComponent, createEffect, createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';
 import {
@@ -68,6 +68,7 @@ vi.mock('@service-connection/websocket', () => ({
 const home: SplitContent = { type: 'component', id: 'home' };
 const settings: SplitContent = { type: 'component', id: 'settings' };
 const documents: SplitContent = { type: 'component', id: 'documents' };
+const reviews: SplitContent = { type: 'component', id: 'reviews' };
 
 const routes: SplitRoutes = {
   definitions: [
@@ -483,4 +484,63 @@ describe('stacked panes', () => {
     expect(shown()).toEqual(['home', 'documents', 'settings']);
     expect(active()).toBe('settings');
   });
+});
+
+// A covered pane's activation moves its pane to the front through the router.
+// Inside an effect or a batch the layout follows the new order only after the
+// activation returns, and inside a router commit the move itself waits, which
+// once made activation recurse until the stack overflowed.
+describe('activating a covered pane', () => {
+  type Setup = ReturnType<typeof setup>;
+
+  it.each<[string, (context: Setup, activate: () => void) => Promise<void>]>([
+    [
+      'inside a batch',
+      async (_context, activate) => {
+        batch(activate);
+      },
+    ],
+    [
+      'inside an effect',
+      async (_context, activate) => {
+        createRoot((disposeEffect) => {
+          createEffect(() => {
+            activate();
+            disposeEffect();
+          });
+        });
+      },
+    ],
+    [
+      'while the router commits another navigation',
+      async ({ router }, activate) => {
+        const homePane = router.panes()[0]!;
+        router.registerGuard(homePane, 1, ({ onCommit }) => {
+          onCommit(activate);
+          return true;
+        });
+        await router.navigatePane(homePane, '/drive');
+      },
+    ],
+  ])(
+    'brings it to the front %s, and opening still works after',
+    async (_, within) => {
+      const context = setup('/home');
+      const { router, manager, shown, active } = context;
+      manager.openWithSplit(settings);
+      manager.openWithSplit(documents);
+      const covered = manager.getSplitByContent('component', 'settings')!;
+
+      await within(context, () => covered.activate());
+      await router.settled();
+      expect(shown().at(-1)).toBe('settings');
+      expect(active()).toBe('settings');
+
+      manager.openWithSplit(reviews);
+      await router.settled();
+      expect(shown()).toHaveLength(4);
+      expect(shown().at(-1)).toBe('reviews');
+      expect(active()).toBe('reviews');
+    }
+  );
 });

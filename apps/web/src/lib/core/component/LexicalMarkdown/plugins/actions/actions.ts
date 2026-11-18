@@ -1,5 +1,4 @@
 import { toast } from '@core/component/Toast/Toast';
-import { enableDatabases, isFeatureEnabled } from '@core/constant/featureFlags';
 import CheckSquare from '@icon/system/regular/check-square.svg';
 import CodeBlock from '@icon/system/regular/code-block.svg';
 import FileText from '@icon/system/regular/file-text.svg';
@@ -286,7 +285,6 @@ export const ACTIONS: Action[] = [
     icon: LightningIcon,
     dependencies: [DatabaseQueryNode],
     action: (editor) => {
-      if (!isFeatureEnabled(enableDatabases)) return;
       queueMicrotask(() =>
         editor.update(() => {
           $insertNodes([
@@ -308,7 +306,6 @@ export const ACTIONS: Action[] = [
     icon: TableIcon,
     dependencies: [AwaitNode, DocumentMentionNode, DocumentCardNode],
     action: (editor, context) => {
-      if (!isFeatureEnabled(enableDatabases)) return;
       queueMicrotask(async () => {
         let placeholderKey: NodeKey | undefined;
         try {

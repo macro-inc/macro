@@ -15,19 +15,12 @@ import {
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
-  enableCalendarUi,
   enableInboxNotifiedSort,
-  enableSnippets,
   enableSupportedSoupForeignEntities,
-  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import {
-  type EntityData,
-  isSnippetEntity,
-  type WithNotification,
-} from '@entity';
+import type { EntityData, WithNotification } from '@entity';
 import { unreadFilterFn } from '@entity/utils/filter';
 import type { UnifiedNotification } from '@notifications/types';
 import {
@@ -87,9 +80,7 @@ function matchesCapabilities(
   entity: EntityData,
   capabilities: HomeQueryCapabilities
 ): boolean {
-  if (entity.type === 'calendar_event') return capabilities.calendar;
   if (entity.type === 'foreign') return capabilities.foreignEntities;
-  if (isSnippetEntity(entity)) return capabilities.snippets;
 
   return true;
 }
@@ -145,10 +136,8 @@ export function useHomeEntitiesQuery(
   const facetContext = (): HomeFacetContext => ({ notificationSource });
 
   const capabilities = (): HomeQueryCapabilities => ({
-    calendar: isFeatureEnabled(enableCalendarUi),
     foreignEntities: foreignEntities().enabled,
     notifiedSort: notifiedSort().enabled,
-    snippets: isFeatureEnabled(enableSnippets),
   });
 
   const viewContext = createMemo(

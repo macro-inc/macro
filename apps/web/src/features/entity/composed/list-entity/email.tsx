@@ -100,9 +100,14 @@ export function EmailNarrowBody(props: {
   showHitSnippet: boolean;
   setContainerRef: (el: HTMLElement) => void;
   previewLeading?: JSX.Element;
+  /** The subject's weight, when the row style sets one; the preview keeps its own. */
+  subjectClass?: string;
 }) {
   return (
-    <Entity.Slot placement="body" class="flex flex-col pb-2 min-h-[2lh] pr-4">
+    <Entity.Slot
+      placement="body"
+      class={cn('flex flex-col pb-2 min-h-[2lh] pr-4', props.subjectClass)}
+    >
       <Entity.Title entity={props.entity} />
       <span class="flex min-w-0 items-center gap-1.5">
         {props.previewLeading}
@@ -154,16 +159,23 @@ export function EmailWideContent(props: {
   chars: number;
   showHitSnippet: boolean;
   setContainerRef: (el: HTMLElement) => void;
+  /** The sender's and subject's weight, when the row style sets one. */
+  textClass?: string;
 }) {
   return (
     <>
       <span class="w-(--title-width) shrink-0 flex items-center gap-2">
-        <span class="truncate max-w-32 flex gap-2 items-center">
+        <span
+          class={cn(
+            'truncate max-w-32 flex gap-2 items-center',
+            props.textClass
+          )}
+        >
           <EmailIdentity entity={props.entity} />
         </span>
         <EmailInboxChip entity={props.entity} class="ml-auto" />
       </span>
-      <span class="truncate">
+      <span class={cn('truncate', props.textClass)}>
         <Entity.Title entity={props.entity} />
       </span>
       <span

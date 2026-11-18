@@ -1,6 +1,7 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
 import type { Permissions } from '@core/component/SharePermissions';
+import type { EntityData } from '@entity';
 import type { ItemType } from '@service-storage/client';
 import type { JSX } from 'solid-js';
 import type { BlockTool } from '../block-tool';
@@ -34,6 +35,11 @@ export function MobileBlockHeader(props: {
   menuTools: BlockTool[];
   ops: FileOperation[];
   itemType?: ItemType;
+  /**
+   * Full entity for the title menu's entity-gated items, when the block can
+   * build one the menu can't (a call needs its channel and status).
+   */
+  entity?: EntityData;
   /** Shown before the file name, such as the file type. */
   badges?: JSX.Element;
   /** Shown after the file name, such as a Beta badge. */
@@ -74,6 +80,7 @@ export function MobileBlockHeader(props: {
         name={props.menuName ?? props.name}
         ops={props.ops}
         tools={props.menuTools}
+        entity={props.entity}
       />
     </>
   );

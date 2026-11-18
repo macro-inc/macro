@@ -63,8 +63,8 @@ An API key always acts as the user who minted it. `requestedAs` is bot-only.
 #### Agent accounts
 
 An agent has its own account and seat. Invite one with
-`(await macro.teams.current()).invite('agent@example.com', { agent: true })`, or sign
-up at https://macro.com/app/signup/agent. After signing in, the agent sees its API key once in the
+`(await macro.teams.current()).invite('agent@example.com', { agent: true })` from your own
+key (an agent's program is refused), or sign up at https://macro.com/app/signup/agent. After signing in, the agent sees its API key once in the
 web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.
@@ -468,6 +468,10 @@ await macro.channels
   .send(msg`Deploy ${sha} finished. ${here}`);
 ```
 
+Pass `{ silent: true }` to `send` or `reply` for a routine update that should
+notify nobody, mentioned people included; the message still appears in the
+channel. It works with every credential.
+
 ### Routines
 
 Create scheduled or event-triggered routines through `macro.routines`. A
@@ -845,7 +849,8 @@ takes typed source/target references and returns a deletable mention handle.
 `macro.apiKeys.create(name)` returns `{ key, secret }`. Save the secret immediately;
 the handle only retains metadata. It and `bot.createToken()` are refused to an
 agent's program (ExecuteCode, a routine), whose results reach the model. `list()` and `key.delete()` manage keys.
-`tokenForEmail(email)` exchanges credentials subject to ordinary server authorization.
+`tokenForEmail(email)` exchanges credentials subject to ordinary server authorization;
+an agent's program is refused.
 
 `chat.send({ content, model, attachments, toolset })` starts a generation and returns
 its chat, response message and cancellable stream handle. Use
@@ -879,7 +884,9 @@ const stop = await macro.events.listen();
 model as persisted webhooks. If you omit `filters`, it derives one filter from
 the event names already registered with `.on()`. Pass `scope: 'team'` for a
 team workspace (defaults to `'user'`). Delivery is best-effort: there is no
-replay if you disconnect.
+replay if you disconnect. Reconnecting sends `Last-Event-ID`, but the service
+replays only for clients that also ask `resume=true`, which `listen()` does
+not, so a reconnected listener gets the live stream as before.
 
 Handlers receive the same hydrated payloads as webhook deliveries — ORM
 handles for every entity the event names.

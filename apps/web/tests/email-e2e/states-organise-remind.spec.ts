@@ -5,9 +5,7 @@
 //
 // A reminder is the storage service's, not the mailbox's: the menu reads and
 // writes it the same way whichever mailbox the thread is in. Gmail on the
-// desktop, from the menu after the open thread's subject (the same menu
-// opened from a row's menu closes at once, a known bug); Outlook on the
-// phone, from the thread's menu.
+// desktop, from a row's menu; Outlook on the phone, from the thread's menu.
 
 import type { Locator, Page } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
@@ -23,7 +21,7 @@ import {
   sheetIn,
 } from './harness/states-organise';
 import { PHONE } from './harness/ways-list1';
-import { deliverAll, titleMenu } from './harness/ways-organise';
+import { deliverAll, rowMenu } from './harness/ways-organise';
 import { expectReminder, remindWhen } from './harness/ways-organise-more';
 import { phoneHeaderSubject } from './harness/ways-thread-more';
 import { saw } from './ledger/record';
@@ -175,12 +173,8 @@ test.describe('the Remind me menu on a desktop', () => {
       mailbox,
       ids,
       shared,
-      // From the open thread: the same menu opened from a row's menu
-      // closes at once (known bug row-menu-dialogs-close-at-once).
-      async (id, subject) => {
-        await mailbox.open(`/app/email/${id}`);
-        await expect(page.getByText(`About ${subject}.`).first()).toBeVisible();
-        await titleMenu(page, subject, /^Remind me/);
+      async (id) => {
+        await rowMenu(page, id, /^Remind me/);
         await expect(remindWhen(page)).toBeVisible();
       },
       (target) => target.click()

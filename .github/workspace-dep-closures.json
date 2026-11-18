@@ -3870,6 +3870,7 @@
     "code_execution": [
       "crates/code_execution",
       "crates/code_mode_assets",
+      "crates/macro_tower_layers",
       "crates/workspace-hack"
     ],
     "code_mode_assets": [

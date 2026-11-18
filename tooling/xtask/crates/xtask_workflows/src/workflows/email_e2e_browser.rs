@@ -3,21 +3,21 @@
 //! and the fixture-level browser suites of the email and calendar features.
 //! Generated into `email_e2e_browser.yml`.
 //!
-//! It runs on every push to `main` that changes the web app or backend code,
-//! and in the daily sweep ([`email_e2e::SWEEP`]), which also reports the
-//! tests kept for known bugs. Both check the coverage of the email UI. It is
-//! not part of `PR CI`: a pull request branch is run by hand
-//! (`workflow_dispatch`, `apps/web/tests/email-e2e/README.md`). A failure on
-//! `main` is a red run on the merge commit; nothing is reverted or blocked
-//! by it.
+//! It runs on pushes to `main` that change the web app or backend code, one
+//! run at a time ([`email_e2e::concurrency`]), and in the daily sweep
+//! ([`email_e2e::SWEEP`]), which also reports the tests kept for known bugs.
+//! Both check the coverage of the email UI. It is not part of `PR CI`: a pull
+//! request branch is run by hand (`workflow_dispatch`,
+//! `apps/web/tests/email-e2e/README.md`). A failure on `main` is a red run on
+//! the commit it tested; nothing is reverted or blocked by it. Its last job
+//! tells the Macro Alerts channel when the pushes or the sweep turn red, and
+//! when they pass again ([`email_e2e_alert`]).
 
-use gh_workflow::{
-    Concurrency, Event, Expression, Job, Push, Run, Schedule, Step, Strategy, Use, Workflow,
-};
+use gh_workflow::{Event, Expression, Job, Push, Run, Schedule, Step, Strategy, Use, Workflow};
 use xtask_paths::RepoGlob;
 
 use crate::workflows::{
-    code_check_cloud_storage, email_e2e, runners,
+    code_check_cloud_storage, email_e2e, email_e2e_alert, runners,
     steps::{self, FluentBuilder},
     vars, web_app_check_main,
 };
@@ -64,6 +64,12 @@ const SHARDS: u32 = 3;
 /// The job that runs a shard of the suite.
 const SUITE_JOB: &str = "email-e2e-browser";
 
+/// The job that checks the coverage of the email UI.
+const COVERAGE_JOB: &str = "email-e2e-browser-coverage";
+
+/// The artifact the coverage job uploads its report as.
+const COVERAGE_REPORT: &str = "email-e2e-browser-coverage";
+
 /// Build the workflow.
 pub fn email_e2e_browser() -> Workflow {
     let push = MAIN_PATHS
@@ -77,18 +83,14 @@ pub fn email_e2e_browser() -> Workflow {
             .push(push)
             .add_schedule(Schedule::new(email_e2e::SWEEP))
             .workflow_dispatch(email_e2e::dispatch()))
-        .concurrency(concurrency())
+        .concurrency(email_e2e::concurrency("email-e2e-browser"))
         .map(vars::with_global_env)
         .add_job(SUITE_JOB, suite())
-        .add_job("email-e2e-browser-coverage", coverage())
-}
-
-/// As the Rust suite: every commit on `main` keeps its own result, per event.
-fn concurrency() -> Concurrency {
-    Concurrency::new(Expression::new(
-        "email-e2e-browser-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.sha }}",
-    ))
-    .cancel_in_progress(true)
+        .add_job(COVERAGE_JOB, coverage())
+        .add_job(
+            email_e2e_alert::JOB,
+            email_e2e_alert::job(&[SUITE_JOB, COVERAGE_JOB], COVERAGE_REPORT),
+        )
 }
 
 /// Build the services and the web bundle, then run a shard of the browser
@@ -175,7 +177,7 @@ fn coverage() -> Job {
         .add_step(download_recorded())
         .add_step(ledger())
         .add_step(
-            steps::upload_artifact("email-e2e-browser-coverage", LEDGER)
+            steps::upload_artifact(COVERAGE_REPORT, LEDGER)
                 .add_with(("if-no-files-found", "ignore"))
                 .add_with(("overwrite", true))
                 .add_with(("retention-days", 30))
@@ -235,7 +237,7 @@ fn known_bugs() -> Step<Run> {
 /// passing test on this stack nor a waiver, when a waived one is covered, and
 /// when a test for a known bug passes (`ledger/README.md`). A run that left
 /// the known-bug tests out says so (`--without-known-bugs`), or their absence
-/// would fail the check. It runs on every push to `main` and in the sweep,
+/// would fail the check. It runs in every run of the suite, the sweep too,
 /// after a failed suite too, where it says what the tests that passed cover.
 fn ledger() -> Step<Run> {
     Step::new("check the coverage of the email UI")

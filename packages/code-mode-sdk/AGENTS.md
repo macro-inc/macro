@@ -11,7 +11,11 @@ HTML worker belong to `packages/sdk-docs`.
 - `scripts/generate.ts`: builds the Deno bundles and backend documentation into
   the directory it is given; `crates/code_mode_assets` runs it at build time.
 - `scripts/typedoc.ts`: index each entity and split linked Markdown into
-  per-symbol references (classes, methods, types). A discriminated union over
+  per-symbol references (classes, methods, types). Index fields retain lazy
+  accessor call signatures and return types (`content(): Promise<string>`).
+  Keep each index under 16 KiB using concise source TSDoc first sentences;
+  preserve the [SDK's operating constraints](../sdk/AGENTS.md#gotchas) there and
+  retain other details in following paragraphs. A discriminated union over
   the 16 KiB reference size, such as `EditOp`, lists its members, each read as
   `EditOp.<discriminator>`.
 - `scripts/catalog.ts`: the entity directories agents discover, one entity

@@ -188,3 +188,69 @@ fn the_reading_is_kept_for_every_later_reader() {
         user("one", TokenSource::Bearer).unwrap()
     );
 }
+
+/// A repeated access-token cookie authenticates with the last, as cookie
+/// jars keep it: a domain-wide cookie beside a newer host-only one, in one
+/// Cookie header or across several. Every one is still a user token.
+#[test]
+fn a_repeated_cookie_authenticates_with_the_last() {
+    let name = access_token_cookie_name();
+    for headers in [
+        vec![("cookie", format!("{name}=stale; {name}=current"))],
+        vec![
+            ("cookie", format!("{name}=stale")),
+            ("cookie", format!("{name}=current")),
+        ],
+    ] {
+        let headers: Vec<(&str, &str)> = headers.iter().map(|(n, v)| (*n, v.as_str())).collect();
+        let carried = credential("/x", &headers).unwrap();
+        assert_eq!(carried.kind, user("current", TokenSource::Cookie).unwrap());
+        assert_eq!(carried.user_tokens, ["current", "stale"]);
+    }
+}
+
+/// The bearer and cookie the access-token extractors read: the first
+/// bearer, else the last cookie, whatever else the request carries.
+#[test]
+fn access_token_sources_are_the_first_bearer_and_the_last_cookie() {
+    let sources = |uri: &str, headers: &[(&str, &str)]| {
+        let mut request = Request::builder().uri(uri);
+        for (name, value) in headers {
+            request = request.header(*name, *value);
+        }
+        let (mut parts, ()) = request.body(()).unwrap().into_parts();
+        access_token_sources(&mut parts)
+    };
+    let name = access_token_cookie_name();
+    let cookies = format!("{name}=stale; {name}=current");
+    assert_eq!(
+        sources(
+            "/x",
+            &[("authorization", "Basic abc"), ("cookie", &cookies)]
+        ),
+        AccessTokenSources {
+            bearer: None,
+            cookie: Some("current".into()),
+        }
+    );
+    assert_eq!(
+        sources(
+            "/x",
+            &[
+                ("authorization", "Bearer one"),
+                (USER_API_KEY_HEADER, "key")
+            ]
+        ),
+        AccessTokenSources {
+            bearer: Some("one".into()),
+            cookie: None,
+        }
+    );
+    // An unreadable query hides neither.
+    assert_eq!(
+        sources("/x?%%", &[("authorization", "Bearer one")])
+            .bearer
+            .as_deref(),
+        Some("one")
+    );
+}

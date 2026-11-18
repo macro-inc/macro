@@ -312,9 +312,14 @@ passing stores nothing and pushes nothing, so a follow-up coming due, a
 calendar change whose event ends or importance moving shows at the tab's next
 read. Mark
 Done hides the row at once and archives the thread; Undo brings it back. The
-worker classifies only inboxes on its `FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so
-other accounts see the empty state `You're caught up`, whose **See the rest of
-your inbox** opens Signal.
+worker classifies an inbox only while its owner has `enable-email-focus` on; a
+delegated inbox follows its owner's flag, not the reader's. An owner who joins
+the rollout gets a filled tab without new mail: within about 6 minutes the
+worker finds them (it looks at every connected inbox each minute, evaluating
+the flag from definitions it polls from PostHog every 5 minutes) and backfills their inbox,
+the last 3 days first, then the rest of the 30 without due dates (an older
+thread gets one with its next mail). With nothing classified the tab
+shows the empty state `You're caught up`, whose **See the rest of your inbox** opens Signal.
 
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the
@@ -962,8 +967,8 @@ input, personal suggestions are recent-first rather than domain/brevity-weighted
 A chip shows the name followed by the address in muted ink.
 Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal
 local windows rather than retaining the address book or searching the server.
-Partial synchronization remains visibly incomplete. Each field owns its query; use
-**Next options** or PageDown for another window. Scoped thread addresses remain
+Partial synchronization remains visibly incomplete. Each field owns its query;
+scrolling to the end of the suggestions (or PageDown) lists the next page below. Scoped thread addresses remain
 available, but the same address must not appear twice when the directory also
 finds it. Paging, closing, changing sender and searching must preserve selected
 custom/off-page chips. After selecting a custom address, search for a different
@@ -1138,7 +1143,7 @@ open shadow root: Playwright text locators can reach them, but a card's ordinary
 
 ### Read receipts
 
-With `enable-email-read-receipts` on and read receipts on for an inbox, which
+With read receipts on for an inbox, which
 is the default (see [Settings](settings.md#email-read-receipts)), messages sent from that
 inbox show **Opened** or **Not opened** beside the date in the expanded
 message header. The desktop tooltip and the expanded header details (tap the
@@ -1218,14 +1223,19 @@ An online send shows **Sending…** with **Undo**: a new message opens its
 conversation and a reply closes its composer, and the message appears as sent
 there immediately, before the server or provider confirms it. Once the server
 accepts the send, **Undo** stays on offer until the server's undo deadline (the
-accepted attempt's `sendTime`), not for a fixed client duration. The notice says
-**Email sent** only after delivery. This holds when another Mail tab delivers or
-cancels the send first, and a cancelled reply still returns its thread to Inbox.
-When the server cannot say how such a send ended, the notice only withdraws
-**Undo**. A send that fails after it was queued shows
-a persistent **Email failed to send**, and **Delivery unconfirmed** reports a
-send the provider did not confirm. An offline send shows **Email queued to
-send** and returns to the email list. The status panel shows a send only while it waits on this
+accepted attempt's `sendTime`), not for a fixed client duration. It is one
+notice that stays on screen until the send ends and changes in place: **Undo**
+leaves at the deadline, and **Sending…** then becomes **Email sent** only after
+delivery; it never closes and reopens while the send is in motion. A send
+that makes no progress for 30 seconds (retrying, or waiting on sign-in) lets
+its notice expire, and a new one follows it once the server accepts it. This holds
+when another Mail tab delivers or cancels the send first, and a cancelled reply
+still returns its thread to Inbox. When the server cannot say how such a send
+ended, the notice closes. A send that fails after it was queued turns the
+notice into a persistent **Email failed to send**, and **Delivery unconfirmed**
+reports a send the provider did not confirm. An offline send shows **Email
+queued to send**, which expires as usual, and returns to the email list; once
+the send goes out a **Sending…** notice follows it the same way. The status panel shows a send only while it waits on this
 device (**Queued on this device**), needs attention, or is scheduled
 (**Scheduled**). On phones the panel sits below the safe area and the floating
 header. Only one active send can own a draft across tabs; queued composers
@@ -1554,7 +1564,15 @@ gives the full send time, with secondary **View message** on the left and primar
 **Email rescheduled** with **View message**. Undo cancels the captured draft in
 the captured inbox and restores its editable body, envelope, and attachments; it must
 not overwrite a newer reply. View message opens the scheduled thread, or scrolls an
-inline reply back into view.
+inline reply back into view. The notice and its Undo stay while the thread opens
+after the schedule, on a phone too: the composer there starts from the schedule
+just made, even when its first read of the draft predates it, and raises no
+**Email scheduled for … Cancel the schedule to edit.** alert, which is for a
+schedule made in another tab or device. A schedule cancelled or moved from
+another composer before its notice shows (while the thread is being marked done)
+gets no notice; once cancelled, the composer that scheduled it, reply or not,
+stays open and editable. A schedule moved on another device while its notice
+shows keeps the notice and its Undo.
 The Email view's **Scheduled** tab lists only server-confirmed scheduled drafts,
 soonest first across the selected inboxes, as ordinary email rows: the recipients,
 subject, and snippet, with a clock-and-time badge (for example **Tomorrow, 2:12
@@ -1686,7 +1704,7 @@ Date-grouped email lists start directly with today's messages; Today is not show
 
 ## Saved email views
 
-Behind `enable-email-saved-views` (on in dev). A saved view is a named
+A saved view is a named
 `kind: "email"` definition in the shared saved-view store; opening it queries
 live mail with the viewer's access. See `docs/design/saved-views.md`.
 

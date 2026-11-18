@@ -4,6 +4,7 @@ import importlib.machinery
 import importlib.util
 import json
 import pathlib
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -13,6 +14,7 @@ from unittest import mock
 
 import datadog_spans
 import markdown_export
+import reconstruct
 import turn_context
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -85,6 +87,23 @@ class Exporter(unittest.TestCase):
         )
         self.assertEqual([step.duration for step in turns[0].steps], [1, 3])
 
+    def test_code_sent_after_the_call_starts_is_kept(self):
+        turns = markdown_export.parse([
+            prompt(0),
+            call(1, "a", "mcp__macro_internal__ExecuteCode"),
+            update(1.2, sessionUpdate="tool_call_update", toolCallId="a", status="in_progress",
+                   rawInput={"source": "export async function main() {}", "acting_as": "requester"}),
+            done(2, "a", {"status": "succeeded"}),
+            call(3, "b", "BashCodeExecution"),
+            update(3.1, sessionUpdate="tool_call_update", toolCallId="b", rawInput={"input": "ls -la"}),
+            done(4, "b", {}),
+            end(5),
+        ])
+        first, second = turns[0].steps
+        self.assertEqual(first.code, "export async function main() {}")
+        self.assertEqual(first.arguments, {"acting_as": "requester"})
+        self.assertEqual(second.code, "ls -la")
+
     def test_a_fence_outlasts_backticks_in_its_content(self):
         self.assertEqual(markdown_export.fence("a\n```\nb"), "````\na\n```\nb\n````")
 
@@ -120,11 +139,13 @@ class Spans(unittest.TestCase):
 class DocumentationAndTools(unittest.TestCase):
     def test_a_documentation_selection_reads_its_entities_and_bytes(self):
         span = {"trace_id": "t1", "start_timestamp": "2026-11-09T10:00:00Z",
+                "tags": ["region:us-east-1", "task_family:agent-harness-service-1a2b3c4d", "task_version:3"],
                 "custom": {"selection_status": "selected", "selected": "2", "selected_entities": "channels,users",
                            "bytes": "20111", "guidance": "Inline", "batches": "2"}}
         self.assertEqual(datadog_spans.documentation(span), {
             "trace_id": "t1", "start_ms": 1794218400000.0, "status": "selected", "selected": 2,
             "entities": ["channels", "users"], "bytes": 20111, "guidance": "Inline", "batches": 2,
+            "task_definition": "agent-harness-service-1a2b3c4d:3",
         })
 
     def test_a_cut_tool_listing_keeps_every_whole_name_and_no_descriptions(self):
@@ -259,6 +280,100 @@ class TurnContext(unittest.TestCase):
 
     def test_without_spans_there_is_no_context(self):
         self.assertEqual(turn_context.for_session({"session": {"id": "s"}, "frames": [prompt(0)]}, []), [])
+
+
+RELEASE_RUNS = {"workflow_runs": [
+    {"name": "Deploy Production Release", "conclusion": "success", "head_sha": "aaa111", "head_branch": "v2026.11.16.0",
+     "created_at": "2026-11-16T14:09:45Z", "updated_at": "2026-11-16T14:41:20Z"},
+    {"name": "Deploy Production Release", "conclusion": "success", "head_sha": "bbb222", "head_branch": "v2026.11.16.1",
+     "created_at": "2026-11-16T23:15:25Z", "updated_at": "2026-11-16T23:35:38Z"},
+    {"name": "Android APK on Release", "conclusion": "success", "head_sha": "ccc333", "head_branch": "v2026.11.16.1",
+     "created_at": "2026-11-16T23:15:25Z", "updated_at": "2026-11-16T23:51:09Z"},
+]}
+
+
+def completed(stdout):
+    return mock.Mock(returncode=0, stdout=stdout, stderr="")
+
+
+class Reconstruct(unittest.TestCase):
+    def test_a_part_is_verified_by_the_harness_hash(self):
+        text = "\n<macro_sdk>\ncatalog</macro_sdk>\n"
+        self.assertEqual(reconstruct.short_hash(text), __import__("hashlib").sha256(text.encode()).hexdigest()[:16])
+        self.assertEqual(reconstruct.check("sdk_docs", text, len(text), reconstruct.short_hash(text))["status"],
+                         "verified")
+        self.assertEqual(reconstruct.check("sdk_docs", text, len(text), "0000000000000000")["status"], "mismatch")
+        self.assertEqual(reconstruct.check("sdk_docs", text, None, None)["status"], "unverified")
+
+    def test_the_commit_is_the_deploy_that_registered_the_task(self):
+        asked = []
+
+        def run(args, **_):
+            asked.append(args)
+            if args[0] == "gh":
+                return completed(json.dumps(RELEASE_RUNS))
+            return completed('"2026-11-16T23:31:34.381000+00:00"')
+        with mock.patch("subprocess.run", side_effect=run):
+            commit = reconstruct.deploy_commit("agent-harness-service-52dc1429:1",
+                                               reconstruct.iso("2026-11-17T16:00:42Z"), "prod",
+                                               reconstruct.production_deploys())
+        self.assertIn("agent-harness-service-52dc1429:1", asked[1])
+        self.assertEqual(commit["sha"], "bbb222")
+        self.assertTrue(commit["exact"])
+
+    def test_an_unreadable_task_falls_back_to_the_last_deploy_with_its_reason(self):
+        def run(args, **_):
+            if args[0] == "gh":
+                return completed(json.dumps(RELEASE_RUNS))
+            raise subprocess.CalledProcessError(255, args)
+        with mock.patch("subprocess.run", side_effect=run):
+            commit = reconstruct.deploy_commit("agent-harness-service-52dc1429:1",
+                                               reconstruct.iso("2026-11-16T20:00:00Z"), "prod",
+                                               reconstruct.production_deploys())
+        self.assertEqual(commit["sha"], "aaa111")
+        self.assertFalse(commit["exact"])
+        self.assertIn("not readable", commit["reason"])
+        self.assertIn("last production deploy before the turn", commit["reason"])
+
+    def test_an_unseen_turn_checks_neither_the_session_preamble_nor_a_macro_prompt(self):
+        output = {"preamble": "P", "macro_prompt": "inline", "routed_macro_prompt": "routed",
+                  "identities": [], "integrations": [], "docs": []}
+        call_row = {"start_ms": seconds(1) * 1000, "eager_tools": 4,
+                    "prompt_bytes": {"preamble": 40}, "prompt_hashes": {"preamble": "0123456789abcdef"}}
+        turn = markdown_export.parse([prompt(0), end(5)])[0]
+        found = reconstruct.parts({"documentation": None}, turn, [call_row], output, iter([]))
+        self.assertEqual([(part["name"], part["status"]) for part in found], [("preamble", "not reconstructed")])
+
+    def test_candidates_of_one_size_without_a_hash_stay_unverified(self):
+        sizes = {"identity": 3}
+        part = reconstruct.inferred("identity", ["Ada", "ada"], sizes, {}, "inferred")
+        self.assertEqual(part["status"], "unverified")
+        self.assertEqual(reconstruct.inferred("identity", ["Ada", "Bo"], sizes, {}, "inferred")["status"], "verified")
+
+    def test_parts_pick_the_routed_prompt_by_guidance_and_flag_a_docs_byte_mismatch(self):
+        docs = "\n<macro_sdk>\ncatalog</macro_sdk>\n"
+        output = {"preamble": "P", "macro_prompt": "inline guides", "routed_macro_prompt": "routed",
+                  "identities": [], "integrations": [], "docs": [docs]}
+        call_row = {"start_ms": seconds(1) * 1000, "eager_tools": 4,
+                    "prompt_bytes": {"preamble": 1, "macro_prompt": 6, "memory": 900, "sdk_docs": len(docs)},
+                    "prompt_hashes": {"preamble": reconstruct.short_hash("P"),
+                                      "macro_prompt": reconstruct.short_hash("routed"),
+                                      "sdk_docs": reconstruct.short_hash(docs)}}
+        turn = markdown_export.parse([prompt(0), end(5)])[0]
+        context = {"documentation": {"entities": [], "guidance": "Selected", "bytes": 999}}
+        found = {part["name"]: part for part in reconstruct.parts(context, turn, [call_row], output, iter(output["docs"]))}
+        self.assertEqual(found["preamble"]["status"], "verified")
+        self.assertEqual(found["macro_prompt"]["text"], "routed")
+        self.assertEqual(found["memory"]["status"], "not reconstructed")
+        self.assertIsNone(found["memory"]["text"])
+        self.assertEqual(found["sdk_docs"]["status"], "mismatch")
+        self.assertIn("999", found["sdk_docs"]["note"])
+
+    def test_a_turn_texts_move_out_once_by_hash(self):
+        contexts = [{"literal": {"parts": [{"hash": "h1", "text": "same"}]}},
+                    {"literal": {"parts": [{"hash": "h1", "text": "same"}, {"hash": None, "text": None}]}}]
+        self.assertEqual(reconstruct.texts(contexts), {"h1": "same"})
+        self.assertNotIn("text", contexts[0]["literal"]["parts"][0])
 
 
 class Cli(unittest.TestCase):

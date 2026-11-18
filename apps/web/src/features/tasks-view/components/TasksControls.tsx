@@ -31,8 +31,7 @@ export function TasksControls() {
 
 function DesktopTasksControls() {
   const panel = useSplitPanelOrThrow();
-  const { state, setPrimarySort, setState, projectsEnabled, ganttEnabled } =
-    useTasksView();
+  const { state, setPrimarySort, setState, ganttEnabled } = useTasksView();
   const filters = useTaskFilters();
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
   let filterTrigger: HTMLButtonElement | undefined;
@@ -78,9 +77,7 @@ function DesktopTasksControls() {
       return TASK_GROUP_OPTIONS;
     }
 
-    return TASK_BOARD_GROUP_OPTIONS.filter((option) => {
-      return option.id !== 'project' || projectsEnabled();
-    });
+    return TASK_BOARD_GROUP_OPTIONS;
   };
 
   return (

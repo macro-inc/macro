@@ -115,8 +115,14 @@ Contact invalidations from messages, native sharing and websocket events call
 runner owns the work. Full-list hooks, query keys and handwritten GET clients
 are retired; no compatibility query should be created by an invalidation.
 Ranked person
-cursors and contact reconciliation use coordinator protocol 17; native menu policy 5
-orders exact names, all-word prefixes, then literal contains by recency and identity.
+cursors and contact reconciliation use coordinator protocol 17; native menu policy 6
+lists people the viewer has a direct message with first among matches at a word
+start, however exactly a stranger's name matches; within each group, exact names
+(full, or the first name for a one-term query) come before all-word prefixes, then
+recency and identity. Literal contains matches come last. "Has a direct message" means a
+positive interaction time, which context facts take from direct-message channels,
+including group and never-written DMs. Native (desktop, iOS, Android) binaries released
+before policy 6 still answer with policy 5; keep accepting it (`PEOPLE_MIN_POLICY_VERSION`).
 Explicit addresses/IDs never match name aliases; empty property browsing pins self.
 Exclude automated recipient addresses before limiting unless explicitly addressed.
 Generate separate suggestion/reference policy floors from Rust; reference evidence
@@ -126,10 +132,14 @@ membership/context tokens, not previous result IDs or a scoring clock. Contact
 changes invalidate pending replies and restart paging; honor short/empty continuations.
 Quick Access person lists are per-observer windows, never global item-cache rows.
 Forward live queries from commands, mentions and property selectors; resolve CRM
-aliases only for the listed rows. In menus (Cmd+K, mentions, mobile name search)
-further pages of people and contact matches are listed below the earlier ones, up
-to a bound; property pickers use explicit paging, and query-backed pages append
-to the visible options. Thread/generic pickers advance their browsed-email and
+aliases only for the listed rows. Every contact menu and picker (Cmd+K, mentions,
+mobile name search, property, recipient and filter pickers) lists further pages
+below the earlier ones as the end scrolls into view, up to 500 rows
+(`queries/contacts/directory-list.ts`); query-backed pages append to the visible
+options. A page with no matching rows reads on until one matches or the source
+ends. Never add a Next options button; a failed page offers Retry. A sentinel
+element opts out of scroll anchoring (`[overflow-anchor:none]`), or Chrome holds
+it in view and every page loads the next. Thread/generic pickers advance their browsed-email and
 server-search pages alongside Quick Access; explicit user rosters stay capped.
 A window key names the page or growing list on screen, never a refresh of it. Reset
 virtual focus/scroll only on window replacement, not label updates or refreshes.
@@ -147,8 +157,8 @@ Keep native row timestamps and forwarding through both editor configuration and
 constructs a per-picker source from live query/open/self/domain inputs; use
 `useContactRecipientSource` or `useCombinedRecipientSource` for personal suggestions
 and keep `options` for explicit scoped extras. Closing releases the page and reopening
-starts at the first window. Selected chips remain caller-owned; Next options/PageDown
-can advance empty windows. Main email To/Cc/Bcc inputs receive the factory through
+starts at the first page. Selected chips remain caller-owned; PageDown loads the
+next page from the keyboard. Main email To/Cc/Bcc inputs receive the factory through
 `EmailComposeContext.createRecipientSource`; scoped hosts opt out explicitly with
 `undefined`. Thread extras and personal hits deduplicate by canonical email while
 preserving the selected representation. Keep selection/outside dismissal synchronous;
@@ -159,7 +169,7 @@ names to option/chip avatars instead of duplicating resolved names in the shared
 recipient and email app-browser fixtures cover desktop/touch. Channel invitation
 and participant pickers use the same source with explicit roster exclusions; keep
 whole-team selection separate. Exclude up to the native IPC budget before ranking,
-filter any oversized roster remainder within each replaceable window, and retain
+filter any oversized roster remainder within each listed page, and retain
 empty continuations. Bind paging to the complete roster's reset key, including
 changes beyond that budget. Keep picker portals inside their owning dialog/drawer;
 cancel a recipient option's pointerup default so synchronous popup removal cannot
@@ -353,6 +363,10 @@ retained detail is claimed by another pane or preview. Keep this check in view
 restoration and preserve entity deduplication and native dock stack restoration;
 `split-layout/tests/view-restoration.test.tsx` covers Chat and Tasks lists in
 either pane, keeping the other pane's detail and history independent.
+Resolve collection-provider ownership from the committed router entry before
+mounting its outlet; the layout's mount metadata can still describe the previous
+view. `split-layout/tests/SplitPanel-collection-navigation.test.tsx` covers CRM
+to Calls, history, and split reuse while that mirror is stale.
 
 Links in database text and URL cells open without editing the cell, on desktop
 and touch, while the rest of the cell still edits:
@@ -476,6 +490,11 @@ meter on every row except on phones, with the direction in its label while
 importance moves, and a preview cut short ending in an ellipsis (its box must
 not be a flex container, whose text never gets one):
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
+The same suite's `row-styles.browser.e2e.ts` covers Mail's row styles over the
+real row: Minimalist unchanged, and Classic's shared line between rows (plus
+the one above each date group's first row), lifted unread fill, weights and
+always-visible checkbox on desktop and tablet, with phones kept on Minimalist,
+and the Settings → Email sample following the Row style tabs.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the
@@ -663,7 +682,7 @@ boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
 match. Among equally good name matches Cmd+K lists Macro users and DMs before
-other rows. Personal contact rows keep policy-5 source order among equally good
+other rows. Personal contact rows keep the native window order among equally good
 name matches only, so a recent weaker match never takes a better match's slot.
 A row whose letters merely appear in order ranks below every row containing the
 typed words.
@@ -671,8 +690,9 @@ Soup's local search pool (`createSearchState`) stays lazy: it builds only when
 local search has text. Measure Quick Access ranking at scale with the
 [scale fixture](src/features/command/browser-test/README.md).
 Ordinary DM entity matching in Cmd+K and mobile name search treats the first
-name as exact, so it reaches a full-name DM; personal contact windows keep their
-independent policy-5 tiers. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
+name as exact, so it reaches a full-name DM; personal contact windows count an
+exact first name as exact the same way, in their native tiers, after leading with
+people the viewer has a direct message with. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
 Quick Access, and Soup search including the Chat sidebar) matches channels and
 DMs by terms in any order, adding to uFuzzy's in-order matches, because names
 are generated from participants and people type them in any order. It also
@@ -988,6 +1008,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   which has no dev/local override while backend ingestion rolls out;
   another contributor's copy remains eligible. Desktop/phone coverage lives in
   `src/features/crm/browser-test/privacy`.
+- Show CRM mailbox-domain block refusals beside the submitted input and existing
+  matching-entry explanations in the shared settings row description; retain
+  removal and distinguish company domains from personal providers.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
@@ -1028,7 +1051,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `browser-test/people` and `browser-test/team` additionally cover synthetic query adapters;
   `browser-test/team` also scrolls a 120-person company through three Team pages.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
-- Email mounts the same saved views (`kind: "email"`, flag `enable-email-saved-views`); read `src/features/email-view/AGENTS.md` before changing its definition, sidebar section, or mobile picker.
+- Email mounts the same saved views (`kind: "email"`); read `src/features/email-view/AGENTS.md` before changing its definition, sidebar section, or mobile picker.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
 - Show email draft sync failure UI (the composer banner, a failure toast, a **Not synced** row) only when the user has to act: the server refused the write for good, or local storage needs a reload. A write that is in flight, queued, superseded by its own send, or failing in a way that can be retried stays silent and retries itself first; a false alarm costs more trust than a late one.
@@ -1067,7 +1090,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   platform, and keep the desktop and Android Enable actions on the native
   notification provider.
 - Share one notification mute menu across entity rows, detail headers, conversations, and sections; offer permanent mute, timed presets, and the existing custom-time picker, with icon-free mute and unmute actions, matching mobile drill-in choices, and no separate Snooze notifications row. Channels other than one-to-one DMs also get **Only @mentions** at the top of that menu (`mentionsOnly` on the menu props, from `makeMuteAction`); a mentions-only item is not muted (`isMutedItem` is false, `isMentionsOnlyItem` true), so give it the `@` indicator, never the muted bell.
-- Keep toast behavior in `@core/component/Toast/Toast`: desktop notices stack, mobile transients replace, and persistent notices use their own regions. Mobile notices omit the close icon and support swiping left or right. Follow the [toast presentation contract](../../.agents/rules/web/design-system.md) for shared surfaces, compact mobile notices, aligned content, and optional close controls.
+- Keep toast behavior in `@core/component/Toast/Toast`: desktop notices stack, mobile transients replace, and persistent notices use their own regions. A process that moves through states (an email send) shows one toast and passes its id as `replace` to change it in place, never dismissing and reopening it. Mobile notices omit the close icon and support swiping left or right. Follow the [toast presentation contract](../../.agents/rules/web/design-system.md) for shared surfaces, compact mobile notices, aligned content, and optional close controls.
   Review current toast specimens under **Current app toasts** at `/app/component/ui?ui=toast`; keep the gallery's actions inert, regions isolated, and account details synthetic.
 - Keep signed-out Drive document routes on the shared detail viewer without
   mounting private list/sidebar sources; let document access checks decide visibility.
@@ -1915,9 +1938,10 @@ Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx
 import it directly from Tasks and legacy `next-soup` consumers.
 Keep entity-picker navigation on its search input, before the enclosing menu handles the key.
 Order assignee menus and @ mention People rows with `@core/user/people-before-agents`:
-you, other people, then agents with Macro first. While searching, rank with
-`NAME_MATCH_RANKING`; an agent needs the typed words, not scattered letters, and never ranks
-above a person who matches as well. Cap a list's people (`capPeople`), never its agents, and
+you, other people, then agents with Macro first. @ menus pass `mention: true`, which lists
+Macro above everyone and keeps it first while its name starts with the query. While
+searching, rank with `NAME_MATCH_RANKING`; an agent needs the typed words, not scattered
+letters, and never ranks above a person who matches as well. Cap a list's people (`capPeople`), never its agents, and
 don't boost bots in a menu's search score.
 
 ### Tag picker selection and creation

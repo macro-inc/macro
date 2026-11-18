@@ -8,6 +8,9 @@ use model_owner::Owner;
 
 use super::error::AgentSessionError;
 
+#[cfg(test)]
+mod test;
+
 // The log vocabulary - the session id, the log entry, and the frame it
 // carries - is owned by `agent_fold`, the bottom of the agent session stack,
 // so that this crate can depend on the fold (see `agent_fold::domain::log`).
@@ -637,7 +640,7 @@ pub struct SessionBot {
     serde::Deserialize,
 )]
 #[strum(serialize_all = "snake_case")]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "snake_case", from = "String")]
 pub enum PrompterKind {
     /// A human or runtime prompt; user identifies any acting human.
     #[default]
@@ -650,6 +653,14 @@ pub enum PrompterKind {
     Program,
 }
 
+/// Every serialized kind decodes through [`PrompterKind::from_stored`], so
+/// an unknown one reads as a system turn's on every path.
+impl From<String> for PrompterKind {
+    fn from(value: String) -> Self {
+        Self::from_stored(&value)
+    }
+}
+
 impl PrompterKind {
     /// Whether this is [`Self::User`], for `skip_serializing_if`.
     #[must_use]
@@ -657,21 +668,41 @@ impl PrompterKind {
         *self == Self::User
     }
 
-    /// The stored `turn_prompter_kind`; anything unknown reads as `User`, as
-    /// every row did before the column held more than `user` and `system`.
+    /// A stored or serialized kind. An unknown one reads as [`Self::System`],
+    /// which acts for nobody, so a bad value never spends the owner's access
+    /// or counts as their word. A missing one is the legacy default,
+    /// [`Self::User`], which the column default and `#[serde(default)]` give.
     #[must_use]
     pub fn from_stored(value: &str) -> Self {
-        value.parse().unwrap_or_default()
+        match value.parse() {
+            Ok(kind) => kind,
+            Err(_) => {
+                tracing::warn!(
+                    prompter_kind = value,
+                    "unknown prompter kind, reading it as a system turn's"
+                );
+                Self::System
+            }
+        }
     }
 
-    /// The kind a prompt keeps when `edit` rewrites it: once a program has
-    /// written it, it stays a program's.
+    /// The kind a prompt keeps when `edit` rewrites it: the less trusted of
+    /// the two, so once a program (or nobody) has written it, it stays theirs.
     #[must_use]
     pub fn after_edit(self, edit: Self) -> Self {
-        if edit == Self::Program {
-            Self::Program
+        if edit.trust() < self.trust() {
+            edit
         } else {
             self
+        }
+    }
+
+    /// How much of the owner's authority the kind carries.
+    fn trust(self) -> u8 {
+        match self {
+            Self::System => 0,
+            Self::Program => 1,
+            Self::User => 2,
         }
     }
 }

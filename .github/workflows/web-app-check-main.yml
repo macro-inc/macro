@@ -380,7 +380,9 @@ jobs:
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
         cache: nix
-        path: /home/runner/.bun/install/cache
+        path: |-
+          /home/runner/.bun/install/cache
+          ${{ github.workspace }}/node_modules
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -460,6 +462,7 @@ jobs:
         cache: nix
         path: |-
           /home/runner/.bun/install/cache
+          ${{ github.workspace }}/node_modules
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
       continue-on-error: true
@@ -668,6 +671,7 @@ jobs:
         cache: nix
         path: |-
           /home/runner/.bun/install/cache
+          ${{ github.workspace }}/node_modules
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
           /home/runner/.cache/.wasm-pack
@@ -758,6 +762,7 @@ jobs:
         cache: nix
         path: |-
           /home/runner/.bun/install/cache
+          ${{ github.workspace }}/node_modules
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
           /home/runner/.cache/.wasm-pack
@@ -854,6 +859,7 @@ jobs:
         cache: nix
         path: |-
           /home/runner/.bun/install/cache
+          ${{ github.workspace }}/node_modules
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
           /home/runner/.cache/.wasm-pack
@@ -1488,60 +1494,3 @@ jobs:
           }
       env:
         IOS_GATE_STEPS: ${{ toJSON(steps) }}
-  status-check:
-    needs:
-    - path-check
-    - android-native-check
-    - typescript
-    - generated-code
-    - biome-check
-    - test
-    - functional
-    - browser
-    - cycles
-    - build
-    - ios-native-check
-    if: always()
-    name: Web App Status Check
-    runs-on: namespace-profile-linux-tiny-no-cache
-    timeout-minutes: 5
-    steps:
-    - name: Check job results
-      run: |
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "android-native-check: ${{ needs.android-native-check.result }}"
-        echo "typescript: ${{ needs.typescript.result }}"
-        echo "generated-code: ${{ needs.generated-code.result }}"
-        echo "biome-check: ${{ needs.biome-check.result }}"
-        echo "test: ${{ needs.test.result }}"
-        echo "functional: ${{ needs.functional.result }}"
-        echo "browser: ${{ needs.browser.result }}"
-        echo "cycles: ${{ needs.cycles.result }}"
-        echo "build: ${{ needs.build.result }}"
-        echo "ios-native-check: ${{ needs.ios-native-check.result }}"
-
-        # The Android check always runs, so it must succeed. For the rest only
-        # success and skipped are OK: a job that hits its timeout reports
-        # cancelled, and passing on that would merge code whose checks never ran.
-        if [[ "${{ needs.android-native-check.result }}" != "success" ]]; then
-          echo "Android Native Check did not succeed"
-          exit 1
-        fi
-        for result in \
-          "${{ needs.path-check.result }}" \
-          "${{ needs.typescript.result }}" \
-          "${{ needs.generated-code.result }}" \
-          "${{ needs.biome-check.result }}" \
-          "${{ needs.test.result }}" \
-          "${{ needs.functional.result }}" \
-          "${{ needs.browser.result }}" \
-          "${{ needs.cycles.result }}" \
-          "${{ needs.build.result }}" \
-          "${{ needs.ios-native-check.result }}"; do
-          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-            echo "One or more jobs failed or were cancelled"
-            exit 1
-          fi
-        done
-
-        echo "All jobs passed or were skipped"

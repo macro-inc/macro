@@ -185,6 +185,20 @@ vi.mock(
   '@core/component/LexicalMarkdown/component/menu/FloatingEquationMenu',
   () => ({ FloatingEquationMenu: () => null })
 );
+// Git blame is always on; its hover listeners and tooltip query need a real
+// view root and blame data, which these tests don't serve.
+vi.mock('@core/component/LexicalMarkdown/plugins/blame-tooltip/native', () => ({
+  registerNativeBlameTooltip: () => () => {},
+}));
+vi.mock(
+  '@core/component/LexicalMarkdown/plugins/blame-tooltip',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('@core/component/LexicalMarkdown/plugins/blame-tooltip')
+    >()),
+    BlameTooltip: () => null,
+  })
+);
 vi.mock('@core/component/LexicalMarkdown/context/DecoratorHostContext', () => ({
   DecoratorHostContext: {
     Provider: (props: { children?: import('solid-js').JSX.Element }) =>

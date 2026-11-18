@@ -3,8 +3,7 @@
 ## What it is
 
 Mail's list view: desktop sidebar and header, mobile pills and filter drawer,
-the Soup-backed thread list, and saved email views (flag
-`enable-email-saved-views`).
+the Soup-backed thread list, and saved email views.
 
 ## Start here
 
@@ -24,6 +23,12 @@ the Soup-backed thread list, and saved email views (flag
   `views/email-compose-route.tsx`) and the touch ones in `views/mobile/`,
   which host the thread's or composer's own mobile header in the pane's top
   bar through `SplitHeaderScope`.
+- `primitives/email-row-style.ts`: the Minimalist/Classic row style chosen in
+  Settings → Email, a per-device preference passed to each row as
+  `ListEntity.rowStyle`; phones always get Minimalist.
+  `components/EmailRowStylePreview.tsx` draws Settings' inert sample of it
+  with the real row, restoring Mail's list tokens that the settings card
+  overrides.
 - `primitives/create-search-scroll-reset.ts`: a new search starts at the top
   once its own results replace the rows kept on screen.
 - `search/`: recent searches (`recent-searches.ts`, per person in browser

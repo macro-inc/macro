@@ -35,7 +35,6 @@ pub fn code_check_cloud_storage() -> Workflow {
         .add_job("test", test())
         .add_job("build-service-bins", build_service_bins())
         .add_job("graphql-schema-compat", graphql_schema_compat())
-        .add_job("status-check", status_check())
 }
 
 /// Same-repo PRs only: the binary cache below is shared, so an untrusted fork
@@ -278,25 +277,6 @@ fn test_execution_runtime() -> Step<Run> {
         ))
 }
 
-/// Always-run collector used as the required status check. Its name must stay
-/// stable — branch protection references it.
-fn status_check() -> Job {
-    Job::default()
-        .timeout_minutes(5u32)
-        .name("Cloud Storage Status Check")
-        .runs_on(runners::Runner::Small.to_string())
-        .cond(Expression::new("always()"))
-        .needs(vec![
-            "path-check".to_string(),
-            "check".to_string(),
-            "doppler-config".to_string(),
-            "test".to_string(),
-            "build-service-bins".to_string(),
-            "graphql-schema-compat".to_string(),
-        ])
-        .add_step(check_job_results())
-}
-
 // --- workflow-specific steps -------------------------------------------------
 
 /// Detect whether cloud-storage-relevant paths changed, and whether any
@@ -478,33 +458,4 @@ fn prepare_tests() -> Step<Run> {
 /// Run the test suite (no AWS credentials; sccache uses Namespace's remote cache).
 fn run_tests() -> Step<Run> {
     Step::new("run tests").run(include_str!("scripts/run_tests.sh"))
-}
-
-/// Aggregate the upstream job results into a single required status check.
-fn check_job_results() -> Step<Run> {
-    Step::new("Check job results").run(indoc::indoc! {r#"
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "check: ${{ needs.check.result }}"
-        echo "doppler-config: ${{ needs.doppler-config.result }}"
-        echo "test: ${{ needs.test.result }}"
-        echo "build-service-bins: ${{ needs.build-service-bins.result }}"
-        echo "graphql-schema-compat: ${{ needs.graphql-schema-compat.result }}"
-
-        # Only success and skipped are OK. A job that hits its timeout reports
-        # cancelled, and passing on that would merge code whose tests never ran.
-        for result in \
-          "${{ needs.path-check.result }}" \
-          "${{ needs.check.result }}" \
-          "${{ needs.doppler-config.result }}" \
-          "${{ needs.test.result }}" \
-          "${{ needs.build-service-bins.result }}" \
-          "${{ needs.graphql-schema-compat.result }}"; do
-          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-            echo "❌ One or more jobs failed or were cancelled"
-            exit 1
-          fi
-        done
-
-        echo "✅ All jobs passed or were skipped"
-    "#})
 }

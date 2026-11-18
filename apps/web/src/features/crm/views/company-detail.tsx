@@ -64,7 +64,6 @@ function CompanyContent(props: CompanyProps) {
     }))
   );
   const listsEnabled = context.listsEnabled();
-  const pipelinesEnabled = context.pipelinesEnabled();
   const { company, query } = useCompanyQuery(() => props.companyId);
   usePending('crm.record', () => query.isLoading);
   const section = () => props.section ?? 'overview';
@@ -94,12 +93,10 @@ function CompanyContent(props: CompanyProps) {
             <Match when={section() === 'overview'}>
               <RecordOverview>
                 <CompanyHeader company={company()} />
-                <Show when={pipelinesEnabled()}>
-                  <context.PipelineEntries
-                    record={{ type: 'company', id: props.companyId }}
-                    onOpenPipeline={props.onOpenPipeline}
-                  />
-                </Show>
+                <context.PipelineEntries
+                  record={{ type: 'company', id: props.companyId }}
+                  onOpenPipeline={props.onOpenPipeline}
+                />
                 <CompanyDiscussionSection companyId={props.companyId} />
               </RecordOverview>
             </Match>

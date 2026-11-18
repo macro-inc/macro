@@ -57,7 +57,6 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableProjects: {},
 }));
 vi.mock('@property/tags', () => ({ useLocalDocTags: vi.fn() }));
 vi.mock('@queries/properties/definitions', () => ({}));

@@ -531,6 +531,7 @@ shell-words = "1.1.1"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-serde = "=0.0.12"
 specta-typescript = "=0.0.12"
+sha1 = "0.10.6"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.6", features = [
   "chrono",

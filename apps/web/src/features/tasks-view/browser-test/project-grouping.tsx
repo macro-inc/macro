@@ -2,7 +2,6 @@
 import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
-import { enableProjects } from '@core/constant/featureFlags';
 import { UserContextProvider } from '@core/context/user';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { authKeys } from '@queries/auth/keys';
@@ -14,7 +13,6 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { TaskGroupHeader } from '../components/task-list/TaskGroupHeader';
 
-enableProjects.override = true;
 const VIEWER_ID = 'macro|project-grouping@example.test';
 const PROJECT_ONE = 'ad000000-0000-0000-0000-000000000001';
 const PROJECT_TWO = 'ad000000-0000-0000-0000-000000000002';

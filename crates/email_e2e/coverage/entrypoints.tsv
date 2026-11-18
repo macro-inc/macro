@@ -6,7 +6,7 @@ elsewhere	document_storage_service GET /reminders/email/{thread_id}	both		crates
 elsewhere	document_storage_service POST /items/soup/ast	both		crates/soup/src/inbound/axum_router.rs:818
 elsewhere	document_storage_service POST /properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}	both		crates/properties/src/inbound/axum_router.rs:182
 elsewhere	document_storage_service POST /properties/tags	both		crates/properties/src/inbound/axum_router.rs:157
-elsewhere	document_storage_service POST /search	both		services/document_storage_service/src/api.rs:236
+elsewhere	document_storage_service POST /search	both		services/document_storage_service/src/api.rs:243
 elsewhere	document_storage_service PUT /properties/entities/{entity_type}/{entity_id}/{property_id}	both		crates/properties/src/inbound/axum_router.rs:177
 elsewhere	document_storage_service PUT /reminders/email/{thread_id}	both		crates/reminders/src/inbound/axum_router.rs:88
 gateway	refresh_email:Backfill	gmail	/event=backfill	crates/models_email/src/email/api/refresh.rs:23
@@ -43,12 +43,12 @@ graphql	GraphqlSoupEmailThread.mailDraftState	both		crates/complete_graph/src/ed
 graphql	GraphqlSoupEmailThread.mailSentPreview	both		crates/complete_graph/src/edges.rs:677
 graphql	GraphqlSoupEmailThread.messages	both		crates/complete_graph/src/edges.rs:690
 graphql	GraphqlSoupEmailThread.reminderReturnedAt	both		crates/complete_graph/src/edges.rs:594
-graphql	GraphqlUser.emailFocus	both		crates/complete_graph/src/schema.rs:1068
+graphql	GraphqlUser.emailFocus	both		crates/complete_graph/src/schema.rs:1123
 graphql	GraphqlUser.emailLabels	both		crates/graphql_email/src/user_query.rs:45
 graphql	GraphqlUser.emailLinks	both		crates/graphql_email/src/user_query.rs:62
-graphql	GraphqlUser.emailSendAttempt	both		crates/complete_graph/src/schema.rs:1029
-graphql	GraphqlUser.emailThread	both		crates/complete_graph/src/schema.rs:1040
-graphql	GraphqlUser.pendingEmailSends	both		crates/complete_graph/src/schema.rs:1018
+graphql	GraphqlUser.emailSendAttempt	both		crates/complete_graph/src/schema.rs:1084
+graphql	GraphqlUser.emailThread	both		crates/complete_graph/src/schema.rs:1095
+graphql	GraphqlUser.pendingEmailSends	both		crates/complete_graph/src/schema.rs:1073
 http	DELETE /email/backfill/gmail	gmail		services/email_service/src/api/email/backfill.rs:12
 http	DELETE /email/drafts/scheduled/{message_id}	both		services/email_service/src/api/email/drafts/scheduled.rs:10
 http	DELETE /email/drafts/{id}	both		services/email_service/src/api/email/drafts.rs:24
@@ -148,6 +148,7 @@ lambda	email_suppression_handler	both		services/email_suppression_handler/src/ha
 lambda	user_link_cleanup_handler	both		services/user_link_cleanup_handler/src/main.rs:40
 loop	backfill_outbox::run	both		services/email_service/src/backfill_outbox.rs:7
 loop	crm_enrichment_worker::run	both		services/email_service/src/crm_enrichment_worker.rs:13
+loop	email_policy_worker::run	both		services/email_service/src/email_policy_worker.rs:5
 loop	mailbox_sync_worker::run	both		services/email_service/src/mailbox_sync_worker.rs:19
 loop	mailbox_sync_worker::run_attachment_cleanup	both		services/email_service/src/mailbox_sync_worker.rs:227
 loop	mailbox_sync_worker::run_commands	both		services/email_service/src/mailbox_sync_worker.rs:211
@@ -275,12 +276,13 @@ queue	backfill:BackfillAttachment	gmail	/backfillOperation/backfill_attachment	c
 queue	backfill:BackfillMessage	gmail	/backfillOperation/backfill_message	crates/models_email/src/email/service/backfill.rs:75
 queue	backfill:BackfillThread	gmail	/backfillOperation/backfill_thread	crates/models_email/src/email/service/backfill.rs:72
 queue	backfill:DepopulateCrmContact	gmail	/backfillOperation/depopulate_crm_contact	crates/models_email/src/email/service/backfill.rs:106
-queue	backfill:DepopulateCrmForUser	gmail	/backfillOperation/depopulate_crm_for_user	crates/models_email/src/email/service/backfill.rs:117
+queue	backfill:DepopulateCrmForUser	gmail	/backfillOperation/depopulate_crm_for_user	crates/models_email/src/email/service/backfill.rs:119
 queue	backfill:FinalizeBackfill	gmail	/backfillOperation/finalize_backfill	crates/models_email/src/email/service/backfill.rs:86
 queue	backfill:Init	gmail	/backfillOperation/init	crates/models_email/src/email/service/backfill.rs:65
 queue	backfill:ListThreads	gmail	/backfillOperation/list_threads	crates/models_email/src/email/service/backfill.rs:69
 queue	backfill:PopulateCrmContact	gmail	/backfillOperation/populate_crm_contact	crates/models_email/src/email/service/backfill.rs:99
 queue	backfill:PopulateCrmForUser	gmail	/backfillOperation/populate_crm_for_user	crates/models_email/src/email/service/backfill.rs:111
+queue	backfill:PopulateCrmPolicy	both	/backfillOperation/populate_crm_policy	crates/models_email/src/email/service/backfill.rs:113
 queue	backfill:SeedSentContact	gmail	/backfillOperation/seed_sent_contact	crates/models_email/src/email/service/backfill.rs:93
 queue	backfill:UpdateThreadMetadata	gmail	/backfillOperation/update_thread_metadata	crates/models_email/src/email/service/backfill.rs:82
 queue	crm-cleanup:ListCandidates	both	/operation/list_candidates	crates/models_email/src/email/service/crm_cleanup.rs:24

@@ -794,6 +794,7 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
                     mentions: vec![customer_lid.clone()],
                 },
                 reply_to: None,
+                user_confirmation: None,
             },
             SendAuthority::Human,
         )

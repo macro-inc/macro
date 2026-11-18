@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   setContactSearchDisabled: (_value: boolean) => {},
   hasMoreContacts: false,
   peopleLoading: (): boolean => false,
+  contactsLoadingMore: (): boolean => false,
   loadMoreContacts: vi.fn(async () => {}),
   calendarEvents:
     [] as import('../../../utils/mentionsUtils').CalendarEventMentionItem[],
@@ -45,7 +46,7 @@ vi.mock('@app/features/crm/record-adapter', () => ({
       users: () => [],
       totalCount: () => mocks.contacts.length,
       hasMore: () => mocks.hasMoreContacts,
-      isLoadingMore: () => false,
+      isLoadingMore: () => mocks.contactsLoadingMore(),
       loadMore: mocks.loadMoreContacts,
     };
   },
@@ -238,7 +239,9 @@ afterEach(() => {
   mocks.setContactSearchDisabled(false);
   mocks.hasMoreContacts = false;
   mocks.peopleLoading = () => false;
-  mocks.loadMoreContacts.mockClear();
+  mocks.contactsLoadingMore = () => false;
+  mocks.loadMoreContacts.mockReset();
+  mocks.loadMoreContacts.mockImplementation(async () => {});
   mocks.calendarEvents = [];
   cleanup();
   vi.useRealTimers();
@@ -399,10 +402,18 @@ it('leaves a category list on the first desktop Escape and closes on the second'
   expect(menu.isOpen()).toBe(false);
 });
 
-it('opens an empty continuation and keeps the editor menu open while paging', async () => {
+it('reads past an empty continuation without a button and keeps the editor menu open', async () => {
   mocks.crmEnabled = true;
   mocks.hasMoreContacts = true;
   mockNoEmails();
+  const [loadingMore, setLoadingMore] = createSignal(false);
+  mocks.contactsLoadingMore = loadingMore;
+  const page = Promise.withResolvers<void>();
+  mocks.loadMoreContacts.mockImplementationOnce(async () => {
+    setLoadingMore(true);
+    await page.promise;
+    setLoadingMore(false);
+  });
   const menu = createMenuOperations();
   const editor = createEditor();
   render(() => (
@@ -417,23 +428,13 @@ it('opens an empty continuation and keeps the editor menu open while paging', as
   menu.openMenu();
   expect(screen.queryByText('No results')).toBeNull();
   fireEvent.click(screen.getByText('View all'));
-  const next = screen.getByText('Next options');
-  const callsBeforeClick = mocks.loadMoreContacts.mock.calls.length;
-  const pointer = new MouseEvent('pointerdown', {
-    bubbles: true,
-    cancelable: true,
-  });
-  next.dispatchEvent(pointer);
-  expect(pointer.defaultPrevented).toBe(true);
-  const mouse = new MouseEvent('mousedown', {
-    bubbles: true,
-    cancelable: true,
-  });
-  next.dispatchEvent(mouse);
-  expect(mouse.defaultPrevented).toBe(true);
-  fireEvent.click(next);
 
-  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(callsBeforeClick + 1);
+  // The empty window reads its next page by itself, one page at a time.
+  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(1);
+  page.resolve();
+  await page.promise;
+  await Promise.resolve();
+  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(2);
   expect(menu.isOpen()).toBe(true);
 });
 
@@ -492,15 +493,16 @@ it('only paginates an open mobile menu and resumes on reopen', async () => {
 
   menu.openMenu();
   await Promise.resolve();
-  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(1);
+  const whileOpen = mocks.loadMoreContacts.mock.calls.length;
+  expect(whileOpen).toBeGreaterThan(0);
 
   menu.closeMenu();
   await Promise.resolve();
-  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(1);
+  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(whileOpen);
 
   menu.openMenu();
   await Promise.resolve();
-  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(2);
+  expect(mocks.loadMoreContacts.mock.calls.length).toBeGreaterThan(whileOpen);
 });
 
 it('offers CRM companies and contacts', () => {

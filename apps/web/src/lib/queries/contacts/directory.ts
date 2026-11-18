@@ -1,6 +1,7 @@
 import type { IUser } from '@core/user/types';
 import type { CacheHost } from '@graphql-cache/host/types';
 import {
+  PEOPLE_MIN_POLICY_VERSION,
   PEOPLE_POLICY_VERSION,
   type PeopleSearch,
   type PeopleSearchResult,
@@ -117,6 +118,9 @@ export async function readContactDirectory(
       throw new ContactDirectoryScopeError();
     span.setAttr('contacts.query_length', request.query.length);
     span.setAttr('contacts.limit', limit);
+    span.setAttr('contacts.mode', policy.mode);
+    // Pickers read further pages by themselves as their lists scroll.
+    span.setAttr('contacts.continuation', !!request.cursor);
     const input = {
       viewer,
       request,
@@ -235,9 +239,12 @@ async function readLocalWindow(
   signal.throwIfAborted();
   await assertContactCacheScope(host, viewer, generation, signal);
 
+  // Native hosts (desktop, iOS, Android) keep an older policy until their next
+  // app release; its windows differ only in order, so they stay local.
   if (
     result.kind !== 'page' ||
-    result.policyVersion !== PEOPLE_POLICY_VERSION
+    result.policyVersion < PEOPLE_MIN_POLICY_VERSION ||
+    result.policyVersion > PEOPLE_POLICY_VERSION
   ) {
     // A local continuation cannot move to the server's ID-ordered pages.
     if (request.cursor) throw new ContactDirectoryScopeError();

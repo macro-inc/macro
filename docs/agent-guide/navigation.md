@@ -274,7 +274,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
-| `/app/for-you` | For you: the person's suggestions as cards (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` shows that suggestion first, ringed |
+| `/app/for-you` | For you: the person's suggestions as cards, Suggestions (work Macro can do), To do, Running and Done today (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` scrolls to that suggestion |
 | `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/notifications/calendar/<month-or-week-or-day>` | Notifications with a calendar notification's event open in the Calendar beside the list; the event uses `sN.calendar.*` |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -288,7 +288,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/routines` | Routines list in the Agents workspace |
 | `/app/routines/new` | A new routine's page, saved only by **Create routine** |
 | `/app/routines/<uuid>` | Routine settings, triggers, and run history in the Agents workspace |
-| `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
+| `/app/agent/<uuid>` | An agent session (opened from `@macro`, `@coder` or `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
@@ -392,12 +392,6 @@ buttons. Mobile content panes retain their back button; Scheduling omits it in
 favor of its owner and view-navigation islands, except while creating or editing
 a schedule: a separate **Back to availability** pill sits beside the editor
 title, matching other mobile routes.
-
-Projects are enabled by default in development; production uses the PostHog
-`enable-projects` flag. `VITE_ENABLE_PROJECTS` overrides either environment.
-When disabled, project navigation,
-creation, assignment, chips, and Cmd+K results are hidden; direct project links
-return to Tasks after flags resolve. Existing Files folders stay available.
 
 Projects open as native detail views within Tasks, preserving its sidebar and
 shared breadcrumb navigation. The Projects breadcrumb returns to the same list,
@@ -1152,8 +1146,7 @@ The labeled glass button one row above Search opens the current page's creation
 flow directly: **+ Task** on Tasks, **+ Email** on Email, **+ Message** on Channels,
 **+ Document** on Files, and **+ Event** on Calendar. On Notifications,
 **+ New** opens a blurred backdrop and a stack of glass actions: Email, Message,
-Document, Event, Task, More. Event follows the calendar UI flag; unavailable
-launcher actions are omitted. The plus rotates into an X; tap it or the backdrop,
+Document, Event, Task, More. Unavailable launcher actions are omitted. The plus rotates into an X; tap it or the backdrop,
 or press Escape, to dismiss. More opens the full create menu as a glass bottom
 sheet on mobile, with broad, screen-scaled corners and an even 8px outer inset;
 home-indicator clearance is inside the glass. The mobile full menu is a scrollable
@@ -1191,7 +1184,7 @@ Filter sheets have a visible heading and Close filters button. Sort and filter
 options use rounded rows with trailing checkmarks; accordion sections retain
 their selection counts. Clear all resets selections without dismissing the sheet.
 In Soup-based list toolbars, Assignee and Created by menus and filter chips load
-suggestions only while open. Next options replaces the page; selected and unavailable
+suggestions only while open, and list further pages as they scroll; selected and unavailable
 saved IDs remain selected across searches. Me remains available, Assignee also has
 Unassigned, and Only changes its own filter group. Clearing a creator refinement on Owned
 restores the Owned constraint. Chip labels resolve separately while menus are closed.
@@ -1284,8 +1277,7 @@ the catalog's first four available template cards (icon, name, one line and its 
 **New email → Label with AI**) with **All templates** at the right, which opens
 New routine's start screen. A card opens New routine already filled in from that
 template. The strip hides while searching and on **On**; on phones the cards
-scroll sideways. With `enable-routine-suggestions` and
-`enable-routine-code-steps` on (not on touch devices), suggestions take the
+scroll sideways. With `enable-routine-suggestions` on (not on touch devices), suggestions take the
 strip's place: **Suggested for you** above the rows on **All** shows one row
 of Discover's cards, as many as fit, and after them a narrow **N more · In
 Discover** column, which opens a third tab, **Discover**. Discover
@@ -1359,8 +1351,7 @@ enabled, for its trigger condition, then **Chase stuck tasks**, **Tag new
 email**, **Tag new documents**, **Tasks from my calls**, **Weekly pipeline
 review**, **Catch up on mentions**, **Sum up new pull requests** and **Weekly
 agent digest**; each shows its icon, what it does and its trigger → first
-step. Routines with code start with it when `enable-routine-code-steps` is on
-and the scheduler can save code, otherwise with an Ask AI step; schedules are
+step. Routines with code start with it when the scheduler can save code, otherwise with an Ask AI step; schedules are
 in the browser's zone), and
 **Start fresh** beside the
 close button. Each choice closes it and opens the new routine's page at
@@ -1445,7 +1436,7 @@ Macro activity triggers by surface:
 
 For messages, mentions, deletion, and task changes, use **Applies to** in the
 same panel to choose any accessible item or specific channels/documents/tasks.
-Specific-item pickers use Next options/PageDown to append later loaded pages.
+Specific-item pickers append later loaded pages as they scroll (or on PageDown).
 Creation triggers cover newly created accessible items; email covers the owner's inbox;
 **Call started** shows **Calls you start** and **Call ended** shows **Calls you
 join** — neither has an item picker. Calls the owner did not start never trigger
@@ -1481,7 +1472,7 @@ a controlled repository's delivery and matching routine history. Wildcard
 routines can run more often, and manually redelivering a webhook from GitHub
 can run a routine again.
 
-When `enable-routine-conditions` is on, every activity trigger can take one
+Every activity trigger can take one
 **Only if** check, a yes/no question about each event, such as **Is this email
 an invoice or a receipt?** (**+ Filter** on the page, **Only run if AI says
 yes** in the trigger panel). Before a run starts, the event's content (the email,
@@ -1698,7 +1689,10 @@ recency weights and type boosts live in `MENTION_RANKING_CONFIG` in the mention
 menu's `utils/mention-ranking.ts`.
 Broader entity matches remain reachable even when the local fuzzy matcher would
 omit them. Personal contacts preserve their local exact/word-prefix/contains and
-recent-first window order among equally good name matches; mixed menu scoring never
+recent-first window order among equally good name matches. People you have a direct
+message with lead every match at a word start, ahead of strangers whose whole name
+equals the query, and an exact first name counts as an exact name: `@rhea` lists
+the Rhea Okafor you message above accounts named just "Rhea" you never messaged; mixed menu scoring never
 drops reverse-word matches. In menus, further pages of people are listed below the
 earlier ones. Partial local contacts never trigger a remote suggestion search. To verify, type `@task` with a project named `Task planning`
 and many recent tasks containing “task”: the project should appear in the first
@@ -1718,12 +1712,15 @@ person has no interaction history and other recently contacted participants matc
 only scattered letters: the named person must lead and be selected by Enter or tap.
 The controlled composer regression is `people-ranking.browser.e2e.ts` in
 `apps/web/src/features/channel/Input/browser-test/`.
-People rows follow the assignee menus' rule (`@core/user/people-before-agents`):
-browsing lists you, then other people, then agents with Macro first; while
-searching, an agent is listed only when its name or handle holds the typed words,
-not just their letters scattered, and never above a person whose name matches as
-well; bots get no score boost. Phone rows keep that People order in the slots the
-blended ranking gives people.
+People rows follow the assignee menus' rule (`@core/user/people-before-agents`)
+with Macro lifted to the top: browsing lists Macro, then you, then other people,
+then the other agents. While searching, Macro stays first while its name starts
+with the query (`m`, `ma`, `mac`); otherwise, and for every other agent, an agent
+is listed only when its name or handle holds the typed words, not just their
+letters scattered, and never above a person whose name matches as well; bots get
+no score boost. Channel and DM composers still list `@here` above Macro while
+browsing. Phone rows keep that People order in the slots the blended ranking
+gives people, so Macro is the first pinned row (after `@here` in a channel or DM).
 
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
@@ -1924,6 +1921,13 @@ message input; `C Shift+A` requests a new split. It does not open a modal or
 create a session before the user sends. Repeating it focuses the existing draft.
 
 ### Content already open
+
+From Customers' Sales Calls, Sales Tasks, and Sales Notes tabs, open Calls through
+the rail (or More) and confirm that the Calls list replaces CRM and remains
+interactive. Repeat at phone width through the dock. Return to Customers and
+confirm its selected tab resumes. On desktop, also open Calls in another split:
+ordinary navigation reuses and focuses that split. Shift-click opens and focuses
+a Calls split beside CRM without changing the CRM tab.
 
 Splits navigate independently. The retired Preview Pair mode no longer creates
 an adjacent viewer, redirects list navigation, or links split sizes and history.

@@ -273,6 +273,12 @@ impl IntoResponse for CrmError {
                     message: message.into(),
                 }),
             ),
+            CrmError::BlocksConnectedMailbox(reason) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: reason.to_string().into(),
+                }),
+            ),
             CrmError::AccessDenied => (
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {

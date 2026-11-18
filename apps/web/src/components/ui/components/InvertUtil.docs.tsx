@@ -1,5 +1,6 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import { For, lazy, Suspense } from 'solid-js';
+import { lazy } from '@core/util/lazy';
+import { For, Suspense } from 'solid-js';
 import { Button } from './Button';
 import { Input } from './Input';
 import { InvertUtil } from './InvertUtil';

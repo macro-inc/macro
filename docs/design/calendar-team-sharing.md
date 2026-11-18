@@ -276,7 +276,11 @@ in the rollout.
    before expecting complete availability; do not backfill verification roles
    merely from a calendar's current role. The next normal calendar-list sync
    forces a full refresh for retained sources whose verification role is missing
-   or mismatched, including pre-migration snapshots. Let scheduler/watch recovery
+   or mismatched, including pre-migration snapshots. A source written before the
+   calendar's last committed sync forces none: a refresh keeps a stored copy
+   newer than Google's along with its old role, so that source stays unverified
+   until it changes at Google instead of rebuilding its calendar on every poll.
+   Let scheduler/watch recovery
    drive this verification while the gate is off; monitor Google quotas and
    catch-up progress before activation.
 2. Verify disclosures and the busy-only default in the sharing settings. Confirm

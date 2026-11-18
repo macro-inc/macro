@@ -1,4 +1,3 @@
-import { enableSnippets, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import { Telemetry } from '@macro-inc/observability';
 import {
@@ -321,15 +320,7 @@ export function installNativeMarkdownOverlays(
         });
         listeners.add(snippets.dispose);
         listeners.add(
-          registerNativeInlineSearch(
-            view,
-            menu,
-            'snippets',
-            ';',
-            unavailable,
-            // Source reads the snippets flag per keystroke; off, `;` is text.
-            () => !isFeatureEnabled(enableSnippets)
-          )
+          registerNativeInlineSearch(view, menu, 'snippets', ';', unavailable)
         );
         if (snippetsAvailable()) {
           overlays.push(() =>

@@ -7,8 +7,6 @@ import {
   type Query,
 } from '@app/features/next-soup/filters/filter-store';
 import {
-  enableCalendarUi,
-  enableSnippets,
   enableSupportedSoupForeignEntities,
   isCalendarSearchUiEnabled,
   isFeatureEnabled,
@@ -87,12 +85,6 @@ const OPEN_TASK_STATUS_INCLUDE_PROPS = [
   },
 ];
 
-const getExcludedDocumentSubTypes = (...subTypes: string[]) =>
-  isFeatureEnabled(enableSnippets) ? subTypes : [...subTypes, 'snippet'];
-
-const getDisabledSnippetSubtypeExclude = (): Query['exclude'] =>
-  isFeatureEnabled(enableSnippets) ? {} : { subType: ['snippet'] };
-
 /** Filters for inbox/signal: not done, importance=true for emails, 2-week window */
 const getInboxSignalFilters = () => {
   const twoWeeksAgo = subWeeks(startOfDay(new Date()), 2).toISOString();
@@ -128,11 +120,8 @@ const getInboxSignalFilters = () => {
       // Calendar events with a not-done notification (a fired event alarm).
       // Referencing `calf` opts the calendar arm into the signal query, which
       // `defineQueryFilters` otherwise excludes with a nil id filter.
-      ...(isFeatureEnabled(enableCalendarUi)
-        ? { calendarEventDone: false }
-        : {}),
+      calendarEventDone: false,
     },
-    exclude: getDisabledSnippetSubtypeExclude(),
     emailView: 'inbox',
   });
 };
@@ -151,7 +140,6 @@ const getInboxNoiseFilters = () =>
       initiativeDone: false,
       emailShared: 'exclude',
     },
-    exclude: getDisabledSnippetSubtypeExclude(),
     emailView: 'inbox',
   });
 
@@ -166,10 +154,7 @@ const getInboxNoiseFilters = () =>
  * and ignores their trees.
  */
 const getRecentFilters = () =>
-  defineQueryFilters(
-    { exclude: getDisabledSnippetSubtypeExclude() },
-    { skipTargets: ['df', 'cf', 'pf', 'chanf', 'ef'] }
-  );
+  defineQueryFilters({}, { skipTargets: ['df', 'cf', 'pf', 'chanf', 'ef'] });
 
 export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
   recent: {
@@ -232,7 +217,6 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             )
               ? [NIL_UUID]
               : [],
-            ...getDisabledSnippetSubtypeExclude(),
           },
           emailView: 'all',
         },
@@ -386,7 +370,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
               documentOwnerId: [ctx.userId],
               isEmailAttachment: false,
             },
-            exclude: { subType: getExcludedDocumentSubTypes('task') },
+            exclude: { subType: ['task'] },
           }),
           clientFilters: { and: ['document-or-file', 'owned-entity'] },
         };
@@ -399,7 +383,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
               isEmailAttachment: false,
             },
             exclude: {
-              subType: getExcludedDocumentSubTypes('task'),
+              subType: ['task'],
               documentOwnerId: [ctx.userId],
             },
           }),
@@ -420,7 +404,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
       all: () => ({
         filters: defineQueryFilters({
-          exclude: { subType: getExcludedDocumentSubTypes('task') },
+          exclude: { subType: ['task'] },
         }),
         clientFilters: { and: ['document-or-file'] },
       }),
@@ -556,7 +540,6 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
               ? {}
               : { calendarEventId: [NIL_UUID] }),
           },
-          exclude: getDisabledSnippetSubtypeExclude(),
         },
         clientFilters: { and: ['search-supported'] },
       }),

@@ -4044,6 +4044,10 @@ export type ChannelWebhookRequest = {
      * Message body.
      */
     content: string;
+    /**
+     * Who hears about the message; `Silent` notifies no one.
+     */
+    notification_policy?: PostMessageNotificationPolicy;
 };
 
 /**
@@ -9560,9 +9564,21 @@ export type EmailPrivacySettings = {
      */
     mailbox_link_id?: string | null;
     /**
+     * Existing personal exclusions that cover the caller's whole mailbox.
+     */
+    personal_domain_warnings: {
+        [key: string]: MailboxDomainConflict;
+    };
+    /**
      * Domains excluded only for the caller's contributions.
      */
     personal_domains: Array<string>;
+    /**
+     * Existing team exclusions that cover a connected member's whole mailbox.
+     */
+    team_domain_warnings: {
+        [key: string]: MailboxDomainConflict;
+    };
     /**
      * Domains excluded across the team, including legacy company exclusions.
      */
@@ -10746,6 +10762,13 @@ export type ExternalChatSendReply = {
      * Message being quoted, within this chat.
      */
     replyTo?: string | null;
+    /**
+     * The user's own reply approving this send, quoted verbatim. Required
+     * from an agent's program; never the request that asked for the message.
+     * Not part of the send's intent: it is neither stored nor compared on a
+     * retry.
+     */
+    userConfirmation?: string | null;
 };
 
 /**
@@ -14070,6 +14093,11 @@ export type LocationResponseV3 = {
 export type MacroUserIdStr = string;
 
 /**
+ * Why a domain exclusion would hide an affected mailbox's entire history.
+ */
+export type MailboxDomainConflict = 'company' | 'personal_provider';
+
+/**
  * Mark messages through this message read.
  */
 export type MarkRead = {
@@ -17279,13 +17307,20 @@ export type PostMessage = {
      */
     nonce?: string | null;
     /**
+     * Who hears about this post. `Silent` still delivers and shows the
+     * message, but sends no notification of any kind, mentions included.
+     * Channel messages only; other parents accept only `Default`.
+     */
+    notification_policy?: PostMessageNotificationPolicy;
+    /**
      * Root to reply to, if this is a reply.
      */
     thread_id?: string | null;
 };
 
 /**
- * Internal notification behavior for a posted channel message.
+ * Who hears about a posted message. A caller may choose it for its own
+ * channel message, since every choice only narrows who is notified.
  */
 export type PostMessageNotificationPolicy = 'Default' | 'MentionsOnly' | 'Silent';
 
@@ -32732,6 +32767,10 @@ export type ExternalChatSendData = {
 };
 
 export type ExternalChatSendErrors = {
+    /**
+     * An agent's program sent without userConfirmation (code confirmation_required), or the caller may not send
+     */
+    403: unknown;
     /**
      * One send request per second per user; Retry-After: 1
      */

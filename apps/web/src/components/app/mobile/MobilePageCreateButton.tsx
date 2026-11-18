@@ -1,4 +1,3 @@
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import {
@@ -58,7 +57,6 @@ type PageCreateAction = Pick<
 export function MobilePageCreateButton() {
   const foregroundView = useForegroundMobileView();
   const createBlocks = useCreateMenuBlocks();
-  const calendarEnabled = useCalendarUiFlag();
   const openEventComposer = useOpenEventComposer();
   const openCreateMenu = () => setCreateMenuOpen(true);
 
@@ -69,20 +67,15 @@ export function MobilePageCreateButton() {
       return { label: t('mobile.company'), onSelect: openCreateCompanyModal };
     }
     if (view === 'calendar') {
-      return calendarEnabled()
-        ? {
-            label: t('mobile.event'),
-            // Created away from the calendar, the event shows there next.
-            onSelect: () =>
-              openEventComposer({
-                onCreated: (created) =>
-                  fireAndForget(
-                    openCalendarEventSplit(created),
-                    'mobile-create'
-                  ),
-              }),
-          }
-        : undefined;
+      return {
+        label: t('mobile.event'),
+        // Created away from the calendar, the event shows there next.
+        onSelect: () =>
+          openEventComposer({
+            onCreated: (created) =>
+              fireAndForget(openCalendarEventSplit(created), 'mobile-create'),
+          }),
+      };
     }
     const block = mobilePageCreateBlock(view, createBlocks());
     return (
@@ -145,7 +138,7 @@ export function MobilePageCreateButton() {
         when={foregroundView() === 'home'}
         fallback={
           <Show
-            when={foregroundView() === 'calendar' && calendarEnabled()}
+            when={foregroundView() === 'calendar'}
             fallback={
               <MobileCreateButton
                 ariaLabel={actionAriaLabel()}

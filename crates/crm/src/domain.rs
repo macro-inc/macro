@@ -13,6 +13,10 @@ pub mod email_rules;
 #[cfg(feature = "ports")]
 pub mod email_policy;
 
+/// Generation-bound history and live-source reconciliation contracts.
+#[cfg(feature = "ports")]
+pub mod email_policy_work;
+
 /// Static list of generic/personal email-provider domains to exclude
 /// from CRM populate
 #[cfg(feature = "ports")]

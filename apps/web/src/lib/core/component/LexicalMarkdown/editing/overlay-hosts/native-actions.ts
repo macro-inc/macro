@@ -1,4 +1,3 @@
-import { enableDatabases, isFeatureEnabled } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import { Telemetry } from '@macro-inc/observability';
@@ -167,12 +166,6 @@ export function createNativeActionMenuHost(
       requests.requestCreation(item.id, context);
       return;
     }
-    // Source Query checks the shared flag before scheduling its insertion update.
-    if (
-      (item.id === 'database-query' || item.id === 'database') &&
-      !isFeatureEnabled(enableDatabases)
-    )
-      return;
     const requestContext = Telemetry.captureContext();
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     if (!current()) return;

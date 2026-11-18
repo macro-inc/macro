@@ -213,6 +213,9 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 ## Gotchas
 
 - The email sign-in (`POST /login/passwordless`, `GET /oauth/passwordless/{code}`) refuses an agent's program (`middleware::refuse_program_sign_in`, 403): one that reads the code from the user's inbox would hold the session. These routes take no credential: inside the sandbox every request carries `x-macro-code-execution`, which is the guard; a sent credential signed for an agent or routine refuses too, though a program outside the sandbox can send none. A credential that does not verify counts as none, so a person with a stale session still signs in.
+- `POST /user/agent_setup` refuses an agent's program or a bot (`middleware::refuse_program_agent_setup`, 403): it returns the agent account's lasting API key and replaces the old one. The operator finishes setup in the browser, signed in as the agent.
+- `POST /link/gmail` and `POST /link/github` refuse an agent's program or a bot (`middleware::refuse_program_link`, 403): the consent URL they return works in any browser, and whoever finishes it gets a sign-in on this account. A person links in Settings. The callback is not bound to the browser that started the link; binding it is the deeper fix.
+- `GET /jwt/macro_api_token` refuses a program (`macro_authorization::is_program_run`, 403): it would turn a run's minute-long credential into an hour-long token the model can read. A person's session or API key still exchanges.
 - Match Google link email display names without ASCII case sensitivity: FusionAuth preserves Google's capitalization, while Macro normalizes email addresses. Keep refresh, token lookup, removal, and grant relocation consistent.
 - `/mobile-welcome-email` copies allowlisted ad parameters from the capture
   request onto the desktop signup link and always sets

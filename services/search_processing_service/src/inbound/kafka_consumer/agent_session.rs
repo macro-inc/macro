@@ -5,6 +5,17 @@ use macro_event_broker::MacroEvent as _;
 
 use super::{EventOutcome, KafkaProcessingContext, MAX_PROCESSING_ATTEMPTS, retry_processing};
 
+/// The session a queued reread for `event` is tracked by.
+///
+/// Every lifecycle event, whatever its kind, runs the same full reconcile of
+/// its session from the owning service below, so a reread queued for the
+/// session and not yet started covers any later event for it. Keep this in
+/// step with [`process_agent_session_event`]: an event kind handled any other
+/// way must not be coalesced.
+pub(super) fn reread_key(event: &AgentSessionLifecycleMacroEvent) -> String {
+    event.event().event.session_id().to_string()
+}
+
 pub(super) async fn process_agent_session_event(
     context: &KafkaProcessingContext,
     event: &AgentSessionLifecycleMacroEvent,

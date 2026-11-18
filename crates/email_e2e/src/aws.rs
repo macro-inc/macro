@@ -21,7 +21,6 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use rootcause::prelude::*;
 use sha2::{Digest, Sha256};
-use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
@@ -110,7 +109,7 @@ impl Aws {
             recorder,
         };
 
-        let listener = TcpListener::bind("127.0.0.1:0")
+        let listener = crate::host::local_listener()
             .await
             .context("could not bind the AWS endpoint")?;
         let address = listener.local_addr()?;

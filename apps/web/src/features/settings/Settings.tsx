@@ -12,10 +12,7 @@ import {
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitPanel } from '@components/app/split-panel';
-import {
-  enableEmailSignatures,
-  enableMacroComputers,
-} from '@core/constant/featureFlags';
+import { enableMacroComputers } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -115,7 +112,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // Hotkeys and touch pills follow the visible nav, which hides team pages
   // from people without a team.
   const navTabs = createMemo(() => navGroups().flatMap((group) => group.items));
-  const signatures = useFeatureFlag(enableEmailSignatures);
   const outlook = useOutlookAvailable();
   const macroComputers = useFeatureFlag(enableMacroComputers);
 
@@ -126,7 +122,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
     createSignal<SettingsSearchResult>();
   const searchResults = createMemo(() =>
     searchSettings(searchGroups(), searchQuery(), {
-      emailSignatures: signatures().enabled,
       outlook: outlook(),
       macroComputers: macroComputers().enabled,
     })

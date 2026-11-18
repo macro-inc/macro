@@ -1193,7 +1193,8 @@ export function createReplyComposer(
     }
     if (scheduleAction === 'schedule' || scheduleAction === 'update') {
       const result = await schedule.submit();
-      if (result === 'scheduled') {
+      // Another composer may have cancelled the schedule while it committed.
+      if (result === 'scheduled' && schedule.state().type === 'scheduled') {
         const scheduledDraftId = savedDraftId();
         rememberCurrentReply();
         // The scheduled draft stays in the thread with its "Scheduled for"

@@ -191,6 +191,8 @@ export type QuickAccessList<T extends QuickAccessItem = QuickAccessItem> = {
   isLoadingMore: Accessor<boolean>;
   error: Accessor<unknown>;
   loadMore: () => Promise<void>;
+  /** Reads a failed page again, where the list can. */
+  retry?: () => Promise<void>;
 };
 
 export type QuickAccessListOptions<

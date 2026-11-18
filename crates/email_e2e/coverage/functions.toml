@@ -1160,6 +1160,8 @@ also = [
   "queue crm-cleanup:ListCandidates",
   "queue crm-cleanup:ProcessCandidate",
   "loop crm_enrichment_worker::run",
+  "queue backfill:PopulateCrmPolicy",
+  "loop email_policy_worker::run",
 ]
 
 # ------------------------------------------------- added after the first pass

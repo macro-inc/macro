@@ -7066,6 +7066,12 @@ export const postChannelBotWebhookHeader = zod.object({
 export const postChannelBotWebhookBody = zod
   .object({
     content: zod.string().describe('Message body.'),
+    notification_policy: zod
+      .enum(['Default', 'MentionsOnly', 'Silent'])
+      .optional()
+      .describe(
+        'Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.'
+      ),
   })
   .describe('Request to post a channel webhook message.');
 
@@ -7438,17 +7444,17 @@ export const listCrmBlockedDomainsResponse = zod.array(
 );
 
 /**
- * @summary Block a domain: email sync stops creating or updating CRM records for
-it, and the company and contacts the CRM holds for it are hidden.
-Idempotent. Requires an admin/owner team role (403).
+ * @summary Block a domain and its subdomains from email contributions, preserving records.
+Refuses a domain covering any member's connected primary mailbox (400).
+Idempotent for permitted domains. Requires an admin/owner team role (403).
  */
 export const blockCrmDomainParams = zod.object({
   domain: zod.string().describe('A bare domain like acme.com'),
 });
 
 /**
- * @summary Unblock a domain: email sync resumes for it, and what blocking hid is
-shown again. Idempotent. Requires an admin/owner team role (403).
+ * @summary Remove a team domain exclusion and schedule eligible email backfill,
+preserving record visibility. Idempotent. Requires an admin/owner role (403).
  */
 export const unblockCrmDomainParams = zod.object({
   domain: zod.string().describe('A bare domain like acme.com'),
@@ -9107,9 +9113,33 @@ export const getCrmEmailPrivacyResponse = zod
           .describe(
             'Exact current primary connection; clients bind opt-in to this identifier.'
           ),
+        personal_domain_warnings: zod
+          .record(
+            zod.string(),
+            zod
+              .enum(['company', 'personal_provider'])
+              .describe(
+                "Why a domain exclusion would hide an affected mailbox's entire history."
+              )
+          )
+          .describe(
+            "Existing personal exclusions that cover the caller's whole mailbox."
+          ),
         personal_domains: zod
           .array(zod.string())
           .describe("Domains excluded only for the caller's contributions."),
+        team_domain_warnings: zod
+          .record(
+            zod.string(),
+            zod
+              .enum(['company', 'personal_provider'])
+              .describe(
+                "Why a domain exclusion would hide an affected mailbox's entire history."
+              )
+          )
+          .describe(
+            "Existing team exclusions that cover a connected member's whole mailbox."
+          ),
         team_domains: zod
           .array(zod.string())
           .describe(
@@ -9226,9 +9256,33 @@ export const updateCrmEmailPrivacyResponse = zod
       .describe(
         'Exact current primary connection; clients bind opt-in to this identifier.'
       ),
+    personal_domain_warnings: zod
+      .record(
+        zod.string(),
+        zod
+          .enum(['company', 'personal_provider'])
+          .describe(
+            "Why a domain exclusion would hide an affected mailbox's entire history."
+          )
+      )
+      .describe(
+        "Existing personal exclusions that cover the caller's whole mailbox."
+      ),
     personal_domains: zod
       .array(zod.string())
       .describe("Domains excluded only for the caller's contributions."),
+    team_domain_warnings: zod
+      .record(
+        zod.string(),
+        zod
+          .enum(['company', 'personal_provider'])
+          .describe(
+            "Why a domain exclusion would hide an affected mailbox's entire history."
+          )
+      )
+      .describe(
+        "Existing team exclusions that cover a connected member's whole mailbox."
+      ),
     team_domains: zod
       .array(zod.string())
       .describe(
@@ -40773,6 +40827,12 @@ export const externalChatDeliveryResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -42009,6 +42069,12 @@ export const externalChatSendsResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -42094,6 +42160,12 @@ export const externalChatSendBody = zod
       .uuid()
       .nullish()
       .describe('Message being quoted, within this chat.'),
+    userConfirmation: zod
+      .string()
+      .nullish()
+      .describe(
+        "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+      ),
   })
   .describe(
     'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -42171,6 +42243,12 @@ export const externalChatSendResponse = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -74833,6 +74911,12 @@ export const entityMessageCreateBody = zod
       .string()
       .nullish()
       .describe('Client nonce for optimistic reconciliation.'),
+    notification_policy: zod
+      .enum(['Default', 'MentionsOnly', 'Silent'])
+      .optional()
+      .describe(
+        'Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.'
+      ),
     thread_id: zod
       .uuid()
       .nullish()

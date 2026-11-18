@@ -57,7 +57,6 @@ afterEach(() => {
 });
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableCalendarUi: false,
   enableReminders: false,
   isFeatureEnabled: vi.fn(),
   USE_MACRO_PR_SUMMARY_BLOCK: true,
@@ -307,6 +306,102 @@ it('acknowledges a failed lookup and opens the next native tap', async () => {
   expect(pendingNotificationNavigation()).toBeUndefined();
   expect(layout.getSplitByContent('channel', 'channel')).toBeDefined();
 });
+
+// A native tap opens inside the pending-navigation effect, where the stacked
+// layout reorders its panes only after the effect returns. Activating a pane
+// behind the front one there once recursed until the stack overflowed.
+it.each([
+  [
+    'a direct push target',
+    {
+      notificationId: 'push-notification',
+      recipientId: 'macro|test@example.com',
+      navigation: {
+        type: 'channel' as const,
+        channelId: '11111111-1111-4111-8111-111111111111',
+        messageId: '22222222-2222-4222-8222-222222222222',
+        threadId: null,
+      },
+    },
+  ],
+  [
+    'a cached notification for an already open split',
+    { notificationId: 'invite-notification' },
+  ],
+])(
+  'brings a channel open behind the front pane forward for %s',
+  async (_, payload) => {
+    const navigated = Promise.withResolvers<void>();
+    const navigate = vi.fn(() => navigated.resolve());
+    const orchestrator = {
+      createBlockInstance: () => ({
+        element: undefined,
+        dispose: vi.fn(),
+        detach: vi.fn(),
+      }),
+      getBlockHandle: async () => ({ goToLocationFromParams: navigate }),
+    } as unknown as BlockOrchestrator;
+    const layout = createRoot((dispose) => {
+      onTestFinished(dispose);
+      return createRoutedSplitLayout(
+        orchestrator,
+        '/channel/11111111-1111-4111-8111-111111111111/~/home',
+        true
+      );
+    });
+    expect(layout.splits().map((split) => split.content.id)).toEqual([
+      '11111111-1111-4111-8111-111111111111',
+      'home',
+    ]);
+    const invite: UnifiedNotification = {
+      id: 'invite-notification',
+      entity_id: '11111111-1111-4111-8111-111111111111',
+      entity_type: 'channel',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      notification_event_type: 'channel_invite',
+      notification_metadata: {
+        tag: 'channel_invite',
+        content: { invitedBy: 'macro|sender@example.com' },
+      },
+      state: 'unseen',
+      sent: true,
+    };
+    createRoot((dispose) => {
+      onTestFinished(dispose);
+      usePendingNotificationNavigationEffect(
+        { notifications: () => [invite] },
+        () => 'macro|test@example.com',
+        () => true
+      );
+    });
+    setGlobalSplitManager(layout);
+    const acknowledged = Promise.withResolvers<void>();
+
+    receiveNotificationTap(
+      { type: 'BACKGROUND_TAP', payload, deliveryId: 'delivery' },
+      async () => acknowledged.resolve()
+    );
+    await acknowledged.promise;
+
+    expect(toast.failure).not.toHaveBeenCalled();
+    expect(pendingNotificationNavigation()).toBeUndefined();
+    expect(layout.splits().map((split) => split.content.id)).toEqual([
+      'home',
+      '11111111-1111-4111-8111-111111111111',
+    ]);
+    expect(layout.activeSplit()?.content().id).toBe(
+      '11111111-1111-4111-8111-111111111111'
+    );
+    if ('navigation' in payload) {
+      await navigated.promise;
+      expect(navigate).toHaveBeenCalledWith({
+        channel_message_id: '22222222-2222-4222-8222-222222222222',
+        channel_thread_id: '22222222-2222-4222-8222-222222222222',
+      });
+    }
+  }
+);
 
 it.each(['direct', 'cached'] as const)(
   'reports a rejected %s destination through the error result',

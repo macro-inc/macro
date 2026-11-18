@@ -1,4 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { startEditorScrollTelemetry } from '@app/observability/editor';
 import { useFlow } from '@app/observability/flow';
 import { NativeMessageCommentsProvider } from '@block-md/comments/NativeMessageCommentsProvider';
@@ -109,9 +108,6 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_SVG_PREVIEW,
-  enableGitBlame,
-  enableInlineAiEditing,
-  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
@@ -176,7 +172,6 @@ export default function RustMarkdownEditor(props: {
 }) {
   const namespace = allocateEditorNamespace('block-md-main');
   const flow = useFlow();
-  const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
   const userId = useUserId();
   const resolveAppLink = useMacroMentionLinkResolver();
   const authenticated = useIsAuthenticated();
@@ -283,7 +278,7 @@ export default function RustMarkdownEditor(props: {
     aiEdit: {
       documentId,
       view: () => runtime()?.view,
-      enabled: () => inlineAiEditing().enabled && canEdit(),
+      enabled: () => canEdit(),
       parentSpan: flow.span,
     },
     comment: {
@@ -476,12 +471,11 @@ export default function RustMarkdownEditor(props: {
         }
       })
     );
-    if (isFeatureEnabled(enableGitBlame))
-      overlayLifecycle.add(
-        registerNativeBlameTooltip(mounted.view, (blame) =>
-          setBlameTooltipStore(blame)
-        )
-      );
+    overlayLifecycle.add(
+      registerNativeBlameTooltip(mounted.view, (blame) =>
+        setBlameTooltipStore(blame)
+      )
+    );
   };
   onMount(() => {
     const openStarted = performance.now();
@@ -867,11 +861,9 @@ export default function RustMarkdownEditor(props: {
           />
         )}
       </Show>
-      <Show when={isFeatureEnabled(enableGitBlame)}>
-        <Suspense>
-          <BlameTooltip state={blameTooltipStore} documentId={documentId()} />
-        </Suspense>
-      </Show>
+      <Suspense>
+        <BlameTooltip state={blameTooltipStore} documentId={documentId()} />
+      </Suspense>
       <Show when={runtime()?.overlays?.Overlays}>
         {(Overlays) => <Dynamic component={Overlays()} />}
       </Show>

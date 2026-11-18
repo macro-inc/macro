@@ -45,10 +45,7 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import {
-  enableDatabases,
-  enableWhatsappLinked,
-} from '@core/constant/featureFlags';
+import { enableWhatsappLinked } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -57,6 +54,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useNativeNavigationEdge } from '@core/mobile/nativeNavigationEdge';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { hasLoginCookie, updateCookie } from '@core/util/cookies';
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { isDesktopPlatform, isPlatform } from '@core/util/platform';
 import { useDesktopZoom } from '@macro/tauri/zoom';
@@ -68,7 +66,6 @@ import { cn } from '@ui';
 import {
   createEffect,
   createMemo,
-  lazy,
   onCleanup,
   onMount,
   type ParentProps,
@@ -293,11 +290,9 @@ export function AppChrome(props: ParentProps) {
   return (
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
       <Show when={isAuthenticated() === true}>
-        <ShowFeatureFlag flag={enableDatabases}>
-          <Suspense>
-            <StarterDatabase />
-          </Suspense>
-        </ShowFeatureFlag>
+        <Suspense>
+          <StarterDatabase />
+        </Suspense>
       </Show>
       <Suspense>
         <Show when={isAuthenticated()}>

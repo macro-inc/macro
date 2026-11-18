@@ -75,8 +75,13 @@ the gateway `/email` prefix.
 - `src/backfill_outbox.rs`: cancellation-aware polling facade for the domain's
   durable backfill publication. `outbound/backfill_jobs/outbox.rs` keeps each
   row lock through the queue send and commits the publication marker afterwards.
-  CRM publication recognizes either contribution grant (`enabled OR
-  selected_enabled`); rule activation and versioned jobs remain separate phases.
+  CRM publication retains captured incarnation/version/work IDs for modern
+  jobs and makes them due again after 15 minutes; legacy publication deletes.
+  Conditional acknowledgement cannot delete a newer generation. Rule activation
+  remains unavailable; workers never initialize consent.
+- `src/email_policy_worker.rs`: cancellation-aware source-event poller on the
+  backfill pool. The CRM domain bounds raw reverse references before filtering
+  active selected policies, atomically scheduling history and system audit.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM
   company directory entries (names/logos) left by binaries without a resolver,
   using the public-homepage `UnfurlCompanyMetadataResolver` wired in
@@ -131,6 +136,7 @@ the gateway `/email` prefix.
 
 ## Gotchas
 
+- A program (`macro_authorization::is_program_run`) reads Macro's own sign-in emails redacted: every API response passes `rewrite_program_json` with `models_email::sign_in_email::hide_sign_in_emails`, and `GET /email/messages/{id}/eml` refuses one with 403. A person reads them whole.
 - The API's server spans come from `macro_tower_layers`
   (`api::traced`). tower-http's default `TraceLayer` span is DEBUG, below the
   exporter's INFO filter, so an API wrapped in it sends no server spans.

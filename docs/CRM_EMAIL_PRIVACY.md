@@ -114,6 +114,16 @@ messages, documents, or agent transcripts is not retroactively redacted.
 - A domain also covers subdomains, with a dot boundary: `acme.com` covers
   `sales.acme.com`, but not `notacme.com`. Any blocked sender/recipient in any
   non-draft message excludes the whole thread, including mixed-company threads.
+- Adding a domain that covers an affected connected primary mailbox is refused
+  with HTTP 400 and the usual `{ message }` validation response. Team blocks
+  protect every current member, independent of consent or CRM viewing access;
+  personal blocks protect only the caller. Company sync-off and archive apply
+  the same guard because they also create domain exclusions. The SDK surfaces
+  the server explanation. A child of the mailbox domain is still permitted.
+  Settings explain refusals at the input and report existing matches beside
+  their entries, without removing them. Company-domain explanations note that
+  own-domain colleagues are already skipped; personal-provider explanations
+  only describe the whole-mailbox email effect.
 - Adding an exclusion or withdrawing consent hides matching email contributions
   on subsequent CRM reads, including direct thread authorization. Existing company
   and contact records and prior interaction metadata remain. A normal mailbox or
@@ -229,8 +239,8 @@ for each consent row lifetime. Legacy rows stay null until an owner-bound
 inspection initializes identity without changing the grant or policy version;
 a previously absent row starts disabled and requires the exact connected primary
 mailbox. Old-token operations cannot initialize a row. Identity is immutable
-across updates, and deletion/recreation gets a fresh identifier. This storage
-layer has no policy activation API or live worker caller.
+across updates, and deletion/recreation gets a fresh identifier. The policy API remains unavailable; workers never initialize identity or grant
+contribution.
 
 Audit and idempotent outcomes carry incarnation/version. Preview and historical
 work each occupy one replaceable member slot; checkpoints and completion compare
@@ -244,14 +254,34 @@ outbox publication. Null generation fields in the existing outbox explicitly den
 upgraded or drained before activation. Mailbox or membership deletion cascades
 private envelopes; deleting only consent cannot make old retry results valid.
 
-Source edits will enqueue durable contact/company events in the worker phase.
-The storage layer pages at most 100 raw saved-rule references before checking
-whether a revision is active, so inactive history cannot turn a miss into an
+Contact address/parent edits, hides, company-hide cascades and sync deletion
+record source events in the same transaction, only for referenced targets.
+Imports of new IDs and metadata-only enrichment keep their existing write paths;
+there are no per-row source triggers. Direct SQL and future matching writers
+must use the same event hook. Existing mailbox teardown and company/contact
+visibility edits preserve the caller's statement timeout. Worker-owned metadata
+transactions retain their 15-second statement and 5-second lock limits.
+The worker pages at most 100 raw saved-rule references before checking whether a
+revision is active, so inactive history cannot turn a miss into an
 unbounded scan. Reverse indexes live only on `crm_email_rule_contacts` and
 `crm_email_rule_companies`; ordinary mail ingestion maintains neither. Source
 IDs have no record FK so deletion can still be reconciled. Team deletion removes
-its pending source events. New policy/work tables remain empty until wired by
-later phases.
+its pending source events. Active selected policies receive coalesced history
+and content-free system audit entries; stable event receipts prevent duplicate
+history after a retry. Preview context invalidation is owned by the API phase.
+
+Modern history pages at most 100 raw mailbox contacts through the existing
+mailbox/address index, with sent-capable contacts before the received pass.
+Each contact reauthorizes before enrichment and in the population transaction;
+page completion compares incarnation, version, work ID and cursor. Same-lifetime
+version changes durably restart unfinished history; a different incarnation
+cannot adopt an old job. The outbox retains a 15-minute recovery signal until
+progress republishes it or exact-generation completion removes it. Legacy
+publication still deletes its outbox row and uses the existing contact fan-out;
+legacy history cannot consume initialized consent. New live-mail hints carry an
+explicit marker and reconcile against current stored eligibility. The API phase
+must replace unfinished legacy history atomically when initializing identity;
+old unmarked live notifications must be drained before activation.
 
 Selected contribution remains default-off under
 `enable-crm-selective-email-contribution`; this phase adds no API or worker that
@@ -261,11 +291,17 @@ new binaries roll out, while older Team and ingestion queries still require the
 legacy bit. That window is safe because every existing consent is all-mail and
 no deployed operation can activate selected mode. Activation must wait for all
 three readers, the policy API, generation-safe historical work and the PR 5
-performance gate, including parity for the forthcoming CRM-scoped email search
-reader, the 1m-thread mailbox tier and a work bound for
+performance gate, including the 1m-thread mailbox tier and a work bound for
 unmatched live target expansions and mailbox-contact discovery. The positive-
-thread probe's result cap alone does not bound that discovery work. The remote
-flag controls future writes, never enforcement of stored restrictions.
+thread probe's result cap alone does not bound that discovery work. CRM-scoped
+email search is deferred and rejects CRM filters with HTTP 400 without reading
+team mail; fourth-reader eligibility parity is required before activation only
+if that search ships first. Audit all live-source event producers, including
+member role changes, before activation. The API phase must also close the
+first-activation/bulk-deletion race: target locks and a fresh reference check
+must cover references committed while teardown waits, without holding the team
+privacy lock across long cascades. The remote flag controls future writes,
+never enforcement of stored restrictions.
 
 The optimized Team reader resolves contribution modes inside its read snapshot.
 When none of the requested contributors uses selected mode, it emits the existing

@@ -11,6 +11,11 @@ vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|alice@example.com',
 }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
+vi.mock('@core/user', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/user')>()),
+  getDisplayName: (id: string | undefined) =>
+    id === 'macro|outside@example.com' ? 'Outside Person' : '',
+}));
 vi.mock('@queries/team/members', () => ({
   useTeamMembers: () => ({
     users: () => [
@@ -116,6 +121,21 @@ describe('Assignee filter ordering', () => {
         'NO_ASSIGNEE',
         'bot|00000000-0000-0000-0000-000000000123',
       ]);
+      dispose();
+    });
+  });
+
+  it('names a selected outsider instead of showing its id', () => {
+    createRoot((dispose) => {
+      const picker = useAssigneePicker(
+        () => ['macro|outside@example.com'],
+        () => true
+      );
+      expect(
+        picker
+          .options()
+          .find((option) => option.id === 'macro|outside@example.com')?.label
+      ).toBe('Outside Person');
       dispose();
     });
   });

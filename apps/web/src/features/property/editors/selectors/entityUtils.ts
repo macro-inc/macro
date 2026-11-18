@@ -127,6 +127,12 @@ export function useQuickAccessEntities<T extends EntityType>(
     loadMore: async () => {
       if (enabled()) await list()?.loadMore();
     },
+    // A list without its own retry reads its next page again.
+    retry: async () => {
+      const current = list();
+      if (!enabled() || !current) return;
+      await (current.retry ? current.retry() : current.loadMore());
+    },
   };
 }
 

@@ -1,6 +1,5 @@
 import { QuestionCardSkeleton } from '@app/features/database-query/components/answer-skeleton';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableDatabases } from '@core/constant/featureFlags';
+import { lazy } from '@core/util/lazy';
 import {
   $createDatabaseQueryNode,
   $isDatabaseQueryNode,
@@ -19,7 +18,6 @@ import {
 } from 'lexical';
 import {
   createSignal,
-  lazy,
   onCleanup,
   Show,
   Suspense,
@@ -42,7 +40,6 @@ const LiveQuestion = lazy(async () => {
 export function DatabaseQuery(
   props: DatabaseQueryDecoratorProps & DatabaseQueryHostProp
 ) {
-  const enabled = useFeatureFlag(enableDatabases);
   const wrapper = useContext(LexicalWrapperContext);
   const [editable, setEditable] = createSignal(
     props.host
@@ -209,10 +206,9 @@ export function DatabaseQuery(
   return (
     <Show
       when={
-        enabled().enabled &&
-        (props.host
+        props.host
           ? props.host.previewFetchEnabled()
-          : !wrapper?.skipPreviewFetch)
+          : !wrapper?.skipPreviewFetch
       }
       fallback={placeholder()}
     >

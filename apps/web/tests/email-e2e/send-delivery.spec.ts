@@ -371,10 +371,10 @@ test.describe('a send an Outlook mailbox rejected', () => {
   // When this fails, Retry send on a reply the provider rejected once does
   // not send it: the reply ends as a draft conflict ("This draft changed in
   // your mailbox. Choose which version to keep.") and nothing goes out.
-  // Not in every run (two in three here): `@sometimes`.
-  test('known bug: outlook-retry-send-after-rejection-conflicts: Retry send delivers the rejected reply once @known-bug', {
-    tag: ['@known-bug', '@sometimes'],
-  }, async ({ page, mailbox }) => {
+  test('Retry send delivers the rejected reply once', async ({
+    page,
+    mailbox,
+  }) => {
     const thread = await lunch(mailbox);
     await injectFault(mailbox, {
       route: 'messages.send',

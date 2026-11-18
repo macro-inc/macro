@@ -3,6 +3,7 @@ import type { BlockCanvasProps } from '@block-canvas/component/Block';
 import type { BlockChannelProps } from '@block-channel/component/NewChannelBlockAdapter';
 import type { BlockMarkdownProps } from '@block-md/component/Block';
 import type { MarkdownConnection } from '@block-md/queries/markdown-connection';
+import type { lazy } from '@core/util/lazy';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type {
   InitialSync,
@@ -22,7 +23,6 @@ import type {
   FlowProps,
   InitializedResource,
   InitializedResourceOptions,
-  lazy,
   Owner,
   Resource,
   ResourceActions,
@@ -362,7 +362,7 @@ interface BlockComponentLoadData extends Record<BlockName, ObjectLike> {
  * context-based and rely on a {@link LoadFunction}
  */
 export type BlockComponent<Name extends BlockName> =
-  | ReturnType<typeof lazy<Component<BlockComponentProps[Name]>>>
+  | ReturnType<typeof lazy<[BlockComponentProps[Name]]>>
   | (Component<BlockComponentProps[Name]> & { preload?: undefined });
 
 export type FileTypeString = string & {};

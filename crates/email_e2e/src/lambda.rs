@@ -17,7 +17,6 @@ use axum::http::{HeaderName, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use rootcause::prelude::*;
-use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
 use crate::process::ServiceProcess;
@@ -80,7 +79,7 @@ pub(crate) async fn invoke(
         event: Arc::new(Mutex::new(Some(event))),
         outcome: Arc::new(Mutex::new(Some(sender))),
     };
-    let listener = TcpListener::bind("127.0.0.1:0")
+    let listener = crate::host::local_listener()
         .await
         .context("could not bind the Lambda runtime API")?;
     let address = listener.local_addr()?;

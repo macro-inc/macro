@@ -82,8 +82,6 @@ import {
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
-  enableGitBlame,
-  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -645,11 +643,7 @@ export function MarkdownEditor(props: {
   });
 
   const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
-  if (isFeatureEnabled(enableGitBlame)) {
-    plugins.use(
-      blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) })
-    );
-  }
+  plugins.use(blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) }));
 
   const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
   plugins.use(
@@ -730,11 +724,9 @@ export function MarkdownEditor(props: {
           />
         }
       >
-        <Show when={isFeatureEnabled(enableGitBlame)}>
-          <Suspense>
-            <BlameTooltip state={blameTooltipStore} documentId={blockId} />
-          </Suspense>
-        </Show>
+        <Suspense>
+          <BlameTooltip state={blameTooltipStore} documentId={blockId} />
+        </Suspense>
         <HighlightLayer
           editor={editor}
           ref={(el) => {
