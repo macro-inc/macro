@@ -12,6 +12,8 @@ import {
   knobValueProblem,
   type SentencePart,
   sentenceParts,
+  type UnusableItem,
+  unusableReason,
 } from '../core/knobs';
 import {
   KnobEntityPicker,
@@ -44,6 +46,8 @@ export function StepSentence(props: {
   size?: SentenceSize;
   /** Placement only, e.g. a fixed height on a card. */
   class?: string;
+  /** Picked items its owner can't use now; their knobs need a new pick. */
+  unusable?: readonly UnusableItem[];
 }) {
   const parts = () => sentenceParts(props.sentence, props.knobs);
   return (
@@ -66,6 +70,7 @@ export function StepSentence(props: {
                 part={part}
                 onKnob={props.onKnob}
                 compact={props.size === 'sm' || props.size === 'xs'}
+                unusable={props.unusable}
               />
             )}
           </For>
@@ -79,6 +84,7 @@ function SentencePiece(props: {
   part: SentencePart;
   onKnob: KnobChange;
   compact: boolean;
+  unusable: readonly UnusableItem[] | undefined;
 }) {
   return (
     <Switch>
@@ -90,6 +96,7 @@ function SentencePiece(props: {
           <KnobControl
             knob={part().knob}
             compact={props.compact}
+            unusable={props.unusable}
             onChange={(value) => props.onKnob(part().knob.name, value)}
           />
         )}
@@ -99,7 +106,12 @@ function SentencePiece(props: {
 }
 
 /** Knobs the sentence doesn't show, as a list of settings. */
-export function KnobSettings(props: { knobs: Knob[]; onKnob: KnobChange }) {
+export function KnobSettings(props: {
+  knobs: Knob[];
+  onKnob: KnobChange;
+  /** Picked items its owner can't use now; their knobs need a new pick. */
+  unusable?: readonly UnusableItem[];
+}) {
   return (
     <dl class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 text-sm">
       <For each={props.knobs}>
@@ -113,6 +125,8 @@ export function KnobSettings(props: { knobs: Knob[]; onKnob: KnobChange }) {
                 knob={knob}
                 // The label is beside it already.
                 emptyText="Not set"
+                unusableText="Needs a new pick"
+                unusable={props.unusable}
                 onChange={(value) => props.onKnob(knob.name, value)}
               />
             </dd>
@@ -133,6 +147,8 @@ function KnobControl(props: {
   compact?: boolean;
   /** What a knob with no value shows; its label by default. */
   emptyText?: string;
+  unusableText?: string;
+  unusable?: readonly UnusableItem[];
   onChange(value: Knob['value']): void;
 }) {
   return (
@@ -143,6 +159,8 @@ function KnobControl(props: {
           knob={props.knob}
           compact={props.compact}
           emptyText={props.emptyText}
+          unusableText={props.unusableText}
+          unusable={unusableReason(props.knob, props.unusable ?? [])}
           onChange={props.onChange}
         />
       }
@@ -195,14 +213,25 @@ function KnobPopover(props: {
   knob: Knob;
   compact?: boolean;
   emptyText?: string;
+  /** Why its picked item needs a new pick, when it does. */
+  unusable?: string;
+  /** What it shows while it needs a new pick; its label by default. */
+  unusableText?: string;
   onChange(value: Knob['value']): void;
 }) {
   const empty = () => knobIsEmpty(props.knob);
+  const needsPick = () => !empty() && props.unusable !== undefined;
   const [open, setOpen] = createSignal(false);
   const [sheetOpen, setSheetOpen] = createSignal(false);
   const inSheet = () => props.knob.type === 'entity' && isTouchDevice();
   const [draft, setDraft] = createSignal<Knob['value']>(props.knob.value);
-  const problem = () => knobValueProblem(props.knob, draft());
+  // The draft still names the item that can't be used: say why, and don't
+  // save it again.
+  const stale = () =>
+    needsPick() && deepEqual(draft(), props.knob.value)
+      ? props.unusable
+      : undefined;
+  const problem = () => knobValueProblem(props.knob, draft()) ?? stale();
   let trigger: HTMLElement | undefined;
   let editor: HTMLDivElement | undefined;
   const close = () => {
@@ -252,7 +281,9 @@ function KnobPopover(props: {
           'cursor-pointer',
           props.knob.type === 'question' ? QUESTION : VALUE,
           // Still to fill in: dashed, as a template reference that fills in.
-          empty() && 'decoration-dashed',
+          (empty() || needsPick()) && 'decoration-dashed',
+          // Picked, but gone or out of reach: its steps fail until repicked.
+          needsPick() && 'text-failure hover:text-failure',
           props.compact && 'px-px decoration-[1.5px] underline-offset-3'
         )}
         aria-label={
@@ -260,7 +291,9 @@ function KnobPopover(props: {
             ? `AI decides whether ${props.knob.label}. Change the question`
             : empty()
               ? `${props.knob.label}: not set. Set it`
-              : `${props.knob.label}: ${knobText(props.knob)}. Change it`
+              : needsPick()
+                ? `${props.knob.label}: needs a new pick. Set it`
+                : `${props.knob.label}: ${knobText(props.knob)}. Change it`
         }
       >
         <Switch fallback={knobText(props.knob)}>
@@ -271,6 +304,10 @@ function KnobPopover(props: {
           <Match when={empty()}>
             <PlusIcon class="mr-0.5 inline size-3.5 align-[-2px]" />
             {props.emptyText ?? props.knob.label}
+          </Match>
+          <Match when={needsPick()}>
+            <PlusIcon class="mr-0.5 inline size-3.5 align-[-2px]" />
+            {props.unusableText ?? props.knob.label}
           </Match>
           <Match when={props.knob.type === 'entity' && props.knob}>
             {(knob) => <KnobEntityValue knob={knob()} />}
@@ -352,6 +389,7 @@ function KnobPopover(props: {
             open={sheetOpen()}
             value={entityDraft(draft())}
             problem={problem()}
+            notice={stale()}
             onInput={setDraft}
             onCancel={close}
             onSave={save}

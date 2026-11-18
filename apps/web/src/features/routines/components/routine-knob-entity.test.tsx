@@ -291,3 +291,91 @@ describe('an entity knob', () => {
     });
   });
 });
+
+const GONE =
+  'The channel picked for "Channel to post in" was deleted or you no longer have access to it. Pick another in the routine\'s settings.';
+
+describe('an entity knob whose item its owner can no longer use', () => {
+  function renderGone(knob: Knob = bugs) {
+    const [current, setCurrent] = createSignal([knob]);
+    render(() => (
+      <StepSentence
+        sentence="Post open bugs in {bugs}."
+        knobs={current()}
+        onKnob={(name, value) =>
+          setCurrent(withKnobValue(current(), name, value))
+        }
+        unusable={[{ item: { type: 'channel', id: 'c1' }, reason: GONE }]}
+      />
+    ));
+    return current;
+  }
+
+  it('shows as needing a new pick, says why, and saves only another', async () => {
+    const current = renderGone();
+    expect(sentence()).toBe('Post open bugs in Channel to post in.');
+    const trigger = screen.getByRole('button', {
+      name: 'Channel to post in: needs a new pick. Set it',
+    });
+    expect(trigger.className).toContain('decoration-dashed');
+    expect(trigger.className).toContain('text-failure');
+    fireEvent.click(trigger);
+    expect(await screen.findByText(GONE)).toBeTruthy();
+    const save = () =>
+      screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    expect(save().disabled).toBe(true);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Pick triage (CHANNEL)' })
+    );
+    expect(screen.queryByText(GONE)).toBeNull();
+    fireEvent.click(save());
+    expect(current()[0]).toMatchObject({
+      value: { type: 'channel', id: 'c2' },
+    });
+    expect(sentence()).toBe('Post open bugs in triage.');
+  });
+
+  it('shows another knob’s usable item as picked', () => {
+    renderGone({ ...bugs, value: { type: 'channel', id: 'c2' } });
+    expect(sentence()).toBe('Post open bugs in triage.');
+  });
+
+  it('reads Needs a new pick beside its label in Settings', () => {
+    render(() => (
+      <KnobSettings
+        knobs={[bugs]}
+        onKnob={() => {}}
+        unusable={[{ item: { type: 'channel', id: 'c1' }, reason: GONE }]}
+      />
+    ));
+    expect(
+      screen.getByRole('button', {
+        name: 'Channel to post in: needs a new pick. Set it',
+      }).textContent
+    ).toBe('Needs a new pick');
+  });
+
+  it('on touch says why in the sheet and keeps Done off until another pick', async () => {
+    touch.value = true;
+    const current = renderGone();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Channel to post in: needs a new pick. Set it',
+      })
+    );
+    const sheet = document.querySelector<HTMLElement>(
+      '[data-corvu-drawer-content]'
+    )!;
+    fireEvent(sheet, new Event('transitionend'));
+    expect(await screen.findByText(GONE)).toBeTruthy();
+    const done = () =>
+      screen.getByText('Done').closest('button') as HTMLButtonElement;
+    expect(done().disabled).toBe(true);
+    fireEvent.click(screen.getByText('Pick triage (CHANNEL)'));
+    expect(done().disabled).toBe(false);
+    fireEvent.click(done());
+    expect(current()[0]).toMatchObject({
+      value: { type: 'channel', id: 'c2' },
+    });
+  });
+});

@@ -1,3 +1,4 @@
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
   type RoutineKnob,
   RoutineKnobEntityType,
@@ -52,17 +53,85 @@ export type KnobEntityType = RoutineKnobEntityType;
 /** The item an entity knob names. */
 export type KnobEntity = { type: KnobEntityType; id: string };
 
+/**
+ * A picked item its owner can't use now (deleted, or out of their reach),
+ * with why, as the scheduler checked the saved routine. Its knobs need a new
+ * pick, and the steps reading them fail until they get one.
+ */
+export type UnusableItem = { item: KnobEntity; reason: string };
+
+/** Why `knob`'s picked item needs a new pick, when it is one of `unusable`. */
+export function unusableReason(
+  knob: Knob,
+  unusable: readonly UnusableItem[]
+): string | undefined {
+  if (knob.type !== 'entity' || !knob.value) return undefined;
+  const { type, id } = knob.value;
+  return unusable.find(({ item }) => item.type === type && item.id === id)
+    ?.reason;
+}
+
 /** What each kind of item is called, for its owner. */
 export function entityNoun(type: KnobEntityType): string {
+  return (
+    match(type)
+      .with('channel', () => 'channel')
+      .with('document', () => 'document')
+      .with('project', () => 'folder')
+      .with('database', () => 'database')
+      .with('user', () => 'person')
+      .with('task', () => 'task')
+      .with('email_thread', () => 'email thread')
+      .with('chat', () => 'chat')
+      .with('crm_company', () => 'company')
+      .with('crm_contact', () => 'contact')
+      // The app calls an initiative a project; a Macro project is a folder.
+      .with('initiative', () => 'project')
+      .exhaustive()
+  );
+}
+
+/**
+ * The entity selector's kind for each kind a knob can name. A whole database
+ * has none: the selector can't pick one, so the knob lists databases itself.
+ */
+export function knobPickerType(type: KnobEntityType): EntityType | undefined {
   return match(type)
-    .with('channel', () => 'channel')
-    .with('document', () => 'document')
-    .with('project', () => 'folder')
-    .with('database', () => 'database')
-    .with('user', () => 'person')
+    .returnType<EntityType | undefined>()
+    .with('channel', () => 'CHANNEL')
+    .with('document', () => 'DOCUMENT')
+    .with('project', () => 'PROJECT')
+    .with('user', () => 'USER')
+    .with('task', () => 'TASK')
+    .with('email_thread', () => 'THREAD')
+    .with('chat', () => 'CHAT')
+    .with('crm_company', () => 'COMPANY')
+    .with('crm_contact', () => 'CONTACT')
+    .with('initiative', () => 'INITIATIVE')
+    .with('database', () => undefined)
     .exhaustive();
 }
 
+/** The knob kind of an item the entity selector picked, if a knob can name it. */
+export function knobTypeOfPicked(type: EntityType): KnobEntityType | undefined {
+  return (
+    match(type)
+      .returnType<KnobEntityType | undefined>()
+      .with('CHANNEL', () => 'channel')
+      .with('DOCUMENT', () => 'document')
+      .with('PROJECT', () => 'project')
+      .with('USER', () => 'user')
+      .with('TASK', () => 'task')
+      .with('THREAD', () => 'email_thread')
+      .with('CHAT', () => 'chat')
+      .with('COMPANY', () => 'crm_company')
+      .with('CONTACT', () => 'crm_contact')
+      .with('INITIATIVE', () => 'initiative')
+      // The selector can't pick these, and a code step has no handle for a row.
+      .with('CALENDAR_EVENT', 'CALL_RECORD', 'DATABASE_ROW', () => undefined)
+      .exhaustive()
+  );
+}
 /** The noun for what an entity knob may hold: its one kind, or "item". */
 export function entityKnobNoun(knob: { entity_types: KnobEntityType[] }) {
   const [only, ...rest] = knob.entity_types;

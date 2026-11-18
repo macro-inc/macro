@@ -9,43 +9,18 @@ import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button, InputGroup, RadioGroup } from '@ui';
 import { createSignal, For, Show, Suspense } from 'solid-js';
-import { match } from 'ts-pattern';
 import {
   aEntityKnob,
   type Knob,
   type KnobEntity,
-  type KnobEntityType,
+  knobPickerType,
+  knobTypeOfPicked,
 } from '../core/knobs';
 
 type EntityKnob = Extract<Knob, { type: 'entity' }>;
 
-/** The app's entity type for a kind the entity picker offers. */
-function pickerType(type: KnobEntityType): EntityType | undefined {
-  return (
-    match(type)
-      .returnType<EntityType | undefined>()
-      .with('channel', () => 'CHANNEL')
-      .with('document', () => 'DOCUMENT')
-      .with('project', () => 'PROJECT')
-      .with('user', () => 'USER')
-      // Databases aren't entity property targets; they have their own list.
-      .with('database', () => undefined)
-      .exhaustive()
-  );
-}
-
-function knobType(type: EntityType): KnobEntityType | undefined {
-  return match(type)
-    .returnType<KnobEntityType | undefined>()
-    .with('CHANNEL', () => 'channel')
-    .with('DOCUMENT', () => 'document')
-    .with('PROJECT', () => 'project')
-    .with('USER', () => 'user')
-    .otherwise(() => undefined);
-}
-
 function pickerTypes(knob: EntityKnob): EntityType[] {
-  return knob.entity_types.flatMap((type) => pickerType(type) ?? []);
+  return knob.entity_types.flatMap((type) => knobPickerType(type) ?? []);
 }
 
 /** The picked item's icon and name, as the step's sentence shows it. */
@@ -55,7 +30,7 @@ export function KnobEntityValue(props: { knob: EntityKnob }) {
       {(value) => (
         <span class="inline-flex max-w-full items-center gap-1 align-bottom">
           <Show
-            when={pickerType(value.type)}
+            when={knobPickerType(value.type)}
             keyed
             fallback={<DatabaseName id={value.id} />}
           >
@@ -157,8 +132,8 @@ function EntityList(props: {
     if (!id) return;
     const entityType = picked?.find((entity) => entity.id === id)?.entity_type;
     const [first, ...rest] = types();
-    const only = first && !rest.length ? knobType(first) : undefined;
-    const type = entityType ? knobType(entityType) : only;
+    const only = first && !rest.length ? knobTypeOfPicked(first) : undefined;
+    const type = entityType ? knobTypeOfPicked(entityType) : only;
     if (!type || !props.knob.entity_types.includes(type)) return;
     props.onInput({ type, id });
   };
@@ -261,6 +236,8 @@ export function KnobEntitySheet(props: {
   open: boolean;
   value: KnobEntity | null;
   problem: string | undefined;
+  /** Why the saved item needs a new pick, under the list while it is picked. */
+  notice?: string;
   onInput(value: KnobEntity | null): void;
   onCancel(): void;
   onSave(): void;
@@ -292,7 +269,7 @@ export function KnobEntitySheet(props: {
         <KnobEntityPicker
           knob={props.knob}
           value={props.value}
-          problem={undefined}
+          problem={props.notice}
           onInput={props.onInput}
           onCancel={props.onCancel}
         />

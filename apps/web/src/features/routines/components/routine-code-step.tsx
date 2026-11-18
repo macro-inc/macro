@@ -74,13 +74,18 @@ export function CodeStepBody(props: {
               sentence={sentence()}
               knobs={props.step.knobs}
               onKnob={setKnob}
+              unusable={steps.unusableItems()}
             />
           )}
         </Show>
         <Show when={settings().length ? settings() : undefined}>
           {(knobs) => (
             <Field label="Settings">
-              <KnobSettings knobs={knobs()} onKnob={setKnob} />
+              <KnobSettings
+                knobs={knobs()}
+                onKnob={setKnob}
+                unusable={steps.unusableItems()}
+              />
             </Field>
           )}
         </Show>

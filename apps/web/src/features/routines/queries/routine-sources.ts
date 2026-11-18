@@ -12,6 +12,7 @@ import type {
 } from '../context/routine-sources';
 import { pendingCodeReview, taskSdk } from '../core/code-review';
 import type { ScheduleDraft } from '../core/draft';
+import type { UnusableItem } from '../core/knobs';
 import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
 import { programSteps } from '../core/routine-steps';
@@ -37,6 +38,7 @@ import {
   useSchedulesQuery,
   useSetScheduleEnabledMutation,
   useSubRoutinesQuery,
+  useUnusableItemsQuery,
   useUpdateScheduleMutation,
 } from './schedules';
 
@@ -122,6 +124,17 @@ export function createRoutineDetailSource(
   const upgrades = useCodeUpgradesQuery(id, () =>
     Boolean(raw() && raw()?.owner === userId())
   );
+  const unusable = useUnusableItemsQuery(id, () =>
+    Boolean(raw() && raw()?.owner === userId())
+  );
+  // Only picked items: an unpicked knob shows as not set on its own.
+  const unusableItems = createMemo((): UnusableItem[] =>
+    unusable.isPending
+      ? []
+      : (unusable.data ?? []).flatMap(({ item, reason }) =>
+          item ? [{ item, reason }] : []
+        )
+  );
   const codeReview = createMemo(() => {
     const current = raw();
     return current && upgrades.isSuccess
@@ -194,6 +207,7 @@ export function createRoutineDetailSource(
     },
     keepAsOwnPending: () => keep.isPending,
     codeReview,
+    unusableItems,
     // Saving checks the proposal against the current SDK again.
     async approveCodeUpdate() {
       const proposal = codeReview()?.proposal;
