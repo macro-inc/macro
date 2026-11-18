@@ -4,7 +4,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::domain::model::{PermissionPolicyConfig, RuntimeAccessFacts};
+use crate::domain::model::{ListedSessions, PermissionPolicyConfig, RuntimeAccessFacts};
 use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, SandboxSize};
@@ -114,13 +114,15 @@ pub trait HarnessBindings: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<Option<RuntimeAccessFacts>>> + Send;
 
     /// The sessions holding one of `acp_sessions` whose bot is bound to
-    /// `harness` now. Scoping by binding is the authorization: a runtime
-    /// naming another harness's ACP sessions reattaches nothing.
+    /// `harness` now, split into live and dormant ones in one query. Scoping
+    /// by binding is the authorization: a runtime naming another harness's
+    /// ACP sessions reattaches nothing. Archived sessions are left out: a
+    /// runtime that keeps listing them never brings them back.
     fn sessions_on_harness(
         &self,
         harness: HarnessId,
         acp_sessions: &[SessionId],
-    ) -> impl Future<Output = anyhow::Result<Vec<AgentSessionId>>> + Send;
+    ) -> impl Future<Output = anyhow::Result<ListedSessions>> + Send;
 }
 
 /// Loads facts for the domain to resolve a bot's permission policy.
@@ -175,6 +177,15 @@ impl std::fmt::Display for RuntimeConnectionId {
     }
 }
 
+/// What recording a runtime's connection did to the agents bound to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionRecorded {
+    /// The harness's agents are as they were.
+    AgentsUnchanged,
+    /// An agent was bound to the harness (a Macro computer's first agent).
+    AgentBound,
+}
+
 /// Durable attach/detach bookkeeping for harness runtime connections.
 ///
 /// The registry itself is in-process liveness; this is what lets the rest of
@@ -184,12 +195,13 @@ impl std::fmt::Display for RuntimeConnectionId {
 /// Methods take `Arc<Self>` and return owned futures so the registry can fire
 /// them from its own background tasks.
 pub trait HarnessPresence: Send + Sync + 'static {
-    /// A runtime attached for this harness.
+    /// A runtime attached for this harness. Says whether recording it bound
+    /// an agent to the harness.
     fn connected(
         self: Arc<Self>,
         harness: HarnessId,
         connection: RuntimeConnectionId,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+    ) -> Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>>;
 
     /// This connection closed. Other connections of the harness are unaffected.
     fn disconnected(
@@ -471,7 +483,7 @@ pub trait RuntimeConnections: Send + Sync + 'static {
         &self,
         harness: HarnessId,
         acp_sessions: &[SessionId],
-    ) -> impl Future<Output = anyhow::Result<Vec<AgentSessionId>>> + Send;
+    ) -> impl Future<Output = anyhow::Result<ListedSessions>> + Send;
 }
 
 /// Mints the one secret a sandbox is given, and the config that points it at

@@ -11,4 +11,7 @@ pub struct UserUnsubscribe {
     /// None for permanent mutes; notifications resume automatically at this deadline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snoozed_until: Option<chrono::DateTime<chrono::Utc>>,
+    /// The item still notifies the user when a message @mentions them directly.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub mentions_only: bool,
 }

@@ -17,7 +17,6 @@ import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const editorMocks = vi.hoisted(() => ({
-  agentsEnabled: false,
   codexEnabled: false,
   cursorEnabled: false,
   clear: vi.fn(),
@@ -47,17 +46,6 @@ vi.mock('@core/hotkey/hotkeys', async (importOriginal) => {
       }
       return actual.registerHotkey(options);
     },
-  };
-});
-
-// These slots render the microphone, so they run with dictation rolled out.
-// Other flags keep their real values.
-vi.mock('@core/constant/featureFlags', async (original) => {
-  const actual = await original<typeof import('@core/constant/featureFlags')>();
-  return {
-    ...actual,
-    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
-      flag === actual.enableDictation || actual.isFeatureEnabled(flag),
   };
 });
 
@@ -133,9 +121,6 @@ vi.mock('@core/codex/flag', () => ({
 }));
 vi.mock('@core/cursor/flag', () => ({
   useCursorAgentsAccess: () => () => editorMocks.cursorEnabled,
-}));
-vi.mock('../../use-chat-v3-agents-flag', () => ({
-  useChatV3AgentsFlag: () => () => editorMocks.agentsEnabled,
 }));
 
 // Several service clients in StaticMarkdown's import graph build websocket
@@ -230,17 +215,21 @@ vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
   MarkdownShell: (props: {
     placeholder?: string;
     initialValue?: string;
+    value?: string;
     onConnect?: () => void;
   }) => {
     onMount(() => {
-      editorMocks.emitChange?.(props.initialValue ?? '');
+      // Like the real shell, only an uncontrolled editor reports its initial
+      // value; a controlled one already holds it.
+      if (props.value === undefined)
+        editorMocks.emitChange?.(props.initialValue ?? '');
       props.onConnect?.();
     });
     return (
       <>
         <div
           data-testid="markdown-shell"
-          data-initial-value={props.initialValue ?? ''}
+          data-initial-value={props.value ?? props.initialValue ?? ''}
         >
           {props.placeholder}
         </div>
@@ -374,7 +363,6 @@ vi.mock('@queries/messages/typing', () => ({
   usePostTypingUpdateMutation: () => ({ mutate: vi.fn() }),
 }));
 
-import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import { codexMentionUser, cursorMentionUser } from '../../macroAi';
 import { ThreadReplyChannelInput } from '../../Thread/ThreadReplyChannelInput';
@@ -407,7 +395,6 @@ function render(ui: () => JSX.Element) {
 
 describe('Input slots', () => {
   beforeEach(() => {
-    editorMocks.agentsEnabled = false;
     editorMocks.codexEnabled = false;
     editorMocks.cursorEnabled = false;
     editorMocks.clear.mockClear();
@@ -538,43 +525,27 @@ describe('Input slots', () => {
     );
   });
 
-  it.each([false, true])(
-    'offers one Macro entry in call chat with agents rollout %s',
-    (enabled) => {
-      editorMocks.agentsEnabled = enabled;
-      render(() => (
-        <ChannelInput
-          input={baseInput}
-          parent={{ type: 'call', id: 'call-1' }}
-          bots={() => [
-            { id: 'bot|owned', name: 'Owned agent', email: 'Owned agent' },
-            { id: 'bot|team', name: 'Team agent', email: 'Team agent' },
-          ]}
-        />
-      ));
-      const users = editorMocks.mentionUsers?.() ?? [];
-      expect(
-        users.filter((user) => user.name === 'Macro').map((user) => user.id)
-      ).toEqual([enabled ? MACRO_NEW_PRINCIPAL_ID : MACRO_AGENT_PRINCIPAL_ID]);
-      expect(users.map((user) => user.id)).toEqual(
-        expect.arrayContaining(['bot|owned', 'bot|team'])
-      );
-    }
-  );
-
-  it('offers a single Macro mention, aimed by the agents rollout', () => {
-    render(() => <ChannelInput input={baseInput} />);
+  it('offers one Macro entry in call chat', () => {
+    render(() => (
+      <ChannelInput
+        input={baseInput}
+        parent={{ type: 'call', id: 'call-1' }}
+        bots={() => [
+          { id: 'bot|owned', name: 'Owned agent', email: 'Owned agent' },
+          { id: 'bot|team', name: 'Team agent', email: 'Team agent' },
+        ]}
+      />
+    ));
+    const users = editorMocks.mentionUsers?.() ?? [];
     expect(
-      editorMocks.mentionUsers?.().filter((user) => user.name === 'Macro')
-    ).toEqual([
-      {
-        id: MACRO_AGENT_PRINCIPAL_ID,
-        name: 'Macro',
-        email: 'Macro',
-      },
-    ]);
+      users.filter((user) => user.name === 'Macro').map((user) => user.id)
+    ).toEqual([MACRO_NEW_PRINCIPAL_ID]);
+    expect(users.map((user) => user.id)).toEqual(
+      expect.arrayContaining(['bot|owned', 'bot|team'])
+    );
+  });
 
-    editorMocks.agentsEnabled = true;
+  it('offers a single Macro mention aimed at the agent bot', () => {
     render(() => <ChannelInput input={baseInput} />);
     expect(
       editorMocks.mentionUsers?.().filter((user) => user.name === 'Macro')

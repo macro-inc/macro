@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::model::PrompterKind;
 use entity_access::domain::models::{AccessLevel, Entity, EntityPermission, EntityType};
 
 fn user() -> MacroUserIdStr<'static> {
@@ -251,4 +252,25 @@ fn a_program_using_a_persons_credential_cannot_name_a_tab() {
     // The prompt still goes through, as the user, but no tab is kept.
     assert_eq!(event.client, None);
     assert_eq!(event.actor, Some(user()));
+}
+
+/// A program's prompt opens a turn nothing in it may take as the user's
+/// decision, so its event says a program sent it; a person's says a person.
+#[test]
+fn a_programs_prompt_is_marked_as_a_programs() {
+    let prompt = |principal| {
+        ControlEvent::authorized(
+            AgentAction::prompt("approve the review".to_owned()),
+            None,
+            None,
+            None,
+            principal,
+            access(AccessLevel::Owner),
+        )
+        .unwrap()
+        .prompter
+    };
+
+    assert_eq!(prompt(ControlPrincipal::Program), PrompterKind::Program);
+    assert_eq!(prompt(ControlPrincipal::User), PrompterKind::User);
 }

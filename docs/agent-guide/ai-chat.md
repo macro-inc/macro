@@ -217,6 +217,26 @@ always the user's. Each row names the item with a chip that opens it; edit and
 sharing rows expand to show the new text or settings. Verify with throwaway
 items, since these mutate real data.
 
+### Selective CRM email contribution
+
+The member's rule API is behind a default-off rollout flag; public code-mode SDK
+wrappers follow in the next phase. A member-authorized agent may activate rules
+directly once available. Inspecting settings is read-only and does not enroll the
+member or move backfill work. Use the exact returned policy observation for an
+explicit sharing mutation; a conflict requires inspecting and deciding again,
+never an automatic token refresh and retry. Scoped credentials cannot grant
+contribution.
+
+Explain that one matching participant shares the whole eligible thread, including
+past and future messages; contact/company selectors follow live records, and
+private-thread/domain exclusions always win. Preview results contain counts only,
+may be partial, and describe the member's own mailbox copies. A teammate may still
+contribute another copy. Narrowing or withdrawing preserves CRM records and
+interaction dates. Report active only after the server commits; a recorded retry
+is evidence of that earlier operation, not current state. Members can inspect
+private history and saved definitions even with CRM viewing off. A request to
+inspect mail is not permission to contribute it.
+
 ### Requesting access the user lacks
 
 A write the user can only view fails in code mode with `MacroForbiddenError`
@@ -231,8 +251,7 @@ agree to the request, grant it as the owner, then ask the agent to retry.
 
 ## Agents opening items for you
 
-With `enable-agent-navigation` (PostHog on the web and the harness; on in dev
-builds), an agent's program can open an item in the tab you typed the prompt
+An agent's program can open an item in the tab you typed the prompt
 in (`macro.ui.open`). It arrives in a new pane beside the agent's
 conversation (a new pane at the end when no pane shows it) and slides in from
 that side while the other panes glide aside; with reduced motion it only fades
@@ -268,7 +287,10 @@ channel message link and a settings page (refused; linked instead).
 **Agents** opens the new conversation list on phones,
 including GitHub PR state and links. Tap a row to open a full-screen conversation;
 the header back button returns to the previous screen, or Agents for a direct link.
-Portrait and landscape touch layouts have no conversation side panel. **Changes** opens a full-width,
+Narrow touch layouts have no docked conversation side panel. Above 720px,
+including unfolded Duo, selecting a session or legacy chat opens it in the
+right preview instead of a standalone split. The Agents sidebar stays left and can
+be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
 The mobile conversation list omits the desktop **Agents** and **Connections** controls. Use the Agents composer or global create menu to start
@@ -303,13 +325,21 @@ Auto/Chat/Code stays in the inset bar above the input on phones, as icons only.
 Repository controls appear alongside it in Code mode.
 Tapping outside collapses the composer and restores New.
 The editor and model picker stay mounted so collapsing preserves the draft.
-Dismissing the model or effort selector on mobile returns focus to the message input.
+Dismissing the model, effort, or priority tier selector on mobile returns focus to the message input.
 Active sessions use the same compact mobile model drawer: focused search, Suggested
 with Gemini last, and More models for the complete provider catalog.
-In new and active agent composers, check that the model selector and lightning
-speed toggle share a height and vertical center: 32px on desktop and 36px with
-touch emulation. Open the model picker and toggle fast mode to verify both
-controls remain interactive at desktop, phone, and tablet widths.
+Beside the model selector, the composer shows **Effort** (a dial plus the
+current level, such as *High*) for models that advertise reasoning effort, and
+**Priority tier** (a lightning bolt plus *Standard*, *Priority* or *Ultrafast*)
+for models with a tier beyond standard: GPT-6.1 Sol and GPT-6 Astra today. On
+touch both are icon buttons that open a bottom sheet. The tier is one browser
+preference shared by every composer (`macro:ai-speed`); a model that doesn't
+offer it runs at standard, and the agent composer applies it before the next
+prompt only when the session reports a different tier. Priority sends
+`service_tier: "priority"` to OpenAI and bills the `:priority` price rows.
+In new and active agent composers, check that the model selector and these
+controls share a height and vertical center: 32px on desktop and 36px with
+touch emulation, and stay interactive at desktop, phone, and tablet widths.
 Repository and branch pickers keep the composer expanded while their search
 fields are focused, so their anchor stays in place.
 
@@ -542,11 +572,9 @@ the shimmer.
   session update.
   Sessions with a linked PR show
   **#<number>** beneath the title (icon colored by open / merged / closed; no
-  status word). Clicking it opens the synced
-  GitHub PR entity in a split (the same destination as the session header chip
-  and Magic Chip). A synced PR opens at `/pr/<foreign-entity-id>`; existing
-  inline previews retain their legacy block host. Until GitHub has synced the
-  entity it opens GitHub in a new tab. Either click leaves the session unopened.
+  status word). Clicking it opens the pull request on GitHub (a new tab, or the
+  system browser in the desktop app), as the session header chip and Magic Chip
+  do. The click leaves the session unopened.
   Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Switching conversations keeps the sidebar mounted (no reload or scroll reset)
@@ -768,7 +796,7 @@ the shimmer.
   provider icons, search, **Suggested** first, and **More models** for the
   complete provider catalog. Desktop opens a submenu; phone widths show
   the catalog in place with a Back action. Search includes every model.
-- A compact **speedometer-style effort** button with a simple arc and needle beside the model selector opens a simple list of effort levels with a check beside the current choice: a popover centered below the button on desktop, or its own bottom sheet on mobile. Choosing a level applies it and closes the menu. Mobile shows it alongside the model control after the input expands. It is hidden when the model has fewer than two effort choices.
+- A labeled **Effort** button (dial icon and current level, e.g. `Effort: High` to screen readers) beside the model selector opens a titled list of effort levels with a check beside the current choice: a popover centered below the button on desktop, or its own bottom sheet on mobile. Choosing a level applies it and closes the menu. Mobile shows it alongside the model control after the input expands. It is hidden when the model has fewer than two effort choices.
   Model-specific effort choices remain available in desktop model submenus.
   New conversations remember the last effort picked for each runtime and model,
   per signed-in user, across sends, mode switches, and reloads, while that model
@@ -939,10 +967,7 @@ email, channel or task event adds **Open item**. Each code step has
 Runs recorded before this change have neither, and runs recorded with the
 removed tool or decision steps show their outcome without per-step detail.
 
-**Draft it** on a new routine writes code and Ask AI steps. Code steps are
-behind `enable-routine-code-steps` (PostHog, on in development builds): with it
-off, Draft it, the add-step box and the built-in templates write Ask AI steps
-only, and code steps a routine already has still show, run and change. The
+**Draft it** on a new routine writes code and Ask AI steps. The
 scheduler drafts on the server (`POST /scheduled-actions/drafts`, one request
 while the button shows **Drafting…**, at most two minutes): the request carries
 only the description and settings (time zone, model, decisions, code steps).
@@ -1047,8 +1072,7 @@ their full history, including tool cards, but nothing can be sent to them. The
 composer is replaced by a notice headed **Macro Chats are now Agents.**, the
 text **This chat is read-only. Continue it in Agents to keep going.**, and a
 **Continue in Agents** button that opens
-the new-conversation composer (or, without `enable-chat-v3-agents`, a new
-agent session) with the unsent draft **Continue this chat:** followed by a
+the new-conversation composer with the unsent draft **Continue this chat:** followed by a
 mention of the chat; no history is copied into it. A response that was
 already streaming when the chat opened shows **Stop** beside it; Ctrl+C also
 stops it. Pending email drafts render read-only with **Email not sent**, and
@@ -1177,13 +1201,10 @@ than treating it as approval or repeatedly sending the prompt.
 
 Automatic chat naming is admitted independently. If naming is denied or validation
 is unavailable, the successful chat continues with its existing/default title.
-Settings → Usage is visible for every plan. In production,
-`enable-ai-usage-billing` activates its controls and the AI usage-limit dialog;
-until then Usage shows the October 8, 2026 announcement and disabled controls.
-Dev and local remain active regardless of the flag.
+Settings → Usage is visible for every plan, with its controls and the AI
+usage-limit dialog active.
 Usage displays the current period as a **Monthly limit** percentage; its info
 button explains that AI agent chat and AI document editing count toward the limit.
-Plan allowance copy and comparisons still follow `enable-ai-usage-billing`.
 Model pickers have no usage multipliers. Normal paid-model access rules still
 apply. Backend enforcement and credit collection remain independent policies.
 
@@ -1358,6 +1379,26 @@ External coding harnesses keep their own tool selection. A runner that fails
 after its tools were advertised still produces an execution failure, not an
 automatic retry through a direct tool.
 
+CRM contribution rules use `macro.crm.emailPrivacy`, discovered under the
+`crmEmailPrivacy` code-mode category. The agent reads `get()`,
+validates selectors with `validateRules`, then directly activates an intended
+replacement with `replaceRules` and that exact policy token plus a unique
+idempotency key. No separate member confirmation is required. The server still
+refuses restricted credentials and unavailable rollout gates; CRM viewing
+permission is separate from these own-member controls. A conflict requires
+inspection and a new decision, never an automatic refresh and retry.
+
+The agent explains that a matching participant shares the whole past/future
+thread; contact/company selectors follow live records, all exclusions win, and
+narrowing leaves CRM records in place. Another member's eligible copy remains
+independent. `settings()` / `excludedThreads()` inspect exclusions. Count previews
+are optional and bounded: only complete counts are exact, partial counts are
+lower bounds, and stale/cancelled results are not current estimates. `history()`
+shows verified provenance and saved definitions. `withdraw` uses the current
+policy observation; legacy members without a token retain `setConsent(false)`.
+These SDK methods do not imply that the rollout is enabled or a rule editor is
+available in Settings.
+
 Team and referral invites exist only in the SDK: `team.invite(emails)` on
 `macro.teams.current()` (resolves `false` when every address was already a
 member or invited), `team.invites()` and `invite.revoke()` for team admins, and
@@ -1369,7 +1410,10 @@ either.
 Ask the agent to discover SDK entities and write a JavaScript module exporting
 `async function main({macro, session, execution})`. These are actual public SDK
 handles; for example, `macro.documents.search(...)` is an async iterator and
-`await document.content()` fetches a document. Use the direct `ListEntities` tool
+`await document.content()` fetches a document as Macro's internal Markdown, with
+chips, tables and other rich content as `<m-*>` tags. To write text back, the
+agent reads it with `contentWithRevision()` and keeps the tags intact. Use the
+direct `ListEntities` tool
 for workspace feeds with type, time, task, tag, mailbox, and sorting filters.
 Return plain JSON
 in `{data}`. The optional `reviews` array contains saved review references and
@@ -1459,7 +1503,8 @@ account the review uses answers yes, it submits the review with
 request”. The HTTP review decision endpoint requires direct user authentication;
 agent runs receive 403 for edits, submissions, and dismissals before their
 request body is decoded. The separate **DecideReview** chat tool keeps its
-existing user-prompted-turn checks. SDK operation
+existing user-prompted-turn checks, and refuses in a turn a program or a
+routine started. SDK operation
 activity reports request outcomes, without storing request arguments or response
 bodies. The execution journal retains source, status and final JSON/error;
 completed API writes are not rolled back after failure or cancellation.
@@ -1746,12 +1791,10 @@ supported edits and retry behavior.
 
 ## In channels
 
-Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is
-the classic in-channel reply; with it, the same mention opens an **agent session** — a
+Mention `@Macro` in any channel message to open an **agent session** — a
 dedicated transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
 `@cursor` opens a session. Macro Coding Agent (`@coder`) is unavailable in mention
-suggestions. There is only ever one Macro entry in the mention menu; which of the
-two answers is the rollout's decision, not a second choice in the menu.
+suggestions. There is only ever one Macro entry in the mention menu.
 
 ## Agent sessions
 
@@ -1865,9 +1908,9 @@ an inline edit.
 
 When the session has opened a pull request, a compact `#N` status chip
 appears in the header (top right) and in the side-panel Details. Click it
-to open the PR entity in a split; until GitHub has synced the entity the
-chip is a GitHub link instead. The icon and status word follow open /
-merged / closed. Merging happens from the PR entity's top bar or from a channel
+to open the pull request on GitHub; once GitHub has synced it, the chip
+previews it on hover. The icon and status word follow open / merged /
+closed. Merging happens from the PR entity's top bar or from a channel
 Magic Chip's PR row, not from this header chip.
 
 Agent prose sets the documents, sessions, pull requests, and contacts it
@@ -2625,23 +2668,26 @@ to a text-only model is rejected by the backend when sending, with guidance to
 choose a vision model or start a conversation without images.
 
 
-## Accelerated model speed
+## Priority tier
 
-The lightning button beside the model selector enables Ultrafast for GPT-6 Astra
-and GPT-6.1 Sol (6× token pricing). Its tooltip shows the mode, state, and usage
-multiplier before sending. Claude models, including Opus 5.5, stay on standard
-speed until Anthropic approves fast mode for this account. Other models keep
-standard speed. The preference is saved in browser local storage and shared by
-legacy chat and native Macro agent composers. External coding agents use their
-own speed controls.
+The **Priority tier** menu beside the model selector picks how a model's requests
+are processed: *Standard*; *Priority* (OpenAI priority processing, 2× usage) and
+*Ultrafast* (6× usage) for GPT-6 Astra and GPT-6.1 Sol. Each choice shows its
+usage multiplier before sending. Claude models, including Opus 5.5, stay on
+standard speed until Anthropic fast mode is enabled for this deployment
+(Anthropic's own Priority Tier doesn't support Opus 5.5 or Sonnet 5.5). Other
+models keep standard speed and show no menu. The preference is saved in browser
+local storage and shared by legacy chat and native Macro agent composers; an old
+saved "fast mode on" becomes Ultrafast. External coding agents use their own
+speed controls.
 
-Preview the controls at `/app/debug/ui?ui=speed-toggle`.
-Click the bolt and verify its brief scale/rotation animation and highlighted state.
+Preview the control at `/app/debug/ui?ui=speed-selector`.
+Pick Priority and verify the trigger reads *Priority*.
 Reload, change between supported models, and confirm the preference survives.
-Select an unsupported model and verify the bolt is hidden; switching back restores
-the preference. With reduced motion enabled, toggling changes the state without
-animation. Native sessions confirm speed configuration before sending the prompt;
-a rejected configuration must retain the unsent draft and attachments.
+Select an unsupported model and verify the menu is hidden; switching back restores
+the preference. Native sessions confirm the tier before sending the prompt when
+the session reports a different one; a rejected configuration must retain the
+unsent draft and attachments.
 
 Usage records follow the provider's delivered speed for each call, including tool
 loops. OpenAI prompts exceeding 272,000 tokens use the long-context rate for that

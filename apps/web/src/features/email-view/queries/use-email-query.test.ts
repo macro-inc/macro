@@ -5,7 +5,7 @@ import {
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import type { useSearchSoupQuery } from '@queries/soup/search';
-import { batch, createRoot, createSignal } from 'solid-js';
+import { batch, createEffect, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmailTab, EmailViewState } from '../types';
@@ -678,6 +678,39 @@ describe('Email list query transitions', () => {
     expect(source.isLoading()).toBe(false);
   });
 
+  it('keeps search hits the service matched by attachment kind or invitation', () => {
+    const { source, setState, setSearchEntities } = mount('invoice');
+    batch(() => {
+      setState('tab', 'all');
+      setState('facets', {
+        attachments: ['attachment-pdf'],
+        calendar: ['has-calendar-invite'],
+      });
+      setSearchEntities([email('pdf-invite-hit')]);
+    });
+    expect(ids(source)).toEqual(['pdf-invite-hit']);
+  });
+
+  it('still drops list rows without the selected attachment kind', () => {
+    const { source, setState, setEntities } = mount();
+    batch(() => {
+      setState('tab', 'all');
+      setState('facets', { attachments: ['attachment-pdf'] });
+      setEntities([email('no-attachment')]);
+    });
+    expect(ids(source)).toEqual([]);
+  });
+
+  it('keeps Drafts search hits whose latest message is not the draft', () => {
+    const { source, setState, setSearchEntities } = mount('invoice');
+    const replyDraft = { ...email('reply-draft'), isDraft: false };
+    batch(() => {
+      setState('tab', 'drafts');
+      setSearchEntities([replyDraft]);
+    });
+    expect(ids(source)).toEqual(['reply-draft']);
+  });
+
   it('keeps archived hits when searching Signal and Noise', () => {
     const { source, setState, setSearchEntities } = mount('invoice');
     const archived = { ...email('archived'), done: true };
@@ -712,6 +745,54 @@ describe('Email list query transitions', () => {
     });
     await vi.waitFor(() => expect(ids(source)).toEqual(['archived']));
     expect(searchNext).toHaveBeenCalledOnce();
+  });
+
+  it('pages past a search page the server filtered to nothing instead of reading as empty', async () => {
+    const root = mount('invoice');
+    const match = email('unread-match');
+    root.setRetainedEntities([]);
+    let seenEmptyAndIdle = false;
+    const stopWatching = createRoot((stop) => {
+      createEffect(() => {
+        if (ids(root.source).length === 0 && !root.source.isLoading())
+          seenEmptyAndIdle = true;
+      });
+      return stop;
+    });
+    let deliverNextPage = () => {};
+    root.searchNext.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          deliverNextPage = () => {
+            batch(() => {
+              root.setSearchEntities([match]);
+              root.setRetainedEntities([match]);
+              root.setSearchHasMore(false);
+            });
+            resolve();
+          };
+        })
+    );
+    try {
+      batch(() => {
+        root.setState('tab', 'all');
+        root.setState('facets', { read: ['unread'] });
+        root.setSearchEntities([]);
+      });
+      await vi.waitFor(() => expect(root.searchNext).toHaveBeenCalledOnce());
+      expect(ids(root.source)).toEqual([]);
+      expect(root.source.isLoading()).toBe(true);
+
+      deliverNextPage();
+      await vi.waitFor(() =>
+        expect(ids(root.source)).toEqual(['unread-match'])
+      );
+    } finally {
+      stopWatching();
+    }
+    expect(seenEmptyAndIdle).toBe(false);
+    expect(root.source.isLoading()).toBe(false);
+    expect(root.source.hasMore()).toBe(false);
   });
 
   it('trims archived search results to done threads', async () => {

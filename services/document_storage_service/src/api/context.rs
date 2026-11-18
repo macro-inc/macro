@@ -1012,6 +1012,8 @@ pub(crate) struct ApiContext {
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
     pub graphql_registered_work_context: complete_graph::RegisteredWorkGraphqlContext,
     pub graphql_notification_inbox_context: complete_graph::NotificationInboxGraphqlContext,
+    pub graphql_active_notification_ids_context:
+        complete_graph::ActiveNotificationIdsGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader,
     /// Focus reads for the GraphQL `emailFocus` list and thread `focus` field.

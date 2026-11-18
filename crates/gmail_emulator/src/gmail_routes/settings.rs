@@ -159,7 +159,7 @@ async fn list_send_as(
                 "sendAsEmail": mailbox.email,
                 "displayName": mailbox.name.clone().unwrap_or_default(),
                 "replyToAddress": "",
-                "signature": "",
+                "signature": &mailbox.signature,
                 "isPrimary": true,
                 "isDefault": true,
             });

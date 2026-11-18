@@ -17,7 +17,8 @@ items. Drag a folder onto another folder to nest it, or onto Passwords to
 move it to the root; a folder cannot move into itself or its descendants. Item
 rows drag onto a folder (or Passwords to unfile). Escape or switching away
 cancels a drag. Right-click a
-folder, or open the "…" folder actions beside New in the list header, for New
+folder, or open the "…" folder actions beside New in the list header (no
+tooltip, so it never covers the menu), for New
 subfolder, Rename (inline), Move to folder (an inline destination list), and
 Delete folder. Delete confirms in place and says how many items move to All
 items and how many subfolders go too; it never deletes items or their values.
@@ -27,6 +28,16 @@ On a phone, the header pills are All, Favorites, Recent, Shared and Folders;
 Folders shows the same tree, and the floating New button opens the item kinds.
 Create folders from the Folders section's "+" on desktop or in the phone's
 Folders tab. A failed create offers Retry with the original name and parent.
+
+The list header filters and groups by type with the Tasks header's menus:
+Filter items (funnel; a Type submenu of the six kinds, a count on the button
+while any apply, and Clear filters) and Group by (None or Type; Type adds a
+section header with the kind's icon and count per kind, in the New menu's
+order). On a phone they live in the filter drawer at the start of the header
+pills, as in Tasks. The type filter combines with the collection, folder and
+search; with a type filter on, an empty list shows "No passwords here yet"
+instead of the empty-vault buttons. Like Tasks, both are kept with the split's
+history entry, so going back restores them.
 
 New opens a menu to pick the kind first: Login, Card, Secure note, Identity,
 API credential, or Verification code. Each kind's form and detail label
@@ -59,7 +70,10 @@ it when it expires; a failed load offers Retry.
 The detail header shows the logo tile, name, folder path and kind, then
 Favorite, Share, Edit and "…" (Activity, Delete item). Usernames load with a
 Copy action and never reveal the password. An empty account identifier or API Key
-shows a dash; lookup failures stay visible. Missing provider username slots read as
+shows a dash; lookup failures stay visible. When Macro does not answer (offline,
+or a gateway returning 502-504) the banner, the username row and a notice above
+the list read "Can't reach Macro. Check your connection.", and the notice's Retry
+reloads the list and the selected username. Missing provider username slots read as
 empty without requiring a re-import. Any signed-in team member with
 access can reveal and copy the password, notes and verification code; there is
 no separate re-sign-in step. Revealed values and codes clear on Lock

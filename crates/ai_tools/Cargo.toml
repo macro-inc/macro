@@ -46,6 +46,7 @@ call = { path = "../call", default-features = false, features = ["ai_tools", "ou
 chat = { path = "../chat", features = ["ai_tools", "outbound"] }
 channels = { path = "../channels", features = ["ai_tools", "outbound"] }
 cognition = { path = "../cognition" }
+jev = { path = "../jev", features = ["outbound"] }
 chrono.workspace = true
 dateparser.workspace = true
 connection = { path = "../connection", default-features = false, features = [

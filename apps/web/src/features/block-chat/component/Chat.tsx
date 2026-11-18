@@ -1,5 +1,4 @@
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
-import { TopBar } from '@block-chat/component/TopBar';
 import { type ChatData, DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
@@ -25,6 +24,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { Button } from '@ui';
 import { createEffect, createSignal, Show, Suspense } from 'solid-js';
+import { ChatHeader } from '../views/chat-header';
+import { MobileChatHeader } from '../views/mobile/chat-header';
 
 /**
  * A legacy AI chat, read-only: its history renders and a response already
@@ -119,11 +120,22 @@ function ChatInner(props: { data: ChatData }) {
     <div class="size-full overscroll-none overflow-hidden flex flex-col">
       <Show when={!isNestedBlock}>
         <Suspense>
-          <TopBar
-            model={resolveChatInputModel(props.data.chat.model)}
-            showStreamDebug={showStreamDebug}
-            toggleStreamDebug={() => setShowStreamDebug((p) => !p)}
-          />
+          <Show
+            when={isTouchDevice()}
+            fallback={
+              <ChatHeader
+                model={resolveChatInputModel(props.data.chat.model)}
+                showStreamDebug={showStreamDebug}
+                toggleStreamDebug={() => setShowStreamDebug((p) => !p)}
+              />
+            }
+          >
+            <MobileChatHeader
+              model={resolveChatInputModel(props.data.chat.model)}
+              showStreamDebug={showStreamDebug}
+              toggleStreamDebug={() => setShowStreamDebug((p) => !p)}
+            />
+          </Show>
         </Suspense>
       </Show>
       <Show when={showStreamDebug()}>

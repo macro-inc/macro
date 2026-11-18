@@ -4,7 +4,7 @@ import type { PasswordWriteItem } from '@service-storage/generated/schemas/passw
 import { ok } from 'neverthrow';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ImportBatchBody } from '../context/passwords-context';
-import { createPasswordSource } from '../queries/source';
+import { createPasswordSource, isUnreachable } from '../queries/source';
 
 const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
@@ -477,7 +477,10 @@ it('marks a failed folder request in its action trace without recording its name
   expect(mocks.spanError).toHaveBeenCalledWith(
     'passwords.folder.create failed'
   );
-  expect(mocks.attributes).toHaveBeenCalledWith('passwords.outcome', 'failed');
+  expect(mocks.attributes).toHaveBeenCalledWith(
+    'passwords.outcome',
+    'unreachable'
+  );
   expect(JSON.stringify(mocks.attributes.mock.calls)).not.toContain(
     'Synthetic private folder'
   );
@@ -572,4 +575,55 @@ it('accepts an empty username response without a failure', async () => {
   const result = await createPasswordSource('team', CURRENT).username('item');
   expect(result.isOk() && result.value).toEqual({ username: '', version: 1 });
   expect(mocks.spanError).not.toHaveBeenCalled();
+});
+
+it('reports an unreachable vault on a username read as unreachable, with its code on the span', async () => {
+  mocks.fetch.mockResolvedValueOnce(new Response('', { status: 502 }));
+  const gateway = await createPasswordSource('team', CURRENT).username('item');
+  expect(gateway.isErr() && gateway.error).toBe('unreachable');
+  expect(mocks.attributes).toHaveBeenCalledWith(
+    'passwords.error_code',
+    'NETWORK_ERROR'
+  );
+  expect(mocks.spanError).toHaveBeenCalledWith('passwords.username failed');
+  mocks.fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  const offline = await createPasswordSource('team', CURRENT).username('item');
+  expect(offline.isErr() && offline.error).toBe('unreachable');
+});
+
+it('refreshes an expired session once and retries the username read', async () => {
+  mocks.fetch
+    .mockResolvedValueOnce(new Response('', { status: 401 }))
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ username: 'account', version: 1 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  const result = await createPasswordSource('team', CURRENT).username('item');
+  expect(result.isOk() && result.value).toEqual({
+    username: 'account',
+    version: 1,
+  });
+  expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  expect(mocks.spanError).not.toHaveBeenCalledWith('passwords.username failed');
+});
+
+it('tells a list behind an unreachable gateway from other list failures', async () => {
+  mocks.fetch.mockResolvedValueOnce(new Response('', { status: 502 }));
+  const gateway = await createPasswordSource('team', CURRENT)
+    .list()
+    .catch((error: unknown) => error);
+  expect(isUnreachable(gateway)).toBe(true);
+  mocks.fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  const offline = await createPasswordSource('team', CURRENT)
+    .folders()
+    .catch((error: unknown) => error);
+  expect(isUnreachable(offline)).toBe(true);
+  mocks.fetch.mockResolvedValueOnce(new Response('', { status: 500 }));
+  const broken = await createPasswordSource('team', CURRENT)
+    .list()
+    .catch((error: unknown) => error);
+  expect(isUnreachable(broken)).toBe(false);
 });

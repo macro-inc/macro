@@ -1313,9 +1313,8 @@ async fn senderless_message_returns_every_attachment_it_claims(pool: Pool<Postgr
     let document_id = Uuid::parse_str("00000000-0000-0000-0000-00000c5a0501")?;
     let media_id = Uuid::parse_str("00000000-0000-0000-0000-00000c5a0502")?;
 
-    let documents =
-        new_email_document_atts(&pool, link_id, "claim-test-senderless-draft-msg").await?;
-    let media = new_email_media_atts(&pool, link_id, "claim-test-senderless-draft-msg").await?;
+    let documents = new_email_document_atts(&pool, link_id, "claim-test-senderless-msg").await?;
+    let media = new_email_media_atts(&pool, link_id, "claim-test-senderless-msg").await?;
 
     assert!(attachment_is_claimed(&pool, document_id).await?);
     assert!(attachment_is_claimed(&pool, media_id).await?);
@@ -1375,6 +1374,74 @@ async fn pending_upload_claim_names_the_claim_until_its_file_is_stored(
     .await?;
 
     assert_eq!(oldest_pending_upload_claim(&pool, message_id).await?, None);
+
+    Ok(())
+}
+
+const DRAFTER_LINK: &str = "00000000-0000-0000-0000-000000000d01";
+const DRAFTER_THREAD: &str = "00000000-0000-0000-0000-00000000d101";
+const DRAFT_ATTACHMENT: &str = "00000000-0000-0000-0000-00000d5a0103";
+
+/// A draft is replaced or deleted when it is saved again, sent or discarded,
+/// which leaves a document imported from its attachment without its link.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("draft_document_attachments"))
+)]
+async fn new_mail_import_skips_draft_attachments(pool: Pool<Postgres>) -> Result<()> {
+    let link_id = Uuid::parse_str(DRAFTER_LINK)?;
+
+    let documents = new_email_document_atts(&pool, link_id, "draft-test-draft-msg").await?;
+
+    assert!(documents.is_empty());
+    assert!(!attachment_is_claimed(&pool, Uuid::parse_str(DRAFT_ATTACHMENT)?).await?);
+
+    let received = new_email_document_atts(&pool, link_id, "draft-test-received-msg").await?;
+    assert_eq!(
+        received
+            .iter()
+            .map(|a| a.filename.as_deref())
+            .collect::<Vec<_>>(),
+        [Some("received_doc.pdf")]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("draft_document_attachments"))
+)]
+async fn thread_backfill_skips_draft_attachments(pool: Pool<Postgres>) -> Result<()> {
+    let documents =
+        thread_document_atts_for_backfill(&pool, Uuid::parse_str(DRAFTER_THREAD)?).await?;
+
+    assert_eq!(
+        documents
+            .iter()
+            .map(|a| a.filename.as_deref())
+            .collect::<Vec<_>>(),
+        [Some("received_doc.pdf")]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("draft_document_attachments"))
+)]
+async fn mailbox_backfill_skips_draft_attachments(pool: Pool<Postgres>) -> Result<()> {
+    let documents =
+        fetch_job_attachments_for_backfill(&pool, Uuid::parse_str(DRAFTER_LINK)?).await?;
+
+    assert_eq!(
+        documents
+            .iter()
+            .map(|a| a.filename.as_deref())
+            .collect::<Vec<_>>(),
+        [Some("received_doc.pdf")]
+    );
 
     Ok(())
 }

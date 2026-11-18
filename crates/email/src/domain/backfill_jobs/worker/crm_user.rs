@@ -85,7 +85,10 @@ where
         &self_email,
         sent_recipients,
         true,
-        |message| async {
+        |mut message| async {
+            if let BackfillOperation::PopulateCrmContact(scope) = &mut message.backfill_operation {
+                scope.payload.live_mail = false;
+            }
             ctx.queue
                 .enqueue(message)
                 .await
@@ -112,7 +115,10 @@ where
         &self_email,
         received_senders,
         false,
-        |message| async {
+        |mut message| async {
+            if let BackfillOperation::PopulateCrmContact(scope) = &mut message.backfill_operation {
+                scope.payload.live_mail = false;
+            }
             ctx.queue
                 .enqueue(message)
                 .await

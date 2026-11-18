@@ -21,9 +21,7 @@ import { getPermissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import {
-  enableCalendarUi,
   enablePasswords,
-  enableProjects,
   enableWhatsappLinked,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
@@ -537,7 +535,6 @@ function getSupportedHandler(
         };
       })
       .with('initiative_discussion', () => {
-        if (!isFeatureEnabled(enableProjects)) return null;
         const meta = notification.notification_metadata;
         if (
           meta.tag !== 'initiative_discussion' ||
@@ -591,13 +588,6 @@ function getSupportedHandler(
         if (meta.tag !== 'calendar_event_reminder') return null;
 
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          // A reminder delivered before the flag closed still has a live
-          // notification; opening it must not reach a surface the user is no
-          // longer meant to have.
-          if (!isFeatureEnabled(enableCalendarUi)) {
-            onApplied?.();
-            return;
-          }
           const content = meta.content;
           const time = content.startsAt
             ? {
@@ -630,10 +620,6 @@ function getSupportedHandler(
 
         // The request is answered from the shared event's details.
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          if (!isFeatureEnabled(enableCalendarUi)) {
-            onApplied?.();
-            return;
-          }
           openCalendarView(
             { eventId: meta.content.eventId },
             {

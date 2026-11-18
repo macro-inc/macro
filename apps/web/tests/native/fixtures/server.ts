@@ -145,6 +145,7 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
     }
     if (
       operation === 'SoupNotifications' ||
+      operation === 'HomeUnreadPresence' ||
       (operation === 'ChannelUnreadPresence' && excludesMail(input))
     )
       return { items: [], nextCursor: null };

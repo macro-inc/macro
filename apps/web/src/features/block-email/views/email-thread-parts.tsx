@@ -30,9 +30,9 @@ export function emailThreadMenu(actions: EmailThreadMenuActions): BlockTool[] {
     actions.createTask,
     actions.createEvent,
     actions.share,
+    actions.excludeFromCrm,
     actions.moveToFolder,
     actions.downloadEml,
-    actions.excludeFromCrm,
     actions.trash,
     actions.senderToSignal,
     actions.senderToNoise,
@@ -43,6 +43,7 @@ export function emailThreadMenu(actions: EmailThreadMenuActions): BlockTool[] {
 function EmailThreadControls(props: EmailThreadControlState) {
   return (
     <>
+      {props.crmExclusion}
       {props.reminder}
       {/* Match the title menu's action glyph; retain accent ink for unread threads. */}
       <Show when={props.isOwnThread}>

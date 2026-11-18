@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH previous AS MATERIALIZED (\n                SELECT id, hidden FROM (\n                    SELECT id, team_id, hidden FROM crm_contacts\n                    WHERE id = $1 OFFSET 0 FOR UPDATE\n                ) scoped WHERE team_id = $2\n            )\n            UPDATE crm_contacts ct SET hidden = $3\n            FROM previous WHERE ct.id = previous.id\n            RETURNING previous.hidden IS DISTINCT FROM $3 AS \"matching_changed!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "matching_changed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "104bbf588a3e323320d8e0f4f3cb0154c76547ff8978fe4247ae33c9e00d87fe"
+}

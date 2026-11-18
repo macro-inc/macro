@@ -58,8 +58,11 @@ A host can run a program with nobody watching (a routine step) by setting
   requests at `fetch` unless a read matches;
 - it has no workers: `Worker` is undefined and worker modules throw.
 
-A dry run is held back inside the process, not by the APIs: code written to
-get around it can still write with the owner's permissions.
+A dry run is held back inside the process; the APIs don't know about it. A
+host that must not write in a dry run also gives it a token that can't: the
+agent harness signs a routine dry run's token with the `dry_run` scope
+(`agent_correlation::scope`), so code written to get around the process's
+dry run is refused by every SDK host.
 
 `DenoChecker` (`src/outbound/deno/check.rs`) type-checks a TypeScript program
 against the SDK's generated declarations (`sdk-types.json` from `crates/code_mode_assets`)
@@ -87,6 +90,8 @@ fingerprint stays valid until it changes.
 | Combined program stdout/stderr | 2 MiB |
 | Additional bounded SDK progress frames | 64 KiB |
 | Regular / advisory progress events | 1024 each |
+| Calls of one SDK operation (`Limits::max_calls_per_operation`); the next call stops the run with an error naming it | 200 (routine steps: 1000) |
+| Unfinished at the deadline after 50+ calls of one operation | the run stops just before the deadline, naming it as a likely loop |
 | V8 old-space target per child | 128 MiB |
 | CPU time per child (`Limits::max_cpu`, off by default) | kernel stops it (SIGXCPU) |
 | Scheduling (`Limits::background`, off by default) | niceness 10 |
@@ -96,7 +101,11 @@ private scratch directory. Deno permits reads only there and network connections
 only to the configured API host/port destinations. Remote and npm imports,
 writes, environment access, subprocesses, FFI, and system information are denied.
 Timers, an attended program's workers and other sleep primitives throw an
-error that points programs at `macro.routines.create` for checking back later; this steers agents and is not
+error explaining that custom timers, including `Promise.race` deadline guards,
+are unsupported. The host enforces the execution deadline (30 s by default in
+ExecuteCode). Use bounded batches with `Promise.allSettled` to return successes
+and failures before the deadline; it does not add a timeout. For checking back
+later, use `macro.routines.create`. These restrictions steer agents and are not
 a security boundary.
 The trusted bootstrap dynamically imports generated `main.mjs` so its module
 reads are subject to the scratch read permission. Both static and dynamic imports
@@ -115,8 +124,8 @@ child before deleting scratch. API writes already accepted by a service may
 complete afterward and must not be blindly retried. SDK operation events carry only an operation name, request identity and status.
 They are bounded diagnostics, not proof of a committed action. Console output
 and progress are program-authored and may be incomplete. W3C trace context and
-`x-macro-code-execution: 1` are sent to configured service origins on
-authenticated requests only. That header is how an API tells a program's
+`x-macro-code-execution: 1` are sent on every request to a configured service
+origin, whatever credential the request carries. That header is how an API tells a program's
 request from the person's, so in every run `fetch` is the only way out. Raw
 sockets, listeners and servers (`Deno.connect`, `listen`, `serve` and the like),
 WebSocket and EventSource, `Deno[Deno.internal]` and `process`'s
@@ -126,6 +135,13 @@ starts processes nor loads other built-ins (`NODE_ALLOWED` in
 `src/outbound/deno.rs`); a test fails when the pinned Deno lists a built-in the
 map doesn't know. Like a dry run, this is held inside the process: the
 sandbox's `--allow-net` still reaches the API origins directly.
+
+A proxied run (`Egress::Proxied`) is the exception: `--allow-net` names only
+a loopback forwarder the runner starts for that run. The program keeps the
+real hosts for its links, its fetch sends their requests to the forwarder,
+and the forwarder, outside the realm, sets the mark and
+the trace context (a child of the run's span) on every request, dropping
+the ones the program set. It follows no redirects and stops with the run.
 
 Deno shares the harness container. The heap setting does not hard-limit native
 memory, ArrayBuffers, or CPU; a container OOM can affect the harness and other

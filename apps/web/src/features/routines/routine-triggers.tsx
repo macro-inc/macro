@@ -1,8 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  enableEventRoutines,
-  enableRoutineConditions,
-} from '@core/constant/featureFlags';
+import { enableEventRoutines } from '@core/constant/featureFlags';
 import { Show, Suspense } from 'solid-js';
 import { RoutineEventCondition } from './components/routine-event-condition';
 import { RoutineGithubConnect } from './components/routine-github-connect';
@@ -48,7 +45,6 @@ export function RoutineTriggers(props: {
   onChange: (triggers: RoutineTriggerDraft[]) => void;
   layout?: 'rows' | 'add' | 'inline';
 }) {
-  const conditions = useFeatureFlag(enableRoutineConditions);
   const eventRoutines = useFeatureFlag(enableEventRoutines);
   const github = createGithubConnection();
   const repositories = createGithubRepositoryOptions(
@@ -95,16 +91,9 @@ export function RoutineTriggers(props: {
             {options()}
           </Show>
         )}
-        renderEventCondition={
-          conditions().enabled
-            ? (trigger, onChange) => (
-                <RoutineEventCondition
-                  trigger={trigger()}
-                  onChange={onChange}
-                />
-              )
-            : undefined
-        }
+        renderEventCondition={(trigger, onChange) => (
+          <RoutineEventCondition trigger={trigger()} onChange={onChange} />
+        )}
         renderEventSettings={(trigger, onChange) => (
           <>
             <Show when={taskTriggerProperty(trigger())}>

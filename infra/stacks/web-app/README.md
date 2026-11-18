@@ -35,6 +35,13 @@ apps' PostHog exception frames are rewritten to the public web copies, whose
 published maps still resolve them. Web delivery and the deploy workflow's
 Datadog upload keep every map.
 
+The archive also leaves out `web-hosted/`. Vite writes imported videos there
+(`assetFileNames` in `apps/web/vite.base.ts`); they publish with the other
+immutable assets, and the native apps load them from this deploy
+(`webHostedUrl`) instead of carrying them in every binary and update. Their
+names carry a content hash, and retained-build pruning never deletes them, so
+an app stuck on an older bundle still finds its videos.
+
 The routing Lambda depends on entrypoint publication. Updating it independently
 could expose HTML naming an asset that still returns 403. Every Lambda HTML
 response, including preview failures, uses `no-store`. Pruning waits for the
@@ -62,7 +69,7 @@ From the repository root:
 
 ```sh
 \cd apps/web
-bun run test --project scripts scripts/publish-web-assets.test.ts scripts/cache-wasm/upload-brotli-to-s3.test.ts scripts/retain-recent-builds.test.ts
+bun run test --project scripts scripts/publish-web-assets.test.ts scripts/cache-wasm/upload-brotli-to-s3.test.ts scripts/retain-recent-builds.test.ts scripts/web-hosted.test.ts
 \cd ../../infra
 bun run check  # Type-checks both projects and runs the web-delivery tests.
 ```

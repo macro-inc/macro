@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_email_policy_source_events\n               (event_id, team_id, source_kind, source_id, traceparent)\n               VALUES ($1, $2, $3, $4, $5) ON CONFLICT (event_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8f8f90bacf58106f324e263907fbb731eb3e59fe73680e9f2a1397f79605b41f"
+}

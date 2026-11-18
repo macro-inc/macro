@@ -103,6 +103,25 @@ function pureGeneratedZodSchemas(): Plugin {
 }
 
 /**
+ * Vite writes imported videos to `web-hosted/` instead of `assets/`. The web
+ * deploy publishes that directory with the rest of `dist`, but every native
+ * bundle deletes it (`build-tauri`, the OTA archive in `infra/stacks/web-app`,
+ * the desktop derivation in `nix/tauri-desktop.nix`): the tutorial videos
+ * alone added 105 MB to each app binary and OTA download. The apps load these
+ * files from the web origin instead (`webHostedUrl`).
+ */
+const WEB_HOSTED_FILE = /\.(mp4|webm|mov)$/i;
+
+// Hosted names keep their hash even in NO_MINIFY builds: a native bundle
+// always loads the web deploy's copy, which is hashed.
+function assetFileNames(bundledPattern: string) {
+  return (asset: Rolldown.PreRenderedAsset) =>
+    asset.names.some((name) => WEB_HOSTED_FILE.test(name))
+      ? 'web-hosted/[name]-[hash][extname]'
+      : `assets/${bundledPattern}`;
+}
+
+/**
  * CloudFront compresses responses of at most 10,000,000 bytes and serves
  * anything larger raw. The entry chunk once crossed that limit and every
  * visitor downloaded 11.9 MB uncompressed instead of ~3 MB, so fail the build
@@ -684,13 +703,14 @@ export const createAppViteConfig = (): UserConfigFn => {
                 // https://github.com/vitejs/vite/issues/378
                 entryFileNames: `assets/[name].js`,
                 chunkFileNames: `assets/[name].js`,
-                assetFileNames: `assets/[name].[ext]`,
+                assetFileNames: assetFileNames('[name].[ext]'),
                 codeSplitting: startupChunks(HTML_ENTRIES),
               }
             : {
                 format: 'es',
                 chunkFileNames: '[name]-[hash].js',
                 entryFileNames: '[name]-[hash].js',
+                assetFileNames: assetFileNames('[name]-[hash][extname]'),
                 codeSplitting: startupChunks(HTML_ENTRIES),
               },
         },

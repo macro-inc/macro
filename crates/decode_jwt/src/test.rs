@@ -483,3 +483,71 @@ async fn router_wrong_cookie_name_returns_401() {
         StatusCode::UNAUTHORIZED
     );
 }
+
+/// The body a request carrying only the valid bearer gets: the user the
+/// cases below should resolve to.
+async fn bearer_only_body(router: &Router) -> String {
+    let req = Request::get("/protected")
+        .header("authorization", format!("Bearer {}", valid_token()))
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let body = response_body(router, req).await;
+    assert!(body.starts_with("macro|"), "{body}");
+    body
+}
+
+/// A non-bearer `Authorization` header (Basic, a guest scheme) beside the
+/// cookie leaves the cookie as the token, as it always has.
+#[tokio::test]
+async fn router_non_bearer_authorization_beside_a_cookie_reads_the_cookie() {
+    let router = test_router();
+    let expected = bearer_only_body(&router).await;
+    let token = valid_token();
+    let req = Request::get("/protected")
+        .header("authorization", "Basic dXNlcjpwYXNz")
+        .header("cookie", format!("{ACCESS_TOKEN_COOKIE}={token}"))
+        .body(axum::body::Body::empty())
+        .unwrap();
+    assert_eq!(response_body(&router, req).await, expected);
+}
+
+/// A repeated access-token cookie (a host-only one beside a domain-wide
+/// one) reads the last, as cookie jars keep it, across Cookie headers too.
+#[tokio::test]
+async fn router_repeated_cookie_reads_the_last() {
+    let router = test_router();
+    let expected = bearer_only_body(&router).await;
+    let token = valid_token();
+    for req in [
+        Request::get("/protected")
+            .header(
+                "cookie",
+                format!("{ACCESS_TOKEN_COOKIE}=stale; {ACCESS_TOKEN_COOKIE}={token}"),
+            )
+            .body(axum::body::Body::empty())
+            .unwrap(),
+        Request::get("/protected")
+            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=stale"))
+            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}={token}"))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    ] {
+        assert_eq!(response_body(&router, req).await, expected);
+    }
+}
+
+/// Another credential header beside a bearer leaves the bearer as the token.
+#[tokio::test]
+async fn router_bearer_beside_another_credential_header_reads_the_bearer() {
+    let router = test_router();
+    let expected = bearer_only_body(&router).await;
+    let token = valid_token();
+    for header in ["x-macro-user-api-key", "x-macro-bot-token"] {
+        let req = Request::get("/protected")
+            .header("authorization", format!("Bearer {token}"))
+            .header(header, "something")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        assert_eq!(response_body(&router, req).await, expected, "{header}");
+    }
+}

@@ -36,8 +36,16 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 Preview wire names include `spam` and `trash`; provider folder semantics belong to
 the email domain and use normalized mailbox facts, not Gmail-only label names.
 
+Historical CRM messages use `PopulateCrmPolicy` with mandatory team, mailbox,
+work ID, consent incarnation and policy version. Missing `live_mail` on a
+`PopulateCrmContact` payload means legacy history; new per-message hints set it
+true and reconcile current stored eligibility. Preserve this distinction during
+rolling upgrades; decoding old payloads must never attach a current generation.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
 
 - Scheduled-message models retain optional agent correlation for delayed delivery; older rows decode without attribution.
+
+- `sign_in_email` recognises Macro's own sign-in emails by sender: the addresses FusionAuth and the auth service send sign-in mail from, which send nothing else. Its tests read the FusionAuth stack's per-environment config and the local kickstart, so a changed sender fails them; update `SIGN_IN_SENDERS` with it.

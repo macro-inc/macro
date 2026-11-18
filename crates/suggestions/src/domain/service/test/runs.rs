@@ -390,7 +390,7 @@ async fn accepting_any_other_suggestion_starts_no_run(pool: PgPool) {
     composer.run_mode = Some(RunMode::Composer);
     let composer = h.suggest(session, composer).await.suggestion.unwrap();
     let entity = h
-        .suggest(session, entity_suggestion("venue:headcount"))
+        .suggest(session, review_suggestion("venue:contract"))
         .await
         .suggestion
         .unwrap();

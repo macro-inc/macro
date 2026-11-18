@@ -1,8 +1,5 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { isTransientRequestError } from '@core/util/request-error';
-import { compositeEntity } from '@notifications/types';
 import { indexUnreadMessageNotifications } from '@notifications/unread-message-notifications';
 import { createChannelNotificationsQuery } from '@queries/channel/notifications';
 import { queryReadyGate } from '@queries/gate';
@@ -33,21 +30,12 @@ export function createChannelUnreadNavigation(options: {
   onDestinationsChanged: () => void;
 }) {
   const notificationSource = useGlobalNotificationSource();
-  const graphqlNotifications = useFeatureFlag(enableGraphqlSoup);
   const channelNotifications = createChannelNotificationsQuery(
     options.channelId,
-    () => graphqlNotifications().enabled
+    () => true
   );
   const notifications = createMemo(() => {
-    if (!graphqlNotifications().enabled) {
-      return (
-        notificationSource.notificationsByEntity()[
-          compositeEntity({ type: 'channel', id: options.channelId })
-        ] ?? []
-      );
-    }
-    if (!channelNotifications.isEnabled || channelNotifications.isPending)
-      return [];
+    if (channelNotifications.isPending) return [];
     if (
       channelNotifications.error &&
       !isTransientRequestError(channelNotifications.error)

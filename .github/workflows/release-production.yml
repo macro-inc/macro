@@ -38,6 +38,14 @@ jobs:
     with:
       environment: prod
     secrets: inherit
+  deploy-mcp-chatgpt-worker:
+    needs:
+    - deploy-cloud-storage
+    name: Deploy MCP ChatGPT Worker
+    uses: ./.github/workflows/deploy_mcp_chatgpt_worker.yml
+    with:
+      environment: prod
+    secrets: inherit
   deploy-website:
     if: github.event_name == 'release'
     name: Deploy Website

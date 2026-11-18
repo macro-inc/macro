@@ -28,6 +28,7 @@ impl macro_authorization::JwtValidator for TestIdentity {
             identity: macro_authorization::ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: user_id.to_owned(),
                 fusion_user_id: "test-user".to_owned(),
                 permissions: None,

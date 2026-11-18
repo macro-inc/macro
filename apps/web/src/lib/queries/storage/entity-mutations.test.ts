@@ -2,13 +2,8 @@ import { CombinedError } from '@urql/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  graphql: true,
   mutation: vi.fn(),
   refresh: vi.fn(),
-}));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: {},
-  isFeatureEnabled: () => mocks.graphql,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getEntityGraphqlClient: () => ({ mutation: mocks.mutation }),
@@ -34,7 +29,6 @@ import {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.graphql = true;
   mocks.refresh.mockResolvedValue(undefined);
   mocks.mutation.mockReturnValue({
     toPromise: async () => ({
@@ -192,7 +186,7 @@ it('leaves omitted sharing fields absent on the wire', async () => {
   });
 });
 
-it('reads the rollout flag at invocation and excludes unsupported kinds', () => {
+it('excludes unsupported kinds from the GraphQL share policy', () => {
   expect(usesGraphqlSharePolicy('document')).toBe(true);
   for (const kind of [
     'agent_session',
@@ -203,8 +197,6 @@ it('reads the rollout flag at invocation and excludes unsupported kinds', () => 
     'channel',
   ])
     expect(usesGraphqlSharePolicy(kind)).toBe(false);
-  mocks.graphql = false;
-  expect(usesGraphqlSharePolicy('document')).toBe(false);
 });
 
 it.each([

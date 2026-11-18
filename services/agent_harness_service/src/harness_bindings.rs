@@ -13,9 +13,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_client_protocol::schema::v1::SessionId;
-use agent_harness::domain::model::RuntimeAccessFacts;
-use agent_harness::domain::ports::{HarnessBindings, HarnessPresence, RuntimeConnectionId};
-use agent_session::domain::model::{AgentSessionId, ReplicaId};
+use agent_harness::domain::model::{DORMANT_AFTER, ListedSessions, RuntimeAccessFacts};
+use agent_harness::domain::ports::{
+    ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeConnectionId,
+};
+use agent_session::domain::model::ReplicaId;
 use bot_id::BotId;
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -94,20 +96,32 @@ impl HarnessBindings for PgHarnessBindings {
         &self,
         harness: HarnessId,
         acp_sessions: &[SessionId],
-    ) -> anyhow::Result<Vec<AgentSessionId>> {
+    ) -> anyhow::Result<ListedSessions> {
         use agent_session::domain::ports::RuntimeSessionLookup;
         use bots::domain::ports::HarnessAssignments;
         use harnesses::domain::ports::HarnessRepo;
 
         let repo = harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(self.pool.clone());
         if repo.get_harness(harness).await?.is_none() {
-            return Ok(Vec::new());
+            return Ok(ListedSessions::default());
         }
         let assignments = bots::outbound::pg_bots_repo::PgBotsRepo::new(self.pool.clone());
         let bots = assignments.bots_on_harness(harness).await?;
         let sessions =
             agent_session::outbound::runtime_sessions::PgRuntimeSessions(self.pool.clone());
-        Ok(sessions.sessions_for_bots(&bots, acp_sessions).await?)
+        let dormant_before = chrono::Utc::now() - DORMANT_AFTER;
+        let mut listed = ListedSessions::default();
+        for session in sessions
+            .sessions_for_bots(&bots, acp_sessions, dormant_before)
+            .await?
+        {
+            if session.dormant {
+                listed.dormant += 1;
+            } else {
+                listed.live.push(session.id);
+            }
+        }
+        Ok(listed)
     }
 }
 
@@ -148,7 +162,7 @@ impl HarnessPresence for PgHarnessPresence {
         self: Arc<Self>,
         harness: HarnessId,
         connection: RuntimeConnectionId,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>> {
         let span = tracing::info_span!(
             "harness.presence.connected",
             %harness,
@@ -197,6 +211,8 @@ impl HarnessPresence for PgHarnessPresence {
                         tracing::error!(error = ?error, %harness, %connection, "failed to record harness attach");
                     }
                 }
+                // Presence itself never binds an agent.
+                ConnectionRecorded::AgentsUnchanged
             }
             .instrument(span),
         )

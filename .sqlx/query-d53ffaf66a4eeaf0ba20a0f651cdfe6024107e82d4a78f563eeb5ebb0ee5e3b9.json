@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT d.thread_id AS \"id!\"\n        FROM unnest($1::uuid[]) AS links(link_id)\n        CROSS JOIN LATERAL (\n            SELECT DISTINCT m.thread_id\n            FROM email_messages m\n            WHERE m.link_id = links.link_id\n              AND m.is_draft\n              AND EXISTS (\n                  SELECT 1\n                  FROM email_message_mailbox_facts mf\n                  WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash\n              )\n            LIMIT $2\n        ) d\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d53ffaf66a4eeaf0ba20a0f651cdfe6024107e82d4a78f563eeb5ebb0ee5e3b9"
+}
