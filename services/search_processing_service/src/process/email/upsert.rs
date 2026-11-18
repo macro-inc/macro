@@ -262,17 +262,9 @@ pub async fn process_upsert_thread_message(
         }
 
         if !upsert_email_message_args.is_empty() {
-            let result = opensearch_client
+            opensearch_client
                 .bulk_upsert_email_messages(&upsert_email_message_args, index_override)
                 .await?;
-
-            if result.failed > 0 {
-                tracing::warn!(
-                    failed = result.failed,
-                    errors = ?result.errors,
-                    "some email messages failed to upsert"
-                );
-            }
         }
 
         // Update offset
@@ -344,17 +336,9 @@ pub async fn process_upsert_thread_batch_message(
     }
 
     if !upsert_email_message_args.is_empty() {
-        let result = opensearch_client
+        opensearch_client
             .bulk_upsert_email_messages(&upsert_email_message_args, index_override)
             .await?;
-
-        if result.failed > 0 {
-            tracing::warn!(
-                failed = result.failed,
-                errors = ?result.errors,
-                "some email messages failed to upsert"
-            );
-        }
     }
 
     Ok(())

@@ -10,8 +10,15 @@
 //!   oldest record not yet processed, 0 when caught up ([`super::backlog`]).
 //!   It keeps rising while the consumer is stalled, when [`LAG`] goes silent.
 //! - [`DROPPED`]: events committed without reaching the index, by
-//!   `entity_type`, and `event_type` for those dropped after their processing
-//!   retries or `failure` (a [`Loss`]) for those that never finished.
+//!   `entity_type`, and `event_type` and `failure` (the last attempt's
+//!   [`Failure`]) for those dropped after their attempts and replay, or
+//!   `failure` (a [`Loss`]) for those that never finished.
+//! - [`FAILED_BULK_ITEMS`]: items OpenSearch failed in the last attempt of an
+//!   event that was queued for a replay or dropped, by `entity_type` and
+//!   `outcome`.
+//!
+//! [`LAG`] and [`DROPPED`] also carry `delivery`: `kafka`, or `sqs_replay` for
+//! a replay, whose lag counts from the original record.
 
 use std::{
     collections::HashMap,
@@ -24,7 +31,9 @@ use opentelemetry::{
     metrics::{Counter, Histogram, Meter, ObservableGauge},
 };
 
-use super::{EventOutcome, ReceivedEvent, entity_type::EntityType};
+use super::{
+    EventOutcome, OutcomeRecord, ReceivedEvent, attempts::Failure, entity_type::EntityType,
+};
 
 #[cfg(test)]
 pub(super) mod test;
@@ -33,11 +42,13 @@ const METER_NAME: &str = "search_processing_service";
 pub(super) const LAG: &str = "search.index.lag_ms";
 pub(super) const OLDEST_PENDING: &str = "search.index.oldest_pending_ms";
 pub(super) const DROPPED: &str = "search.index.dropped_events";
+pub(super) const FAILED_BULK_ITEMS: &str = "search.index.failed_bulk_items";
 
 const ENTITY_TYPE: &str = "entity_type";
 const EVENT_TYPE: &str = "event_type";
 const OUTCOME: &str = "outcome";
 const FAILURE: &str = "failure";
+const DELIVERY: &str = "delivery";
 const TOPIC: &str = "topic";
 const PARTITION: &str = "partition";
 
@@ -104,6 +115,7 @@ const PENDING_STALE_AFTER: Duration = Duration::from_secs(30);
 pub(crate) struct IndexMetrics {
     lag: Histogram<u64>,
     dropped: Counter<u64>,
+    failed_bulk_items: Counter<u64>,
     pending: PendingAges,
     _oldest_pending: ObservableGauge<u64>,
 }
@@ -130,6 +142,12 @@ impl IndexMetrics {
                 .u64_counter(DROPPED)
                 .with_description("Events committed without reaching the search index")
                 .build(),
+            failed_bulk_items: meter
+                .u64_counter(FAILED_BULK_ITEMS)
+                .with_description(
+                    "Items OpenSearch failed in the last attempt of an event it did not index",
+                )
+                .build(),
             _oldest_pending: meter
                 .u64_observable_gauge(OLDEST_PENDING)
                 .with_unit("ms")
@@ -155,9 +173,11 @@ impl IndexMetrics {
 
     /// Records the end of one event's processing, or of its handoff when it
     /// needed no worker.
-    pub(super) fn record_processed(&self, received: &ReceivedEvent, outcome: EventOutcome) {
+    pub(super) fn record_processed(&self, received: &ReceivedEvent, record: OutcomeRecord) {
         let entity_type = KeyValue::new(ENTITY_TYPE, EntityType::of(&received.event).as_str());
         let event_type = KeyValue::new(EVENT_TYPE, received.event_type);
+        let outcome = KeyValue::new(OUTCOME, <&'static str>::from(record.outcome));
+        let delivery = KeyValue::new(DELIVERY, <&'static str>::from(received.delivery));
         if let Some(produced_at_ms) = received.produced_at_ms {
             let lag_ms = chrono::Utc::now().timestamp_millis() - produced_at_ms;
             self.lag.record(
@@ -165,12 +185,32 @@ impl IndexMetrics {
                 &[
                     entity_type.clone(),
                     event_type.clone(),
-                    KeyValue::new(OUTCOME, <&'static str>::from(outcome)),
+                    outcome.clone(),
+                    delivery.clone(),
                 ],
             );
         }
-        if outcome == EventOutcome::Dropped {
-            self.dropped.add(1, &[entity_type, event_type]);
+        if matches!(
+            record.outcome,
+            EventOutcome::RetryQueued | EventOutcome::Dropped
+        ) && record.failed_items > 0
+        {
+            self.failed_bulk_items.add(
+                u64::from(record.failed_items),
+                &[entity_type.clone(), outcome],
+            );
+        }
+        if record.outcome == EventOutcome::Dropped {
+            let failure = record.failure.unwrap_or(Failure::Error);
+            self.dropped.add(
+                1,
+                &[
+                    entity_type,
+                    event_type,
+                    KeyValue::new(FAILURE, <&'static str>::from(failure)),
+                    delivery,
+                ],
+            );
         }
     }
 

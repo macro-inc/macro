@@ -150,6 +150,21 @@ pub async fn process_message(
                 );
             }
         }
+        #[cfg(feature = "processing")]
+        SearchQueueMessage::ReplayBrokerEvent(replay) => {
+            use crate::inbound::kafka_consumer::{ReplayDone, replay_broker_event};
+            let receive_count = sqs_worker::receive_count(message).unwrap_or(1);
+            if replay_broker_event(&ctx.broker_events, &replay, receive_count).await
+                == ReplayDone::Redeliver
+            {
+                // Left on the queue, which delivers it again or dead-letters it.
+                anyhow::bail!("search-index replay failed");
+            }
+        }
+        #[cfg(not(feature = "processing"))]
+        SearchQueueMessage::ReplayBrokerEvent(_) => {
+            anyhow::bail!("this build does not process broker events")
+        }
     }
 
     ctx.worker.cleanup_message(message).await?;

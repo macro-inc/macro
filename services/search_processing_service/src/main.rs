@@ -304,24 +304,13 @@ async fn main() -> anyhow::Result<()> {
             config.queue_max_messages,
             config.queue_wait_time_seconds,
         );
-        let search_processing_context = SearchProcessingContext {
-            db: db.clone(),
-            worker: Arc::new(worker.clone()),
-            document_storage_bucket: config.document_storage_bucket.to_string(),
-            s3_client: s3_client.clone(),
-            opensearch_client: opensearch_client.clone(),
-            lexical_client: lexical_client.clone(),
-            calendar_search_enabled: config.calendar_search_enabled,
-        };
-        run_search_processing_workers(search_processing_context, config.worker_count);
-
         let kafka_processing_context = KafkaProcessingContext {
             agent_session_indexer: agent_session_indexer.clone(),
             db: db.clone(),
             opensearch_client: opensearch_client.clone(),
             s3_client: s3_client.clone(),
             document_storage_bucket: config.document_storage_bucket.to_string(),
-            lexical_client,
+            lexical_client: lexical_client.clone(),
             calendar_search_enabled: config.calendar_search_enabled,
             mailbox_deletes: process::email::mailbox_delete::MailboxDeletes::new(
                 opensearch_client.clone(),
@@ -329,7 +318,19 @@ async fn main() -> anyhow::Result<()> {
                 shutdown_token.clone(),
             ),
             metrics: IndexMetrics::global(),
+            replays: sqs_client.clone(),
         };
+        let search_processing_context = SearchProcessingContext {
+            db: db.clone(),
+            worker: Arc::new(worker.clone()),
+            document_storage_bucket: config.document_storage_bucket.to_string(),
+            s3_client: s3_client.clone(),
+            opensearch_client: opensearch_client.clone(),
+            lexical_client,
+            calendar_search_enabled: config.calendar_search_enabled,
+            broker_events: kafka_processing_context.clone(),
+        };
+        run_search_processing_workers(search_processing_context, config.worker_count);
         tokio::spawn(supervise_event_consumer(
             config.kafka_brokers.as_ref().to_owned(),
             kafka_processing_context,

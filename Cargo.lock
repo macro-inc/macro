@@ -18589,6 +18589,7 @@ dependencies = [
  "projects",
  "properties",
  "psd_engine",
+ "rand 0.9.4",
  "rdkafka",
  "rootcause",
  "rust-embed",

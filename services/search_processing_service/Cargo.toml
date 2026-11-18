@@ -20,9 +20,11 @@ processing = [
   "dep:opentelemetry",
   "dep:projects",
   "dep:properties",
+  "dep:rand",
   "dep:rdkafka",
   "dep:rootcause",
   "dep:tokio-retry",
+  "dep:tracing-opentelemetry",
 ]
 service = [
   "dep:documents",
@@ -106,13 +108,14 @@ models_properties = { path = "../../crates/models_properties", optional = true }
 models_search = { path = "../../crates/models_search" }
 nom = { workspace = true }
 opensearch_client = { path = "../../crates/opensearch_client" }
-opentelemetry = { workspace = true, features = ["metrics"], optional = true }
+opentelemetry = { workspace = true, features = ["metrics", "trace"], optional = true }
 ensure_exists = { path = "../../crates/ensure_exists", features = ["dynamodb"] }
 pdfium-render = { workspace = true, optional = true }
 properties = { path = "../../crates/properties", default-features = false, features = [
   "outbound",
 ], optional = true }
 projects = { path = "../../crates/projects", default-features = false, optional = true }
+rand = { workspace = true, optional = true }
 rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 rust-embed = "8.6.0"
@@ -132,6 +135,7 @@ tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true, optional = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
