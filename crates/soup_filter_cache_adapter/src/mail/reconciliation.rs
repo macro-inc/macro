@@ -3,7 +3,7 @@
 
 use super::*;
 use item_filter_index::properties::{compile_mail, mail_profile};
-use predicate_index::{IndexQuery, PredicateExpr};
+use predicate_index::{IndexQuery, PredicateExpr, evaluate_reference};
 use std::collections::HashMap;
 
 /// Called only for the canonical Soup operation, after composing its current
@@ -173,10 +173,34 @@ pub(crate) async fn first_page_updates<S: PredicateIndexStorage>(
         .load_optimistic_projections(&missing)
         .await
         .map_err(ProjectionError::Storage)?;
+    // A pending write protects only the membership it creates. When the
+    // authoritative facts alone still place a row in this window, the server
+    // page contradicts those facts, not the write: a mark read queued on a
+    // thread trashed elsewhere must not keep it listed.
+    let protected: Vec<_> = missing
+        .iter()
+        .zip(&pending)
+        .filter(|(_, pending)| pending.is_some())
+        .map(|(key, _)| key.clone())
+        .collect();
+    let authoritative: Vec<_> = storage
+        .load_projection_states(&protected)
+        .await
+        .map_err(ProjectionError::Storage)?
+        .into_iter()
+        .filter_map(|state| match state {
+            Some(ProjectionState::Complete(document)) => Some(document),
+            _ => None,
+        })
+        .collect();
+    let contradicted: HashSet<_> = evaluate_reference(&bounded, &authoritative)
+        .into_iter()
+        .map(|hit| hit.record_key)
+        .collect();
     Ok(missing
         .into_iter()
         .zip(pending)
-        .filter(|(_, pending)| pending.is_none())
+        .filter(|(key, pending)| pending.is_none() || contradicted.contains(key))
         .map(|(record_key, _)| ProjectionMutation::MarkIncomplete {
             record_key,
             profile: mail_profile(),
