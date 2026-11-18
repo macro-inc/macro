@@ -38,6 +38,9 @@ mod test;
 /// Lanes kept before idle ones are dropped.
 const MAX_LANES: usize = 1024;
 
+/// The longest cooldown one 429 can impose, whatever its `Retry-After` says.
+const MAX_COOLDOWN: Duration = Duration::from_secs(60 * 60);
+
 /// How hard one account may drive one connected app.
 #[derive(Clone, Copy, Debug)]
 pub struct BudgetPolicy {
@@ -114,6 +117,8 @@ struct Schedule {
     next_start: Option<Instant>,
     /// Nothing starts before this, after a 429.
     cooldown_until: Option<Instant>,
+    /// When the last call was let through to the upstream.
+    last_admitted: Option<Instant>,
 }
 
 impl Lane {
@@ -133,6 +138,24 @@ impl Lane {
         }
         schedule.next_start = Some(start + interval);
         Some(start)
+    }
+
+    /// Let a call through at `now`, unless the lane is cooling or another
+    /// call went through less than `interval` ago: a timer wakes late, so
+    /// two reserved slots can come due together.
+    fn admit(&self, now: Instant, interval: Duration) -> bool {
+        let mut schedule = self.schedule();
+        let cooling = schedule.cooldown_until.is_some_and(|until| until > now);
+        let too_soon = schedule
+            .last_admitted
+            .is_some_and(|admitted| now < admitted + interval);
+        if cooling || too_soon {
+            return false;
+        }
+        schedule.last_admitted = Some(now);
+        let earliest = now + interval;
+        schedule.next_start = Some(schedule.next_start.map_or(earliest, |at| at.max(earliest)));
+        true
     }
 
     fn cool_down(&self, until: Instant) {
@@ -216,8 +239,13 @@ impl CallBudget {
                 };
                 tokio::time::sleep_until(start).await;
                 waited += queued.elapsed();
-                // A 429 that landed while this call waited for its slot.
-                if lane.cooling(Instant::now()) {
+                let now = Instant::now();
+                if now > deadline {
+                    break Err(exhausted(&lane));
+                }
+                // A 429 that landed, or another call that went through,
+                // while this one waited for its slot.
+                if !lane.admit(now, policy.interval) {
                     continue;
                 }
                 attempts += 1;
@@ -229,9 +257,10 @@ impl CallBudget {
                         let jitter = Duration::from_millis(rand::random_range(
                             0..=u64::try_from(policy.max_jitter.as_millis()).unwrap_or(u64::MAX),
                         ));
-                        lane.cool_down(
-                            Instant::now() + asked.unwrap_or(policy.default_retry_after) + jitter,
-                        );
+                        let wait = asked
+                            .unwrap_or(policy.default_retry_after)
+                            .min(MAX_COOLDOWN);
+                        lane.cool_down(Instant::now() + wait + jitter);
                     }
                     outcome => break outcome,
                 }

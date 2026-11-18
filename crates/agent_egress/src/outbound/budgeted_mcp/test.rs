@@ -261,3 +261,28 @@ async fn a_listing_is_not_budgeted() {
         "a listing is sent once, never retried or queued"
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn an_enormous_retry_after_fails_the_call_instead_of_panicking() {
+    let budget = CallBudget::new(policy());
+    let upstream = Upstream::new(
+        Duration::from_millis(10),
+        usize::MAX,
+        Some(Duration::from_secs(u64::MAX)),
+    );
+
+    let result = budget
+        .run(lane("owner@example.com"), || upstream.call())
+        .await;
+
+    assert!(
+        matches!(
+            result,
+            Err(EgressError::RateLimited {
+                retry_after: Some(_)
+            })
+        ),
+        "{result:?}"
+    );
+    assert_eq!(upstream.attempts.load(Ordering::SeqCst), 1);
+}

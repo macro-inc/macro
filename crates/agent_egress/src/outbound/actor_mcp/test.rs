@@ -152,3 +152,20 @@ async fn an_upstream_429_is_a_typed_rate_limit_carrying_retry_after() {
     }
     server.abort();
 }
+
+#[test]
+fn retry_after_reads_seconds_and_http_dates() {
+    assert_eq!(retry_after(" 2 "), Some(std::time::Duration::from_secs(2)));
+    let in_a_minute =
+        httpdate::fmt_http_date(std::time::SystemTime::now() + std::time::Duration::from_secs(60));
+    let wait = retry_after(&in_a_minute).unwrap();
+    assert!(
+        wait > std::time::Duration::from_secs(55) && wait <= std::time::Duration::from_secs(60),
+        "{wait:?}"
+    );
+    assert_eq!(
+        retry_after("Wed, 21 Oct 2015 07:28:00 GMT"),
+        Some(std::time::Duration::ZERO)
+    );
+    assert_eq!(retry_after("soon"), None);
+}

@@ -180,14 +180,22 @@ fn call_error(error: rmcp::ServiceError) -> EgressError {
         && status.status == http::StatusCode::TOO_MANY_REQUESTS.as_u16()
     {
         return EgressError::RateLimited {
-            // Only the delay-seconds form; an HTTP date falls back to the
-            // caller's default wait.
-            retry_after: status
-                .retry_after
-                .as_deref()
-                .and_then(|value| value.trim().parse().ok())
-                .map(std::time::Duration::from_secs),
+            retry_after: status.retry_after.as_deref().and_then(retry_after),
         };
     }
     EgressError::Upstream(rootcause::report!(error).into())
+}
+
+/// A `Retry-After` value as a wait: delay-seconds, or an HTTP date, which
+/// counts from now (a date already past is no wait).
+fn retry_after(value: &str) -> Option<std::time::Duration> {
+    let value = value.trim();
+    if let Ok(seconds) = value.parse() {
+        return Some(std::time::Duration::from_secs(seconds));
+    }
+    let at = httpdate::parse_http_date(value).ok()?;
+    Some(
+        at.duration_since(std::time::SystemTime::now())
+            .unwrap_or_default(),
+    )
 }
