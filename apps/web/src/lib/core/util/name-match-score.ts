@@ -1,8 +1,12 @@
+/** Longer text (a pasted message, say) is computed each time, never kept. */
+const REMEMBERED_TEXT_LENGTH = 200;
+
 /** Remembers a pure string function's answers. Ranking thousands of rows
- * reads the same names on every keystroke; the bound only caps memory. */
+ * reads the same names on every keystroke; the bounds only cap memory. */
 function rememberText<R>(compute: (value: string) => R) {
   const known = new Map<string, R>();
   return (value: string): R => {
+    if (value.length > REMEMBERED_TEXT_LENGTH) return compute(value);
     const hit = known.get(value);
     if (hit !== undefined) return hit;
     const result = compute(value);
