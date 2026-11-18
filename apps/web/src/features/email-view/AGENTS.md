@@ -48,9 +48,11 @@ the Soup-backed thread list, and saved email views.
   state, and revision-aware reconciliation.
 - `views/email-saved-views.tsx`: sidebar section (also the touch sidebar sheet), menus, the
   builder dialog, header actions, unavailable and skipped-setting states.
+- Saved-view creation uses the shared `create-saved-view-creation` lifecycle and route-owned `SavedViewDraftHost` leave protection.
 
 ## Gotchas
 
+- Append each new or duplicated view as a selected draft after saved email views; retain builder name, sharing, and filters until Save or Discard, and confirm leaving dirty new drafts without prompting for saved-view edits.
 - Keep tags in the desktop Filters menu and mobile filter drawer, not in the
   sidebar; filter changes stay on the current tab.
 - A saveable tab is a built-in view: it starts from its own restrictions

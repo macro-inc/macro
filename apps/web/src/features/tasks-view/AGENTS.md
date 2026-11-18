@@ -69,7 +69,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Use the shared task illustration and contextual empty-state panel for empty list results; keep search guidance distinct and preserve host-supplied empty content.
 - Keep desktop list-header filters, layout, sort, and grouping at `md` / `icon-md` (32px), matching New and Search; preserve the mobile filter drawer.
 - The Title sort sends Soup's `name` method, ascending until the viewer reverses it. Keep `sortTasks`'s local comparator on the same order — `compareSoupNames` (lower-cased ICU root order, matching the server's `und-x-icu`), unnamed last, newest update then descending ID — so loaded rows do not move while a page revalidates.
-- Show one local New view draft row after creation starts; prefill its save dialog with New view, replace the row on confirmed save, and remove it on cancellation or navigation without adding fake cached records.
+- Start every creation or duplicate with a fresh New view draft at the end of the task views list; track name, sharing, and settings until confirmed save replaces it. Confirm leaving dirty new drafts, including task navigation, with Save/Discard/Cancel; only clean drafts leave without asking.
 - Close the selected-view menu before opening a dialog, discard deferred actions after account or selection changes, and close dialogs after account, saved-view, or built-in-tab navigation.
 - Own mobile action dialogs outside closing drawers; finish drawer closure before opening a dialog, and reopen filters after cancellation only within the same navigation scope.
 - Honor confirmed deletion when the same account selects the target while deletion is pending; never apply completion to another account.

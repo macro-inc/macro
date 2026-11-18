@@ -8,6 +8,9 @@ const fixture = vi.hoisted(() => ({
   savedView: (): string | undefined => 'view',
   viewerId: (): string => 'viewer',
 }));
+vi.mock('../saved-views/views/saved-view-draft-host', () => ({
+  SavedViewDraftHost: () => null,
+}));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: true, loading: false }),
   ShowFeatureFlag: (props: ParentProps) => props.children,

@@ -1758,6 +1758,12 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   as in Tasks, and **Revert** beside it returns to the tab's own filters and
   every inbox; Sent, Drafts, Scheduled, Reminders, Shared and Focus can't be
   saved. Search text is never saved.
+- **New drafts.** Each creation or duplication immediately selects a fresh draft
+  at the end of Saved views. Saving keeps its position; discarding removes it.
+  Closing the builder retains the draft and its name, sharing, and filters.
+  Leaving a dirty new view, opening a thread, switching views, or closing its pane
+  asks Save, Discard, or Cancel. Clean drafts and existing saved views do not ask.
+  Browser close and reload use the browser's native unsaved-changes warning.
 - **Open.** The view opens on All with every condition in the Filters
   controls; the header shows its name and a
   `…` menu, and built-in tabs stop looking selected. Changing a filter shows

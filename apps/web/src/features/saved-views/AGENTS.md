@@ -13,6 +13,8 @@ Reusable named view definitions. Consumers are main Tasks, Projects, and Email; 
 - `views/saved-view-dialogs.tsx`: one create/edit dialog owns separate mutation hooks, a shared wide responsive form, and lifetime checks; deletion keeps its confirmation.
 - `components/`: presentational forms/confirmation, compound sidebar lists, and shared styled context/overflow items.
 - `primitives/create-saved-view-draft.ts`: shared revision-aware baseline and retained-draft reconciliation; consumers provide their codecs, defaults, and setting application.
+- `primitives/create-saved-view-creation.ts`: fresh local identities, consumer-kind draft ownership, and append-only draft/confirmed list entries.
+- `views/saved-view-draft-host.tsx`: route-owned creation writes and the existing shared leave-guard/dialog integration.
 
 ## Boundaries
 
@@ -31,11 +33,12 @@ Reusable named view definitions. Consumers are main Tasks, Projects, and Email; 
 - The create/edit form body scrolls as one, name included, with the actions below it and edge fades (`ScrollIndicators`) standing in for the hidden scrollbar; consumer fields must not add their own scroll area. Consumers may pass the delete confirmation's description in their own terms.
 - Snapshot saved configuration when adapting query data; reconciled Solid stores must not mutate a confirmed draft baseline.
 - Append task and project saved-view rows below each consumer's built-in views on desktop and touch, with Create view last and no saved-view section header or empty-state card.
-- Compose unsaved list entries with the draft row; keep draft lifecycle and confirmed-record reconciliation in the consumer.
+- Start every Create view, captured Save view, or Duplicate with a fresh local identity at the end of its consumer list; confirmed saving replaces that row in place and discard removes it.
 - Keep creation consumer-owned and forward the final Create view control ref so the host can isolate its keyboard scope.
 - Set variant="ghost" and size="icon-xs" explicitly when Dropdown.Trigger renders ViewSidebar.Control so dropdown text-button defaults cannot stretch the 24px circle.
 - Open task and project row actions through a long-press sheet on touch and a hover/focus More menu on desktop; reuse permission-aware actions and finish closure before opening dialogs.
 - Suppress only the pointer click following a held row; keep keyboard and assistive activation usable after sheet dismissal.
+- Confirm before leaving a dirty new draft through local selection, child navigation, pane/tab closure, or browser unload; clean drafts and existing saved views do not prompt. Use native browser unload confirmation and the shared Save/Discard/Cancel dialog for app navigation.
 - Bind deferred menu actions to the opening account and discard them after an account change.
 - Validate the response viewer before exposing cached reads after an account change.
 - Keep list and detail hooks independent; pass mutation dialogs a refresh callback, not an aggregate read source.

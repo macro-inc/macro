@@ -234,6 +234,7 @@ export type {
 export { Toolbar } from './components/Toolbar';
 export type { TooltipClassOptions } from './components/Tooltip';
 export { Tooltip, tooltipClasses } from './components/Tooltip';
+export { UnsavedChangesDialog } from './components/UnsavedChangesDialog';
 export { UserMessageBubble } from './components/UserMessageBubble';
 export { cn } from './utils/classname';
 export type { CtrlJKMenuNavigationOptions } from './utils/menuKeyboardNavigation';

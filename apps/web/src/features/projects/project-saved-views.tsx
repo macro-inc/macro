@@ -22,6 +22,7 @@ import {
   useSavedView,
   useSavedViews,
 } from '../saved-views/queries/saved-views';
+import { SavedViewDraftHost } from '../saved-views/views/saved-view-draft-host';
 import { ProjectSavedViewsContext } from './context/project-saved-views-context';
 import {
   DEFAULT_PROJECT_SETTINGS,
@@ -227,6 +228,13 @@ export function ProjectSavedViewsProvider(
   const context = createProjectSavedViews(props);
   return (
     <ProjectSavedViewsContext.Provider value={context}>
+      <SavedViewDraftHost
+        creation={context.creation}
+        refresh={context.list.refresh}
+        discard={context.discardNew}
+        selection={{ projects: ['savedView'], tasks: ['tab', 'savedView'] }}
+        registerLeave={props.registerLeave}
+      />
       {props.children}
     </ProjectSavedViewsContext.Provider>
   );

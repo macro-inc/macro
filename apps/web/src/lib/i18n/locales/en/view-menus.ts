@@ -204,6 +204,9 @@ export default {
   retryLoadingViews: 'Retry loading views',
   loadMoreViews: 'Load more views',
   saveViewFailed: 'Could not save view',
+  leaveDraftTitle: 'Save this new view?',
+  leaveDraftDescription:
+    'This new view has unsaved changes. Save it before leaving, discard it, or cancel to keep editing.',
   unsupportedProjectView:
     'This project view contains unsupported settings. Its original definition is unchanged.',
   addExistingTasks: 'Add existing tasks',

@@ -22,7 +22,7 @@ main Tasks screen.
 | Relative people | “Me” means the current viewer; explicitly selected people remain fixed. |
 | Contents | Filters, selected layout, grouping, and ordered sorting, including implicit person conditions. No search text or scroll state. |
 | Editing | Explicit Save changes, Reset, and Duplicate. |
-| Navigation | Leaving discards temporary edits without a confirmation prompt. |
+| Navigation | Existing saved-view edits reset on leaving. Dirty new drafts ask Save, Discard, or Cancel; clean new drafts leave without prompting. |
 | Creation | The final Create view row below built-in and saved views starts an unsaved view; mobile also captures changed filters, layout, grouping, or sort in the filter drawer. |
 | Capture | Save view appears left of Filters on desktop and in the mobile overlay banner when filters, layout, grouping, or sort differ from built-in tab defaults. |
 | Mobile | Shared Tasks sidebar opened by the hamburger; the filter drawer owns save/create/reset actions. |
@@ -108,13 +108,17 @@ exist or reads are loading or failed. No separate saved-view heading or empty-st
 card interrupts either list. Isolate the Create view keyboard scope from list
 shortcuts. Changes from the built-in settings expose creation in the filter
 drawer's overlay banner above the footer and existing-view save/reset actions at
-its footer's right. Starting a new view shows one local, selected New view row
-labeled Draft on desktop and touch.
-Confirmed creation replaces the draft with the named record, including while the
-list refresh is pending. Canceling the draft or leaving its view removes the row;
-closing only the naming dialog retains it. Draft rows never enter the query cache.
-Open the shared create/edit dialog or delete confirmation through the imperative
-dialog system; dialogs own mutation hooks.
+its footer's right. Every creation entry point starts a fresh, selected draft at
+the end of its consumer's list, including capture and duplication. The shared
+creation primitive owns identity and append ordering, separate from confirmed
+revision reconciliation. Saving replaces that row with the confirmed record;
+discard removes it. Closing only the naming dialog retains the draft and its
+name, sharing, and settings. Draft rows never enter the query cache.
+Use the existing Save/Discard/Cancel leave dialog before in-app navigation from a
+dirty new draft, including item navigation and pane/tab closure. Browser close or
+reload uses native beforeunload confirmation. Existing saved views and clean new
+drafts do not prompt. Mutation dialogs and the route-owned leave host reuse the
+same create mutation and draft identity.
 Edit combines the name and team-sharing checkbox in the same responsive form.
 Edit and delete dialog titles identify the saved view by name, wrapping long names.
 Keep sharing guidance in the adjacent info control, available on hover, keyboard
@@ -407,8 +411,8 @@ not mistaken for the visible search results.
   restrictions and the normal open-status filters. Nothing is persisted until
   Save view succeeds.
 - Reuse the Task filter controls to configure it. Saving prefills the name with
-  New view, which can be edited, and offers optional team sharing. Cancel restores
-  normal navigation without persistence.
+  New view and offers optional team sharing. Closing the naming dialog retains
+  its draft; Discard removes it, and leaving a dirty new draft asks first.
 - Opening a saved view replaces the prior filter scope rather than intersecting
   with the previously selected built-in tab. Clear unrelated text search.
 - Changes show Save changes and Reset for the owner. All viewers can Duplicate
@@ -417,8 +421,8 @@ not mistaken for the visible search results.
   duplicating another sidebar view uses that view's saved definition. Other viewers cannot overwrite
   the shared definition.
 - Only a confirmed write updates the saved baseline. Failures keep the draft and
-  its inputs. Leaving the view discards temporary settings, including when a
-  background save fails after navigation.
+  its inputs. Leaving an existing saved view discards temporary settings; leaving
+  a dirty new view waits for Save, Discard, or Cancel.
 - Task-detail navigation and its return breadcrumb retain the originating saved
   view identity, but do not persist an unsaved filter draft. Scope async results
   to the account, selected view, and revision before installing them. A confirmed

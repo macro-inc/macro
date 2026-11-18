@@ -14,6 +14,7 @@ import {
   useSavedView,
   useSavedViews,
 } from '@app/features/saved-views/queries/saved-views';
+import { SavedViewDraftHost } from '@app/features/saved-views/views/saved-view-draft-host';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
@@ -449,6 +450,9 @@ function EmailViewRoot() {
     setReadingPane,
     savedViews,
     savedViewScope,
+    savedViewCreation,
+    savedViewsList,
+    discardNewSavedView,
   } = useEmailView();
   const savedViewKey = () => savedViewScope()?.id;
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
@@ -516,6 +520,14 @@ function EmailViewRoot() {
   return (
     <StaticMarkdownContext>
       <SplitPanel.Root>
+        <Show when={savedViewCreation && savedViewsList}>
+          <SavedViewDraftHost
+            creation={savedViewCreation!}
+            refresh={savedViewsList!.refresh}
+            discard={discardNewSavedView}
+            selection={{ mail: ['tab', 'savedView'] }}
+          />
+        </Show>
         <SplitPanel.Body>
           <EmailLayout
             list={list()}

@@ -12,6 +12,7 @@ import {
   useSavedView,
   useSavedViews,
 } from '@app/features/saved-views/queries/saved-views';
+import { SavedViewDraftHost } from '@app/features/saved-views/views/saved-view-draft-host';
 import { ViewTour, ViewTourAction } from '@app/features/tours/ViewTour';
 import { TutorialRow } from '@app/features/video-tutorials';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
@@ -96,13 +97,14 @@ function TasksViewBreadcrumbs(props: ParentProps) {
 }
 
 function TasksProjectViews(props: ParentProps) {
-  const { state } = useTasksView();
+  const { state, registerProjectViewLeave } = useTasksView();
   const navigate = useNavigate();
   const params = useParams<{ projectId?: string; taskId?: string }>();
   return (
     <ProjectSavedViewsProvider
       enabled={() => true}
       active={() => isProjectTab(state.tab) && !state.savedViewActive}
+      registerLeave={registerProjectViewLeave}
       scope={() => projectScopeForTab(state.tab)}
       location={() => ({
         projectId: params.projectId,
@@ -144,7 +146,15 @@ function ImportLinearAction() {
 
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, setState, savedViews, selectedTask } = useTasksView();
+  const {
+    state,
+    setState,
+    savedViews,
+    selectedTask,
+    savedViewCreation,
+    savedViewsList,
+    discardNewSavedView,
+  } = useTasksView();
   const params = useParams<{ projectId?: string }>();
   const navigate = useNavigate();
   const layout = useSplitLayout();
@@ -203,6 +213,14 @@ function TasksViewRoot() {
 
   return (
     <SplitPanel.Root>
+      <Show when={savedViewCreation && savedViewsList}>
+        <SavedViewDraftHost
+          creation={savedViewCreation!}
+          refresh={savedViewsList!.refresh}
+          discard={discardNewSavedView}
+          selection={{ tasks: ['tab', 'savedView'], projects: ['savedView'] }}
+        />
+      </Show>
       <SplitPanel.Body>
         <ViewShell.Root
           contentLayout="collection"
