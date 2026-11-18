@@ -110,7 +110,12 @@ impl MailboxIngest for PgMailboxSync {
         if let Some(existing) = &existing {
             sqlx::query!("DELETE FROM email_draft_organization_versions WHERE message_id=$1 AND ($2=versions[cardinality(versions)] OR NOT ($2=ANY(versions)))",existing.id,version)
                 .execute(&mut *tx).await.map_err(db_error)?;
-            let remote = serde_json::to_value(&message).map_err(|_| MailboxError::Persistence)?;
+            let mut remote =
+                serde_json::to_value(&message).map_err(|_| MailboxError::Persistence)?;
+            email_db_client::parse::nul_characters::remove_from_json(
+                &mut remote,
+                "email_mailbox_drafts.remote_snapshot",
+            );
             sqlx::query!(
                 "UPDATE email_mailbox_drafts SET remote_snapshot = $2 WHERE message_id = $1",
                 existing.id,
