@@ -182,6 +182,10 @@ pub enum ChannelNotificationEffect {
         sender_profile_picture_url: Option<String>,
         /// Users that should receive the notification.
         recipient_ids: HashSet<MacroUserIdStr<'static>>,
+        /// Members the reply @mentions, left out of `recipient_ids` because
+        /// they get a mention notification. Ingress adds back each one who
+        /// turned mentions off for the channel.
+        mention_fallback_ids: HashSet<MacroUserIdStr<'static>>,
     },
     /// A reaction was added to a user's message.
     Reaction {
@@ -222,6 +226,10 @@ pub enum ChannelNotificationEffect {
         sender_profile_picture_url: Option<String>,
         /// Users that should receive the notification.
         recipient_ids: HashSet<MacroUserIdStr<'static>>,
+        /// Members the message @mentions, left out of `recipient_ids` because
+        /// they get a mention notification. Ingress adds back each one who
+        /// turned mentions off for the channel.
+        mention_fallback_ids: HashSet<MacroUserIdStr<'static>>,
     },
     /// Someone asked to join a channel.
     AccessRequested {
@@ -739,6 +747,14 @@ where
             excluded_user_ids.iter().map(String::as_str),
         )
         .collect();
+        let mentioned_members = recipients_excluding(
+            user_mentions
+                .iter()
+                .map(String::as_str)
+                .filter(|user_id| channel_members.contains(user_id)),
+            sender.as_user().map(|user_id| user_id.as_ref()),
+        )
+        .collect();
 
         Ok(PostedMessageNotificationContext {
             metadata,
@@ -751,6 +767,7 @@ where
             excluded_user_ids,
             recipients_without_sender,
             recipients_without_sender_and_mentions,
+            mentioned_members,
             is_first_top_level_message,
         })
     }
@@ -897,6 +914,7 @@ where
                 context.excluded_user_ids.iter().map(String::as_str),
             )
             .collect(),
+            mention_fallback_ids: context.mentioned_members.clone(),
         })
         .await;
     }
@@ -983,6 +1001,7 @@ where
             metadata: context.metadata.clone(),
             sender_profile_picture_url: context.sender_profile_picture_url.clone(),
             recipient_ids: context.recipients_without_sender_and_mentions.clone(),
+            mention_fallback_ids: context.mentioned_members.clone(),
         })
         .await;
     }
@@ -1086,6 +1105,8 @@ struct PostedMessageNotificationContext {
     excluded_user_ids: Vec<String>,
     recipients_without_sender: HashSet<MacroUserIdStr<'static>>,
     recipients_without_sender_and_mentions: HashSet<MacroUserIdStr<'static>>,
+    /// Channel members the message @mentions, other than its sender.
+    mentioned_members: HashSet<MacroUserIdStr<'static>>,
     is_first_top_level_message: bool,
 }
 

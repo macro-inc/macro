@@ -367,6 +367,7 @@ where
                 metadata,
                 sender_profile_picture_url,
                 recipient_ids,
+                mention_fallback_ids,
             } => {
                 self.ingress
                     .send_notification(
@@ -392,6 +393,7 @@ where
                             recipient_ids,
                         }
                         .into_request()
+                        .with_mention_fallback(mention_fallback_ids)
                         .with_apns()
                         .with_conn_gateway(),
                     )
@@ -407,6 +409,7 @@ where
                 metadata,
                 sender_profile_picture_url,
                 recipient_ids,
+                mention_fallback_ids,
             } => {
                 self.ingress
                     .send_notification(
@@ -427,6 +430,7 @@ where
                             recipient_ids,
                         }
                         .into_request()
+                        .with_mention_fallback(mention_fallback_ids)
                         .with_apns()
                         .with_conn_gateway(),
                     )
