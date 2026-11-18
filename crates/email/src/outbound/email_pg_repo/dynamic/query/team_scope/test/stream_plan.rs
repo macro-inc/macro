@@ -22,8 +22,10 @@ async fn matching_thread_fetches_stay_bounded_with_stale_statistics(
     sqlx::query!(
         r#"INSERT INTO email_threads
                (id, provider_id, link_id, inbox_visible, is_signal, latest_non_spam_message_ts)
-           SELECT md5('stream-plan-' || i)::uuid, 'stream-plan-' || i, $1, TRUE, i % 200 = 0,
-                  '2026-02-01'::timestamptz - i * interval '1 minute'
+           SELECT md5('stream-plan-' || i)::uuid, 'stream-plan-' || i, $1, TRUE,
+                  i % 200 = 0 OR i IN (100, 200, 300),
+                  '2026-02-01'::timestamptz -
+                  CASE WHEN i IN (100, 200, 300) THEN 5100 ELSE i END * interval '1 minute'
            FROM generate_series(1, 20000) i
            ON CONFLICT (id) DO NOTHING"#,
         link,
@@ -41,7 +43,7 @@ async fn matching_thread_fetches_stay_bounded_with_stale_statistics(
     .await?;
     assert_eq!(foreign.rows_affected(), 1);
     let mut matches = sqlx::query_scalar!(
-        r#"SELECT md5('stream-plan-' || i)::uuid AS "id!" FROM generate_series(100, 20000, 100) i"#
+        r#"SELECT md5('stream-plan-' || i)::uuid AS "id!" FROM generate_series(100, 20000, 100) i ORDER BY i"#
     )
     .fetch_all(&mut *connection)
     .await?;
@@ -50,7 +52,7 @@ async fn matching_thread_fetches_stay_bounded_with_stale_statistics(
     matches.push(matches[51]);
     // A missing ID and another inbox's ID must not leak into this stream.
     matches.extend([Uuid::nil(), foreign_thread]);
-    let expected = sqlx::query_scalar!(
+    let mut expected = sqlx::query_scalar!(
         r#"SELECT md5('stream-plan-' || i)::uuid AS "id!" FROM generate_series(5200, 20000, 200) i ORDER BY i"#
     )
     .fetch_all(&mut *connection)
@@ -65,7 +67,12 @@ async fn matching_thread_fetches_stay_bounded_with_stale_statistics(
     params.resolved = ResolvedFilters::empty().with_contributing_links(vec![link]);
     let cursor_timestamp =
         Utc.with_ymd_and_hms(2026, 2, 1, 0, 0, 0).unwrap() - chrono::Duration::minutes(5100);
-    let cursor_id = Uuid::nil();
+    // At equal timestamps, only the lower ID belongs on the next page.
+    // These three matching Signal rows are newer than every older result.
+    let mut cursor_ties = [matches[0], matches[1], matches[2]];
+    cursor_ties.sort_unstable();
+    let cursor_id = cursor_ties[1];
+    expected.insert(0, cursor_ties[0]);
     params.cursor_timestamp = Some(cursor_timestamp);
     params.cursor_id_str = Some(cursor_id.to_string());
     let read = team_read(&view, &filter, params).unwrap();
