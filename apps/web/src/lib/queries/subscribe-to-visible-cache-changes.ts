@@ -19,7 +19,7 @@ export function subscribeToVisibleCacheChanges(
     searchBuckets?: Accessor<readonly string[]>;
     includeHydration?: boolean;
     /** Minimum spacing between refreshes during a burst of changes. */
-    intervalMs?: number;
+    intervalMs?: number | Accessor<number>;
     live?: Accessor<boolean>;
   }
 ): () => void {

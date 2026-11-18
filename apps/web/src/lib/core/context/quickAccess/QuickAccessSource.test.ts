@@ -1511,7 +1511,7 @@ describe('Quick Access source integration', () => {
 });
 
 describe('Quick Access shared sources', () => {
-  it('rereads history and recent channels only while a list reads the cache', () => {
+  it('follows recent channels closely only while a list reads the cache and once a minute otherwise, telling history the same', async () => {
     const [first, setFirst] = createSignal(false);
     const [second, setSecond] = createSignal(false);
     setup((source) => [
@@ -1519,14 +1519,21 @@ describe('Quick Access shared sources', () => {
       source.useList({ buckets: ['channel', 'dm', 'note'], enabled: first }),
       source.useList({ buckets: ['note'], enabled: second }),
     ]);
+    vi.useFakeTimers();
 
     mocks.changed?.();
+    mocks.changed?.();
+    await vi.advanceTimersByTimeAsync(1_000);
     expect(mocks.historyReading?.()).toBe(false);
-    expect(mocks.channelRefetch).not.toHaveBeenCalled();
+    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
 
     setFirst(true);
+    await vi.advanceTimersByTimeAsync(1_500);
     expect(mocks.historyReading?.()).toBe(true);
     expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+    mocks.changed?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.channelRefetch).toHaveBeenCalledTimes(2);
 
     setSecond(true);
     setFirst(false);
@@ -1534,8 +1541,11 @@ describe('Quick Access shared sources', () => {
 
     setSecond(false);
     mocks.changed?.();
+    await vi.advanceTimersByTimeAsync(59_000);
     expect(mocks.historyReading?.()).toBe(false);
-    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+    expect(mocks.channelRefetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(mocks.channelRefetch).toHaveBeenCalledTimes(3);
   });
 
   it('keeps a channel renamed after the cached list was read', async () => {
