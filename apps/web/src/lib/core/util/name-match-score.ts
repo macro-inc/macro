@@ -2,9 +2,8 @@
 const REMEMBERED_TEXT_LENGTH = 1_000;
 /** Remembered text past this many characters in all is forgotten. */
 const REMEMBERED_CHARACTERS = 4_000_000;
-/** A longer query is a paste: only the latest is kept, up to this length;
- * a longer one is read again for every row. */
-const KEPT_PASTE_LENGTH = 1_000_000;
+/** Longer queries kept at once: a paste and its normalized text. */
+const KEPT_PASTES = 2;
 
 /** A string that shares no memory with the one it came from: text trimmed
  * from a long paste can, which a remembered key or its words would keep
@@ -15,23 +14,26 @@ const copyOf = (value: string) => value.split('').join('');
 /** Remembers a pure string function's answers. Ranking thousands of rows
  * reads the same names on every keystroke; the bounds only cap memory. A
  * query is read once for every row ranked against it, so a query's function
- * also keeps the latest text too long to remember with the others. */
+ * also keeps the latest texts too long to remember with the others, until a
+ * shorter query follows them. */
 function rememberText<R>(
   compute: (value: string) => R,
   of: 'names' | 'queries'
 ) {
   const known = new Map<string, R>();
   let characters = 0;
-  let paste: { text: string; result: R } | undefined;
+  let pastes: { text: string; result: R }[] = [];
   return (value: string): R => {
     if (value.length > REMEMBERED_TEXT_LENGTH) {
-      if (paste?.text === value) return paste.result;
-      if (of === 'names' || value.length > KEPT_PASTE_LENGTH)
-        return compute(value);
+      if (of === 'names') return compute(value);
+      const kept = pastes.find((paste) => paste.text === value);
+      if (kept) return kept.result;
       const text = copyOf(value);
-      paste = { text, result: compute(text) };
+      const paste = { text, result: compute(text) };
+      pastes = [paste, ...pastes].slice(0, KEPT_PASTES);
       return paste.result;
     }
+    if (pastes.length) pastes = [];
     const hit = known.get(value);
     if (hit !== undefined) return hit;
     const text = copyOf(value);
