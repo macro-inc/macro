@@ -1,5 +1,7 @@
+import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
 import type { Accessor, JSX, Ref, Setter, ValidComponent } from 'solid-js';
 import {
@@ -100,6 +102,15 @@ function DialogDrawer(props: DialogProps) {
 function DesktopDialog(props: DialogProps) {
   const [animateOnOpen, setAnimateOnOpen] = createSignal(false);
   let countedOpen = false;
+
+  // Touch closes dialogs on navigation as it does sheets (phones' fullscreen
+  // dialogs, tablets' cards); desktop keeps its dialogs.
+  if (isTouchDevice()) {
+    createCloseOnNavigation({
+      open: () => props.open,
+      close: () => props.onOpenChange?.(false),
+    });
+  }
 
   createEffect(() => {
     if (props.open) {
