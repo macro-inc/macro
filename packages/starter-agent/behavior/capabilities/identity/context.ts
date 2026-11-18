@@ -13,6 +13,7 @@ import {
   type Failures,
   type Greeted,
   type Greeter,
+  type GreetingModel,
   unsayable,
 } from '@macro-inc/muppet/utilities/greeting';
 import type { TypingIndicators } from '@macro-inc/muppet/utilities/macro/chat';
@@ -23,8 +24,7 @@ import type { Trace } from '../../agent/claude.ts';
 import type { Base } from '../../context/index.ts';
 import { trace } from '../../context/telemetry.ts';
 import type { Chat } from '../chat/macro.ts';
-import type { Ask } from '../people/appraise.ts';
-import { type PeopleClaude, sdkAsk } from '../people/ask.ts';
+import type { PeopleClaude } from '../people/ask.ts';
 import type { Vault } from '../secrets/vault.ts';
 import {
   computer,
@@ -37,6 +37,12 @@ import {
 } from './config.ts';
 import { type Needs, owner, readIdentity } from './index.ts';
 import { type GreetingMacro, sdkGreetingMacro } from './macro.ts';
+import {
+  directModel,
+  eitherModel,
+  type Upstream,
+  warmClaude,
+} from './model.ts';
 import { givenName, greetingIdentity } from './prompt.ts';
 
 export type GreeterPorts = {
@@ -50,7 +56,8 @@ export type GreeterPorts = {
   readonly name: string | undefined;
   /** Whether the agent runs on a computer of its own. */
   readonly hosted: boolean;
-  readonly ask: Ask;
+  /** Starts the greeting's model, warming up until it is asked. */
+  readonly model: () => GreetingModel;
   readonly macro: GreetingMacro;
   readonly chat: Pick<Chat, 'send'>;
   /** The process's typing indicators, shared with replies: see chat's `typing`. */
@@ -79,7 +86,7 @@ const ownMachinery = [
   'ReadCodeDocs',
 ];
 /** How long the vault may take to say whether it is on: the owner is waiting on the hello. */
-const vaultProbeMs = 2_500;
+const vaultProbeMs = 1_000;
 const greetingLog = 'greeting';
 const noFailures: Failures = { paid: 0, unpaid: 0 };
 /** The failures file, as written: data from an earlier run of this code. */
@@ -94,7 +101,7 @@ export const greeterOf = ({
   catalog,
   name,
   hosted,
-  ask,
+  model,
   macro,
   chat,
   typing,
@@ -131,17 +138,7 @@ export const greeterOf = ({
       ...(hosted ? [computer] : []),
     ],
     unsayable: unsayable(catalog, ownMachinery),
-    // Claude Code started when asked: nothing to warm up, so nothing to drop.
-    model: () => ({
-      answer: (prompt) =>
-        ask(prompt, {
-          model: greetingModel,
-          timeoutMs: greetingTimeoutMs,
-          // Thinking costs the owner most of the wait, for a few short lines.
-          thinking: false,
-        }),
-      cancel: () => {},
-    }),
+    model,
     chat: {
       ownerName: macro.ownerName,
       ownerDm: macro.ownerDm,
@@ -224,6 +221,7 @@ export const identityContext = (
     claude,
     hosted,
     vault,
+    anthropic,
   }: {
     readonly chat: Pick<Chat, 'send'>;
     readonly typing: TypingIndicators;
@@ -231,6 +229,8 @@ export const identityContext = (
     readonly claude: PeopleClaude;
     readonly hosted: boolean;
     readonly vault: Pick<Vault, 'team' | 'search'>;
+    /** The Anthropic gateway, in Macro-credits mode; undefined on a Claude plan. */
+    readonly anthropic: () => Promise<Upstream | undefined>;
   }
 ) =>
   behavior<Base>().decorate({
@@ -250,12 +250,26 @@ export const identityContext = (
         catalog,
         name: givenName(base.config.identity.name),
         hosted,
-        ask: sdkAsk({
-          query,
-          defaultModel: greetingModel,
-          claude,
-          spendEvent: greetingSpend,
-        }),
+        model: () =>
+          eitherModel(anthropic, {
+            direct: (upstream) =>
+              directModel({
+                upstream,
+                fetch: (request) => fetch(request),
+                model: greetingModel,
+                timeoutMs: greetingTimeoutMs,
+                spend: claude.spend,
+                spendEvent: greetingSpend,
+              }),
+            warm: () =>
+              warmClaude({
+                query,
+                claude,
+                model: greetingModel,
+                timeoutMs: greetingTimeoutMs,
+                spendEvent: greetingSpend,
+              }),
+          }),
         macro: sdkGreetingMacro(base.macro, () => base.config.owner),
         chat,
         typing,

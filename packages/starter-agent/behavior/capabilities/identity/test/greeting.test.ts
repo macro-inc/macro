@@ -87,7 +87,7 @@ const wiring = (hosted: boolean, vault = true) => {
     [join(import.meta.dir, '..', 'greeting.md'), markdown],
   ]);
   const now = Temporal.Instant.from('2026-01-05T10:00:00Z');
-  const asks: unknown[] = [];
+  const asks: string[] = [];
   const sent: string[] = [];
   const greeter = greeterOf({
     context: {
@@ -108,10 +108,13 @@ const wiring = (hosted: boolean, vault = true) => {
     catalog,
     name: 'Wren',
     hosted,
-    ask: async (_prompt, options) => {
-      asks.push(options);
-      return hello;
-    },
+    model: () => ({
+      answer: async (prompt) => {
+        asks.push(prompt);
+        return hello;
+      },
+      cancel: () => {},
+    }),
     macro: {
       ownerName: async () => 'Maya',
       ownerDm: async () => 'dm-1',
@@ -174,13 +177,11 @@ test('the wiring counts failed starts by kind in the run bucket', async () => {
   await expect(greeter.store.failures()).rejects.toThrow('malformed');
 });
 
-test('the wiring asks the quick model, with thinking off, and reads greeting.md', async () => {
+test('the wiring reads greeting.md, and asks the model it was given', async () => {
   const { greeter, asks } = wiring(true);
   expect(await greeter.prompt()).toBe(markdown);
-  await greeter.model().answer('hello');
-  expect(asks).toEqual([
-    { model: 'claude-haiku-4-5-20251001', timeoutMs: 60_000, thinking: false },
-  ]);
+  expect(await greeter.model().answer('hello')).toBe(hello);
+  expect(asks).toEqual(['hello']);
 });
 
 test("the greeting's typing never stops a reply's typing in the same DM", async () => {
@@ -200,10 +201,10 @@ test("the greeting's typing never stops a reply's typing in the same DM", async 
       startTyping: (channelId) => indicators.start(channelId),
     },
     model: () => ({
-      answer: async (prompt) => {
+      answer: async () => {
         // A reply starts typing in the same DM while the greeting is written.
         replies.start('dm-1');
-        return greeter.model().answer(prompt);
+        return hello;
       },
       cancel: () => {},
     }),
@@ -265,7 +266,7 @@ test('a vault that takes too long is not promised, and its wait is bounded', asy
       waited.push(ms);
     })
   ).toBe(false);
-  expect(waited).toEqual([2_500]);
+  expect(waited).toEqual([1_000]);
 });
 
 test('the greeting introduces the agent by the name its owner gave, and asks only what is missing', async () => {

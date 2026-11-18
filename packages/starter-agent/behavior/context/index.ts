@@ -111,6 +111,14 @@ export type Wiring = {
   readonly relayed: () => Promise<Readonly<Record<string, string>>>;
   /** What Claude Code needs to reach Anthropic, if enrollment gave it (Macro-credits mode); nothing otherwise. */
   readonly claudeAccess: () => Promise<Readonly<Record<string, string>>>;
+  /**
+   * The Anthropic gateway itself, for this process's own model calls, in
+   * Macro-credits mode; undefined on a Claude plan, and in a script's process,
+   * which holds no credentials.
+   */
+  readonly anthropic: () => Promise<
+    { readonly url: string; readonly token: string } | undefined
+  >;
 };
 
 const missing = (error: unknown): boolean =>
@@ -467,6 +475,10 @@ export const base = (
       addresses,
       relayed,
       claudeAccess: claude,
+      anthropic: async () =>
+        given === undefined
+          ? anthropicUpstream(await held(credentials, claudeKeys))
+          : undefined,
     },
   });
 };

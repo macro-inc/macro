@@ -50,13 +50,14 @@ export const secretsContext = (
       },
       team: () => {
         // A lookup that failed isn't kept: the next call asks again.
-        team ??= macro()
-          .then((client) => client.teams.current())
-          .then(({ id }) => id)
-          .catch((error: unknown) => {
+        team ??= (async () => {
+          try {
+            return (await (await macro()).teams.current()).id;
+          } catch (error) {
             team = undefined;
             throw error;
-          });
+          }
+        })();
         return team;
       },
       wakeId: wakeIds(process.env[wakeVariable], clock),
