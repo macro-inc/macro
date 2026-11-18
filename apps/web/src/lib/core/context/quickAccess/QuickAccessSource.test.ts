@@ -39,7 +39,9 @@ import {
   createRenderEffect,
   createRoot,
   createSignal,
-  Show,
+  getOwner,
+  type Owner,
+  runWithOwner,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQuickAccess } from './context';
@@ -1504,17 +1506,21 @@ describe('Quick Access source integration', () => {
 });
 
 describe('Soup search pool', () => {
-  it('reads the cache only while a search holds the pool', async () => {
+  it('reads the cache only while a search holds the pool, and lists in-memory rows throughout', async () => {
+    mocks.history = [
+      {
+        id: 'recent',
+        type: 'document',
+        fileType: 'md',
+        name: 'Recent',
+        ownerId: 'owner',
+      },
+    ];
     const [text, setText] = createSignal('');
-    const [mounted, setMounted] = createSignal(true);
-    let pool: Accessor<SoupSearchPoolEntry[]> = () => [];
-    let idlePool: Accessor<SoupSearchPoolEntry[]> = () => [];
-    const Search = () => {
-      pool = useSearchContext().entityPool(() => text().trim() !== '');
-      return null;
-    };
-    const Idle = () => {
-      idlePool = useSearchContext().entityPool(() => false);
+    let host: Owner | null = null;
+    const Host = () => {
+      useSearchContext().entityPool(() => false);
+      host = getOwner();
       return null;
     };
     const client = new QueryClient();
@@ -1526,17 +1532,7 @@ describe('Soup search pool', () => {
             get children() {
               return createComponent(SearchProvider, {
                 get children() {
-                  return [
-                    createComponent(Idle, {}),
-                    createComponent(Show, {
-                      get when() {
-                        return mounted();
-                      },
-                      get children() {
-                        return createComponent(Search, {});
-                      },
-                    }),
-                  ];
+                  return createComponent(Host, {});
                 },
               });
             },
@@ -1544,16 +1540,23 @@ describe('Soup search pool', () => {
         },
       })
     );
+    let pool: Accessor<SoupSearchPoolEntry[]> = () => [];
+    let unmountSearch = () => {};
+    runWithOwner(host, () =>
+      createRoot((dispose) => {
+        unmountSearch = dispose;
+        pool = useSearchContext().entityPool(() => text().trim() !== '');
+      })
+    );
+    const ids = () => pool().map((entry) => entry.data.id);
     try {
       mocks.changed?.();
       expect(mocks.search).not.toHaveBeenCalled();
-      expect(pool()).toEqual([]);
+      expect(ids()).toEqual(['recent']);
 
       mocks.search.mockResolvedValue(page(0, 1));
       setText('b');
-      await vi.waitFor(() =>
-        expect(pool().map((entry) => entry.id)).toEqual(['0'])
-      );
+      await vi.waitFor(() => expect(ids()).toContain('0'));
       expect(mocks.search).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
           buckets: [
@@ -1569,7 +1572,6 @@ describe('Soup search pool', () => {
         }),
         expect.anything()
       );
-      expect(idlePool()).toEqual([]);
 
       setText('bu');
       setText('bud');
@@ -1577,12 +1579,12 @@ describe('Soup search pool', () => {
 
       setText('');
       expect(mocks.unsubscribe).toHaveBeenCalledOnce();
-      expect(pool()).toEqual([]);
+      expect(ids()).toEqual(['recent']);
 
       setText('c');
-      await vi.waitFor(() => expect(pool()).toHaveLength(1));
+      await vi.waitFor(() => expect(ids()).toContain('0'));
       expect(mocks.search).toHaveBeenCalledTimes(2);
-      setMounted(false);
+      unmountSearch();
       expect(mocks.unsubscribe).toHaveBeenCalledTimes(2);
       mocks.changed?.();
       expect(mocks.search).toHaveBeenCalledTimes(2);

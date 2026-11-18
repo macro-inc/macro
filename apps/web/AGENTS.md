@@ -555,10 +555,11 @@ name matches only, so a recent weaker match never takes a better match's slot.
 A row whose letters merely appear in order ranks below every row containing the
 typed words.
 Soup's local search pool (`createSearchState`) stays lazy: it builds only when
-local search has text. Its cache list (`SearchProvider`'s `entityPool`) reads
-only while a caller passes a `searching` accessor that is true, and lists
-nothing otherwise, because a loaded pool rereads the cache on every change and
-queues behind every other read. Measure Quick Access ranking at scale with the
+local search has text. Its cache rows (`SearchProvider`'s `entityPool`) are
+read only while a caller passes a `searching` accessor that is true
+(`readsCache` on the list), because a pool reading the cache rereads it on every
+change and queues behind every other read; its in-memory rows stay listed, so
+the first keystroke does not rebuild them. Measure Quick Access ranking at scale with the
 [scale fixture](src/features/command/browser-test/README.md).
 Ordinary DM entity matching in Cmd+K and mobile name search treats the first
 name as exact, so it reaches a full-name DM; personal contact windows keep their

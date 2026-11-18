@@ -33,9 +33,9 @@ interface SearchContextValue {
   /**
    * The rows Home, Drive, Tasks and Soup searches match locally, for a caller
    * whose `searching` is true while its search has text. Call it once while
-   * setting up; `searching` reads plain signals only. The pool reads the cache
-   * only while some caller is searching, and lists nothing to a caller that is
-   * not: a loaded pool rereads its cache list on every cache change.
+   * setting up; `searching` reads plain signals only. The pool always lists
+   * its in-memory rows, but adds cache rows, and rereads the cache on every
+   * cache change, only while some caller is searching.
    */
   entityPool: (searching: Accessor<boolean>) => Accessor<SoupSearchPoolEntry[]>;
   /**
@@ -62,13 +62,16 @@ type PoolHold = { searching: Accessor<boolean> };
 export const SearchProvider: FlowComponent = (props) => {
   const [holds, setHolds] = createSignal<PoolHold[]>([]);
   // Only the flip matters: the list's effects would otherwise rerun, and
-  // replay the cache browse, on every keystroke of every search.
+  // replay the cache browse, on every keystroke of every search. The in-memory
+  // rows stay enabled so the first keystroke finds them already built.
   const anySearching = createMemo(() =>
     holds().some((hold) => hold.searching())
   );
   const { items } = useQuickAccessEntities(
     () => [...SEARCH_ENTITY_TYPES],
     () => '',
+    () => true,
+    undefined,
     anySearching
   );
   const routines = useQuickAccess().useList('routine').items;
@@ -76,7 +79,7 @@ export const SearchProvider: FlowComponent = (props) => {
     const hold = { searching };
     setHolds((list) => [...list, hold]);
     onCleanup(() => setHolds((list) => list.filter((entry) => entry !== hold)));
-    return () => (searching() ? items() : []);
+    return items;
   };
 
   return (
