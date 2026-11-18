@@ -131,6 +131,13 @@ or generation, and repeated positive reads reuse them. Mail lists select ownersh
 in batches of at most 500 IDs; up to 1,024 idle positive ID/alias witnesses are retained.
 Active chunks hold their witnesses until content and fallback flag reads settle,
 so concurrent lists cannot evict another reader's ownership evidence.
+Property assignments and option-delta mutations for the exact owned thread reuse
+that live witness: their responses contain only the target's assignments,
+definitions and values, with references represented by identifiers rather than
+nested CRM records. Shared threads and raw property-record reads remain protected,
+and retirement ignores these temporary witnesses.
+Bulk property edits retain one authoring epoch across every item, so later items
+cannot revive copied inputs or grouped-page recipes after retirement.
 A missing witness never permits content. Ordinary Soup database rows require an
 independently authorized database entity; CRM pipelines use distinct contracts.
 Opaque GraphQL Soup continuation cursors inherit scope only from an independently scoped,

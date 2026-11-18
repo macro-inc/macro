@@ -2,6 +2,7 @@ import {
   SaveEmailDraftDocument,
   SetEmailThreadArchivedDocument,
   SoupDocument,
+  UpdateEntityPropertyOptionsDocument,
   UpdateNotificationsDocument,
 } from '@service-storage/graphql/generated/graphql';
 import {
@@ -34,9 +35,14 @@ import {
 } from 'wonka';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
+import {
+  beginQueryAuthorizationReset,
+  crmSnapshotAuthorization,
+} from '../../urql-solid/authorization';
 import { createUrqlQuery } from '../../urql-solid/create-urql-query';
 import { type CacheAuthority, StaleCacheAuthorityError } from '../authority';
 import { testAuthority } from '../authority-fixture';
+import { rememberOwnedEmail } from '../authority-scope';
 import { CacheNavigationError } from '../host/navigation-error';
 import { createRetirableCacheHost } from '../host/retirable-host';
 import type {
@@ -3920,6 +3926,81 @@ describe('normalizedCacheExchange', () => {
 
   describe('mutations', () => {
     const optimistic = { setEntityProperty: { id: 'prop-1' } };
+
+    it.each([false, true])(
+      'keeps owned-thread tag links without CRM proof only for the authoring epoch (retired=%s)',
+      async (retired) => {
+        installAuthority(host, { ready: false });
+        const authorizationEpoch = crmSnapshotAuthorization().epoch;
+        if (retired) beginQueryAuthorizationReset()();
+        // Reacquiring ownership must not give an old copied recipe a new epoch.
+        rememberOwnedEmail('owned-tag-edit', () => true);
+        const variables = {
+          input: {
+            entityType: 'THREAD' as const,
+            entityId: 'owned-tag-edit',
+            properties: [
+              {
+                propertyDefinitionId: 'tags',
+                addOptionIds: ['urgent'],
+                removeOptionIds: [],
+              },
+            ],
+          },
+        };
+        const data = { updateEntityPropertyOptions: [{ id: 'assignment' }] };
+        const patch = {
+          recordRoot: { entityKey: 'GraphqlSoupEmailThread:owned-tag-edit' },
+          path: [{ field: 'properties' }],
+          operation: {
+            kind: 'upsertByField',
+            entityKey: 'GraphqlProperty:assignment',
+            whereField: 'propertyDefinitionId',
+            equals: 'tags',
+          },
+        };
+        const revalidation = {
+          query:
+            '{ user { soupEntity(input:{entityType:EMAIL_THREAD, id:"owned-tag-edit"}) { id } } }',
+          variablesJson: '{}',
+          onlyOnLinkFailure: true,
+        };
+        const admitted =
+          Promise.withResolvers<
+            Parameters<CacheHost['enqueueOptimisticMutation']>[0]
+          >();
+        const enqueue = host.enqueueOptimisticMutation.bind(host);
+        vi.spyOn(host, 'enqueueOptimisticMutation').mockImplementation(
+          async (args, claim) => {
+            admitted.resolve(args);
+            return enqueue(args, claim);
+          }
+        );
+        const { ops } = harness(host);
+        ops.next(
+          makeOperation(
+            'mutation',
+            createRequest(UpdateEntityPropertyOptionsDocument, variables),
+            {
+              ...makeMutationOp(1).context,
+              normalizedCacheOptimistic: {
+                uuid: crypto.randomUUID(),
+                optimisticResponse: data,
+                linkPatches: [patch],
+                revalidations: [revalidation],
+                authorizationEpoch,
+              },
+            }
+          )
+        );
+        const args = await admitted.promise;
+        expect(args.variables).toEqual(variables);
+        expect(args.data).toEqual(retired ? {} : data);
+        expect(args.linkPatches).toEqual(retired ? [] : [patch]);
+        expect(args.revalidations).toEqual(retired ? [] : [revalidation]);
+        await tick();
+      }
+    );
 
     it('carries submitted client metadata through queue admission and settlement', async () => {
       const enqueue = vi.spyOn(host, 'enqueueOptimisticMutation');

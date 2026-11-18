@@ -391,14 +391,19 @@ type EntityPropertyExecution = Parameters<
     SetEntityPropertyMutationVariables,
     GraphqlEntityPropertyMutationInput
   >
->[0];
+>[0] & { authorizationEpoch?: number };
 
 async function executeGraphqlEntityPropertyMutation(
-  { client, mutation, input, context }: EntityPropertyExecution,
+  {
+    client,
+    mutation,
+    input,
+    context,
+    authorizationEpoch = crmSnapshotAuthorization().epoch,
+  }: EntityPropertyExecution,
   onEnqueued?: () => void,
   prepareGrouped?: PrepareGroupedPropertyUpdates
 ) {
-  const authorizationEpoch = crmSnapshotAuthorization().epoch;
   const args = await prepareMutationArgs(input, prepareGrouped);
   const variables: SetEntityPropertyMutationVariables = {
     input: {
@@ -555,6 +560,9 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
     mutation: SetEntityPropertyDocument,
     client: getGraphqlSoupClient(),
     execute: async ({ client, mutation, input, context }) => {
+      // Every item can reuse the submission's copied inputs and grouped pages.
+      // A later item must not relabel them after an earlier enqueue retires.
+      const authorizationEpoch = crmSnapshotAuthorization().epoch;
       let latestResult:
         | OperationResult<
             SetEntityPropertyMutation,
@@ -583,6 +591,7 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
                   mutation,
                   input: { kind: 'save', ...item },
                   context,
+                  authorizationEpoch,
                 },
                 acknowledge,
                 prepareGrouped

@@ -1,6 +1,10 @@
 import {
   type GraphqlSoupEntityType,
   MoveEntitiesDocument,
+  SetEntityPropertyDocument,
+  type SetEntityPropertyMutationVariables,
+  UpdateEntityPropertyOptionsDocument,
+  type UpdateEntityPropertyOptionsMutationVariables,
 } from '@service-storage/graphql/generated/graphql';
 import { parse, print } from 'graphql';
 import { describe, expect, it, vi } from 'vitest';
@@ -62,6 +66,115 @@ describe('CRM cache admission classification', () => {
     current = false;
     expect(queryNeedsCrmProof(query, { input })).toBe(true);
   });
+  it.each([
+    {
+      name: 'SetEntityProperty',
+      document: SetEntityPropertyDocument,
+      variables: {
+        input: {
+          entityType: 'THREAD',
+          entityId: 'owned-property-thread',
+          propertyDefinitionId: 'property-definition',
+          value: null,
+        },
+      } satisfies SetEntityPropertyMutationVariables,
+    },
+    {
+      name: 'UpdateEntityPropertyOptions',
+      document: UpdateEntityPropertyOptionsDocument,
+      variables: {
+        input: {
+          entityType: 'THREAD',
+          entityId: 'owned-tag-thread',
+          properties: [
+            {
+              propertyDefinitionId: 'tag-definition',
+              addOptionIds: ['new-tag'],
+              removeOptionIds: [],
+            },
+          ],
+        },
+      } satisfies UpdateEntityPropertyOptionsMutationVariables,
+    },
+  ])(
+    'admits $name only while its exact thread ownership witness is current',
+    ({ document, variables }) => {
+      const query = print(document);
+      const request = { query, variables };
+      expect(queryNeedsCrmProof(query, variables)).toBe(true);
+      let account = 'owner';
+      let session = 1;
+      let generation = 'first-generation';
+      rememberOwnedEmail(
+        variables.input.entityId,
+        () =>
+          account === 'owner' &&
+          session === 1 &&
+          generation === 'first-generation'
+      );
+      expect(queryNeedsCrmProof(query, variables)).toBe(false);
+      expect(requestNeedsCrmProof('enqueue-optimistic-mutation', request)).toBe(
+        false
+      );
+      expect(
+        requestNeedsCrmProof('graphql_cache_commit_optimistic_write', request)
+      ).toBe(false);
+      expect(queryNeedsCrmRetirement(query, variables)).toBe(true);
+      expect(
+        requestNeedsCrmProof('read-records-by-keys', {
+          keys: ['GraphqlProperty:owned-assignment'],
+        })
+      ).toBe(true);
+      for (const input of [
+        { ...variables.input, entityId: 'foreign-thread' },
+        { ...variables.input, entityType: 'COMPANY' },
+        { ...variables.input, entityType: 'EMAIL_THREAD' },
+        { entityType: 'THREAD' },
+      ])
+        expect(queryNeedsCrmProof(query, { input })).toBe(true);
+
+      for (const invalidation of ['generation', 'account', 'session']) {
+        account = 'owner';
+        session = 1;
+        generation = 'first-generation';
+        rememberOwnedEmail(
+          variables.input.entityId,
+          () =>
+            account === 'owner' &&
+            session === 1 &&
+            generation === 'first-generation'
+        );
+        expect(requestNeedsCrmProof('commit-optimistic-write', request)).toBe(
+          false
+        );
+        if (invalidation === 'generation') generation = 'retired-generation';
+        if (invalidation === 'account') account = 'other-owner';
+        if (invalidation === 'session') session = 2;
+        expect(
+          requestNeedsCrmProof('graphql_cache_commit_optimistic_write', request)
+        ).toBe(true);
+      }
+    }
+  );
+  it.each(['setEntityProperty', 'updateEntityPropertyOptions'])(
+    'checks every aliased %s target even beside an owned thread',
+    (field) => {
+      const owned = `owned-${field}-thread`;
+      rememberOwnedEmail(owned, () => true);
+      const personal = `personal: ${field}(input:{entityType:THREAD, entityId:"${owned}"}) { id }`;
+      expect(queryNeedsCrmProof(`mutation { ${personal} }`)).toBe(false);
+      expect(
+        queryNeedsCrmProof(
+          `mutation { ${personal} shared: ${field}(input:{entityType:THREAD, entityId:"shared-thread"}) { id } }`
+        )
+      ).toBe(true);
+      expect(
+        queryNeedsCrmProof(
+          `mutation { ${personal} crm: ${field}(input:{entityType:COMPANY, entityId:"${owned}"}) { id } }`
+        )
+      ).toBe(true);
+    }
+  );
   it('continues checking siblings of personal resolver fields', () => {
     expect(
       queryNeedsCrmProof(

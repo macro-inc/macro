@@ -453,10 +453,22 @@ function compiledScope(query: string, operationName?: string): CompiledScope {
         name === 'setEntityProperty' ||
         name === 'updateEntityPropertyOptions'
       )
-        return (variables) =>
-          !unrelatedEntityTypes.has(
-            String(object(args(variables).input).entityType)
+        return (variables, allowWitnesses = true) => {
+          const input = object(args(variables).input);
+          // Both resolvers return only the requested entity's assignments.
+          // A live ownership witness admits that mailbox's properties, but
+          // cannot exempt shared threads or survive snapshot retirement.
+          return (
+            !unrelatedEntityTypes.has(String(input.entityType)) &&
+            !(
+              operation.operation === 'mutation' &&
+              path.length === 0 &&
+              allowWitnesses &&
+              input.entityType === 'THREAD' &&
+              hasOwnedEmailWitness(input.entityId)
+            )
           );
+        };
       if (name === 'propertyDefinitions')
         return (variables) =>
           !['SYSTEM', 'USER', 'TEAM'].includes(String(args(variables).scope));

@@ -64,6 +64,7 @@ Keep exact email-reminder detail reads/writes and collection reads independent o
 Classify flat REST Soup from its raw AST so personal Spam/Trash reads remain independent; require explicit company exclusion, absent or excluded contacts, and no CRM association or email expansion. Keep legacy and grouped REST protected.
 Admit opaque GraphQL Soup continuations only from an independently scoped cached parent with the same query, operation, group and current account/owner generation. Flat REST continuations require a successfully decoded independent parent with the same body and login because the server ignores the replacement body's filters; share bounded witnesses across both transports.
 Before exempting a thread-by-ID read, select only cached id/ownerId and bind its ownership witness to the account, login, host, owner and generation; reuse valid witnesses, coalesce pending probes, and retain witnesses through active Mail chunks, complete thread reads and mounted thread routes, including canonical IDs and fallback reads, while CRM-only shared threads remain gated.
+Reuse the live ownership witness for exact `THREAD` property assignments and option-delta mutations, whose responses contain only that thread's properties; keep raw property reads, other targets, expired witnesses and snapshot retirement protected.
 Memoize GraphQL classification by document and selected operation with bounded retention, recheck arguments and witnesses on each call, and never evaluate disabled infinite-query variables.
 Keep unrelated response observers synchronous and stable native reads to one IPC; use the installed authority event/version fence to reject changed generations instead of polling after every command.
 Keep an ordinary write's real status and payload when later CRM proof fails;
@@ -76,6 +77,7 @@ Fence visibility synchronously on retirement, wait for every overlapping cleanup
 Derive whole-list team-view mutations from a successful network-only settings read inside the serialized mutation; retain the authoring account/session and recheck it after that GET, so a queued edit or skipped response admission cannot overwrite another login's settings or a newer list.
 Capture the generation before predicting optimistic results from authored
 arguments; caller-supplied copied updates must retain their original generation.
+Capture one authorization epoch for an entire bulk property submission, including later items that reuse its inputs or prepared grouped pages after earlier enqueues.
 Publish the shared client and host before installing authority callbacks, which
 can synchronously reset mounted observers and reenter client lookup.
 On native, await bounded authority listener setup before exposing cached reads;
