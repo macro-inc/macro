@@ -114,6 +114,13 @@ describe('createInputCommands', () => {
     ['a list left with Enter', '1. one\n2. two\n\n \n', '1. one\n2. two'],
     ['several empty paragraphs', 'hello\n\n \n\n \n', 'hello'],
     ['blank lines between paragraphs', 'one\n\n \n\ntwo', 'one\n\n \n\ntwo'],
+    ['spaces after its last text', 'hello  \n \n', 'hello  '],
+    // A trim that backtracks over a long run of blank lines takes seconds here.
+    [
+      'a long run of blank lines before text',
+      `one${'\n'.repeat(65_536)}two`,
+      `one${'\n'.repeat(65_536)}two`,
+    ],
   ])('sends %s without blank lines at its end', async (_name, value, sent) => {
     const onSend = vi.fn();
     const commands = createInputCommands({
