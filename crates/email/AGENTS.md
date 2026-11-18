@@ -496,6 +496,10 @@ tools — hexagonal, heavily feature-gated.
   owner, then actor id, retaining one binding per link and actor; the repository
   returns each binding's kind so custody cleanup runs before an owner disconnect
   can suppress it without processing a self-custodian twice.
+- `email_links.fusionauth_user_id` is the holder of the credentials a link
+  syncs with, not the inbox's owner (`macro_id`): another participant's
+  connection or a custody transfer changes it. Never read it as ownership. A
+  deleted user gets an owner binding only for an inbox of their own account.
 - `email_mailbox_folders.total_item_count` is Graph's `totalItemCount` from the
   latest catalog discovery (every 5 minutes, from the listing discovery already
   makes), and the discover span sums it as `outlook.provider_item_count`. It
