@@ -532,6 +532,7 @@ F-073	starring does nothing
 F-074	unstarring a row does nothing
 F-075	Trash does nothing
 F-076	restoring from Trash does nothing
+F-078	Not spam sends nothing, so the thread stays in Spam (Gmail) or Junk Email (Outlook)
 F-079	muting a thread from the list does nothing
 F-080	Block Sender does not block the sender
 F-081	Sender to Noise does not move the sender
