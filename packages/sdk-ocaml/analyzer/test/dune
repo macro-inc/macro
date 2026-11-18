@@ -2,6 +2,7 @@
 ; test_coverage: every SDK operation is in the analyzer's table and found.
 ; test_trusted: code mode's runtime, which the analyzer trusts, names no
 ; operation.
+; test_registry: every SDK operation has a permission group and action.
 
 (test
  (name test_corpus)
@@ -43,3 +44,11 @@
  (libraries compiler-libs.common)
  (deps (universe)))
 
+; Reads ../../crates/agent_permission_registry/registry.json through
+; DUNE_SOURCEROOT, outside this dune project.
+
+(test
+ (name test_registry)
+ (modules test_registry)
+ (libraries macro_sdk_analyzer yojson)
+ (deps (universe)))
