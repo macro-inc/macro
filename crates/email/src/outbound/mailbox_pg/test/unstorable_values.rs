@@ -1,5 +1,5 @@
 //! Values PostgreSQL can't store: a NUL character is removed before the write,
-//! and anything else the database refuses gives the message up at once.
+//! and a message the database still refuses stops after three tries.
 
 use super::retries::{Provider, outcomes, queue, row, sync};
 use super::{fixture, snapshot};
@@ -153,7 +153,7 @@ async fn a_message_with_nul_characters_is_stored_without_them(db: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_message_the_database_refuses_is_abandoned_at_once(db: PgPool) {
+async fn a_message_the_database_refuses_stops_after_three_attempts(db: PgPool) {
     let telemetry = Telemetry::default();
     let _guard = telemetry.install();
     let (repo, link) = fixture(&db).await;
@@ -163,7 +163,10 @@ async fn a_message_the_database_refuses_is_abandoned_at_once(db: PgPool) {
         .and_then(|date| date.and_hms_opt(0, 0, 0))
         .map(|date| date.and_utc());
     queue(&db, link, "refused", 0).await;
-    let service = sync(&repo, Provider::answering(vec![Ok(Some(refused))]));
+    let service = sync(
+        &repo,
+        Provider::answering(vec![Ok(Some(refused.clone())), Ok(Some(refused))]),
+    );
 
     let error = service.reconcile_once().await.unwrap_err();
 
@@ -171,18 +174,42 @@ async fn a_message_the_database_refuses_is_abandoned_at_once(db: PgPool) {
         error.to_string(),
         "mailbox data cannot be stored: sqlstate 22008"
     );
+    let parked = row(&db, link, "refused").await;
+    assert!(!parked.abandoned);
+    assert_eq!(parked.attempts, 1);
+    assert!(
+        (595..=600).contains(&parked.delay_seconds),
+        "a refused value waits 10 minutes, not an outage's 30 seconds: {}",
+        parked.delay_seconds
+    );
+
+    sqlx::query!(
+        "UPDATE email_message_reconciliation SET attempts = 2, available_at = now() WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(service.reconcile_once().await.is_err());
+
     assert_eq!(
         outcomes(&telemetry),
-        [("abandoned".into(), "unstorable".into(), None)]
+        [
+            ("deferred".into(), "unstorable".into(), Some("600".into())),
+            ("abandoned".into(), "unstorable".into(), None),
+        ]
     );
-    let row = row(&db, link, "refused").await;
-    assert!(row.abandoned, "a refused value is not retried as an outage");
-    assert_eq!(row.attempts, 0);
+    let abandoned = row(&db, link, "refused").await;
+    assert!(
+        abandoned.abandoned,
+        "the third refusal abandons the message"
+    );
+    assert_eq!(abandoned.attempts, 0);
     let events = telemetry.events("mailbox message abandoned");
     let [(level, fields)] = events.as_slice() else {
         panic!("expected one abandonment, got {events:?}");
     };
     assert_eq!(*level, tracing::Level::WARN);
     assert_eq!(fields["defer_reason"], "unstorable");
-    assert_eq!(fields["attempts"], "1");
+    assert_eq!(fields["attempts"], "3");
 }

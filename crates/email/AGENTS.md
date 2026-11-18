@@ -494,8 +494,9 @@ tools — hexagonal, heavily feature-gated.
   `import_completed_at` and log "outlook import started", as
   `outbound/mailbox_pg/lifecycle.rs` does.
 - A message reconciliation that keeps failing is abandoned
-  (`message_retry` in `domain/mailbox.rs`), and one the database refuses
-  (`Unstorable`) on its first failure: its row waits at
+  (`message_retry` in `domain/mailbox.rs`), one the database refuses
+  (`Unstorable`) after 3 tries, 10 minutes apart, as a Graph permanent
+  refusal: its row waits at
   `available_at = 'infinity'` with attempts reset, so claims stop at their
   index bound and every enqueue's `available_at = now()` revives it. Any query
   that reads queued or import-running state must leave those rows out, as
