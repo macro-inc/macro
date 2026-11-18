@@ -1,5 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
+    error::OpensearchClientError,
     retry::resend_on_lost_connection,
     upsert::{self, BulkUpsertResult, email::UpsertEmailArgs, properties::IndexedProperty},
 };
@@ -122,17 +123,57 @@ impl OpensearchClient {
     }
 
     /// Starts deleting every email document of an inbox as a throttled
-    /// background OpenSearch task and returns its id without waiting.
+    /// background OpenSearch task and returns its id without waiting, or
+    /// returns the delete already running for that inbox, so a retry, a second
+    /// delivery of the same event, or a start whose response was lost adopts
+    /// the running task. Listing and starting are separate requests, so two
+    /// starts racing for one inbox can still start two tasks.
     ///
-    /// Not resent after a lost connection: OpenSearch may already have started
-    /// the task, and a resend would start a second one over the same inbox.
-    #[tracing::instrument(skip(self), err)]
+    /// The start itself is not resent after a lost connection: OpenSearch may
+    /// already have accepted it, so the running tasks are read again instead.
+    /// The span's `start` field says which: `adopted`, `started`, or
+    /// `adopted_after_lost_connection`.
+    #[tracing::instrument(skip(self), fields(start = tracing::field::Empty), err)]
     pub async fn start_email_link_delete(
         &self,
         link_id: &str,
         docs_per_second: i64,
     ) -> Result<delete::email::EmailDeleteTaskId> {
-        delete::email::start_email_link_delete(&self.inner, link_id, docs_per_second).await
+        let span = tracing::Span::current();
+        if let Some(running) = self.running_email_link_delete(link_id).await? {
+            span.record("start", "adopted");
+            return Ok(running);
+        }
+        match delete::email::start_email_link_delete(&self.inner, link_id, docs_per_second).await {
+            Err(error @ OpensearchClientError::RequestFailed { .. }) => {
+                match self.running_email_link_delete(link_id).await {
+                    Ok(Some(running)) => {
+                        span.record("start", "adopted_after_lost_connection");
+                        Ok(running)
+                    }
+                    Ok(None) => Err(error),
+                    Err(listing_error) => {
+                        tracing::warn!(error = ?listing_error, "could not list running deletes after a lost start");
+                        Err(error)
+                    }
+                }
+            }
+            started => {
+                if started.is_ok() {
+                    span.record("start", "started");
+                }
+                started
+            }
+        }
+    }
+
+    /// The inbox delete task OpenSearch is running for `link_id`, if any.
+    async fn running_email_link_delete(
+        &self,
+        link_id: &str,
+    ) -> Result<Option<delete::email::EmailDeleteTaskId>> {
+        resend_on_lost_connection(|| delete::email::running_email_link_delete(&self.inner, link_id))
+            .await
     }
 
     /// Reads a background email delete task's progress, or `None` when

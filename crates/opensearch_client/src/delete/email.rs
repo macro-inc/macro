@@ -46,6 +46,11 @@ impl TryFrom<String> for EmailDeleteTaskId {
     }
 }
 
+/// The `X-Opaque-Id` an inbox's delete task carries, so it can be found again.
+fn email_link_delete_opaque_id(link_id: &str) -> String {
+    format!("email-link-delete:{link_id}")
+}
+
 /// Starts deleting every email document of an inbox as a background
 /// OpenSearch task and returns its id without waiting. The task is throttled
 /// to `docs_per_second` across automatic slices, skips documents changed
@@ -67,6 +72,14 @@ pub async fn start_email_link_delete(
         .conflicts(opensearch::params::Conflicts::Proceed)
         .slices(opensearch::params::Slices::Auto)
         .requests_per_second(docs_per_second)
+        .header(
+            opensearch::http::headers::HeaderName::from_static("x-opaque-id"),
+            opensearch::http::headers::HeaderValue::from_str(&email_link_delete_opaque_id(link_id))
+                .map_err(|err| OpensearchClientError::SerializationFailed {
+                    details: err.to_string(),
+                    operation: OPERATION,
+                })?,
+        )
         .send()
         .await
         .map_err(|err| OpensearchClientError::request_failed(OPERATION, &err))?;
@@ -102,6 +115,97 @@ pub(crate) fn parse_started_task(body: &str) -> Result<EmailDeleteTaskId> {
             details,
             operation: OPERATION,
         })
+}
+
+/// The inbox delete task OpenSearch is running for `link_id`, if any.
+pub async fn running_email_link_delete(
+    client: &opensearch::OpenSearch,
+    link_id: &str,
+) -> Result<Option<EmailDeleteTaskId>> {
+    const OPERATION: OpensearchOperation = OpensearchOperation::RunningEmailLinkDeletes;
+    const QUERY: &[(&str, &str)] = &[
+        ("actions", "indices:data/write/delete/byquery"),
+        ("detailed", "true"),
+        ("group_by", "none"),
+        ("timeout", "10s"),
+    ];
+    let response = client
+        .send::<(), [(&str, &str)]>(
+            opensearch::http::Method::Get,
+            "/_tasks",
+            opensearch::http::headers::HeaderMap::new(),
+            Some(QUERY),
+            None,
+            None,
+        )
+        .await
+        .map_err(|err| OpensearchClientError::request_failed(OPERATION, &err))?;
+    let status_code = response.status_code();
+    let body = response
+        .text()
+        .await
+        .map_err(|err| OpensearchClientError::deserialization_failed(OPERATION, &err))?;
+    if !status_code.is_success() {
+        return Err(OpensearchClientError::Unknown {
+            details: body,
+            operation: OPERATION,
+        });
+    }
+    parse_running_email_link_delete(&body, link_id)
+}
+
+/// The top-level task in a `_tasks?group_by=none` listing that carries
+/// `link_id`'s opaque id. A sliced delete's slices share the header but name
+/// their parent, so they are skipped. A listing some node failed to answer is
+/// an error: the task could be on that node.
+pub(crate) fn parse_running_email_link_delete(
+    body: &str,
+    link_id: &str,
+) -> Result<Option<EmailDeleteTaskId>> {
+    const OPERATION: OpensearchOperation = OpensearchOperation::RunningEmailLinkDeletes;
+    let listing: serde_json::Value =
+        serde_json::from_str(body).map_err(|err| OpensearchClientError::DeserializationFailed {
+            details: err.to_string(),
+            operation: OPERATION,
+        })?;
+    let failed = |key: &str| {
+        listing[key]
+            .as_array()
+            .is_some_and(|failures| !failures.is_empty())
+    };
+    if failed("node_failures") || failed("task_failures") {
+        return Err(OpensearchClientError::Unknown {
+            details: format!("incomplete task listing: {body}"),
+            operation: OPERATION,
+        });
+    }
+    let opaque_id = email_link_delete_opaque_id(link_id);
+    let Some(tasks) = listing["tasks"].as_array() else {
+        return Ok(None);
+    };
+    let found = tasks.iter().find(|task| {
+        task["parent_task_id"].is_null()
+            && task["headers"]["X-Opaque-Id"].as_str() == Some(&opaque_id)
+    });
+    match found {
+        None => Ok(None),
+        Some(task) => {
+            let id = format!(
+                "{}:{}",
+                task["node"].as_str().unwrap_or_default(),
+                task["id"]
+                    .as_u64()
+                    .map(|id| id.to_string())
+                    .unwrap_or_default()
+            );
+            EmailDeleteTaskId::try_from(id)
+                .map(Some)
+                .map_err(|details| OpensearchClientError::DeserializationFailed {
+                    details,
+                    operation: OPERATION,
+                })
+        }
+    }
 }
 
 /// Progress of a background email delete task.
@@ -195,6 +299,13 @@ pub(crate) fn parse_email_delete_task(body: &str) -> Result<EmailDeleteTask> {
             "{} failures, first: {}",
             failures.len(),
             describe_error(&failures[0]["cause"])
+        ))
+    } else if let Some(conflicts) = response["version_conflicts"]
+        .as_u64()
+        .filter(|&conflicts| conflicts > 0)
+    {
+        EmailDeleteState::Failed(format!(
+            "{conflicts} documents changed while being deleted and were skipped"
         ))
     } else if response["timed_out"].as_bool().unwrap_or(false) {
         EmailDeleteState::Failed("timed out".to_owned())

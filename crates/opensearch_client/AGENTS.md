@@ -58,9 +58,10 @@ projects.
   fails them all at once. Wrap each public `OpensearchClient` method's request
   in `retry::resend_on_lost_connection`, which resends twice on a connection
   closed or refused before a complete response, never on a timeout or an
-  error status. Every resent request must be safe to resend: write by explicit
-  id or by query. Starting a background task is not, so
-  `start_email_link_delete` is sent once.
+  error status. Every resent request must be safe to resend: a read, or a
+  write by explicit id or by query. Starting a background task is not, so
+  `start_email_link_delete` sends it once and, when the connection drops,
+  looks for the task by its `X-Opaque-Id` instead.
 - Put `instrument(err)` on the public method, not the inner function it
   retries, so a recovered attempt does not record an error span.
 - Requests time out after five minutes (`REQUEST_TIMEOUT`). A delete that can

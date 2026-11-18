@@ -396,3 +396,126 @@ fn task_ids_need_a_node_and_a_number() {
         );
     }
 }
+
+#[test]
+fn a_task_that_skipped_changed_documents_is_not_completed() {
+    let task = parse_email_delete_task(
+        r#"{"completed":true,"response":{"total":40,"deleted":39,"version_conflicts":1,"failures":[]}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        task.state,
+        EmailDeleteState::Failed("1 documents changed while being deleted and were skipped".into())
+    );
+}
+
+#[test]
+fn the_running_delete_for_an_inbox_is_found_by_its_opaque_id() {
+    let listing = r#"{"tasks":[
+        {"node":"n1","id":7,"parent_task_id":null,"headers":{"X-Opaque-Id":"email-link-delete:other"}},
+        {"node":"n1","id":8,"parent_task_id":"n1:9","headers":{"X-Opaque-Id":"email-link-delete:inbox"}},
+        {"node":"n1","id":9,"parent_task_id":null,"headers":{"X-Opaque-Id":"email-link-delete:inbox"}}
+    ]}"#;
+
+    assert_eq!(
+        parse_running_email_link_delete(listing, "inbox")
+            .unwrap()
+            .map(|id| id.as_str().to_owned()),
+        Some("n1:9".to_owned()),
+        "the parent, not its slice"
+    );
+    assert_eq!(
+        parse_running_email_link_delete(listing, "missing").unwrap(),
+        None
+    );
+    assert_eq!(
+        parse_running_email_link_delete(r#"{"tasks":[]}"#, "inbox").unwrap(),
+        None
+    );
+}
+
+const RUNNING_FOR_INBOX: &str = r#"{"tasks":[{"node":"n1","id":9,"parent_task_id":null,"headers":{"X-Opaque-Id":"email-link-delete:inbox"}}]}"#;
+
+#[tokio::test]
+async fn an_inbox_with_a_running_delete_adopts_it_without_starting_another() {
+    use crate::test_support::{Reply, serve_script};
+    let (url, server) = serve_script(vec![Reply::Respond("200 OK", RUNNING_FOR_INBOX)]);
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    let task = client
+        .start_email_link_delete("inbox", 1_000)
+        .await
+        .unwrap();
+
+    assert_eq!(task.as_str(), "n1:9");
+    let requests = server.join().unwrap();
+    assert_eq!(requests.len(), 1, "{requests:?}");
+    for part in [
+        "GET /_tasks?",
+        "actions=indices%3Adata%2Fwrite%2Fdelete%2Fbyquery",
+        "detailed=true",
+        "group_by=none",
+        "timeout=10s",
+    ] {
+        assert!(requests[0].contains(part), "{part} in {}", requests[0]);
+    }
+}
+
+#[tokio::test]
+async fn an_inbox_without_a_running_delete_starts_one_tagged_with_its_opaque_id() {
+    use crate::test_support::{Reply, serve_script};
+    let (url, server) = serve_script(vec![
+        Reply::Respond("200 OK", r#"{"tasks":[]}"#),
+        Reply::Respond("200 OK", r#"{"task":"n1:5"}"#),
+    ]);
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    let task = client
+        .start_email_link_delete("inbox", 1_000)
+        .await
+        .unwrap();
+
+    assert_eq!(task.as_str(), "n1:5");
+    let requests = server.join().unwrap();
+    assert!(
+        requests[1].starts_with("POST /emails/_delete_by_query?"),
+        "{}",
+        requests[1]
+    );
+    assert!(
+        requests[1].ends_with(" x-opaque-id=email-link-delete:inbox"),
+        "{}",
+        requests[1]
+    );
+}
+
+#[tokio::test]
+async fn a_start_lost_in_flight_is_adopted_from_a_second_listing() {
+    use crate::test_support::{Reply, serve_script};
+    let (url, server) = serve_script(vec![
+        Reply::Respond("200 OK", r#"{"tasks":[]}"#),
+        Reply::Close,
+        Reply::Respond("200 OK", RUNNING_FOR_INBOX),
+    ]);
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    let task = client
+        .start_email_link_delete("inbox", 1_000)
+        .await
+        .unwrap();
+
+    assert_eq!(task.as_str(), "n1:9");
+    assert_eq!(server.join().unwrap().len(), 3);
+}
+
+#[test]
+fn a_listing_some_node_failed_to_answer_is_an_error() {
+    assert!(
+        parse_running_email_link_delete(
+            r#"{"node_failures":[{"type":"failed_node_exception"}],"tasks":[]}"#,
+            "inbox"
+        )
+        .is_err()
+    );
+}

@@ -9,13 +9,25 @@ const LINK_ID: Uuid = Uuid::from_u128(1);
 
 type Reply = anyhow::Result<Option<EmailDeleteTask>>;
 
+/// A scripted answer; `Hang` never answers, like a request that hangs.
+enum Scripted<T> {
+    Answer(T),
+    Hang,
+}
+
+impl<T> From<T> for Scripted<T> {
+    fn from(answer: T) -> Self {
+        Self::Answer(answer)
+    }
+}
+
 /// Scripted OpenSearch: each start returns the next scripted id, and each
-/// progress read the task's next scripted reply. A task with no reply left
-/// never answers, like a request that hangs.
+/// progress read the task's next scripted reply. Anything unscripted panics,
+/// so an extra start or read fails the test instead of hanging it.
 #[derive(Default)]
 struct FakeTasks {
-    starts: Mutex<VecDeque<anyhow::Result<EmailDeleteTaskId>>>,
-    progress: Mutex<HashMap<EmailDeleteTaskId, VecDeque<Reply>>>,
+    starts: Mutex<VecDeque<Scripted<anyhow::Result<EmailDeleteTaskId>>>>,
+    progress: Mutex<HashMap<EmailDeleteTaskId, VecDeque<Scripted<Reply>>>>,
     started: Mutex<Vec<Uuid>>,
 }
 
@@ -23,6 +35,19 @@ impl FakeTasks {
     fn new(
         starts: Vec<anyhow::Result<EmailDeleteTaskId>>,
         progress: Vec<(EmailDeleteTaskId, Vec<Reply>)>,
+    ) -> Arc<Self> {
+        Self::scripted(
+            starts.into_iter().map(Scripted::from).collect(),
+            progress
+                .into_iter()
+                .map(|(id, replies)| (id, replies.into_iter().map(Scripted::from).collect()))
+                .collect(),
+        )
+    }
+
+    fn scripted(
+        starts: Vec<Scripted<anyhow::Result<EmailDeleteTaskId>>>,
+        progress: Vec<(EmailDeleteTaskId, Vec<Scripted<Reply>>)>,
     ) -> Arc<Self> {
         Arc::new(Self {
             starts: Mutex::new(starts.into()),
@@ -53,11 +78,11 @@ impl FakeTasks {
 impl DeleteTasks for FakeTasks {
     async fn start(&self, link_id: Uuid) -> anyhow::Result<EmailDeleteTaskId> {
         self.started.lock().unwrap().push(link_id);
-        self.starts
-            .lock()
-            .unwrap()
-            .pop_front()
-            .expect("no unscripted start")
+        let scripted = self.starts.lock().unwrap().pop_front();
+        match scripted.expect("no unscripted start") {
+            Scripted::Answer(result) => result,
+            Scripted::Hang => std::future::pending().await,
+        }
     }
 
     async fn progress(&self, task_id: &EmailDeleteTaskId) -> Reply {
@@ -67,9 +92,9 @@ impl DeleteTasks for FakeTasks {
             .unwrap()
             .get_mut(task_id)
             .and_then(VecDeque::pop_front);
-        match reply {
-            Some(reply) => reply,
-            None => std::future::pending().await,
+        match reply.expect("no unscripted progress read") {
+            Scripted::Answer(reply) => reply,
+            Scripted::Hang => std::future::pending().await,
         }
     }
 }
@@ -132,6 +157,7 @@ async fn a_delete_is_followed_until_its_task_completes() {
             restarts: 0,
             deleted: 40,
             total: 40,
+            poll_errors: 0,
         }
     );
     assert_eq!(tasks.unread_replies(), 0);
@@ -167,6 +193,7 @@ async fn a_task_that_fails_again_is_reported_failed_with_its_counts() {
             restarts: 1,
             deleted: 12,
             total: 40,
+            poll_errors: 0,
         }
     );
 }
@@ -185,7 +212,7 @@ async fn a_task_opensearch_no_longer_knows_is_started_once_more() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn unreadable_progress_stops_following_without_starting_another_task() {
+async fn unreadable_progress_keeps_following_without_starting_another_task() {
     let tasks = FakeTasks::new(
         vec![],
         vec![(
@@ -193,21 +220,21 @@ async fn unreadable_progress_stops_following_without_starting_another_task() {
             vec![
                 unreadable(),
                 unreadable(),
+                unreadable(),
+                unreadable(),
                 running(),
-                unreadable(),
-                unreadable(),
-                unreadable(),
+                done(),
             ],
         )],
     );
 
     let report = deletes(&tasks).follow(LINK_ID, id(1)).await;
 
-    assert_eq!(report.outcome, FollowOutcome::Unreadable);
+    assert_eq!(report.outcome, FollowOutcome::Completed);
     assert_eq!(report.restarts, 0);
     assert!(
         tasks.started().is_empty(),
-        "the first task may still be running"
+        "the first task was still running"
     );
 }
 
@@ -243,7 +270,7 @@ async fn shutdown_stops_following_without_failing() {
 
 #[tokio::test(start_paused = true)]
 async fn shutdown_interrupts_a_progress_read_that_hangs() {
-    let tasks = FakeTasks::new(vec![], vec![]);
+    let tasks = FakeTasks::scripted(vec![], vec![(id(1), vec![Scripted::Hang])]);
     let deletes = deletes(&tasks);
     let following = tokio::spawn({
         let deletes = deletes.clone();
@@ -304,7 +331,10 @@ async fn at_most_two_deletes_run_at_once_and_the_rest_wait_their_turn() {
 
 #[tokio::test(start_paused = true)]
 async fn a_delete_still_waiting_at_shutdown_is_not_started() {
-    let tasks = FakeTasks::new(vec![Ok(id(1)), Ok(id(2))], vec![]);
+    let tasks = FakeTasks::scripted(
+        vec![Ok(id(1)).into(), Ok(id(2)).into()],
+        vec![(id(1), vec![Scripted::Hang]), (id(2), vec![Scripted::Hang])],
+    );
     let deletes = deletes(&tasks);
     for link in 1..=3 {
         deletes.start(Uuid::from_u128(link)).await.unwrap();
@@ -341,4 +371,104 @@ async fn a_waiting_delete_tries_to_start_three_times() {
 
     assert_eq!(tasks.started().len(), 5);
     assert_eq!(tasks.unread_replies(), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_start_cut_off_by_shutdown_is_reported_as_possibly_accepted() {
+    let tasks = FakeTasks::scripted(vec![Scripted::Hang], vec![]);
+    let deletes = deletes(&tasks);
+    let starting = tokio::spawn({
+        let deletes = deletes.clone();
+        async move { deletes.start_task(LINK_ID).await }
+    });
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    deletes.shutdown.cancel();
+
+    assert!(matches!(starting.await.unwrap(), Start::Interrupted));
+    assert_eq!(tasks.started(), [LINK_ID]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn nothing_is_sent_once_shutdown_has_begun() {
+    let tasks = FakeTasks::new(vec![Ok(id(1))], vec![]);
+    let deletes = deletes(&tasks);
+    deletes.shutdown.cancel();
+
+    assert!(matches!(deletes.start_task(LINK_ID).await, Start::NotSent));
+    assert!(tasks.started().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_delete_whose_progress_is_unreadable_keeps_its_slot() {
+    let links = [Uuid::from_u128(1), Uuid::from_u128(2), Uuid::from_u128(3)];
+    let unreadable_then_done = || {
+        let mut replies: Vec<Reply> = (0..5).map(|_| unreadable()).collect();
+        replies.push(done());
+        replies
+    };
+    let tasks = FakeTasks::new(
+        vec![Ok(id(1)), Ok(id(2)), Ok(id(3))],
+        vec![
+            (id(1), unreadable_then_done()),
+            (id(2), unreadable_then_done()),
+            (id(3), vec![done()]),
+        ],
+    );
+    let deletes = deletes(&tasks);
+    for link in links {
+        deletes.start(link).await.unwrap();
+    }
+
+    tokio::time::sleep(Duration::from_secs(4)).await;
+    assert_eq!(
+        tasks.started(),
+        links[..MAX_RUNNING],
+        "both slots stay taken"
+    );
+
+    drain(&deletes).await;
+    assert_eq!(tasks.started(), links);
+}
+
+#[tokio::test(start_paused = true)]
+async fn progress_unreadable_for_too_long_ends_the_follow() {
+    let mut replies = vec![running()];
+    replies.extend((0..=UNREADABLE_LIMIT.as_secs() + 1).map(|_| unreadable()));
+    let tasks = FakeTasks::new(vec![], vec![(id(1), replies)]);
+
+    let report = deletes(&tasks).follow(LINK_ID, id(1)).await;
+
+    assert_eq!(report.outcome, FollowOutcome::Unreadable);
+    assert!(report.poll_errors > 0);
+    assert!(tasks.started().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_second_event_for_a_followed_inbox_starts_nothing_more() {
+    let tasks = FakeTasks::new(vec![Ok(id(1))], vec![(id(1), vec![running(), done()])]);
+    let deletes = deletes(&tasks);
+
+    deletes.start(LINK_ID).await.unwrap();
+    deletes.start(LINK_ID).await.unwrap();
+
+    assert_eq!(tasks.started(), [LINK_ID]);
+    drain(&deletes).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_replacement_start_cut_off_by_shutdown_reports_the_failed_task() {
+    let tasks = FakeTasks::scripted(vec![Scripted::Hang], vec![(id(1), vec![failed().into()])]);
+    let deletes = deletes(&tasks);
+    let following = tokio::spawn({
+        let deletes = deletes.clone();
+        async move { deletes.follow(LINK_ID, id(1)).await }
+    });
+
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    deletes.shutdown.cancel();
+
+    let report = following.await.unwrap();
+    assert_eq!(report.outcome, FollowOutcome::StartInterrupted);
+    assert_eq!((report.deleted, report.total), (12, 40));
 }
