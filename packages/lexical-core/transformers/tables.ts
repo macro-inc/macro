@@ -126,17 +126,18 @@ const HEADER_STATE_BY_ATTR: Record<string, TableCellHeaderState> = {
   both: TableCellHeaderStates.BOTH,
 };
 
-const CELL_ALIGNMENTS = [
+type CellAlignment = Exclude<ElementFormatType, ''>;
+
+const CELL_ALIGNMENTS: readonly CellAlignment[] = [
   'left',
   'center',
   'right',
   'start',
   'end',
   'justify',
-] as const;
+];
 
-type CellAlignment = (typeof CELL_ALIGNMENTS)[number];
-
+/** Reads an `align` attribute; anything but a cell alignment is none. */
 function isCellAlignment(value: string | undefined): value is CellAlignment {
   return CELL_ALIGNMENTS.some((alignment) => alignment === value);
 }
@@ -217,9 +218,7 @@ export const I_TABLE_NODE: ElementTransformer = {
               colspan: cell.getColSpan() > 1 ? cell.getColSpan() : undefined,
               rowspan: cell.getRowSpan() > 1 ? cell.getRowSpan() : undefined,
               header: HEADER_ATTR_BY_STATE[cell.__headerState],
-              align: isCellAlignment(cell.getFormatType())
-                ? cell.getFormatType()
-                : undefined,
+              align: cell.getFormatType() || undefined,
             })}>`;
             output += $convertToMarkdownString(
               internalTransformersWithinTables,
@@ -475,7 +474,8 @@ function delimiterFor(format: ElementFormatType): string {
     .with('left', 'start', () => ':---')
     .with('center', () => ':---:')
     .with('right', 'end', () => '---:')
-    .otherwise(() => '---');
+    .with('justify', '', () => '---')
+    .exhaustive();
 }
 
 /** Aligns a cell unless it already has an alignment of its own. */
