@@ -16,6 +16,7 @@ mod strategy;
 
 pub(crate) mod workflow;
 mod yaml;
+mod zizmor;
 
 pub use action::*;
 pub use concurrency::*;
@@ -30,6 +31,7 @@ pub use permissions::*;
 pub use step::*;
 pub use strategy::*;
 pub use workflow::*;
+pub use zizmor::*;
 
 mod private {
     pub trait Sealed {}

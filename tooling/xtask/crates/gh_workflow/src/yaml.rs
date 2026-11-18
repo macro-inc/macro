@@ -8,7 +8,9 @@
 //!   otherwise, `|` block scalars when they span lines, double-quoted only
 //!   for text a block scalar can't carry (control characters, a leading
 //!   space or blank first line);
-//! - `{}` / `[]` for empty collections and `null` for unit values.
+//! - `{}` / `[]` for empty collections and `null` for unit values;
+//! - a mapping's [`COMMENTS_KEY`] entry is no key: each [`LineComment`] in it
+//!   becomes a trailing `# ...` on its key's line.
 
 use std::fmt::Write;
 
@@ -16,6 +18,18 @@ use serde::ser::{self, Serialize};
 
 use crate::error::{Error, Result};
 use crate::expr;
+
+/// The mapping key a struct serializes its [`LineComment`]s under. The NUL
+/// keeps it from colliding with any key GitHub reads.
+pub(crate) const COMMENTS_KEY: &str = "\u{0}comments";
+
+/// A trailing comment on the line of the mapping's `key`; an empty `key` is
+/// the mapping's first line.
+#[derive(serde::Serialize)]
+pub(crate) struct LineComment {
+    pub key: &'static str,
+    pub text: String,
+}
 
 /// Render `value` as a YAML document, without the expression checks.
 #[cfg(test)]
@@ -60,6 +74,9 @@ fn canonicalize_expressions(
     match node {
         Node::Map(entries) => {
             for (key, value) in entries {
+                if key == COMMENTS_KEY {
+                    continue;
+                }
                 path.push(key.clone());
                 canonicalize_expressions(value, path, document)?;
                 path.pop();
@@ -177,13 +194,41 @@ impl Node {
 }
 
 fn emit_entries(out: &mut String, entries: &[(String, Node)], indent: usize, first_inline: bool) {
-    for (index, (key, value)) in entries.iter().enumerate() {
+    let comments: Vec<(&str, &str)> = entries
+        .iter()
+        .filter(|(key, _)| key == COMMENTS_KEY)
+        .filter_map(|(_, value)| value.as_seq())
+        .flatten()
+        .filter_map(|comment| {
+            Some((
+                comment.get("key")?.as_str()?,
+                comment.get("text")?.as_str()?,
+            ))
+        })
+        .collect();
+    let entries = entries.iter().filter(|(key, _)| key != COMMENTS_KEY);
+    for (index, (key, value)) in entries.enumerate() {
         if index > 0 || !first_inline {
             push_indent(out, indent);
         }
         emit_key(out, key);
         out.push(':');
+        let start = out.len();
         emit_child(out, value, indent);
+        let line: Vec<&str> = comments
+            .iter()
+            .filter(|(target, _)| *target == key || (index == 0 && target.is_empty()))
+            .map(|(_, text)| *text)
+            .collect();
+        if !line.is_empty() {
+            // Before the end of the key's own line: after a scalar, a block
+            // scalar's indicator, or the bare `key:` of a nested collection.
+            let end = out[start..]
+                .find('\n')
+                .map_or(out.len(), |offset| start + offset);
+            let comment = format!(" # {}", line.join("; ").replace('\n', " "));
+            out.insert_str(end, &comment);
+        }
     }
 }
 

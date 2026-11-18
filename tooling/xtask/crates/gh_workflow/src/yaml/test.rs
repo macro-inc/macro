@@ -116,3 +116,30 @@ fn scalars_keep_their_types() {
         "bool: false\nint: 15\n'null': null\nstring-bool: 'false'\n"
     );
 }
+
+#[test]
+fn zizmor_ignores_render_on_the_line_zizmor_reports() {
+    let steps: Vec<crate::StepValue> = vec![
+        crate::Step::new("Checkout")
+            .uses("actions", "checkout", "abc")
+            .add_with(("fetch-depth", "0"))
+            .zizmor_ignore(crate::ZizmorRule::Artipacked, "later steps push")
+            .into(),
+        crate::Step::new("Export")
+            .run("echo A=1 >> \"$GITHUB_ENV\"\necho done\n")
+            .zizmor_ignore(crate::ZizmorRule::GithubEnv, "exports for later steps")
+            .into(),
+    ];
+
+    assert_eq!(
+        to_string(&steps).unwrap(),
+        "- name: Checkout # zizmor: ignore[artipacked] later steps push\n  \
+         uses: actions/checkout@abc\n  \
+         with:\n    \
+         fetch-depth: '0'\n\
+         - name: Export\n  \
+         run: | # zizmor: ignore[github-env] exports for later steps\n    \
+         echo A=1 >> \"$GITHUB_ENV\"\n    \
+         echo done\n"
+    );
+}

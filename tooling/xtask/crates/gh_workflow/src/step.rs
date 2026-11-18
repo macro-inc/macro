@@ -7,7 +7,7 @@ use merge::Merge;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{private, Env, Expression};
+use crate::{private, Env, Expression, ZizmorIgnore, ZizmorRule};
 
 /// Represents a step in the workflow.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -163,6 +163,18 @@ pub struct StepValue {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge::option::overwrite_none)]
     pub working_directory: Option<String>,
+
+    /// zizmor findings kept on purpose, rendered as comments on the lines
+    /// zizmor reports them on, not as a key.
+    #[serde(
+        rename = "\u{0}comments",
+        default,
+        skip_deserializing,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    #[setters(skip)]
+    #[merge(strategy = merge::vec::append)]
+    pub zizmor_ignores: Vec<ZizmorIgnore>,
 }
 
 impl StepValue {
@@ -244,6 +256,15 @@ impl<'de> Deserialize<'de> for Uses {
 
 /// Represents a step in the workflow.
 impl<T> Step<T> {
+    /// Keeps the zizmor finding `rule` on this step, for `reason` (one line).
+    pub fn zizmor_ignore(mut self, rule: ZizmorRule, reason: impl ToString) -> Self {
+        self.value.zizmor_ignores.push(ZizmorIgnore {
+            rule,
+            reason: reason.to_string(),
+        });
+        self
+    }
+
     /// Adds an environment variable to the step.
     pub fn add_env<R: Into<Env>>(mut self, new_env: R) -> Self {
         let mut env = self.value.env.take().unwrap_or_default();
