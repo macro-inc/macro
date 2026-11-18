@@ -318,8 +318,10 @@ export type MutationQueueRunnerDeps = {
     operationName?: string;
     variables?: Record<string, unknown>;
   };
-  /** Evicts records a successful response implies were deleted. */
-  deleteReportedRecords: (result: OperationResult) => Promise<unknown>;
+  /** Returns whether reported deletion may have changed observer membership. */
+  deleteReportedRecords: (
+    result: OperationResult
+  ) => Promise<{ attempted: boolean }>;
   /**
    * Replays explicit deletions mixed into a committed response, in order.
    * Undefined when there is nothing to replay, so settlement does not yield.
@@ -332,7 +334,8 @@ export type MutationQueueRunnerDeps = {
   /** Refreshes queries a settled mutation could not update in place. */
   revalidate: (
     revalidations: QueryRevalidationWire[],
-    mutation?: Operation
+    mutation?: Operation,
+    affectedOps?: readonly string[]
   ) => Promise<void>;
 };
 
@@ -1085,14 +1088,18 @@ export function createMutationQueueRunner(
         } else {
           disposition = 'committed';
           outcome = 'committed';
-          await deps.deleteReportedRecords(result);
+          const deleted = await deps.deleteReportedRecords(result);
           if (!isCurrent(attempt)) return detachedResult();
           const replay = deps.replayExplicitEffects(op, result.data, () =>
             isCurrent(attempt)
           );
           if (replay) await replay;
           if (isCurrent(attempt))
-            await deps.revalidate(committed.revalidations ?? [], op);
+            await deps.revalidate(
+              committed.revalidations ?? [],
+              op,
+              deleted.attempted || replay ? undefined : committed.affectedOps
+            );
         }
       }
     } catch (error) {

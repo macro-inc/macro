@@ -131,7 +131,7 @@ function fixture(options: MutationQueueRunnerDeps['options'] = {}) {
       operationName: getOperationAST(op.query)?.name?.value,
       variables: op.variables ?? {},
     }),
-    deleteReportedRecords: async () => {},
+    deleteReportedRecords: async () => ({ attempted: false }),
     replayExplicitEffects: () => undefined,
     revalidate: async () => {},
   });

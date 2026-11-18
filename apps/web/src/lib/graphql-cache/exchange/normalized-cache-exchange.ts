@@ -758,9 +758,9 @@ export function normalizedCacheExchange(
       );
     };
 
-    const pendingAffectedReads = new Set<Promise<void>>();
-    const trackAffectedRead = (read: Promise<void>): void => {
-      pendingAffectedReads.add(read);
+    const pendingAffectedReads = new Map<Promise<void>, number>();
+    const trackAffectedRead = (key: number, read: Promise<void>): void => {
+      pendingAffectedReads.set(read, key);
       const settled = () => pendingAffectedReads.delete(read);
       void read.then(settled, settled);
     };
@@ -878,7 +878,7 @@ export function normalizedCacheExchange(
         } else if (state && state.networkBoundQueries > 0) {
           state.deferredAffected = true;
           if (!state.replacementFallback)
-            trackAffectedRead(emitAffectedWhileNetworkBound(key));
+            trackAffectedRead(key, emitAffectedWhileNetworkBound(key));
         } else if (
           host.watchQuery &&
           !registrationOnly &&
@@ -886,7 +886,7 @@ export function normalizedCacheExchange(
           !liveQueries.get(key)?.result.error &&
           !liveQueries.get(key)?.result.hasNext
         ) {
-          trackAffectedRead(emitWatchedQuery(key));
+          trackAffectedRead(key, emitWatchedQuery(key));
         } else {
           reexecuteAffected(key, registrationOnly);
         }
@@ -1058,7 +1058,8 @@ export function normalizedCacheExchange(
 
       async function revalidateAfterSettlement(
         revalidations: QueryRevalidationWire[],
-        mutation?: Operation
+        mutation?: Operation,
+        affectedOps?: readonly string[]
       ): Promise<void> {
         const reportError = (error: unknown, operation = mutation) => {
           // Diagnostics cannot turn a durably settled attempt back into a retry.
@@ -1110,13 +1111,30 @@ export function normalizedCacheExchange(
           // Ordinary membership refreshes continue in the background.
           if (revalidation.onlyOnLinkFailure) repairs.push(pending);
         }
-        if (repairs.length === 0 && pendingAffectedReads.size === 0) return;
+        // A committed write already names the observers it changed. Without
+        // further repairs/effects, unrelated reads (including those waiting on
+        // CRM proof) must not withhold its successful result.
+        const affected =
+          revalidations.length === 0 && affectedOps
+            ? new Set(affectedOps)
+            : undefined;
+        const pendingPublications = () =>
+          [...pendingAffectedReads]
+            .filter(
+              ([, key]) => !affected || affected.has(`${host.clientId}:${key}`)
+            )
+            .map(([read]) => read);
+        if (repairs.length === 0 && pendingPublications().length === 0) return;
         const deliver = async () => {
           await Promise.all(repairs);
           // Persistence schedules subscriber reads but does not publish their
           // values. Even a healthy commit must hand off optimism to those reads.
-          while (pendingAffectedReads.size > 0) {
-            await Promise.allSettled([...pendingAffectedReads]);
+          for (
+            let pending = pendingPublications();
+            pending.length > 0;
+            pending = pendingPublications()
+          ) {
+            await Promise.allSettled(pending);
           }
         };
         let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -1294,6 +1312,7 @@ export function normalizedCacheExchange(
         // result drains. Read current storage here and use the exchange's
         // forwarding queue on a miss, without replaying that stale result.
         trackAffectedRead(
+          key,
           readThenRoute(
             makeOperation('query', op, {
               ...op.context,
@@ -1713,19 +1732,24 @@ export function normalizedCacheExchange(
 
       async function deleteReportedRecords(result: OperationResult) {
         const op = result.operation;
-        if (result.error || result.hasNext || result.data == null) return;
+        if (result.error || result.hasNext || result.data == null)
+          return { attempted: false, revision: undefined };
         try {
           const keys = options.deletedRecordKeys?.(result) ?? [];
-          if (keys.length)
-            return await host.deleteRecords(
-              keys,
-              typeof op.context.cacheAuthorityGeneration === 'string'
-                ? op.context.cacheAuthorityGeneration
-                : undefined
-            );
+          if (keys.length === 0)
+            return { attempted: false, revision: undefined };
+          const deletion = await host.deleteRecords(
+            keys,
+            typeof op.context.cacheAuthorityGeneration === 'string'
+              ? op.context.cacheAuthorityGeneration
+              : undefined
+          );
+          return { ...deletion, attempted: true };
         } catch (error) {
           options.onCacheError?.(error, op);
         }
+        // A failed deletion may still have published affected notifications.
+        return { attempted: true, revision: undefined };
       }
 
       function writeThrough(

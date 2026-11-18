@@ -72,6 +72,7 @@ guard the outcome by its login and admit cache effects only under the captured
 permission generation. Parse the selected GraphQL operation and classify REST
 POST contracts explicitly because POST also serves reads. Preserve queued
 identity settlement separately; never offer a duplicate retry for a committed write.
+When a committed queued write needs no further repairs or effects, wait only for publications named by its affected operation keys in this client; unrelated proof-blocked reads must not withhold the result. Preserve deletion revisions and conservative repair/effect waits.
 Reserve subscription order before authority awaits, capture both subscription and cache generations at arrival, and carry the source generation through deletion commands and host wrappers.
 Fence visibility synchronously on retirement, wait for every overlapping cleanup to settle before reopening, and reject replaced-owner transition replies before they can retire the current owner.
 Derive whole-list team-view mutations from a successful network-only settings read inside the serialized mutation; retain the authoring account/session and recheck it after that GET, so a queued edit or skipped response admission cannot overwrite another login's settings or a newer list.

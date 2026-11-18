@@ -1,4 +1,5 @@
 import {
+  MoveEntitiesDocument,
   SaveEmailDraftDocument,
   SetEmailThreadArchivedDocument,
   SoupDocument,
@@ -3926,6 +3927,89 @@ describe('normalizedCacheExchange', () => {
 
   describe('mutations', () => {
     const optimistic = { setEntityProperty: { id: 'prop-1' } };
+
+    it.each(['unrelated', 'mail', 'other-client', 'reported-deletion'])(
+      "waits only for the folder move's affected publication (%s)",
+      async (scope) => {
+        vi.useFakeTimers();
+        const reread = Promise.withResolvers<QueryUpdate>();
+        const affected = scope === 'mail';
+        const reportedDeletion = scope === 'reported-deletion';
+        const waits = affected || reportedDeletion;
+        try {
+          host.watchQuery = vi
+            .fn()
+            .mockResolvedValueOnce({
+              kind: 'hit',
+              revision: parseCacheRevision('1'),
+              data: { from: 'initial' },
+            })
+            .mockReturnValueOnce(reread.promise);
+          const commit = host.commitOptimisticWrite.bind(host);
+          host.commitOptimisticWrite = async (...args) => ({
+            ...(await commit(...args)),
+            affectedOps: [
+              ...(affected ? [`${host.clientId}:11`] : []),
+              ...(scope === 'other-client' ? ['another-client:11'] : []),
+            ],
+          });
+          const { ops, results, forwarded } = harness(host, undefined, {
+            deletedRecordKeys: reportedDeletion
+              ? () => ['GraphqlSoupDocument:removed']
+              : undefined,
+          });
+          ops.next(affected ? personalMailOp(11, 'cache-first') : makeOp(11));
+          await vi.advanceTimersByTimeAsync(10);
+          host.pushAffected([11]);
+          await vi.advanceTimersByTimeAsync(10);
+          expect(host.watchQuery).toHaveBeenCalledTimes(2);
+
+          ops.next(
+            makeOperation(
+              'mutation',
+              createRequest(MoveEntitiesDocument, {
+                inputs: [
+                  {
+                    entity: { type: 'EMAIL_THREAD', id: 'owned-thread' },
+                    projectId: 'folder',
+                  },
+                ],
+              }),
+              {
+                ...makeMutationOp(1).context,
+                normalizedCacheOptimistic: {
+                  uuid: crypto.randomUUID(),
+                  optimisticResponse: { moveEntities: { results: [] } },
+                  revalidations: [],
+                },
+              }
+            )
+          );
+          await vi.advanceTimersByTimeAsync(10);
+          expect(host.commits).toHaveLength(1);
+          expect(forwarded).toHaveLength(1);
+          expect(
+            results.filter((result) => result.operation.kind === 'mutation')
+          ).toHaveLength(waits ? 0 : 1);
+          reread.resolve({
+            kind: 'hit',
+            revision: parseCacheRevision('2'),
+            data: { from: 'updated' },
+          });
+          await vi.advanceTimersByTimeAsync(10);
+          expect(results.at(-1)?.operation.kind).toBe(
+            waits ? 'mutation' : 'query'
+          );
+          expect(
+            results.filter((result) => result.operation.kind === 'mutation')
+          ).toHaveLength(1);
+        } finally {
+          reread.resolve({ kind: 'miss', revision: parseCacheRevision('2') });
+          await vi.advanceTimersByTimeAsync(10);
+          vi.useRealTimers();
+        }
+      }
+    );
 
     it.each([false, true])(
       'keeps owned-thread tag links without CRM proof only for the authoring epoch (retired=%s)',

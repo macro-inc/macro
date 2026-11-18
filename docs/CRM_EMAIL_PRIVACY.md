@@ -110,6 +110,10 @@ Soup remain protected.
 Folder moves are independent for supported non-CRM entity kinds: their effects
 contain only the moved entity and its folders, and the email domain requires
 Owner access before moving a thread or returning its updated snapshot.
+Committed queue writes without further repairs or effects wait only for their
+affected observers in the current client. An unrelated observer waiting for CRM
+proof cannot withhold that successful result; required repairs and postcommit
+effects retain their existing publication wait.
 Arbitrary thread, attachment and EML reads can use CRM grants and retain proof checks.
 A current read whose recovery discovers an account replacement settles without
 data or a network fallback; obsolete attempts remain discarded.
