@@ -491,8 +491,9 @@ tools — hexagonal, heavily feature-gated.
   is not the round's last opens a `mail_folder_live` stream for the folder
   (`open_live_pass`, under the link lock): `initial_complete = true`, so its
   rows queue live and notify, it reads through `provider` and is never paced;
-  its first request lists only mail received since `import_started_at`, the
-  claim time of the page that opened it. `enumerate_once` claims a due live
+  its first request lists only mail received since five minutes before
+  `import_started_at`, the claim time of the page that opened it (Graph dates
+  mail by Exchange's clock, and mail can land after its date). `enumerate_once` claims a due live
   pass before any folder (`claim_stream` takes the kind). The round's
   checkpoint and `reset_stream` delete the pass in their transaction; resync,
   re-import and a removed folder delete it too, and a webhook wakes it. An

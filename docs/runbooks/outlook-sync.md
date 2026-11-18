@@ -59,10 +59,10 @@ round lasts as long as its import. With the PostHog flag
 `enable-outlook-import-live-pass` on, an import round reads the folder newest
 first, and from its first page each importing folder also gets a live pass
 (`email_sync_streams.kind = 'mail_folder_live'`): a delta round of only the
-mail received since the import round started, read like a synced folder
-(woken by change notifications, live Graph budget, never paced), whose
-messages import as new mail. The pass is deleted when the folder's import
-round ends. Its enumerate spans read `@outlook.stream_kind:mail_folder_live`;
+mail received since five minutes before the import round started, read like
+a synced folder (woken by change notifications, live Graph budget, never
+paced), whose messages import as new mail. The pass is deleted when the
+folder's import round ends. Its enumerate spans read `@outlook.stream_kind:mail_folder_live`;
 `@outlook.live_pass_opened` marks the page that opened one.
 
 - The flag is evaluated for the service context `outlook-mailbox-sync`. Turn

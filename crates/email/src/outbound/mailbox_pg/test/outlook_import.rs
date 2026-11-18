@@ -1,6 +1,7 @@
 //! A large Outlook folder's import, driven through the real Outlook adapter
 //! against the Outlook emulator: newest mail first, and mail that arrives
-//! during the import is stored as new mail before the import's walk ends.
+//! during the import is stored as new mail before the import's walk ends,
+//! even mail dated just before the import started.
 
 use crate::domain::mailbox::live_pass::LiveImportPass;
 use crate::domain::mailbox::*;
@@ -196,12 +197,37 @@ async fn a_large_folder_imports_newest_first_and_stores_new_mail_during_its_impo
         )
         .unwrap()
         .id;
+    // Graph dates mail when Exchange received it, and mail can reach its
+    // folder after that date: mail dated just before the round started but
+    // delivered after its snapshot is in neither the round nor a pass that
+    // lists only mail received since the round started.
+    let cutoff = sqlx::query_scalar!(
+        r#"SELECT s.import_started_at AS "cutoff!" FROM email_sync_streams s
+        JOIN email_mailbox_folders f ON f.link_id = s.link_id AND f.provider_id = s.scope_id
+        WHERE s.link_id = $1 AND s.kind = 'mail_folder_live' AND f.role = 'inbox'"#,
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    let dated_earlier = emulator
+        .deliver(
+            ADA,
+            &NewMessage {
+                subject: Some("Dated before the import".into()),
+                text: Some("Hello".into()),
+                date: Some(cutoff - chrono::Duration::seconds(30)),
+                ..NewMessage::default()
+            },
+        )
+        .unwrap()
+        .id;
 
     // The sync loop's order: a folder page, then a message. The walk is
     // paced at two pages while 200 import rows wait, so it cannot reach
     // the end of the round in these steps.
     for _ in 0..30 {
-        if stored(&db, link, &arrived).await {
+        if stored(&db, link, &arrived).await && stored(&db, link, &dated_earlier).await {
             break;
         }
         service.enumerate_once().await.unwrap();
@@ -211,6 +237,10 @@ async fn a_large_folder_imports_newest_first_and_stores_new_mail_during_its_impo
     assert!(
         stored(&db, link, &arrived).await,
         "new mail waited for the import"
+    );
+    assert!(
+        stored(&db, link, &dated_earlier).await,
+        "mail dated just before the import waited for it"
     );
     assert!(
         !inbox_round(&db, link).await.1,

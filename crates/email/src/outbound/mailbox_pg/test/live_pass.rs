@@ -225,9 +225,13 @@ async fn the_live_pass_is_read_first_through_the_live_reader_and_never_paced(db:
     // The folder's next page is due too; the live pass goes first.
     assert!(service.enumerate_once().await.unwrap());
 
+    // It looks back five minutes before the round started.
     assert_eq!(
         live.reads(),
-        vec![(None, RoundStart::ReceivedSince(received_since))]
+        vec![(
+            None,
+            RoundStart::ReceivedSince(received_since - chrono::Duration::minutes(5))
+        )]
     );
     assert_eq!(import.reads().len(), 1);
     let read = live_pass(&db, link).await.unwrap();
@@ -259,7 +263,7 @@ async fn the_live_pass_is_read_first_through_the_live_reader_and_never_paced(db:
         live.reads()[1],
         (
             Some("live-delta".into()),
-            RoundStart::ReceivedSince(received_since)
+            RoundStart::ReceivedSince(received_since - chrono::Duration::minutes(5))
         )
     );
 }

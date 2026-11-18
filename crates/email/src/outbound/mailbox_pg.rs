@@ -303,7 +303,8 @@ impl MailboxSyncRepository for PgMailboxSync {
         // `import_started_at` is when the import round the pass runs beside
         // started: the claim of the page just read, which for a round's first
         // page is just before its first request. The pass lists mail
-        // received since then; the round lists everything older.
+        // received since a few minutes before then (`live_pass::round_start`);
+        // the round lists everything older.
         sqlx::query!(
             r#"
             INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,import_started_at)

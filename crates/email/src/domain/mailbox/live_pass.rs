@@ -4,8 +4,9 @@
 //! started comes back only once the round reaches its checkpoint, and a large
 //! folder's round lasts as long as its import. While the switch is on, the
 //! round reads newest first, and a live pass beside it lists only mail
-//! received since the round started, through the live reader, so new mail is
-//! stored as it arrives. The pass is deleted when the round ends.
+//! received since shortly before the round started, through the live reader,
+//! so new mail is stored as it arrives. The pass is deleted when the round
+//! ends.
 
 use chrono::{DateTime, Utc};
 use email_api_client::domain::models::RoundStart;
@@ -13,6 +14,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::StreamLease;
+
+/// How long before its round's start a live pass lists mail from. Graph dates
+/// mail when Exchange received it, by Exchange's clock, and mail can reach its
+/// folder after that date, so mail dated just before the round can be missing
+/// from both. What the round lists as well merges into its reconciliation row.
+const LOOK_BACK_SECONDS: i64 = 300;
 
 /// Turns the live pass and newest-first import rounds on. The host sets it
 /// from its feature flag; off, folder streams read as they always have.
@@ -53,8 +60,9 @@ impl StreamKind {
 pub enum FolderPass {
     /// The folder's delta stream.
     Folder,
-    /// The live pass. Its first request lists only mail received since
-    /// `received_since`, when the import round it runs beside started.
+    /// The live pass. Its first request lists only mail received from a few
+    /// minutes before `received_since`, when the import round it runs beside
+    /// started.
     Live { received_since: DateTime<Utc> },
 }
 
@@ -70,7 +78,9 @@ impl FolderPass {
 /// What a stream's next round lists, read only for a round's first page.
 pub(super) fn round_start(lease: &StreamLease, switch: &LiveImportPass) -> RoundStart {
     match lease.pass {
-        FolderPass::Live { received_since } => RoundStart::ReceivedSince(received_since),
+        FolderPass::Live { received_since } => {
+            RoundStart::ReceivedSince(received_since - chrono::Duration::seconds(LOOK_BACK_SECONDS))
+        }
         // A large folder's recent mail imports before its oldest.
         FolderPass::Folder if !lease.initial_complete && switch.enabled() => {
             RoundStart::NewestFirst
