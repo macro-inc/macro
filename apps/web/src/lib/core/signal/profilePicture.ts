@@ -1,4 +1,4 @@
-import { type AgentFace, parseAgentFace } from '@core/agent-faces-stub';
+import { type AgentFace, parseAgentFace } from '@macro-inc/agent-faces';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 

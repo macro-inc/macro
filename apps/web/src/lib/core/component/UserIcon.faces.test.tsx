@@ -27,7 +27,7 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
     return state.facesEnabled;
   },
 }));
-vi.mock('@core/agent-faces-stub', async (importOriginal) => ({
+vi.mock('@macro-inc/agent-faces', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   renderFace: faces.renderFace,
 }));

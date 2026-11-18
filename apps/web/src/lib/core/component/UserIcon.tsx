@@ -1,4 +1,4 @@
-import { type AgentFace, renderFace } from '@core/agent-faces-stub';
+import { type AgentFace, renderFace } from '@macro-inc/agent-faces';
 import {
   ENABLE_AGENT_FACES,
   ENABLE_PROFILE_PICTURES,
