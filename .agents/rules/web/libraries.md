@@ -67,7 +67,9 @@ under `services/` throw and validate with zod; elsewhere in `apps/web` and
   `@core/util/date` / `@core/util/time` helpers; `Intl.DateTimeFormat` for
   locale display. No dayjs, luxon, moment, or Temporal.
 - **FE-45** Default virtualized lists to `virtua`; use `@tanstack/solid-virtual`
-  for the redesigned Chat sidebar's nested, scroll-aware lists. Persisted UI
+  only where you must control measurement, the rendered range, or keep rows
+  mounted: the redesigned Chat sidebar's nested, scroll-aware lists, channel
+  message lists, and the database grid, board, and timeline. Persisted UI
   state uses `makePersistedState` (`src/lib/persistence`) with a zod schema,
   not raw `localStorage` calls.
 - **FE-46** Reuse the house helpers instead of re-implementing them: `deepEqual`

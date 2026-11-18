@@ -170,7 +170,7 @@ Run from the repository root inside Nix, with a migrated local PostgreSQL databa
 and `SQLX_OFFLINE` unset:
 
 ```sh
-cargo test -p databases --features postgres,inbound,ai_tools,gateway,entity_mutation
+cargo test -p databases --features postgres,inbound,ai_tools,gateway,entity_mutation,view_rows
 ```
 
 The suite covers permission scoping, typed round trips, relations, safe casts,
