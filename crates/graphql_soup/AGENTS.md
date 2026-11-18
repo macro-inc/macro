@@ -35,5 +35,11 @@ viewer pattern), which apply to every type defined here.
 - `NOTIFIED_AT` maps to Soup's notified request, not a simple sort: `soup`
   accepts it descending only and `groupSoup` rejects it. Its continuation
   cursors carry their own sort tag and string identifiers, separate from timestamp and selected-property cursors.
+  Each item's notification time is `SoupPage.notifiedAt`, a per-page list
+  keyed by type name and id, never an entity field: it orders this list and
+  other lists share the records. Selecting it on a notified page takes the
+  enriched Soup read (as `frecencyScore` does); other sorts keep the plain
+  read and return an empty list, since the shared `Soup` document always
+  selects it.
 - External chats are intentionally excluded from Soup hydration; use the `/external-chats` API.
 - `SoupPatch::hydrate_updated` omits kinds without a `GraphqlSoupEntityType` (databases, forms, external chats), so a committed mutation on them returns empty effects, not a GraphQL error.
