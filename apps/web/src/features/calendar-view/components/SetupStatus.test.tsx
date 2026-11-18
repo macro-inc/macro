@@ -162,6 +162,64 @@ describe('SetupStatus', () => {
     );
   });
 
+  it('names an inbox whose calendar stopped syncing while another inbox works', async () => {
+    const user = userEvent.setup();
+    setLinks([
+      link('working'),
+      link('stopped', {
+        needs_calendar_permission: true,
+        has_calendar_data: true,
+      }),
+    ]);
+    render(() => <SetupStatus />);
+
+    expect(
+      screen.getByText('Calendar for stopped@example.com stopped syncing')
+    ).toBeTruthy();
+    expect(
+      screen.queryByText('Reconnect to show its events in Macro again.')
+    ).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Reconnect' }));
+
+    expect(mocks.startAddInbox).toHaveBeenCalledWith({
+      provider: 'GMAIL',
+      reconnectLinkId: 'stopped',
+      emailAddress: 'stopped@example.com',
+      scopes: 'calendar',
+    });
+  });
+
+  it('explains a stopped calendar over an empty grid when it is the only one', () => {
+    setLinks([
+      link('stopped', {
+        needs_calendar_permission: true,
+        has_calendar_data: true,
+      }),
+    ]);
+    render(() => <SetupStatus />);
+
+    expect(
+      screen.getByText('Calendar for stopped@example.com stopped syncing')
+    ).toBeTruthy();
+    expect(
+      screen.getByText('Reconnect to show its events in Macro again.')
+    ).toBeTruthy();
+  });
+
+  it('leaves a calendar that was never enabled, or a delegated stopped one, to settings while another works', () => {
+    setLinks([
+      link('working'),
+      link('never', { needs_calendar_permission: true }),
+      delegated('theirs', {
+        needs_calendar_permission: true,
+        has_calendar_data: true,
+      }),
+    ]);
+    render(() => <SetupStatus />);
+
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
   it('stays quiet when the viewer’s own calendar works, whatever a delegated inbox needs', () => {
     setLinks([
       link('own'),

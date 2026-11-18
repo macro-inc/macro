@@ -2971,6 +2971,46 @@ impl GoogleCalendarSyncRepository for PgCalendarRepository {
         .map_err(report)?;
         Ok(reaped as usize)
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn disable_google_accounts_without_calendar_capability(&self) -> Result<usize, Report> {
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        let mut log = ChangeLogBatch::default();
+        // A grant from before Macro narrowed its calendar scopes still
+        // reports the broad scope, which never counts as the capability, so
+        // nothing syncs the account; Outlook's claim maintenance treats the
+        // same gap this way. Grants being applied hold their scopes row and
+        // are skipped until the next round.
+        let links = sqlx::query_scalar!(
+            r#"
+            SELECT account.email_link_id
+            FROM calendar_accounts account
+            JOIN email_link_google_scopes scopes ON scopes.link_id = account.email_link_id
+            WHERE account.provider = 'google'
+              AND account.sync_status <> 'disabled'
+              AND NOT scopes.granted_scopes @> $1::text[]
+            ORDER BY account.email_link_id
+            LIMIT 100
+            FOR UPDATE OF account, scopes SKIP LOCKED
+            "#,
+            &required_scopes,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(report)?;
+        for email_link_id in &links {
+            disable_calendar_capability_tx(&mut tx, &mut log, *email_link_id).await?;
+        }
+        log.commit(tx).await?;
+        if !links.is_empty() {
+            tracing::info!(
+                accounts = links.len(),
+                "turned off Google calendars without the calendar capability"
+            );
+        }
+        Ok(links.len())
+    }
 }
 
 async fn fence_google_mutation_tx(

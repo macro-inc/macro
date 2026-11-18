@@ -31,11 +31,31 @@ const SETUP_MESSAGES = {
     description: 'Reconnect your account to resume calendar sync.',
     action: 'Reconnect',
   },
+  stopped: {
+    title: 'Calendar stopped syncing',
+    description: 'Reconnect to show its events in Macro again.',
+    action: 'Reconnect',
+  },
 } as const;
 
 function isWorkingCalendar(link: EmailLink) {
   return (
     link.is_sync_active && !link.needs_calendar_permission && !link.needs_reauth
+  );
+}
+
+/**
+ * An inbox whose calendar used to sync but lost calendar access without the
+ * user turning it off, such as a grant from before Macro narrowed its
+ * calendar scopes. Its events are gone, so it is named even while another
+ * inbox's calendar works.
+ */
+function isStoppedCalendar(link: EmailLink) {
+  return (
+    link.needs_calendar_permission &&
+    link.has_calendar_data &&
+    !link.calendar_disabled &&
+    !link.needs_reauth
   );
 }
 
@@ -76,8 +96,10 @@ export function SetupStatus() {
   // Existing events are not evidence that setup is complete: a revoked grant
   // or delegated inbox can leave events visible without a working calendar
   // connection belonging to the current user.
+  const stoppedLink = () => ownLinks().find(isStoppedCalendar);
+
   const setupState = createMemo<
-    'connect' | 'permission' | 'reauth' | 'disabled' | undefined
+    'connect' | 'permission' | 'reauth' | 'disabled' | 'stopped' | undefined
   >(() => {
     const activeData = calendarPager.activeData();
     const range = activeData?.range();
@@ -94,6 +116,7 @@ export function SetupStatus() {
     const links = ownLinks();
     if (links.length === 0) return 'connect';
 
+    if (links.some(isStoppedCalendar)) return 'stopped';
     if (links.some(isWorkingCalendar)) return undefined;
     if (links.some((link) => link.needs_reauth)) return 'reauth';
     if (links.some((link) => link.needs_calendar_permission)) {
@@ -112,6 +135,12 @@ export function SetupStatus() {
   const setupMessage = createMemo(
     () => SETUP_MESSAGES[setupState() ?? 'connect']
   );
+  const setupTitle = () => {
+    const stopped = setupState() === 'stopped' ? stoppedLink() : undefined;
+    return stopped
+      ? `Calendar for ${stopped.email_address} stopped syncing`
+      : setupMessage().title;
+  };
 
   // The permission and disabled states both sit on a working mailbox —
   // turning calendar off leaves Gmail untouched — so they ask for calendar
@@ -122,14 +151,16 @@ export function SetupStatus() {
     const link =
       state === 'reauth'
         ? links.find((link) => link.needs_reauth)
-        : links.find((link) => link.needs_calendar_permission);
+        : state === 'stopped'
+          ? stoppedLink()
+          : links.find((link) => link.needs_calendar_permission);
     fireAndForget(
       startAddInbox({
         provider: link?.provider,
         reconnectLinkId: link?.id,
         emailAddress: link?.email_address,
         scopes:
-          state === 'permission' || state === 'disabled'
+          state === 'permission' || state === 'disabled' || state === 'stopped'
             ? 'calendar'
             : 'gmail_and_calendar',
       }),
@@ -158,7 +189,7 @@ export function SetupStatus() {
           when={!hasEvents() && !seesWorkingCalendar()}
           fallback={
             <div class="absolute right-2 bottom-2 z-20 flex items-center gap-2 rounded-full border border-edge-muted bg-surface py-1 pr-1 pl-2.5 text-xs text-ink-muted shadow-menu">
-              <span>{setupMessage().title}</span>
+              <span>{setupTitle()}</span>
               <Button variant="primary" size="sm" onClick={startSetup}>
                 {setupMessage().action}
               </Button>
@@ -170,9 +201,7 @@ export function SetupStatus() {
             aria-live="polite"
           >
             <div class="flex max-w-sm flex-col items-center gap-3">
-              <div class="text-sm font-semibold text-ink">
-                {setupMessage().title}
-              </div>
+              <div class="text-sm font-semibold text-ink">{setupTitle()}</div>
               <p class="text-xs text-ink-muted">{setupMessage().description}</p>
               <Button variant="primary" size="sm" onClick={startSetup}>
                 {setupMessage().action}
