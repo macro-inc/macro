@@ -1,0 +1,109 @@
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_33167d4cf077ea::t_79403be8d4dfa4 1-45
+apps/web/src/features/agent-permissions/CLAUDE.md
+  s_33167d4cf077ea::t_6e59b2270fbadc 1
+apps/web/src/features/agent-permissions/components/group-icon.ts
+  s_33167d4cf077ea::t_98ea4e56200b20 1-49
+apps/web/src/features/agent-permissions/components/labels.ts
+  s_33167d4cf077ea::t_6304181389cf72 1-54
+apps/web/src/features/agent-permissions/components/match-text.tsx
+  s_33167d4cf077ea::t_2fd8678fd8480c 1-21
+apps/web/src/features/agent-permissions/components/permission-action-row.tsx
+  s_33167d4cf077ea::t_4e1db74b020664 1-79
+apps/web/src/features/agent-permissions/components/permission-group-row.tsx
+  s_33167d4cf077ea::t_e1b3f03bc74c7d 1-58
+apps/web/src/features/agent-permissions/components/permission-group-summary.tsx
+  s_33167d4cf077ea::t_fd844443238f14 1-74
+apps/web/src/features/agent-permissions/components/permission-row.tsx
+  s_33167d4cf077ea::t_16ab18e90855aa 1-34
+apps/web/src/features/agent-permissions/components/permission-state-control.tsx
+  s_33167d4cf077ea::t_99b752d8de2f69 1-53
+apps/web/src/features/agent-permissions/components/permission-state-glyph.tsx
+  s_33167d4cf077ea::t_ecdd6fe0fea642 1-37
+apps/web/src/features/agent-permissions/components/permission-tool-list.tsx
+  s_33167d4cf077ea::t_6844a3ccc07daf 1-90
+apps/web/src/features/agent-permissions/components/permission-tool-row.tsx
+  s_33167d4cf077ea::t_df065550f85e38 1-115
+apps/web/src/features/agent-permissions/components/permissions-notes.tsx
+  s_33167d4cf077ea::t_bc0452a29be2bc 1-98
+apps/web/src/features/agent-permissions/components/permissions-skeleton.tsx
+  s_33167d4cf077ea::t_f7fe68dbb1a7e1 1-24
+apps/web/src/features/agent-permissions/components/reset-permissions-dialog.tsx
+  s_33167d4cf077ea::t_facf4aec17eb9f 1-45
+apps/web/src/features/agent-permissions/components/rich-text.tsx
+  s_33167d4cf077ea::t_be75666251fc54 1-19
+apps/web/src/features/agent-permissions/core/model.test.ts
+  s_33167d4cf077ea::t_22eac2408baeb6 1-145
+apps/web/src/features/agent-permissions/core/model.ts
+  s_33167d4cf077ea::t_9bbf7f14793361 1-302
+apps/web/src/features/agent-permissions/index.ts
+  s_33167d4cf077ea::t_a065541f643dd4 1-5
+apps/web/src/features/agent-permissions/primitives/pending-changes.ts
+  s_33167d4cf077ea::t_bebba8cb0f6969 1-69
+apps/web/src/features/agent-permissions/queries/keys.ts
+  s_33167d4cf077ea::t_9ec09d4f7d5a34 1-9
+apps/web/src/features/agent-permissions/queries/permissions.ts
+  s_33167d4cf077ea::t_dcbd709db26f6d 1-136
+apps/web/src/features/agent-permissions/tests/fixtures.ts
+  s_33167d4cf077ea::t_77ec06030e9539 1-147
+apps/web/src/features/agent-permissions/use-agent-permissions-flag.ts
+  s_33167d4cf077ea::t_f916a17b6cccd1 1-17
+apps/web/src/features/agent-permissions/views/agent-permissions-list.tsx
+  s_33167d4cf077ea::t_950ef93c5302e0 1-439
+apps/web/src/features/agent-permissions/views/agent-permissions-page.test.tsx
+  s_33167d4cf077ea::t_da35f951ae87cc 1-283
+apps/web/src/features/agent-permissions/views/agent-permissions-page.tsx
+  s_33167d4cf077ea::t_1d2de8952172f8 1-279
+apps/web/src/features/agent-permissions/views/agent-permissions-section.tsx
+  s_33167d4cf077ea::t_06dcbda6ef6cd6 1-184
+apps/web/src/features/agent-permissions/views/permission-changes.ts
+  s_33167d4cf077ea::t_4690e25c29747c 1-126
+apps/web/src/features/settings/Agents.test.tsx
+  s_33167d4cf077ea::t_713f87365c9256 29,80-107,358,1022-1102
+apps/web/src/features/settings/Agents.tsx
+  s_33167d4cf077ea::t_6bfc0291884e56 2-7,35,207-223,354,371,378-413,469-470,515-519,584-595,663,701-718,999-1002,1355-1364,1661-1669
+apps/web/src/features/settings/agentSettingsState.ts
+  s_33167d4cf077ea::t_fcb3771f5e732e 1,5-6,10-15,28-43
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_33167d4cf077ea::t_d00a81782c11bf 155-175
+apps/web/src/lib/i18n/locales/en.ts
+  s_33167d4cf077ea::t_08a0fb639e9273 5,57
+apps/web/src/lib/i18n/locales/en/agent-permissions.ts
+  s_33167d4cf077ea::t_ff51e263be9429 1-115
+apps/web/src/lib/service-clients/service-agent-harness/tool-permissions.ts
+  s_33167d4cf077ea::t_0e017df19a67f5 1-95
+docs/agent-guide/settings.md
+  s_33167d4cf077ea::t_eac19f53135a34 1189-1216
+rules/ast-grep/ts-feature-components-presentational.yml
+  s_33167d4cf077ea::t_62395a3bb70252 18
+rules/ast-grep/ts-feature-core-pure.yml
+  s_33167d4cf077ea::t_5eb8d4efd18121 20
+rules/ast-grep/ts-feature-data-no-ui.yml
+  s_33167d4cf077ea::t_fb6db7b7a5442b 18-19
+rules/ast-grep/ts-feature-layers-use-context.yml
+  s_33167d4cf077ea::t_666a887d3734bb 28-32
+rules/ast-grep/tsx-feature-components-presentational.yml
+  s_33167d4cf077ea::t_e2865d395d631f 18
+rules/ast-grep/tsx-feature-core-pure.yml
+  s_33167d4cf077ea::t_5281853652ddfb 20
+rules/ast-grep/tsx-feature-data-no-ui.yml
+  s_33167d4cf077ea::t_40ccddfaf46d6a 18-19
+rules/ast-grep/tsx-feature-layers-use-context.yml
+  s_33167d4cf077ea::t_d147779f8206ce 28-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "506ccb9ee68495a87846703e05fae08a92187e03",
+  "prompts": {},
+  "sessions": {
+    "s_33167d4cf077ea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "744ef236-3548-43fa-ada2-62959115fcce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
