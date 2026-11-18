@@ -190,15 +190,20 @@ export function wasmCacheKey(
   const directories = closures.wasm_closures?.[closurePackage] ?? [];
   if (directories.length === 0) {
     throw new Error(
-      `no wasm closure for ${closurePackage}: add it to WASM_PACKAGES in tooling/xtask/crates/xtask_deps/src/closures.rs and run \`cargo x deps\``
+      `no wasm closure for ${closurePackage}: add it to apps/web/wasm-modules.json and run \`cargo x deps\``
     );
   }
 
   const hash = createHash('sha256');
 
-  const files = git(root, [
+  // Untracked files count too (a new module a build compiles before it is
+  // staged); ignored ones do not.
+  const listed = git(root, [
     'ls-files',
     '-z',
+    '--cached',
+    '--others',
+    '--exclude-standard',
     '--',
     ...directories,
     'rust-toolchain.toml',
@@ -207,13 +212,19 @@ export function wasmCacheKey(
     'nix',
     '.cargo',
     'static_assets',
-  ])
-    .split('\0')
-    .filter((file) => file !== '');
+  ]).split('\0');
+  const files = [...new Set(listed.filter((file) => file !== ''))].sort();
   for (const file of files) {
-    // Symlinks (the CLAUDE.md links) count by target, as git stores them.
     const path = join(root, file);
-    const isLink = lstatSync(path).isSymbolicLink();
+    // A tracked file deleted from the working tree is listed but unreadable.
+    const stat = lstatSync(path, { throwIfNoEntry: false });
+    if (stat === undefined) {
+      hash.update(`deleted ${file}\0`);
+      continue;
+    }
+
+    // Symlinks (the CLAUDE.md links) count by target, as git stores them.
+    const isLink = stat.isSymbolicLink();
     hash.update(`${isLink ? 'link' : 'file'} ${file}\0`);
     hash.update(isLink ? readlinkSync(path) : readFileSync(path));
     hash.update('\0');

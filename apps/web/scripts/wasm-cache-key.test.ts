@@ -203,6 +203,26 @@ describe('wasmCacheKey', () => {
     for (const other of changed) expect(other).not.toBe(base);
   });
 
+  it('counts untracked and deleted files in the build, not ignored ones', () => {
+    const root = workspace({ ...BASE_FILES, '.gitignore': 'crates/engine/out/\n' });
+    const current = () => wasmCacheKey(root, 'engine', BUILD, {});
+    const base = current();
+
+    mkdirSync(join(root, 'crates/engine/out'));
+    writeFileSync(join(root, 'crates/engine/out/pkg.wasm'), 'built');
+    expect(current()).toBe(base);
+
+    writeFileSync(join(root, 'crates/engine/src/new.rs'), 'pub fn a() {}\n');
+    const withNew = current();
+    expect(withNew).not.toBe(base);
+    writeFileSync(join(root, 'crates/engine/src/new.rs'), 'pub fn b() {}\n');
+    expect(current()).not.toBe(withNew);
+
+    rmSync(join(root, 'crates/engine/src/new.rs'));
+    rmSync(join(root, 'crates/engine/src/lib.rs'));
+    expect(current()).not.toBe(base);
+  });
+
   it('gives every checkout of the same sources one key', () => {
     const first = workspace(BASE_FILES);
     const second = workspace(BASE_FILES);
