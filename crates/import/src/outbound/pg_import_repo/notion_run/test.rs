@@ -882,3 +882,46 @@ async fn notice_markers_alone_do_not_retain_a_staged_generation(pool: PgPool) {
             .is_empty()
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn fidelity_warnings_survive_retries_and_cannot_change_another_owners_row(pool: PgPool) {
+    let repo = PgImportRepo::new(pool);
+    let owner = user("loss-owner");
+    let rows = repo
+        .replace_plan(
+            &owner,
+            ImportSource::Notion,
+            &[PlanRow {
+                kind: ImportKind::DataSource,
+                foreign_id: "dddddddddddddddddddddddddddddddd".into(),
+                parent_foreign_id: None,
+                metadata: serde_json::json!({"title":"Work", "plan":{"decision":"copy"}}),
+            }],
+        )
+        .await
+        .unwrap();
+    let id = rows[0].id;
+    repo.record_warnings(&owner, id, &["View: filter approximated".into()])
+        .await
+        .unwrap();
+    repo.record_warnings(
+        &owner,
+        id,
+        &[
+            "View: filter approximated".into(),
+            "Formula snapshot".into(),
+        ],
+    )
+    .await
+    .unwrap();
+    assert!(
+        repo.record_warnings(&user("loss-other"), id, &["Different loss".into()])
+            .await
+            .is_err()
+    );
+    let row = repo.get(&owner, id).await.unwrap().unwrap();
+    let warnings = row.metadata["warnings"].as_array().unwrap();
+    assert_eq!(warnings.len(), 2);
+    assert!(warnings.contains(&serde_json::json!("View: filter approximated")));
+    assert!(warnings.contains(&serde_json::json!("Formula snapshot")));
+}

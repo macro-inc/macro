@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use futures::{FutureExt, StreamExt, stream};
-use import_notion::domain::inventory::{all_rows, full_markdown};
+use import_notion::domain::inventory::all_rows;
 use import_notion::domain::macro_cells::{PeopleMap, capped_name, derived_id};
 use import_notion::domain::model::NotionId;
 use import_notion::domain::ports::NotionApi;
@@ -30,7 +30,10 @@ use crate::domain::ports::{
 use super::values::{task_body, task_properties};
 
 mod database;
-pub(super) use database::{WrittenDatabase, link_relations, recorded_database, write_database};
+pub(super) use database::{
+    PreparedDatabase, WrittenDatabase, link_relations, prepare_database, recorded_database,
+    write_prepared_database,
+};
 
 #[cfg(test)]
 mod test;
@@ -76,6 +79,8 @@ impl Cancel {
 pub(in crate::domain::service) struct WriteItem {
     /// The ledger row.
     pub import_id: Uuid,
+    /// Planned objects referencing an external source, for placement reporting.
+    pub dependency_of: Vec<String>,
     /// The ledger row it sits under, if any.
     pub parent: Option<Uuid>,
     /// The Notion object.
@@ -111,6 +116,7 @@ impl WriteItem {
         let plan = meta.plan?;
         Some(Self {
             import_id: entity.id,
+            dependency_of: plan.dependency_of,
             parent: entity.parent_id,
             notion_id: NotionId::parse(&entity.foreign_id)?,
             kind: entity.kind,
@@ -338,6 +344,16 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
         Ok(())
     }
 
+    /// Persist losses before converting or writing a body or preset.
+    pub async fn warn(&self, warnings: &[String]) -> anyhow::Result<()> {
+        if !warnings.is_empty() {
+            self.store
+                .record_warnings(self.user, self.import_id, warnings)
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Record the row's own object of `kind`.
     pub async fn record(&self, kind: WrittenKind, macro_id: Uuid) -> anyhow::Result<()> {
         self.record_all(vec![WrittenObject::own(self.import_id, kind, macro_id)])
@@ -382,15 +398,13 @@ pub(super) async fn folder_once<Writer: WorkspaceWriter, Store: WrittenObjects>(
     progress: &Progress<'_, Store>,
     kind: WrittenKind,
     name: &str,
-    parent: Uuid,
+    parent: Option<Uuid>,
     visibility: crate::domain::ports::ImportVisibility,
 ) -> anyhow::Result<Uuid> {
     if let Some(folder) = progress.get(kind) {
         return Ok(folder);
     }
-    let folder = writer
-        .create_folder(user, name, Some(parent), visibility)
-        .await?;
+    let folder = writer.create_folder(user, name, parent, visibility).await?;
     progress.record(kind, folder).await?;
     Ok(folder)
 }
@@ -411,6 +425,7 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
     share: bool,
     people: &PeopleMap,
     links: &tokio::sync::RwLock<NotionLinks>,
+    destinations: &super::databases::DatabaseDestinations,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
     personal_folder: Option<Uuid>,
@@ -426,7 +441,7 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                 progress,
                 WrittenKind::TasksFolder,
                 &capped_name(&item.title),
-                folder,
+                Some(folder),
                 visibility,
             )
             .await?
@@ -478,7 +493,10 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                         }
                         return Ok(());
                     }
-                    let content = full_markdown(api, &row.id).await?;
+                    let snapshot = links.read().await.clone();
+                    let (content, row_links) =
+                        super::databases::body_links(api, &row.id, &snapshot, destinations, progress)
+                            .await?;
                     let body = task_body(&row, &content, &item.task_fields, people);
                     let properties = task_properties(&row, &item.task_fields, people);
                     let title = if row.title.trim().is_empty() {
@@ -487,14 +505,13 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                         row.title.trim()
                     };
                     let id = derived_id(item.import_id, &format!("task/{}", row.id.as_str()));
-                    let links = links.read().await.clone();
                     let created = writer
                         .create_task(
                             user,
                             id,
                             title,
                             &body,
-                            &links,
+                            &row_links,
                             &properties,
                             Some(tasks_folder),
                             Some(SourceDates::from(&row)),

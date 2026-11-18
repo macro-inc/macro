@@ -228,6 +228,8 @@ fn page(hex: char, title: &str) -> PlanRow {
 /// A page planned as a document, shared with the team or not.
 fn planned_page(hex: char, title: &str, shared: bool) -> PlanRow {
     let plan = NotionPlanItem {
+        dependency_of: Vec::new(),
+        inline_on: Vec::new(),
         decision: Some(NotionDecision::Copy),
         reason: None,
         path: Vec::new(),
@@ -905,6 +907,7 @@ mod events;
 mod reimport;
 /// The session events the import produces, in order.
 mod root;
+mod inline;
 mod tracker;
 
 mod dates;

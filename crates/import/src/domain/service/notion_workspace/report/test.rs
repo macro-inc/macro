@@ -16,6 +16,8 @@ fn row(
     last_error: Option<&str>,
 ) -> ImportEntity {
     let plan = NotionPlanItem {
+        dependency_of: Vec::new(),
+        inline_on: Vec::new(),
         decision: Some(decision),
         reason: (decision == NotionDecision::Hand).then(|| "Mixed records".to_string()),
         path: Vec::new(),

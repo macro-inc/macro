@@ -92,7 +92,7 @@ from this import's other databases into it are not linked.
 - `src/domain/service/tracker_workspace.rs` (+ `plan`, `values`): Linear/Jira
   group decisions, frozen source snapshots, task/project writes and relationships.
 - `src/domain/service/notion_workspace.rs` (+ `plan`, `triage`, `sharing`,
-  `object`, `write`, `values`, `report`): the Notion workspace import —
+  `object`, `databases`, `reserve`, `write`, `values`, `report`): the Notion workspace import —
   planning, the decision model, who sees what, writing one object (claim,
   link or write), cancel and the report. Database columns and cells come
   from `import_notion::domain::macro_cells`.
@@ -307,3 +307,43 @@ contract; original source values remain in the task body.
 Jira ids include the cloud id. Epic groups have a separate identity from their
 issue task. Tracker imports never use the generic accept/finalize paths; those
 paths reject workspace-plan rows so approval cannot be bypassed.
+
+## Inline and linked Notion databases
+
+- Discover body placements and view-backed dependencies before triage, including
+  sources reached from row bodies. `plan.dependencyOf` names the planned objects
+  referencing an external source; readable dependencies start included, and
+  unavailable dependencies are visible by-hand rows without sharing controls.
+  `plan.inlineOn` includes referenced sources already in selected roots; suggest
+  Copy for every inline source. Preserve approved Tasks or exclusion choices at
+  write time and report their `notImported` occurrence fallbacks.
+- Finish ancestor folder sharing, then reserve every approved database and saved
+  view before converting any body. Use the source UUID as identity within the
+  user/team ledger; globally unique Notion source UUIDs never dedupe by title.
+- File owner-only databases with their page when safe. Keep each database's
+  reviewed sharing separate; a personal source falls back to the private Notion
+  root, then top level (with a warning), when concrete ancestor grants are shared.
+  A folder's link-only setting does not grant access to the filed database.
+- `databases::body_links` builds a separate occurrence map for each page or row;
+  `?v` selects the saved view, otherwise the first container tab is assumed and
+  reported. Excluded sources retain `notImported` links.
+- Stream rows once to collect date-range property ids, union timeline usage,
+  and retain schemas/ids/views only until writing. Re-read rows under the normal
+  write pacer and concurrency bound; report schema or date-shape drift and write
+  the values fitting the reserved schema. Record API row counts per pass. Persist
+  `SchemaPlan` and `DateRangeProperty` markers atomically before applying schema
+  operations, and reuse them on resume instead of changing Date/DateRange shapes.
+  `SchemaPlan` carries a UUIDv5 property-schema fingerprint: on restart mismatch,
+  fail only that source and report unresolved card fallbacks; keep other sources
+  and pages running. Do not rebuild incompatible columns or store full snapshots.
+- Keep rootless dependencies reached only from source rows at the Notion folder
+  and report that placement with the source titles. Apply the same privacy guard;
+  do not create or share row-body folders early merely to file a dependency.
+  Approximate filters preserve a superset of source rows and visibly mark the
+  saved view name. Persist translation losses, unresolved placements and labelled
+  computed snapshots through `WrittenObjects::record_warnings`; reports and
+  settlement events retain them across retries.
+- Database ids derive from the ledger row; view ids derive from database and
+  source-view ids. Record their written markers and reuse an existing caller id
+  after a lost create response. Keep page placement and page link defaults on
+  their existing path; database privacy does not change those defaults.

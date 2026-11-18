@@ -638,7 +638,71 @@ SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
         Ok(())
     }
 
-    #[tracing::instrument(skip(self, import_ids), fields(rows = import_ids.len()), err)]
+    #[tracing::instrument(skip_all, fields(source_id = %source, database_id = %database), err)]
+    async fn database_mapping(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: &import_notion::domain::model::NotionId,
+        database: Uuid,
+    ) -> Result<Option<crate::domain::ports::RecordedDatabaseMapping>> {
+        let table = sqlx::query!(
+            r#"
+            SELECT table_marker.macro_id, COALESCE(holder.metadata->'warnings', '[]'::jsonb) AS "warnings!"
+            FROM import_entity AS holder
+            JOIN import_entity_written AS database_marker ON database_marker.import_id = holder.id
+                AND database_marker.kind = 'database' AND database_marker.object = ''
+            JOIN import_entity_written AS table_marker ON table_marker.import_id = holder.id
+                AND table_marker.kind = 'table' AND table_marker.object = ''
+            WHERE holder.source = 'notion' AND holder.kind = 'data_source'
+                AND holder.foreign_id = $2 AND holder.status = 'imported'
+                AND holder.entity_type = 'database' AND holder.entity_id = $3::uuid::text
+                AND database_marker.macro_id = $3
+                AND (holder.user_id = $1 OR holder.team_id = (SELECT team_id FROM team_user WHERE user_id = $1))
+            "#,
+            user.as_ref(), source.as_str(), database,
+        ).fetch_optional(&self.pool).await?;
+        table
+            .map(|row| {
+                Ok(crate::domain::ports::RecordedDatabaseMapping {
+                    table: models_databases::TableId::from_uuid(row.macro_id),
+                    warnings: serde_json::from_value(row.warnings)
+                        .map_err(|error| ImportError::Other(error.into()))?,
+                })
+            })
+            .transpose()
+    }
+
+    #[tracing::instrument(skip_all, fields(import_id = %import_id, warnings = warnings.len() as i64), err)]
+    async fn record_warnings(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        warnings: &[String],
+    ) -> Result<()> {
+        if warnings.is_empty() {
+            return Ok(());
+        }
+        let warnings = serde_json::json!(warnings);
+        let changed = sqlx::query!(
+            r#"
+            UPDATE import_entity
+            SET metadata = jsonb_set(metadata, '{warnings}', (
+                SELECT COALESCE(jsonb_agg(DISTINCT loss), '[]'::jsonb)
+                FROM jsonb_array_elements(COALESCE(metadata->'warnings', '[]'::jsonb) || $3::jsonb) AS loss
+            )), updated_at = NOW()
+            WHERE id = $2 AND user_id = $1 AND metadata->'plan' IS NOT NULL
+            "#,
+            user.as_ref(), import_id, warnings,
+        ).execute(&self.pool).await?;
+        if changed.rows_affected() != 1 {
+            return Err(ImportError::Other(anyhow::anyhow!(
+                "warning ledger row unavailable"
+            )));
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, user, import_ids), fields(rows = import_ids.len()), err)]
     async fn written(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -660,7 +724,7 @@ SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
         rows.into_iter().map(WrittenObject::try_from).collect()
     }
 
-    #[tracing::instrument(skip(self, objects), fields(objects = objects.len()), err)]
+    #[tracing::instrument(skip(self, user, objects), fields(objects = objects.len()), err)]
     async fn record_written(
         &self,
         user: &MacroUserIdStr<'static>,

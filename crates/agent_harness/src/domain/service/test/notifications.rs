@@ -748,6 +748,7 @@ async fn a_settled_import_wakes_an_idle_session_with_its_final_report() {
                 subject_id: review.to_string(),
                 event: NotificationEvent::ReviewSettled(ReviewSettlement::Import {
                     import: ImportSettlement {
+                        warnings: Vec::new(),
                         source: ImportWorkspace::Notion,
                         outcome: ImportOutcome::Completed,
                         error: None,

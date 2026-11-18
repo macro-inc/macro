@@ -22,7 +22,11 @@ execution, display) that don't belong to a single domain.
 - `src/import_workspace.rs`: `ToolEntityCreator` as the import crate's
   `WorkspaceWriter` (folders, documents, tasks, databases as Macro AI for the
   user), sharing its document/task paths with `EntityCreator`; Notion bodies
-  go through `DocumentCreator::create_notion_markdown`. `share_with_team`
+  go through `DocumentCreator::create_notion_markdown`, including page-local
+  typed database-card occurrence maps. Database creation uses caller-reserved ids
+  and owner-only filing; saved-view creation safely reuses committed ids after a
+  lost response. The folder privacy port checks concrete grants and ancestry,
+  leaving the import domain to choose personal filing or top level. `share_with_team`
   shares a folder through `ProjectService::edit_project` (edit level) and a
   document through `DocumentService::set_team_share`. Notion pages and tasks
   are created with their page's dates (`NewDocumentMetadata::created_at` /

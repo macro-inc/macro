@@ -176,6 +176,7 @@ fn settlement(
         RunStatus::Running | RunStatus::Ready | RunStatus::Importing => return None,
     };
     Some(ImportSettlement {
+        warnings: report.warnings.clone(),
         source: workspace(source)?,
         outcome,
         error: run.error.as_deref().map(bounded),

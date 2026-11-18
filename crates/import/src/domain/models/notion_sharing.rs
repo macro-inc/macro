@@ -14,7 +14,7 @@ pub struct NotionAlreadyImported {
     pub by: String,
     /// The Macro entity it became.
     pub entity_id: String,
-    /// That entity's type (`md`, `project`).
+    /// That entity's type (`md`, `project`, `database`).
     pub entity_type: String,
 }
 

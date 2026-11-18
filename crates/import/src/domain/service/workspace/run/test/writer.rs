@@ -11,6 +11,20 @@ pub(super) struct Writer {
     pub(super) folders: Mutex<Vec<String>>,
     pub(super) folder_delay: Option<std::time::Duration>,
     pub(super) folder_visibilities: Mutex<Vec<(String, crate::domain::ports::ImportVisibility)>>,
+    pub(super) databases: Mutex<Vec<(Uuid, Option<Uuid>)>>,
+    pub(super) saved_views: Mutex<
+        Vec<(
+            Uuid,
+            models_databases::views::ViewId,
+            models_databases::views::NewView,
+        )>,
+    >,
+    pub(super) steps: Mutex<Vec<&'static str>>,
+    pub(super) no_private_folder: bool,
+    pub(super) database_reads: Mutex<Vec<(Uuid, models_databases::TableId)>>,
+    pub(super) deny_database_access: bool,
+
+    pub(super) tasks: Mutex<Vec<Uuid>>,
     pub(super) documents: Mutex<Vec<(Uuid, String, NotionLinks)>>,
     pub(super) shares: Mutex<Vec<SharedEntity>>,
     pub(super) hold: Option<(Arc<Notify>, tokio_util::sync::CancellationToken)>,
@@ -223,6 +237,11 @@ impl WorkspaceWriter for Writer {
         if let SharedEntity::Folder(id) = entity {
             self.grants.lock().unwrap().insert(id);
         }
+        self.steps.lock().unwrap().push(match entity {
+            SharedEntity::Folder(_) => "share_folder",
+            SharedEntity::Database(_) => "share_database",
+            SharedEntity::Document(_) => "share_document",
+        });
         self.shares.lock().unwrap().push(entity);
         Ok(())
     }
@@ -242,6 +261,7 @@ impl WorkspaceWriter for Writer {
         self.visibilities.lock().unwrap().push((id, visibility));
         self.document_dates.lock().unwrap().push((id, dates));
         self.document_folders.lock().unwrap().push((id, folder));
+        self.steps.lock().unwrap().push("document");
         if let Some((entered, shutdown)) = &self.hold {
             entered.notify_one();
             shutdown.cancelled().await;
@@ -283,6 +303,7 @@ impl WorkspaceWriter for Writer {
     ) -> anyhow::Result<crate::domain::ports::CreatedImportTask> {
         self.visibilities.lock().unwrap().push((id, visibility));
         self.task_folders.lock().unwrap().push(folder);
+        self.tasks.lock().unwrap().push(id);
         Ok(crate::domain::ports::CreatedImportTask {
             id: id.to_string(),
             notice: self
@@ -303,6 +324,76 @@ impl WorkspaceWriter for Writer {
         })
     }
 
+    async fn folder_is_private(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+    ) -> anyhow::Result<bool> {
+        Ok(!self.no_private_folder)
+    }
+    async fn database_access(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> anyhow::Result<bool> {
+        Ok(!self.deny_database_access)
+    }
+    async fn database(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        id: Uuid,
+        table: models_databases::TableId,
+    ) -> anyhow::Result<crate::domain::ports::ImportedDatabase> {
+        self.database_reads.lock().unwrap().push((id, table));
+        Ok(crate::domain::ports::ImportedDatabase {
+            database_id: id,
+            table,
+            views: self
+                .saved_views
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(database, _, _)| *database == id)
+                .map(|(_, view, _)| *view)
+                .collect(),
+        })
+    }
+    async fn ensure_database_view(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        database: Uuid,
+        _: models_databases::TableId,
+        id: models_databases::views::ViewId,
+        view: models_databases::views::NewView,
+    ) -> anyhow::Result<()> {
+        let mut saved = self.saved_views.lock().unwrap();
+        if !saved.iter().any(|(_, known, _)| *known == id) {
+            saved.push((database, id, view));
+            self.steps.lock().unwrap().push("view");
+        }
+        Ok(())
+    }
+    async fn create_database(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        _: &str,
+        folder: Option<Uuid>,
+    ) -> anyhow::Result<NewDatabase> {
+        {
+            let mut databases = self.databases.lock().unwrap();
+            if !databases.iter().any(|(known, _)| *known == id) {
+                databases.push((id, folder));
+                self.steps.lock().unwrap().push("database");
+            }
+        }
+        let _ = user;
+        Ok(NewDatabase {
+            database_id: id,
+            table: models_databases::TableId::from_uuid(
+                import_notion::domain::macro_cells::derived_id(id, "table"),
+            ),
+            title_column: models_databases::ColumnId::from_uuid(
+                import_notion::domain::macro_cells::derived_id(id, "title"),
+            ),
+        })
+    }
     async fn apply_database_ops(
         &self,
         _: &MacroUserIdStr<'static>,
@@ -310,17 +401,18 @@ impl WorkspaceWriter for Writer {
         ops: Vec<models_databases::DatabaseOp>,
     ) -> anyhow::Result<Vec<models_databases::OpResult>> {
         use models_databases::{DatabaseOp, OpResult, RowId, RowsChange, RowsResult, TableVersion};
+        self.steps.lock().unwrap().push("ops");
         Ok(ops
             .into_iter()
             .filter_map(|op| match op {
                 DatabaseOp::Rows {
                     table,
-                    change: RowsChange::Insert { rows, .. },
+                    change: RowsChange::Insert { rows, ids },
                 } => Some(OpResult::Rows {
                     table,
                     table_version: TableVersion(1),
                     change: RowsResult::Inserted {
-                        rows: rows.iter().map(|_| RowId::new()).collect(),
+                        rows: ids.unwrap_or_else(|| rows.iter().map(|_| RowId::new()).collect()),
                     },
                 }),
                 _ => None,

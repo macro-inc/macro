@@ -4,11 +4,37 @@ use super::*;
 /// first record of an object wins.
 #[derive(Default)]
 pub(super) struct FakeStore {
+    pub(super) warnings: Mutex<Vec<String>>,
     pub(super) written: Mutex<Vec<WrittenObject>>,
     pub(super) notices: Mutex<HashMap<(Uuid, Uuid), crate::domain::ports::TaskImportNoticeReason>>,
 }
 
 impl WrittenObjects for FakeStore {
+    async fn database_mapping(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &NotionId,
+        _: Uuid,
+    ) -> crate::domain::ports::Result<Option<crate::domain::ports::RecordedDatabaseMapping>> {
+        Ok(None)
+    }
+
+    async fn record_warnings(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        warnings: &[String],
+    ) -> crate::domain::ports::Result<()> {
+        let mut stored = self.warnings.lock().unwrap();
+        for warning in warnings {
+            if !stored.contains(warning) {
+                stored.push(warning.clone());
+            }
+        }
+        Ok(())
+    }
+
+
     async fn record_task_notice(
         &self,
         _: &MacroUserIdStr<'static>,

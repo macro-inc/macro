@@ -649,6 +649,12 @@ pub struct NotionTaskFields {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NotionPlanItem {
+    /// Notion objects whose bodies require this external data source.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dependency_of: Vec<String>,
+    /// Planned objects whose bodies display this source inline.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inline_on: Vec<String>,
     /// What the import does with it; absent while planning has staged the
     /// object but the decision model has not answered for it yet.
     #[serde(default, skip_serializing_if = "Option::is_none")]

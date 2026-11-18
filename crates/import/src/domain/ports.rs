@@ -614,6 +614,26 @@ pub struct NewDatabase {
     pub title_column: models_databases::ColumnId,
 }
 
+/// The source holder's durable table identity and fidelity report.
+#[derive(Debug, Clone)]
+pub struct RecordedDatabaseMapping {
+    /// The exact imported table, regardless of its current UI tab position.
+    pub table: models_databases::TableId,
+    /// Losses from the copy being reused.
+    pub warnings: Vec<String>,
+}
+
+/// An accessible destination, including the saved views that actually exist.
+#[derive(Debug, Clone)]
+pub struct ImportedDatabase {
+    /// Starter table identity.
+    pub database_id: Uuid,
+    /// The exact table recorded by the source's holder.
+    pub table: models_databases::TableId,
+    /// Existing views of that table.
+    pub views: Vec<models_databases::views::ViewId>,
+}
+
 /// Something a workspace import shares with the user's team.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SharedEntity {
@@ -851,11 +871,45 @@ pub trait WorkspaceWriter: ImportedTargetReader {
         visibility: ImportVisibility,
     ) -> impl Future<Output = anyhow::Result<CreatedImportTask>> + Send;
 
-    /// Create an empty database named `name`.
+    /// Whether this folder and its ancestors have only the owner's grants.
+    fn folder_is_private(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
+
+    /// Check current view access before reading another holder's table marker.
+    fn database_access(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
+
+    /// Verify the recorded table belongs to an accessible database and read its views.
+    fn database(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        table: models_databases::TableId,
+    ) -> impl Future<Output = anyhow::Result<ImportedDatabase>> + Send;
+
+    /// Create a deterministic saved view once, reusing it after a lost marker.
+    fn ensure_database_view(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        database: Uuid,
+        table: models_databases::TableId,
+        id: models_databases::views::ViewId,
+        view: models_databases::views::NewView,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Create owner-only database `id` atomically in the reviewed folder.
     fn create_database(
         &self,
         user: &MacroUserIdStr<'static>,
+        id: Uuid,
         name: &str,
+        folder: Option<Uuid>,
     ) -> impl Future<Output = anyhow::Result<NewDatabase>> + Send;
 
     /// Apply `ops` to a database `user` created, in one transaction. Ops may
@@ -1228,6 +1282,23 @@ pub trait WrittenObjects: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'static>,
         import_id: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Read the imported source holder's exact table marker, scoped to this user
+    /// or team. The caller must first verify current database view access.
+    fn database_mapping(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: &NotionId,
+        database: Uuid,
+    ) -> impl Future<Output = Result<Option<RecordedDatabaseMapping>>> + Send;
+
+    /// Retain distinct fidelity losses on a plan row across attempts.
+    fn record_warnings(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        warnings: &[String],
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Everything recorded for the user's ledger rows `import_ids`.

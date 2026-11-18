@@ -1262,6 +1262,8 @@ export type ImportSettlement =
 
 /**  The final report of an approved workspace import, with no page content. */
 export type ImportSettlement_Deserialize = {
+  /**  Fidelity losses and source snapshot labels retained by the import. */
+  warnings?: string[];
   /**  The workspace the import read. */
   source?: ImportWorkspace;
   /**  How the write ended. */
@@ -1305,6 +1307,8 @@ export type ImportSettlement_Deserialize = {
 
 /**  The final report of an approved workspace import, with no page content. */
 export type ImportSettlement_Serialize = {
+  /**  Fidelity losses and source snapshot labels retained by the import. */
+  warnings?: string[];
   /**  The workspace the import read. */
   source: ImportWorkspace;
   /**  How the write ended. */

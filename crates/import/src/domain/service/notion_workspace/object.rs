@@ -3,7 +3,6 @@
 
 use std::collections::HashMap;
 
-use import_notion::domain::inventory::full_markdown;
 use import_notion::domain::macro_cells::PeopleMap;
 use import_notion::domain::model::NotionId;
 use import_notion::domain::ports::{NotionApi, NotionConnections};
@@ -13,7 +12,7 @@ use uuid::Uuid;
 
 use super::super::ImportServiceImpl;
 use super::run::JobControl;
-use super::{Place, failure_text, plan, values, write};
+use super::{Place, databases, failure_text, plan, reserve::Reservations, values, write};
 use crate::domain::models::{
     ImportEntity, ImportKind, ImportStatus, NotionAlreadyImported, NotionDecision, TeamClaim,
     WrittenObject,
@@ -147,6 +146,22 @@ where
                 entity_id,
                 entity_type,
             } => {
+                if item.kind == ImportKind::DataSource
+                    && entity_type == write::DATABASE_ENTITY
+                    && !self
+                        .creator
+                        .database_access(
+                            user,
+                            entity_id
+                                .parse()
+                                .map_err(|error| ImportError::Other(anyhow::Error::new(error)))?,
+                        )
+                        .await?
+                {
+                    return Err(ImportError::Other(anyhow::anyhow!(
+                        "database view access is unavailable"
+                    )));
+                }
                 self.repo
                     .mark_imported(user, item.import_id, &entity_id, &entity_type, None)
                     .await?;
@@ -221,6 +236,7 @@ where
                     share,
                     target.people,
                     target.links,
+                    &target.reservations.destinations,
                     progress,
                     cancel,
                     personal_child_folder,
@@ -229,18 +245,34 @@ where
                 (tasks.to_string(), write::FOLDER_ENTITY)
             }
             (ImportKind::DataSource, _) => {
-                let written = write::write_database(
+                let prepared = target
+                    .reservations
+                    .prepared
+                    .get(&item.notion_id)
+                    .ok_or_else(|| {
+                        ImportError::Other(anyhow::anyhow!(
+                            "database reservation failed: {}",
+                            target
+                                .reservations
+                                .failures
+                                .get(&item.notion_id)
+                                .map(String::as_str)
+                                .unwrap_or("source is not ready")
+                        ))
+                    })?;
+                let written = write::write_prepared_database(
                     api,
                     self.creator.as_ref(),
                     user,
                     item,
-                    folder,
                     share,
                     target.people,
                     target.links,
                     progress,
                     cancel,
                     personal_child_folder,
+                    prepared,
+                    &target.reservations.destinations,
                 )
                 .await?;
                 let id = written.database_id.to_string();
@@ -252,7 +284,15 @@ where
                 (id, write::DATABASE_ENTITY)
             }
             _ => {
-                let markdown = full_markdown(api, &item.notion_id).await?;
+                let snapshot = target.links.read().await.clone();
+                let (markdown, links) = databases::body_links(
+                    api,
+                    &item.notion_id,
+                    &snapshot,
+                    &target.reservations.destinations,
+                    progress,
+                )
+                .await?;
                 // A teammate's copy can disappear after the link snapshot.
                 // Once this row writes, its identity belongs to this generation.
                 let id = write::document_id(item.import_id);
@@ -266,7 +306,6 @@ where
                         (Default::default(), None)
                     }
                 };
-                let links = target.links.read().await.clone();
                 let document = self
                     .creator
                     .create_document(
@@ -439,6 +478,7 @@ pub(super) struct Target<'a, Api> {
     pub place: Place<'a>,
     pub people: &'a PeopleMap,
     pub links: &'a tokio::sync::RwLock<NotionLinks>,
+    pub reservations: &'a Reservations,
     pub databases: &'a tokio::sync::Mutex<HashMap<NotionId, write::WrittenDatabase>>,
     pub written: &'a [WrittenObject],
     pub cancel: &'a write::Cancel,
