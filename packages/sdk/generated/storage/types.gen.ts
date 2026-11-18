@@ -9897,9 +9897,21 @@ export type EmailPrivacySettings = {
      */
     mailbox_link_id?: string | null;
     /**
+     * Existing personal exclusions that cover the caller's whole mailbox.
+     */
+    personal_domain_warnings: {
+        [key: string]: MailboxDomainConflict;
+    };
+    /**
      * Domains excluded only for the caller's contributions.
      */
     personal_domains: Array<string>;
+    /**
+     * Existing team exclusions that cover a connected member's whole mailbox.
+     */
+    team_domain_warnings: {
+        [key: string]: MailboxDomainConflict;
+    };
     /**
      * Domains excluded across the team, including legacy company exclusions.
      */
@@ -14449,6 +14461,11 @@ export type LocationResponseV3 = {
 };
 
 export type MacroUserIdStr = string;
+
+/**
+ * Why a domain exclusion would hide an affected mailbox's entire history.
+ */
+export type MailboxDomainConflict = 'company' | 'personal_provider';
 
 /**
  * Mark messages through this message read.

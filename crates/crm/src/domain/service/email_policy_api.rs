@@ -194,7 +194,7 @@ where
             .get_authenticated_user()
             .map_err(|_| CrmError::AccessDenied)?;
         let available = self.selective_email_available(user.clone()).await;
-        let withdraw = matches!(command.change, EmailPolicyChange::Withdraw);
+        let withdraw = matches!(command.change, EmailPolicyChange::Withdraw {});
         if let EmailPolicyChange::ReplaceRules { rules } = &mut command.change {
             *rules = canonical_rules(rules.clone())?;
         }
@@ -283,8 +283,8 @@ where
         let state = tx.state().clone();
         let action = match &command.change {
             EmailPolicyChange::ReplaceRules { .. } => EmailPolicyAuditAction::RulesActivated,
-            EmailPolicyChange::EnableAll => EmailPolicyAuditAction::AllMailEnabled,
-            EmailPolicyChange::Withdraw => EmailPolicyAuditAction::Withdrawn,
+            EmailPolicyChange::EnableAll {} => EmailPolicyAuditAction::AllMailEnabled,
+            EmailPolicyChange::Withdraw {} => EmailPolicyAuditAction::Withdrawn,
         };
         tx.record_audit(&NewEmailPolicyAudit {
             event_id, action, actor_kind: actor.kind, agent_id: actor.agent_id,

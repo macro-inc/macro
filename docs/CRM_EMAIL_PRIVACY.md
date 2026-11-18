@@ -114,6 +114,16 @@ messages, documents, or agent transcripts is not retroactively redacted.
 - A domain also covers subdomains, with a dot boundary: `acme.com` covers
   `sales.acme.com`, but not `notacme.com`. Any blocked sender/recipient in any
   non-draft message excludes the whole thread, including mixed-company threads.
+- Adding a domain that covers an affected connected primary mailbox is refused
+  with HTTP 400 and the usual `{ message }` validation response. Team blocks
+  protect every current member, independent of consent or CRM viewing access;
+  personal blocks protect only the caller. Company sync-off and archive apply
+  the same guard because they also create domain exclusions. The SDK surfaces
+  the server explanation. A child of the mailbox domain is still permitted.
+  Settings explain refusals at the input and report existing matches beside
+  their entries, without removing them. Company-domain explanations note that
+  own-domain colleagues are already skipped; personal-provider explanations
+  only describe the whole-mailbox email effect.
 - Adding an exclusion or withdrawing consent hides matching email contributions
   on subsequent CRM reads, including direct thread authorization. Existing company
   and contact records and prior interaction metadata remain. A normal mailbox or

@@ -148,9 +148,10 @@ pub enum EmailPolicyChange {
         rules: EmailRuleSet,
     },
     /// Explicitly share all eligible past and future mail.
-    EnableAll,
+    // Empty struct variants preserve serde unknown-field rejection.
+    EnableAll {},
     /// Withdraw contribution, retaining CRM records and interaction dates.
-    Withdraw,
+    Withdraw {},
 }
 
 /// Retry-safe command with the exact state observed by the caller.

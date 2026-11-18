@@ -116,6 +116,14 @@ fn acp_message_contains_an_acp_raw_jsonrpc_message() {
 }
 
 #[test]
+fn agents_changed_is_a_bare_hint() {
+    assert_eq!(
+        serde_json::to_value(ToRuntimeMessage::AgentsChanged).unwrap(),
+        json!({ "type": "agentsChanged" })
+    );
+}
+
+#[test]
 fn model_probe_messages_carry_no_session_id_and_no_correlation() {
     let request = ToRuntimeMessage::ModelProbeRequest;
     let response = ToServerMessage::ModelProbeResponse {

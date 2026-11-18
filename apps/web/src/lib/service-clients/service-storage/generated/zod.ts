@@ -7444,17 +7444,17 @@ export const listCrmBlockedDomainsResponse = zod.array(
 );
 
 /**
- * @summary Block a domain: email sync stops creating or updating CRM records for
-it, and the company and contacts the CRM holds for it are hidden.
-Idempotent. Requires an admin/owner team role (403).
+ * @summary Block a domain and its subdomains from email contributions, preserving records.
+Refuses a domain covering any member's connected primary mailbox (400).
+Idempotent for permitted domains. Requires an admin/owner team role (403).
  */
 export const blockCrmDomainParams = zod.object({
   domain: zod.string().describe('A bare domain like acme.com'),
 });
 
 /**
- * @summary Unblock a domain: email sync resumes for it, and what blocking hid is
-shown again. Idempotent. Requires an admin/owner team role (403).
+ * @summary Remove a team domain exclusion and schedule eligible email backfill,
+preserving record visibility. Idempotent. Requires an admin/owner role (403).
  */
 export const unblockCrmDomainParams = zod.object({
   domain: zod.string().describe('A bare domain like acme.com'),
@@ -9113,9 +9113,33 @@ export const getCrmEmailPrivacyResponse = zod
           .describe(
             'Exact current primary connection; clients bind opt-in to this identifier.'
           ),
+        personal_domain_warnings: zod
+          .record(
+            zod.string(),
+            zod
+              .enum(['company', 'personal_provider'])
+              .describe(
+                "Why a domain exclusion would hide an affected mailbox's entire history."
+              )
+          )
+          .describe(
+            "Existing personal exclusions that cover the caller's whole mailbox."
+          ),
         personal_domains: zod
           .array(zod.string())
           .describe("Domains excluded only for the caller's contributions."),
+        team_domain_warnings: zod
+          .record(
+            zod.string(),
+            zod
+              .enum(['company', 'personal_provider'])
+              .describe(
+                "Why a domain exclusion would hide an affected mailbox's entire history."
+              )
+          )
+          .describe(
+            "Existing team exclusions that cover a connected member's whole mailbox."
+          ),
         team_domains: zod
           .array(zod.string())
           .describe(
@@ -9232,9 +9256,33 @@ export const updateCrmEmailPrivacyResponse = zod
       .describe(
         'Exact current primary connection; clients bind opt-in to this identifier.'
       ),
+    personal_domain_warnings: zod
+      .record(
+        zod.string(),
+        zod
+          .enum(['company', 'personal_provider'])
+          .describe(
+            "Why a domain exclusion would hide an affected mailbox's entire history."
+          )
+      )
+      .describe(
+        "Existing personal exclusions that cover the caller's whole mailbox."
+      ),
     personal_domains: zod
       .array(zod.string())
       .describe("Domains excluded only for the caller's contributions."),
+    team_domain_warnings: zod
+      .record(
+        zod.string(),
+        zod
+          .enum(['company', 'personal_provider'])
+          .describe(
+            "Why a domain exclusion would hide an affected mailbox's entire history."
+          )
+      )
+      .describe(
+        "Existing team exclusions that cover a connected member's whole mailbox."
+      ),
     team_domains: zod
       .array(zod.string())
       .describe(

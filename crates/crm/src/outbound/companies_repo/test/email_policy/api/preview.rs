@@ -121,7 +121,7 @@ async fn preview_snapshot_is_stable_across_import_and_cannot_publish_after_priva
         insert_interaction(
             &pool,
             link,
-            &format!("person{n}@example.com"),
+            &format!("person{n}@example.net"),
             Utc::now(),
             true,
         )
@@ -130,7 +130,7 @@ async fn preview_snapshot_is_stable_across_import_and_cannot_publish_after_priva
     assert_eq!(
         start(
             &app,
-            json!([{"kind":"domain","domain":"example.com"}]),
+            json!([{"kind":"domain","domain":"example.net"}]),
             None
         )
         .await
@@ -145,7 +145,7 @@ async fn preview_snapshot_is_stable_across_import_and_cannot_publish_after_priva
     let first = snapshot.next_page(15_000).await?;
     assert_eq!(first.scanned_threads, 100);
     assert_eq!(first.counts.proposed, 100);
-    insert_interaction(&pool, link, "new@example.com", Utc::now(), true).await?;
+    insert_interaction(&pool, link, "new@example.net", Utc::now(), true).await?;
     let second = snapshot.next_page(15_000).await?;
     assert_eq!(second.scanned_threads, 1);
     assert_eq!(second.counts.proposed, 1);
@@ -170,7 +170,7 @@ async fn preview_snapshot_is_stable_across_import_and_cannot_publish_after_priva
         OWNER,
         EmailPrivacyChange::AddDomain {
             scope: EmailBlockScope::Personal,
-            domain: "example.com".into(),
+            domain: "example.net".into(),
         },
     )
     .await?;

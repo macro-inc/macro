@@ -469,9 +469,9 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
     ) -> impl Future<Output = Result<Vec<CrmBlockedDomain>, CrmError>> + Send;
 
     /// Adds a domain to (`blocked = true`) or removes it from the
-    /// caller's team blocklist. Blocking stops email sync for the domain
-    /// and hides the company and contacts the CRM holds for it;
-    /// unblocking un-hides them. Requires an admin/owner role
+    /// caller's team blocklist. Blocking excludes matching email contributions
+    /// without changing record visibility. A domain covering a member's connected
+    /// primary mailbox is refused. Requires an admin/owner role
     /// ([`CrmError::SettingsAdminRequired`] otherwise); the domain must
     /// be a bare domain like "acme.com" ([`CrmError::InvalidRequest`]).
     /// Returns the normalized domain.

@@ -3,6 +3,8 @@
     reason = "Just to allow GetActivitiesResponse and UserActivitiesResponse"
 )]
 
+mod email_policy;
+
 use crate::api::saved_views::definitions::{
     CreateSavedViewDefinitionRequest, ReorderSavedViewDefinitionsRequest, SavedViewDefinition,
     SavedViewDefinitionPage, SavedViewSharingRequest, UpdateSavedViewDefinitionRequest,
@@ -223,12 +225,14 @@ use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
 use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
 use utoipa::OpenApi;
 
+use email_policy::EmailPolicySchemas;
+
 #[derive(OpenApi)]
 #[openapi(
     info(
         terms_of_service = "https://macro.com/terms",
     ),
-    modifiers(&FormsApiAddon),
+    modifiers(&FormsApiAddon, &EmailPolicySchemas),
     paths(
         passwords::inbound::router::teams,
         passwords::inbound::router::list,

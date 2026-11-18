@@ -293,6 +293,10 @@ retained detail is claimed by another pane or preview. Keep this check in view
 restoration and preserve entity deduplication and native dock stack restoration;
 `split-layout/tests/view-restoration.test.tsx` covers Chat and Tasks lists in
 either pane, keeping the other pane's detail and history independent.
+Resolve collection-provider ownership from the committed router entry before
+mounting its outlet; the layout's mount metadata can still describe the previous
+view. `split-layout/tests/SplitPanel-collection-navigation.test.tsx` covers CRM
+to Calls, history, and split reuse while that mirror is stale.
 
 Links in database text and URL cells open without editing the cell, on desktop
 and touch, while the rest of the cell still edits:
@@ -874,6 +878,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   which has no dev/local override while backend ingestion rolls out;
   another contributor's copy remains eligible. Desktop/phone coverage lives in
   `src/features/crm/browser-test/privacy`.
+- Show CRM mailbox-domain block refusals beside the submitted input and existing
+  matching-entry explanations in the shared settings row description; retain
+  removal and distinguish company domains from personal providers.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see

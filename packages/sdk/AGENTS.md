@@ -282,6 +282,8 @@ the existing gateway prefixes.
   `docs/CRM_EMAIL_PRIVACY.md` when adding wrappers.
 - CRM records and initiatives share `messages/discussion.ts`: their comments are
   messages under a `crm_company`, `crm_contact` or `initiative` parent.
+- `crm.blockDomain` refuses domains covering a team member's connected primary
+  mailbox; preserve the server's validation message through `MacroApiError`.
 - Meeting list lookup only covers the owner's newest 100 standalone meetings;
   handles seeded from invitations retain their token for refetching after writes.
 - Team routes act on the caller's current team, which the auth service

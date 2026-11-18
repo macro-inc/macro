@@ -483,6 +483,21 @@ pub struct CrmTeamSettingsPatch {
     pub exclude_personal_emails: Option<bool>,
 }
 
+/// Why a domain exclusion would hide an affected mailbox's entire history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, thiserror::Error)]
+#[cfg_attr(feature = "ports", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum MailboxDomainConflict {
+    /// A company mailbox already excludes colleagues on its own domain.
+    #[error(
+        "Colleagues on a mailbox's own company domain are already kept out of the CRM. Blocking this domain would hide all of that mailbox's email."
+    )]
+    Company,
+    /// A shared personal provider is not a company domain.
+    #[error("Blocking this domain would hide all of a connected mailbox's email from the CRM.")]
+    PersonalProvider,
+}
+
 /// Errors that can occur in the CRM domain.
 #[derive(Debug, thiserror::Error)]
 pub enum CrmError {
@@ -501,6 +516,9 @@ pub enum CrmError {
     /// Request rejected for a client-side reason (e.g. blank comment text).
     #[error("{0}")]
     InvalidRequest(String),
+    /// A domain exclusion would veto every thread in an affected mailbox.
+    #[error("{0}")]
+    BlocksConnectedMailbox(MailboxDomainConflict),
     /// The request asks for hidden CRM rows but the caller's team role is
     /// below admin/owner.
     #[error("Querying hidden CRM companies requires admin/owner team role")]

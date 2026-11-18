@@ -112,6 +112,8 @@ threads, pins, recents, notifications, folders, activity.
   policy API stays default-off for grants; GET never initializes identity,
   including when the flag is on. Keep its OpenAPI contract and generated storage
   SDK current; public SDK wrappers are deferred to the next phase.
+  Keep the email-policy enum closure modifier in `api/swagger/email_policy.rs`
+  until schema generation propagates `deny_unknown_fields` to variant objects.
 
 - Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
   the CRM domain owns authorization, normalization and relation invariants.

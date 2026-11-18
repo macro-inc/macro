@@ -1072,10 +1072,12 @@ async fn run_server() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
-    let (webhook_stream_sender, _) =
-        tokio::sync::broadcast::channel(webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY);
+    let webhook_stream_feed = webhook::domain::stream::StreamFeed::new(
+        webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY,
+        webhook::domain::stream::WEBHOOK_STREAM_REPLAY_CAPACITY,
+    );
     let sse_stream_service = webhook::domain::stream::WebhookEventStreamServiceImpl::new(
-        webhook_stream_sender.clone(),
+        webhook_stream_feed.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
         crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
@@ -1088,7 +1090,7 @@ async fn run_server() -> anyhow::Result<()> {
     );
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
-        let sender = webhook_stream_sender;
+        let feed = webhook_stream_feed;
         let workspace_resolver = webhook_repository.clone();
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
@@ -1098,7 +1100,7 @@ async fn run_server() -> anyhow::Result<()> {
                     _ = cancellation_token.cancelled() => break,
                     result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
                         &brokers,
-                        &sender,
+                        &feed,
                         &workspace_resolver,
                     ) => result,
                 };

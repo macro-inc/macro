@@ -97,6 +97,7 @@ tools/HTTP/GraphQL surfaces over them.
   policy mutation compares the legacy observation under locks, initializes
   identity and transfers history atomically. `Existing` never creates a row.
   `email_policy_api.rs` owns opaque CAS, direct activation and trusted actor audit.
+  Use empty struct variants for payload-free policy commands so serde rejects unknown fields.
   Fingerprint explicit authority fields, never whole mailbox/member row versions
   or sync/billing fields. A cleared same-grant reauth may preserve intent; an
   actual revocation changes version. Recheck live eligibility before granting. Worker checkpoints/completion must pass their captured
@@ -244,6 +245,12 @@ tools/HTTP/GraphQL surfaces over them.
   preserves records and prior interaction dates, like personal blocked domains.
 - Domain exclusions affect contribution and CRM email reads, never record
   visibility. Preserve archive state on block/unblock and consent withdrawal.
+  Apply `domain/email_privacy/mailbox_domains` before every new exclusion:
+  team blocks (including company sync-off/archive) protect all members' connected
+  primary mailboxes; personal blocks protect the caller's. The adapter gathers
+  and locks mailbox facts before domain/entity locks and invokes domain policy
+  within the write transaction. Full settings report existing matches without
+  removing them; consent-only and the three eligibility readers stay independent.
 - Keep ambiguous CSV contact lookups unresolved without creating records for
   them; continue valid rows, but propagate lookup storage and authorization failures.
 

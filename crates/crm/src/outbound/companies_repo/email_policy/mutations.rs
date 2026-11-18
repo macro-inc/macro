@@ -98,13 +98,13 @@ impl EmailPolicyAuthoringTransaction for PgEmailPolicyTransaction {
                     self.team,self.user,revision
                 ).execute(&mut *self.tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
             }
-            EmailPolicyChange::EnableAll => {
+            EmailPolicyChange::EnableAll {} => {
                 sqlx::query!(
                     "UPDATE crm_email_consent SET mode='all',enabled=TRUE,selected_enabled=FALSE,active_rule_revision=NULL WHERE team_id=$1 AND user_id=$2",
                     self.team,self.user
                 ).execute(&mut *self.tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
             }
-            EmailPolicyChange::Withdraw => {
+            EmailPolicyChange::Withdraw {} => {
                 sqlx::query!(
                     "UPDATE crm_email_consent SET enabled=FALSE,selected_enabled=FALSE WHERE team_id=$1 AND user_id=$2",
                     self.team,self.user
