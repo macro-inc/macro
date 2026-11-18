@@ -11,6 +11,7 @@ import { Show } from 'solid-js';
 import { canEditProject } from '../../core/project';
 import type { ProjectRowProps } from '../../project-row';
 import {
+  PROJECT_TOUCH_GRID_COLUMNS,
   ProjectRowColumns,
   ProjectRowName,
 } from '../shared/project-row-content';
@@ -24,7 +25,12 @@ export function MobileProjectRow(props: ProjectRowProps) {
     props.definitions?.find((property) => property.propertyDefinitionId === id);
 
   return (
-    <Show when={isMobile()} fallback={<ProjectRowColumns {...props} />}>
+    <Show
+      when={isMobile()}
+      fallback={
+        <ProjectRowColumns {...props} columns={PROJECT_TOUCH_GRID_COLUMNS} />
+      }
+    >
       <NarrowRowGrid variant="compact">
         <Entity.Slot placement="indicator" />
         <Entity.Slot placement="title" class="min-w-0 font-medium">

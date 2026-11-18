@@ -77,6 +77,17 @@ with an outline and preview, keeping `reviews`; the frame limit stays the backst
 An unattended result is never summarized: later routine steps read it whole, so
 one over the limit fails the run with a message saying so.
 
+Every Deno child's `code_execution.process` span records how it ended:
+`process.exit_code` or `process.signal`, `process.wall_ms`, `process.cpu_ms`
+and `process.peak_rss_kib` (`outbound/deno/exit.rs`). Peak memory is `VmHWM`
+sampled from procfs every 250 ms while the child runs, since it is gone
+before the child's pipes close (a child that dies within one interval
+shows only its startup peak); CPU time is read once more after they close.
+A run the deadline, a cancellation or a protocol error cuts short records
+the same fields with `process.killed = true` (its status is the runner's
+kill). A child that ends on its own without exit code 0 after its terminal
+frame logs one `Deno child ended abnormally` warning with the same fields.
+
 ## Checks
 
 - `cargo test -p code_execution --lib -- --include-ignored` from the repository

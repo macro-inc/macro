@@ -423,6 +423,7 @@ impl ChannelService for ToolTestChannelService {
                 .metadata_name
                 .clone()
                 .unwrap_or_else(|| "Previous".to_string()),
+            named: true,
         })
     }
 

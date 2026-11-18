@@ -1,9 +1,12 @@
 import { Telemetry } from '@macro-inc/observability';
+import { ResultAsync } from 'neverthrow';
 import { v7 as uuidv7 } from 'uuid';
 import {
   type DeleteEmailDraft,
   DraftPersistRejected,
   type DraftSaveResult,
+  type EmailComposeFeedback,
+  type EmailDraftLifecycleState,
   type EmailDraftStorage,
   type SentWorkingCopy,
 } from '../context/compose-capabilities';
@@ -56,6 +59,86 @@ export async function deleteDraftForDiscard(
   }
 }
 
+/** What a composer knows of its draft once a save was refused as already sent. */
+export type SentDraft = {
+  type: 'sent';
+  threadId?: string;
+  sentCopy?: SentWorkingCopy;
+};
+
+type ReadDraftLifecycle = (identity: {
+  draftId: string;
+  threadId: string;
+  inboxId?: string;
+}) => Promise<EmailDraftLifecycleState | undefined>;
+
+/**
+ * Settles a draft whose save the server refused because another tab or
+ * device sent it, as a read that finds the draft sent is settled: `settle`
+ * keeps text the sent message lacks as a new draft (returning true) or
+ * leaves the draft. The draft is read first for the working copy a send
+ * from this browser carried. The refusal is the server's word that the
+ * draft was sent, so a failed read still settles it as sent: without the
+ * copy, text that looks unsaved is kept, never dropped.
+ */
+export function createAlreadySentSettlement(options: {
+  session: DraftSession;
+  read: ReadDraftLifecycle | undefined;
+  notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>;
+  /** The composer is gone, or a discard under way owns the draft. */
+  superseded(): boolean;
+  settle(sent: SentDraft): boolean;
+}) {
+  const { session, notices } = options;
+  // The epoch a copy kept after a refusal started at. Refused in turn before
+  // the server ever confirmed it, the copy would only be kept again, and
+  // again; its text stays in the editor instead.
+  let keptAt: number | undefined;
+  return async () => {
+    const draftId = session.draftId();
+    if (!draftId || options.superseded()) return;
+    if (
+      keptAt !== undefined &&
+      session.epoch() === keptAt + 1 &&
+      session.identity().kind !== 'server'
+    ) {
+      notices.reportError(
+        new Error('The server refused a kept draft as already sent')
+      );
+      return;
+    }
+    const epoch = session.epoch();
+    const threadId = session.threadId();
+    const read =
+      options.read && threadId
+        ? await ResultAsync.fromPromise(
+            options.read({ draftId, threadId, inboxId: session.inboxId() }),
+            (error) => error
+          )
+        : undefined;
+    if (read?.isErr()) notices.reportError(read.error);
+    // A discard, send or restore that settled the draft meanwhile stands,
+    // and so does a discard still under way. Each of those starts a new
+    // epoch; the server's ids for this draft arriving meanwhile do not.
+    if (
+      session.epoch() !== epoch ||
+      !session.alreadySent() ||
+      options.superseded()
+    )
+      return;
+    const observed = read?.isOk() ? read.value : undefined;
+    notices.feedback.alert(
+      'This scheduled email was sent. Your composer has been updated.'
+    );
+    const kept = options.settle(
+      observed?.type === 'sent'
+        ? observed
+        : { type: 'sent', threadId: session.threadId() }
+    );
+    keptAt = kept ? session.epoch() : undefined;
+  };
+}
+
 /**
  * One draft's save/delete workflow against its session, shared by the reply
  * and standalone controllers.
@@ -86,6 +169,7 @@ export function createDraftPersistence(options: {
   /** A standalone compose mints its thread handle too; a reply saves into a known thread. */
   mintThreadHandle: boolean;
   localDraft?: Pick<LocalDraft, 'revision' | 'generation'>;
+  /** A save was refused as already sent; the session keeps the draft latched for the composer to settle. */
   onAlreadySent(): void;
 }) {
   const { session } = options;
@@ -115,10 +199,15 @@ export function createDraftPersistence(options: {
     });
   };
 
-  // The session records deterministic rejections (latch, or drop on
-  // already-sent); transport failures just reject and the next save may retry.
+  // The session latches deterministic rejections; an already-sent one also
+  // hands the draft to the composer, once. Transport failures just reject
+  // and the next save may retry.
   const recordRejection = (error: unknown, epoch: number) => {
-    if (!(error instanceof DraftPersistRejected) || session.isStale(epoch))
+    if (
+      !(error instanceof DraftPersistRejected) ||
+      session.isStale(epoch) ||
+      session.alreadySent()
+    )
       return;
     session.dispatch({ type: 'rejected', epoch, code: error.code });
     if (error.code === 'DRAFT_ALREADY_SENT') options.onAlreadySent();

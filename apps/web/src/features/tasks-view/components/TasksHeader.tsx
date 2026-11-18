@@ -11,6 +11,7 @@ import { useProjectSavedViews } from '@app/features/projects/context/project-sav
 import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import { Show } from 'solid-js';
 import { TASK_TABS } from '../constants';
@@ -62,6 +63,8 @@ export function TaskViewBreadcrumbItem() {
             <span class="truncate">{tabTitle()}</span>
           </>
         );
+        // A compact (phone) bar keeps its room for the open entity's name, so
+        // the way back is an arrow; the view's name stays its accessible name.
         const button = () => (
           <ViewBreadcrumbs.ReturnButton
             isActive={item.isActive()}
@@ -69,7 +72,16 @@ export function TaskViewBreadcrumbItem() {
             tooltip={tabTitle()}
             class="gap-2"
           >
-            {label()}
+            <span
+              data-compact-back
+              aria-hidden="true"
+              class="hidden group-data-[compact]/location:flex"
+            >
+              <ArrowLeftIcon class="size-4 shrink-0" />
+            </span>
+            <span class="flex min-w-0 items-center gap-2 group-data-[compact]/location:sr-only">
+              {label()}
+            </span>
           </ViewBreadcrumbs.ReturnButton>
         );
         // At the list itself the name switches views; deeper, it returns here.

@@ -27,7 +27,6 @@ import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/T
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { openInNewTab } from '@components/app/tab-layout/open-in-new-tab';
 import { toast } from '@core/component/Toast/Toast';
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compareDateDesc } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -71,6 +70,7 @@ import type {
 import { createProjectGanttRows } from '../primitives/project-gantt-rows';
 import {
   PROJECT_GRID_COLUMNS,
+  PROJECT_TOUCH_GRID_COLUMNS,
   ProjectListHeader,
   ProjectRow,
 } from '../project-row';
@@ -135,6 +135,8 @@ export function ProjectsCollection(props: {
   let timeline: HTMLDivElement | undefined;
   let focusSearch: (() => void) | undefined;
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
+  const columns = () =>
+    isTouchDevice() ? PROJECT_TOUCH_GRID_COLUMNS : PROJECT_GRID_COLUMNS;
   const isGantt = () =>
     props.ganttEnabled && !isTouchDevice() && collection.layout() === 'gantt';
   const definition = (id: string) =>
@@ -686,7 +688,7 @@ export function ProjectsCollection(props: {
                       : `${timestampHeaderWidth()}px`,
                 }}
               >
-                <Show when={!isMobile()}>
+                <Show when={!isTouchDevice()}>
                   <ProjectListHeader
                     onSortUpdated={() => collection.setSort('updated')}
                     updatedSelected={collection.sort() === 'updated'}
@@ -758,7 +760,7 @@ export function ProjectsCollection(props: {
                             {(group) => (
                               <TaskGroupHeader
                                 row={group()}
-                                columnCount={PROJECT_GRID_COLUMNS.length}
+                                columnCount={columns().length}
                                 groupBy={collection.groupBy()}
                                 expanded={collection.disclosure.isExpanded(
                                   group().groupId
@@ -833,7 +835,7 @@ export function ProjectsCollection(props: {
                               <div role="row" id={more().id}>
                                 <div
                                   role="gridcell"
-                                  aria-colspan={PROJECT_GRID_COLUMNS.length}
+                                  aria-colspan={columns().length}
                                   class="flex justify-center py-2"
                                 >
                                   <Button

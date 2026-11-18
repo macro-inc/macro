@@ -100,7 +100,8 @@ Every `chat_streaming` span records the size of each part of its request, never
 the content: `macro.genai.prompt.<section>.bytes` and `.hash` for each system
 prompt section (`preamble`, `macro_prompt`, `identity`, `session_instructions`,
 `session_note`, `opener_note`, `memory`, `model_id`, `connected_integrations`,
-`sdk_docs`), `macro.genai.prompt.tools.{eager,loaded}.{count,bytes,hash}`
+`sdk_docs`, the turn's SDK docs, which are sent on its request rather than in
+the prompt), `macro.genai.prompt.tools.{eager,loaded}.{count,bytes,hash}`
 for the tool schemas offered upfront and those loaded by tool search, and
 `macro.genai.prompt.{messages,history.bytes,tool_results.count,tool_results.bytes}`
 for the conversation. When `gen_ai.usage.cache_read.input_tokens` drops between

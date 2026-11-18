@@ -53,7 +53,10 @@ code, not in its prompt. The harness also signs the scope into the credential
   imports need no route check. `refuse_sharing` is the body check for sharing
   that isn't a grant (link sharing) or that the grant writer can't see:
   documents, call records, initiatives, projects, chats, DSS threads and saved
-  views, CRM pipeline edits. A new such field or edit route joins that check.
+  views, CRM pipeline edits and email contribution activation. Rule validation
+  and count previews are `POST_READS`; they never grant sharing. Policy PUT
+  also belongs in `SENDS`, so `no_send` refuses it before the handler. A new such
+  field or edit route joins that check.
   Both record the refusal for `propagate`.
 - `src/verb.rs`: closed SDK display-verb vocabulary.
 - `src/inbound.rs`: optional signed-claim extractor and HTTP propagation.

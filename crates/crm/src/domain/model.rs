@@ -531,6 +531,21 @@ pub enum CrmError {
     /// The thread-exclusion rollout is disabled or its flag could not be loaded.
     #[error("thread exclusions are not available")]
     ThreadExclusionsUnavailable,
+    /// New policy authoring is disabled or the flag failed to load.
+    #[error("selective email contribution is not available")]
+    SelectiveEmailUnavailable,
+    /// The observed consent lifetime/version or retry command no longer matches.
+    #[error("email contribution changed; inspect the current policy before retrying")]
+    EmailPolicyConflict,
+    /// A scoped credential is not permitted to change sharing.
+    #[error("this credential cannot enable email contribution")]
+    EmailPolicySharingRefused,
+    /// Preview work is limited to one new request per member per thirty seconds.
+    #[error("wait before starting another email contribution preview")]
+    EmailPreviewRateLimited,
+    /// A count page reached its bounded statement/work budget.
+    #[error("email contribution preview reached its work budget")]
+    EmailPreviewBudgetExhausted,
     /// Caller's team role is below the team's `edit_stages_role`.
     #[error("editing deal stages requires the {} team role", .0.as_db_str())]
     StageEditRoleRequired(CrmPermissionRole),

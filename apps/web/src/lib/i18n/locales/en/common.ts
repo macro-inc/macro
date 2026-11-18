@@ -42,6 +42,8 @@ export default {
   pleaseTryAgain: 'Please try again',
   loading: 'Loading…',
   loadingConversation: 'Loading conversation',
+  loadingPeople: 'Loading people',
+  peopleUnavailable: "Couldn't load people",
   delete: 'Delete',
   rename: 'Rename',
   search: 'Search',

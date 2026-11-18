@@ -737,8 +737,13 @@ filter icon inside its button. A separate
 status"`) picks the status in the desktop header and above the list on touch
 devices, and the board hides it. The desktop sidebar has no layout or status
 switches. Status tabs size to their labels with even horizontal padding and use
-the shared fully rounded segmented style. Open is the default; Closed includes
-both closed and merged PRs, and All shows every status. The filter dropdown and mobile drawer also
+the shared fully rounded segmented style. When the header's actions would run
+past it, the status tabs show only their icons (named by tooltip), then the
+scope name hides; each comes back once the header has room. Opening the search
+can take the tab labels when the field would not fit beside them. Check a 640px
+window and 860px beside the docked sidebar, with search closed and open. Open
+is the default; Closed includes both closed and merged PRs, and All shows every
+status. The filter dropdown and mobile drawer also
 offer independent Open, Closed, and Merged selections. Custom multi-status
 selections hide the toggle, except the combined Closed preset keeps it visible.
 A partial Closed-only or Merged-only selection leaves every option unhighlighted.
@@ -1023,7 +1028,13 @@ sidebar, without header tabs or a saved-view selector. In project detail, the ph
 and name; its actions share, copy the link, or rename when editing is allowed.
 Phone detail stays one page rather than switching Overview and Tasks.
 Projects use the same list rows, property cells, selection, group headers, and
-keyboard navigation as Tasks. Search (`Cmd/Ctrl+F`), `Sort projects`,
+keyboard navigation as Tasks. On touch devices, where the list fills a phone or
+a tablet's narrow list pane, there are no column headings and no checkbox
+column, as in the Tasks list on phones: each row is the project's name followed
+by its Status, Priority, Assignees, and Due date icons. On desktop, when the
+list is narrower than 840px, those columns show their values as icons and their
+headings as icons with tooltips, as the Tasks list does, and Tasks and Updated
+leave the grid without an empty column. Search (`Cmd/Ctrl+F`), `Sort projects`,
 `Group projects`, and `Filter projects` sit above the list. Groups default to
 Status; choose None, Priority, or Assignee to change them. Click a group header
 or use the list's disclosure keys to collapse or expand it. Sort by Updated
@@ -1078,6 +1089,12 @@ row menu: `Open in new split`, `Copy Link`, `Copy ID`, and `Share`, plus
 so an editor who doesn't own the project gets neither; several owned projects
 offer only `Delete`. The dialogs are the Projects list's own.
 
+While a project page shows its Overview, Cmd+K lists `Copy link` and `Copy ID`
+(the same URL and id as the title menu), plus the tag and notification commands
+its Home row offers. In the Tasks section, Cmd+K and Shift+Cmd+C act on the
+focused task row instead. In Home's project preview the commands live in the
+preview's own hotkey scope, so they apply once the cursor is in the preview.
+
 `New project` and the global Create menu's `Project` action (C, then P) open
 the same native composer host and layout as task creation,
 with a project name, a Markdown description (`Add description...`), and the
@@ -1108,18 +1125,21 @@ Closing the popover without submitting keeps the underlying view open.
 
 Opening a project from Tasks keeps the Tasks workspace and its navigation.
 Home rows instead preview it inline with a Home return breadcrumb; touch and
-explicit split activation still use this full Tasks workspace. The top bar
-shows the Projects return breadcrumb and the project name, with the same Share
-and side-panel controls as task detail. `Project actions` (the dots button
-after the name) opens the row context menu's entries for this project,
-including `Delete` for its owner. Choose Overview or Tasks using the inset
-tabs in that top bar; below 600px they collapse to icons, with tooltips on
-desktop, and the project name truncates instead. In Tasks, an outlined
-circular search button expands into a focused `Search in <project name>` field.
+explicit split activation still use this full Tasks workspace. Desktop and
+tablet keep Overview/Tasks tabs, with compact icons when space is limited.
+Phones keep the one-page project layout and caret-only Back, project-title,
+Share, and Details header islands. The project-title menu retains Change icon,
+Copy Link, Share, and permission-aware project actions. On desktop/tablet Overview, Cmd+K also
+offers the project's Copy link and Copy ID commands; the task list retains its
+own row commands. In Tasks, an outlined circular search button expands into a
+focused `Search in <project name>` field.
 Close or Escape clears the query and restores focus to the button. The desktop
 task toolbar keeps one 32px Add task dropdown with New task (C) and Add existing
 tasks; opening the menu alone never creates a task. On phones, the One page
 Tasks heading has Filters and the floating Task control uses MobileCreateMenu.
+Tablet Overview also offers a floating task-creation control. The app's generic
+Task control stays hidden throughout project routes, including loading and
+read-only states, so it cannot create a task outside the current project.
 Opening an associated task extends the breadcrumb trail; choose the project
 breadcrumb to return, or Projects to restore the collection with its filters,
 groups, and scroll position. Project URLs retain identity and section:

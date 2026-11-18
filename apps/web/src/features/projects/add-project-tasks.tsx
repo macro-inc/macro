@@ -1,23 +1,19 @@
 import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Telemetry } from '@macro-inc/observability';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { Button } from '@ui';
-import { createMemo, type JSX, onCleanup, Show, Suspense } from 'solid-js';
+import { type JSX, Show, Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useProjectsContext } from './context/projects-context';
 import { canEditProject, type ProjectDetail } from './core/project';
+import { createAddProjectTasks } from './primitives/add-project-tasks';
 import { AddProjectTasksView } from './views/add-project-tasks';
 import { MobileAddProjectTasks } from './views/mobile/add-project-tasks';
 
 type AddState = {
   open: boolean;
   mode: 'choices' | 'existing';
-  selected: string[];
-  error?: string;
-  saving: boolean;
-  savingProjectId?: string;
 };
 
 export function AddProjectTasks(props: {
@@ -26,33 +22,29 @@ export function AddProjectTasks(props: {
   inline?: boolean;
 }) {
   const commands = useProjectsContext().createCommands();
+  const selection = createAddProjectTasks({
+    project: () => props.project,
+    assignTasks: commands.assignTasks,
+  });
   const [state, setState] = createStore<AddState>({
     open: false,
     mode: 'choices',
-    selected: [],
-    saving: false,
   });
-  let generation = 0;
-  onCleanup(() => generation++);
-  const excludedIds = createMemo(() => new Set(props.project.taskIds));
-  const eligibleSelection = () =>
-    state.selected.filter((id) => !excludedIds().has(id));
-  const isSaving = () =>
-    state.saving && state.savingProjectId === props.project.id;
   const setOpen = (open: boolean) => {
-    if (isSaving() && !open) return;
-    if (open) {
-      if (!isSaving()) setState('saving', false);
-      generation++;
-      setState({
-        mode: props.onCreateTask ? 'choices' : 'existing',
-        selected: [],
-        error: undefined,
+    if (selection.saving()) return;
+    selection.reset();
+    setState({ open, mode: props.onCreateTask ? 'choices' : 'existing' });
+  };
+  const error = () => {
+    const failure = selection.error();
+    if (!failure) return undefined;
+    if (failure.kind === 'partial') {
+      return t('viewMenus.someTasksFailed', {
+        count: failure.count,
+        error: failure.reason,
       });
-    } else {
-      generation++;
     }
-    setState('open', open);
+    return failure.message ?? t('viewMenus.addTasksFailed');
   };
   const close = () => setOpen(false);
   const chooseExisting = () => setState('mode', 'existing');
@@ -66,58 +58,14 @@ export function AddProjectTasks(props: {
     props.onCreateTask?.();
   };
   const add = async () => {
-    const projectId = props.project.id;
-    const taskIds = eligibleSelection();
-    if (!canEditProject(props.project) || isSaving() || !taskIds.length) return;
-    const request = generation;
-    setState({ saving: true, savingProjectId: projectId, error: undefined });
-    try {
-      const results = await Telemetry.span(
-        'project.tasks.assign',
-        async (span) => {
-          span.setAttr('project.id', projectId);
-          span.setAttr('task.count', taskIds.length);
-          const results = await commands.assignTasks(projectId, taskIds);
-          const failed = results.filter((result) => result.error);
-          span.setAttr('task.failed_count', failed.length);
-          if (failed.length) span.error('Some tasks could not be added');
-          return results;
-        }
-      );
-      if (request !== generation || props.project.id !== projectId) return;
-      const failed = results.filter((result) => result.error);
-      if (!failed.length) {
-        setState('saving', false);
-        close();
-        return;
-      }
-      setState(
-        'selected',
-        failed.map((result) => result.taskId)
-      );
-      setState(
-        'error',
-        t('viewMenus.someTasksFailed', {
-          count: failed.length,
-          error: failed[0].error ?? '',
-        })
-      );
-    } catch (error) {
-      if (request !== generation || props.project.id !== projectId) return;
-      setState(
-        'error',
-        error instanceof Error ? error.message : t('viewMenus.addTasksFailed')
-      );
-    } finally {
-      if (request === generation) setState('saving', false);
-    }
+    if (await selection.add()) close();
   };
   const pickerFields = (presentation?: 'sheet') => (
     <>
       <div
-        inert={state.saving}
+        inert={selection.saving()}
         classList={{
-          'opacity-50': state.saving,
+          'opacity-50': selection.saving(),
           'flex min-h-0 flex-1 flex-col': presentation === 'sheet',
         }}
       >
@@ -128,19 +76,18 @@ export function AddProjectTasks(props: {
               specificEntityType: 'TASK',
               isMultiSelect: true,
               placeholder: t('viewMenus.searchTasks'),
-              excludedIds,
+              excludedIds: selection.excludedIds,
               fillHeight: presentation === 'sheet',
               visibleCheckboxes: presentation === 'sheet',
             }}
-            selectedOptions={() => new Set(state.selected)}
-            setSelectedOptions={(ids) => {
-              if (!state.saving) setState('selected', [...ids]);
-            }}
+            selectedOptions={selection.selected}
+            setSelectedOptions={selection.select}
             onClose={close}
+            onCancel={close}
           />
         </Suspense>
       </div>
-      <Show when={state.error}>
+      <Show when={error()}>
         {(message) => (
           <p role="alert" class="px-3 pb-2 text-sm text-failure">
             {message()}
@@ -165,7 +112,7 @@ export function AddProjectTasks(props: {
       <Button
         variant="ghost"
         size={presentation === 'sheet' ? 'md' : 'sm'}
-        disabled={state.saving}
+        disabled={selection.saving()}
         onClick={close}
       >
         {t('common.cancel')}
@@ -173,12 +120,12 @@ export function AddProjectTasks(props: {
       <Button
         size={presentation === 'sheet' ? 'md' : 'sm'}
         variant="primary"
-        disabled={state.saving || !eligibleSelection().length}
+        disabled={selection.saving() || !selection.selected().size}
         onClick={() => fireAndForget(add(), 'projects')}
       >
-        {state.saving
+        {selection.saving()
           ? t('common.addingTasks')
-          : t('common.addTasks', { count: eligibleSelection().length })}
+          : t('common.addTasks', { count: selection.selected().size })}
       </Button>
     </div>
   );

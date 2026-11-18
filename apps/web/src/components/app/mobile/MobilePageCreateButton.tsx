@@ -28,7 +28,10 @@ import {
 } from './MobileCreateMenu';
 import type { MobileNavViewId } from './mobile-nav-views';
 import { mobilePageCreateBlock } from './mobile-page-create-action';
-import { useForegroundMobileView } from './use-mobile-nav';
+import {
+  useForegroundMobileView,
+  useForegroundProject,
+} from './use-mobile-nav';
 
 const QUICK_CREATE_VIEWS = [
   { view: 'mail', icon: EmailIcon },
@@ -60,6 +63,7 @@ type PageCreateAction = Pick<
 /** The current non-AI view's New action above the navigation dock. */
 export function MobilePageCreateButton() {
   const foregroundView = useForegroundMobileView();
+  const foregroundProject = useForegroundProject();
   const createBlocks = useCreateMenuBlocks();
   const openEventComposer = useOpenEventComposer();
   const openCreateMenu = () => setCreateMenuOpen(true);
@@ -162,7 +166,7 @@ export function MobilePageCreateButton() {
           </Show>
         }
       >
-        <Match when={isProjectDetail()}>
+        <Match when={isProjectDetail() || (isMobile() && foregroundProject())}>
           {/* Reserve the same chrome clearance as the page-owned Task action. */}
           <div aria-hidden="true" class="h-(--mobile-chrome-button-size)" />
         </Match>

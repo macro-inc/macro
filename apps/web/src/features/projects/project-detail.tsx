@@ -1,5 +1,6 @@
 import { MobileDiscussion } from '@app/components/discussion/mobile-discussion';
 import { useTouchTopBarsFloat } from '@app/components/view-shell';
+import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
 import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
@@ -17,7 +18,7 @@ import {
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Match, Show, Suspense, Switch } from 'solid-js';
+import { type Accessor, Match, Show, Suspense, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { ProjectContentSkeleton } from './components/project-skeletons';
@@ -29,9 +30,11 @@ import {
 import {
   canDiscussProject,
   canEditProject,
+  type ProjectDetail as ProjectDetailData,
   type ProjectSection,
 } from './core/project';
 import type { ProjectRoute } from './core/route';
+import { NewProjectTaskPill } from './new-project-task';
 import {
   ProjectBreadcrumbItem,
   type ProjectBreadcrumbProps,
@@ -63,6 +66,30 @@ type ProjectDetailProps = {
   onDelete?(): void;
   onSectionChange?(section: ProjectSection): void;
 };
+/** Register project commands without replacing the task list's own commands. */
+function ProjectEntityCommands(props: {
+  projectId: string;
+  project: Accessor<ProjectDetailData | undefined>;
+  scopeId: string;
+}) {
+  useBlockEntityCommands({
+    id: props.projectId,
+    scopeId: props.scopeId,
+    resolveEntity: () => {
+      const project = props.project();
+      if (!project) return undefined;
+      return {
+        type: 'initiative',
+        id: project.id,
+        name: project.name,
+        ownerId: project.ownerId,
+        appearance: project.appearance,
+      };
+    },
+  });
+  return null;
+}
+
 function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
@@ -105,6 +132,10 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       },
     });
   };
+  const canCreateTask = () => {
+    const project = source.project();
+    return project !== undefined && canEditProject(project);
+  };
   const header: ProjectDetailHeaderProps = {
     source,
     commands,
@@ -120,6 +151,35 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   };
   return (
     <>
+      {/* Phones own one combined task menu in their one-page workspace.
+          Tablets still need creation from Overview, outside the task list. */}
+      <Show
+        when={
+          isTouchDevice() && !isMobile() && props.route.section === 'overview'
+        }
+      >
+        <NewProjectTaskPill
+          onCreateTask={canCreateTask() ? createTask : undefined}
+        />
+      </Show>
+      {/* The one-page phone view always mounts task-row commands. Keep their
+          shared scope intact; only a separate Overview registers the project. */}
+      <Show
+        when={
+          !isMobile() && props.route.section === 'overview'
+            ? source.project()?.id
+            : undefined
+        }
+        keyed
+      >
+        {(projectId) => (
+          <ProjectEntityCommands
+            projectId={projectId}
+            project={source.project}
+            scopeId={panel.splitHotkeyScope}
+          />
+        )}
+      </Show>
       <Show when={props.breadcrumb}>
         {(breadcrumb) => (
           <ProjectBreadcrumbItem {...breadcrumb()} project={source.project()} />

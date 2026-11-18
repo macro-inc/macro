@@ -21,6 +21,13 @@ export const PROJECT_GRID_COLUMNS = [
   'dueDate',
   'timestamp',
 ] as const satisfies readonly TaskGridColumnId[];
+export const PROJECT_TOUCH_GRID_COLUMNS = [
+  'content',
+  'status',
+  'priority',
+  'assignees',
+  'dueDate',
+] as const satisfies readonly TaskGridColumnId[];
 export const GRID_STYLE = taskGridTemplate(PROJECT_GRID_COLUMNS);
 
 export function ProjectRowName(props: { row: ProjectRowData }) {
@@ -45,7 +52,12 @@ const PROJECT_PROPERTY_COLUMNS = PROJECT_GRID_COLUMNS.flatMap((id) =>
   TASK_GRID_COLUMNS.filter((column) => column.id === id)
 );
 
-export function ProjectRowColumns(props: ProjectRowProps) {
+export function ProjectRowColumns(
+  props: ProjectRowProps & {
+    columns?: readonly TaskGridColumnId[];
+  }
+) {
+  const columns = () => props.columns ?? PROJECT_GRID_COLUMNS;
   const canEdit = () => canEditProject(props.row.project);
   const propertyFor = (id: string) =>
     props.row.properties.find(
@@ -62,18 +74,24 @@ export function ProjectRowColumns(props: ProjectRowProps) {
   return (
     <Entity.Layout
       class="task-grid-row task-grid-icon-creator project-grid-row grid min-h-[inherit] w-full grid-rows-[1fr] items-center gap-2 px-2 text-sm"
-      style={GRID_STYLE}
+      style={taskGridTemplate(columns())}
     >
-      <Entity.Slot placement="indicator" class="size-full">
-        <MultiSelectCheckbox
-          checked={props.checked}
-          onChecked={props.onChecked}
-        />
-      </Entity.Slot>
+      <Show when={columns().includes('indicator')}>
+        <Entity.Slot placement="indicator" class="size-full">
+          <MultiSelectCheckbox
+            checked={props.checked}
+            onChecked={props.onChecked}
+          />
+        </Entity.Slot>
+      </Show>
       <Entity.Slot placement="content" class="ms-2 min-w-0 font-medium">
         <ProjectRowName row={props.row} />
       </Entity.Slot>
-      <For each={PROJECT_PROPERTY_COLUMNS}>
+      <For
+        each={PROJECT_PROPERTY_COLUMNS.filter((column) =>
+          columns().includes(column.id)
+        )}
+      >
         {(column) => (
           <Entity.Slot
             placement={column.id}
@@ -100,12 +118,14 @@ export function ProjectRowColumns(props: ProjectRowProps) {
           </Entity.Slot>
         )}
       </For>
-      <Entity.Slot
-        placement="timestamp"
-        class="task-updated-cell ms-2 whitespace-nowrap text-right text-xs font-light text-ink-extra-muted @max-[840px]/u-list:text-center"
-      >
-        <time dateTime={props.row.project.updatedAt}>{updated()}</time>
-      </Entity.Slot>
+      <Show when={columns().includes('timestamp')}>
+        <Entity.Slot
+          placement="timestamp"
+          class="task-updated-cell ms-2 whitespace-nowrap text-right text-xs font-light text-ink-extra-muted @max-[840px]/u-list:text-center"
+        >
+          <time dateTime={props.row.project.updatedAt}>{updated()}</time>
+        </Entity.Slot>
+      </Show>
     </Entity.Layout>
   );
 }

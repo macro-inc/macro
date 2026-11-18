@@ -18,7 +18,10 @@ import { MobileProjectRow } from './views/mobile/project-row';
 import { DesktopProjectRow } from './views/project-row';
 import { GRID_STYLE } from './views/shared/project-row-content';
 
-export { PROJECT_GRID_COLUMNS } from './views/shared/project-row-content';
+export {
+  PROJECT_GRID_COLUMNS,
+  PROJECT_TOUCH_GRID_COLUMNS,
+} from './views/shared/project-row-content';
 export function ProjectListHeader(props: {
   onSortUpdated?: () => void;
   updatedSelected?: boolean;

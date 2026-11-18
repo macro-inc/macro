@@ -23,6 +23,11 @@ export function EntityDetailTopBar(
     /** Collapses while `compact`, so the title keeps its room. */
     navigation?: (compact: Accessor<boolean>) => JSX.Element;
     titleMenu?: JSX.Element;
+    /**
+     * A phone's bar keeps its room for the open entity's name: crumbs that
+     * can compact (the view's return crumb, an editable icon) do.
+     */
+    compact?: boolean;
   }>
 ) {
   const titleMenu = children(() => props.titleMenu);
@@ -43,6 +48,13 @@ export function EntityDetailTopBar(
         <ViewBreadcrumbs.Outlet
           aria-label="Task location"
           activeItem={titleMenu()}
+          data-compact={props.compact ? '' : undefined}
+          class={cn(
+            'group/location',
+            // A crumb compacted to a back arrow needs no separator after it.
+            props.compact &&
+              '[&>:has([data-compact-back])~svg:first-of-type]:hidden'
+          )}
           fallback={<EntityDetailBreadcrumbSkeleton />}
         />
       </ViewShell.TopBarTitle>

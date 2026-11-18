@@ -1,4 +1,5 @@
 import CheckIcon from '@icon/system/regular/check.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Popover } from '@kobalte/core/popover';
@@ -6,6 +7,7 @@ import { Button, cn, Dropdown, TextField } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import {
   type Knob,
+  knobIsEmpty,
   knobText,
   knobValueProblem,
   type SentencePart,
@@ -104,6 +106,8 @@ export function KnobSettings(props: { knobs: Knob[]; onKnob: KnobChange }) {
             <dd class="min-w-0 text-right">
               <KnobControl
                 knob={knob}
+                // The label is beside it already.
+                emptyText="Not set"
                 onChange={(value) => props.onKnob(knob.name, value)}
               />
             </dd>
@@ -122,6 +126,8 @@ function KnobControl(props: {
   knob: Knob;
   /** In a card's smaller sentence: a thinner, closer underline. */
   compact?: boolean;
+  /** What a knob with no value shows; its label by default. */
+  emptyText?: string;
   onChange(value: Knob['value']): void;
 }) {
   return (
@@ -130,6 +136,7 @@ function KnobControl(props: {
         <KnobPopover
           knob={props.knob}
           compact={props.compact}
+          emptyText={props.emptyText}
           onChange={props.onChange}
         />
       }
@@ -222,8 +229,10 @@ function KnobChoiceMenu(props: {
 function KnobPopover(props: {
   knob: Knob;
   compact?: boolean;
+  emptyText?: string;
   onChange(value: Knob['value']): void;
 }) {
+  const empty = () => knobIsEmpty(props.knob);
   const [open, setOpen] = createSignal(false);
   const [draft, setDraft] = createSignal<Knob['value']>(props.knob.value);
   const problem = () => knobValueProblem(props.knob, draft());
@@ -257,18 +266,28 @@ function KnobPopover(props: {
         class={cn(
           'cursor-pointer',
           props.knob.type === 'question' ? QUESTION : VALUE,
+          // Still to fill in: dashed, as a template reference that fills in.
+          empty() && 'decoration-dashed',
           props.compact && 'px-px decoration-[1.5px] underline-offset-3'
         )}
         aria-label={
           props.knob.type === 'question'
             ? `AI decides whether ${props.knob.label}. Change the question`
-            : `${props.knob.label}: ${knobText(props.knob)}. Change it`
+            : empty()
+              ? `${props.knob.label}: not set. Set it`
+              : `${props.knob.label}: ${knobText(props.knob)}. Change it`
         }
       >
-        <Show when={props.knob.type === 'question'}>
-          <SparkleIcon class="mr-1 inline size-3.5 align-[-2px] text-accent" />
-        </Show>
-        {knobText(props.knob)}
+        <Switch fallback={knobText(props.knob)}>
+          <Match when={props.knob.type === 'question'}>
+            <SparkleIcon class="mr-1 inline size-3.5 align-[-2px] text-accent" />
+            {knobText(props.knob)}
+          </Match>
+          <Match when={empty()}>
+            <PlusIcon class="mr-0.5 inline size-3.5 align-[-2px]" />
+            {props.emptyText ?? props.knob.label}
+          </Match>
+        </Switch>
       </Popover.Trigger>
       <Popover.Portal mount={menuMount(trigger)}>
         <Popover.Content

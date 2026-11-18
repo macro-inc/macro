@@ -17,7 +17,7 @@ export function ProjectWorkspace(props: ProjectWorkspaceProps) {
         <div class="min-h-0 flex-1">
           <Switch>
             <Match when={props.section === 'overview'}>
-              <div class="h-full overflow-y-auto px-6 pb-8 pt-12 touch:pt-6">
+              <div class="h-full overflow-y-auto px-6 pb-8 pt-12 touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)]">
                 <div class="mx-auto max-w-3xl">
                   <ProjectSummary {...props}>
                     <div aria-label="Project description">

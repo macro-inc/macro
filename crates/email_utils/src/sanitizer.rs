@@ -124,14 +124,22 @@ fn sanitize_style_blocks(html: &str) -> String {
 }
 
 fn sanitize_style_content(css: &str) -> String {
+    // A comment goes without a trace: in a selector it separates nothing
+    // (`div/**/.x` is `div.x`), and what deleting it joins is filtered below.
+    // A space goes where an `@import` was, so the text around it cannot join
+    // into another import (`@im@import a;port url(b);`).
     let css = CSS_COMMENT.replace_all(css, "");
-    let css = CSS_IMPORT.replace_all(&css, "");
+    let css = CSS_IMPORT.replace_all(&css, " ");
 
-    CSS_DECLARATION_BLOCK
-        .replace_all(&css, |caps: &regex::Captures<'_>| {
-            format!("{{{}}}", filter_css_declarations(&caps[1]))
-        })
-        .into_owned()
+    let css = CSS_DECLARATION_BLOCK.replace_all(&css, |caps: &regex::Captures<'_>| {
+        format!("{{{}}}", filter_css_declarations(&caps[1]))
+    });
+
+    // Removing text must never leave `</style>` behind (`</sty/**/le>`): it
+    // would end the element and turn the rest of the stylesheet into markup.
+    // `\/` is the same character to CSS, and without `</` the text cannot
+    // close its element.
+    css.replace("</", "<\\/")
 }
 
 fn filter_css_declarations(declarations: &str) -> String {

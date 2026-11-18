@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { Accessor, ParentProps } from 'solid-js';
+import { type Accessor, createSignal, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AddProjectTasks } from '../add-project-tasks';
 import type { ProjectDetail } from '../core/project';
@@ -120,6 +120,32 @@ it('keeps only failed tasks selected for retry', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Add 1 task' }));
   await vi.waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
   expect(mock.assignTasks).toHaveBeenLastCalledWith('project', ['two']);
+});
+
+it('keeps a late answer for one project out of the next project', async () => {
+  const result = Promise.withResolvers<{ taskId: string; error?: string }[]>();
+  mock.assignTasks.mockReturnValue(result.promise);
+  const [current, setCurrent] = createSignal(project);
+  render(() => <AddProjectTasks project={current()} />);
+  fireEvent.keyDown(
+    screen.getByRole('button', { name: 'Add existing tasks' }),
+    { key: 'Enter' }
+  );
+  fireEvent.click(screen.getByText('Select tasks'));
+  fireEvent.click(screen.getByRole('button', { name: 'Add 2 tasks' }));
+  setCurrent({ ...project, id: 'next', name: 'Next', taskIds: [] });
+  result.resolve([
+    { taskId: 'one' },
+    { taskId: 'two', error: 'You need edit access to this task.' },
+  ]);
+  await result.promise;
+  await Promise.resolve();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByTestId('selection').textContent).toBe('');
+  expect(screen.getByRole('button', { name: 'Cancel' })).toHaveProperty(
+    'disabled',
+    false
+  );
 });
 
 it('preserves the selection after a request failure and allows canceling', async () => {
