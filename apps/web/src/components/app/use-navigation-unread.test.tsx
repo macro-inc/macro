@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   counts: undefined as unknown as () => readonly InboxUnreadCount[] | undefined,
   countStreams: 0,
   presenceSources: 0,
-  presence: (_id: string) => false,
+  presence: ((_id: string) => false) as (id: string) => boolean,
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
@@ -58,6 +58,7 @@ function setup(options: {
   unified: Flag;
   passwords?: boolean;
   counts?: readonly InboxUnreadCount[];
+  homeIsNotifications?: boolean;
 }) {
   return createRoot((disposer) => {
     dispose = disposer;
@@ -66,7 +67,13 @@ function setup(options: {
     mocks.unified = unified;
     mocks.passwords = () => flag(options.passwords ?? false);
     mocks.counts = counts;
-    return { unread: useNavigationUnread(), setUnified, setCounts };
+    return {
+      unread: useNavigationUnread({
+        homeIsNotifications: options.homeIsNotifications,
+      }),
+      setUnified,
+      setCounts,
+    };
   });
 }
 
@@ -101,6 +108,17 @@ describe('useNavigationUnread with the unified Notifications view', () => {
     expect(unread.has('documents')).toBe(false);
     expect(unread.count('documents')).toBeUndefined();
     expect(mocks.presenceSources).toBe(0);
+  });
+
+  it('puts the number on Home where Home stands in for Notifications', () => {
+    const { unread } = setup({
+      unified: flag(true),
+      counts: [row('email', 4), row('task', 1)],
+      homeIsNotifications: true,
+    });
+
+    expect(unread.count('home')).toBe(5);
+    expect(unread.has('home')).toBe(true);
   });
 
   it('follows the counts as they change, section by section', () => {

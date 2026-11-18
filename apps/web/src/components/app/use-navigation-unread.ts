@@ -29,27 +29,34 @@ export type NavigationUnread = {
   count: (id: string) => number | undefined;
 };
 
-/**
- * The notifications inbox rows each section's number counts; `undefined`
- * rows are every kind. Home has a dot for the same rows and no number: it
- * would repeat the one on Notifications beside it.
- */
-const COUNTED_SECTIONS: Record<
-  string,
-  { rowTypes?: readonly InboxRowType[]; number: boolean }
-> = {
-  home: { number: false },
-  notifications: { number: true },
-  channels: { rowTypes: CHANNEL_ROW_TYPES, number: true },
-  mail: { rowTypes: MAIL_ROW_TYPES, number: true },
+/** Where the navigation shows unread state. */
+export type NavigationUnreadOptions = {
+  /**
+   * Home stands in for Notifications, as the mobile dock's bell does, so it
+   * carries the number. Beside a Notifications section it keeps a dot: the
+   * number would repeat the one next to it.
+   */
+  homeIsNotifications?: boolean;
 };
+
+/**
+ * The notifications inbox rows each section counts; `undefined` is every
+ * kind.
+ */
+const COUNTED_SECTIONS: Record<string, { rowTypes?: readonly InboxRowType[] }> =
+  {
+    home: {},
+    notifications: {},
+    channels: { rowTypes: CHANNEL_ROW_TYPES },
+    mail: { rowTypes: MAIL_ROW_TYPES },
+  };
 
 /**
  * Unread rows of the notifications inbox by section, pushed by the server.
  * A dot and its number always agree, and both match what the Notifications
  * view lists as unread.
  */
-function useCountedUnread(): NavigationUnread {
+function useCountedUnread(options: NavigationUnreadOptions): NavigationUnread {
   const userId = useUserId();
   const passwordsFlag = useFeatureFlag(enablePasswords);
   const counts = createInboxUnread({
@@ -69,7 +76,8 @@ function useCountedUnread(): NavigationUnread {
 
   return {
     has: (id) => (rows(id) ?? 0) > 0,
-    count: (id) => (COUNTED_SECTIONS[id]?.number ? rows(id) : undefined),
+    count: (id) =>
+      id === 'home' && !options.homeIsNotifications ? undefined : rows(id),
   };
 }
 
@@ -78,7 +86,9 @@ function useCountedUnread(): NavigationUnread {
  * Notifications view it is counted from that view's rows; without it, the
  * sections keep their presence dots and show no numbers.
  */
-export function useNavigationUnread(): NavigationUnread {
+export function useNavigationUnread(
+  options: NavigationUnreadOptions = {}
+): NavigationUnread {
   const unified = useFeatureFlag(enableUnifiedNotifications);
   const mode = createMemo(() => {
     if (unified().loading) return 'undecided';
@@ -88,7 +98,7 @@ export function useNavigationUnread(): NavigationUnread {
   // both the count stream and the presence queries.
   const source = createMemo((): NavigationUnread | undefined => {
     if (mode() === 'undecided') return undefined;
-    if (mode() === 'counted') return useCountedUnread();
+    if (mode() === 'counted') return useCountedUnread(options);
     const has = usePresenceUnread();
     return { has, count: () => undefined };
   });

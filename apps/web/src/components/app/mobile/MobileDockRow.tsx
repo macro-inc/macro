@@ -201,7 +201,8 @@ function MobileNavigationDockRow(props: { vertical?: boolean }) {
   const navigate = useMobileNavNavigate();
   const foregroundView = useForegroundMobileView();
   const availableViews = useMobileDockViews();
-  const unread = useNavigationUnread();
+  // The dock's bell is Home, and opens Notifications when that view is on.
+  const unread = useNavigationUnread({ homeIsNotifications: true });
   const userId = useUserId();
   const preferences = createMemo(() =>
     createMobileDockOrder(
