@@ -772,9 +772,14 @@ in
       boot.supportedFilesystems = [ "zfs" ];
       boot.zfs.extraPools = [ zfsPool ];
       boot.zfs.forceImportRoot = false;
-      # zfs_bclone_enabled and zfs_bclone_wait_dirty stay at their default
-      # 1; the storage unit refuses to go on otherwise.
-      boot.kernelParams = [ "zfs.zfs_arc_max=${toString cfg.storage.arcMaxBytes}" ];
+      # Block cloning on, and a clone of dirty data waits for it (both the
+      # 2.4 defaults, pinned so a default change can't turn them off); the
+      # storage unit and the agent refuse to go on otherwise.
+      boot.kernelParams = [
+        "zfs.zfs_arc_max=${toString cfg.storage.arcMaxBytes}"
+        "zfs.zfs_bclone_enabled=1"
+        "zfs.zfs_bclone_wait_dirty=1"
+      ];
       services.zfs.autoScrub.enable = true;
       services.zfs.trim.enable = true;
 
