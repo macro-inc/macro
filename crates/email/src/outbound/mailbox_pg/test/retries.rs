@@ -2,6 +2,7 @@
 //! it back.
 
 use super::{fixture, snapshot};
+use crate::domain::mailbox::live_pass::StreamKind;
 use crate::domain::mailbox::progress::MailboxProgressRepository;
 use crate::domain::mailbox::*;
 use crate::outbound::mailbox_pg::PgMailboxSync;
@@ -190,7 +191,11 @@ async fn a_message_refused_outright_stops_after_three_attempts_until_it_changes(
     );
 
     // A new change from the provider queues it again with fresh attempts.
-    let stream = repo.claim_stream(Uuid::now_v7()).await.unwrap().unwrap();
+    let stream = repo
+        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
     repo.commit_page(
         &stream,
         &MailboxChangePage {
@@ -363,7 +368,11 @@ async fn new_mail_on_a_message_an_import_was_reading_waits_for_no_import_delay(d
     .execute(&db)
     .await
     .unwrap();
-    let stream = repo.claim_stream(Uuid::now_v7()).await.unwrap().unwrap();
+    let stream = repo
+        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
     repo.commit_page(
         &stream,
         &MailboxChangePage {
@@ -499,11 +508,21 @@ async fn sync_claims_skip_a_mailbox_that_needs_reauth_until_it_is_cleared(db: Pg
 
     set_reauth(true).await.unwrap();
     assert!(repo.claim_catalog(Uuid::now_v7()).await.unwrap().is_none());
-    assert!(repo.claim_stream(Uuid::now_v7()).await.unwrap().is_none());
+    assert!(
+        repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+            .await
+            .unwrap()
+            .is_none()
+    );
     assert!(repo.claim_message(Uuid::now_v7()).await.unwrap().is_none());
 
     set_reauth(false).await.unwrap();
     assert!(repo.claim_catalog(Uuid::now_v7()).await.unwrap().is_some());
-    assert!(repo.claim_stream(Uuid::now_v7()).await.unwrap().is_some());
+    assert!(
+        repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+            .await
+            .unwrap()
+            .is_some()
+    );
     assert!(repo.claim_message(Uuid::now_v7()).await.unwrap().is_some());
 }
