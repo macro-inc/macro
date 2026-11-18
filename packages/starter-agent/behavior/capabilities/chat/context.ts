@@ -1,6 +1,9 @@
 import { behavior, type ContextOf } from '@macro-inc/muppet/core/behavior';
 import { channel } from '@macro-inc/muppet/core/event';
-import { typingIndicators } from '@macro-inc/muppet/utilities/macro/chat';
+import {
+  typingIndicators,
+  typingOn,
+} from '@macro-inc/muppet/utilities/macro/chat';
 import { z } from 'zod';
 import type { Base } from '../../context/index.ts';
 import { batches } from '../../context/stream.ts';
@@ -8,7 +11,6 @@ import type { Conversation, Queued } from './entry.ts';
 import { history } from './history.ts';
 import { Screen } from './listen.ts';
 import { sdkChat } from './macro.ts';
-import { typing } from './typing.ts';
 
 /** The owner of chat's state directories. */
 export const owner = 'chat';
@@ -27,7 +29,7 @@ export const chatContext = ({ macro, config, state, join, disk }: Base) => {
   const screenPath = join(import.meta.dir, screenFile);
   return behavior<Base>().decorate({
     chat,
-    typing: typing(indicators),
+    typing: typingOn(indicators),
     /** Every typing indicator in the process, counted per channel: see `typing`. */
     typingIndicators: indicators,
     history: history({

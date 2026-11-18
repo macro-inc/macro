@@ -10,7 +10,6 @@ owner, and it needs nothing but `MACRO_API_KEY`: sending, reading, the relevance
 | `listen.ts`, `screen.ts` | Is a message for the agent: the pure decision, and the questions the screen asks. |
 | `history.ts`             | Every message heard, per channel, and the ones still waiting for a reply.         |
 | `prompt.ts`              | What a reply run is asked.                                                        |
-| `typing.ts`              | The typing indicator while a reply is being written.                              |
 | `presence.ts`            | Keeping the agent shown as online.                                                |
 | `online.ts`              | Telling Macro once per run that the agent is up (`POST /team_agents/me/online`).   |
 | `index.ts`               | The capabilities: post, reply, react, DM, join, leave, read.                      |

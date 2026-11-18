@@ -8,10 +8,12 @@ import {
   parseGreeting,
   said,
 } from '@macro-inc/muppet/utilities/greeting';
-import { typingIndicators } from '@macro-inc/muppet/utilities/macro/chat';
+import {
+  typingIndicators,
+  typingOn as typingOf,
+} from '@macro-inc/muppet/utilities/macro/chat';
 import { passthrough } from '../../../agent/claude.ts';
 import { capabilityModules } from '../../../index.ts';
-import { typing as typingOf } from '../../chat/typing.ts';
 import { computer, failuresFile, greetedFile } from '../config.ts';
 import { greeterOf, greetingParent, vaultAnswers } from '../context.ts';
 

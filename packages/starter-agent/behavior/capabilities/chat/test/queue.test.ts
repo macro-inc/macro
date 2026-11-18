@@ -1,10 +1,12 @@
 import { expect, test } from 'bun:test';
-import { typingIndicators } from '@macro-inc/muppet/utilities/macro/chat';
+import {
+  typingOn as typing,
+  typingIndicators,
+} from '@macro-inc/muppet/utilities/macro/chat';
 import { batches } from '../../../context/stream.ts';
 import { join, memoryDisk } from '../../../context/test/fakes.ts';
 import type { Queued } from '../entry.ts';
 import { history } from '../history.ts';
-import { typing } from '../typing.ts';
 
 const queued = (id: string, channel_id = 'c1'): Queued => ({
   id,
