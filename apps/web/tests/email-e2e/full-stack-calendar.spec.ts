@@ -575,7 +575,7 @@ test.describe('shared events in email on GMAIL', { tag: '@full-stack' }, () => {
 });
 
 test.describe('first calendar sync from email', { tag: '@full-stack' }, () => {
-  test.use({ provider: 'GMAIL', access: 'mail', video: 'on' });
+  test.use({ provider: 'GMAIL', access: 'mail' });
 
   test('shared-event actions recover when the first writable calendar arrives', async ({
     page,
@@ -600,6 +600,10 @@ test.describe('first calendar sync from email', { tag: '@full-stack' }, () => {
 
     const release = await delayCalendarDiscovery(mailbox, calendarAddress);
     try {
+      await page.screencast.start({
+        path: test.info().outputPath('first-calendar-sync.webm'),
+        size: { width: 1280, height: 720 },
+      });
       await mailbox.stack.link(
         mailbox.user,
         'GMAIL',
@@ -655,6 +659,7 @@ test.describe('first calendar sync from email', { tag: '@full-stack' }, () => {
       expect(await page.evaluate(() => performance.timeOrigin)).toBe(origin);
     } finally {
       await release();
+      await page.screencast.stop();
     }
   });
 });
