@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT event_id, team_id, source_kind, source_id, after_user_id, after_revision, traceparent\n               FROM crm_email_policy_source_events ORDER BY event_id\n               FOR UPDATE SKIP LOCKED LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "source_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "source_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "after_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "after_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "traceparent",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "76a5a50d8b870da6b0499453208530a7c874106c9214f8ac7e1af3086c51351e"
+}

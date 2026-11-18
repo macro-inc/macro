@@ -6,7 +6,7 @@ import { Entity } from '../../entity';
 import type { EmailEntity } from '../../types/entity';
 import { EmailIdentity, EmailInboxChip, EmailNarrowSnippet } from './email';
 import { RowEnd } from './row-end';
-import { InboxDivider, type LayoutProps } from './shared';
+import { classicWeight, InboxDivider, type LayoutProps } from './shared';
 
 /**
  * An email row stacked for narrow desktop lists (the reading pane's list):
@@ -18,7 +18,10 @@ import { InboxDivider, type LayoutProps } from './shared';
 export function NarrowEmailLayout(
   props: LayoutProps & { entity: EmailEntity }
 ) {
-  const weight = () => (props.unread ? 'font-semibold' : 'font-normal');
+  const weight = () => {
+    if (props.classic) return classicWeight(props.unread);
+    return props.unread ? 'font-semibold' : 'font-normal';
+  };
 
   return (
     <Entity.Layout
@@ -36,7 +39,7 @@ export function NarrowEmailLayout(
         class="group/check grid place-items-center self-center pt-2.5"
       >
         <Show
-          when={!props.hideCheckbox && props.checked}
+          when={!props.hideCheckbox && (props.checked || props.classic)}
           fallback={
             <>
               <UnreadIndicator
@@ -44,7 +47,7 @@ export function NarrowEmailLayout(
                   '[grid-area:1/1] size-2',
                   !props.hideCheckbox && 'not-touch:group-hover/check:hidden'
                 )}
-                active={props.unread}
+                active={props.unread && !props.classic}
               />
               <Show when={!props.hideCheckbox}>
                 <div class="[grid-area:1/1] hidden not-touch:group-hover/check:block">
@@ -60,6 +63,7 @@ export function NarrowEmailLayout(
           <MultiSelectCheckbox
             checked={props.checked}
             onChecked={props.onChecked}
+            showBorder={props.classic}
           />
         </Show>
       </Entity.Slot>
@@ -77,7 +81,12 @@ export function NarrowEmailLayout(
 
       <Entity.Slot
         placement="timestamp"
-        class="flex items-center justify-end pt-2.5 pr-3 pl-2 text-xs text-ink-extra-muted"
+        class={cn(
+          'flex items-center justify-end pt-2.5 pr-3 pl-2 text-xs',
+          props.classic && classicWeight(props.unread),
+          // A Classic unread date reads like its sender and subject.
+          props.classic && props.unread ? 'text-ink' : 'text-ink-extra-muted'
+        )}
       >
         <RowEnd actions={props.actions} leadingAction={props.leadingAction}>
           <span class="flex items-center gap-1">
@@ -104,7 +113,8 @@ export function NarrowEmailLayout(
         setContainerRef={props.setSnippetContainerRef}
         previewLeading={props.previewLeading}
       />
-      <InboxDivider />
+      {/* Classic rows draw their wall-to-wall line over this pixel. */}
+      <InboxDivider hidden={props.classic} />
     </Entity.Layout>
   );
 }

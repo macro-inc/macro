@@ -1,4 +1,3 @@
-import { useBlockEntityCommands } from '@app/features/next-soup/actions/use-block-entity-commands';
 import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { Permissions } from '@core/component/SharePermissions';
@@ -76,7 +75,9 @@ export type AgentSessionHeaderState = {
 
 /**
  * The session's identity, access and actions for its header. Rename lives on
- * the title menu (channel / routine), not on a tap of the name.
+ * the title menu (channel / routine), not on a tap of the name. Its host
+ * registers the session's commands: the block on its own scope, the Agents
+ * view on its split's.
  */
 export function useAgentSessionHeader(props: {
   session: Accessor<AgentSessionResponse | undefined>;
@@ -113,7 +114,6 @@ export function useAgentSessionHeader(props: {
           : session.status.kind,
     };
   };
-  useBlockEntityCommands({ resolveEntity: entity });
   const openShare = useShareModal(() => {
     const session = entity();
     if (!session) return;

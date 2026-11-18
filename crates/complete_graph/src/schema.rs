@@ -41,7 +41,7 @@ use graphql_favorite::{
 };
 use graphql_initiative::{
     GraphqlInitiativeTasksPage, InitiativeMutationRoot, InitiativeTasksInput, resolve_initiative,
-    resolve_initiative_tasks,
+    resolve_initiative_tasks, resolve_visible_initiative,
 };
 use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
@@ -838,12 +838,26 @@ where
     }
 
     /// One initiative accessible to the authenticated viewer.
+    #[graphql(
+        deprecation = "Use visibleInitiative, which answers a missing or hidden project with null instead of NOT_FOUND. Remove after 2026-12-31."
+    )]
     async fn initiative(
         &self,
         ctx: &Context<'_>,
         initiative_id: ID,
     ) -> async_graphql::Result<GraphqlSoupInitiative<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
         resolve_initiative(ctx, initiative_id).await
+    }
+
+    /// One initiative accessible to the authenticated viewer, or null when it
+    /// is missing or not visible to them.
+    async fn visible_initiative(
+        &self,
+        ctx: &Context<'_>,
+        initiative_id: ID,
+    ) -> async_graphql::Result<Option<GraphqlSoupInitiative<SoupEdges<NR, PR, ER, FR, AR, AcR>>>>
+    {
+        resolve_visible_initiative(ctx, initiative_id).await
     }
 
     /// A permission-filtered page of task identifiers within an initiative.

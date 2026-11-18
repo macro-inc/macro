@@ -121,6 +121,7 @@ async fn ocaml_sdk_call_is_authenticated_marked_and_reported() {
             web_app_url: "https://app.example.test".into(),
         },
         unattended: None,
+        egress: Egress::Direct,
     };
     let source = r#"
 open Macro_sdk

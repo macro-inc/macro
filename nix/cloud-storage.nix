@@ -16,10 +16,27 @@
 
       # ── cloud-storage (Rust backend) ──────────────────────────────
 
-      rustToolchain = fenix.packages.${system}.fromToolchainFile {
+      rustToolchainManifestSha256 = "sha256-qqF33vNuAdU5vua96VKVIwuc43j4EFeEXbjQ6+l4mO4=";
+      rustToolchainFromFile = fenix.packages.${system}.fromToolchainFile {
         file = ../rust-toolchain.toml;
-        sha256 = "sha256-qqF33vNuAdU5vua96VKVIwuc43j4EFeEXbjQ6+l4mO4=";
+        sha256 = rustToolchainManifestSha256;
       };
+      # On macOS, add llvm-tools: Xcode 27's SwiftPM builds the Tauri plugins'
+      # @_cdecl exports as local symbols, and swift-rs promotes them back with
+      # the llvm-objcopy in rustc's sysroot. Without it the iOS app library
+      # fails to link. macOS only, so Linux toolchains and their caches stay
+      # as they are.
+      rustToolchain =
+        if isDarwin then
+          fenix.packages.${system}.combine [
+            rustToolchainFromFile
+            (fenix.packages.${system}.toolchainOf {
+              channel = (builtins.fromTOML (builtins.readFile ../rust-toolchain.toml)).toolchain.channel;
+              sha256 = rustToolchainManifestSha256;
+            }).llvm-tools
+          ]
+        else
+          rustToolchainFromFile;
 
       craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
@@ -1266,7 +1283,6 @@
           rustToolchain
           python3
         ]
-        ++ [ (pkgs.callPackage ./_swagger2openapi.nix { }) ]
         ++ pkgs.lib.optionals isLinux [
           mold
           docker

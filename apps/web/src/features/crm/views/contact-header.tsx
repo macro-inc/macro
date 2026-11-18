@@ -5,6 +5,7 @@ import ContactIcon from '@icon/system/regular/address-book.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import { Avatar, Badge, Tooltip } from '@ui';
 import { Show } from 'solid-js';
+import { AddToPipeline } from '../add-to-pipeline';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CrmContactResponse } from '../core/contact';
 import { ContactCompanyField, ContactEmailField } from './contact-properties';
@@ -42,7 +43,8 @@ export function ContactHeader(props: {
   contact?: CrmContactResponse;
   onOpenCompany?: (companyId: string) => boolean;
 }) {
-  const { contactInitials: getInitialsFromName } = useCrmContext();
+  const context = useCrmContext();
+  const getInitialsFromName = context.contactInitials;
   // Default avatar mirrors the channel user avatar: initials on a flat circle.
   // Contacts have no photo, so initials come from the name or email.
   const initials = () => {
@@ -83,6 +85,18 @@ export function ContactHeader(props: {
               identity
               contactId={contact().id}
               onOpenCompany={props.onOpenCompany}
+            />
+          )}
+        </Show>
+        <Show when={props.contact}>
+          {(contact) => (
+            <AddToPipeline
+              record={{
+                type: 'contact',
+                id: contact().id,
+                name: contact().name || (contact().email ?? ''),
+                detail: contact().email ?? '',
+              }}
             />
           )}
         </Show>

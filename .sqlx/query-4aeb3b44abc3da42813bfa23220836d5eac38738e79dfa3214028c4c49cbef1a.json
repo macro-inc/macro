@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM scheduled_action_code_upgrade\n                WHERE action_id = $1 AND to_sdk = $2 AND outcome = 'running'\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4aeb3b44abc3da42813bfa23220836d5eac38738e79dfa3214028c4c49cbef1a"
+}

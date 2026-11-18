@@ -4,10 +4,18 @@ export type EmailPrivacy = {
   mailboxLinkId: string | null;
   teamDomains: string[];
   personalDomains: string[];
+  teamDomainWarnings?: Record<string, MailboxDomainConflict>;
+  personalDomainWarnings?: Record<string, MailboxDomainConflict>;
   canRemoveTeamDomains: boolean;
 };
 
+export type MailboxDomainConflict = 'company' | 'personal_provider';
+
 export type EmailBlockScope = 'team' | 'personal';
+export type EmailConsent = Pick<
+  EmailPrivacy,
+  'enabled' | 'mailboxEmail' | 'mailboxLinkId'
+>;
 export type ExcludedThreads = {
   threads: { threadId: string; linkId: string; subject: string | null }[];
   nextCursor: string | null;

@@ -71,7 +71,7 @@ globalThis.console = {
 // The bootstrap keeps one timer for itself: the loop report before the deadline.
 const bootstrapTimeout = globalThis.setTimeout.bind(globalThis);
 const sleepBanned = (name) => function () {
-  throw new Error(`${name} is unavailable in ExecuteCode: do not sleep or poll in a program. Finish this execution, and to check back later create a routine with macro.routines.create.`);
+  throw new Error(`${name} is unavailable in ExecuteCode: Custom timers are unsupported, including Promise.race deadline guards. The host already enforces the execution deadline (30 s by default in ExecuteCode). Use bounded batches with Promise.allSettled and return successful results with any failures before the deadline. Promise.allSettled does not add a timeout. To check back later, create a routine with macro.routines.create.`);
 };
 for (const name of ["setTimeout", "setInterval", "setImmediate", "Worker"]) globalThis[name] = sleepBanned(name);
 AbortSignal.timeout = sleepBanned("AbortSignal.timeout");
@@ -238,7 +238,19 @@ try {
   }
   const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
-  const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
+  // `--allow-net` lets `host.` through as `host`, but the URL keeps the dot.
+  const originOf = (url) => {
+    const parsed = new URL(url);
+    parsed.hostname = parsed.hostname.replace(/\.$/, "");
+    return parsed.origin;
+  };
+  const origins = new Set(Object.values(context.hosts).map(originOf));
+  // A proxied run reaches only its forwarder: a request to a host's base is
+  // sent to that service under the forwarder, longest base first. The
+  // forwarder, not this, marks it.
+  const forwarded = Object.entries(context.forwarder ?? {})
+    .map(([service, local]) => [context.hosts[service].replace(/\/$/, ""), local])
+    .sort(([left], [right]) => right.length - left.length);
   // Requests SDK calls make, by id, so a completion reports only those started.
   const activeRequests = new Set();
   let observedRequests = 0;
@@ -257,7 +269,7 @@ try {
   const sendRequest = (input, init) => {
     const request = new Request(input, init);
     // Every request to an SDK origin, whatever credential it carries.
-    if (origins.has(new URL(request.url).origin)) {
+    if (origins.has(originOf(request.url))) {
       if (language === "ocaml" && unattended && request.headers.has("authorization")) request.headers.set("authorization", `Bearer ${context.token}`);
       for (const [name, value] of Object.entries(context.traceHeaders ?? {})) {
         if (name === "traceparent" || name === "tracestate") request.headers.set(name, value);
@@ -271,6 +283,12 @@ try {
         const path = new URL(request.url).pathname;
         const read = routes.some(route => route.method === request.method && route.pattern.test(path) && !route.write);
         if (!read) return Promise.reject(new Error("A dry run doesn't send changes."));
+      }
+    }
+    for (const [base, local] of forwarded) {
+      const url = request.url;
+      if (url === base || url.startsWith(`${base}/`) || url.startsWith(`${base}?`)) {
+        return originalFetch(new Request(`${local}${url.slice(base.length)}`, request));
       }
     }
     return originalFetch(request);

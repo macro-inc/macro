@@ -3,8 +3,10 @@ import {
   type HydrationSearchChanges,
   INITIAL_CACHE_REVISION,
 } from '@graphql-cache/protocol';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { subscribeToVisibleCacheChanges } from './subscribe-to-visible-cache-changes';
+import { intervalWhileRead } from './visible-refresh';
 
 let visibility: DocumentVisibilityState;
 let dispose: (() => void) | undefined;
@@ -51,6 +53,54 @@ afterEach(() => {
 });
 
 describe('subscribeToVisibleCacheChanges', () => {
+  it('only remembers changes while not live, and refreshes once when live turns on', async () => {
+    const [live, setLive] = createSignal(false);
+    const { notify, refresh } = createRoot((disposeRoot) => {
+      const subscription = setup(undefined, { live });
+      const unsubscribe = dispose;
+      dispose = () => {
+        unsubscribe?.();
+        disposeRoot();
+      };
+      return subscription;
+    });
+    notify();
+    notify();
+    expect(refresh).not.toHaveBeenCalled();
+
+    setLive(true);
+    expect(refresh).toHaveBeenCalledOnce();
+    setLive(false);
+    setLive(true);
+    expect(refresh).toHaveBeenCalledOnce();
+
+    await vi.advanceTimersByTimeAsync(250);
+    notify();
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not run a refresh held while hidden once live has turned off', async () => {
+    const [live, setLive] = createSignal(true);
+    const { notify, refresh } = createRoot((disposeRoot) => {
+      const subscription = setup(undefined, { live });
+      const unsubscribe = dispose;
+      dispose = () => {
+        unsubscribe?.();
+        disposeRoot();
+      };
+      return subscription;
+    });
+    setVisibility('hidden');
+    notify();
+    setLive(false);
+    setVisibility('visible');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(refresh).not.toHaveBeenCalled();
+
+    setLive(true);
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it('does no work for unrelated hydration, including while hidden', () => {
     const { notify, refresh } = setup(undefined, {
       searchBuckets: () => ['note', 'task'],
@@ -237,6 +287,31 @@ describe('subscribeToVisibleCacheChanges', () => {
       expect(refresh).toHaveBeenCalledTimes(state === 'hidden' ? 2 : 1);
     }
   );
+
+  it('follows a change made during a slow idle read once it lands, at the reading spacing', async () => {
+    let finish!: () => void;
+    const refresh = vi.fn<() => void | Promise<unknown>>().mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+    );
+    const [reading, setReading] = createSignal(false);
+    const { notify } = setup(refresh, {
+      intervalMs: intervalWhileRead(reading),
+    });
+    notify();
+    setReading(true);
+    await vi.advanceTimersByTimeAsync(1_000);
+    notify();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(refresh).toHaveBeenCalledOnce();
+
+    finish();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refresh).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
 
   it('handles rejection without dropping a dirty follow-up or retrying forever', async () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});

@@ -174,6 +174,8 @@ fn static_file_block_is_mode_specific() {
     assert!(caddyfile(&test_instance(), Mode::Dev, false).contains("handle_path /static-file/*"));
     assert!(!caddyfile(&test_instance(), Mode::Dev, false).contains("/static-file-storage"));
     assert!(local.contains("handle_path /local-storage/*"));
+    // A CDN-signed link reaches LocalStack without the CDN's parameters.
+    assert!(local.contains("uri @cdn_signed query"));
     assert!(
         !caddyfile(&test_instance(), Mode::Dev, false).contains("handle_path /local-storage/*")
     );

@@ -1,5 +1,6 @@
 import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { type EmailEntity, isEmailEntity } from '@entity';
+import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
 import { WebsocketEvent } from '@macro-inc/collaboration/websocket';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
@@ -17,6 +18,7 @@ import {
   getGraphqlSoupClient,
   mapGraphqlSoupItem,
 } from '@service-storage/graphql-soup';
+import type { OperationResult } from '@urql/core';
 import { type Accessor, onCleanup } from 'solid-js';
 import {
   isDisplayableSoupItem,
@@ -56,12 +58,34 @@ export function mapEmailFocus(data: EmailFocusQuery): EmailEntity[] {
 }
 
 /**
+ * The answer from the server to the read a tab makes as it opens. Refreshes
+ * read `network-only`; answers from the normalized cache (shown first while
+ * the server is asked, or again when what it holds changes) don't count.
+ */
+export function isOpenRead(result: OperationResult): boolean {
+  const source = normalizedCacheResultMetadata(result)?.source;
+  return (
+    result.operation.context.requestPolicy === 'cache-and-network' &&
+    (source === undefined || source === 'live-network') &&
+    !result.stale &&
+    !result.error &&
+    result.data != null
+  );
+}
+
+/**
  * The viewer's Focus list, read through the shared GraphQL client. The list is
  * one read the normalized cache can't maintain, so the worker's `focus_updated`
  * push, or a reconnect that may have missed one, reads it again. A hidden tab
  * catches up once when it next shows; a closed tab reads when it opens.
+ *
+ * `onOpenRead` hears the server's answer to the read the tab makes as it
+ * opens, with the threads it lists: once per visit, never for a refresh.
  */
-export function useEmailFocusQuery(enabled: Accessor<boolean>) {
+export function useEmailFocusQuery(
+  enabled: Accessor<boolean>,
+  onOpenRead?: (threads: number) => void
+) {
   const query = createLiveQuery(
     EmailFocusDocument,
     () => (enabled() ? { days: FOCUS_WINDOW_DAYS } : undefined),
@@ -69,6 +93,11 @@ export function useEmailFocusQuery(enabled: Accessor<boolean>) {
       client: getGraphqlSoupClient(),
       requestPolicy: 'cache-and-network' as const,
       select: mapEmailFocus,
+      onResult: (result) => {
+        // Mapped again, once a visit: the query may still be starting here.
+        if (onOpenRead && result.data && isOpenRead(result))
+          onOpenRead(mapEmailFocus(result.data).length);
+      },
     })
   );
 

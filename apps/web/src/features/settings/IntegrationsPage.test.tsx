@@ -12,23 +12,6 @@ vi.mock('@core/constant/settingsTabsConfig', () => ({
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettings }),
 }));
-vi.mock('@core/constant/featureFlags', () => ({ ENABLE_EMAIL: true }));
-vi.mock('@core/pipedream/flag', () => ({
-  usePipedreamMcpFlag: () => () => true,
-}));
-vi.mock('./Email', () => ({ EmailCard: () => <div>Email</div> }));
-vi.mock('./Granola', () => ({ GranolaCard: () => <div>Granola</div> }));
-vi.mock('./GitHub', () => ({ GitHubCard: () => <div>GitHub</div> }));
-vi.mock('./Integrations', () => ({ IntegrationsSection: () => null }));
-vi.mock('./Team', () => ({
-  useTeamViewer: () => ({ isAdminOrOwner: () => true }),
-}));
-vi.mock('@queries/team/teams', () => ({
-  useUserTeamsQuery: () => ({ isSuccess: true, data: [] }),
-}));
-vi.mock('@app/features/slack-import/slack-import', () => ({
-  SlackImport: () => <div>Slack export</div>,
-}));
 vi.mock('./connections/integrations-view', () => ({
   IntegrationsView: (props: { onOpenLocalAgents?: () => void }) => (
     <div>

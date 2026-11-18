@@ -28,15 +28,10 @@ const harness = vi.hoisted(() => ({
   get: vi.fn(),
   control: vi.fn(),
 }));
-const flags = vi.hoisted(() => ({ agentNavigation: false }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@core/constant/featureFlags')>();
-  return {
-    ...actual,
-    isFeatureEnabled: (flag: unknown) =>
-      flag === actual.enableAgentNavigation && flags.agentNavigation,
-  };
+  return { ...actual, isFeatureEnabled: () => false };
 });
 const device = vi.hoisted(() => ({ nativeApp: false, touch: false }));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
@@ -329,6 +324,7 @@ describe('AgentSession', () => {
       type: 'prompt',
       prompt: 'hi',
       actionId,
+      clientId: expect.any(String),
     });
     // Same id back: nothing to reconcile.
     expect(inputs().filter((input) => input.kind === 'retracted')).toEqual([]);
@@ -337,10 +333,6 @@ describe('AgentSession', () => {
   });
 
   it('sends the tab a prompt was typed in, and only with prompts', async () => {
-    flags.agentNavigation = true;
-    onTestFinished(() => {
-      flags.agentNavigation = false;
-    });
     const live = AgentSession.acquire(SESSION);
     await live.load();
 
@@ -360,11 +352,7 @@ describe('AgentSession', () => {
   it.each(MOBILE_DEVICES)(
     'sends no tab with a prompt typed on $on',
     async (mobile) => {
-      flags.agentNavigation = true;
       holdMobile(device, mobile);
-      onTestFinished(() => {
-        flags.agentNavigation = false;
-      });
       const live = AgentSession.acquire(SESSION);
       await live.load();
 

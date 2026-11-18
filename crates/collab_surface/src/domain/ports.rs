@@ -100,7 +100,7 @@ pub trait SurfaceInitializer: Send + Sync + 'static {
         surface_id: &str,
     ) -> impl Future<Output = Result<bool, CollabSurfaceError>> + Send;
 
-    /// The session for `surface_id` rendered as GitHub-flavored markdown.
+    /// The session for `surface_id` rendered as lossless internal markdown.
     fn markdown(
         &self,
         surface_id: &str,
@@ -230,7 +230,7 @@ pub trait OwnedSurfaceService: Send + Sync + 'static {
         snapshot: Vec<u8>,
     ) -> impl Future<Output = Result<CollabSurface, CollabSurfaceError>> + Send;
 
-    /// A ready surface's content as GitHub-flavored markdown; `None` while the
+    /// A ready surface's content as lossless internal markdown; `None` while the
     /// surface does not exist or is not ready.
     fn owned_surface_markdown(
         &self,

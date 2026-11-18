@@ -23,7 +23,9 @@
 //!
 //! A row is listed only while it shows something. Team invites, inbox
 //! reconnection notices and external chat messages have no row at all. Each
-//! row also says who it is from and what the viewer can do from it.
+//! row also says who it is from, what the viewer can do from it, and which
+//! other kinds it is listed under, such as a thread whose reply mentions the
+//! viewer, listed under mentions as well.
 
 use std::collections::{HashMap, HashSet};
 
@@ -523,6 +525,65 @@ fn row_type(slot: &Slot, channel: bool, mention: bool) -> InboxRowType {
     }
 }
 
+/// The kinds besides its own that a row is listed under, because what it
+/// shows is that too. A filter selects the rows with what it names, so a
+/// reply that mentions the viewer lists its thread under mentions as well as
+/// threads, a mention's thread with replies under threads as well, and an
+/// entity's comments that mention the viewer under comments as well. A pull
+/// request or agent session that mentions the viewer is listed under mentions
+/// outside a channel, as comment mentions are.
+fn also_listed_as(
+    row_type: InboxRowType,
+    shown: &[FeedNotification],
+    viewer: &MacroUserIdStr<'static>,
+) -> Vec<InboxRowType> {
+    let channel_kinds = || {
+        shown
+            .iter()
+            .map(|notification| channel_view(notification, viewer).kind)
+    };
+    match row_type {
+        InboxRowType::ChannelThread
+            if channel_kinds().any(|kind| {
+                matches!(
+                    kind,
+                    ChannelKind::Message {
+                        role: MessageRole::Mention,
+                        ..
+                    }
+                )
+            }) =>
+        {
+            vec![InboxRowType::ChannelMention]
+        }
+        InboxRowType::ChannelMention
+            if channel_kinds().any(|kind| {
+                matches!(
+                    kind,
+                    ChannelKind::Message {
+                        thread_id: Some(_),
+                        ..
+                    }
+                )
+            }) =>
+        {
+            vec![InboxRowType::ChannelThread]
+        }
+        InboxRowType::DiscussionMention => vec![InboxRowType::DiscussionMessages],
+        InboxRowType::PullRequest | InboxRowType::Agent
+            if shown.iter().any(|notification| {
+                matches!(
+                    notification.notification_metadata,
+                    NotifEvent::GithubPrMention(_) | NotifEvent::AgentSessionMentioned(_)
+                )
+            }) =>
+        {
+            vec![InboxRowType::DiscussionMention]
+        }
+        _ => Vec::new(),
+    }
+}
+
 /// Who a notification is from: the agent for agent session events, Macro
 /// for reminders and AI chat responses, otherwise the user who sent it.
 fn actor(notification: &FeedNotification) -> Option<InboxActor> {
@@ -666,8 +727,10 @@ pub fn rows(
                 }
                 _ => notifications.iter().any(|n| counts_as_unseen(n)),
             };
+            let row_type = row_type(&slot, channel, mention);
             Some(InboxRow {
-                row_type: row_type(&slot, channel, mention),
+                row_type,
+                also_listed_as: also_listed_as(row_type, &notifications, viewer),
                 actor: actor(&notifications[0]),
                 actions: actions(&slot, &notifications),
                 thread_id: match &slot {

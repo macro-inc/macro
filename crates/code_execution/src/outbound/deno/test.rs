@@ -139,6 +139,7 @@ async fn real_sdk_nested_calls_are_authenticated_and_concurrent() {
             web_app_url: "https://app.example.test".into(),
         },
         unattended: None,
+        egress: Egress::Direct,
     };
     let source = r#"
 import { Macro } from '@macro-inc/sdk';
@@ -226,6 +227,7 @@ async fn a_program_presents_a_view_through_its_session() {
             web_app_url: "https://app.example.test".into(),
         },
         unattended: None,
+        egress: Egress::Direct,
     };
     let source = r#"
 export async function main({execution}) {
@@ -433,7 +435,7 @@ export async function main() {
     } catch (error) {
       const message = String(error?.message ?? error);
       results[name] = message.includes("Make requests with fetch") ? "unavailable"
-        : message.includes("do not sleep") ? "refused as a sleep"
+        : message.includes("Promise.race deadline guards") ? "refused as a sleep"
         : error instanceof TypeError ? "removed" : message;
     }
   }
@@ -579,7 +581,7 @@ export async function main() {{
       results[name] = "loaded";
     }} catch (error) {{
       results[name] = error.message.includes("Make requests with fetch") ? "unavailable"
-        : error.message.includes("do not sleep") ? "refused as a sleep" : error.message;
+        : error.message.includes("Promise.race deadline guards") ? "refused as a sleep" : error.message;
     }}
   }}
   return results;
@@ -618,6 +620,42 @@ export async function main() {{
         error.message,
         "Error: node:net is unavailable in ExecuteCode. Make requests with fetch or the macro SDK."
     );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn timer_deadline_guards_explain_supported_parallel_calls() {
+    let (_root, service) = setup(Limits::default()).await;
+    for source in [
+        "export async function main() { return Promise.race([new Promise(() => {}), new Promise((_, reject) => setTimeout(() => reject(new Error('deadline')), 1000))]); }",
+        "export function main() { setInterval(() => {}, 1000); }",
+        "export async function main() { await import('node:timers/promises'); }",
+    ] {
+        let (_, outcome) = run(&service, source, 5000).await;
+        let Outcome::Failed { error } = outcome else {
+            panic!("{source}: {outcome:?}");
+        };
+        assert_eq!(error.code, FailureCode::Runtime);
+        assert!(
+            error
+                .message
+                .contains("including Promise.race deadline guards"),
+            "{}",
+            error.message
+        );
+        assert!(error.message.contains("30 s"), "{}", error.message);
+        assert!(
+            error.message.contains("Promise.allSettled"),
+            "{}",
+            error.message
+        );
+        assert!(
+            error.message.contains("return successful results"),
+            "{}",
+            error.message
+        );
+    }
     service.shutdown().await;
 }
 
@@ -1415,8 +1453,335 @@ export async function main({token, hosts}) {
             .unwrap(),
     )
     .await;
-    server.await.unwrap();
     assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    server.await.unwrap();
+}
+
+/// A proxied run, with its one SDK host at `host`.
+fn proxied(host: &str) -> RunEnvironment {
+    RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("cognition".into(), host.to_owned())]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        egress: Egress::Proxied,
+        ..RunEnvironment::default()
+    }
+}
+
+/// A proxied run's requests are marked by the host's forwarder, whatever
+/// the program does to the realm or its own headers, and reach the host's
+/// path with their query.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_run_is_marked_outside_the_realm() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        respond(&mut stream, "{}").await;
+        request
+    });
+    let source = r#"
+export async function main({hosts}) {
+  Headers.prototype.set = function () {};
+  const response = await fetch(`${hosts.cognition}/marked?x=1`, {
+    headers: {"x-macro-code-execution": "0", traceparent: "00-forged-forged-01", authorization: "Bearer fixture-run-token"},
+  });
+  return {status: response.status, cognition: hosts.cognition};
+}
+"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 10_000,
+                    language: Language::Javascript,
+                },
+                proxied(&host),
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["status"], 200);
+    // The program keeps the real host, which its links need; its request
+    // went to the forwarder.
+    assert_eq!(value["cognition"], serde_json::json!(host));
+    let request = server.await.unwrap().to_ascii_lowercase();
+    assert!(request.starts_with("get /marked?x=1 "), "{request}");
+    assert!(
+        request.contains("x-macro-code-execution: 1\r\n"),
+        "{request}"
+    );
+    assert!(!request.contains("x-macro-code-execution: 0"), "{request}");
+    assert!(!request.contains("forged"), "{request}");
+    assert!(
+        request.contains("authorization: bearer fixture-run-token\r\n"),
+        "{request}"
+    );
+    service.shutdown().await;
+}
+
+/// With the forwarder its only address, a proxied run can't reach an SDK
+/// host directly.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_run_cannot_reach_the_hosts_directly() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    // The SDK host is named `localhost`, so the program's fetch doesn't send
+    // `127.0.0.1` to the forwarder: it tries to connect itself.
+    let host = format!("http://localhost:{port}");
+    let direct = format!("http://127.0.0.1:{port}");
+    let source = format!(
+        r#"
+export async function main() {{
+  try {{
+    await fetch("{direct}/direct");
+    return "sent";
+  }} catch (error) {{
+    return String(error);
+  }}
+}}
+"#
+    );
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source,
+                    timeout_ms: 10_000,
+                    language: Language::Javascript,
+                },
+                proxied(&host),
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert!(value.as_str().unwrap().contains("NotCapable"), "{value}");
+    assert!(
+        tokio::time::timeout(Duration::from_millis(500), listener.accept())
+            .await
+            .is_err()
+    );
+    service.shutdown().await;
+}
+
+/// A run's forwarder stops listening when the run ends, and when it is
+/// cancelled.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_runs_forwarder_stops_with_the_run() {
+    let (_root, service) = setup(Limits::default()).await;
+    let host = "http://127.0.0.1:9";
+    let finished = r#"export function main({forwarder}) { return forwarder.cognition; }"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: finished.into(),
+                    timeout_ms: 10_000,
+                    language: Language::Javascript,
+                },
+                proxied(host),
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    let forwarder = value
+        .as_str()
+        .unwrap()
+        .trim_start_matches("http://")
+        .split('/')
+        .next()
+        .unwrap()
+        .to_owned();
+    assert!(TcpStream::connect(&forwarder).await.is_err(), "{forwarder}");
+
+    let waiting = r#"export async function main({forwarder}) { console.log(forwarder.cognition); await new Promise(() => {}); }"#;
+    let mut handle = service
+        .execute(
+            ExecuteRequest {
+                source: waiting.into(),
+                timeout_ms: 10_000,
+                language: Language::Javascript,
+            },
+            proxied(host),
+        )
+        .unwrap();
+    let forwarder = loop {
+        if let EventKind::Log { message, .. } = handle.events.recv().await.unwrap().kind {
+            break message
+                .trim_start_matches("http://")
+                .split('/')
+                .next()
+                .unwrap()
+                .to_owned();
+        }
+    };
+    assert!(TcpStream::connect(&forwarder).await.is_ok(), "{forwarder}");
+    handle.cancellation.cancel();
+    let (_, outcome) = collect(handle).await;
+    assert!(matches!(outcome, Outcome::Cancelled), "{outcome:?}");
+    assert!(TcpStream::connect(&forwarder).await.is_err(), "{forwarder}");
+    service.shutdown().await;
+}
+
+/// A request still in flight when a proxied run ends is dropped with it:
+/// the host sees its connection close.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_runs_requests_end_with_the_run() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let (closed, was_closed) = tokio::sync::oneshot::channel();
+    tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        read_request(&mut stream).await;
+        // Never answer; wait for the forwarder to hang up.
+        let mut buffer = [0; 64];
+        while stream.read(&mut buffer).await.is_ok_and(|count| count > 0) {}
+        let _ = closed.send(());
+    });
+    let source =
+        r#"export async function main({hosts}) { await fetch(`${hosts.cognition}/hangs`); }"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 1000,
+                    language: Language::Javascript,
+                },
+                proxied(&host),
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(matches!(outcome, Outcome::TimedOut), "{outcome:?}");
+    tokio::time::timeout(Duration::from_secs(2), was_closed)
+        .await
+        .expect("the forwarder kept the host's connection open after the run")
+        .unwrap();
+    service.shutdown().await;
+}
+
+/// `--allow-net` lets `host.` through as `host`, so a trailing dot must not
+/// lose the mark either.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_trailing_dot_host_is_still_marked() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("GET /dotted "), "{request}");
+        assert!(
+            request
+                .to_ascii_lowercase()
+                .contains("x-macro-code-execution: 1\r\n"),
+            "{request}"
+        );
+        respond(&mut stream, "{}").await;
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("cognition".into(), format!("http://localhost:{port}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        ..RunEnvironment::default()
+    };
+    let source = format!(
+        r#"
+export async function main() {{
+  await fetch("http://localhost.:{port}/dotted");
+  return {{data: null, reviews: []}};
+}}
+"#
+    );
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source,
+                    timeout_ms: 5000,
+                    language: Language::Javascript,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    // A fetch refused before connecting fails here rather than hanging below.
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    server.await.unwrap();
+}
+
+/// A proxied request's body reaches the host as the program sent it.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_requests_body_reaches_the_host() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        respond(&mut stream, "{}").await;
+        request
+    });
+    let source = r#"
+export async function main({hosts}) {
+  const response = await fetch(`${hosts.cognition}/decisions`, {
+    method: "POST",
+    headers: {"content-type": "application/json"},
+    body: JSON.stringify({input: "x", questions: {yes: "Yes?"}}),
+  });
+  return response.status;
+}
+"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 10_000,
+                    language: Language::Javascript,
+                },
+                proxied(&host),
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value, 200);
+    let request = server.await.unwrap();
+    assert!(request.starts_with("POST /decisions "), "{request}");
+    assert!(
+        request.ends_with(r#"{"input":"x","questions":{"yes":"Yes?"}}"#),
+        "{request}"
+    );
+    service.shutdown().await;
 }
 
 mod ocaml;

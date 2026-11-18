@@ -188,33 +188,6 @@ export const notificationServiceClient = {
       })
     ).map((result) => result);
   },
-  async bulkMarkNotificationAsSeen(args: NotificationBulkRequest) {
-    const { notificationIds } = args;
-    return (
-      await notificationFetch<any>(`/user_notifications/bulk/seen`, {
-        method: 'PATCH',
-        body: JSON.stringify({ notificationIds }),
-      })
-    ).map((result) => result);
-  },
-  async bulkMarkNotificationAsDone(args: NotificationBulkRequest) {
-    const { notificationIds } = args;
-    return (
-      await notificationFetch<any>(`/user_notifications/bulk/done`, {
-        method: 'PATCH',
-        body: JSON.stringify({ notificationIds }),
-      })
-    ).map((result) => result);
-  },
-  async bulkMarkNotificationAsUndone(args: NotificationBulkRequest) {
-    const { notificationIds } = args;
-    return (
-      await notificationFetch<any>(`/user_notifications/bulk/undone`, {
-        method: 'PATCH',
-        body: JSON.stringify({ notificationIds }),
-      })
-    ).map((result) => result);
-  },
   async markNotificationEntityAsSeen(args: WithEventItemId) {
     const { event_item_id } = args;
     return (
@@ -302,10 +275,15 @@ export const notificationServiceClient = {
       body: JSON.stringify(body),
     });
   },
-  async unsubscribeItem(args: WithItem & { snoozed_until?: string | null }) {
-    const query = args.snoozed_until
-      ? `?snoozed_until=${encodeURIComponent(args.snoozed_until)}`
-      : '';
+  async unsubscribeItem(
+    args: WithItem & { snoozed_until?: string | null; mentions_only?: boolean }
+  ) {
+    // Both are sent when both are given, so the server refuses the pair
+    // instead of this client choosing one.
+    const params = new URLSearchParams();
+    if (args.mentions_only) params.set('mentions_only', 'true');
+    if (args.snoozed_until) params.set('snoozed_until', args.snoozed_until);
+    const query = params.size > 0 ? `?${params}` : '';
     return notificationFetch<{}>(
       `/unsubscribe/item/${encodeURIComponent(args.item_type)}/${encodeURIComponent(args.item_id)}${query}`,
       {

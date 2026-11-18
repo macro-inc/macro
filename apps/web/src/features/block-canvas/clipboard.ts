@@ -110,9 +110,10 @@ export function createCanvasClipboard(
     notify('Clipboard has no Canvas Next shapes');
     return false;
   };
+  /** Resolves to whether the selection reached the clipboard. */
   async function copy(cut = false) {
     const text = serialize();
-    if (!text) return;
+    if (!text) return false;
     const document = editor.document,
       selection = editor.getSession().selectedIds.join('\n');
     try {
@@ -126,8 +127,10 @@ export function createCanvasClipboard(
       )
         editor.deleteSelection();
       notify(cut ? 'Cut selection' : 'Copied selection');
+      return true;
     } catch {
       notify('Clipboard permission denied. Use the keyboard shortcut instead.');
+      return false;
     }
   }
   return {

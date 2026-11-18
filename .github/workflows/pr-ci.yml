@@ -18,6 +18,8 @@ jobs:
       pull-requests: write
       statuses: write
     outputs:
+      infra: ${{ steps.filter.outputs.infra }}
+      conventions: ${{ steps.filter.outputs.conventions }}
       cargo_deny: ${{ steps.filter.outputs.cargo_deny }}
       workspace_dependencies: ${{ steps.filter.outputs.workspace_dependencies }}
       generated_workflows: ${{ steps.filter.outputs.generated_workflows }}
@@ -475,6 +477,23 @@ jobs:
       uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
       with:
         filters: |
+          infra:
+            - 'infra/**'
+            - 'flake.nix'
+            - 'flake.lock'
+            - '.github/actions/setup-nix-dev-shell/**'
+            - '.github/actions/teardown-nix/**'
+            - '.github/workflows/code_check_infra.yml'
+          conventions:
+            - 'crates/**'
+            - 'services/**'
+            - 'tooling/xtask/**'
+            - 'apps/web/**'
+            - 'packages/**'
+            - 'rules/**'
+            - 'sgconfig.yml'
+            - '.github/actions/teardown-nix/**'
+            - '.github/workflows/code_check_conventions.yml'
           cargo_deny:
             - 'Cargo.toml'
             - 'crates/**/Cargo.toml'
@@ -558,12 +577,14 @@ jobs:
   infra:
     needs:
     - start
+    if: needs.start.outputs.infra == 'true'
     name: Infra
     uses: ./.github/workflows/code_check_infra.yml
     secrets: inherit
   conventions:
     needs:
     - start
+    if: needs.start.outputs.conventions == 'true'
     name: Conventions
     uses: ./.github/workflows/code_check_conventions.yml
     secrets: inherit

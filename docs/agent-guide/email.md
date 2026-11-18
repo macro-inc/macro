@@ -1,5 +1,14 @@
 # Email
 
+Email paints its touch top fade within the email-list pane only. Above 720px on touch, the list stays left of an empty or selected reading pane. Show sidebar opens mailbox navigation in a sheet that slides over the email list.
+
+Fold with a thread open to verify the same thread and its draft stay mounted.
+The thread fills the pane and its top-left Back button returns to the current
+mailbox and filter. Drag right from the left edge of the thread body to reveal
+the same list underneath. Cancel the drag to return to the thread, or complete
+it to return to the list.
+Unfolding before going back restores the side-by-side reading pane.
+
 ## Thread motion
 
 Message cards animate their height when expanding or collapsing a message or
@@ -55,12 +64,17 @@ and `Reminders` (when reminders are enabled), followed by a **Library** section 
 [Saved email views](#saved-email-views)). Sidebar number shortcuts follow that
 order; `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
 `Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
-While the email list itself has focus, `Tab` moves browser focus instead; use
-`g i` or `g o`. Leaving the search field (`Escape`, `ArrowDown`, `Enter`,
-or picking a recent search) hands the keyboard to the view, not the list,
-so `Tab` still switches tabs there. Calendar mail remains available through
-the calendar filter and existing Calendar route. Mobile keeps its original tabs and order, including
-separate Signal, Noise, and Calendar tabs, with `Focus` (flagged) first.
+This holds while the email list itself has focus, as it does after `Escape`
+closes a thread; only on a control inside the list (a row's sender name,
+checkbox or actions, Load more) does `Tab` move browser focus to the next
+control. Leaving the
+search field (`Escape`, `ArrowDown`, `Enter`, or picking a recent search)
+hands the keyboard to the view, so `Tab` switches tabs there too. Calendar mail
+remains available through
+the calendar filter and existing Calendar route. Touch shows the same Inbox
+pills as desktop: Signal and Noise, with Focus first when enabled. Other
+mailboxes show their current name instead of a strip of every mailbox; use the
+sidebar to switch destinations.
 The top of Signal shows a pinned **Learn how to use Macro Mail** row
 (`TutorialRow` from `features/video-tutorials`, shared by every block). No block shows a tutorial entry on a touch device (`isTouchDevice()`: phones,
 tablets and the native iOS and Android apps), so they never load a tutorial video. Clicking it opens the tutorial video in a dialog at 80% of
@@ -81,7 +95,8 @@ widens the field across the list header; Filters, the view actions and New are
 hidden until the search is closed (the X, `Escape` on an empty field, or
 `Escape` in the list). Results still update as you type. While a new query
 loads, the rows already on screen stay, dimmed, instead of a blank list and a
-spinner. With the field focused, up to five recent searches containing the
+spinner. Once its own results arrive, a new search starts at the top of the list,
+wherever the list was scrolled. With the field focused, up to five recent searches containing the
 typed text are listed above the results: `ArrowDown` walks them before it
 reaches the results, `Enter` or a click runs one and moves to its first
 result. A search is remembered when the field is left with it, at most eight
@@ -90,11 +105,27 @@ that rows never blank between two queries, that switching tabs never shows
 the previous tab's rows, and that with the flag off the compact field and the
 spinner are unchanged.
 
+On a phone (and any touch device) the same flag adds a search pill to Email's
+pill row, after Show sidebar and before Filters. Tapping it opens Email's search page: the
+field and **Cancel** replace the pills in the header, the keyboard comes up in
+the tap, recent searches are listed while the field has focus, and the list
+below shows the results as ordinary email rows, updating as you type and
+keeping the previous rows dimmed while a new query loads. The keyboard's Search
+key drops the keyboard to show the results; the field's X clears the text and
+keeps the keyboard; Cancel (or Android Back) clears the search and returns to
+the mailbox. Opening a result and coming back returns to the search page with
+its results. If the flag turns off or the tab changes to one that cannot be
+searched while the page is open, the page closes and its search ends. The
+dock's app-wide search is unchanged. Check at 390px with touch
+emulation: the pill row scrolls, so the search pill can start off screen on a
+tab far to the right.
+
 Mail-client keys work in the list, the reading pane, and the open thread while
-Email is focused: `s` star, `z` undo the last action, and `g` then a letter
-for a tab (`i` Signal, `o` Noise, `s` Favorites, `t` Sent, `d` Drafts, `e`
-Archived, `a` All). These letters replace the app-wide `g` targets only inside
-Email (`g t` is still Tasks elsewhere); `g h` still goes Home. `Escape` in a
+Email is focused: `s` star and `z` undo the last action. `g` then a letter
+keeps its app-wide meaning inside Email too ([navigation](navigation.md)):
+`g e` opens Email on Signal and `g s` on Sent from any view, as long as no
+editor or input (Email search included) has focus; other tabs are on the
+number keys and the sidebar. `Escape` in a
 list steps back one level: it clears a selection, then a search, and with
 neither returns to Signal; in the reading pane it first hands the keyboard back
 to the list. From the search field, `ArrowDown` or `Enter` moves to the first
@@ -282,18 +313,39 @@ passing stores nothing and pushes nothing, so a follow-up coming due, a
 calendar change whose event ends or importance moving shows at the tab's next
 read. Mark
 Done hides the row at once and archives the thread; Undo brings it back. The
-worker classifies only inboxes on its `FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so
-other accounts see the empty state `You're caught up`, whose **See the rest of
-your inbox** opens Signal.
+worker classifies an inbox only while its owner has `enable-email-focus` on; a
+delegated inbox follows its owner's flag, not the reader's. An owner who joins
+the rollout gets a filled tab without new mail: within about 6 minutes the
+worker finds them (it looks at every connected inbox each minute, evaluating
+the flag from definitions it polls from PostHog every 5 minutes) and backfills their inbox,
+the last 3 days first, then the rest of the 30 without due dates (an older
+thread gets one with its next mail). With nothing classified the tab
+shows the empty state `You're caught up`, whose **See the rest of your inbox** opens Signal.
+PostHog counts each visit to the tab when the server answers the read it
+makes as it opens (`email_focus_tab_opened`, with the threads the list holds,
+so an empty tab reads as `threads: 0`; refreshes are not counted) and each
+thread opened from it by click, tap or Enter (`email_focus_thread_opened`,
+with its position); a thread the reading pane opens as the keyboard cursor
+moves is not counted.
 
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the
 All mailbox with Done applied, excluding threads teammates shared with you. It
-respects the selected inboxes and filters. The search service cannot filter
-archive state, so search within the tab keeps only archived hits on the client.
-Rows offer **Unarchive email**;
+respects the selected inboxes and filters, and search within the tab finds only
+done threads. Rows offer **Unarchive email**;
 unarchiving removes the row at once. The tab persists across reloads. An empty
 list shows `No archived email`.
+
+Search within a tab or facet finds the threads the list would show: Shared finds
+threads shared with you through a grant to you, a channel or a team, and none of
+your own; Calendar finds only threads with an invitation; Read status and Done
+filter by the thread's read and inbox state, as the list does (Done is not the
+notification's state); Sent finds threads with a message you sent and Drafts
+threads holding a draft; the attachment filters find threads with an attachment
+of any selected kind on any message. Check each with a search term that also
+matches threads the tab leaves out. A draft that never synced to the provider
+is not in the search index, so Drafts finds it only by its subject among the
+drafts this browser holds.
 
 A thread carrying a sent file shows a muted paperclip immediately before its
 date, in every list layout. Inline images (an image with a Content-ID, such as
@@ -330,10 +382,17 @@ while selected tag sets are pending. Background refreshes retain the current lis
 
 While the search field has text the list shows only search states: no Watch
 tutorial row, a spinner while the search runs (from the first character), and
-`No results` when nothing matches. `Load More` appears only under
-result rows: a page whose hits the tab or a client-side filter drops (Archived
-keeps only archived hits) pages on by itself until a row shows or results run
-out. To check the tab switch,
+`No results` when nothing matches. `Load More` appears under result
+rows. A page that adds no row (an alias, saved view or client-side filter drops
+its hits, or the service's done check for Archived read its bound of index pages
+without keeping one) is read past by itself, after the first page and after each
+Load More, up to five pages per load (`MAX_PAGES_PER_LOAD`). A load stops at
+a new row, at the end of the results (Load More goes away), on an error, or at
+that cap; one that reaches the cap without a row leaves `No matches in the next
+pages. Search further`, which reads up to five more. Check with a term that
+matches many inbox threads and few archived ones: every Load More adds a row,
+ends the results, or ends on that label, never a click that adds nothing. To
+check the tab switch,
 rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
 network read must not leave the old rows visible or expose their Load more action.
 
@@ -345,6 +404,15 @@ that supplemental metadata appears without replacing the rows or thread body.
 On the first mobile Mail visit, its filter button and Signal/Noise pills must
 also appear. Navigate Home → Mail → a thread → Mail and verify those controls
 survive header replacement, including with the network still blocked.
+The touch pill row is contained within the email-list pane. It has an explicit
+0.5rem top gutter below the safe-area boundary,
+matching Drive even when Duo has no top safe-area inset.
+The email list reserves the pill row and a 0.75rem gap beneath it. Email
+navigation opens in a left sheet at every touch width, above the floating list
+controls and app chrome. Hide sidebar sits beside Email in the sheet, and Show
+sidebar precedes the filter button in the list.
+Wide touch keeps the list beside an empty or selected thread preview; desktop
+retains its reading-pane preference.
 
 Opening an email shows loading while its local draft identity and thread data
 resolve. Verify a cold open and switching directly between threads with delayed
@@ -425,6 +493,8 @@ continuation pages. Once replay commits (even after a reload), only those querie
 refresh from the server; they should not refetch over the optimistic state merely
 because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
+Press # right after opening a thread, while its mark read is still on its way:
+the row must leave the list and stay out once the mark read lands.
 Archive-based
 Mark Done, Mark Not Done, and Undo/Redo use `setEmailThreadArchived`: `inboxVisible`
 updates optimistically in the normalized cache, and each reversal is a distinct
@@ -516,8 +586,13 @@ Spam and Trash order threads by their latest message in that folder. Reading a t
 
 Use **Not spam** on a Spam row or **Restore** on a Trash row. The same
 action appears in the selection toolbar for bulk restores, including on mobile.
-Outlook restores received mail to Inbox and provider drafts to Drafts. Gmail removes
-the Spam or Trash label and preserves the remaining labels; it does not add Inbox.
+Outlook restores received mail to Inbox and provider drafts to Drafts. Gmail Restore
+removes the Trash label and preserves the remaining labels; it does not add Inbox.
+Gmail Not spam moves the thread from Spam to the inbox, as Gmail's own button does:
+it adds Inbox when received mail in the thread is in Spam (the user's own sent
+mail, even addressed to themselves, only leaves Spam), then removes Spam. Report
+spam on Gmail files the thread under Spam, then takes it out of the inbox. The
+assistant adding or removing the SPAM label does the same.
 Gmail restores update the canonical preview and ordering immediately, before the
 queued provider write completes.
 Outlook uses pending mailbox operations, and the thread's operation notice shows
@@ -599,9 +674,14 @@ that match its supported view/filter but are missing inside its covered sort
 range (including timestamp/ID ties). An exhausted page covers the remaining
 matching range, including an empty result. This checks at most 500 local matches
 per write; larger stale sets converge over refreshes. It preserves normalized
-threads and pending optimistic edits, and does not use cursor pages or backfill
-gaps as negative evidence. An older open view's server snapshot cannot restore
-explicitly invalidated membership; pending local edits still take precedence.
+threads, and keeps a row with queued writes unless its stored facts and each
+prefix of those writes all still match the page (a queued mark read does not
+keep a thread the page left out; a queued Undo of an archive keeps its row). It
+does not use cursor pages or backfill gaps as negative evidence. An older open
+view's server snapshot cannot restore
+explicitly invalidated membership; pending local edits still take precedence,
+so an older view can list a thread its first page dropped (the trashed thread
+with a queued mark read) until that write settles.
 Invalidated facts stay unqueryable until a full canonical snapshot arrives,
 rather than guessing whether a thread was moved or
 deleted. Verification: seed stale Noise matches between returned rows, apply a
@@ -720,7 +800,8 @@ task**, and the **Share** icon and label / copy-link icon. On touch (phones and
 tablets) the thread header has only Back, the subject, and the Info button:
 tapping the subject opens the title menu as a sheet, which holds every thread
 action including **Ask Macro**, **Create task**, and **Remind me**, and Info
-opens the details sheet. The arrows
+opens the details sheet. A thread open in Mail on touch has the same header;
+beside the list on wide touch it has no Back. The arrows
 follow the current filtered list and disable at its ends. When the open thread
 leaves the list while it stays open (a reply in Signal marks it done, or another
 device archives it), they step from its former neighbours. Mark done advances in
@@ -737,8 +818,10 @@ On desktop a new email opens inside the Email view at `/app/mail/new`, from
 Email's **New**, the app's New menu, a `mailto:` link, a calendar event's
 guest email, or the agent's send-email card: the composer takes the list's
 place beside the Email sidebar, and the reading pane folds away while it is
-open. Its Back arrow returns to the list. Replies stay in their thread. Touch
-keeps the full-screen composer. Check with the reading pane on and off that
+open. Its Back arrow returns to the list. Replies stay in their thread. On
+touch away from phone width it opens at the same URL in the preview pane
+beside the list, with the phone composer's header actions; narrow panes add
+Back. Phones keep the full-screen composer. Check with the reading pane on and off that
 the sidebar stays usable while composing, that Back and sidebar tabs return
 to the list without the draft in its URL, that reloading keeps the draft, and
 that a second **New** starts an empty composer.
@@ -905,13 +988,14 @@ as `person+tag@example.com`, whether or not it is a saved contact. That holds
 when contacts or their names load after typing starts and reorder the list,
 including under a resting pointer, and when the address was typed or pasted
 before suggestions loaded. Name-word prefixes outrank substring matches;
-`jo sm` and `sm jo` both find John Smith. Within each name tier, and on empty
+`jo sm` and `sm jo` both find John Smith. A domain (`gmail.com`) or a local part
+unlike the name finds the contact, below name matches. Within each name tier, and on empty
 input, personal suggestions are recent-first rather than domain/brevity-weighted.
 A chip shows the name followed by the address in muted ink.
 Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal
 local windows rather than retaining the address book or searching the server.
-Partial synchronization remains visibly incomplete. Each field owns its query; use
-**Next options** or PageDown for another window. Scoped thread addresses remain
+Partial synchronization remains visibly incomplete. Each field owns its query;
+scrolling to the end of the suggestions (or PageDown) lists the next page below. Scoped thread addresses remain
 available, but the same address must not appear twice when the directory also
 finds it. Paging, closing, changing sender and searching must preserve selected
 custom/off-page chips. After selecting a custom address, search for a different
@@ -1008,8 +1092,9 @@ edit once more, unless send, discard, or a reset already cancelled it; if that
 write also fails, a brief warning shows after the composer closes. A later
 failure shows a new warning.
 Retry preserves the original draft handle. An already-sent rejection drops the
-local copy rather than recreating the sent message. The REST compose path keeps
-its existing behavior.
+local copy rather than recreating the sent message; an open composer keeps only
+the text the sent message lacks, as a new draft (see below). The REST compose
+path keeps its existing behavior.
 
 Native draft recovery requires a full app update containing queue inspection and
 durable mutation metadata support. An older app receiving an OTA bundle opens
@@ -1086,7 +1171,7 @@ open shadow root: Playwright text locators can reach them, but a card's ordinary
 
 ### Read receipts
 
-With `enable-email-read-receipts` on and read receipts on for an inbox, which
+With read receipts on for an inbox, which
 is the default (see [Settings](settings.md#email-read-receipts)), messages sent from that
 inbox show **Opened** or **Not opened** beside the date in the expanded
 message header. The desktop tooltip and the expanded header details (tap the
@@ -1126,7 +1211,13 @@ focus belongs to the sent message card in the same thread pane, even while
 the thread refresh is still pending. Replying again requires clicking Reply
 or using a reply shortcut.
 Sending a new email opens its thread with the message already shown as sent; it
-must not show the draft or **Loading draft…** first.
+must not show the draft or **Loading draft…** first. The thread opens by the
+server's id: a new email sent before its draft's first save is confirmed (paste
+the body and press `Cmd+Enter` at once, from **New**, `Create` → `Email` or
+`Cmd+K`) stays in the locked composer until the server accepts the send, then
+opens the thread, never the not-found page. An Undo that restores the draft, or
+leaving the composer, cancels that navigation; an Undo too late to stop the send
+does not.
 
 After a send is queued, its notice offers `Undo`. Undo restores the
 sent envelope and editable content, including when the reply used another inbox;
@@ -1166,14 +1257,19 @@ An online send shows **Sending…** with **Undo**: a new message opens its
 conversation and a reply closes its composer, and the message appears as sent
 there immediately, before the server or provider confirms it. Once the server
 accepts the send, **Undo** stays on offer until the server's undo deadline (the
-accepted attempt's `sendTime`), not for a fixed client duration. The notice says
-**Email sent** only after delivery. This holds when another Mail tab delivers or
-cancels the send first, and a cancelled reply still returns its thread to Inbox.
-When the server cannot say how such a send ended, the notice only withdraws
-**Undo**. A send that fails after it was queued shows
-a persistent **Email failed to send**, and **Delivery unconfirmed** reports a
-send the provider did not confirm. An offline send shows **Email queued to
-send** and returns to the email list. The status panel shows a send only while it waits on this
+accepted attempt's `sendTime`), not for a fixed client duration. It is one
+notice that stays on screen until the send ends and changes in place: **Undo**
+leaves at the deadline, and **Sending…** then becomes **Email sent** only after
+delivery; it never closes and reopens while the send is in motion. A send
+that makes no progress for 30 seconds (retrying, or waiting on sign-in) lets
+its notice expire, and a new one follows it once the server accepts it. This holds
+when another Mail tab delivers or cancels the send first, and a cancelled reply
+still returns its thread to Inbox. When the server cannot say how such a send
+ended, the notice closes. A send that fails after it was queued turns the
+notice into a persistent **Email failed to send**, and **Delivery unconfirmed**
+reports a send the provider did not confirm. An offline send shows **Email
+queued to send**, which expires as usual, and returns to the email list; once
+the send goes out a **Sending…** notice follows it the same way. The status panel shows a send only while it waits on this
 device (**Queued on this device**), needs attention, or is scheduled
 (**Scheduled**). On phones the panel sits below the safe area and the floating
 header. Only one active send can own a draft across tabs; queued composers
@@ -1229,6 +1325,13 @@ selected inbox after reconnect, even when the intermediate draft save is still
 queued. Uploaded files remain attached. Forwarded and imported provider attachments retain their source-inbox access checks.
 Provider-bound drafts use the explicit inbox-transfer flow. Accepted Outlook
 sends remain owned by its provider coordinator; ambiguity is reconciled there.
+Choosing another inbox saves the draft first. The service refuses to move an
+Outlook draft while that save is still being written to Outlook, so the move
+waits for the write (up to 30 seconds) and asks again with the same operation:
+From keeps the chosen inbox. A refusal with no write in flight (a Gmail draft),
+a write that ends in a conflict, or a write still running after the wait cancels
+the move with **Retry inbox change**; a refusal of a draft whose write has just
+finished is asked once more first.
 
 Verify: queue a new message and a reply offline, close and reopen the app, and
 check their persistent status and read-only content. Cancel one before reconnect
@@ -1293,8 +1396,15 @@ Further typing saves locally without retrying the rejected write. Verify that
 pending attachment bytes survive reopening and that a reply stays in its
 conversation.
 An already-sent rejection after reconnect follows the same path as an immediate
-already-sent response: announce that the email or reply was sent, clear the local
-composer, and cancel pending autosave. It must never offer Retry for that draft.
+already-sent response: cancel pending autosave, announce that the email or reply
+was sent, then keep any text the sent message lacks as a new draft (saying it
+was not sent), or else leave the sent draft. Edits made meanwhile count toward
+that text; autosave, Send and the From switch wait until the composer has
+settled it, and it must never offer Retry for that draft. A discard pressed
+before it settles takes precedence: no notice and no kept draft, even when its
+delete fails, because the draft was sent either way. A composer that closes
+first shows nothing and keeps nothing: the text the sent message lacks is lost,
+a known gap, since the queue drops the refused working copy.
 Verify this in standalone and reply composers, including a queued edit awaiting
 its debounce and a failure racing the first identity read. A settlement for a
 previous or different draft must not clear the current editor.
@@ -1502,7 +1612,15 @@ gives the full send time, with secondary **View message** on the left and primar
 **Email rescheduled** with **View message**. Undo cancels the captured draft in
 the captured inbox and restores its editable body, envelope, and attachments; it must
 not overwrite a newer reply. View message opens the scheduled thread, or scrolls an
-inline reply back into view.
+inline reply back into view. The notice and its Undo stay while the thread opens
+after the schedule, on a phone too: the composer there starts from the schedule
+just made, even when its first read of the draft predates it, and raises no
+**Email scheduled for … Cancel the schedule to edit.** alert, which is for a
+schedule made in another tab or device. A schedule cancelled or moved from
+another composer before its notice shows (while the thread is being marked done)
+gets no notice; once cancelled, the composer that scheduled it, reply or not,
+stays open and editable. A schedule moved on another device while its notice
+shows keeps the notice and its Undo.
 The Email view's **Scheduled** tab lists only server-confirmed scheduled drafts,
 soonest first across the selected inboxes, as ordinary email rows: the recipients,
 subject, and snippet, with a clock-and-time badge (for example **Tomorrow, 2:12
@@ -1634,7 +1752,7 @@ Date-grouped email lists start directly with today's messages; Today is not show
 
 ## Saved email views
 
-Behind `enable-email-saved-views` (on in dev). A saved view is a named
+A saved view is a named
 `kind: "email"` definition in the shared saved-view store; opening it queries
 live mail with the viewer's access. See `docs/design/saved-views.md`.
 
@@ -1671,8 +1789,8 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   the mobile picker, which has no drag, each row's menu has Move up/Move down.
   The order is personal and follows the account. A dot marks a view whose first
   unread page has unread mail.
-- **Mobile.** A saved-view pill follows Filters; its drawer lists and manages
-  views. The filter drawer shows "Save these filters as a view" with Save view
+- **Touch.** Views are listed and managed in the sidebar sheet opened by
+  **Show sidebar**; the list header has no saved-view pill. The filter drawer shows "Save these filters as a view" with Save view
   and Revert above its footer, and Save changes/Reset in the footer while a view
   is edited.
 
