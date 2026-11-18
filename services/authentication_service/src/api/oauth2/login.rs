@@ -90,7 +90,7 @@ pub(in crate::api::oauth2) async fn handler(
         url.query_pairs_mut().append_pair("token", &session_code);
 
         ctx.macro_cache_client
-            .set_mobile_login_session(&session_code, &refresh_token)
+            .set_mobile_login_session(&session_code, &refresh_token, None)
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "unable to set mobile login session");

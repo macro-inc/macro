@@ -15,7 +15,10 @@ behind its own Cargo feature.
 - `src/passwordless_rate_limit.rs`, `src/create_user_rate_limit.rs`: the
   `auth_rate_limit` feature's two limiters.
 - `src/auth.rs`: shared auth-cache helpers (feature `auth`), including the
-  single-use mobile login sessions behind sign-in session codes.
+  single-use mobile login sessions behind sign-in session codes. A code bound
+  to a sign-in is one hash under its own prefix (`mbl_login_bound:`), so its
+  challenge can't be evicted apart from it and a server that predates binding
+  never finds it.
 
 ## Scope
 

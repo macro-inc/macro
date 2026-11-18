@@ -3029,6 +3029,15 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "session_code_challenge",
+            "in": "query",
+            "description": "With `is_mobile`: base64url(SHA-256(verifier)), unpadded. The session code then redeems only with that verifier in the `x-session-code-verifier` header.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3654,6 +3663,15 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "x-session-code-verifier",
+            "in": "header",
+            "description": "The verifier whose S256 challenge the sign-in sent as `session_code_challenge`. A code minted with a challenge redeems only with it, and a request that sends one redeems only such a code.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
             }
           }
         ],

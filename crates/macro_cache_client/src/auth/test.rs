@@ -27,7 +27,7 @@ async fn a_session_code_redeems_once() {
     let cache = cache();
     let code = fresh_code("once");
     cache
-        .set_mobile_login_session(&code, "fake-refresh-token")
+        .set_mobile_login_session(&code, "fake-refresh-token", None)
         .await
         .unwrap();
 
@@ -47,7 +47,7 @@ async fn concurrent_redemptions_yield_exactly_one_success() {
     let cache = cache();
     let code = fresh_code("race");
     cache
-        .set_mobile_login_session(&code, "fake-refresh-token")
+        .set_mobile_login_session(&code, "fake-refresh-token", None)
         .await
         .unwrap();
 
@@ -81,7 +81,7 @@ async fn a_restored_session_redeems_once_more_within_its_lifetime() {
     let cache = cache();
     let code = fresh_code("restore");
     cache
-        .set_mobile_login_session(&code, "fake-refresh-token")
+        .set_mobile_login_session(&code, "fake-refresh-token", None)
         .await
         .unwrap();
 
@@ -126,7 +126,7 @@ async fn a_restore_never_overwrites_a_live_code() {
     let cache = cache();
     let code = fresh_code("no-overwrite");
     cache
-        .set_mobile_login_session(&code, "fake-first-token")
+        .set_mobile_login_session(&code, "fake-first-token", None)
         .await
         .unwrap();
     let taken = cache
@@ -135,7 +135,7 @@ async fn a_restore_never_overwrites_a_live_code() {
         .unwrap()
         .unwrap();
     cache
-        .set_mobile_login_session(&code, "fake-second-token")
+        .set_mobile_login_session(&code, "fake-second-token", None)
         .await
         .unwrap();
 
@@ -159,7 +159,7 @@ async fn errors_and_debug_output_never_contain_the_code_or_token() {
     let code = fresh_code("unreachable");
 
     let set = cache
-        .set_mobile_login_session(&code, "fake-refresh-token")
+        .set_mobile_login_session(&code, "fake-refresh-token", None)
         .await
         .unwrap_err();
     let take = cache.take_mobile_login_session(&code).await.unwrap_err();
@@ -171,9 +171,116 @@ async fn errors_and_debug_output_never_contain_the_code_or_token() {
 
     let session = MobileLoginSession {
         refresh_token: "fake-refresh-token".into(),
+        code_challenge: Some(FAKE_CHALLENGE.into()),
         expires_at: std::time::Instant::now(),
     };
-    assert!(!format!("{session:?}").contains("fake-refresh-token"));
+    let text = format!("{session:?}");
+    assert!(!text.contains("fake-refresh-token"), "{text}");
+    assert!(!text.contains(FAKE_CHALLENGE), "{text}");
+}
+
+const FAKE_CHALLENGE: &str = "fake-challenge";
+
+/// Whether the unbound and the bound key of `code` exist.
+async fn stored_keys(cache: &MacroCache, code: &str) -> [bool; 2] {
+    let mut connection = cache
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .unwrap();
+    let mut exists = [false; 2];
+    for (key, found) in [
+        mobile_login_session_key(code),
+        bound_mobile_login_session_key(code),
+    ]
+    .iter()
+    .zip(&mut exists)
+    {
+        *found = redis::cmd("EXISTS")
+            .arg(key)
+            .query_async(&mut connection)
+            .await
+            .unwrap();
+    }
+    exists
+}
+
+#[tokio::test]
+async fn a_bound_code_is_one_record_that_unbound_readers_never_see() {
+    // A server that predates binding reads only the unbound key, so it can
+    // never redeem a bound code without its verifier, and no eviction can
+    // separate the challenge from the token.
+    let cache = cache();
+    let code = fresh_code("bound-record");
+    cache
+        .set_mobile_login_session(&code, "fake-refresh-token", Some(FAKE_CHALLENGE))
+        .await
+        .unwrap();
+
+    assert_eq!(stored_keys(&cache, &code).await, [false, true]);
+}
+
+#[tokio::test]
+async fn a_bound_code_redeems_with_its_challenge_and_leaves_nothing_behind() {
+    let cache = cache();
+    let code = fresh_code("bound");
+    cache
+        .set_mobile_login_session(&code, "fake-refresh-token", Some(FAKE_CHALLENGE))
+        .await
+        .unwrap();
+
+    let taken = cache
+        .take_mobile_login_session(&code)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(taken.code_challenge(), Some(FAKE_CHALLENGE));
+    assert_eq!(stored_keys(&cache, &code).await, [false, false]);
+
+    // A code minted later under the same name starts without a challenge.
+    cache
+        .set_mobile_login_session(&code, "fake-refresh-token", None)
+        .await
+        .unwrap();
+    let unbound = cache
+        .take_mobile_login_session(&code)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(unbound.code_challenge(), None);
+}
+
+#[tokio::test]
+async fn a_restored_code_keeps_its_challenge() {
+    let cache = cache();
+    let code = fresh_code("bound-restore");
+    cache
+        .set_mobile_login_session(&code, "fake-refresh-token", Some(FAKE_CHALLENGE))
+        .await
+        .unwrap();
+    let taken = cache
+        .take_mobile_login_session(&code)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(
+        cache
+            .restore_mobile_login_session(&code, &taken)
+            .await
+            .unwrap()
+    );
+    assert_eq!(stored_keys(&cache, &code).await, [false, true]);
+    let again = cache
+        .take_mobile_login_session(&code)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        again.code_challenge(),
+        Some(FAKE_CHALLENGE),
+        "a retry must not find the code unbound"
+    );
 }
 
 #[tokio::test]
@@ -181,7 +288,7 @@ async fn a_session_past_its_original_deadline_is_not_restored() {
     let cache = cache();
     let code = fresh_code("expired");
     cache
-        .set_mobile_login_session(&code, "fake-refresh-token")
+        .set_mobile_login_session(&code, "fake-refresh-token", None)
         .await
         .unwrap();
     let mut taken = cache

@@ -13,6 +13,7 @@ pub mod outbound;
 mod rate_limit_config;
 mod server;
 pub mod service;
+mod session_code_binding;
 
 /// The service's OpenAPI document, rendered by the `*_openapi` binary.
 pub use api::swagger::ApiDoc;

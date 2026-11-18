@@ -1,4 +1,5 @@
 use crate::api::context::ApiContext;
+use crate::session_code_binding::SessionCodeChallenge;
 use axum::{
     Json,
     extract::{Query, State},
@@ -22,6 +23,11 @@ pub struct SsoState {
     /// Whether this sign-in started on the agent signup page.
     #[serde(default)]
     pub is_agent: bool,
+    /// The challenge the session code minted for this sign-in is bound to;
+    /// see [`crate::session_code_binding`]. Clients that predate it send none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
+    pub session_code_challenge: Option<SessionCodeChallenge>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -39,6 +45,8 @@ pub(crate) struct LoginQueryParams {
     /// Whether this sign-in started on the agent signup page.
     #[serde(default)]
     is_agent: bool,
+    /// S256 challenge to bind the session code to (`is_mobile` sign-ins).
+    session_code_challenge: Option<SessionCodeChallenge>,
 }
 
 pub(crate) fn is_allowed_original_url(url: &Url) -> bool {
@@ -112,6 +120,7 @@ fn sign_in_prompt(idp_name: &str) -> Option<&'static str> {
             ("is_mobile" = String, Query, description = "**OPTIONAL**. If the authentication request is from a mobile device."),
             ("referral_code" = String, Query, description = "**OPTIONAL**. If the user opened a link with a referral code."),
             ("is_agent" = bool, Query, description = "**OPTIONAL**. If the sign-in started on the agent signup page. A new account becomes an agent."),
+            ("session_code_challenge" = Option<String>, Query, description = "With `is_mobile`: base64url(SHA-256(verifier)), unpadded. The session code then redeems only with that verifier in the `x-session-code-verifier` header."),
         ),
         responses(
             (status = 200),
@@ -121,7 +130,7 @@ fn sign_in_prompt(idp_name: &str) -> Option<&'static str> {
     )]
 // `query` is skipped: original_url is client-controlled (query/fragment may
 // carry tokens) and login_hint is a user email — neither belongs in span fields.
-#[tracing::instrument(skip(ctx, query), fields(idp_name = ?query.idp_name, idp_id = ?query.idp_id, is_mobile = query.is_mobile, is_agent = query.is_agent))]
+#[tracing::instrument(skip(ctx, query), fields(idp_name = ?query.idp_name, idp_id = ?query.idp_id, is_mobile = query.is_mobile, is_agent = query.is_agent, code_bound = query.session_code_challenge.is_some()))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     query: Query<LoginQueryParams>,
@@ -134,6 +143,7 @@ pub async fn handler(
         is_mobile,
         referral_code,
         is_agent,
+        session_code_challenge,
     }) = query;
 
     let original_url = original_url.map(|url| url.0);
@@ -219,13 +229,15 @@ pub async fn handler(
         original_url,
         referral_code,
         is_agent,
+        session_code_challenge,
     };
 
     // Only include state if it has a value
     let sso_state = (state.is_mobile
         || state.is_agent
         || state.original_url.is_some()
-        || state.referral_code.is_some())
+        || state.referral_code.is_some()
+        || state.session_code_challenge.is_some())
     .then_some(state);
 
     // Generate code
@@ -253,7 +265,7 @@ pub async fn handler(
             .into_response()
     })?;
 
-    tracing::info!(sso_url=%sso_url, "SSO URL");
-
+    // Never log `sso_url`: it carries the address hint and the state, whose
+    // `original_url` names the client's pending sign-in attempt.
     Ok(Redirect::temporary(&sso_url).into_response())
 }

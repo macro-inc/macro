@@ -25,6 +25,7 @@ const SENSITIVE_HEADERS = [
   'x-macro-signature',
   'x-macro-user-api-key',
   'x-permissions-token',
+  'x-session-code-verifier',
 ] as const;
 
 const visibilityConfig = (metricName: string) => ({

@@ -1,4 +1,5 @@
 use crate::api::context::ApiContext;
+use crate::session_code_binding::SESSION_CODE_VERIFIER_HEADER;
 use anyhow::Context;
 use axum::Router;
 use axum::http::HeaderName;
@@ -58,9 +59,10 @@ pub(crate) mod trace_capture;
 const GATEWAY_PATH_PREFIX: &str = "/auth";
 
 pub(crate) async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
-    let cors = macro_cors::cors_layer_with_headers(vec![HeaderName::from_static(
-        MACRO_REFRESH_TOKEN_HEADER,
-    )]);
+    let cors = macro_cors::cors_layer_with_headers(vec![
+        HeaderName::from_static(MACRO_REFRESH_TOKEN_HEADER),
+        HeaderName::from_static(SESSION_CODE_VERIFIER_HEADER),
+    ]);
 
     let env = state.environment;
     let correlation =

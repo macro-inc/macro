@@ -33,7 +33,7 @@ pub async fn handler(
 ) -> Result<Response, Response> {
     let session_code = generate_session_code();
     ctx.macro_cache_client
-        .set_mobile_login_session(&session_code, &token_context.refresh_token)
+        .set_mobile_login_session(&session_code, &token_context.refresh_token, None)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "unable to set mobile login session");
