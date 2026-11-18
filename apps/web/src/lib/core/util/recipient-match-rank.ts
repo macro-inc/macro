@@ -1,4 +1,4 @@
-import { normalizeNameText, startsWordsOf } from './name-match-score';
+import { normalizeQueryText, startsWordsOf } from './name-match-score';
 
 /** Same tiers as subsequence_match::ranking::recipient_match_rank. */
 export function recipientMatchRank(
@@ -6,7 +6,7 @@ export function recipientMatchRank(
   email: string | undefined,
   query: string
 ): number {
-  const term = normalizeNameText(query);
+  const term = normalizeQueryText(query);
   if (!term) return 0;
   const address = email?.toLowerCase();
   if (address === term) return 3;

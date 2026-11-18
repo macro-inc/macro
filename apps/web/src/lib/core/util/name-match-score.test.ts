@@ -6,6 +6,7 @@ import {
   nameMatchQuality,
   nameMatchRank,
   normalizeNameText,
+  normalizeQueryText,
   startsWordsOf,
 } from './name-match-score';
 import { recipientMatchRank } from './recipient-match-rank';
@@ -64,5 +65,15 @@ it('scores text longer than a name as it scores the same words padded short', ()
       undefined
     );
     expect(startsWordsOf(`${long} more`, long)).toBe(true);
+  }
+});
+
+it('normalizes a query as it normalizes a name, at every length', () => {
+  for (const words of [1, 200, 200_001]) {
+    const text = ` Sam\tLEE${' x'.repeat(words)} `;
+    for (let pass = 0; pass < 2; pass++) {
+      expect(normalizeQueryText(text)).toBe(normalizeNameText(text));
+      expect(recipientMatchRank(text, undefined, text)).toBe(1);
+    }
   }
 });

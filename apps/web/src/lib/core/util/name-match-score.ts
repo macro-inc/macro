@@ -2,13 +2,15 @@
 const REMEMBERED_TEXT_LENGTH = 1_000;
 /** Remembered text past this many characters in all is forgotten. */
 const REMEMBERED_CHARACTERS = 4_000_000;
-/** A longer query is a paste: only the latest is kept, up to this length. */
-const KEPT_PASTE_LENGTH = 100_000;
+/** A longer query is a paste: only the latest is kept, up to this length;
+ * a longer one is read again for every row. */
+const KEPT_PASTE_LENGTH = 1_000_000;
 
 /** A string that shares no memory with the one it came from: text trimmed
  * from a long paste can, which a remembered key or its words would keep
- * alive. Joining makes new text, and its slice keeps only that. */
-const copyOf = (value: string) => ` ${value}`.slice(1);
+ * alive. Joining single characters makes new text in every engine, where a
+ * slice of joined text can still keep the original. */
+const copyOf = (value: string) => value.split('').join('');
 
 /** Remembers a pure string function's answers. Ranking thousands of rows
  * reads the same names on every keystroke; the bounds only cap memory. A
@@ -60,6 +62,12 @@ const normalizedQuery = rememberText(normalize, 'queries');
  * It never normalizes a score against the other rows in a result window. */
 export function normalizeNameText(value: string): string {
   return normalizedText(value);
+}
+
+/** `normalizeNameText` for a query each row is ranked against: a longer
+ * query, such as a paste, is kept too. */
+export function normalizeQueryText(value: string): string {
+  return normalizedQuery(value);
 }
 
 const WORD_BREAK = /[^\p{Alphabetic}\p{Number}]+/u;
