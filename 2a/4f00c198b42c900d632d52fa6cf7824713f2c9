@@ -1,0 +1,60 @@
+services/agent_harness_service/src/api.rs
+  s_6966afebcdde0a::t_5b936af2538a71 94,153,307-312,480
+services/agent_harness_service/src/main.rs
+  s_6966afebcdde0a::t_5b936af2538a71 2087-2088,2091,2095-2100,2102,2104-2109,2193
+  s_6966afebcdde0a::t_ad9935497912f2 36,2089-2090,2092-2094,2101,2103
+services/agent_harness_service/src/api/swagger.rs
+  s_6966afebcdde0a::t_ad9935497912f2 23-26,142-147,232-236,249-250
+services/agent_harness_service/Cargo.toml
+  s_6966afebcdde0a::t_30077a3c6033c2 41
+services/agent_harness_service/src/api/test.rs
+  s_6966afebcdde0a::t_315013b7539033 439-472
+services/agent_harness_service/src/code_mode.rs
+  s_6966afebcdde0a::t_30077a3c6033c2 278-305
+services/agent_harness_service/AGENTS.md
+  s_6966afebcdde0a::t_b731729615451b 64-70
+services/agent_harness_service/src/code_mode/test.rs
+  s_6966afebcdde0a::t_b89a91d44cc62c 727-756
+.sqlx/query-0f6c9ac05ceabd7985b1fff67574cd19b63bf853992d21f61ae2bbd26924e165.json
+  s_6966afebcdde0a::t_032564ffc0af23 1-15
+.sqlx/query-1e65cc186251eb6afbea9e3ec5cffbcf9f06797c306211d67051ef2966270362.json
+  s_6966afebcdde0a::t_d3315515c8ac16 1-40
+.sqlx/query-492c2b85342e6f8402754a4b540391c97438056a4ccd79b3f3e23343c0c17288.json
+  s_6966afebcdde0a::t_97869beae123c6 1-19
+.sqlx/query-72a38ea3db40e3941dc74331fac682e137b701bae4e745ee2b5dd078130f90d4.json
+  s_6966afebcdde0a::t_d44d29e2b315b2 1-17
+.sqlx/query-8885bdb8b45d0f5b5534290a8f16370a0d476182567f453bf117386732c1d0c1.json
+  s_6966afebcdde0a::t_9e460958325d07 1-18
+.sqlx/query-9cc4d4aa63a547f5e5203a8968022bcd2ba7d809e33418a8983f9071b4ec9f91.json
+  s_6966afebcdde0a::t_95118829868a64 1-16
+.sqlx/query-c05ddf323991ee67b38b75ccf3e6b3d092ce7ed27491c3101ae48c4ba3e4137e.json
+  s_6966afebcdde0a::t_45c41259541abb 1-16
+.sqlx/query-c82f135f188447f7cfd05c2dde2afe98acff8ff8615537bbf2a7b5f1d5ed3c92.json
+  s_6966afebcdde0a::t_a4914b85100418 1-47
+.sqlx/query-cdce338cc4b4024a63e03775cf37d04944963344c39ae38e0a65cb5809261b3e.json
+  s_6966afebcdde0a::t_8647f0b1808b7a 1-46
+.sqlx/query-ebe35d2a8cbbbd3f5bb79624acac3efcf9cc89c61913becb03df9f66182a2e0f.json
+  s_6966afebcdde0a::t_51016f8bad7a26 1-19
+.sqlx/query-ee67841194dbd676956e9a873597c35008c1b58d81255698171025cad844270c.json
+  s_6966afebcdde0a::t_12cfbd4f0aca24 1-14
+Cargo.lock
+  s_6966afebcdde0a::t_faf60da919582b 652
+services/agent_harness_service/src/tool_permissions.rs
+  s_6966afebcdde0a::t_415df4bf6028c2 1-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2a4f00c198b42c900d632d52fa6cf7824713f2c9",
+  "prompts": {},
+  "sessions": {
+    "s_6966afebcdde0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "13694447-aca1-404a-8fbf-c900186fe6c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
