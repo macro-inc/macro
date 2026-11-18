@@ -14,7 +14,7 @@ import { createEffect, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ContactDirectoryPage, readContactDirectory } from './directory';
 import { createContactDirectoryWindow } from './directory-query';
-import { contactReadersOpen } from './refresh';
+import { watchContactReaders } from './readers';
 
 vi.mock('./backfill', () => ({
   loadContactCheckpoint: () => ({ pages: 200, completedAt: 1 }),
@@ -300,6 +300,7 @@ it('keeps its window key through a refresh of the same page and changes it for t
 });
 
 it('counts as an open contact reader only while enabled and mounted', () => {
+  const readersOpen = watchContactReaders();
   const client = new QueryClient();
   const [enabled, setEnabled] = createSignal(false);
   function Harness() {
@@ -311,13 +312,13 @@ it('counts as an open contact reader only while enabled and mounted', () => {
       <Harness />
     </QueryClientProvider>
   ));
-  expect(contactReadersOpen()).toBe(false);
+  expect(readersOpen()).toBe(false);
   setEnabled(true);
-  expect(contactReadersOpen()).toBe(true);
+  expect(readersOpen()).toBe(true);
   setEnabled(false);
-  expect(contactReadersOpen()).toBe(false);
+  expect(readersOpen()).toBe(false);
   setEnabled(true);
   view.unmount();
-  expect(contactReadersOpen()).toBe(false);
+  expect(readersOpen()).toBe(false);
   client.clear();
 });

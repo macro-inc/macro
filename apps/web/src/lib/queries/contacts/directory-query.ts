@@ -31,7 +31,8 @@ import {
 } from './directory';
 import { contactsKeys } from './keys';
 import { createContactQueryEpoch } from './query-epoch';
-import { openContactReader, requestContactRefresh } from './refresh';
+import { openContactReader } from './readers';
+import { requestContactRefresh } from './refresh';
 
 export type ContactWindowHost = ContactDirectoryHost &
   Pick<CacheHost, 'onCacheChanged' | 'onCacheGenerationChanged'>;

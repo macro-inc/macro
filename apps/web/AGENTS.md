@@ -59,10 +59,11 @@ and the contact context publisher across account switches with delayed responses
 (`account-sources.browser.e2e.ts`). `queries/contacts/context-source.ts` reuses
 those keyed queries through ownership-tagged selectors; gate missing inputs rather
 than publishing an empty snapshot. Its cached-channel overlay rereads the cache only
-for `dm` changes while a contact window in the tab is enabled
-(`openContactReader`, held by `createContactDirectoryWindow`), and once when one
-opens after changes it missed: channel rows never reach contact facts, and nothing
-reads them while no window is open. `context-publisher.ts` caps pending IDs and
+for `dm` changes while a contact window is enabled in any tab, and once when one
+opens after changes it missed: channel rows never reach contact facts, and every
+tab ranks from the leader's publication. `createContactDirectoryWindow` holds
+`openContactReader` while enabled; `queries/contacts/readers.ts` shares that across
+tabs, and a tab that vanishes stays counted as open. `context-publisher.ts` caps pending IDs and
 write batches at 500, replaces overflowing/uncertain snapshots with a new epoch,
 and never writes directory names or membership. `useContactContextPublisher`
 shares Soup's leader, rollout and generation lifecycle; do not add another leader.

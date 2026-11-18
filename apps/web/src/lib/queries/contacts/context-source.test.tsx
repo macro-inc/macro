@@ -16,7 +16,7 @@ import { channelKeys } from '../channel/keys';
 import { emailKeys } from '../email/keys';
 import type { PersonFacts } from './context-facts';
 import { createContactContextSource } from './context-source';
-import { openContactReader } from './refresh';
+import { openContactReader } from './readers';
 
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
@@ -196,4 +196,30 @@ it('does not reread on opening a reader when no DM changed meanwhile', async () 
   closeReader = openContactReader();
   await vi.advanceTimersByTimeAsync(5_000);
   expect(reads).toBe(1);
+});
+
+it('catches up when a contact window opens in another tab', async () => {
+  const fromOtherTab = (seq: number, open: boolean) =>
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'macro.contact-readers',
+        newValue: JSON.stringify({ kind: 'readers', tab: 'tab-2', seq, open }),
+      })
+    );
+  const source = mountSource(dmHost());
+  await vi.advanceTimersByTimeAsync(0);
+  notify(['dm']);
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(reads).toBe(1);
+
+  fromOtherTab(1, true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reads).toBe(2);
+  expect(source.viewedAt()).toBe(VIEWED_AT[1]);
+
+  fromOtherTab(2, false);
+  await vi.advanceTimersByTimeAsync(5_000);
+  notify(['dm']);
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(reads).toBe(2);
 });
