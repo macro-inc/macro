@@ -16,7 +16,10 @@ const userName = (user: IUser) =>
   user.name && user.name !== user.email ? user.name : undefined;
 
 /** A person matches by name, then address. */
-const personText = (name: string | undefined, email: string | undefined) =>
+const personText = (
+  name: string | null | undefined,
+  email: string | undefined
+) =>
   name ? `${name} ${email}` : (email ?? '');
 
 /** Reads an option's fields in one pass. A picker over thousands of channels
