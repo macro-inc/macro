@@ -11,6 +11,7 @@ import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { CallLiveChip } from '../Call/components/CallLiveChip';
 import { CallWaveform } from '../Call/components/CallWaveform';
+import { openChannelCallTab } from '../Call/open-channel-call-tab';
 import { useParticipantSpeaking } from '../Call/primitives/use-call-speaking';
 import { useChannelTab } from './ChannelTabContext';
 
@@ -45,7 +46,7 @@ export function ActiveCallMessage(props: { channelId: string }) {
   };
   async function handleJoin() {
     if (call.isInThisChannel()) {
-      setActiveTab(getCallJoinTab());
+      await openChannelCallTab(props.channelId);
       return;
     }
     analytics.track('call_action', {

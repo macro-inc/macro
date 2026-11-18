@@ -60,6 +60,13 @@ in a second Calls view. Old copied `/app/call/<callId>` links redirect to the Ca
 detail without losing the transcript target. Existing `/app/drive/call/<callId>`
 links still work. A failed load shows Retry.
 
+The phone floating call pill returns to the media owner's call surface, even
+when its channel is already open. Browser calls select the live `Call` tab
+without joining again; native iOS and Android calls expand their native call
+drawer. The phone pill stays hidden on its own channel, where the composer
+banner offers `Return to call`. Away from that channel, its left action fills
+the pill's inner height with equal top and bottom insets.
+
 ### Join and leave sounds
 
 Browser calls play a clear two-note ascending chime when you or another
