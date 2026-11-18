@@ -420,13 +420,13 @@ export function AgentInput(props: AgentInputProps) {
                     />
                   </Show>
                   <div class="ml-auto flex shrink-0 items-center gap-[3.75px]">
+                    <Show when={props.modelControl}>
+                      <div class="min-w-0">{props.modelControl}</div>
+                    </Show>
                     <DictationButton
                       dictation={dictation}
                       disabled={props.disabled || props.readOnly}
                     />
-                    <Show when={props.modelControl}>
-                      <div class="min-w-0">{props.modelControl}</div>
-                    </Show>
                     <Show
                       when={props.busy && props.onStop && !canSend()}
                       fallback={

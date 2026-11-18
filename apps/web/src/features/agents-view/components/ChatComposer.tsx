@@ -534,11 +534,11 @@ export function ChatComposer(props: {
                                 : 'contents'
                             }
                           >
+                            <div class="min-w-0">{props.selector}</div>
                             <DictationButton
                               dictation={dictation}
                               disabled={disabled()}
                             />
-                            <div class="min-w-0">{props.selector}</div>
                           </div>
                           {sendControl()}
                         </div>
@@ -579,11 +579,11 @@ export function ChatComposer(props: {
               </div>
               <div class="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
                 <div class={collapsed() ? 'hidden' : 'contents'}>
+                  <div class="min-w-0">{props.selector}</div>
                   <DictationButton
                     dictation={dictation}
                     disabled={disabled()}
                   />
-                  <div class="min-w-0">{props.selector}</div>
                 </div>
                 {sendControl()}
               </div>
