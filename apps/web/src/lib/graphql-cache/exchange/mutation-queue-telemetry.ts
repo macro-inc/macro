@@ -129,16 +129,23 @@ export interface MutationQueueTelemetry {
   attempt(mutation: ClaimedMutation): MutationAttemptTelemetry;
   /**
    * Releases a claim whose page has gone, so its head runs now instead of
-   * when the lease runs out. `release` says whether the claim was still
-   * held, and so does the result.
+   * when the lease runs out. `release` says how that went, and so does the
+   * result.
    */
   releaseLease(
     lease: { transactionId: string; itemId: string; expiresAtMs: number },
-    release: () => Promise<boolean>
-  ): Promise<boolean>;
+    release: () => Promise<LeaseReleaseOutcome>
+  ): Promise<LeaseReleaseOutcome>;
   skipped(reason: MutationQueueSkipReason): void;
   storageReset(): void;
 }
+
+/**
+ * `released`: the claim no longer holds the head. `moved`: the engine
+ * refused, because the claim was settled, claimed again or released by
+ * another page. `failed`: the claim still holds the head.
+ */
+export type LeaseReleaseOutcome = 'released' | 'moved' | 'failed';
 
 export const NOOP_MUTATION_ATTEMPT_TELEMETRY: MutationAttemptTelemetry = {
   run: (send) => send(),
@@ -728,10 +735,10 @@ export function createMutationQueueTelemetry({
             'mutation_queue.lease_remaining_ms',
             Math.max(0, expiresAtMs - now())
           );
-          const released = await release();
-          span.setAttr('mutation_queue.lease_released', released);
-          count(released ? 'lease.released' : 'lease.moved');
-          return released;
+          const outcome = await release();
+          span.setAttr('mutation_queue.lease_release_outcome', outcome);
+          count(`lease.${outcome}`);
+          return outcome;
         }
       );
     },

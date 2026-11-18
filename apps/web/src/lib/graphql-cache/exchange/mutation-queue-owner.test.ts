@@ -74,6 +74,24 @@ async function settles(departure: Promise<void> | undefined): Promise<boolean> {
   ]);
 }
 
+it('holds plain claims, and live ones only while it holds their owner', async () => {
+  const { locks } = originLocks();
+  const lifecycle = page();
+  const owner = createMutationQueueOwner('here', locks, lifecycle.target);
+  await flush();
+  expect(owner.claimOwner()).toBe('exchange-live:here:0');
+  expect(owner.holds('exchange:here')).toBe(true);
+  expect(owner.holds('exchange-live:here:0')).toBe(true);
+  lifecycle.hide();
+  expect(owner.holds('exchange:here')).toBe(true);
+  expect(owner.holds('exchange-live:here:0')).toBe(false);
+  lifecycle.show(true);
+  await flush();
+  expect(owner.claimOwner()).toBe('exchange-live:here:1');
+  expect(owner.holds('exchange-live:here:0')).toBe(false);
+  expect(owner.holds('exchange-live:here:1')).toBe(true);
+});
+
 it('claims as a plain owner until the page holds its lock', async () => {
   const { locks } = originLocks();
   const owner = createMutationQueueOwner('here', locks, page().target);

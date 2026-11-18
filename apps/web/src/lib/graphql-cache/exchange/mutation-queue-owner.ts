@@ -32,6 +32,12 @@ export type MutationQueueOwner = {
   /** Owner for a claim made now: the live owner while this page holds its lock. */
   claimOwner: () => string;
   /**
+   * Whether a claim this page made under `owner` is still its own to send:
+   * false once the page has let that live owner go, since another page may
+   * have released the claim.
+   */
+  holds: (owner: string) => boolean;
+  /**
    * Settles once `owner`'s page has been hidden or gone. Undefined when that
    * cannot be known: this page's own owners, and owners that held no lock.
    */
@@ -116,6 +122,8 @@ export function createMutationQueueOwner(
 
   return {
     claimOwner: () => live ?? plainOwner,
+    holds: (claimedAs) =>
+      !claimedAs.startsWith(LIVE_OWNER_PREFIX) || claimedAs === live,
     departed(owner) {
       if (
         !locks ||

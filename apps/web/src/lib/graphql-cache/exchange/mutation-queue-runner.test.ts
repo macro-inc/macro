@@ -81,6 +81,7 @@ function enqueue(
 /** An owner that cannot judge whether another page has gone. */
 const PLAIN_OWNER: MutationQueueOwner = {
   claimOwner: () => 'owner',
+  holds: () => true,
   departed: () => undefined,
 };
 function fixture(
@@ -377,10 +378,11 @@ const GONE = 'exchange-live:gone';
 function headLeasedBy(
   leaseOwner: string,
   expiresAtMs = Date.now() + 300_000,
-  generation = '4'
+  generation = '4',
+  transactionId = '1'
 ): MutationInspection {
   return {
-    transactionId: '1',
+    transactionId,
     uuid: 'same-attempt',
     superseded: false,
     query: stringifyDocument(operation().query),
@@ -396,6 +398,7 @@ function headLeasedBy(
 function liveOwner(departure: () => Promise<void>) {
   return {
     claimOwner: () => 'exchange-live:here',
+    holds: () => true,
     departed: vi.fn((leaseOwner: string) =>
       leaseOwner.startsWith('exchange-live:') ? departure() : undefined
     ),
@@ -514,6 +517,26 @@ it('keeps the claim when its page cannot be judged after all', async () => {
   expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
 });
 
+it('releases the claim the departed page holds once it has gone, not the one first seen', async () => {
+  const { runner, host } = fixture(
+    {},
+    liveOwner(async () => {})
+  );
+  // The page settled the head it held when it was first seen, and claimed the
+  // next mutation (generation 1 again) before it went.
+  host.inspectMutations = vi
+    .fn<() => Promise<MutationInspection[]>>()
+    .mockResolvedValueOnce([headLeasedBy(GONE, Date.now() + 300_000, '1')])
+    .mockResolvedValue([headLeasedBy(GONE, Date.now() + 300_000, '1', '5')]);
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1_001);
+  expect(
+    vi
+      .mocked(host.deferOptimisticWrite)
+      .mock.calls.map((call) => call.slice(0, 2))
+  ).toEqual([['5', { owner: GONE, generation: '1' }]]);
+});
+
 it('watches the claim that took the head from a refused release at once', async () => {
   const OTHER = 'exchange-live:other';
   const { runner, host } = fixture(
@@ -522,6 +545,7 @@ it('watches the claim that took the head from a refused release at once', async 
   );
   host.inspectMutations = vi
     .fn<() => Promise<MutationInspection[]>>()
+    .mockResolvedValueOnce([headLeasedBy(GONE)])
     .mockResolvedValueOnce([headLeasedBy(GONE)])
     .mockResolvedValue([headLeasedBy(OTHER, Date.now() + 300_000, '5')]);
   vi.mocked(host.deferOptimisticWrite).mockRejectedValueOnce(
@@ -539,7 +563,37 @@ it('watches the claim that took the head from a refused release at once', async 
   expect(claim).toHaveBeenCalledTimes(2);
 });
 
-it('reports a release whose claim had already moved on, and looks again at the next poll', async () => {
+it('reports a refused release whose claim has left the head, and drains at once', async () => {
+  const releases: unknown[] = [];
+  const telemetry: MutationQueueTelemetry = {
+    ...NOOP_MUTATION_QUEUE_TELEMETRY,
+    releaseLease: async (_lease, release) => {
+      const outcome = await release();
+      releases.push(outcome);
+      return outcome;
+    },
+  };
+  const { runner, host } = fixture(
+    { mutationQueueTelemetry: telemetry },
+    liveOwner(async () => {})
+  );
+  // Another page released the claim between this page's look and its release.
+  host.inspectMutations = vi
+    .fn<() => Promise<MutationInspection[]>>()
+    .mockResolvedValueOnce([headLeasedBy(GONE)])
+    .mockResolvedValueOnce([headLeasedBy(GONE)])
+    .mockResolvedValue([{ ...headLeasedBy(GONE), lease: undefined }]);
+  vi.mocked(host.deferOptimisticWrite).mockRejectedValueOnce(
+    new Error('stale claim for optimistic transaction 1')
+  );
+  const claim = vi.spyOn(host, 'claimNextMutation');
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1_001);
+  expect(releases).toEqual(['moved']);
+  expect(claim).toHaveBeenCalledTimes(2);
+});
+
+it('reports a release that failed while its claim still held the head, and tries again at the next poll', async () => {
   const releases: unknown[] = [];
   const telemetry: MutationQueueTelemetry = {
     ...NOOP_MUTATION_QUEUE_TELEMETRY,
@@ -558,7 +612,7 @@ it('reports a release whose claim had already moved on, and looks again at the n
     leased ? headLeasedBy(GONE) : { ...headLeasedBy(GONE), lease: undefined },
   ]);
   vi.mocked(host.deferOptimisticWrite)
-    .mockRejectedValueOnce(new Error('stale mutation claim'))
+    .mockRejectedValueOnce(new Error('storage unavailable'))
     .mockImplementationOnce(async () => {
       leased = false;
       return { kind: 'deferred' };
@@ -566,12 +620,39 @@ it('reports a release whose claim had already moved on, and looks again at the n
   const claim = vi.spyOn(host, 'claimNextMutation');
   runner.start();
   await vi.advanceTimersByTimeAsync(1_000);
-  expect(releases).toEqual([false]);
-  // It looked once more, and the same claim still held the head.
-  expect(host.inspectMutations).toHaveBeenCalledTimes(2);
+  expect(releases).toEqual(['failed']);
+  // It looked after the grace and once more after the release, and the same
+  // claim still held the head.
+  expect(host.inspectMutations).toHaveBeenCalledTimes(3);
   expect(claim).toHaveBeenCalledOnce();
   await vi.advanceTimersByTimeAsync(30_001);
-  expect(releases).toEqual([false, true]);
+  expect(releases).toEqual(['failed', 'released']);
   // The release woke the queue at once.
   expect(claim).toHaveBeenCalledTimes(3);
+});
+
+it('hands back a claim whose owner the page let go while it waited for admission', async () => {
+  let shown = true;
+  const owner: MutationQueueOwner = {
+    claimOwner: () => 'exchange-live:here:0',
+    holds: (claimedAs) => shown || !claimedAs.startsWith('exchange-live:'),
+    departed: () => undefined,
+  };
+  const { runner, forwarded, host } = fixture(
+    {
+      beforeMutationAttempt: async () => {
+        shown = false;
+        return true;
+      },
+    },
+    owner
+  );
+  await runner.admit(operation(), enqueue(operation(), '2'), runner.epoch());
+  expect(forwarded).toEqual([]);
+  expect(host.deferOptimisticWrite).toHaveBeenCalledWith(
+    '1',
+    { owner: 'exchange-live:here:0', generation: '2' },
+    expect.any(Number),
+    'Admission deferred'
+  );
 });

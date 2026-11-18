@@ -334,20 +334,20 @@ describe('createMutationQueueTelemetry', () => {
     });
   });
 
-  it('records a released lease with its remaining time and whether it held', async () => {
+  it('records a released lease with its remaining time and how the release went', async () => {
     const queue = create();
     expect(
       await queue.releaseLease(
         { transactionId: '7', itemId: 'item-7', expiresAtMs: 301_000 },
-        async () => true
+        async () => 'released'
       )
-    ).toBe(true);
+    ).toBe('released');
     expect(
       await queue.releaseLease(
         { transactionId: '8', itemId: 'item-8', expiresAtMs: 500 },
-        async () => false
+        async () => 'failed'
       )
-    ).toBe(false);
+    ).toBe('failed');
     expect(
       telemetry.spans.map(({ name, attributes, ended }) => ({
         name,
@@ -361,7 +361,7 @@ describe('createMutationQueueTelemetry', () => {
           'mutation_queue.item_id': 'item-7',
           'mutation_queue.transaction_id': '7',
           'mutation_queue.lease_remaining_ms': 300_000,
-          'mutation_queue.lease_released': true,
+          'mutation_queue.lease_release_outcome': 'released',
         },
         ended: true,
       },
@@ -371,7 +371,7 @@ describe('createMutationQueueTelemetry', () => {
           'mutation_queue.item_id': 'item-8',
           'mutation_queue.transaction_id': '8',
           'mutation_queue.lease_remaining_ms': 0,
-          'mutation_queue.lease_released': false,
+          'mutation_queue.lease_release_outcome': 'failed',
         },
         ended: true,
       },
