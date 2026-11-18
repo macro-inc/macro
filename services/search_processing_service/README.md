@@ -30,8 +30,10 @@ Kafka subscriptions are declared in `src/inbound/kafka_consumer.rs`, including a
 
 There is no agent-session indexing feature flag. The deployed search-processing
 binary subscribes to the existing `macro.agent_session_lifecycle` topic. Events
-are invalidation hints: every event rereads current metadata and the effective
-ACP log through the owning agent-session/fold services. It never indexes the
+are invalidation hints: every reconcile rereads current metadata and the effective
+ACP log through the owning agent-session/fold services, and an event that arrives
+while a reconcile for its session is still queued is covered by that reconcile
+(see the Kafka delivery contract). It never indexes the
 event's excerpt as a substitute for the transcript. Completed turns, questions,
 renames, and deletions therefore converge on current persisted state.
 
@@ -105,10 +107,10 @@ Upserts read the current call state from Postgres and overwrite the indexed repr
 ### Kafka Delivery Contract
 
 - The durable consumer group is `search-processing-service`. Its subscriptions are declared in `src/inbound/kafka_consumer.rs`.
-- The poll loop shards decoded events by entity ordering key across ten sequential workers, each with a bounded 16-message channel. Sending waits when the selected channel is full, stopping polling and committing until that worker catches up. Events for the same entity stay ordered within one consumer, but not end to end: producers can publish them out of order, and a rebalance does not wait for the previous owner's workers, which can still be processing older events while the new owner processes later ones. Handlers must not assume an entity's newest event arrives last.
+- The poll loop shards decoded events by entity ordering key across ten sequential workers, each with a bounded 16-message channel. Sending waits when the selected channel is full, stopping polling and committing until that worker catches up. Agent-session lifecycle events are rereads of the whole session, so while one for a session is queued and not yet started, later ones for that session are committed without a handoff; the worker clears the session as it starts the reread, so an event arriving mid-reread queues the next one. Without this, one session emitting events faster than its roughly two-second reconcile filled its worker's channel and held the whole consumer, every topic, to that worker's pace. Events for the same entity stay ordered within one consumer, but not end to end: producers can publish them out of order, and a rebalance does not wait for the previous owner's workers, which can still be processing older events while the new owner processes later ones. Handlers must not assume an entity's newest event arrives last.
 - An offset is committed asynchronously immediately after a successful in-memory handoff, not after OpenSearch processing. This commit-after-handoff design creates a loss window: a process or host crash can lose committed events still in those buffers. If the worker channel closes before handoff, the offset is left uncommitted for redelivery.
 - Malformed, keyless, and unsupported-schema records are logged and committed without handoff so a poison record cannot wedge a partition. Commit failures are logged and may cause duplicate delivery, which is safe because full upserts and per-call deletes are idempotent.
-- Processing gets three total attempts, with retries after 1 and 2 seconds. Failed attempts that will be retried log warnings; exhausted events are logged as errors and dropped so later events can continue. Within each attempt, `opensearch_client` resends a request whose connection drops before a complete response.
+- Processing gets three total attempts, with retries after 1 and 2 seconds. Failed attempts that will be retried log warnings; exhausted events are logged as errors and dropped so later events can continue. A dropped agent-session reconcile also drops the events it absorbed; the error names the session for a backfill repair. Within each attempt, `opensearch_client` resends a request whose connection drops before a complete response.
 
 ## Running Locally
 
