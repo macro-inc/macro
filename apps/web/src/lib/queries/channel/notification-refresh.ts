@@ -225,6 +225,7 @@ export class ChannelNotificationRefresh {
       job.failures = 0;
       job.retryAt = 0;
       job.blocked = false;
+      job.awaited.clear();
     }
     this.reconnect();
   }

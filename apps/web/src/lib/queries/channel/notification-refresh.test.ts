@@ -532,6 +532,21 @@ describe('new channels reaching channel lists', () => {
     await refreshed;
   });
 
+  it('stops waiting for a channel when the cache or session is replaced', async () => {
+    const f = setup();
+    list(f, firstPage('dms'), ['direct_message']);
+    f.request.mockResolvedValue(page('older'));
+
+    f.queue.expectChannel({ id: 'new', channelType: 'direct_message' });
+    await tick();
+    expect(f.query).toHaveBeenCalledTimes(1);
+    f.queue.reset();
+    await tick();
+    expect(f.query).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(f.query).toHaveBeenCalledTimes(2);
+  });
+
   it('leaves lists of other channel types and continuation pages alone', async () => {
     const f = setup();
     list(f, firstPage('team'), ['team']);
