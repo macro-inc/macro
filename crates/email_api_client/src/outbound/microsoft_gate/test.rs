@@ -199,6 +199,7 @@ async fn an_import_request_waits_only_until_the_window_has_room_for_it() {
 #[ignore = "requires local Redis on port 6379; uses only unique mailbox keys"]
 async fn two_refused_import_requests_wait_for_room_and_the_rest_defer() {
     let (live, mailbox) = fixture().await;
+    let poll = Duration::from_millis(WAIT_POLL_MS.into());
     let import = RedisMicrosoftRequestGate::new(live.connection.clone(), RequestBudget::Import);
     let mut permits = Vec::new();
     for _ in 0..2 {
@@ -209,7 +210,7 @@ async fn two_refused_import_requests_wait_for_room_and_the_rest_defer() {
     for &waiter in &waiters {
         assert_eq!(
             import.admit(mailbox, waiter, IMPORT_WAIT).await.unwrap(),
-            Admission::Wait(GateLimit::Concurrency, Duration::from_millis(50))
+            Admission::Wait(GateLimit::Concurrency, poll)
         );
     }
     let deferred = Uuid::now_v7();
@@ -221,7 +222,7 @@ async fn two_refused_import_requests_wait_for_room_and_the_rest_defer() {
     import.finish(mailbox, permits.remove(0), None).await;
     assert_eq!(
         import
-            .wait_for_room(mailbox, waiters[0], Duration::from_millis(50))
+            .wait_for_room(mailbox, waiters[0], poll)
             .await
             .unwrap(),
         Admission::Admitted
@@ -229,7 +230,7 @@ async fn two_refused_import_requests_wait_for_room_and_the_rest_defer() {
     // The admitted waiter gave up its place.
     assert_eq!(
         import.admit(mailbox, deferred, IMPORT_WAIT).await.unwrap(),
-        Admission::Wait(GateLimit::Concurrency, Duration::from_millis(50))
+        Admission::Wait(GateLimit::Concurrency, poll)
     );
     cleanup(&live, mailbox).await;
 }

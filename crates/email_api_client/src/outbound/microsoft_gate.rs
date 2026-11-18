@@ -36,8 +36,10 @@ const BUSY_RETRY_MS: u32 = 1_000;
 // mailbox from holding the sync workers other mailboxes need.
 const IMPORT_WAITERS: u32 = 2;
 const IMPORT_WAIT: Duration = Duration::from_secs(20);
-// How often a waiting request checks for a free slot.
-const WAIT_POLL_MS: u32 = 50;
+// How often a waiting request checks for a free slot: about once per Graph
+// request. Checking every 50 ms did not speed an import up and doubled the
+// waiters' Redis calls.
+const WAIT_POLL_MS: u32 = 100;
 // A waiter's place outlives its sleep by this much, so a crashed waiter frees it.
 const WAITER_LEASE_MARGIN_MS: u32 = 1_000;
 // Admitted requests are counted per sync generation for import statistics.
