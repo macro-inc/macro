@@ -93,8 +93,8 @@ commit or publication. Independent mailbox and flat Soup query metadata is retir
 replacement, including same-account sign-in, rather than on CRM proof changes.
 After that cleanup and sign-in, active independent mailbox and flat Soup observers restart
 without waiting for CRM proof; protected observers still require verification.
-Personal Spam and Trash lists use flat REST Soup. Their raw AST must exclude
-company/contact records and omit CRM association and email-grant expansion;
+Personal Spam and Trash lists use flat REST Soup. Their raw AST must explicitly exclude
+companies, omit or exclude contacts, and omit CRM association and email-grant expansion;
 GraphQL's folder-view translation is not used to decide this scope. Their
 response and body completion retain the login fence. Legacy and grouped REST
 Soup remain protected.
