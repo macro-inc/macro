@@ -4,7 +4,7 @@ import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 
 /** Ask a runtime's owner for access, or take back a request still pending. */
 export function RuntimeAccessAction(props: { harnessId: string }) {
@@ -18,16 +18,23 @@ export function RuntimeAccessAction(props: { harnessId: string }) {
     const until = mine()?.retryAfter;
     return !!until && new Date(until).getTime() > Date.now();
   };
+  // Set before the request goes out, so the button shows its spinner at once
+  // and a second click cannot send the change twice.
+  const [running, setRunning] = createSignal(false);
   const run = async (
     action: () => Promise<unknown>,
     failed: string,
     succeeded?: string
   ) => {
+    if (running()) return;
+    setRunning(true);
     try {
       await action();
     } catch {
       toast.failure(failed);
       return;
+    } finally {
+      setRunning(false);
     }
     if (succeeded) toast.success(succeeded);
   };
@@ -39,6 +46,7 @@ export function RuntimeAccessAction(props: { harnessId: string }) {
           variant="secondary"
           size="sm"
           disabled={source.busy() || coolingDown() || !source.state()}
+          loading={running()}
           onClick={() =>
             fireAndForget(
               run(
@@ -60,6 +68,7 @@ export function RuntimeAccessAction(props: { harnessId: string }) {
         variant="ghost"
         size="sm"
         disabled={source.busy()}
+        loading={running()}
         aria-label={t('runtimeSharing.cancelRequest')}
         onClick={() => {
           const revision = mine()?.revision;

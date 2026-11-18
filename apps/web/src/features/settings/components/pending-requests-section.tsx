@@ -8,7 +8,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { OwnerLabel } from '@entity/owner/owner-display';
 import { Button } from '@ui';
-import { For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { SettingsCard } from '../primitives';
 import { RuntimeName } from './connected-runtimes-section';
 
@@ -67,16 +67,23 @@ function IncomingRequestRow(props: { pending: PendingRequest }) {
     () => shareEntity('harness', props.pending.harness.id),
     () => true
   );
-  const decide = (approve: boolean) =>
-    fireAndForget(
-      source
-        .resolve(
-          props.pending.request,
-          approve ? props.pending.request.requestedLevel : null
-        )
-        .catch(() => toast.failure(t('runtimeSharing.writeFailed'))),
-      'runtime-sharing'
-    );
+  // Set before the request goes out, so the clicked button shows its spinner
+  // at once and a second click cannot send the decision twice.
+  const [deciding, setDeciding] = createSignal<'approve' | 'deny'>();
+  const decide = async (decision: 'approve' | 'deny') => {
+    if (deciding()) return;
+    setDeciding(decision);
+    try {
+      await source.resolve(
+        props.pending.request,
+        decision === 'approve' ? props.pending.request.requestedLevel : null
+      );
+    } catch {
+      toast.failure(t('runtimeSharing.writeFailed'));
+    } finally {
+      setDeciding(undefined);
+    }
+  };
   return (
     <div class={ROW_CLASS} data-pending-request="incoming">
       <div class="min-w-0 flex-1 text-sm text-ink">
@@ -100,16 +107,18 @@ function IncomingRequestRow(props: { pending: PendingRequest }) {
         <Button
           variant="ghost"
           size="sm"
-          disabled={source.busy()}
-          onClick={() => decide(false)}
+          disabled={source.busy() || deciding() === 'approve'}
+          loading={deciding() === 'deny'}
+          onClick={() => fireAndForget(decide('deny'), 'runtime-sharing')}
         >
           {t('runtimeSharing.deny')}
         </Button>
         <Button
           variant="primary"
           size="sm"
-          disabled={source.busy()}
-          onClick={() => decide(true)}
+          disabled={source.busy() || deciding() === 'deny'}
+          loading={deciding() === 'approve'}
+          onClick={() => fireAndForget(decide('approve'), 'runtime-sharing')}
         >
           {t('runtimeSharing.approve')}
         </Button>

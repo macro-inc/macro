@@ -327,3 +327,38 @@ test('approves from Pending requests with one click, without remounting rows', a
     net.writes.filter((write) => write.path.endsWith('/resolve'))
   ).toHaveLength(1);
 });
+
+test('shows Approve pending while the decision is in flight', async ({
+  page,
+}) => {
+  const net = await serve(page);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/\/access-requests\/[^/]+\/resolve$/, async (route) => {
+    await held;
+    await route.fallback();
+  });
+  if (!test.info().project.use.hasTouch)
+    await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  const row = page.locator('[data-pending-request="incoming"]');
+  await expect(row).toContainText('bob@example.com');
+
+  await press(page, row.getByRole('button', { name: 'Approve' }));
+  await expect(row.getByRole('button', { name: 'Approve' })).toHaveAttribute(
+    'aria-busy',
+    'true'
+  );
+  await expect(row.getByRole('button', { name: 'Deny' })).toBeDisabled();
+  await page.screenshot({
+    path: test.info().outputPath('pending-approve.png'),
+  });
+
+  release();
+  await expect(row).toBeHidden();
+  expect(
+    net.writes.filter((write) => write.path.endsWith('/resolve'))
+  ).toHaveLength(1);
+});
