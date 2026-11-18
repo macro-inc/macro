@@ -7,9 +7,12 @@ fn a_workflow_shape_renders_in_block_style() {
     let mut step = IndexMap::new();
     step.insert("name", serde_json::json!("Build"));
     step.insert("run", serde_json::json!("cargo build\ncargo test\n"));
+    // Nested maps pass through `serde_json::Value`, whose key order depends on
+    // whether some crate in the build enables `preserve_order`; keys go in
+    // sorted order so both orders agree.
     let mut job = IndexMap::new();
-    job.insert("runs-on", serde_json::json!("small"));
     job.insert("needs", serde_json::json!([]));
+    job.insert("runs-on", serde_json::json!("small"));
     job.insert("steps", serde_json::json!([step]));
     let mut push = IndexMap::new();
     push.insert("branches", vec!["main"]);
