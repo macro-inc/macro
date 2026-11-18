@@ -1,0 +1,56 @@
+import type { GithubPullRequestCheckRun } from '@service-storage/generated/schemas';
+import { describe, expect, it } from 'vitest';
+import { orderChecks, summarizeChecks } from './checks';
+
+const check = (
+  name: string,
+  status: string,
+  conclusion?: string
+): GithubPullRequestCheckRun => ({
+  id: name.length,
+  name,
+  status,
+  conclusion,
+});
+
+const CHECKS = [
+  check('lint', 'completed', 'success'),
+  check('preview', 'completed', 'skipped'),
+  check('unit tests', 'completed', 'failure'),
+  check('browser tests', 'in_progress'),
+  check('typecheck', 'completed', 'success'),
+  check('deploy', 'completed', 'timed_out'),
+];
+
+describe('summarizeChecks', () => {
+  it('counts failures and running checks, not only passes', () => {
+    expect(summarizeChecks(CHECKS)).toEqual({
+      failed: 2,
+      running: 1,
+      passed: 2,
+    });
+  });
+
+  it('counts nothing for no checks', () => {
+    expect(summarizeChecks([])).toEqual({ failed: 0, running: 0, passed: 0 });
+  });
+});
+
+describe('orderChecks', () => {
+  it('lists failed checks first, then running ones, keeping GitHub order within each', () => {
+    expect(orderChecks(CHECKS).map((c) => c.name)).toEqual([
+      'unit tests',
+      'deploy',
+      'browser tests',
+      'lint',
+      'preview',
+      'typecheck',
+    ]);
+  });
+
+  it('leaves the given list unchanged', () => {
+    const names = CHECKS.map((c) => c.name);
+    orderChecks(CHECKS);
+    expect(CHECKS.map((c) => c.name)).toEqual(names);
+  });
+});

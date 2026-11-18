@@ -13,6 +13,7 @@ import type {
 } from '@service-storage/generated/schemas';
 import { cn, Layer } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
+import { orderChecks, summarizeChecks } from '../data/checks';
 
 type GithubPullRequestWithPanelDetails = GithubPullRequest & {
   authorLogin?: string | null;
@@ -45,10 +46,6 @@ function githubDisplayLogin(login: string): string {
 
 function githubAvatarUrl(login: string): string {
   return `https://github.com/${githubDisplayLogin(login)}.png?size=48`;
-}
-
-function checksPassedCount(checks: GithubPullRequestCheckRun[]): number {
-  return checks.filter((check) => check.conclusion === 'success').length;
 }
 
 function checkDuration(check: GithubPullRequestCheckRun): string | null {
@@ -223,16 +220,23 @@ export function GithubPullRequestChecksContent(props: {
   enrichment?: GithubPullRequestWithPanelDetails;
 }) {
   const checks = () => props.enrichment?.checks ?? [];
+  const summary = () => summarizeChecks(checks());
   return (
     <Show
       when={checks().length > 0}
       fallback={<div class="text-ink-placeholder">No checks</div>}
     >
       <div class="flex flex-col gap-1 text-xs">
-        <div class="text-xs text-ink-muted">
-          {checksPassedCount(checks())} passed
+        <div class="flex flex-wrap gap-x-2 text-xs text-ink-muted">
+          <Show when={summary().failed}>
+            {(count) => <span class="text-failure">{count()} failed</span>}
+          </Show>
+          <Show when={summary().running}>
+            {(count) => <span>{count()} running</span>}
+          </Show>
+          <span>{summary().passed} passed</span>
         </div>
-        <For each={checks()}>
+        <For each={orderChecks(checks())}>
           {(check) => (
             <div class="flex items-center gap-2 min-w-0 h-6">
               <GithubPullRequestCheckStatusIcon check={check} />
