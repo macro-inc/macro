@@ -1,0 +1,240 @@
+packages/sdk-ocaml/fetch/macro_sdk_fetch.mli
+  s_d68827eef00d3d::t_083ba21b63b908 18-22
+crates/code_execution/src/outbound/ocaml/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 78-111
+crates/code_execution/src/domain/ports.rs
+  s_d68827eef00d3d::t_083ba21b63b908 86-97
+crates/agent_permission_registry/Cargo.toml
+  s_d68827eef00d3d::t_083ba21b63b908 9-11,14
+crates/agent_code_mode/src/domain/reviews/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 118
+apps/web/src/features/agent-updates/core/agent-update.test.ts
+  s_d68827eef00d3d::t_083ba21b63b908 66
+crates/agent_code_mode/src/domain/service.rs
+  s_d68827eef00d3d::t_083ba21b63b908 37-42,51-53,166,216-217,219-223,225-239,241,600,668-685,797
+  s_d68827eef00d3d::t_fdd8eb9237fd73 215,218,224,240
+crates/agent_code_mode/src/outbound/reviews/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 33
+crates/folds/agent_fold/src/domain/fold/tool_approval.rs
+  s_d68827eef00d3d::t_083ba21b63b908 44,62
+services/agent_harness_service/src/code_mode/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 771,973-1118
+  s_d68827eef00d3d::t_49abd2cdb8a77d 1119
+services/agent_harness_service/src/lib.rs
+  s_d68827eef00d3d::t_b9fb0a53e5ab5b 687-689,703-713,957-983,997,1017-1021,1088,2206
+crates/agent_permissions/src/domain.rs
+  s_d68827eef00d3d::t_083ba21b63b908 4
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_d68827eef00d3d::t_083ba21b63b908 52-63,68,70-73,294-328
+crates/agent_code_mode/src/domain/activity.rs
+  s_d68827eef00d3d::t_083ba21b63b908 37,44-47
+crates/agent_code_mode/src/outbound/postgres/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 26,87
+services/agent_harness_service/src/code_mode/permissions/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 1-611
+crates/agent_permissions/src/domain/admission/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 1-85
+crates/agent_permissions/src/inbound/toolset/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 1-224
+crates/agent_egress/src/domain/approval/model.rs
+  s_d68827eef00d3d::t_083ba21b63b908 10,97-98,101-119,155-175,235-238
+crates/agent_egress/src/domain/approval.rs
+  s_d68827eef00d3d::t_083ba21b63b908 64-75,193-223,259-269,409-412,419,437,439,463,475-480,594-596,611-674,946-1037
+  s_d68827eef00d3d::t_8f145cb05e8cdd 1038
+crates/agent_code_mode/src/domain/connected_apps/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 163,229,278,316
+crates/code_execution/src/outbound/deno/test/ocaml.rs
+  s_d68827eef00d3d::t_083ba21b63b908 125,1075-1340
+services/agent_harness_service/AGENTS.md
+  s_d68827eef00d3d::t_083ba21b63b908 78-85
+crates/agent_code_mode/src/domain/models.rs
+  s_d68827eef00d3d::t_083ba21b63b908 1,146-148,189-193,214-217,280-291,336-339
+apps/web/src/features/agent-activity/queries/code-activity.ts
+  s_d68827eef00d3d::t_083ba21b63b908 66-69
+crates/agent_harness/src/inbound/tool_approvals/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 13-16
+crates/code_execution/AGENTS.md
+  s_d68827eef00d3d::t_083ba21b63b908 21-25,92-96
+crates/code_execution/src/outbound/deno/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 143,232
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_d68827eef00d3d::t_083ba21b63b908 193-212,324-337
+  s_d68827eef00d3d::t_61191d276f540e 192
+packages/sdk/generated/agent-fold/index.ts
+  s_d68827eef00d3d::t_083ba21b63b908 1262,1282,1286,1296,1306,1332-1338,1344,1348,1364,1405,1412,1432,1436,1446,1456,1482-1488,1494,1498,1514,1555,1669-1674
+crates/agent_permissions/src/inbound.rs
+  s_d68827eef00d3d::t_083ba21b63b908 4
+packages/sdk-ocaml/analyzer/lib/analyze.mli
+  s_d68827eef00d3d::t_083ba21b63b908 14-17
+packages/sdk-ocaml/fetch/macro_sdk_fetch.ml
+  s_d68827eef00d3d::t_083ba21b63b908 53-54
+crates/agent_permissions/src/domain/model.rs
+  s_d68827eef00d3d::t_083ba21b63b908 26,311-313,497-565
+crates/agent_code_mode/src/domain/ui_commands/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 161
+apps/web/src/features/block-agent/state/section-steps.ts
+  s_d68827eef00d3d::t_083ba21b63b908 61,63-67
+crates/folds/agent_fold/src/domain/model/interaction.rs
+  s_d68827eef00d3d::t_083ba21b63b908 63-66
+packages/sdk/tests/agent-sessions.test.ts
+  s_d68827eef00d3d::t_083ba21b63b908 675,688
+crates/code_execution/src/outbound/ocaml.rs
+  s_d68827eef00d3d::t_083ba21b63b908 74-80,159-204,624-678,684
+services/agent_harness_service/src/api/swagger.rs
+  s_d68827eef00d3d::t_083ba21b63b908 155-165
+nix/cloud-storage.nix
+  s_d68827eef00d3d::t_083ba21b63b908 305,318,351-352
+services/agent_harness_service/src/code_mode/permissions.rs
+  s_d68827eef00d3d::t_083ba21b63b908 1-310
+crates/agent_egress/src/domain/approval/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 177,208-214,236,243-249,257,265,460,577-583,618-624,684,725,754-760,779-785,798-1136
+crates/agent_code_mode/src/inbound/toolset/test/ocaml.rs
+  s_d68827eef00d3d::t_083ba21b63b908 201
+crates/agent_code_mode/AGENTS.md
+  s_d68827eef00d3d::t_083ba21b63b908 117-120,123-129
+crates/agent_runtime_protocol/src/domain/tool_approval/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 16
+services/agent_harness_service/src/routine_code.rs
+  s_d68827eef00d3d::t_083ba21b63b908 333
+crates/folds/agent_fold/src/domain/test/interactions.rs
+  s_d68827eef00d3d::t_083ba21b63b908 235-267
+  s_d68827eef00d3d::t_4a323bf23f73af 234
+crates/code_execution/src/outbound/deno.rs
+  s_d68827eef00d3d::t_083ba21b63b908 274-281
+services/agent_harness_service/src/internal_mcp/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 196,438,462,478-480,495,513,571-745
+services/agent_harness_service/src/api/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 489-510
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 288-306,310,333,348-350,365,368,374-379
+crates/agent_code_mode/src/inbound/toolset/session/ocaml_permissions.md
+  s_d68827eef00d3d::t_083ba21b63b908 1
+crates/agent_egress/src/domain/model.rs
+  s_d68827eef00d3d::t_083ba21b63b908 593-595,598
+crates/code_execution/src/outbound/ocaml/analyze.rs
+  s_d68827eef00d3d::t_083ba21b63b908 1-130
+crates/folds/agent_fold/src/domain/model/part.rs
+  s_d68827eef00d3d::t_083ba21b63b908 105-108
+packages/sdk-ocaml/analyzer/index/index.ml
+  s_d68827eef00d3d::t_083ba21b63b908 7-11,23-66,79-84,86-97,122-124,137,156-158
+packages/sdk-ocaml/code_mode/bundle/build.sh
+  s_d68827eef00d3d::t_083ba21b63b908 21,60-63,71
+crates/agent_egress/src/domain/model/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 27-31
+crates/agent_permissions/AGENTS.md
+  s_d68827eef00d3d::t_083ba21b63b908 28-34
+crates/agent_session/src/domain/updates/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 149
+services/agent_harness_service/src/internal_mcp/test/code_mode.rs
+  s_d68827eef00d3d::t_083ba21b63b908 123
+crates/agent_code_mode/Cargo.toml
+  s_d68827eef00d3d::t_083ba21b63b908 8,54
+crates/code_execution/src/domain/service.rs
+  s_d68827eef00d3d::t_083ba21b63b908 77
+packages/sdk-ocaml/README.md
+  s_d68827eef00d3d::t_083ba21b63b908 170,177-180,235,355,372-374
+services/agent_harness_service/Cargo.toml
+  s_d68827eef00d3d::t_083ba21b63b908 223
+crates/agent_permissions/Cargo.toml
+  s_d68827eef00d3d::t_083ba21b63b908 12,22
+crates/agent_permissions/src/inbound/toolset.rs
+  s_d68827eef00d3d::t_083ba21b63b908 1-343
+crates/agent_session/src/domain/service/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 1671
+crates/agent_permission_registry/src/lib.rs
+  s_d68827eef00d3d::t_083ba21b63b908 23-27
+packages/sdk-ocaml/fetch/test/test_fetch.ml
+  s_d68827eef00d3d::t_083ba21b63b908 45-47,88
+services/agent_harness_service/src/code_mode.rs
+  s_d68827eef00d3d::t_a8790e56d93a21 290-291
+  s_d68827eef00d3d::t_083ba21b63b908 109-111,238-242,244-247,365,439-449,521
+crates/agent_harness/src/outbound/tool_approvals/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 32
+crates/agent_permissions/src/domain/admission.rs
+  s_d68827eef00d3d::t_083ba21b63b908 1-103
+crates/agent_egress/AGENTS.md
+  s_d68827eef00d3d::t_083ba21b63b908 44-50
+packages/sdk-ocaml/analyzer/test/test_cli.ml
+  s_d68827eef00d3d::t_083ba21b63b908 41-43,52-61
+crates/agent_harness/src/inbound/tool_approvals.rs
+  s_d68827eef00d3d::t_7e2537de368ac1 277
+  s_d68827eef00d3d::t_083ba21b63b908 198-200,243,275-276,285
+crates/agent_inmem/src/outbound/approval_gate/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 127-133,151,295-301
+packages/sdk-ocaml/analyzer/lib/analyze.ml
+  s_d68827eef00d3d::t_083ba21b63b908 3-10,35,37,49,739-740
+crates/code_execution/src/domain/models.rs
+  s_d68827eef00d3d::t_083ba21b63b908 73-78,363-417
+crates/agent_runtime_protocol/src/domain/tool_approval.rs
+  s_d68827eef00d3d::t_083ba21b63b908 102-106
+packages/sdk-ocaml/fetch/test/run.mjs
+  s_d68827eef00d3d::t_083ba21b63b908 52,62,71
+crates/agent_code_mode/src/domain/service/test.rs
+  s_d68827eef00d3d::t_083ba21b63b908 327,546,815,929-1066
+services/agent_harness_service/src/internal_mcp.rs
+  s_d68827eef00d3d::t_083ba21b63b908 100-124,185-211,249-250,253,301-326
+apps/web/src/features/block-agent/primitives/create-tool-approval-controller.test.ts
+  s_d68827eef00d3d::t_083ba21b63b908 19
+Cargo.lock
+  s_d68827eef00d3d::t_87d94936f22b3f 341-342,665,921,936,948
+apps/web/src/lib/service-clients/service-agent-fold/generated/types.ts
+  s_d68827eef00d3d::t_7d4f695ba16063 1412,1463,1495,1536,1574,1626-1631,1662,1696,1743,1813,1845,1896,1928,1969,2007,2059-2064,2095,2129,2176,2246,2389-2394
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/declinedStatus.ts
+  s_d68827eef00d3d::t_1808a88507e9e9 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermission.ts
+  s_d68827eef00d3d::t_a759a1c1b6ce97 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermissionOneOf.ts
+  s_d68827eef00d3d::t_0d4cb4f7b71aca 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermissionOneOfOutcome.ts
+  s_d68827eef00d3d::t_0046c1b7f1b875 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermissionOneOfThree.ts
+  s_d68827eef00d3d::t_96d30f16b42284 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermissionOneOfThreeOutcome.ts
+  s_d68827eef00d3d::t_22708072aa6865 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionReceipt.ts
+  s_d68827eef00d3d::t_0741a496d44a70 1-28
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionReceiptError.ts
+  s_d68827eef00d3d::t_c79c7ce3a46337 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionReceiptPermission.ts
+  s_d68827eef00d3d::t_78e0522a1ba8e8 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecord.ts
+  s_d68827eef00d3d::t_76556b99c4a79f 12,39
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecordPermission.ts
+  s_d68827eef00d3d::t_3b7dc8b15ea00a 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/gatedOperation.ts
+  s_d68827eef00d3d::t_268dea97cd24ec 1-33
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/gatedOperationAction.ts
+  s_d68827eef00d3d::t_6e638a47e8eeaf 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/groupSelection.ts
+  s_d68827eef00d3d::t_ba13cd4a4f31f3 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_d68827eef00d3d::t_94c04a69a78cc0 224,266-273,277,289-290,295,480-483,518
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/recordedCallStatus.ts
+  s_d68827eef00d3d::t_7c75caf0d521f5 20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/showPermissionsResult.ts
+  s_d68827eef00d3d::t_4488abb5499996 1-28
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/showPermissionsResultReason.ts
+  s_d68827eef00d3d::t_6fe6c6d1cabe4d 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/showPermissionsSelection.ts
+  s_d68827eef00d3d::t_ddc4a25e9bdae6 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/shownPermission.ts
+  s_d68827eef00d3d::t_153d03b3ce2aee 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolSelection.ts
+  s_d68827eef00d3d::t_32226c641848ef 1-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "bfbd9321ce3aff58708252a81f9f5594c119bd2d",
+  "prompts": {},
+  "sessions": {
+    "s_d68827eef00d3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7845e4f-e917-4189-85b6-0d6704e36200",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
