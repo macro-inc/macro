@@ -1371,8 +1371,9 @@ Ask the agent to discover SDK entities and write a JavaScript module exporting
 `async function main({macro, session, execution})`. These are actual public SDK
 handles; for example, `macro.documents.search(...)` is an async iterator and
 `await document.content()` fetches a document as Macro's internal Markdown, with
-chips, tables and other rich content as `<m-*>` tags the agent keeps intact when
-it writes the text back. Use the direct `ListEntities` tool
+chips, tables and other rich content as `<m-*>` tags. To write text back, the
+agent reads it with `contentWithRevision()` and keeps the tags intact. Use the
+direct `ListEntities` tool
 for workspace feeds with type, time, task, tag, mailbox, and sorting filters.
 Return plain JSON
 in `{data}`. The optional `reviews` array contains saved review references and

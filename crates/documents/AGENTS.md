@@ -36,8 +36,9 @@ word docs, Illustrator/Photoshop files).
 - `src/inbound/axum_router.rs`: the HTTP surface; `axum_router/get_text.rs`
   serves `/text-content` through `src/domain/text.rs`. Native Markdown comes
   from live collaborative storage, not the legacy S3 export, in the same
-  internal format as `/{id}/markdown`, so SDK `content()` text can be written
-  back with `setContent`.
+  internal format as `/{id}/markdown`. A write-back still takes its text and
+  revision from one `/{id}/markdown` read (`contentWithRevision`), so it can't
+  overwrite a change made after the text was read.
 - `axum_router/appearance.rs` edits ordinary Markdown/snippet appearance through
   Edit receipts with atomic attributed history; copies and metadata reads retain
   overrides without changing content dates.

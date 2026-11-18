@@ -43,7 +43,7 @@ function toBlob(content: FileContent): Blob {
  *
  * When a program already holds the exact new Markdown, as an integration syncing from another system does, read `document.contentWithRevision()` and write with `document.setContent(markdown, {expectedRevision})`: the write lands only if nobody changed the document since the read, and throws `DocumentChangedError` otherwise, so read again and reapply instead of overwriting.
  *
- * `document.content()`, `contentWithRevision()` and `initiative.description()` return Macro's lossless Markdown: people, documents, dates and other chips, tables, images and equations are `<m-*>` tags with a JSON body, such as `<m-user-mention>{"userId":"…"}</m-user-mention>` for a person and `<m-table>` for a table. When you write the text back, copy every tag you are not changing exactly as you read it: an edited tag changes its chip, and a dropped one deletes it.
+ * `document.content()`, `contentWithRevision()` and `initiative.description()` return Macro's lossless Markdown: people, documents, dates and other chips, tables, images and equations are `<m-*>` tags with a JSON body, such as `<m-user-mention>{"userId":"…"}</m-user-mention>` for a person and `<m-table>` for a table. To write text back, take it and its revision from one `contentWithRevision()` read, and copy every tag you are not changing exactly as you read it: an edited tag changes its chip, and a dropped one deletes it.
  *
  * ## Uploaded Office and design files
  *
