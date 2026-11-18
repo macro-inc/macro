@@ -72,24 +72,31 @@ impl OpensearchClient {
     }
 
     /// Deletes every document of one deleted email message, whatever thread
-    /// it was indexed under, visible to search when this returns.
+    /// it was indexed under, without forcing a refresh: search stops finding
+    /// it at the index's next scheduled refresh.
     #[tracing::instrument(
         skip(self),
-        fields(deleted = tracing::field::Empty, passes = tracing::field::Empty),
+        fields(
+            deleted = tracing::field::Empty,
+            other_threads = tracing::field::Empty,
+            passes = tracing::field::Empty,
+        ),
         err
     )]
     pub async fn delete_email_message(
         &self,
         message_id: &str,
+        thread_id: &str,
         index_override: Option<&str>,
     ) -> Result<()> {
-        let deleted = resend_on_lost_connection(|| {
-            delete::email::delete_email_message(&self.inner, message_id, index_override)
+        let removed = resend_on_lost_connection(|| {
+            delete::email::delete_email_message(&self.inner, message_id, thread_id, index_override)
         })
         .await?;
         let span = tracing::Span::current();
-        span.record("deleted", deleted.deleted);
-        span.record("passes", deleted.passes);
+        span.record("deleted", removed.deleted());
+        span.record("other_threads", removed.other_threads.deleted);
+        span.record("passes", removed.other_threads.passes);
         Ok(())
     }
 

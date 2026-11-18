@@ -241,3 +241,196 @@ fn chunk_counts_add_up() {
         }
     );
 }
+
+#[tokio::test]
+async fn a_message_delete_goes_by_id_then_sweeps_other_threads_without_forcing_a_refresh() {
+    let (url, server) = crate::test_support::serve_in_order(vec![
+        ("200 OK", r#"{"result":"deleted"}"#),
+        (
+            "200 OK",
+            r#"{"deleted":1,"version_conflicts":0,"failures":[]}"#,
+        ),
+    ]);
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    client
+        .delete_email_message("message-1", "thread-1", None)
+        .await
+        .unwrap();
+    let requests = server.join().unwrap();
+
+    let (by_id, _) = &requests[0];
+    assert!(
+        by_id.starts_with("DELETE /emails/_doc/thread-1%3Amessage-1 "),
+        "{by_id}"
+    );
+    let (sweep, sweep_body) = &requests[1];
+    assert!(
+        sweep.starts_with("POST /emails/_delete_by_query?"),
+        "{sweep}"
+    );
+    assert!(sweep.contains("conflicts=proceed"), "{sweep}");
+    assert!(sweep.contains("refresh=false"), "{sweep}");
+    let body: serde_json::Value = serde_json::from_str(sweep_body).unwrap();
+    assert_eq!(
+        body,
+        serde_json::json!({ "query": { "bool": {
+            "filter": [{ "term": { "message_id": "message-1" } }],
+            "must_not": [{ "ids": { "values": ["thread-1:message-1"] } }],
+        } } })
+    );
+}
+
+#[tokio::test]
+async fn a_message_never_indexed_under_its_thread_is_still_swept_elsewhere() {
+    let (url, server) = crate::test_support::serve_in_order(vec![
+        ("404 Not Found", r#"{"result":"not_found"}"#),
+        (
+            "200 OK",
+            r#"{"deleted":0,"version_conflicts":0,"failures":[]}"#,
+        ),
+    ]);
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    client
+        .delete_email_message("message-1", "thread-1", None)
+        .await
+        .unwrap();
+
+    assert_eq!(server.join().unwrap().len(), 2);
+}
+
+#[test]
+fn only_a_missing_document_is_a_harmless_404() {
+    assert!(is_missing_document(404, r#"{"result":"not_found"}"#));
+    assert!(!is_missing_document(
+        404,
+        r#"{"error":{"type":"index_not_found_exception"},"status":404}"#
+    ));
+    assert!(!is_missing_document(500, r#"{"result":"not_found"}"#));
+}
+
+async fn index_email_document(
+    client: &opensearch::OpenSearch,
+    index: &str,
+    thread_id: &str,
+    message_id: &str,
+) -> anyhow::Result<()> {
+    client
+        .index(opensearch::IndexParts::IndexId(
+            index,
+            &crate::upsert::email::email_document_id(thread_id, message_id),
+        ))
+        .body(serde_json::json!({"entity_id": thread_id, "message_id": message_id}))
+        .send()
+        .await?
+        .error_for_status_code()?;
+    Ok(())
+}
+
+async fn refresh_email_index(client: &opensearch::OpenSearch, index: &str) -> anyhow::Result<()> {
+    client
+        .indices()
+        .refresh(opensearch::indices::IndicesRefreshParts::Index(&[index]))
+        .send()
+        .await?
+        .error_for_status_code()?;
+    Ok(())
+}
+
+async fn refresh_count(client: &opensearch::OpenSearch, index: &str) -> anyhow::Result<u64> {
+    let stats: serde_json::Value = client
+        .indices()
+        .stats(opensearch::indices::IndicesStatsParts::IndexMetric(
+            &[index],
+            &["refresh"],
+        ))
+        .send()
+        .await?
+        .error_for_status_code()?
+        .json()
+        .await?;
+    Ok(stats["_all"]["primaries"]["refresh"]["total"]
+        .as_u64()
+        .unwrap_or_default())
+}
+
+async fn message_documents(
+    client: &opensearch::OpenSearch,
+    index: &str,
+    message_id: &str,
+) -> anyhow::Result<u64> {
+    let body: serde_json::Value = client
+        .count(opensearch::CountParts::Index(&[index]))
+        .body(serde_json::json!({"query": {"term": {"message_id": message_id}}}))
+        .send()
+        .await?
+        .error_for_status_code()?
+        .json()
+        .await?;
+    Ok(body["count"].as_u64().unwrap_or_default())
+}
+
+/// The message's document under its own thread was indexed a moment ago and
+/// no refresh has made it searchable; a copy under another thread is
+/// searchable. Both go, and the delete forces no refresh.
+#[tokio::test]
+#[ignore = "requires local OpenSearch at http://localhost:9200"]
+async fn a_deleted_message_leaves_every_thread_without_a_forced_refresh() {
+    let client =
+        crate::OpensearchClient::new("http://localhost:9200".into(), "".into(), "".into()).unwrap();
+    let index = format!("email-message-delete-test-{}", uuid::Uuid::now_v7());
+    client
+        .ensure_index_exists(
+            &index,
+            serde_json::json!({
+                "settings": {"number_of_shards": 2, "number_of_replicas": 0, "refresh_interval": "-1"},
+                "mappings": {"dynamic": false, "properties": {
+                    "entity_id": {"type": "keyword"},
+                    "message_id": {"type": "keyword"}
+                }}
+            }),
+        )
+        .await
+        .unwrap();
+    let os = &client.inner;
+
+    let result: anyhow::Result<()> = async {
+        index_email_document(os, &index, "old-thread", "message-1").await?;
+        index_email_document(os, &index, "old-thread", "message-2").await?;
+        refresh_email_index(os, &index).await?;
+        index_email_document(os, &index, "thread-1", "message-1").await?;
+        let refreshes = refresh_count(os, &index).await?;
+
+        let removed = delete_email_message(os, "message-1", "thread-1", Some(&index)).await?;
+
+        assert_eq!(
+            refresh_count(os, &index).await?,
+            refreshes,
+            "the delete forced a refresh"
+        );
+        assert!(removed.by_id);
+        assert_eq!(
+            removed.other_threads,
+            EmailMessageDeleted {
+                deleted: 1,
+                passes: 1
+            }
+        );
+        refresh_email_index(os, &index).await?;
+        assert_eq!(message_documents(os, &index, "message-1").await?, 0);
+        assert_eq!(
+            message_documents(os, &index, "message-2").await?,
+            1,
+            "another message was deleted"
+        );
+        Ok(())
+    }
+    .await;
+    os.indices()
+        .delete(opensearch::indices::IndicesDeleteParts::Index(&[&index]))
+        .send()
+        .await
+        .ok();
+    result.unwrap();
+}
