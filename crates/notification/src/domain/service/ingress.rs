@@ -28,8 +28,13 @@ use crate::domain::ports::{
     NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
     NotificationRealtimePublisher, NotificationRepository, SnsEndpointManager,
 };
+use crate::domain::section_settings::{
+    ChannelDelivery, ChannelSectionMembership, ChannelSectionMembershipReader, NoChannelSections,
+    channel_delivery,
+};
 use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
+use chrono::Utc;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
@@ -39,7 +44,10 @@ use rootcause::prelude::ResultExt;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+
+/// The event type of a channel invite.
+const CHANNEL_INVITE_EVENT_TYPE: &str = "channel_invite";
 use uuid::Uuid;
 
 /// Trait for sending notifications through the ingress service.
@@ -178,18 +186,21 @@ pub trait NotificationReader: Send + Sync + 'static {
 ///
 /// Handles recipient filtering, DB persistence, and queue publishing.
 /// Does NOT handle delivery - that's done by [`super::NotificationEgressService`].
-pub struct NotificationIngressService<N, Q, S> {
+pub struct NotificationIngressService<N, Q, S, M = NoChannelSections> {
     repository: N,
     queue: Q,
     state_machine_driver: S,
+    /// Which Chat sections hold a channel, for section notification settings.
+    channel_sections: M,
     service_name: &'static str,
 }
 
-impl<N, Q, S> NotificationIngress for NotificationIngressService<N, Q, S>
+impl<N, Q, S, M> NotificationIngress for NotificationIngressService<N, Q, S, M>
 where
     N: NotificationRepository,
     Q: NotificationQueue,
     S: BulkDigestStateMachine,
+    M: ChannelSectionMembershipReader,
 {
     fn send_notification<'a, T: Notification + Clone, U: Serialize + Send + Sync + 'static>(
         &'a self,
@@ -206,16 +217,42 @@ where
     Q: NotificationQueue,
     S: BulkDigestStateMachine,
 {
-    /// Create a new ingress service.
+    /// Create a new ingress service. Without
+    /// [`Self::with_channel_sections`], no channel is in any Chat section, so
+    /// section notification settings never apply.
     pub fn new(repository: N, queue: Q, state_machine_driver: S) -> Self {
         Self {
             repository,
             queue,
             state_machine_driver,
+            channel_sections: NoChannelSections,
             service_name: std::env!("CARGO_PKG_NAME"),
         }
     }
 
+    /// Apply users' Chat section notification settings, resolving which
+    /// sections hold a channel through `channel_sections`.
+    pub fn with_channel_sections<M: ChannelSectionMembershipReader>(
+        self,
+        channel_sections: M,
+    ) -> NotificationIngressService<N, Q, S, M> {
+        NotificationIngressService {
+            repository: self.repository,
+            queue: self.queue,
+            state_machine_driver: self.state_machine_driver,
+            channel_sections,
+            service_name: self.service_name,
+        }
+    }
+}
+
+impl<N, Q, S, M> NotificationIngressService<N, Q, S, M>
+where
+    N: NotificationRepository,
+    Q: NotificationQueue,
+    S: BulkDigestStateMachine,
+    M: ChannelSectionMembershipReader,
+{
     /// Send a notification to the specified recipients.
     ///
     /// This method performs the following steps:
@@ -329,20 +366,24 @@ where
     /// - Sender (sender cannot receive their own notification)
     /// - Muted notifications
     /// - Unsubscribed from item (a mentions-only preference lets direct mentions through)
-    /// - Notification type disabled, globally or for the notification's channel
+    /// - Notification type disabled, globally or by the notification's
+    ///   channel and Chat section settings
+    /// - Every Chat section holding the notification's channel muted
     ///
-    /// A channel message or reply also reaches the users it @mentions who
-    /// turned mentions off for that channel: their mention notification is
-    /// dropped, so this one tells them instead.
+    /// A channel message or reply also reaches the users it @mentions whose
+    /// settings turn mentions off for that channel: their mention
+    /// notification is dropped, so this one tells them instead.
     #[tracing::instrument(
         name = "notification.filter_recipients",
         skip_all,
         fields(
             notification.event_type = req.req.notification.tag.as_ref(),
             recipient_count = req.req.recipient_ids.len(),
+            section_settings_user_count = tracing::field::Empty,
             mention_fallback_count = tracing::field::Empty,
             excluded_count = tracing::field::Empty,
             channel_settings_excluded_count = tracing::field::Empty,
+            section_muted_count = tracing::field::Empty,
         ),
         err
     )]
@@ -351,11 +392,10 @@ where
         mut req: SendNotificationRequest<'a, T, U>,
     ) -> Result<SendNotificationRequest<'a, T, U>, Report> {
         let notification_type = req.req.notification.tag.as_ref().to_owned();
-        let channel_kind = channel_settings_target(
-            &req.req.notification_entity,
-            &notification_type,
-            req.channel_settings_kind,
-        );
+        let channel_id = settings_channel(&req.req.notification_entity, &notification_type);
+        let channel_kind = req
+            .channel_settings_kind
+            .or_else(|| notification_type.parse().ok());
         let mention_fallback = std::mem::take(&mut req.mention_fallback_recipient_ids);
         let lookup_ids: Vec<_> = req
             .req
@@ -366,7 +406,13 @@ where
             .collect();
 
         // Fetch all filter data upfront, for the fallback users too.
-        let (muted_users, unsubscribed_users, type_disabled_users, channel_settings) = tokio::try_join!(
+        let (
+            muted_users,
+            unsubscribed_users,
+            type_disabled_users,
+            channel_settings,
+            section_settings,
+        ) = tokio::try_join!(
             self.repository.get_muted_users(&lookup_ids),
             self.repository.get_unsubscribed_users(
                 &req.req.notification_entity.entity_id,
@@ -376,8 +422,8 @@ where
             self.repository
                 .get_users_with_type_disabled(&notification_type, &lookup_ids),
             async {
-                match channel_kind {
-                    Some((channel_id, _)) => {
+                match channel_id {
+                    Some(channel_id) => {
                         self.repository
                             .get_channel_notification_settings(channel_id, &lookup_ids)
                             .await
@@ -385,44 +431,94 @@ where
                     None => Ok(HashMap::new()),
                 }
             },
+            async {
+                match channel_id {
+                    Some(_) => {
+                        self.repository
+                            .get_channel_section_settings(&lookup_ids)
+                            .await
+                    }
+                    None => Ok(HashMap::new()),
+                }
+            },
         )?;
+        tracing::Span::current().record("section_settings_user_count", section_settings.len());
+
+        // Only users with section settings can be affected by the sections
+        // holding the channel, so only they are looked up.
+        let membership = match channel_id {
+            Some(channel_id) if !section_settings.is_empty() => {
+                let users: Vec<_> = section_settings.keys().map(CowLike::copied).collect();
+                self.channel_sections
+                    .memberships(channel_id, &users)
+                    .await?
+            }
+            _ => ChannelSectionMembership::default(),
+        };
+
+        let now = Utc::now();
+        let no_section_settings = BTreeMap::new();
+        let delivery = |user_id: &MacroUserIdStr<'_>, kind: Option<ChannelNotificationKind>| {
+            channel_delivery(
+                kind,
+                channel_settings.get(user_id),
+                &membership.sections_for(user_id),
+                section_settings
+                    .get(user_id)
+                    .unwrap_or(&no_section_settings),
+                now,
+            )
+        };
 
         let fallback_recipients: Vec<_> = mention_fallback
             .into_iter()
             .filter(|user_id| {
-                channel_settings.get(user_id).is_some_and(|settings| {
-                    settings
-                        .disabled
-                        .contains(&ChannelNotificationKind::Mention)
-                })
+                delivery(user_id, Some(ChannelNotificationKind::Mention))
+                    == ChannelDelivery::TurnedOff
             })
             .collect();
         tracing::Span::current().record("mention_fallback_count", fallback_recipients.len());
         req.req.recipient_ids.extend(fallback_recipients);
 
-        let channel_kind_disabled_users = match channel_kind {
-            Some((_, kind)) => channel_settings
-                .into_iter()
-                .filter(|(_, settings)| settings.disabled.contains(&kind))
-                .map(|(user_id, _)| user_id)
-                .collect(),
-            None => HashSet::new(),
-        };
+        // Users without channel or section settings receive everything.
+        let mut turned_off_users = HashSet::new();
+        let mut section_muted_users = HashSet::new();
+        for user_id in channel_settings.keys().chain(section_settings.keys()) {
+            match delivery(user_id, channel_kind) {
+                ChannelDelivery::Receive => {}
+                ChannelDelivery::TurnedOff => {
+                    turned_off_users.insert(user_id.clone());
+                }
+                ChannelDelivery::MutedBySections => {
+                    section_muted_users.insert(user_id.clone());
+                }
+            }
+        }
 
         let (out, excluded) = req.update_recipients(
             muted_users,
             unsubscribed_users,
             type_disabled_users,
-            channel_kind_disabled_users,
+            turned_off_users,
+            section_muted_users,
         );
 
-        let channel_settings_excluded = excluded
-            .iter()
-            .filter(|exclusion| exclusion.reason == ExclusionReason::DisabledForChannel)
-            .count();
+        let count_excluded = |reason| {
+            excluded
+                .iter()
+                .filter(|exclusion| exclusion.reason == reason)
+                .count()
+        };
         let span = tracing::Span::current();
         span.record("excluded_count", excluded.len());
-        span.record("channel_settings_excluded_count", channel_settings_excluded);
+        span.record(
+            "channel_settings_excluded_count",
+            count_excluded(ExclusionReason::DisabledForChannel),
+        );
+        span.record(
+            "section_muted_count",
+            count_excluded(ExclusionReason::MutedBySections),
+        );
 
         Ok(out)
     }
@@ -512,20 +608,15 @@ where
     }
 }
 
-/// The channel and the kind of notification its per-channel settings decide,
-/// when this notification is one a user can turn off for its channel.
-fn channel_settings_target(
-    entity: &Entity<'_>,
-    event_type: &str,
-    kind: Option<ChannelNotificationKind>,
-) -> Option<(Uuid, ChannelNotificationKind)> {
-    if entity.entity_type != EntityType::Channel {
+/// The channel whose notification settings apply to this notification:
+/// every channel notification except an invite, which reaches people as they
+/// join, before any setting of theirs could hold the channel.
+fn settings_channel(entity: &Entity<'_>, event_type: &str) -> Option<Uuid> {
+    if entity.entity_type != EntityType::Channel || event_type == CHANNEL_INVITE_EVENT_TYPE {
         return None;
     }
 
-    let kind = kind.or_else(|| event_type.parse().ok())?;
-    let channel_id = entity.entity_id.parse().ok()?;
-    Some((channel_id, kind))
+    entity.entity_id.parse().ok()
 }
 
 /// A lightweight [`NotificationIngress`] implementation that serializes

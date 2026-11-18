@@ -243,6 +243,7 @@ impl<'a, T, U> SendNotificationRequest<'a, T, U> {
         unsubscribed_users: HashSet<MacroUserIdStr<'a>>,
         type_disabled_users: HashSet<MacroUserIdStr<'a>>,
         channel_kind_disabled_users: HashSet<MacroUserIdStr<'a>>,
+        section_muted_users: HashSet<MacroUserIdStr<'a>>,
     ) -> (Self, Vec<RecipientExclusion<'a>>) {
         let recipient_is_sender = |id: FilteredRecipient<'a>| match (id, &self.req.sender_id) {
             (FilteredRecipient::Allowed(macro_user_id_str), Some(sender))
@@ -304,6 +305,18 @@ impl<'a, T, U> SendNotificationRequest<'a, T, U> {
             x => x,
         };
 
+        let muted_by_sections = |id: FilteredRecipient<'a>| match id {
+            FilteredRecipient::Allowed(macro_user_id_str)
+                if section_muted_users.contains(&macro_user_id_str) =>
+            {
+                FilteredRecipient::Excluded(RecipientExclusion {
+                    user_id: macro_user_id_str,
+                    reason: ExclusionReason::MutedBySections,
+                })
+            }
+            x => x,
+        };
+
         let recipients = std::mem::take(&mut self.req.recipient_ids);
 
         let (allowed, excluded): (HashSet<_>, Vec<_>) = recipients
@@ -314,6 +327,7 @@ impl<'a, T, U> SendNotificationRequest<'a, T, U> {
             .map(notif_type_is_ignored)
             .map(user_disabled_type)
             .map(user_disabled_channel_kind)
+            .map(muted_by_sections)
             .partition_map(|r| match r {
                 FilteredRecipient::Allowed(a) => itertools::Either::Left(a),
                 FilteredRecipient::Excluded(b) => itertools::Either::Right(b),

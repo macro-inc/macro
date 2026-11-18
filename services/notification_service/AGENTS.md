@@ -17,7 +17,10 @@ worker that sends email/mobile-push/websocket notifications.
   (list/read), `unsubscribe.rs` (single and atomic bulk item mute/snooze, and a
   channel's `mentions_only` level on the single route),
   `notification_settings.rs` (a user's per-channel notification settings:
-  list, partial update, reset), `health.rs`.
+  list, partial update, reset; `sections.rs` for Chat section settings),
+  `health.rs`.
+- The ingress worker reads Chat section membership through
+  `channel_labels::outbound::section_membership`, wired in `main.rs`.
 - `src/model/notification.rs`: service-local request/response shapes.
 - Push payload schemas come from `notification::domain::models::apple`; keep the
   frontend push validators generated from those same OpenAPI components.

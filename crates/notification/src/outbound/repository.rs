@@ -13,8 +13,10 @@ use crate::domain::models::{
     SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
 };
 use crate::domain::ports::NotificationRepository;
+use crate::domain::section_settings::{ChannelSection, SectionNotificationSettings};
 use crate::outbound::channel_settings::settings_for_recipients;
 use crate::outbound::device_registration::DeviceRegistrationDbOps;
+use crate::outbound::section_settings::section_settings_for_recipients;
 use chrono::{DateTime, Utc};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -25,7 +27,7 @@ use rootcause::Report;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use sqlx::{PgPool, Postgres, QueryBuilder};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -360,6 +362,17 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         Output = Result<HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>, Report>,
     > + Send;
 
+    /// Each of these users' settings for any of their Chat sections.
+    fn get_channel_section_settings<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> impl std::future::Future<
+        Output = Result<
+            HashMap<MacroUserIdStr<'static>, BTreeMap<ChannelSection, SectionNotificationSettings>>,
+            Report,
+        >,
+    > + Send;
+
     /// Get device endpoints for the given users.
     fn get_device_endpoints<'a>(
         &self,
@@ -611,6 +624,16 @@ impl NotificationDbOps for PgPool {
         user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>, Report> {
         settings_for_recipients(self, channel_id, user_ids).await
+    }
+
+    async fn get_channel_section_settings<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<
+        HashMap<MacroUserIdStr<'static>, BTreeMap<ChannelSection, SectionNotificationSettings>>,
+        Report,
+    > {
+        section_settings_for_recipients(self, user_ids).await
     }
 
     async fn get_device_endpoints<'a>(
@@ -1612,6 +1635,16 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         self.db
             .get_channel_notification_settings(channel_id, user_ids)
             .await
+    }
+
+    async fn get_channel_section_settings<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<
+        HashMap<MacroUserIdStr<'static>, BTreeMap<ChannelSection, SectionNotificationSettings>>,
+        Report,
+    > {
+        self.db.get_channel_section_settings(user_ids).await
     }
 
     async fn get_device_endpoints<'a>(

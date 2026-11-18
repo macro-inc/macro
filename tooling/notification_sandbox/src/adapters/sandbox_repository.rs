@@ -9,13 +9,14 @@ use notification::domain::models::{
     UserNotificationRow, device::DeviceType,
 };
 use notification::domain::ports::NotificationRepository;
+use notification::domain::section_settings::{ChannelSection, SectionNotificationSettings};
 use notification::outbound::repository::DbNotificationRepository;
 use rootcause::Report;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use sqlx::PgPool;
-use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -68,6 +69,16 @@ impl NotificationRepository for SandboxNotificationRepository {
         self.inner
             .get_channel_notification_settings(channel_id, user_ids)
             .await
+    }
+
+    async fn get_channel_section_settings<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<
+        HashMap<MacroUserIdStr<'static>, BTreeMap<ChannelSection, SectionNotificationSettings>>,
+        Report,
+    > {
+        self.inner.get_channel_section_settings(user_ids).await
     }
 
     async fn create_notification<'a, T: Serialize + Send + Sync>(

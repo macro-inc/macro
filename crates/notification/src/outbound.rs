@@ -38,6 +38,8 @@ pub mod queue;
 pub mod rate_limit;
 pub mod repository;
 pub mod retention;
+/// PostgreSQL storage for users' Chat section notification settings.
+pub mod section_settings;
 pub mod sns_endpoint;
 pub mod user_existence_checker;
 pub mod websocket;

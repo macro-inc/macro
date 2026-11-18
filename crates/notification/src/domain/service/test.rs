@@ -29,6 +29,7 @@ use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
     RealtimeSender, SnsEndpointManager,
 };
+use crate::domain::section_settings::{ChannelSection, SectionNotificationSettings};
 use crate::domain::service::{
     NotificationEgressService, NotificationIngress, NotificationIngressService, NotificationReader,
     NotificationReaderService, PlatformArnConfig,
@@ -42,7 +43,7 @@ use rootcause::{Report, report};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
@@ -112,6 +113,8 @@ struct MockRepository {
     unsubscribed_users: HashSet<MacroUserIdStr<'static>>,
     type_disabled_users: HashSet<MacroUserIdStr<'static>>,
     channel_settings: HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>,
+    section_settings:
+        HashMap<MacroUserIdStr<'static>, BTreeMap<ChannelSection, SectionNotificationSettings>>,
     device_endpoints: HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>,
     created_notifications: Mutex<Vec<Uuid>>,
     stored_collapse_keys: Mutex<Vec<(Uuid, Option<String>)>>,
@@ -137,6 +140,7 @@ impl MockRepository {
             unsubscribed_users: HashSet::new(),
             type_disabled_users: HashSet::new(),
             channel_settings: HashMap::new(),
+            section_settings: HashMap::new(),
             device_endpoints: HashMap::new(),
             created_notifications: Mutex::new(Vec::new()),
             stored_collapse_keys: Mutex::new(Vec::new()),
@@ -205,6 +209,19 @@ impl MockRepository {
 
     fn with_type_disabled_user(mut self, user_id: MacroUserIdStr<'static>) -> Self {
         self.type_disabled_users.insert(user_id);
+        self
+    }
+
+    fn with_section_settings(
+        mut self,
+        user_id: MacroUserIdStr<'static>,
+        section: ChannelSection,
+        settings: SectionNotificationSettings,
+    ) -> Self {
+        self.section_settings
+            .entry(user_id)
+            .or_default()
+            .insert(section, settings);
         self
     }
 
@@ -293,6 +310,21 @@ impl NotificationRepository for MockRepository {
     ) -> Result<HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>, Report> {
         Ok(self
             .channel_settings
+            .iter()
+            .filter(|(user_id, _)| user_ids.contains(user_id))
+            .map(|(user_id, settings)| (user_id.clone(), settings.clone()))
+            .collect())
+    }
+
+    async fn get_channel_section_settings<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<
+        HashMap<MacroUserIdStr<'static>, BTreeMap<ChannelSection, SectionNotificationSettings>>,
+        Report,
+    > {
+        Ok(self
+            .section_settings
             .iter()
             .filter(|(user_id, _)| user_ids.contains(user_id))
             .map(|(user_id, settings)| (user_id.clone(), settings.clone()))
@@ -652,6 +684,16 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         (**self)
             .get_channel_notification_settings(channel_id, user_ids)
             .await
+    }
+
+    async fn get_channel_section_settings<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<
+        HashMap<MacroUserIdStr<'static>, BTreeMap<ChannelSection, SectionNotificationSettings>>,
+        Report,
+    > {
+        (**self).get_channel_section_settings(user_ids).await
     }
 
     async fn create_notification<'a, T: Serialize + Send + Sync>(

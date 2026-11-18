@@ -19,21 +19,22 @@ const FOREIGN_KEY_VIOLATION: &str = "23503";
 pub struct PgChannelNotificationSettingsRepository(pub PgPool);
 
 /// Parse stored event types, skipping any this build does not know.
-fn parse_kinds(event_types: Vec<String>) -> BTreeSet<ChannelNotificationKind> {
+pub(crate) fn parse_kinds(event_types: Vec<String>) -> BTreeSet<ChannelNotificationKind> {
     event_types
         .into_iter()
         .filter_map(|event_type| {
             event_type
                 .parse()
                 .inspect_err(|_| {
-                    tracing::warn!(event_type, "Skipping unknown channel notification setting");
+                    tracing::warn!(event_type, "Skipping unknown notification setting");
                 })
                 .ok()
         })
         .collect()
 }
 
-fn event_types(kinds: &BTreeSet<ChannelNotificationKind>) -> Vec<String> {
+/// Event types in their stored form.
+pub(crate) fn event_types(kinds: &BTreeSet<ChannelNotificationKind>) -> Vec<String> {
     kinds
         .iter()
         .map(|kind| <&'static str>::from(*kind).to_owned())

@@ -66,6 +66,8 @@ use crate::{
                 notification_settings::list_channel_settings,
                 notification_settings::update_channel_settings,
                 notification_settings::reset_channel_settings,
+                notification_settings::sections::list_section_settings,
+                notification_settings::sections::update_section_settings,
         ),
         components(
             schemas(
@@ -83,6 +85,11 @@ use crate::{
                         notification_settings::ListChannelNotificationSettingsResponse,
                         notification_settings::UpdateChannelNotificationSettingsRequest,
                         notification_crate::domain::channel_settings::ChannelNotificationKind,
+                        notification_settings::sections::SectionNotificationSettingsResponse,
+                        notification_settings::sections::ListSectionNotificationSettingsResponse,
+                        notification_settings::sections::UpdateSectionNotificationSettingsRequest,
+                        notification_crate::domain::section_settings::ChannelSection,
+                        notification_crate::domain::section_settings::SectionMute,
                         DeviceType,
                         PushNotificationData,
                         NewEmailMetadata,

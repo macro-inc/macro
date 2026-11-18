@@ -30,8 +30,11 @@ pub enum ExclusionReason {
     UnsubscribedFromItem,
     /// The recipient has disabled this notification type.
     DisabledNotificationType,
-    /// The recipient turned this kind of notification off for its channel.
+    /// The recipient's channel or Chat section settings turn this kind of
+    /// notification off for its channel.
     DisabledForChannel,
+    /// Every Chat section holding the channel is muted for the recipient.
+    MutedBySections,
 }
 
 impl ExclusionReason {
@@ -45,6 +48,7 @@ impl ExclusionReason {
             ExclusionReason::DisabledForChannel => {
                 "User has turned this notification off for the channel"
             }
+            ExclusionReason::MutedBySections => "User has muted every section holding the channel",
         }
     }
 }

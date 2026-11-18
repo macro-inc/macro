@@ -1,4 +1,6 @@
-//! The authenticated user's own per-channel notification settings.
+//! The authenticated user's own channel and Chat section notification settings.
+
+pub(crate) mod sections;
 
 use axum::{
     Json, Router,
@@ -26,6 +28,10 @@ pub fn router() -> Router<ApiContext> {
         .route(
             "/channels/{channel_id}",
             patch(update_channel_settings).delete(reset_channel_settings),
+        )
+        .route(
+            "/sections",
+            get(sections::list_section_settings).patch(sections::update_section_settings),
         )
 }
 
@@ -86,7 +92,7 @@ pub struct UpdateChannelNotificationSettingsRequest {
     pub overrides_section_mute: Option<bool>,
 }
 
-fn internal_error(message: &'static str) -> Response {
+pub(super) fn internal_error(message: &'static str) -> Response {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         Json(ErrorResponse {

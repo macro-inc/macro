@@ -1,6 +1,9 @@
 use super::*;
 use crate::domain::channel_settings::ChannelNotificationKind;
 use crate::domain::models::request::SendNotificationRequest;
+use crate::domain::section_settings::{
+    ChannelSectionMembership, ChannelSectionMembershipReader, SectionMute,
+};
 use std::collections::BTreeSet;
 
 const CHANNEL_ID: &str = "0194f1a2-0000-7000-8000-000000000001";
@@ -201,4 +204,94 @@ async fn a_notification_can_name_the_setting_that_decides_it() {
     let result = service.send_notification(request).await.unwrap().unwrap();
 
     assert_eq!(result.notified_recipients, HashSet::from([messages_off]));
+}
+
+/// Sections holding the channel, as the channel sections domain would report.
+struct FakeSections(ChannelSectionMembership);
+
+impl ChannelSectionMembershipReader for FakeSections {
+    async fn memberships<'a>(
+        &self,
+        _channel_id: Uuid,
+        _user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<ChannelSectionMembership, Report> {
+        Ok(self.0.clone())
+    }
+}
+
+const PROJECTS: Uuid = Uuid::from_u128(0x62);
+
+fn section_settings(
+    disabled: &[ChannelNotificationKind],
+    mute: SectionMute,
+) -> SectionNotificationSettings {
+    SectionNotificationSettings {
+        disabled: disabled.iter().copied().collect(),
+        mute,
+    }
+}
+
+#[tokio::test]
+async fn section_settings_apply_to_the_channels_their_sections_hold() {
+    let quiet_section = test_user_id("quiet-section@example.com");
+    let muted_section = test_user_id("muted-section@example.com");
+    let overridden = test_user_id("overridden@example.com");
+    let mentions_off = test_user_id("mentions-off@example.com");
+    let label = ChannelSection::Label { label_id: PROJECTS };
+    let membership = ChannelSectionMembership {
+        built_in: Some(ChannelSection::TeamChannels),
+        labels: HashMap::from([
+            (quiet_section.clone(), vec![PROJECTS]),
+            (muted_section.clone(), vec![PROJECTS]),
+            (overridden.clone(), vec![PROJECTS]),
+        ]),
+        favorites: HashSet::new(),
+    };
+    let service = NotificationIngressService::new(
+        MockRepository::new()
+            .with_section_settings(
+                quiet_section.clone(),
+                label,
+                section_settings(
+                    &[ChannelNotificationKind::TopLevelMessage],
+                    SectionMute::Unmuted,
+                ),
+            )
+            .with_section_settings(
+                muted_section.clone(),
+                label,
+                section_settings(&[], SectionMute::Muted),
+            )
+            .with_section_settings(
+                overridden.clone(),
+                label,
+                section_settings(&[], SectionMute::Muted),
+            )
+            .with_channel_settings(
+                overridden.clone(),
+                ChannelNotificationSettings {
+                    overrides_section_mute: true,
+                    ..Default::default()
+                },
+            )
+            // Team channels holds the channel for this user, whose custom
+            // sections don't.
+            .with_section_settings(
+                mentions_off.clone(),
+                ChannelSection::TeamChannels,
+                section_settings(&[ChannelNotificationKind::Mention], SectionMute::Unmuted),
+            ),
+        MockQueue::new(),
+        MockStateMachine,
+    )
+    .with_channel_sections(FakeSections(membership));
+    let request = channel_message(&[&quiet_section, &muted_section, &overridden])
+        .with_mention_fallback(HashSet::from([mentions_off.clone()]));
+
+    let result = service.send_notification(request).await.unwrap().unwrap();
+
+    assert_eq!(
+        result.notified_recipients,
+        HashSet::from([overridden, mentions_off])
+    );
 }

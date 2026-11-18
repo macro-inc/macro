@@ -35,6 +35,18 @@ through the same service.
   `user_channel_notification_setting`. Each type is turned off, turned on over
   the channel's sections, or follows them; `section_mute_override` keeps a
   channel notifying inside muted sections. Independent of mute and snooze.
+- `domain/section_settings.rs` + `outbound/section_settings.rs`: a user's own
+  settings for Chat sidebar sections (`ChannelSection`: a custom section by
+  `channel_label` id, or Favorites, Direct messages, Team channels), stored in
+  `user_channel_section_notification_setting`: kinds off, and mute or snooze.
+  `channel_delivery` is the one place the rules combine: section mute (all
+  holding sections muted, unless the channel overrides it), then the channel's
+  own choice for the kind, then any holding section allowing it. A section
+  without a row allows everything and is unmuted; "All channels" is not a
+  section. Which sections hold a channel comes through the
+  `ChannelSectionMembershipReader` port, implemented by
+  `channel_labels::outbound::section_membership`; ingress without one
+  (`NoChannelSections`) applies no section settings.
 - `outbound/notification_consumer/health.rs`: periodic per-instance Kafka
   backlog and telemetry-health logs; offsets stay uncommitted.
 - `domain/retention.rs` + `outbound/retention.rs`: bounded 30-day cleanup.
@@ -113,8 +125,10 @@ through the same service.
 - A channel message or reply leaves the users it @mentions out of its own
   recipients; the producer names them with `with_mention_fallback`, and
   ingress adds back each one whose channel settings turn mentions off, so
-  they still hear about the message. The `notification.filter_recipients` span
-  records the fallback and exclusion counts.
+  they still hear about the message. Ingress resolves section membership only
+  for recipients that have section settings, and never for channel invites.
+  The `notification.filter_recipients` span records the fallback, exclusion
+  and section-muted counts.
 
 - `user_notification` carries copies of its notification's `event_item_type`,
   `event_item_id` and `notification_event_type`. Entity reads find a viewer's

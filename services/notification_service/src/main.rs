@@ -342,6 +342,9 @@ pub async fn main() -> anyhow::Result<()> {
         ingress_repository,
         ingress_delivery_queue,
         ingress_state_machine,
+    )
+    .with_channel_sections(
+        channel_labels::outbound::section_membership::PgChannelSectionMembership(db.clone()),
     );
 
     let ingress_queue = ::notification::outbound::queue::SqsQueue::new(
@@ -364,6 +367,9 @@ pub async fn main() -> anyhow::Result<()> {
             ),
             channel_settings: ::notification::domain::channel_settings::ChannelNotificationSettingsService::new(
                 ::notification::outbound::channel_settings::PgChannelNotificationSettingsRepository(db.clone()),
+            ),
+            section_settings: ::notification::domain::section_settings::SectionNotificationSettingsService::new(
+                ::notification::outbound::section_settings::PgSectionNotificationSettingsRepository(db.clone()),
             ),
             internal_api_key: config.internal_api_key.clone(),
             db,
