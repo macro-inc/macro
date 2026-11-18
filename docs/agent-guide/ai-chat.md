@@ -287,9 +287,9 @@ The floating mobile composer appears only on **Agents**; Home and other views
 keep their New action or their own reply/comment composer.
 
 The phone Agents composer is a chrome island above the dock. At rest it is a
-46px pill with the short placeholder “Message Macro AI”, a one-line draft and a
-40px Send control. Tapping the editor expands it to show attachments above the
-text, then 36px Add, a labeled model/agent pill, dictation and Send controls.
+46px pill with the vertically centered “Message Macro AI” placeholder or a
+one-line draft, and no Send control. Tapping the editor expands it to show
+attachments above the text, then 36px Add, model/agent, dictation, and Send controls.
 The editor and model picker stay mounted when the composer collapses; attachment
 state survives hiding the chips. Home keeps a separate draft and attachment store.
 

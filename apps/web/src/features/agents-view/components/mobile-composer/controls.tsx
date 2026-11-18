@@ -5,8 +5,11 @@ export function MobileComposerControls(props: ParentProps) {
   return (
     <div
       data-composer-controls
-      class="flex shrink-0 items-center gap-1"
-      classList={{ 'w-full h-9': !state.collapsed() }}
+      class="shrink-0 items-center gap-1"
+      classList={{
+        hidden: state.collapsed(),
+        'flex w-full h-9': !state.collapsed(),
+      }}
     >
       {props.children}
     </div>

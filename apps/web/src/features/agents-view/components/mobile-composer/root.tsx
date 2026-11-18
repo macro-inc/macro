@@ -48,7 +48,7 @@ export function MobileComposerRoot(props: MobileComposerRootProps) {
               data-phone-composer="true"
               class="group/composer flex min-w-0 gap-1"
               classList={{
-                'h-[46px] items-center pl-[18px] pr-[3px]': props.collapsed,
+                'h-[46px] items-center px-[18px]': props.collapsed,
                 'flex-col px-1.5 pt-2 pb-1.5': !props.collapsed,
               }}
             >
