@@ -32,8 +32,7 @@ it('renders in every instance after the instance that started the load unmounts 
 
   setFirstShown(false);
   resolveModule({ default: () => 'Pick your size' });
-  await module;
-  await Promise.resolve();
+  await Poll.preload();
 
   expect(container.querySelector('[data-card="second"]')?.textContent).toBe(
     'Pick your size'
@@ -51,8 +50,7 @@ it('remounts a loaded component at once, without its fallback', async () => {
       </Suspense>
     </Show>
   ));
-  await module;
-  await Promise.resolve();
+  await Poll.preload();
   expect(container.textContent).toBe('Pick your size');
 
   setShown(false);
