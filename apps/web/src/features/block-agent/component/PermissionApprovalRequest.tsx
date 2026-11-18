@@ -75,7 +75,9 @@ export function PermissionApprovalRequest(props: {
 
   const note = () => {
     if (!canApprove()) {
-      return t('agentPermissionsChat.waitingNote', { name: approverName() });
+      return approvals()?.canCancel()
+        ? t('agentPermissionsChat.waitingNote', { name: approverName() })
+        : t('agentPermissionsChat.waitingNoteOnly', { name: approverName() });
     }
     const message = t('agentPermissionsChat.approverNote', { agent: agent() });
     const [before, link, after] = message.split(/<link>|<\/link>/);

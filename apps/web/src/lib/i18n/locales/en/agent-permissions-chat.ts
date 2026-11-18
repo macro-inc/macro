@@ -33,6 +33,7 @@ export default {
     'These are set to Ask in <link>{{agent}}’s permissions</link>. A program may not reach every call listed. Allow for this session skips asking for these until the session ends.',
   waitingNote:
     '{{name}} answers this. You can stop waiting, which declines it.',
+  waitingNoteOnly: '{{name}} answers this.',
   viewProgram: 'View program',
   hideProgram: 'Hide program',
   decline: 'Decline',

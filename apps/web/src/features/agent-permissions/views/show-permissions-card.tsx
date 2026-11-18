@@ -203,31 +203,42 @@ export function ShowPermissionsCard(props: {
               <Match when={ready()}>
                 {(loaded) => (
                   <div class="divide-y divide-edge-muted">
-                    <For each={blocks()}>
-                      {(block) => (
-                        <SelectionGroup
-                          block={block}
-                          catalog={loaded().catalog}
-                          view={loaded().view}
-                          agentName={props.agentName}
-                          canEdit={canEdit()}
-                          pendingState={changes.pendingState}
-                          onAction={(group, action, state) =>
-                            fireAndForget(
-                              changes.apply(
-                                changeForAction(group, action, state),
-                                state
-                              ),
-                              'agent-permissions'
-                            )
-                          }
-                          onTool={(change, shown) =>
-                            fireAndForget(
-                              changes.apply(change, shown),
-                              'agent-permissions'
-                            )
-                          }
-                        />
+                    {/* Keyed by group id: the blocks are rebuilt on every
+                        read of the view, and a remount would drop focus
+                        from the control just clicked. */}
+                    <For each={blocks().map((block) => block.group.id)}>
+                      {(groupId) => (
+                        <Show
+                          when={blocks().find(
+                            (block) => block.group.id === groupId
+                          )}
+                        >
+                          {(block) => (
+                            <SelectionGroup
+                              block={block()}
+                              catalog={loaded().catalog}
+                              view={loaded().view}
+                              agentName={props.agentName}
+                              canEdit={canEdit()}
+                              pendingState={changes.pendingState}
+                              onAction={(group, action, state) =>
+                                fireAndForget(
+                                  changes.apply(
+                                    changeForAction(group, action, state),
+                                    state
+                                  ),
+                                  'agent-permissions'
+                                )
+                              }
+                              onTool={(change, shown) =>
+                                fireAndForget(
+                                  changes.apply(change, shown),
+                                  'agent-permissions'
+                                )
+                              }
+                            />
+                          )}
+                        </Show>
                       )}
                     </For>
                   </div>

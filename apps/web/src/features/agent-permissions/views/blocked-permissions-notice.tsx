@@ -17,8 +17,9 @@ export function BlockedPermissionsNotice(props: {
   const viewQuery = useSessionToolPermissionsQuery(() => props.sessionId);
   const openPermissions = useOpenAgentPermissions();
   const view = () => (viewQuery.isSuccess ? viewQuery.data : undefined);
-  // Unknown is not read-only: while loading, say nothing about who may edit.
-  const canEdit = () => view()?.canEdit ?? viewQuery.isPending;
+  // Unknown (loading, failed, unavailable) is not read-only: say nothing
+  // about who may edit, and offer no link.
+  const canEdit = () => view()?.canEdit ?? true;
 
   return (
     <BlockedByPermissionsCard
