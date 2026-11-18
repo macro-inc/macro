@@ -161,17 +161,21 @@ impl CompaniesRepositoryImpl {
         // Only currently eligible mailbox history may update CRM records.
         let existing = Self::find_company_by_domain(&mut tx, team_id, &normalized_domain).await?;
 
-        // The upsert below finds a contact by its company and primary address.
-        // A contact that holds this address as a further one is not found that
-        // way, so look for it first: mail from any of a contact's addresses
-        // refreshes that contact instead of filing a second one. An address
-        // repeats only across manually created duplicates, hence the cap.
+        // The company upsert matches a primary address under that company.
+        // Look up address holders so we can preserve a manual unfiled contact
+        // or a contact that holds the address as a further one. Start from
+        // the address index even when the planner knows the team size.
         let holders = sqlx::query!(
-            r#"SELECT ct.id, ct.company_id,
+            r#"SELECT ct.id, ct.company_id, ct.manually_created,
                       (LOWER(BTRIM(ct.email)) = ce.email) IS TRUE AS "is_primary!"
                FROM crm_contact_emails ce
-               JOIN crm_contacts ct ON ct.id = ce.contact_id
-               WHERE ce.email = $2 AND ct.team_id = $1
+               JOIN LATERAL (
+                   SELECT id, company_id, email, manually_created
+                   FROM crm_contacts
+                   WHERE id = ce.contact_id AND team_id = $1
+                   OFFSET 0
+               ) ct ON TRUE
+               WHERE ce.email = $2
                ORDER BY ct.id
                LIMIT 20"#,
             team_id,
@@ -267,6 +271,33 @@ impl CompaniesRepositoryImpl {
             }
         };
 
+        // Company population has already run. Keep a sole manual holder's
+        // identity and company choice when its primary address matches.
+        if let [holder] = holders.as_slice()
+            && holder.manually_created
+            && holder.company_id.is_none()
+            && holder.is_primary
+        {
+            if self
+                .refresh_existing_contact(
+                    &mut tx,
+                    team_id,
+                    holder.id,
+                    None,
+                    &normalized_email,
+                    name,
+                    &interaction,
+                )
+                .await?
+            {
+                Self::record_contact_source(&mut tx, holder.id, link_id).await?;
+            }
+            return tx
+                .commit()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()));
+        }
+
         // First non-NULL name wins (COALESCE preserves existing).
         // `last_interaction` always GREATEST; `first_interaction`
         // LEAST-merges only on is_sent=true (mirrors company rule).
@@ -360,6 +391,7 @@ impl CompaniesRepositoryImpl {
                  AND EXISTS (
                      SELECT 1 FROM crm_contact_emails ce
                      WHERE ce.contact_id = crm_contacts.id AND ce.email = $7
+                     OFFSET 0
                  )
                RETURNING id"#,
             contact_id,

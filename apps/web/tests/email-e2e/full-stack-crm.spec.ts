@@ -92,9 +92,8 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
-    // When this fails, New email on a contact's record does not start a
-    // message to the contact, the message never reaches the provider, or the
-    // record does not show the mail exchanged with the contact.
+    // New email sends to the contact and lists the sent message on its
+    // record. Mail sync must also preserve that contact's identity.
     test('New email reuses the manual contact and shows the sent mail', async ({
       page,
       mailbox,

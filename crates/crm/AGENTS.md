@@ -283,6 +283,9 @@ tools/HTTP/GraphQL surfaces over them.
   their team and email address. Company-less contacts add no independent
   thread-access grant, but hidden ones suppress their team's
   CRM-derived grant for members; independent access grants still apply.
+  For a work address whose sole holder is a manual unfiled contact with that
+  primary address, sync refreshes the existing contact and preserves its company
+  choice. Domain company population still runs on its own.
 - Every address a contact is known by is a row in `crm_contact_emails`, stored
   trimmed and lowercased. `crm_contacts.email` is the primary address, and a
   trigger records it in that table. Find a contact by address through
