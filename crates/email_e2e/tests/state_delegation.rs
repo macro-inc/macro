@@ -610,3 +610,56 @@ async fn outlook_deleting_a_delegate_removes_their_access() -> Result<(), Report
 
     stack.finish().await
 }
+
+/// Deleting a user who was given access to someone else's Outlook mailbox
+/// leaves the mailbox with its owner.
+///
+/// When it fails: deleting the account of a user who connected another
+/// user's Outlook mailbox disconnects that mailbox for its owner and
+/// deletes the owner's synced mail.
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_deleting_a_delegate_leaves_the_owner_their_inbox() -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let alice = stack.user("alice").await?;
+    let inbox = alice.link_outlook().await?;
+    let zed = stack.user("zed").await?;
+    share_with(&stack, &zed, Provider::Outlook, alice.email()).await?;
+
+    stack
+        .send_to_queue(
+            "link-manager",
+            &json!({ "operation": "DeleteUser", "fusionauth_user_id": zed.fusion_id() }),
+        )
+        .await?;
+    email_e2e::eventually(
+        "the deleted user's access to be removed",
+        email_e2e::DEFAULT_TIMEOUT,
+        async || Ok(link_ids(&zed).await?.is_empty().then_some(())),
+    )
+    .await?;
+
+    // Mail still arrives for the owner afterwards.
+    inbox.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "After the delegate left",
+        "Hi.",
+    ))?;
+    wait_for_preview(&alice, "inbox", "After the delegate left").await?;
+    assert!(
+        link_ids(&alice)
+            .await?
+            .contains(&inbox.link_id().to_string())
+    );
+    let disconnecting: bool = sqlx::query_scalar(
+        "SELECT disconnect_requested_at IS NOT NULL FROM email_links WHERE id = $1",
+    )
+    .bind(inbox.link_id())
+    .fetch_one(stack.db())
+    .await?;
+    assert!(
+        !disconnecting,
+        "the owner's inbox is not being disconnected"
+    );
+
+    stack.finish().await
+}
