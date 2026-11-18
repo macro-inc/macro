@@ -6,6 +6,7 @@ import { propertiesServiceClient } from '../../service-clients/service-propertie
 import type { AddPropertyOptionRequest } from '../../service-clients/service-properties/generated/schemas/addPropertyOptionRequest';
 import type { PropertyOption } from '../../service-clients/service-properties/generated/schemas/propertyOption';
 import type { UpdatePropertyOptionRequest } from '../../service-clients/service-properties/generated/schemas/updatePropertyOptionRequest';
+import { listPropertyOptions } from '../../service-clients/service-storage/property-catalog';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
@@ -20,12 +21,7 @@ function propertyOptionsQueryOptions(
 ) {
   return queryOptions({
     queryKey: propertiesKeys.options({ propertyDefinitionId }).queryKey,
-    queryFn: () =>
-      throwOnErr(() =>
-        propertiesServiceClient.getPropertyOptions({
-          definition_id: propertyDefinitionId,
-        })
-      ),
+    queryFn: () => listPropertyOptions(propertyDefinitionId),
     enabled,
     staleTime: 1000 * 60 * 5, // 5 minutes
     placeholderData: EMPTY_OPTIONS,
