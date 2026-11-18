@@ -14,8 +14,9 @@ The fixture runs CodeRabbit-shaped comments (`fixtures.ts`) through the
 production `buildTimeline` and `GithubMessageView`, with hosted traffic blocked.
 It checks that no HTML or marker comments show as text, that `<details>`
 sections start collapsed and open on press (nested ones one level at a time),
-and that icons drop out of bold labels, inline code stays code, and badge
-images in tables read as their alt text.
+and that icons drop out of bold labels, inline code stays code, badge
+images in tables read as their alt text, and an inline comment's long file
+path truncates before its author's name does.
 
 `changes-split.browser.e2e.ts` mounts the real `ChangesSplit` and Changes pane
 with the PR's minimum width over an in-memory changeset: an 800px PR opens

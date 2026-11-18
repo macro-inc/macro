@@ -163,7 +163,7 @@ function GithubCommentMessage(props: {
           placement="header"
           class="flex items-center gap-1 min-w-0 w-full"
         >
-          <Message.SenderName />
+          <Message.SenderName class="max-w-[60%] shrink-0" />
           <Show when={!props.isReply && commentBadge(props.comment)}>
             {(badge) => (
               <span
