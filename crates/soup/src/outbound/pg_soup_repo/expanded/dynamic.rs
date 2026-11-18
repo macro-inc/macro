@@ -1839,6 +1839,130 @@ fn bound_access_semi_join(id_sql: &str, entity_type: &str, source_ids: usize) ->
     )
 }
 
+/// The document arm's access gate for a caller whose grants were counted
+/// ([`DocumentGrants::Counted`]): the semi-join over their distinct granted
+/// ids, with the count as its `LIMIT`. Postgres estimates every source it has
+/// no statistics for at the table's average grant count, so a caller with a
+/// few hundred channels looked like a holder of hundreds of thousands of
+/// grants and got a hash join over a scan of every live document. A constant
+/// `LIMIT` is the one estimate Postgres takes as given, so it now plans
+/// with the real number: one index probe per granted document for a broad
+/// list, the list's own index for a selective one. The `LIMIT` never removes
+/// a row: the count read the same grant rows in the same snapshot
+/// ([`begin_dynamic_query`]), and there are no more distinct ids than rows.
+/// The fence reads the grants by source before the `DISTINCT`; without it,
+/// `DISTINCT ... LIMIT` was answered by walking an entity-ordered index over
+/// all of `entity_access`.
+fn counted_document_access_semi_join(source_ids: usize, grants: u32) -> String {
+    format!(
+        r#"d.id IN (
+                    SELECT DISTINCT held.entity_id::text
+                    FROM (
+                        SELECT ea.entity_id
+                        FROM entity_access ea
+                        WHERE ea.source_id = ANY(${source_ids}::text[])
+                            AND ea.entity_type = 'document'
+                        OFFSET 0
+                    ) held
+                    LIMIT {grants}
+                )"#
+    )
+}
+
+/// Callers holding at most this many document grants have them counted for
+/// [`counted_document_access_semi_join`]. At the limit a broad page costs
+/// about half a second warm, one lookup per granted document. Above it, one
+/// scan of the live documents can cost less than that many random reads, and
+/// the statistics list the sources that hold that many, so the planner
+/// chooses. The search lookup (`get_user_accessible_items`) switches at the
+/// same count.
+const COUNTED_DOCUMENT_GRANTS: u32 = 50_000;
+
+/// How many document grants the caller's sources hold, as far as the
+/// document arm's access gate needs to know.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::outbound::pg_soup_repo) enum DocumentGrants {
+    /// Not counted: the document arm does not gate on the count
+    /// ([`document_arm_gates_on_count`]), or the caller holds more than
+    /// [`COUNTED_DOCUMENT_GRANTS`]. Postgres estimates them.
+    Estimated,
+    /// The grant rows the caller's sources hold, counted in the query's
+    /// snapshot.
+    Counted(u32),
+}
+
+impl DocumentGrants {
+    /// Counts the caller's document grants, up to one past
+    /// [`COUNTED_DOCUMENT_GRANTS`], when the document arm gates on the count.
+    async fn count(
+        connection: &mut PgConnection,
+        filter: &EntityFilterAst,
+        source_ids: &[String],
+    ) -> Result<Self, sqlx::Error> {
+        if !document_arm_gates_on_count(filter) {
+            return Ok(Self::Estimated);
+        }
+        let span = tracing::info_span!(
+            "soup.sql.count_document_grants",
+            grants = tracing::field::Empty
+        );
+        let counted = sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) AS "count!"
+            FROM (
+                SELECT 1
+                FROM entity_access ea
+                WHERE ea.source_id = ANY($1)
+                    AND ea.entity_type = 'document'
+                LIMIT $2
+            ) held
+            "#,
+            source_ids,
+            i64::from(COUNTED_DOCUMENT_GRANTS) + 1
+        )
+        .persistent(false)
+        .fetch_one(connection)
+        .instrument(span.clone())
+        .await?;
+        span.record("grants", counted);
+        Ok(u32::try_from(counted)
+            .ok()
+            .filter(|&grants| grants <= COUNTED_DOCUMENT_GRANTS)
+            .map_or(Self::Estimated, Self::Counted))
+    }
+}
+
+/// Whether the document arm checks access against the caller's counted
+/// grants. It does not when it can return no document, when it checks its
+/// named documents after its filters ([`DocumentArmAccess::AfterFilters`]),
+/// or when its filter requires a folder or a notification
+/// ([`requires_a_folder_or_notification`]).
+fn document_arm_gates_on_count(filter: &EntityFilterAst) -> bool {
+    let document_filter = filter.document_filter.as_deref();
+    DynamicArms::new(filter).documents
+        && !names_few_documents(document_filter)
+        && !requires_a_folder_or_notification(document_filter)
+}
+
+/// Whether every document the filter admits is in a named folder, or has a
+/// notification for the caller. Postgres reads those few documents by index
+/// first and probes each one's grants, which costs less than reading every
+/// grant the caller holds: a folder's page took under a millisecond with the
+/// grants estimated, and up to a tenth of a second with them counted.
+fn requires_a_folder_or_notification(ast: Option<&Expr<DocumentLiteral>>) -> bool {
+    ast.is_some_and(|expr| {
+        expr.collapse_frames(|frame: filter_ast::ExprFrame<bool, _>| match frame {
+            filter_ast::ExprFrame::And(a, b) => a || b,
+            filter_ast::ExprFrame::Or(a, b) => a && b,
+            filter_ast::ExprFrame::Not(_) => false,
+            filter_ast::ExprFrame::Literal(
+                DocumentLiteral::ProjectId(_) | DocumentLiteral::NotificationState(_),
+            ) => true,
+            filter_ast::ExprFrame::Literal(_) => false,
+        })
+    })
+}
+
 /// The most named ids an arm checks access for after its filters. Each
 /// survivor costs a few index probes, so the per-candidate form grows with
 /// the list while the planned semi-join and property bitmaps do not. CRM
@@ -1881,31 +2005,40 @@ struct FencedPage {
     after_cursor: &'static str,
 }
 
-/// How a document arm gates access. A broad arm keeps the flattenable
-/// [`bound_access_semi_join`], so Postgres can hash the caller's grants. An
-/// arm bounded by at most [`MAX_NAMED_CANDIDATES`] named ids reads its
-/// candidates and their own filters behind an `OFFSET` fence and probes
-/// `entity_access` once per survivor afterwards ([`bounded_access_probe`]):
-/// Postgres otherwise checks access first, on every listed id, and pays a
-/// grant lookup for each document the sub-type, file-type and property
-/// filters then reject.
+/// Whether the filter names at most [`MAX_NAMED_CANDIDATES`] documents, and
+/// admits no other.
+fn names_few_documents(ast: Option<&Expr<DocumentLiteral>>) -> bool {
+    named_document_bound(ast).is_some_and(|bound| bound <= MAX_NAMED_CANDIDATES)
+}
+
+/// How a document arm gates access. A broad arm keeps a flattenable
+/// semi-join: [`counted_document_access_semi_join`] when the caller's grants
+/// were counted, [`bound_access_semi_join`] otherwise, so Postgres can hash
+/// the caller's grants or probe them per candidate. An arm bounded by at
+/// most [`MAX_NAMED_CANDIDATES`] named ids reads its candidates and their
+/// own filters behind an `OFFSET` fence and probes `entity_access` once per
+/// survivor afterwards ([`bounded_access_probe`]): Postgres otherwise checks
+/// access first, on every listed id, and pays a grant lookup for each
+/// document the sub-type, file-type and property filters then reject.
 #[derive(Clone, Copy)]
 enum DocumentArmAccess {
     Joined,
+    Counted(u32),
     AfterFilters,
 }
 
 impl DocumentArmAccess {
-    fn new(document_filter: Option<&Expr<DocumentLiteral>>) -> Self {
-        match named_document_bound(document_filter) {
-            Some(bound) if bound <= MAX_NAMED_CANDIDATES => Self::AfterFilters,
-            _ => Self::Joined,
+    fn new(document_filter: Option<&Expr<DocumentLiteral>>, grants: DocumentGrants) -> Self {
+        match grants {
+            _ if names_few_documents(document_filter) => Self::AfterFilters,
+            DocumentGrants::Counted(grants) => Self::Counted(grants),
+            DocumentGrants::Estimated => Self::Joined,
         }
     }
 
     fn property_probe(self) -> PropertyProbe {
         match self {
-            Self::Joined => PropertyProbe::Planned,
+            Self::Joined | Self::Counted(_) => PropertyProbe::Planned,
             Self::AfterFilters => PropertyProbe::PerCandidate,
         }
     }
@@ -1913,7 +2046,7 @@ impl DocumentArmAccess {
     /// Opens the arm, before its top clause.
     fn open(self) -> &'static str {
         match self {
-            Self::Joined => "",
+            Self::Joined | Self::Counted(_) => "",
             Self::AfterFilters => "SELECT * FROM (",
         }
     }
@@ -1924,7 +2057,7 @@ impl DocumentArmAccess {
     fn close(self, page: Option<&FencedPage>, source_ids: usize) -> String {
         let probe = bounded_access_probe("bounded_documents.id", "document", source_ids);
         match (self, page) {
-            (Self::Joined, _) => String::new(),
+            (Self::Joined | Self::Counted(_), _) => String::new(),
             (Self::AfterFilters, None) => {
                 format!(" {PER_CANDIDATE}) bounded_documents WHERE {probe}\n")
             }
@@ -1981,6 +2114,10 @@ fn document_top_where_clause(
             "\n                AND {}",
             bound_access_semi_join("d.id", "document", source_ids)
         ),
+        DocumentArmAccess::Counted(grants) => format!(
+            "\n                AND {}",
+            counted_document_access_semi_join(source_ids, grants)
+        ),
         DocumentArmAccess::AfterFilters => String::new(),
     };
     format!(
@@ -2011,6 +2148,7 @@ fn build_query<'a>(
     filter_ast: &'a EntityFilterAst,
     exclude_frecency: bool,
     sort: DynamicSort,
+    document_grants: DocumentGrants,
     document_ids: &mut DocumentIdArrays,
 ) -> QueryBuilder<'a, Postgres> {
     let sort_method = sort.timestamp_method();
@@ -2114,7 +2252,7 @@ fn build_query<'a>(
         push_union_separator(&mut builder, &mut needs_separator);
         // Subtype is needed only for task-property filters or property-sort namespaces.
         let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
-        let access = DocumentArmAccess::new(document_filter);
+        let access = DocumentArmAccess::new(document_filter, document_grants);
         builder.push(access.open());
         builder.push(document_top_clause(
             sort_method,
@@ -2648,9 +2786,11 @@ pub(crate) struct ExpandedDynamicCursorArgs<'a> {
 /// this query tens of milliseconds to start, so at the default
 /// `parallel_setup_cost` callers with a few thousand grants ran twice as slow
 /// in parallel; the raised cost keeps parallel plans for the largest callers.
+/// Its statements read one snapshot, so the grants [`DocumentGrants::count`]
+/// counts are the rows [`counted_document_access_semi_join`] reads.
 async fn begin_dynamic_query(db: &PgPool) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
     let mut transaction = db
-        .begin()
+        .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         .instrument(tracing::info_span!(
             "soup.pool.acquire",
             pool_size = db.size(),
@@ -2693,12 +2833,15 @@ async fn expanded_dynamic_cursor_soup_hydrated(
 
     let mut transaction = begin_dynamic_query(db).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
+    let document_grants =
+        DocumentGrants::count(&mut transaction, cursor.filter(), &source_ids).await?;
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), false));
     let mut builder = build_query(
         cursor.filter(),
         exclude_frecency,
         *cursor.sort_method(),
+        document_grants,
         &mut document_ids,
     );
     let mut query = builder
@@ -2921,6 +3064,7 @@ fn build_grouped_query<'a>(
     exclude_frecency: bool,
     grouping: &'a GroupingConfig,
     sort: DynamicSort,
+    document_grants: DocumentGrants,
     document_ids: &mut DocumentIdArrays,
 ) -> (QueryBuilder<'a, Postgres>, Option<String>) {
     let sort_method = sort.timestamp_method();
@@ -2967,7 +3111,7 @@ fn build_grouped_query<'a>(
         push_union_separator(&mut builder, &mut needs_separator);
         let document_filter = filter_ast.document_filter.as_deref();
         let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
-        let access = DocumentArmAccess::new(document_filter);
+        let access = DocumentArmAccess::new(document_filter, document_grants);
         builder.push(access.open());
         builder.push(grouped_document_top_clause(
             sort_method,
@@ -3217,6 +3361,8 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
 
     let mut transaction = begin_dynamic_query(db).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
+    let document_grants =
+        DocumentGrants::count(&mut transaction, cursor.filter(), &source_ids).await?;
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), true));
     let (mut query_builder, entity_type_bind) = build_grouped_query(
@@ -3224,6 +3370,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         exclude_frecency,
         &grouping,
         *cursor.sort_method(),
+        document_grants,
         &mut document_ids,
     );
 

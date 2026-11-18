@@ -55,6 +55,20 @@ pub struct ListedServer {
     pub client: Arc<McpServer>,
     /// Tools `tools/list` already returned for `client`.
     pub tools: Vec<Tool>,
+    /// Whether calls carry the caller's trace context to this server.
+    pub trace_context: TraceContext,
+}
+
+/// Whether this toolset puts the caller's W3C trace context in each call's
+/// `_meta` (SEP-414), so the server's work joins the caller's trace.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TraceContext {
+    /// A server we run in this process's trace: the harness's internal MCP.
+    Propagate,
+    /// Any other server: this toolset adds nothing to its requests. (Calls
+    /// that go through the egress proxy get context from the proxy's own
+    /// upstream exchange.)
+    Withhold,
 }
 
 struct RegisteredTool {
@@ -62,6 +76,7 @@ struct RegisteredTool {
     tool: Tool,
     /// The name the server was registered under, before mangling.
     server: Arc<str>,
+    trace_context: TraceContext,
 }
 
 /// Dispatches tool calls to connected MCP servers using name-mangled routing.
@@ -124,6 +139,7 @@ impl RemoteMcpToolSet {
                 &server_name,
                 Arc::new(client),
                 server_tools,
+                TraceContext::Withhold,
                 &subject,
             );
         }
@@ -150,6 +166,7 @@ impl RemoteMcpToolSet {
                 &server.name,
                 server.client,
                 server.tools,
+                server.trace_context,
                 &subject,
             );
         }
@@ -229,7 +246,14 @@ impl RemoteMcpToolSet {
             .get(&key)
             .ok_or_else(|| Error::UnknownTool(name.to_owned()))?;
 
-        let params = CallToolRequestParams::new(entry.tool.name.clone()).with_arguments(arguments);
+        let mut params =
+            CallToolRequestParams::new(entry.tool.name.clone()).with_arguments(arguments);
+        if entry.trace_context == TraceContext::Propagate {
+            genai_telemetry::propagation::inject_mcp(
+                &tracing::Span::current(),
+                params.meta.get_or_insert_with(Default::default),
+            );
+        }
 
         entry
             .peer
@@ -245,6 +269,7 @@ fn register_server(
     server_name: &str,
     client: Arc<McpServer>,
     server_tools: Vec<Tool>,
+    trace_context: TraceContext,
     subject: &Option<String>,
 ) {
     let server: Arc<str> = server_name.into();
@@ -281,6 +306,7 @@ fn register_server(
                 peer: client.peer().clone(),
                 tool,
                 server: Arc::clone(&server),
+                trace_context,
             },
         );
     }
