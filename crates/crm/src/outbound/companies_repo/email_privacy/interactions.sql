@@ -4,6 +4,14 @@
 -- company domain of the team, once for each participant of each thread. Keep
 -- these predicates in sync with both functions; the privacy parity tests
 -- compare this query against them.
+--
+-- Deriving every contributed thread's participants, their domains, and every
+-- domain suffix is the bulk of the per-call buffer traffic on busy mailboxes,
+-- yet that enumeration is only needed to apply `selected` inclusion rules or to
+-- find threads with a blocked participant. Consent mode is fixed per call (one
+-- consent row per link), so for an `all` mailbox whose owner has no blocked
+-- domains at all the enumeration cannot change the result: `thread_messages` is
+-- gated to skip it in that case, which is the common one.
 WITH matching_messages AS (
     SELECT m.id, m.thread_id, m.is_sent, COALESCE(m.internal_date_ts, m.created_at) AS occurred_at
     FROM email_messages m
@@ -48,10 +56,28 @@ WITH matching_messages AS (
         WHERE e.team_id = $1 AND e.user_id = cm.owner
           AND e.thread_id = tl.thread_id AND e.link_id = tl.link_id
     )
+), owner_blocked AS MATERIALIZED (
+    -- Whether blocking can apply at all for this call, from the same three
+    -- sources as crm_email_domain_blocked. Only its emptiness is used, to gate
+    -- the participant enumeration below; it is usually empty.
+    SELECT 1
+    FROM contributing_mailboxes cm
+    JOIN crm_personal_email_blocklist b ON b.team_id = $1 AND b.user_id = cm.owner
+    UNION ALL
+    SELECT 1 FROM crm_blocked_domains b WHERE b.team_id = $1
+    UNION ALL
+    SELECT 1
+    FROM crm_domains d
+    JOIN crm_companies c ON c.id = d.company_id AND c.team_id = $1 AND NOT c.email_sync
+    WHERE d.team_id = $1
 ), thread_messages AS MATERIALIZED (
+    -- Enumerated only when inclusion or blocking needs it: a `selected` mailbox,
+    -- or any mailbox whose owner has blocked domains. An `all` mailbox with no
+    -- blocked domains leaves this (and everything derived from it) empty.
     SELECT ct.thread_id, ct.owner, m.id, m.from_contact_id
     FROM contributed_threads ct
     JOIN email_messages m ON m.thread_id = ct.thread_id AND NOT m.is_draft
+    WHERE ct.mode = 'selected' OR EXISTS (SELECT 1 FROM owner_blocked)
 ), participants AS MATERIALIZED (
     SELECT thread_id, owner, from_contact_id AS contact_id
     FROM thread_messages WHERE from_contact_id IS NOT NULL

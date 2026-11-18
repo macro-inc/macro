@@ -192,7 +192,11 @@ Team view's read of one record's emails (`push_allowed` in
 `crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope.rs`, with the
 contributing inboxes in `dynamic/resolve.rs`) apply the same rules set-based, once
 per call instead of once per thread and participant; change them together, and
-keep their parity tests against the functions passing.
+keep their parity tests against the functions passing. The interaction scan only
+enumerates thread participants when it must — for a `selected` mailbox, or when
+the owner has blocked domains at all — because deriving every participant's
+domain was the bulk of its per-call buffer traffic; an `all` mailbox with no
+blocked domains cannot change the result and skips the enumeration entirely.
 The Team reader calls `crm_email_thread_excluded` for each candidate and each
 competing copy before choosing the conversation's representative.
 The Team view's read takes the inboxes that contributed when its filters resolved
