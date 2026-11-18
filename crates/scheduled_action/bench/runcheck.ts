@@ -4,7 +4,7 @@
 
 import { SQL } from 'bun';
 
-import type { Case, Context, DraftResult, Effects, Fire } from './cases';
+import type { Case, Context, DraftResult, Effects, Fire, SubRoutineMade } from './cases';
 import { restoreStatuses, seedId, setTaskStatus, taskStatus } from './setup';
 import { type Stack, call, sdk } from './stack';
 import { OWNER, PERSON_KEYS, SCENARIO_NAME, userId } from './workspace';
@@ -23,7 +23,25 @@ export type SavedRoutine = {
   created_at: string;
   updated_at: string;
   configuration_revision?: number;
+  sub_routine?: { key?: string | null; paused_by_parent?: boolean } | null;
 };
+
+/** The sub-routines `id`'s runs made, read before it is deleted, which deletes them too. */
+async function subRoutinesOf(at: Stack, token: string, id: string): Promise<SubRoutineMade[]> {
+  const children = await call<SavedRoutine[]>(`${routines(at)}?parent=${id}`, { token });
+  return children.map((child) => ({
+    name: child.name,
+    trigger: child.trigger,
+    // A routine saved as the older single agent task is one Ask AI step.
+    steps: child.task.steps
+      ? child.task.steps.map((step) => String((step as { type?: unknown }).type))
+      : typeof child.task.prompt === 'string' || typeof child.task.user_prompt === 'string'
+        ? ['agent']
+        : [],
+    key: child.sub_routine?.key ?? null,
+    switchedOff: !child.enabled && !child.sub_routine?.paused_by_parent,
+  }));
+}
 
 const routines = (at: Stack) => `${at.harness}/scheduled-action/scheduled-actions`;
 
@@ -284,6 +302,7 @@ export async function runCheck(
     if (runs.length) await Bun.sleep(SETTLE_MS);
     effects = await read(db, context, t0, firedMessage, (id) => sdk(at, owner).tasks.byId(id).content());
     effects.runs = runs.length ? await withReplies(db, await runsSince(at, owner, routine.id, t0)) : runs;
+    effects.subRoutines = await subRoutinesOf(at, owner, routine.id);
   } finally {
     // Deleted first, so putting the task back doesn't fire it again.
     await call(`${routines(at)}/${routine.id}`, { method: 'DELETE', token: owner }).catch(() => undefined);

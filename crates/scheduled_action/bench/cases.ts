@@ -4,7 +4,7 @@
 // request names has exactly one match, except where a case checks a name
 // with none or two.
 
-import { FIXTURE, email, fullName } from './workspace';
+import { FIXTURE, OWNER, email, fullName, tasks } from './workspace';
 
 export { FIXTURE };
 
@@ -90,7 +90,16 @@ export type Effects = {
   tasks: { id: string; name: string; text: string }[];
   /** The owner's new notifications, as text. */
   notifications: string[];
+  /** The sub-routines the routine's runs made (absent in results saved before they were read). */
+  subRoutines?: SubRoutineMade[];
 };
+
+/**
+ * A sub-routine a run made: when it runs, its step kinds, the key it was made
+ * under, and whether it was made switched off (not merely paused with a parent
+ * saved off).
+ */
+export type SubRoutineMade = { name: string; trigger: unknown; steps: string[]; key: string | null; switchedOff: boolean };
 
 export type RunCheck = {
   says: string;
@@ -341,6 +350,20 @@ const stepKind = (kind: 'code' | 'agent'): Expectation => ({
   arms: ['draft'],
 });
 
+/**
+ * Later work is scheduled from code, not left to AI each run. The run check
+ * reads the keys the sub-routines were made under.
+ */
+const schedulesFromCode: Expectation = {
+  says: 'a code step schedules the later work as sub-routines',
+  holds: (draft) =>
+    allSteps(draft).some((step) => {
+      const { type, source } = (step ?? {}) as { type?: unknown; source?: unknown };
+      return type === 'code' && /routines\.create\(/.test(String(source));
+    }),
+  arms: ['draft'],
+};
+
 // ---------- run checks ----------
 
 /** A run that did its steps: a condition that wasn't met still records a success. */
@@ -366,6 +389,81 @@ const said = (effects: Effects) =>
   ].join('\n');
 
 const ran = (effects: Effects) => effects.runs.some(didRun);
+
+type Local = ReturnType<typeof local>;
+
+/**
+ * When a sub-routine runs, on the person's clock, if it runs once on a
+ * `once` trigger: only that kind stops counting toward the 50 a routine may
+ * have once it has run, so a dated `cron` doesn't do.
+ */
+function runsOnceAt(trigger: unknown, timezone: string): Local | undefined {
+  const once = trigger as { type?: unknown; at?: unknown } | null;
+  return once?.type === 'once' && typeof once.at === 'string' ? local(new Date(once.at), timezone) : undefined;
+}
+
+/** Days from the person's today to a date on their clock: 0 is today. */
+const daysFromToday = (date: Local, { now, timezone }: Context) => {
+  const today = local(now, timezone);
+  return Math.round(
+    (Date.UTC(date.year, date.month - 1, date.day) - Date.UTC(today.year, today.month - 1, today.day)) / 86_400_000,
+  );
+};
+
+/**
+ * The run made sub-routines, each keyed, not switched off on its own, run
+ * once at a time `when` accepts and ending in an Ask AI step (a code step
+ * can't tell the owner anything), and `enough` accepts how many days from
+ * today they run.
+ */
+const scheduled =
+  (when: (at: Local, context: Context) => boolean, enough: (days: number[]) => boolean) =>
+  (effects: Effects, context: Context) => {
+    const made = effects.subRoutines ?? [];
+    const times = made.map((routine) => runsOnceAt(routine.trigger, context.timezone));
+    return (
+      ran(effects) &&
+      made.every((routine, index) => {
+        const at = times[index];
+        return (
+          routine.key !== null &&
+          !routine.switchedOff &&
+          at !== undefined &&
+          when(at, context) &&
+          routine.steps.at(-1) === 'agent'
+        );
+      }) &&
+      enough(times.map((at) => (at ? daysFromToday(at, context) : Number.NaN)))
+    );
+  };
+
+/** Days from today the owner's open tasks fall due, as `setup` dates them, one entry per task. */
+const OWNER_OPEN_DUE = Object.values(tasks())
+  .filter(
+    (task) =>
+      task.assignees.includes(OWNER) &&
+      task.status !== 'completed' &&
+      task.status !== 'canceled' &&
+      task.due !== undefined,
+  )
+  .map((task) => task.due as number);
+
+/**
+ * A reminder at 9am the day before each open task of the owner's due in the
+ * next seven days. Tasks due in 2 to 6 days need theirs, one each; a task due
+ * tomorrow may be skipped (9am today may have passed) and one due in 7 days
+ * may fall outside a reading of "the next seven days".
+ */
+const remindsDayBefore = scheduled(
+  (at, context) =>
+    at.hour === 9 &&
+    at.minute === 0 &&
+    OWNER_OPEN_DUE.some((due) => due >= 1 && due <= 7 && due === daysFromToday(at, context) + 1),
+  (days) =>
+    [2, 3, 4, 5, 6].every(
+      (due) => days.filter((day) => day === due - 1).length >= OWNER_OPEN_DUE.filter((each) => each === due).length,
+    ),
+);
 
 /** The run succeeded and something it produced, anywhere, matches every pattern. */
 const reports =
@@ -723,5 +821,39 @@ export const CASES: Case[] = [
       notAny(['engineering-archive', 'eng']),
       nothingUnused,
     ],
+  },
+  {
+    id: 'due-soon-reminders',
+    kind: 'routine',
+    code: true,
+    text: "Every morning at 8, for each of my open tasks due in the next seven days, schedule a reminder that tells me about it at 9am the day before it's due.",
+    expect: [drafted, at(8, 0), schedulesFromCode, nothingUnused],
+    run: {
+      says: "a run schedules a keyed one-time reminder ending in an Ask AI step at 9am the day before each open task of the owner's due in the coming week",
+      fire: execute,
+      holds: remindsDayBefore,
+    },
+  },
+  {
+    id: 'review-check-later',
+    kind: 'routine',
+    code: true,
+    text: 'Whenever a task in the Website Redesign project moves to In review, check on it three days later and tell me if it is still in review.',
+    expect: [
+      drafted,
+      watches('task.status_changed', 'task.property_changed'),
+      uses('Website Redesign'),
+      notAny(['Website Redesign 2025']),
+      schedulesFromCode,
+      nothingUnused,
+    ],
+    run: {
+      says: 'moving the homepage hero task to In review schedules one keyed one-time check, ending in an Ask AI step, three days later',
+      fire: () => ({ type: 'task_status', task: 'task:homepage-hero', status: 'in_review', restore: 'in_progress' }),
+      holds: scheduled(
+        (at, context) => daysFromToday(at, context) === 3,
+        (days) => days.length === 1,
+      ),
+    },
   },
 ];

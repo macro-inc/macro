@@ -139,7 +139,7 @@ each run.
   the answer's size and `routine.draft.lookup` what it found;
   `routine.check` records whether a check passed and kept a draft's
   answer. `DraftContext` still accepts and ignores the `workspace` older
-  web clients send. `bench/` is the drafting eval: 20 requests on a seeded
+  web clients send. `bench/` is the drafting eval: 22 requests on a seeded
   workspace, drafted by Draft it and by a bare agent session on a local
   stack against the live model, timed phase by phase and checked three ways
   (the draft's shape, one run of the routine, a blind judge); `compare`
