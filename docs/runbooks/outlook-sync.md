@@ -148,7 +148,8 @@ their database writes failed. Failed Kafka, SQS or HTTP effects are deferred
 as `effect` instead and don't count here, and neither do values the database
 refuses (`unstorable`). A message reconciliation that hits one stops after 3
 tries; other sync work (catalogs, folder streams, projections) keeps retrying
-it, and no monitor counts it: search the deferral logs for `unstorable`.
+it, and no monitor counts it: search `"mailbox sync work deferred"` and
+`"mailbox sync work failed"` logs for `@defer_reason:unstorable`.
 
 - Group the deferral logs (`"mailbox sync work deferred"`) for
   `persistence` by their database error kind or SQLSTATE: lock timeouts and
