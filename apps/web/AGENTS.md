@@ -258,7 +258,8 @@ keep the labels. On touch, New task is the project's own floating `+ Task`
 pill, which replaces the Tasks view's (that one creates outside any project), and
 read-only viewers get none. Its backend-free regression renders the real row and
 float host with a stand-in for the task filters (the real phone filter trigger,
-one button on desktop) and for the Tasks view's pill:
+widened by a two-digit filter count, one button on desktop) and for the Tasks
+view's pill:
 `bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
 
 Search facet chip sizing, text alignment, and filter interactions have a backend-free

@@ -44,7 +44,7 @@ export function TasksControls() {
       <MobileFilterDrawer
         triggerLabel="Open task filters"
         label="Task list controls"
-        activeCount={0}
+        activeCount={12}
         onClear={() => {}}
       >
         <p>Filters</p>
