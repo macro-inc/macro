@@ -8,6 +8,12 @@ import type { Agent } from '../core/agent.ts';
 
 const server = 'muppet';
 
+/** The code-mode tools' names: the library's own, so they never collide with Macro's MCP tools. */
+export const codeTools = {
+  run: 'RunCapabilityScript',
+  describe: 'DescribeCapabilities',
+} as const;
+
 /**
  * Claude Code as an agent, through the Claude Agent SDK. Each wake starts a
  * session with the request and its event as the prompt, and the system
@@ -26,7 +32,7 @@ export const claudeCode = ({
       name: server,
       tools: [
         tool(
-          'RunCapabilityScript',
+          codeTools.run,
           'Type-check a TypeScript module that exports `async function main({ context, log })`, then run it with your context, and get back what main returned and everything it passed to log, or the type errors that kept it from running. Use it to use your capabilities.',
           { source: z.string() },
           async ({ source }) => {
@@ -38,7 +44,7 @@ export const claudeCode = ({
           }
         ),
         tool(
-          'DescribeCapabilities',
+          codeTools.describe,
           'Read the full docs of capabilities in your catalog, several at once.',
           { names: z.array(z.string()) },
           async ({ names }) => ({

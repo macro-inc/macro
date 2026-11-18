@@ -29,7 +29,8 @@ fails isn't run.
 
 - Owns: the behavior, event, hook, capability and runtime mechanisms; the
   Claude Code agent; utilities any agent can use (schedules, jobs,
-  credentials, browser (a running Chromium's tab over CDP), Macro chat, failures, time).
+  credentials, browser (a running Chromium's tab over CDP), Macro chat, failures, time,
+  greeting (a new agent's first hello to its owner, from the agent's own prompt file)).
 - Not here: any particular agent's prompts, memory or product logic →
   the agent's own repository, started from `../starter-agent`.
 
