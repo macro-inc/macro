@@ -63,6 +63,12 @@
 	}
 }
 
+/* Native Android steps loading indicators (see `.skeleton-shimmer` in
+   index.css): the pulse holds each keyframe, a slow blink. */
+html[data-platform="android"] .calendar-view [data-calendar-loading-placeholder] {
+	animation-timing-function: steps(1);
+}
+
 .calendar-view .fc {
 	color: var(--color-ink);
 	font-family: inherit;
