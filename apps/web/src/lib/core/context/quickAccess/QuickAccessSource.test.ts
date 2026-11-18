@@ -1512,29 +1512,52 @@ describe('Quick Access source integration', () => {
 
 describe('Quick Access shared sources', () => {
   it('rereads history and recent channels only while a list reads the cache', () => {
-    const [open, setOpen] = createSignal(false);
-    const client = new QueryClient();
-    const rendered = renderRetainedList(client, {
-      buckets: ['channel', 'dm', 'note'],
-      enabled: open,
-    });
-    try {
-      mocks.changed?.();
-      expect(mocks.historyReading?.()).toBe(false);
-      expect(mocks.channelRefetch).not.toHaveBeenCalled();
+    const [first, setFirst] = createSignal(false);
+    const [second, setSecond] = createSignal(false);
+    setup((source) => [
+      source.useList('channel', 'dm'),
+      source.useList({ buckets: ['channel', 'dm', 'note'], enabled: first }),
+      source.useList({ buckets: ['note'], enabled: second }),
+    ]);
 
-      setOpen(true);
-      expect(mocks.historyReading?.()).toBe(true);
-      expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+    mocks.changed?.();
+    expect(mocks.historyReading?.()).toBe(false);
+    expect(mocks.channelRefetch).not.toHaveBeenCalled();
 
-      setOpen(false);
-      mocks.changed?.();
-      expect(mocks.historyReading?.()).toBe(false);
-      expect(mocks.channelRefetch).toHaveBeenCalledOnce();
-    } finally {
-      rendered.unmount();
-      client.clear();
-    }
+    setFirst(true);
+    expect(mocks.historyReading?.()).toBe(true);
+    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+
+    setSecond(true);
+    setFirst(false);
+    expect(mocks.historyReading?.()).toBe(true);
+
+    setSecond(false);
+    mocks.changed?.();
+    expect(mocks.historyReading?.()).toBe(false);
+    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a channel renamed after the cached list was read', async () => {
+    const channel = cachedChannel('renamed-channel');
+    mocks.cachedChannels = () => [channel];
+    mocks.channels.mockReturnValue([
+      {
+        id: channel.id,
+        name: 'New name',
+        channel_type: 'public',
+        owner_id: 'owner',
+        participants: [],
+        auto_join_team: false,
+        is_participant: true,
+        created_at: channel.createdAt,
+        updated_at: '2030-01-01T00:00:00.000Z',
+      },
+    ]);
+    const list = setup((source) => source.useList('channel'));
+    await vi.waitFor(() =>
+      expect(list.items().map((item) => item.searchText)).toEqual(['New name'])
+    );
   });
 });
 

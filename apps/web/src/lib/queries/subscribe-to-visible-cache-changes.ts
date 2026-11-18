@@ -23,11 +23,19 @@ export function subscribeToVisibleCacheChanges(
     live?: Accessor<boolean>;
   }
 ): () => void {
-  const visibleRefresh = createVisibleRefresh(refresh, {
-    intervalMs: options?.intervalMs,
-  });
   let disposed = false;
   let missed = false;
+  // A refresh held back while the tab was hidden runs later, so check again.
+  const visibleRefresh = createVisibleRefresh(
+    () => {
+      if (options?.live && !untrack(options.live)) {
+        missed = true;
+        return;
+      }
+      return refresh();
+    },
+    { intervalMs: options?.intervalMs }
+  );
   const unsubscribe = host.onCacheChanged(
     (_revision, changes) => {
       if (disposed) return;

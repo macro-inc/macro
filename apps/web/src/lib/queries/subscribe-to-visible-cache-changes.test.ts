@@ -78,6 +78,28 @@ describe('subscribeToVisibleCacheChanges', () => {
     expect(refresh).toHaveBeenCalledTimes(2);
   });
 
+  it('does not run a refresh held while hidden once live has turned off', async () => {
+    const [live, setLive] = createSignal(true);
+    const { notify, refresh } = createRoot((disposeRoot) => {
+      const subscription = setup(undefined, { live });
+      const unsubscribe = dispose;
+      dispose = () => {
+        unsubscribe?.();
+        disposeRoot();
+      };
+      return subscription;
+    });
+    setVisibility('hidden');
+    notify();
+    setLive(false);
+    setVisibility('visible');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(refresh).not.toHaveBeenCalled();
+
+    setLive(true);
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it('does no work for unrelated hydration, including while hidden', () => {
     const { notify, refresh } = setup(undefined, {
       searchBuckets: () => ['note', 'task'],
