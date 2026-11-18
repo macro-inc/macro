@@ -10,6 +10,7 @@ use agent_session::domain::model::TurnPrompter;
 use ai_toolset::actor::{ToolActor, add_actor_schema};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::{Value, json};
+use tracing::Instrument as _;
 
 /// Preserve the original MCP session/callback capabilities for owner calls.
 /// Other-account calls use independently authenticated, actor-keyed sessions.
@@ -52,7 +53,6 @@ where
                 MACRO_SERVER_SLUG,
                 request["params"]["name"].as_str().unwrap_or_default(),
             );
-        let macro_tools = matches!(destination, McpDestination::Macro);
         let (actor, user) = if listing || public {
             // Keep the session owner's configured catalog. Selecting requester
             // changes execution credentials, not which integrations are advertised.
@@ -100,9 +100,9 @@ where
             session_id,
             acting_user,
             upstream,
+            destination,
             request,
             listing,
-            macro_tools,
         )
         .await
     }
@@ -197,11 +197,19 @@ where
             .actor_mcp
             .clone()
             .ok_or(EgressError::Unauthenticated("actor transport unavailable"))?;
-        match transport
-            .exchange(grant.session, user.clone(), upstream, request)
-            .await
+        match traced_exchange(
+            transport.as_ref(),
+            grant.session,
+            user.clone(),
+            upstream,
+            destination,
+            request,
+        )
+        .await
         {
             Ok(result) => Ok(result),
+            // Refused before it ran: the caller paces and retries it.
+            Err(error @ EgressError::RateLimited { .. }) => Err(error),
             Err(error) if !listing => {
                 tracing::warn!(?error, "actor MCP exchange failed");
                 Ok(tool_error_result(UNKNOWN_OUTCOME.into()))
@@ -272,6 +280,91 @@ where
     }
 }
 
+/// What a call the upstream refused with HTTP 429 says: it did not run.
+const RATE_LIMITED: &str = "The app is rate limiting the selected account; this call did not run. Make fewer calls and try again later.";
+
+/// One MCP exchange with an upstream server, as an outbound span: where it
+/// went, how big it was and how it ended. Never its arguments or result.
+async fn traced_exchange(
+    transport: &dyn crate::domain::ports::ActorMcpTransport,
+    session: crate::domain::model::AgentSessionId,
+    actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+    upstream: UpstreamCall,
+    destination: &McpDestination,
+    request: Value,
+) -> Result<Value, EgressError> {
+    let (app_kind, app_key) = match destination {
+        McpDestination::Connected(slug) => ("connected", slug.as_str()),
+        McpDestination::Custom(key) => ("custom", key.as_str()),
+        McpDestination::Macro => ("macro", MACRO_SERVER_SLUG),
+        McpDestination::Preview => ("preview", "preview"),
+    };
+    let span = tracing::info_span!(
+        "connected_app.mcp_exchange",
+        otel.kind = "client",
+        otel.status_code = tracing::field::Empty,
+        agent_session_id = %session,
+        server.address = upstream.url().host_str().unwrap_or_default(),
+        app.kind = app_kind,
+        app.key = app_key,
+        mcp.method = request["method"].as_str().unwrap_or_default(),
+        mcp.request_bytes = tracing::field::Empty,
+        mcp.response_bytes = tracing::field::Empty,
+        mcp.outcome = tracing::field::Empty,
+    );
+    // Sizing serializes the JSON again; skip it when nobody records the span.
+    let traced = !span.is_disabled();
+    if traced {
+        span.record("mcp.request_bytes", json_bytes(&request));
+    }
+    let result = transport
+        .exchange(session, actor, upstream, request)
+        .instrument(span.clone())
+        .await;
+    match &result {
+        Ok(value) => {
+            if traced {
+                span.record("mcp.response_bytes", json_bytes(value));
+            }
+            let outcome = if value["isError"] == Value::Bool(true) {
+                "tool_error"
+            } else {
+                "ok"
+            };
+            span.record("mcp.outcome", outcome);
+        }
+        Err(error) => {
+            // The limiter's own `mcp.call_budget` span, inside this one,
+            // records its waits, attempts and refusals.
+            let outcome = if matches!(error, EgressError::RateLimited { .. }) {
+                "rate_limited"
+            } else {
+                "upstream_error"
+            };
+            span.record("mcp.outcome", outcome);
+            span.record("otel.status_code", "ERROR");
+        }
+    }
+    result
+}
+
+/// The length of `value` as JSON, without keeping the text.
+fn json_bytes(value: &Value) -> i64 {
+    struct Counter(usize);
+    impl std::io::Write for Counter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0 += bytes.len();
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut counter = Counter(0);
+    let _ = serde_json::to_writer(&mut counter, value);
+    i64::try_from(counter.0).unwrap_or(i64::MAX)
+}
+
 /// What a failed call says: it may have run upstream before failing.
 const UNKNOWN_OUTCOME: &str = "The selected account's tool could not complete. Its outcome may be unknown; check state before retrying writes.";
 
@@ -280,19 +373,24 @@ async fn exchange_result(
     session: crate::domain::model::AgentSessionId,
     actor: macro_user_id::user_id::MacroUserIdStr<'static>,
     upstream: UpstreamCall,
+    destination: &McpDestination,
     request: Value,
     listing: bool,
-    macro_tools: bool,
 ) -> Result<ProxyResponse, EgressError> {
+    let macro_tools = matches!(destination, McpDestination::Macro);
     let id = request["id"].clone();
-    let mut result = match transport.exchange(session, actor, upstream, request).await {
-        Ok(result) => result,
-        Err(error) if !listing => {
-            tracing::warn!(?error, "actor MCP exchange failed");
-            return Ok(tool_result_response(id, UNKNOWN_OUTCOME.into()));
-        }
-        Err(error) => return Err(error),
-    };
+    let mut result =
+        match traced_exchange(transport, session, actor, upstream, destination, request).await {
+            Ok(result) => result,
+            Err(EgressError::RateLimited { .. }) if !listing => {
+                return Ok(tool_result_response(id, RATE_LIMITED.into()));
+            }
+            Err(error) if !listing => {
+                tracing::warn!(?error, "actor MCP exchange failed");
+                return Ok(tool_result_response(id, UNKNOWN_OUTCOME.into()));
+            }
+            Err(error) => return Err(error),
+        };
     if listing && let Some(tools) = result["tools"].as_array_mut() {
         tools.retain(|tool| {
             !tool["inputSchema"]["properties"]

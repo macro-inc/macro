@@ -179,7 +179,7 @@ async fn a_task_brief_names_the_current_status_priority_due_date_and_assignees()
         vec![
             ("/internal/documents/task-1/basic", 200, task()),
             (
-                "/markdown/task-1?target=external",
+                "/markdown/task-1?target=internal",
                 200,
                 json!({"data": "Reproduce the race, then add a regression test."}),
             ),
@@ -241,7 +241,7 @@ async fn unavailable_live_content_is_retried_instead_of_starting_without_a_descr
         vec![
             ("/internal/documents/task-1/basic", 200, task()),
             (
-                "/markdown/task-1?target=external",
+                "/markdown/task-1?target=internal",
                 503,
                 json!({"error": "temporarily unavailable"}),
             ),
@@ -262,7 +262,7 @@ async fn unavailable_properties_are_retried_instead_of_starting_without_them() {
         vec![
             ("/internal/documents/task-1/basic", 200, task()),
             (
-                "/markdown/task-1?target=external",
+                "/markdown/task-1?target=internal",
                 200,
                 json!({"data": "Reproduce the race, then add a regression test."}),
             ),

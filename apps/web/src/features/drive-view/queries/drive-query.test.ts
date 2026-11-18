@@ -23,7 +23,6 @@ function request(
     selection: selected,
     userId,
     facetContext,
-    snippetsEnabled: true,
   });
 }
 
@@ -48,14 +47,6 @@ describe('buildDriveQuery', () => {
     expect(result.body.ef).toEqual({ l: { ThreadId: NIL_UUID } });
     expect(result.body.cf).toEqual({ l: { cid: NIL_UUID } });
     expect(result.body.pf).toEqual({ l: { pid: NIL_UUID } });
-  });
-
-  it('excludes disabled snippets before paginating the list', () => {
-    const result = buildDriveQuery({ selection, userId: 'me', facetContext });
-    expect(JSON.stringify(result.body.df)).toContain(
-      '"!":{"l":{"dst":"snippet"}}'
-    );
-    expect(JSON.stringify(request().body.df)).not.toContain('snippet');
   });
 
   it('drops owned scoping outside default and maps attachment scope', () => {

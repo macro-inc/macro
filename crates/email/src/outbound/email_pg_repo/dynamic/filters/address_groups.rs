@@ -89,12 +89,16 @@ pub(super) fn build(
     let mut contact_ctes = Vec::new();
     let mut branches = Vec::new();
     for (value, kinds) in partials {
+        let value = format!("%{}%", escape_like_pattern(value));
+        let contact_query = if resolved.fenced_text_matches() {
+            let mut predicate = SqlFragment::raw("c.email_address ILIKE ");
+            predicate.extend(SqlFragment::bind_string(value));
+            fenced_contacts(predicate, link_scope.unwrap_or_default())
+        } else {
+            matching_contacts_cte_body("c.email_address ILIKE ", value, link_scope)
+        };
         push_contact_group(
-            matching_contacts_cte_body(
-                "c.email_address ILIKE ",
-                format!("%{}%", escape_like_pattern(value)),
-                link_scope,
-            ),
+            contact_query,
             &kinds,
             facts,
             link_scope,
@@ -119,7 +123,15 @@ pub(super) fn build(
             }
         }
         if !members.domains.is_empty() {
-            let contact_query = domain_contacts(members.domains, link_scope);
+            let contact_query = if resolved.fenced_text_matches() {
+                let mut predicate =
+                    SqlFragment::raw("LOWER(SPLIT_PART(c.email_address, '@', 2)) = ANY(");
+                predicate.extend(SqlFragment::bind_string_array(members.domains));
+                predicate.push_raw(")");
+                fenced_contacts(predicate, link_scope.unwrap_or_default())
+            } else {
+                domain_contacts(members.domains, link_scope)
+            };
             push_contact_group(
                 contact_query,
                 &kinds,
@@ -131,6 +143,16 @@ pub(super) fn build(
         }
     }
     (contact_ctes, branches)
+}
+
+/// Read only the requested mailboxes before a text predicate. A global
+/// domain index can contain millions of unrelated mailboxes' matches.
+fn fenced_contacts(predicate: SqlFragment, links: &[Uuid]) -> SqlFragment {
+    let mut query = SqlFragment::raw("SELECT c.id FROM unnest(");
+    query.extend(SqlFragment::bind_uuid_array(links.to_vec()));
+    query.push_raw("::uuid[]) inbox(link_id) CROSS JOIN LATERAL (SELECT id, email_address FROM email_contacts WHERE link_id = inbox.link_id OFFSET 0) c WHERE ");
+    query.extend(predicate);
+    query
 }
 
 fn domain_contacts(domains: Vec<String>, link_scope: Option<&[Uuid]>) -> SqlFragment {
@@ -199,6 +221,7 @@ pub(super) fn message_predicate(
                     &members.domains,
                     None,
                     resolved.text_match_links(),
+                    resolved.fenced_text_matches(),
                 ));
             }
             if kinds.any_recipient() {
@@ -206,6 +229,7 @@ pub(super) fn message_predicate(
                     &members.domains,
                     Some(kinds),
                     resolved.text_match_links(),
+                    resolved.fenced_text_matches(),
                 ));
             }
         }
@@ -220,12 +244,20 @@ fn message_domains(
     domains: &[String],
     recipients: Option<AddressKinds>,
     link_scope: Option<&[Uuid]>,
+    fenced: bool,
 ) -> SqlFragment {
-    let mut predicate = match recipients {
-        None => SqlFragment::raw(
+    let mut predicate = match (recipients, fenced) {
+        (None, true) => SqlFragment::raw(
+            "EXISTS (SELECT 1 FROM (SELECT email_address, link_id FROM email_contacts WHERE id = m.from_contact_id OFFSET 0) c WHERE ",
+        ),
+        (Some(kinds), true) => SqlFragment::raw(format!(
+            "EXISTS (SELECT 1 FROM (SELECT mr.contact_id FROM email_message_recipients mr WHERE mr.message_id = m.id{} OFFSET 0) matched CROSS JOIN LATERAL (SELECT email_address, link_id FROM email_contacts WHERE id = matched.contact_id OFFSET 0) c WHERE ",
+            kinds.recipient_type_sql()
+        )),
+        (None, false) => SqlFragment::raw(
             "EXISTS (SELECT 1 FROM email_contacts c WHERE c.id = m.from_contact_id AND ",
         ),
-        Some(kinds) => SqlFragment::raw(format!(
+        (Some(kinds), false) => SqlFragment::raw(format!(
             "EXISTS (SELECT 1 FROM email_message_recipients mr JOIN email_contacts c ON c.id = mr.contact_id WHERE mr.message_id = m.id{} AND ",
             kinds.recipient_type_sql()
         )),

@@ -87,15 +87,6 @@ impl UiTurns for Turn {
     }
 }
 
-struct Flag(bool);
-
-#[async_trait]
-impl UiNavigationFlag for Flag {
-    async fn enabled(&self, _: &MacroUserIdStr<'static>) -> bool {
-        self.0
-    }
-}
-
 /// Counts per scope, as the shared counter does, all-or-nothing.
 #[derive(Default)]
 struct Budgets(Mutex<HashMap<String, u32>>);
@@ -184,11 +175,10 @@ struct Harness {
     execution: ExecutionId,
 }
 
-fn harness(prompter: Option<TurnPrompter>, flag: bool, connections: u64) -> Harness {
+fn harness(prompter: Option<TurnPrompter>, connections: u64) -> Harness {
     harness_sharing(
         Uuid::from_u128(TURN),
         prompter,
-        flag,
         Gateway::with(connections),
         Arc::new(Budgets::default()),
     )
@@ -197,7 +187,6 @@ fn harness(prompter: Option<TurnPrompter>, flag: bool, connections: u64) -> Harn
 fn harness_sharing(
     turn: Uuid,
     prompter: Option<TurnPrompter>,
-    flag: bool,
     gateway: Arc<Gateway>,
     budgets: Arc<Budgets>,
 ) -> Harness {
@@ -207,7 +196,6 @@ fn harness_sharing(
             store: Arc::new(Store(record(execution, turn))),
             active: Arc::new(Active(Some(turn))),
             turns: Arc::new(Turn(prompter)),
-            flag: Arc::new(Flag(flag)),
             budgets,
             delivery: gateway.clone(),
         },
@@ -251,7 +239,7 @@ impl Harness {
 
 #[tokio::test]
 async fn a_prompt_typed_in_a_tab_opens_in_that_tab_only() {
-    let harness = harness(Some(typed_in_tab()), true, 2);
+    let harness = harness(Some(typed_in_tab()), 2);
 
     let outcome = harness.open(DOC).await;
 
@@ -273,6 +261,20 @@ async fn a_prompt_typed_in_a_tab_opens_in_that_tab_only() {
     assert_eq!(frame.kind, UiCommandKind::Open);
 }
 
+/// A program that rewrote a prompt the owner typed in a tab opens a Program
+/// turn that still names the tab; it never shows anything there.
+#[tokio::test]
+async fn a_program_turn_never_sends_a_command() {
+    let prompter = TurnPrompter {
+        kind: PrompterKind::Program,
+        ..typed_in_tab()
+    };
+    let harness = harness(Some(prompter), 1);
+
+    assert_eq!(harness.open(DOC).await, UiCommandOutcome::NoClient);
+    assert!(harness.gateway.frames().is_empty());
+}
+
 #[tokio::test]
 async fn a_system_turn_never_sends_a_command() {
     // Routines' notification batches, triggers and email-triggered turns are
@@ -281,7 +283,7 @@ async fn a_system_turn_never_sends_a_command() {
         kind: PrompterKind::System,
         ..typed_in_tab()
     };
-    let harness = harness(Some(prompter), true, 1);
+    let harness = harness(Some(prompter), 1);
 
     assert_eq!(harness.open(DOC).await, UiCommandOutcome::NoClient);
     assert!(harness.gateway.frames().is_empty());
@@ -295,7 +297,7 @@ async fn a_turn_nobody_typed_in_a_tab_never_sends_a_command() {
         client: None,
         ..typed_in_tab()
     };
-    let harness = harness(Some(prompter), true, 1);
+    let harness = harness(Some(prompter), 1);
 
     assert_eq!(harness.open(DOC).await, UiCommandOutcome::NoClient);
     assert!(harness.gateway.frames().is_empty());
@@ -307,7 +309,7 @@ async fn a_tab_from_an_earlier_turn_is_not_reused() {
         action_id: AgentActionId::from_uuid(Uuid::from_u128(TURN + 1)),
         ..typed_in_tab()
     };
-    let harness = harness(Some(prompter), true, 1);
+    let harness = harness(Some(prompter), 1);
 
     assert_eq!(harness.open(DOC).await, UiCommandOutcome::NoClient);
     assert!(harness.gateway.frames().is_empty());
@@ -315,7 +317,7 @@ async fn a_tab_from_an_earlier_turn_is_not_reused() {
 
 #[tokio::test]
 async fn a_closed_or_foreign_route_is_refused_before_sending() {
-    let harness = harness(Some(typed_in_tab()), true, 1);
+    let harness = harness(Some(typed_in_tab()), 1);
     let refused = [
         "https://evil.example.com/app/md/x",
         "//evil.example.com/drive/md/x",
@@ -347,7 +349,7 @@ async fn a_closed_or_foreign_route_is_refused_before_sending() {
 
 #[tokio::test]
 async fn open_routes_pass_with_their_query() {
-    let harness = harness(Some(typed_in_tab()), true, 1);
+    let harness = harness(Some(typed_in_tab()), 1);
 
     for path in [
         "/md/0190f5a4-0000-7000-8000-000000000001",
@@ -363,7 +365,7 @@ async fn open_routes_pass_with_their_query() {
 
 #[tokio::test]
 async fn only_the_panes_own_search_is_sent() {
-    let harness = harness(Some(typed_in_tab()), true, 1);
+    let harness = harness(Some(typed_in_tab()), 1);
 
     let outcome = harness
         .open("/channels/c1?channel_message_id=m1&s0.channels.messageId=m1")
@@ -376,7 +378,7 @@ async fn only_the_panes_own_search_is_sent() {
 
 #[tokio::test]
 async fn a_turn_sends_at_most_three_panes() {
-    let harness = harness(Some(typed_in_tab()), true, 1);
+    let harness = harness(Some(typed_in_tab()), 1);
 
     for _ in 0..MAX_NEW_PANES_PER_TURN {
         assert!(matches!(
@@ -409,7 +411,6 @@ async fn a_person_gets_at_most_thirty_commands_a_minute_across_sessions() {
                 action_id: turn,
                 ..typed_in_tab()
             }),
-            true,
             gateway.clone(),
             budgets.clone(),
         );
@@ -425,28 +426,15 @@ async fn a_person_gets_at_most_thirty_commands_a_minute_across_sessions() {
 }
 
 #[tokio::test]
-async fn navigation_turned_off_sends_nothing() {
-    let harness = harness(Some(typed_in_tab()), false, 1);
-
-    assert_eq!(
-        harness.open(DOC).await,
-        UiCommandOutcome::Declined {
-            reason: UiDeclineReason::TurnedOff
-        }
-    );
-    assert!(harness.gateway.frames().is_empty());
-}
-
-#[tokio::test]
 async fn a_tab_that_is_not_connected_is_no_client() {
-    let harness = harness(Some(typed_in_tab()), true, 0);
+    let harness = harness(Some(typed_in_tab()), 0);
 
     assert_eq!(harness.open(DOC).await, UiCommandOutcome::NoClient);
 }
 
 #[tokio::test]
 async fn only_the_account_the_execution_acts_as_may_send() {
-    let harness = harness(Some(typed_in_tab()), true, 1);
+    let harness = harness(Some(typed_in_tab()), 1);
 
     let result = harness.open_as(other_person(), DOC).await;
 

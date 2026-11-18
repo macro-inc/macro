@@ -356,6 +356,9 @@ Object.assign(window, {
   },
 });
 
+// Pipelines are off here, so the headers never render this.
+export const AddToPipeline = () => null;
+
 export const useFeatureFlag = () => () => ({ enabled: true, loading: false });
 
 declare global {

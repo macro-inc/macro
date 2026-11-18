@@ -27,7 +27,8 @@ through the same service.
   `SignedUnsubscribeLinks` signs `domain/models/signing.rs` unsubscribe
   placeholders per recipient), `repository.rs`
   (owned Postgres queries), `withdrawal.rs` (durable suppression),
-  `item_preferences.rs` (owner-scoped single and atomic bulk snooze/mute).
+  `item_preferences.rs` (owner-scoped single and atomic bulk snooze/mute, and
+  a channel's mentions-only level).
 - `outbound/notification_consumer/health.rs`: periodic per-instance Kafka
   backlog and telemetry-health logs; offsets stay uncommitted.
 - `domain/retention.rs` + `outbound/retention.rs`: bounded 30-day cleanup.
@@ -86,6 +87,14 @@ through the same service.
   compile test-only code, while CI rejects its warnings.
 
 ## Gotchas
+
+- A `user_notification_item_unsubscribe` row with `mentions_only` silences its
+  channel for every event type except a direct mention
+  (`item_preferences::is_direct_mention`, today `channel_mention`). Ingress
+  drops the recipient before the notification row and queue messages exist,
+  so web, push and unread state agree. A new event type that names its
+  recipient directly must be added to `is_direct_mention`, or mentions-only
+  channels stay silent for it. Mute and snooze writes clear the flag.
 
 - `user_notification` carries copies of its notification's `event_item_type`,
   `event_item_id` and `notification_event_type`. Entity reads find a viewer's

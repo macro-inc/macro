@@ -144,8 +144,8 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
   readonly sharePermissions = this.field('sharePermission');
 
   /**
-   * The description as GitHub-flavored Markdown; empty while no one has opened
-   * or written it.
+   * The description as Macro's lossless Markdown, with chips, tables and other
+   * rich content as `<m-*>` tags; empty while no one has opened or written it.
    *
    * @readonly
    */

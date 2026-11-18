@@ -1018,19 +1018,18 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         .await
         .context("failed to read the turn prompter")?;
         Ok(row.and_then(|row| {
-            row.turn_action_id.map(|action_id| TurnPrompter {
-                kind: if row.turn_prompter_kind == "system" {
-                    crate::domain::model::PrompterKind::System
-                } else {
-                    crate::domain::model::PrompterKind::User
-                },
-                action_id: agent_runtime_protocol::domain::action::AgentActionId::from_uuid(
-                    action_id,
-                ),
-                user: row.turn_prompter,
-                client: row
-                    .turn_prompter_client
-                    .map(crate::domain::model::UiClientId::from_uuid),
+            row.turn_action_id.map(|action_id| {
+                let kind = crate::domain::model::PrompterKind::from_stored(&row.turn_prompter_kind);
+                TurnPrompter {
+                    kind,
+                    action_id: agent_runtime_protocol::domain::action::AgentActionId::from_uuid(
+                        action_id,
+                    ),
+                    user: row.turn_prompter,
+                    client: row
+                        .turn_prompter_client
+                        .map(crate::domain::model::UiClientId::from_uuid),
+                }
             })
         }))
     }

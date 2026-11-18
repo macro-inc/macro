@@ -108,3 +108,48 @@ fn async_delivery_links_to_producer_without_replacing_its_own_parent() {
     assert_eq!(linked.trace_state(), expected.trace_state());
     assert!(linked.is_remote());
 }
+
+#[test]
+fn mcp_meta_carries_context_under_the_sep_414_keys() {
+    opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+    let _guard = tracing::subscriber::set_default(subscriber);
+    let caller = tracing::info_span!(parent: None, "caller");
+    let expected = caller.context().span().span_context().clone();
+    let mut meta = Map::from_iter([("progressToken".to_owned(), json!(7))]);
+    inject_mcp(&caller, &mut meta);
+    assert!(meta["traceparent"].is_string(), "{meta:?}");
+    assert_eq!(meta["progressToken"], json!(7));
+
+    let wire = serde_json::to_string(&meta).expect("serialize metadata");
+    let received: Map<String, Value> = serde_json::from_str(&wire).expect("deserialize");
+    let server = tracing::info_span!(parent: None, "server");
+    set_parent_from_mcp(&server, &received);
+    drop(server);
+    drop(caller);
+    provider.force_flush().expect("flush");
+    let spans = exporter.get_finished_spans().expect("spans");
+    let server = spans.iter().find(|span| span.name == "server").unwrap();
+    assert_eq!(server.span_context.trace_id(), expected.trace_id());
+    assert_eq!(server.parent_span_id, expected.span_id());
+
+    inject_mcp(&tracing::Span::none(), &mut meta);
+    assert!(
+        !meta.contains_key("traceparent"),
+        "stale context is cleared"
+    );
+    assert_eq!(meta["progressToken"], json!(7));
+
+    let orphan = tracing::info_span!(parent: None, "orphan");
+    let before = orphan.context().span().span_context().trace_id();
+    set_parent_from_mcp(
+        &orphan,
+        &Map::from_iter([("traceparent".to_owned(), json!("bad"))]),
+    );
+    assert_eq!(orphan.context().span().span_context().trace_id(), before);
+}

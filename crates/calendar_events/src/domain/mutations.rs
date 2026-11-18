@@ -849,7 +849,9 @@ fn provider_error(error: CalendarProviderError) -> CalendarMutationError {
         CalendarProviderErrorKind::ReauthRequired => {
             CalendarMutationError::ReauthRequired(error.to_string())
         }
-        CalendarProviderErrorKind::Transient | CalendarProviderErrorKind::SyncTokenExpired => {
+        CalendarProviderErrorKind::Transient
+        | CalendarProviderErrorKind::SyncTokenExpired
+        | CalendarProviderErrorKind::Deferred => {
             CalendarMutationError::Retryable(error.to_string())
         }
         CalendarProviderErrorKind::Permanent | CalendarProviderErrorKind::PushUnsupported => {

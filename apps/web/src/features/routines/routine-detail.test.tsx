@@ -169,9 +169,7 @@ vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
   },
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: (flag: { key: string }) => () => ({
-    enabled: flag.key === 'enable-routine-conditions',
-  }),
+  useFeatureFlag: () => () => ({ enabled: false }),
 }));
 vi.mock('./routine-ai-composer', () => ({
   RoutineAiComposer: () => null,

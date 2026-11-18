@@ -1365,6 +1365,7 @@ async fn mcp_tool_calls_rebuild_identically_and_the_session_releases() {
             name: server_name.to_owned(),
             client: Arc::new(client.expect("the client connects")),
             tools: vec![tool],
+            trace_context: mcp_toolset::TraceContext::Withhold,
         });
     }
     let remote = mcp_toolset::RemoteMcpToolSet::from_listed(listed, None);

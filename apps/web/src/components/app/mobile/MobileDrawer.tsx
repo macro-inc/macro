@@ -48,7 +48,8 @@ const FOCUSABLE_SELECTOR =
  * Drop-in replacement for `Drawer.Content` that handles mobile keyboard
  * behaviour automatically:
  *
- * - Keeps an 8px gutter above the screen edge or virtual keyboard.
+ * - Bottom sheets keep an 8px gutter above the screen edge or keyboard.
+ * - Left/right sheets fill their host bounds and slide along that edge.
  * - Clamps its height to the visible viewport when the keyboard opens.
  * - When a `MobileDrawer.ScrollBody` is present, hands the safe-area padding
  *   to it so the scroll viewport reaches the drawer's bottom edge
@@ -75,6 +76,9 @@ function MobileDrawerContent(
     'opaque',
   ]);
 
+  const drawer = Drawer.useContext(props.contextId);
+  const horizontal = () =>
+    drawer.side() === 'left' || drawer.side() === 'right';
   const maxHeight = () =>
     Math.min(100, local.maxHeight ?? Math.max(80, local.targetHeight ?? 0));
   const targetHeight = () =>
@@ -99,11 +103,21 @@ function MobileDrawerContent(
         }}
         class={cn(
           'portal-scope',
-          'fixed! inset-x-2 bottom-[calc(var(--virtual-keyboard-height,0px)+8px)] z-modal mobile-sheet glass flex flex-col max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-var(--virtual-keyboard-height,0px)-16px))] data-transitioning:transition-transform data-transitioning:duration-200 ease-out motion-reduce:transition-none',
+          'fixed! z-modal glass flex flex-col data-transitioning:transition-transform data-transitioning:duration-200 ease-out motion-reduce:transition-none',
+          // Sheets stay inside the horizontal safe area, like the app frame:
+          // the iPhone Duo's control column and landscape notches are there.
+          horizontal()
+            ? 'inset-y-0 h-full w-80 max-w-[calc(100vw-var(--safe-left,0px)-var(--safe-right,0px))] border-edge-frame shadow-menu [--mobile-sheet-safe-padding:var(--safe-bottom,0px)]'
+            : 'left-[calc(var(--safe-left,0px)+8px)] right-[calc(var(--safe-right,0px)+8px)] bottom-[calc(var(--virtual-keyboard-height,0px)+8px)] mobile-sheet max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-var(--virtual-keyboard-height,0px)-16px))]',
+          horizontal() &&
+            (drawer.side() === 'left'
+              ? 'left-(--safe-left) border-r'
+              : 'right-(--safe-right) border-l'),
           local.opaque
             ? 'bg-menu [--color-dialog:var(--color-menu)]'
             : 'bg-menu-glass [--color-dialog:var(--color-menu-glass)]',
-          targetHeight() != null ? 'h-(--drawer-h)' : 'h-fit',
+          !horizontal() &&
+            (targetHeight() != null ? 'h-(--drawer-h)' : 'h-fit'),
           virtualKeyboardVisible()
             ? 'pb-4 has-[[data-drawer-scroll-body]]:pb-0'
             : 'pb-[max(16px,var(--mobile-sheet-safe-padding))] has-[[data-drawer-scroll-body]]:pb-0',

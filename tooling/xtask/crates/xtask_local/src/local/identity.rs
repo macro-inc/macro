@@ -27,6 +27,13 @@ pub const MACRO_API_TOKEN_PUBLIC_KEY: &str =
 pub const MACRO_API_TOKEN_PRIVATE_KEY: &str =
     include_str!("identity/macro-api-token.local.private.pem");
 
+/// An RSA key for signing email attachment links. The stack's storage checks
+/// no signature, but the email service signs every link it hands out. A test
+/// fixture, not a secret.
+pub const ATTACHMENT_LINK_SIGNING_KEY: &str = include_str!(
+    "../../../../../../crates/call/src/outbound/s3_recording_storage/test_private_key.pem"
+);
+
 /// The populate-JWT lambda id (the unlicensed local variant).
 pub const POPULATE_JWT_LAMBDA_ID: &str = "a7f3e8d2-4b91-4c5a-9e6f-1a2b3c4d5e6f";
 

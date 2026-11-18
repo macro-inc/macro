@@ -98,6 +98,7 @@ fn emits_required_keys() {
         // Boot-blocking stubs — service config loaders require these even in a
         // no-doppler stack (see `BootStubEnv`).
         "POSTHOG_API_KEY",
+        "POSTHOG_FEATURE_FLAGS_SECURE_API_KEY",
         "REDIS_HOST",
         "MACRO_DB_URL",
         "INTERNAL_API_KEY",
@@ -125,7 +126,6 @@ fn emits_required_keys() {
         "MACRO_API_TOKEN_PRIVATE_SECRET_KEY",
         "MACRO_API_TOKEN_EXPIRY_SECONDS",
         "GMAIL_GCP_QUEUE",
-        "EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL",
         "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY",
         "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID",
         "APPLE_BUNDLE_ID",
@@ -147,6 +147,7 @@ fn emits_required_keys() {
         "LIVEKIT_API_SECRET",
         "OPENAI_API_KEY",
         "FIREWORK_API_KEY",
+        "CEREBRAS_API_KEY",
         "GOOGLE_GENERATIVE_AI_API_KEY",
         "COHERE_API_KEY",
         "CAL_WEBHOOK_SECRET_KEY",
@@ -626,6 +627,13 @@ fn named_instance_separates_browser_and_container_aws_endpoints() {
     assert_eq!(
         env["DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL"],
         format!("{}/local-storage/doc-storage", env["FRONTEND_ORIGIN"])
+    );
+    assert_eq!(
+        env["EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL"],
+        format!(
+            "{}/local-storage/macro-email-attachments",
+            env["FRONTEND_ORIGIN"]
+        )
     );
 }
 

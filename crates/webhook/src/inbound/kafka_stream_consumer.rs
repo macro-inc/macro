@@ -11,12 +11,11 @@ use crate::domain::ingestion::{
     user_event_subject,
 };
 use crate::domain::ports::WebhookWorkspaceResolver;
-use crate::domain::stream::StreamCandidateEvent;
+use crate::domain::stream::{StreamCandidateEvent, StreamFeed};
 use crate::topics::DeclaredMacroEvent;
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
 use macro_event_broker::{KafkaConsumerAdapter, MacroEvent as _, MacroEventConsumerService};
 use std::time::Duration;
-use tokio::sync::broadcast;
 
 /// Time allowed for topic metadata lookup.
 const METADATA_TIMEOUT: Duration = Duration::from_secs(10);
@@ -31,7 +30,7 @@ type WebhookStreamKafkaConsumer =
 /// workspaces, once per event rather than once per subscriber.
 pub async fn run_webhook_stream_consumer<R: WebhookWorkspaceResolver>(
     brokers: &str,
-    sender: &broadcast::Sender<StreamCandidateEvent>,
+    feed: &StreamFeed,
     workspace_resolver: &R,
 ) -> Result<(), rootcause::Report> {
     let consumer = KafkaEventConsumer::<Ungrouped>::from_env(brokers)
@@ -51,10 +50,7 @@ pub async fn run_webhook_stream_consumer<R: WebhookWorkspaceResolver>(
             }
         };
         match candidate_from(&decoded, workspace_resolver).await {
-            Ok(Some(candidate)) => {
-                // Having no active subscribers is expected; SSE delivery is best-effort.
-                let _ = sender.send(candidate);
-            }
+            Ok(Some(candidate)) => feed.publish(candidate),
             Ok(None) => {}
             Err(error) => {
                 tracing::warn!(error = ?error, "skipping non-streamable broker event");

@@ -115,10 +115,12 @@ const postReads = new Set([
   'storage.postItemsSoup',
   'storage.postItemsSoupAst',
   'storage.postItemsSoupAstGrouped',
+  'storage.previewCrmEmailRules',
   'storage.previewCrmRecords',
   'storage.previewSmartTag',
   'storage.queryCrmPipelineRows',
   'storage.taskSimilaritySearchHandler',
+  'storage.validateCrmEmailRules',
   'unfurl.getUnfurlBulk',
 ]);
 const labels: Record<string, string> = {
