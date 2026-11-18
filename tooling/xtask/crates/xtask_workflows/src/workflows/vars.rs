@@ -38,7 +38,7 @@ secret!(SEGMENT_WRITE_KEY_PRODUCTION);
 
 /// Webhook that posts to the Macro Alerts channel, a repo *variable*; it takes
 /// [`MACRO_BUILD_ALERT_BOT_TOKEN`] in an `x-macro-channel-bot-token` header.
-/// The hand-written `alert-native-build-failures.yml` posts there too.
+/// [`super::alert_native_build_failures`] posts there too.
 pub const MACRO_BUILD_ALERT_WEBHOOK_URL: Var = Var("MACRO_BUILD_ALERT_WEBHOOK_URL");
 
 /// Workload identity provider that lets CI authenticate to Google Play, a

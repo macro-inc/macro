@@ -61,11 +61,11 @@ rules:
       # No `permissions:` block, so jobs get the repository's default token.
       # Scoping it changes what each job's token can do, so it needs every job
       # reviewed, workflow by workflow.
-      - build-rust-ci-image.yml # hand-written; snapshots a runner image
+      - build-rust-ci-image.yml # snapshots a runner image
       - build_agent_daemon_on_tag.yml # builds and uploads release assets
       - build_desktop_on_tag.yml # builds and uploads release assets
       - deploy-pulumi-stack.yml # deploys a Pulumi stack
-      - deploy-service-generic.yml # hand-written deploy
+      - deploy-service-generic.yml # calls the deploy workflow
       - deploy_ai_editing_worker.yml # deploys a worker
       - deploy_all_services.yml # deploys every service
       - deploy_fusionauth_instance.yml # deploys FusionAuth
@@ -74,7 +74,7 @@ rules:
       - deploy_sync_service.yml # deploys a worker
       - deploy_web_app.yml # deploys the web app
       - deploy_website.yml # deploys the website
-      - migrate-macro-db.yml # hand-written; runs migrations
+      - migrate-macro-db.yml # runs migrations
       - pr-ci.yml # calls every check workflow; callees inherit its token
       - release-production.yml # cuts the release and calls deploy workflows
       - sdk-check.yml # builds and tests the SDK

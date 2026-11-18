@@ -72,9 +72,10 @@ Listen on `8080` by default; the Dockerfile sets `PORT=8080`.
   runs locally. *Missed by both calendar and the Slack import worker;* the deploy
   fails at `nix build .#deploy-service-binaries-<name>`. Files you `include_str!`
   must also match the nix `assetFilter`.
-- **`.github/workflows/deploy-service-generic.yml`:** add the name to the dispatch
-  list. It's hand-maintained and was forgotten twice.
-- If you changed a workflow generator, run `cargo x workflows`.
+- **`SERVICES` in `tooling/xtask/crates/xtask_workflows/src/workflows/deploy_service_generic.rs`:**
+  add the name to the dispatch list, then run `cargo x workflows`. It was
+  forgotten twice.
+- If you changed another workflow generator, run `cargo x workflows`.
 
 ## 3. Infrastructure
 

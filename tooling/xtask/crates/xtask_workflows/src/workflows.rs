@@ -13,6 +13,7 @@
 #[rustfmt::skip]
 pub mod actions;
 mod actionlint;
+mod alert_native_build_failures;
 mod android_apk_on_release;
 mod android_build;
 mod android_play_publish;
@@ -26,6 +27,7 @@ mod build_appimage_on_tag;
 mod build_cef_codecs;
 mod build_desktop_on_tag;
 mod build_dmg_on_tag;
+mod build_rust_ci_image;
 mod build_web_app;
 mod cancel_stuck_cloud_storage_deploys;
 mod cargo_deny;
@@ -46,6 +48,7 @@ mod code_check_infra;
 pub mod composite;
 mod deploy_ai_editing_worker;
 mod deploy_all_services;
+mod deploy_analytics_proxy_dev;
 mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
 mod deploy_mcp_chatgpt_worker;
@@ -53,22 +56,26 @@ mod deploy_observability;
 mod deploy_on_push;
 mod deploy_pulumi_stack;
 mod deploy_sdk_docs;
+mod deploy_service_generic;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
 mod desktop_qa_macos;
 mod ensure_daytona_snapshot;
 mod export_ci_telemetry;
+mod export_datadog_observability;
 mod ios_app_store_publish;
 mod ios_app_store_release;
 mod ios_preview;
 mod ios_release_drift;
 mod ios_release_watch;
+mod migrate_macro_db;
 mod native_check_label;
 mod observability_image;
 mod path_validation;
 mod pr_ci;
 mod pr_privacy_check;
+mod publish_android_play;
 mod publish_sdk;
 mod pulumi_preview_pr;
 mod push_local_stack_binaries;
@@ -437,6 +444,47 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "sdk_check",
         file_name: "sdk-check.yml",
         render_yaml: || render_gh_workflow(sdk_check::sdk_check)(),
+    },
+    WorkflowFile {
+        slug: "alert_native_build_failures",
+        file_name: "alert-native-build-failures.yml",
+        render_yaml: || {
+            render_gh_workflow(alert_native_build_failures::alert_native_build_failures)()
+        },
+    },
+    WorkflowFile {
+        slug: "build_rust_ci_image",
+        file_name: "build-rust-ci-image.yml",
+        render_yaml: || render_gh_workflow(build_rust_ci_image::build_rust_ci_image)(),
+    },
+    WorkflowFile {
+        slug: "deploy_analytics_proxy_dev",
+        file_name: "deploy-analytics-proxy-dev.yml",
+        render_yaml: || {
+            render_gh_workflow(deploy_analytics_proxy_dev::deploy_analytics_proxy_dev)()
+        },
+    },
+    WorkflowFile {
+        slug: "deploy_service_generic",
+        file_name: "deploy-service-generic.yml",
+        render_yaml: || render_gh_workflow(deploy_service_generic::deploy_service_generic)(),
+    },
+    WorkflowFile {
+        slug: "export_datadog_observability",
+        file_name: "export-datadog-observability.yml",
+        render_yaml: || {
+            render_gh_workflow(export_datadog_observability::export_datadog_observability)()
+        },
+    },
+    WorkflowFile {
+        slug: "migrate_macro_db",
+        file_name: "migrate-macro-db.yml",
+        render_yaml: || render_gh_workflow(migrate_macro_db::migrate_macro_db)(),
+    },
+    WorkflowFile {
+        slug: "publish_android_play",
+        file_name: "publish-android-play.yml",
+        render_yaml: || render_gh_workflow(publish_android_play::publish_android_play)(),
     },
 ];
 

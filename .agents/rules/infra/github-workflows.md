@@ -44,8 +44,6 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
   must print `no semantic changes` from `cargo x workflows diff --base <rev>`.
 - New CI scripts are Rust or TypeScript, never Python. A step with no checkout embeds
   its script with `include_str!` and runs it on the hosted image's Node.
-- A few older workflows are still hand-written YAML. When you change one
-  substantially, port it to the generator instead of editing the YAML.
 - Pin each third-party action to one SHA (CS-39) in
   `tooling/xtask/crates/xtask_workflows/actions.lock`, then run
   `cargo x workflows actions fetch` and `cargo x workflows`: use the action
@@ -56,10 +54,11 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
   finding when the fix leaves what the job runs unchanged; otherwise allowlist
   it with its reason, one rule and file per entry: shellcheck in the
   `SHELLCHECK_IGNORES` table in `src/workflows/actionlint.rs` (which generates
-  `.github/actionlint.yaml`; its runner labels come from the workflows'
-  `runs-on`), zizmor in `.github/zizmor.yml`.
+  `.github/actionlint.yaml`), zizmor in `.github/zizmor.yml` (composite
+  actions under `action.yml`). A new runner label goes in `runners.rs`; the
+  generated config picks it up from the workflows' `runs-on`.
 
-Check: `cargo x workflows --check` passes, no new `.github/workflows/*.yml`
-lacks the generated header, `nix develop .#workflow-lint -c sh -c
+Check: `cargo x workflows --check` passes, no `.github/workflows/*.yml` lacks
+the generated header, `nix develop .#workflow-lint -c sh -c
 'actionlint && zizmor --offline .github'` passes, and the
 `rust-workflows-*` ast-grep rules report nothing.

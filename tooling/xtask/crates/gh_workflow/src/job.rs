@@ -26,6 +26,26 @@ where
     }
 }
 
+/// A job's `snapshot:`: the custom image GitHub saves the runner as.
+#[derive(Debug, Setters, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+#[setters(strip_option, into)]
+pub struct Snapshot {
+    pub image_name: String,
+    /// The image version, such as `1.*` (the minor version counts up).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+}
+
+impl Snapshot {
+    pub fn new(image_name: impl Into<String>) -> Self {
+        Self {
+            image_name: image_name.into(),
+            version: None,
+        }
+    }
+}
+
 /// Represents a job in the workflow.
 /// Field order matches GitHub Actions YAML structure for better readability.
 #[derive(Debug, Setters, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -40,6 +60,10 @@ pub struct Job {
     pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runs_on: Option<RunsOn>,
+    /// Save the runner, after the job, as a custom image (GitHub-hosted
+    /// larger runners only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<Snapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub permissions: Option<Permissions>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -74,6 +98,7 @@ impl Default for Job {
             cond: None,
             name: None,
             runs_on: Some(RunsOn(Value::from("ubuntu-latest"))),
+            snapshot: None,
             permissions: None,
             environment: None,
             concurrency: None,
