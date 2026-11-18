@@ -76,10 +76,14 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { replaceCitations } from '../../citationsUtils';
-import { DecoratorHostContext } from '../../context/DecoratorHostContext';
+import {
+  type DecoratorHostCapabilities,
+  DecoratorHostContext,
+} from '../../context/DecoratorHostContext';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { MarkdownHostContext } from '../../context/MarkdownHostContext';
 import { createLexicalDecoratorHost } from '../../decorator-host/lexical';
+import { createLexicalSnapshotHost } from '../../decorator-host/lexical-snapshot';
 import '../../styles.css';
 import type { BlockName } from '@core/block';
 import {
@@ -1260,7 +1264,10 @@ type StaticMarkdownProps = {
 
 export function StaticMarkdown(props: StaticMarkdownProps) {
   const wrapper = useContext(LexicalWrapperContext);
-  const host = createLexicalDecoratorHost(wrapper);
+  const host: DecoratorHostCapabilities = {
+    ...createLexicalDecoratorHost(wrapper),
+    snapshot: createLexicalSnapshotHost(wrapper),
+  };
   return (
     <DecoratorHostContext.Provider value={host}>
       <StaticMarkdownInner {...props} />

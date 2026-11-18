@@ -2033,8 +2033,6 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   unrelated layout input. Profile with the
   [entity collection fixture](src/features/entity/browser-test/README.md).
 
-Keep calendar preview paragraph adjacency on sanitized display-only classes; bare descendant tag sibling selectors invalidate unrelated editor paragraphs. Verify preview spacing and literal browser selection with `bunx playwright test --config src/features/calendar/browser-test/playwright.config.ts`.
-
 Keep `dev-probes` out of production native feature graphs; opt into it only for preview/test seals and run `scripts/native-editor-features.test.ts` when changing that guard.
 
 ### Passwords
