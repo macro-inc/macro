@@ -613,13 +613,15 @@ impl Disks for FileDisks {
                 }
             }
             Containers::Zfs(datasets) => {
+                // Stored under `templates`, like the seal's read: a seal
+                // runs wholly before (and this pass then tops it up) or after.
+                let _turn = self.templates.lock().await;
                 sizes_gib.clone_into(
                     &mut self
                         .home_sizes_gib
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner),
                 );
-                let _turn = self.templates.lock().await;
                 for key in goldens {
                     self.snapshot_golden_homes(datasets, key, sizes_gib).await?;
                 }

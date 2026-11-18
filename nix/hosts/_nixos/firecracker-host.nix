@@ -757,8 +757,9 @@ in
 
     (lib.mkIf (cfg.storage.kind == "zfs") {
       # Computers are dataset clones; hibernation and golden builds still
-      # move files with block cloning (the agent checks the same at start). It had corruption fixes through 2.2.4 and is on by default
-      # from 2.3; the hosts were measured on 2.4.
+      # move files with block cloning (the agent checks the same at start).
+      # Block cloning had corruption fixes through 2.2.4 and is on by
+      # default from 2.3; the hosts were measured on 2.4.
       assertions = [
         {
           assertion = lib.versionAtLeast config.boot.zfs.package.version minimumZfsVersion;

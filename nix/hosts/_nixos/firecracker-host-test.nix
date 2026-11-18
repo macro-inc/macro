@@ -328,7 +328,7 @@ pkgs.testers.runNixOSTest {
             # squeezes) needs swap: ready only because zram is there.
             controlPlane.wait_until_succeeds(f"{curl} https://192.168.1.2:8444/health", timeout=300)
             golden = "tank/firecracker/goldens/test/1v-512m"
-            snapshot = host.succeed(f"zfs list -H -t snapshot -o name -s creation {golden} | tail -n 1").strip()
+            snapshot = host.succeed(f"zfs list -H -t snapshot -o name -s createtxg {golden} | tail -n 1").strip()
             host.succeed(
                 f"test -f \"$(zfs get -H -o value mountpoint {golden})/.zfs/snapshot/{snapshot.split('@')[1]}/home-1g.ext4\""
             )
