@@ -9,7 +9,8 @@ and serves `crates/firecracker_host_api` over mTLS to the control plane's
 
 ## How it works
 
-Create = reflink the golden's rootfs, grow/reuse `/home`, take a netns slot,
+Create = take a spare disk set or `zfs clone` the golden's latest snapshot
+(rootfs plus an empty `/home` of every sold size; XFS: reflinks), grow, take a netns slot,
 jailer, `snapshot/load` (paused, `clock_realtime`), PATCH both drives (new
 sizes), PUT MMDS (identity + enrollment), resume, kick `macro-restore` over
 vsock. Power actions follow `domain::power::plan`. One record per computer
@@ -50,9 +51,12 @@ mesh: pre-copy while it runs, then a final round after `release`), then
 - `src/outbound/jails.rs`: jailer, chroot, Firecracker calls; `jails/machines.rs`: the `Machines` port; `jails/golden_build.rs`: golden builds.
 - `src/outbound/network.rs`: netns slots and nftables.
 - `src/outbound/layout.rs`: what lives where on the durable disk.
-- `src/domain/ports.rs` `Disks`: the storage seam (XFS reflink files in
-  `outbound/disks.rs`; a ZFS implementation returns `DriveBacking::BlockDevice`
-  zvols, which the jail turns into device nodes owned by the VM user).
+- `src/domain/ports.rs` `Disks`: the storage seam; `outbound/disks.rs`
+  implements it over ZFS datasets (default) or XFS reflinks.
+- `src/outbound/file_clone.rs`: the only block cloning (ZFS BRT) left:
+  hibernation's Diff memory, hibernation publish and golden builds (see the
+  architecture doc, **Storage**). It runs on the blocking pool; never call
+  `copy_file_range` or other whole-file work on an async worker.
 
 ## Gotchas
 
