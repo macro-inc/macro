@@ -59,9 +59,12 @@ const dashboard = new datadog.Dashboard('queue-alerts', {
       }),
       thresholdGraph({
         // The lowest lag over the trailing day, as the monitor evaluates it.
+        // moving_rollup reads only the graphed range, so the week's first day
+        // is a running minimum.
         title: 'Kafka consumer has not caught up in a day',
-        query: `moving_rollup(${KAFKA_LAG}, 86400, 'min')`,
-        critical: '1000',
+        query: `moving_rollup(${KAFKA_LAG}.rollup(min), 86400, 'min')`,
+        critical: '100',
+        liveSpan: '1w',
       }),
       thresholdGraph({
         // Close to the topic's whole lag when one of its six partitions holds
@@ -132,8 +135,8 @@ prodMonitor('sqs-email-backfill-backlog-anomaly', {
   runbook: 'docs/runbooks/queues.md#backlog',
 });
 
-// Datadog only, like the two above: Grafana copies exist for the alerts it
-// pages on, and these only notify.
+// Datadog only: Grafana's CloudWatch rules list dimension values exactly, and
+// the consumer groups and topics change with the code.
 prodMonitor('kafka-consumer-lag-high', {
   title: 'Kafka consumer far behind',
   service: 'kafka',
@@ -146,18 +149,23 @@ prodMonitor('kafka-consumer-lag-high', {
   runbook: 'docs/runbooks/queues.md#kafka-consumer-lag',
 });
 
-// Every healthy group drains to near zero within 18 hours, even after a
-// burst, so one floor fits every group and topic. A group's oldest unread
-// event is no older than the last time it caught up, so the first alert
-// leaves about six of the topic's seven retention days.
+// Every healthy group's lag falls under 100 within a day, bursts included, so
+// one floor fits every group and topic. A group stalled since its lag was last
+// under the floor fires a day after passing it: on a topic that gets 100
+// events within hours, about six of its seven retention days remain. A
+// stalled group on a topic with fewer than about 20 events a day, or a stuck
+// partition on one with fewer than about 100, can lose events first.
 prodMonitor('kafka-consumer-not-caught-up', {
   title: 'Kafka consumer has not caught up in a day',
   service: 'kafka',
-  query: `min(last_1d):${KAFKA_LAG} > 1000`,
-  monitorThresholds: { critical: '1000' },
+  query: `min(last_1d):${KAFKA_LAG} > 100`,
+  monitorThresholds: { critical: '100' },
+  // A new group, or one replaying a topic from its start, fires only after a
+  // whole day behind.
+  requireFullWindow: true,
   pages: false,
   description:
-    "{{consumer_group.name}}'s lag on {{topic.name}} has not dropped below {{value}} events in 24 hours. Healthy groups drain to near zero within 18 hours. When this first fires, its oldest unread event is about a day old at most: about six days remain before the topic's 7-day retention deletes events the group has not read.",
+    "{{consumer_group.name}}'s lag on {{topic.name}} has not dropped below {{value}} events in 24 hours; healthy groups fall under 100 within a day. When this first fires on a busy topic, the oldest unread event is about a day old: about six days remain before the topic's 7-day retention deletes events the group has not read.",
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/queues.md#kafka-consumer-lag',
 });

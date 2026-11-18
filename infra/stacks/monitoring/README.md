@@ -52,7 +52,8 @@ its thresholds many times a day.
 
 `monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts`,
 `outlook-sync.ts`, `routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts` and `storage-pool.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
-on CloudWatch metrics have hand-written copies in Grafana
+on CloudWatch metrics, except those `queues.ts` marks Datadog only, have
+hand-written copies in Grafana
 (`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
 Notify service), so one incident pages once. Keep thresholds and windows in sync by hand. The error-logs
@@ -196,7 +197,7 @@ is applied. Reach for `restrictedRoles` if convention stops being enough.
 
 Add a prod threshold or anomaly monitor with `prodMonitor()` in the matching
 `monitors/*.ts`, a `thresholdGraph()` for it on that file's dashboard, and its Grafana copy in `prod-alerts.nix` when the metric is in
-CloudWatch. Declare anything else with `new datadog.Monitor(...)`, ending its
+CloudWatch and its dimensions are a fixed list. Declare anything else with `new datadog.Monitor(...)`, ending its
 message with `notify({ pages })` and setting `renotifyInterval: RENOTIFY_MINUTES`. Use the `adopted()` helper only
 for monitors that already exist in Datadog — it sets `protect`, which is there
 to stop a program that no longer declares a pre-existing monitor from deleting
@@ -396,34 +397,32 @@ onward.
 `monitors/queues.ts` adds **two monitors** on every prod consumer group's
 committed-offset lag per topic (`aws.kafka.sum_offset_lag`, multi-alert by
 `consumer_group` and `topic`), and a Kafka consumer lag group on the Queue
-alerts dashboard. Neither pages. [The runbook](../../../docs/runbooks/queues.md#kafka-consumer-lag)
+alerts dashboard. Neither pages, and neither has a Grafana copy: Grafana's
+rules list CloudWatch dimensions exactly, and the groups and topics change
+with the code. [The runbook](../../../docs/runbooks/queues.md#kafka-consumer-lag)
 covers both.
 
 - **Not caught up in a day** (sustained backlog): the lag has not dropped below
-  1,000 in 24 hours. Over the 30 days to 2026-11-18 every group drained to
-  near zero within 18 hours, bursts included, so one floor fits every group and
-  topic. A group's oldest unread event is no older than the last time it
-  caught up, so the first alert leaves about six of the topics' seven
-  retention days.
+  100 in 24 hours, over a full day of data. Over the 30 days to 2026-11-18,
+  outside the search-processing-service backlog below, the highest any group's
+  lag stayed for a whole day was 17, so one floor fits every group and topic. On a topic that
+  gets 100 events within hours, the first alert leaves about six of its seven
+  retention days. A stalled group on a topic with fewer than about 20 events a
+  day, or a stuck partition on one with fewer than about 100, can lose events
+  before it fires.
 - **Far behind** (ceiling): the 15-minute average lag is above 5M, warning at
   2M. Ordinary bursts peaked at 0.95M on search-processing-service's
   `macro.email`, the busiest topic, and under 135k on every other group and
-  topic. The ceiling catches a large backlog within hours; the day-long
-  monitor covers quieter topics.
+  topic.
 
 In that backtest, both fired only for search-processing-service, whose
 `macro.email` backlog grew from 2.1M to 28.4M from 2026-11-09: the warning by
-23:30Z on 11-09, the day-long alert by 14:30Z on 11-10 (also on its
-`macro.documents`, `macro.calendar` and `macro.agent_session_lifecycle`
-lag) and the critical by 17:30Z on 11-10. The 10-28 and 11-04 bursts stayed
-quiet, and no other group fired.
+23:30Z on 11-09, the day-long alert by 14:00Z on 11-10 (and by 15:00Z on its
+`macro.documents`, `macro.calendar`, `macro.agent_session_lifecycle`,
+`macro.properties` and `macro.messages` lag) and the critical by 17:30Z on
+11-10. The 10-28 and 11-04 bursts stayed quiet, and no other group fired.
 
-A growth-rate alert (lag above its level 24 hours earlier for a whole day)
-fired at the same time and implies the day-long one, so it is not declared.
-MSK's `estimated_max_time_lag` and `rolling_estimated_time_lag_max` divide lag
-by the current consumption rate, not event age, and swing by orders of
-magnitude, so nothing alerts on them. Lag goes missing while a group
-rebalances, and the monitors do not notify on missing data: a crash-looping
-consumer shows gaps, not an alert. Consumers that commit no offsets, such as
-the independent notification consumers, report no lag
-([Notification retention coverage](#notification-retention-coverage)).
+Lag goes missing while a group rebalances, and the monitors do not notify on
+missing data: a crash-looping consumer shows gaps, not an alert. Consumers that
+commit no offsets, such as the independent notification consumers, report no
+lag ([Notification retention coverage](#notification-retention-coverage)).

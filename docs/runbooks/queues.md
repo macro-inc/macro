@@ -37,14 +37,16 @@ abnormally.
 
 A consumer group is far behind on a topic (`aws.kafka.sum_offset_lag`, the
 committed-offset lag summed over the topic's six partitions), or its lag has
-not dropped below 1,000 events in 24 hours. Topics keep events for 7 days
-(`infra/stacks/kafka-cluster/topics.ts`). A committed offset older than that
-points at deleted events, and the group restarts at its `INITIAL_OFFSET`:
-`Latest` skips the whole backlog without an error. The day-long alert leaves
-about six days before that happens.
+not dropped below 100 events in 24 hours. Topics keep events for 7 days
+(`infra/stacks/kafka-cluster/topics.ts`). Once a group's next unread event is
+older than that, it is deleted and the group resets to its `INITIAL_OFFSET`:
+`Latest` skips the whole retained backlog, `Earliest` only the deleted part,
+and neither logs an error. On a busy topic the day-long alert leaves about six
+days before that happens.
 
 - Find the group's service: the alert names the group, which is the
-  `GROUP_NAME` of its consumer (`rg 'GROUP_NAME: &.*= "<group>"'`).
+  `GROUP_NAME` of its consumer (`rg 'GROUP_NAME: &.*= "<group>"'`); one group
+  can run in more than one service.
 - Check its running task count (`aws.ecs.service.running`) against its
   autoscaling floor and ceiling in its stack. Autoscaling follows CPU, not lag,
   and a deploy can reset the desired count to the floor. A group spreads a topic
@@ -61,6 +63,10 @@ about six days before that happens.
 - A group with gaps in its lag is rebalancing: MSK reports lag only while a
   group is stable or empty, so a crash-looping consumer shows missing data,
   not lag.
+- A group no running code reads (a renamed `GROUP_NAME`, a topic dropped from
+  a subscription) keeps its committed offsets for 7 days after its last member
+  leaves, and its lag grows until Kafka expires them. Deleting its offsets or
+  muting that group is for the owners.
 - Do not read `aws.kafka.estimated_max_time_lag` as event age: it divides
   lag by the current consumption rate and reads years when a consumer slows.
 - Levers: scale the consumer up to six tasks if what it writes to has
