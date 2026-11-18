@@ -164,4 +164,62 @@ check 'B9 a restart after a land and a clean stop never count' bash -c "[[ \$(ca
 stopped 1
 check 'B9 a crash on a new head counts' bash -c "[[ \$(cat '$root/case/state/failures') == 1 ]]"
 
+# --- B10: the agent's code needs a newer muppet than the image has ------------
+# The template declares the muppet API it needs (package.json `muppetApi`);
+# the image's muppet declares the level it has (its package.json `apiLevel`).
+image_muppet() { # image_muppet <level>: the image's muppet package
+  mkdir -p "$root/case/runtime/node_modules/@macro-inc/muppet"
+  echo "{\"name\":\"@macro-inc/muppet\",\"apiLevel\":$1}" >"$root/case/runtime/node_modules/@macro-inc/muppet/package.json"
+}
+needs_muppet() { # needs_muppet <level>: the agent's code, committed
+  ws checkout -q main
+  echo "{\"name\":\"agent\",\"muppetApi\":$1,\"dependencies\":{\"zod\":\"4.4.3\"}}" >"$root/case/workspace/package.json"
+  ws commit -qam "needs muppet API $1"
+}
+fresh
+start
+needs_muppet 2
+image_muppet 1
+: >"$root/bun.ran"
+MUPPET_CREDENTIALS_FILE=$root/case/agent.env bash "$root/case/start-agent" run 2>"$root/case/stderr" && code=0 || code=$?
+check 'B10 code that needs a newer muppet exits 78' bash -c "[[ $code == 78 ]]"
+check 'B10 and says the agent needs a newer image' grep -q 'needs a newer image: its code needs muppet API 2, the image has 1' "$root/case/stderr"
+check 'B10 and the runtime did not run' bash -c "[[ ! -s '$root/bun.ran' ]]"
+check 'B10 that boot is counted against the head that needs it' bash -c "[[ \$(cat '$root/case/state/boot-head') == \$(git -C '$root/case/workspace' rev-parse HEAD) ]]"
+
+fresh
+start
+needs_muppet 2
+image_muppet 2
+: >"$root/bun.ran"
+check 'B10 code that needs the level the image has boots' start
+check 'B10 and the runtime ran' ran
+
+fresh
+start
+needs_muppet 1
+image_muppet 3
+: >"$root/bun.ran"
+check 'B10 an older need on a newer image boots' start
+
+fresh
+image_muppet 1
+: >"$root/bun.ran"
+check 'B10 a template that declares no need boots on any image' start
+
+fresh
+start
+needs_muppet 1
+rm -rf "$root/case/runtime/node_modules/@macro-inc"
+: >"$root/bun.ran"
+MUPPET_CREDENTIALS_FILE=$root/case/agent.env bash "$root/case/start-agent" run 2>"$root/case/stderr" && code=0 || code=$?
+check 'B10 an image whose muppet declares no level has level 0' bash -c "[[ $code == 78 ]] && grep -q 'the image has 0' '$root/case/stderr'"
+
+fresh
+start
+needs_muppet '"two"'
+: >"$root/bun.ran"
+MUPPET_CREDENTIALS_FILE=$root/case/agent.env bash "$root/case/start-agent" run 2>"$root/case/stderr" && code=0 || code=$?
+check 'B10 a need that is not a whole number exits 78 and says so' bash -c "[[ $code == 78 ]] && grep -q 'muppetApi must be a whole number' '$root/case/stderr'"
+
 exit "$failed"
