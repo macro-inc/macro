@@ -23,6 +23,7 @@ import type { Agent } from '../agents/agent';
 import { Chat } from '../chats/chat';
 import { MacroEntity } from '../entity';
 import type { EntityReference } from '../reference';
+import type { Task } from '../tasks/task';
 import { User } from '../users/user';
 
 /** An event selector references resources by typed handles. */
@@ -80,6 +81,15 @@ function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
 }
 
 /**
+ * The item an entity knob holds, as a reference to the handle the SDK
+ * returned: an {@link EntityReference} of a kind a knob names, or a task,
+ * which references call a document.
+ */
+export type RoutineKnobItem =
+  | Extract<EntityReference, { type: RoutineKnobEntityType }>
+  | { type: 'task'; entity: Task };
+
+/**
  * A code step's knob. An `entity` knob holds one of the user's items, such
  * as the channel the step posts in, as a reference to the handle the SDK
  * returned: `{ type: 'channel', entity: channel }`, never an id. The step's
@@ -89,7 +99,7 @@ function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
 export type RoutineKnobOptions =
   | Exclude<RoutineKnob, { type: 'entity' }>
   | (Omit<Extract<RoutineKnob, { type: 'entity' }>, 'value'> & {
-      value: Extract<EntityReference, { type: RoutineKnobEntityType }>;
+      value: RoutineKnobItem;
     });
 
 /** A code step, its entity knobs holding handles. */

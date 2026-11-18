@@ -1292,9 +1292,13 @@ export type RoutineKnobEntity = {
 export type RoutineKnobEntityId = string;
 
 /**
- * A kind of item an entity knob names: one Macro's SDK has a handle for.
+ * A kind of item an entity knob names: each kind the app's entity picker
+ * offers, which Macro's SDK has a handle for, and whole databases. Its
+ * name is the SDK's for the kind (`EntityReference`'s `type`, which the
+ * handle's `entityType` repeats), except `task`, a document that is a
+ * task.
  */
-export type RoutineKnobEntityType = 'channel' | 'document' | 'project' | 'database' | 'user';
+export type RoutineKnobEntityType = 'channel' | 'document' | 'project' | 'database' | 'user' | 'task' | 'email_thread' | 'chat' | 'crm_company' | 'crm_contact' | 'initiative';
 
 /**
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
@@ -2141,6 +2145,26 @@ export type TemplateVariable = {
 };
 
 /**
+ * An entity knob of a saved routine whose item needs a new pick: it was
+ * deleted, its owner lost access, or none is picked.
+ */
+export type UnusableKnob = {
+    item?: null | RoutineKnobEntity;
+    /**
+     * The knob's name.
+     */
+    knob: string;
+    /**
+     * Why it can't be used, for the routine's owner.
+     */
+    reason: string;
+    /**
+     * Its step's position among the routine's steps, from 0.
+     */
+    step: number;
+};
+
+/**
  * How an upgrade went.
  */
 export type UpgradeOutcome = 'running' | 'checked' | 'rewritten' | 'needs_update';
@@ -2983,6 +3007,35 @@ export type ActivateScheduledActionTemplateResponses = {
 };
 
 export type ActivateScheduledActionTemplateResponse = ActivateScheduledActionTemplateResponses[keyof ActivateScheduledActionTemplateResponses];
+
+export type ListScheduledActionUnusableItemsData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/unusable-items';
+};
+
+export type ListScheduledActionUnusableItemsErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type ListScheduledActionUnusableItemsError = ListScheduledActionUnusableItemsErrors[keyof ListScheduledActionUnusableItemsErrors];
+
+export type ListScheduledActionUnusableItemsResponses = {
+    /**
+     * The routine's entity knobs whose item its owner can't use now: deleted, trashed, out of their reach, or not picked
+     */
+    200: Array<UnusableKnob>;
+};
+
+export type ListScheduledActionUnusableItemsResponse = ListScheduledActionUnusableItemsResponses[keyof ListScheduledActionUnusableItemsResponses];
 
 export type ListSuggestionsData = {
     body?: never;

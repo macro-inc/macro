@@ -149,7 +149,7 @@ test('routine creation sends code and Ask AI steps that write as the user', asyn
     },
   ]);
 });
-test('an entity knob takes the handle of the item it names and sends its id', async () => {
+test('an entity knob takes the handle of the item it names, a task included, and sends its id', async () => {
   const bodies: unknown[] = [];
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL) => {
@@ -183,6 +183,13 @@ test('an entity knob takes the handle of the item it names and sends its id', as
               entity: macro.channels.byId('channel-1'),
             },
           },
+          {
+            type: 'entity',
+            name: 'task',
+            label: 'Task to follow',
+            entity_types: ['task', 'email_thread'],
+            value: { type: 'task', entity: macro.tasks.byId('task-1') },
+          },
           { type: 'number', name: 'days', label: 'Days', value: 7 },
         ],
       },
@@ -200,6 +207,13 @@ test('an entity knob takes the handle of the item it names and sends its id', as
                 label: 'Channel to post in',
                 entity_types: ['channel'],
                 value: { type: 'channel', id: 'channel-1' },
+              },
+              {
+                type: 'entity',
+                name: 'task',
+                label: 'Task to follow',
+                entity_types: ['task', 'email_thread'],
+                value: { type: 'task', id: 'task-1' },
               },
               { type: 'number', name: 'days', label: 'Days', value: 7 },
             ],
