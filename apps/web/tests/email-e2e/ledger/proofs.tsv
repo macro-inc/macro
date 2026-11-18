@@ -945,6 +945,7 @@ STL-516	not shown as the row says (scheduling notice "<name> accepted / declined
 STL-517	The "Responding as" prefix before the responding address on the invitation card is dropped, in calendar-invite-card.tsx.
 STL-520	not shown as the row says (confirmation prompt with checkbox "I understand this may send a duplicate email." / "I have reviewed the original copy…"): its rendering is switched off or changed in src/features/email-message/views/message-operation-recovery.tsx
 STL-521	not shown as the row says (header with Back, the subject and Info only): its rendering is switched off or changed in src/features/block-email/views/mobile/email-thread.tsx
+STL-522	The shared event card with only Outlook calendars shows a disabled Add to calendar button instead of explaining the writable Google calendar requirement, in AddToCalendarButton.tsx.
 STL-600	not shown as the row says (toast "Failed to block sender" / "Failed to unblock sender"): its rendering is switched off or changed in src/lib/queries/email/thread.ts
 STL-601	not shown as the row says (toast "Failed to mark sender as <label>" / "Failed to undo"): its rendering is switched off or changed in src/lib/queries/email/thread.ts
 STL-602	The row menu's sender moves in createSoupEntityActions.ts ignore the row's Signal/Noise bucket, so both "Sender → Signal" and "Sender → Noise" are offered whatever tab the row is in.
