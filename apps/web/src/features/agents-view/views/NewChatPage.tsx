@@ -496,6 +496,24 @@ export function NewChatPage(props: {
     event.preventDefault();
     focusInput?.();
   };
+  // Keep catalog identities stable when capability discovery updates the menu.
+  // Recreating option objects remounts their discovery observers and restarts requests.
+  const catalogModels = createMemo(() =>
+    selectedCatalog.models().map((option) => ({
+      id: option.id,
+      label: modelLabel(option.id, option.name, option.description),
+      group: option.group ?? undefined,
+    }))
+  );
+  const suggestedModels = createMemo(() =>
+    (macro() ? macroCatalog.models() : selectedCatalog.models()).map(
+      (option) => ({
+        id: option.id,
+        label: modelLabel(option.id, option.name, option.description),
+        group: option.group ?? undefined,
+      })
+    )
+  );
   const agentSelector = () => (
     <UnifiedModelSelector
       state={{
@@ -505,19 +523,8 @@ export function NewChatPage(props: {
           composerModelOverride() ??
           selected()?.defaultModel ??
           selectedCatalog.currentModel(),
-        models: selectedCatalog.models().map((option) => ({
-          id: option.id,
-          label: modelLabel(option.id, option.name, option.description),
-          group: option.group ?? undefined,
-        })),
-        suggestedModels: (macro()
-          ? macroCatalog.models()
-          : selectedCatalog.models()
-        ).map((option) => ({
-          id: option.id,
-          label: modelLabel(option.id, option.name, option.description),
-          group: option.group ?? undefined,
-        })),
+        models: catalogModels(),
+        suggestedModels: suggestedModels(),
         suggestedDisabled: Boolean((macro() ?? selected())?.unavailableReason),
         suggestedSelected: !macro() || selected()?.id === macro()?.id,
         loading: props.rosterLoading,
@@ -560,6 +567,7 @@ export function NewChatPage(props: {
     else ownMode.setMode(next);
   };
 
+  const phoneComposer = () => !!props.compact && isTouchDevice();
   const modeSwitch = () => (
     <div ref={tourTarget(AGENTS_TOUR.modeSwitch)} class="shrink-0">
       <Tabs
@@ -577,19 +585,32 @@ export function NewChatPage(props: {
           { value: 'chat', label: agentsModeLabel('chat'), icon: ChatIcon },
           { value: 'code', label: agentsModeLabel('code'), icon: CodeIcon },
         ]}
-        variant="track"
+        {...(phoneComposer()
+          ? {
+              variant: 'grouped' as const,
+              touch: 'inset' as const,
+              size: 'sm' as const,
+            }
+          : { variant: 'track' as const })}
         fullWidth
         // Phones keep the icons; the name stays for assistive tech.
         iconOnly={isTouchDevice()}
         value={mode()}
         onChange={setMode}
-        class={ownMode.autoAvailable() ? 'w-72 touch:w-36' : 'w-56 touch:w-24'}
+        class={
+          phoneComposer()
+            ? 'w-auto'
+            : ownMode.autoAvailable()
+              ? 'w-72 touch:w-36'
+              : 'w-56 touch:w-24'
+        }
       />
     </div>
   );
 
   const repositoryPicker = () => (
     <RepositoryPicker
+      compactPhone={phoneComposer()}
       onOpenChange={setRepositoryPickerOpen}
       repoUrl={repoUrl()}
       branch={repoBranch()}
@@ -613,6 +634,7 @@ export function NewChatPage(props: {
     <ChatComposer
       autoFocus={props.autoFocus}
       collapseOnBlur={props.compact}
+      phoneLayout={phoneComposer()}
       controlsOpen={repositoryPickerOpen() || effortPickerOpen()}
       registerFocus={(focus) => {
         focusInput = focus;
@@ -631,7 +653,13 @@ export function NewChatPage(props: {
         <div class="flex w-full min-w-0 items-center gap-2">
           {modeSwitch()}
           <Show when={coding()}>
-            <div class="min-w-0 flex-1 touch:[&>div]:justify-end">
+            <div
+              class="min-w-0 flex-1"
+              classList={{
+                'touch:flex-none touch:max-w-[calc(100%_-_96px)]':
+                  phoneComposer(),
+              }}
+            >
               {repositoryPicker()}
             </div>
           </Show>

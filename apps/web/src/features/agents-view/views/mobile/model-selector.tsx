@@ -79,7 +79,7 @@ export function MobileModelSelector() {
         size="sm"
         disabled={state.disabled}
         aria-label={t('agentControls.modelSelector')}
-        class="h-[34px] min-w-0 max-w-full gap-1.5 rounded-full px-2 text-ink-muted"
+        class="min-w-0 max-w-full gap-1.5 rounded-full px-2 text-ink-muted font-normal"
         onPointerDown={(event: PointerEvent) => event.preventDefault()}
         onMouseDown={(event: MouseEvent) => event.preventDefault()}
       >

@@ -276,53 +276,35 @@ unified diff with **Back to conversation**; returning preserves the unsent draft
 
 The phone list shows startable custom agents as bubbles above the Favorites, Waiting on you, and Conversations sections. Tap a bubble to focus the accessory composer with that agent selected. New agent opens the roster creation flow. The title menu opens Conversations, Agents, Routines, and Archived. Archived has Back and search, but no composer or dock. Long-press a row for its entity actions. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
-draft, attachments, agent, model, repository, and branch. Tap the
-agent/model control once to open a bottom sheet with its search field focused,
-without first focusing or expanding the message input. Tap an agent to use its
-default model, or its model arrow to choose a model; **Create agent** opens the
-roster. Agents are clustered into **Built-in**, **Your agents**, and **Needs
-connection**, with runtime/model details below their names. Code opens directly
-on these groups without an empty Models section or an unrelated runtime warning.
-**Create agent** uses the shared rounded pill button with a subtle fill at the
-bottom right at the end of the scrolling list. The picker uses one
-continuous surface, with labels and spacing separating groups instead of nested
-shaded cards. Provider sections use compact spacing, with labels close to their
-rows. Model lists start with
-**Suggested**, with Gemini last when available, followed by **More models** and your agents. **More models**
-opens the complete provider catalog, including copies of Suggested choices;
-use Back to return. Search accepts
-model names, IDs, and providers. When browsing an agent, **Use default** in the
-header selects its configured model.
+draft, attachments, agent, model, repository, and branch. Tap the agent/model pill to open the phone model sheet. Its search and
+Suggested models sit above Built-in and Your agents; All models opens the
+complete catalog. Reasoning effort and Speed appear below the list when the
+selected runtime and model support them. Tap an option to set it, or Back to
+return to the list. An agent without access offers its existing connection
+flow. Search filters models and agents without changing the current selection.
 
 The floating mobile composer appears only on **Agents**; Home and other views
 keep their New action or their own reply/comment composer.
-The mobile Agents composer is an opaque, rounded input using the same surface as
-the New button, including its glass treatment in dark mode. Send is a bare up
-arrow without a background, including when disabled. The short placeholder reads
-“Message Macro AI”.
-Its collapsed height matches New, with Send visible and the model/provider control hidden until the input is focused. Tap the input to expand across the row, hiding New and giving the draft
-a full-width text area above the controls.
-Auto/Chat/Code stays in the inset bar above the input on phones, as icons only.
-Repository controls appear alongside it in Code mode.
-Tapping outside collapses the composer and restores New.
-The editor and model picker stay mounted so collapsing preserves the draft.
-Dismissing the model, effort, or priority tier selector on mobile returns focus to the message input.
-Active sessions use the same compact mobile model drawer: focused search, Suggested
-with Gemini last, and More models for the complete provider catalog.
-Beside the model selector, the composer shows **Effort** (a dial plus the
-current level, such as *High*) for models that advertise reasoning effort, and
-**Priority tier** (a lightning bolt plus *Standard*, *Priority* or *Ultrafast*)
-for models with a tier beyond standard: GPT-6.1 Sol and GPT-6 Astra today. On
-touch both are icon buttons that open a bottom sheet. The tier is one browser
-preference shared by every composer (`macro:ai-speed`); a model that doesn't
-offer it runs at standard, and the agent composer applies it before the next
-prompt only when the session reports a different tier. Priority sends
-`service_tier: "priority"` to OpenAI and bills the `:priority` price rows.
-In new and active agent composers, check that the model selector and these
-controls share a height and vertical center: 32px on desktop and 36px with
-touch emulation, and stay interactive at desktop, phone, and tablet widths.
-Repository and branch pickers keep the composer expanded while their search
-fields are focused, so their anchor stays in place.
+
+The phone Agents composer is a chrome island above the dock. At rest it is a
+46px pill with the short placeholder “Message Macro AI”, a one-line draft and a
+40px Send control. Tapping the editor expands it to show attachments above the
+text, then 36px Add, a labeled model/agent pill, dictation and Send controls.
+The editor and model picker stay mounted when the composer collapses; attachment
+state survives hiding the chips. Home keeps a separate draft and attachment store.
+
+The expanded composer shows icon-only Chat and Code tabs above the island.
+Code shows a content-width repository-and-branch pill beside the tabs. The
+repository and branch each open their own sheet; selecting a new repository
+resets the starting branch. A paired local runtime locks its branch to main.
+The composer stays expanded while repository, branch, or model sheets are open.
+The model pill shows only the selected model or agent name; reasoning effort and
+Speed live in the model sheet. Dismissing that sheet restores editor focus.
+Tapping an agent bubble selects its agent and focuses the composer during the
+tap, as required for the iOS keyboard; changing Chat or Code afterward remains possible.
+Outside taps collapse the island. The touch keyboard's Enter inserts a newline;
+Send submits text and attachments. Active session composers retain their existing
+controls and send/stop behavior.
 
 Home/list composers, search, the create menu, folder AI creation, contextual
 **Chat with AI**, and onboarding prompts all start new agent sessions, with or

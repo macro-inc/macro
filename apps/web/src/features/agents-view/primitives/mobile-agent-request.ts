@@ -8,11 +8,22 @@ const [request, setRequest] = createSignal<{
   kind: AgentKind;
   request: string;
 }>();
+let composerFocus: { userId: string; focus: () => void } | undefined;
+
 export const mobileAgentRequest = {
   forUser: (userId: string | undefined) =>
     userId && request()?.userId === userId ? request() : undefined,
   select: (userId: string | undefined, agentId: string, kind: AgentKind) => {
-    if (userId)
-      setRequest({ userId, agentId, kind, request: crypto.randomUUID() });
+    if (!userId) return;
+    setRequest({ userId, agentId, kind, request: crypto.randomUUID() });
+    // iOS opens the keyboard only when focus happens inside the bubble tap.
+    if (composerFocus?.userId === userId) composerFocus.focus();
+  },
+  registerFocus: (userId: string, focus: () => void) => {
+    const registration = { userId, focus };
+    composerFocus = registration;
+    return () => {
+      if (composerFocus === registration) composerFocus = undefined;
+    };
   },
 };

@@ -1,6 +1,6 @@
 # Agents workspace
 
-Status: redesigned desktop/phone lists, shared model selection, and phone session header; phone composer integration remains.
+Status: redesigned desktop/phone lists, shared model selection, phone composer, and phone session header.
 
 ## What it is
 
@@ -20,6 +20,9 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - `views/shared/code-details-drawer/`: common phone PR/branch drawer for rows and the session header.
 - `queries/session-code-details.ts`: bounded session-ID/owner lookup for cold header code identity.
 - `../block-agent/views/mobile/redesigned-session-header/`: normal-weight session title, code details, Info, and retained action owners.
+- `components/mobile-composer/`: phone Root, editor, controls, attachment and send parts; `ChatComposer` retains shared editor behavior.
+- `primitives/composer-expansion.ts`: focus/blur and open-sheet expansion state.
+- Phone attachment chips reuse `Input.Attachments appearance="chips"`; Home and session composers retain the default previews.
 
 ## Boundaries
 
@@ -32,6 +35,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Keep the `connections` page routable even though the redesigned navigation omits it.
 - Preserve `agents-conversation-list-view-v1` filters when changing sort; legacy grouping does not determine the redesigned list.
 - Follow Root-and-parts composition and the [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
+- Keep catalog option identities stable across capability updates; isolate optional speed-marker discovery with Suspense so it cannot detach the editor.
 
 ## Checks
 

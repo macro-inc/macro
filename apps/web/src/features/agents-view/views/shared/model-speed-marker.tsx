@@ -1,7 +1,7 @@
 import { selectConfigOption } from '@app/features/block-agent/state/session-config';
 import Bolt from '@icon/system/fill/lightning-fill.svg';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
-import { Show } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 
 /** Discover only visible model choices; never infer a runtime tier from its name. */
@@ -26,14 +26,16 @@ export function ModelSpeedMarker(props: { model: string }) {
     return speed?.options.some((option) => option.value === 'ultrafast');
   };
   return (
-    <Show when={ultrafast()}>
-      <span
-        aria-hidden="true"
-        class="flex h-3 w-4 shrink-0 items-center text-ink-extra-muted"
-      >
-        <Bolt class="size-3" />
-        <Bolt class="-ml-1.5 size-3" />
-      </span>
-    </Show>
+    <Suspense>
+      <Show when={ultrafast()}>
+        <span
+          aria-hidden="true"
+          class="flex h-3 w-4 shrink-0 items-center text-ink-extra-muted"
+        >
+          <Bolt class="size-3" />
+          <Bolt class="-ml-1.5 size-3" />
+        </span>
+      </Show>
+    </Suspense>
   );
 }

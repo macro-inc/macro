@@ -40,6 +40,8 @@ type BranchChoice =
 /** Explicit, portaled repository/branch controls shared by Home and Agents. */
 export function RepositoryPicker(props: {
   repoUrl?: string;
+  /** Use the joined repository/branch pill in the phone accessory only. */
+  compactPhone?: boolean;
   onOpenChange?: (open: boolean) => void;
   branch: string;
   /** This runtime always starts new worktrees from main. */
@@ -182,7 +184,13 @@ export function RepositoryPicker(props: {
     offeredBranches().length === 0 &&
     !branchSearch().trim();
   return (
-    <div class="flex min-w-0 w-full items-center gap-2">
+    <div
+      class="flex min-w-0 w-full items-center gap-2"
+      classList={{
+        'w-fit max-w-full gap-0 rounded-full border border-edge bg-chrome px-1':
+          props.compactPhone,
+      }}
+    >
       <RepositoryPickerMenu
         open={repoOpen()}
         onOpenChange={(open) => {
@@ -194,14 +202,20 @@ export function RepositoryPicker(props: {
           }
         }}
         label="Repository"
-        triggerClass="pill min-w-0 max-w-full text-ink"
+        triggerClass={
+          props.compactPhone
+            ? 'pill min-w-0 max-w-[70%] shrink-0 h-9 px-2 gap-2 text-ink'
+            : 'pill min-w-0 max-w-full text-ink'
+        }
         trigger={
           <>
             <GithubIcon class="size-4 shrink-0" />
             <span class="truncate">
               {props.repoUrl ? repositoryLabel(props.repoUrl) : 'Auto-detect'}
             </span>
-            <CaretDownIcon class="size-3 shrink-0" />
+            <Show when={!props.compactPhone || !props.repoUrl}>
+              <CaretDownIcon class="size-3 shrink-0" />
+            </Show>
           </>
         }
       >
@@ -329,7 +343,11 @@ export function RepositoryPicker(props: {
           }}
           label="Starting branch"
           triggerLabel="Branch"
-          triggerClass="pill min-w-0 max-w-[45%] text-ink"
+          triggerClass={
+            props.compactPhone
+              ? 'pill min-w-0 max-w-full flex-1 h-9 pl-1 pr-2 gap-2 text-ink'
+              : 'pill min-w-0 max-w-[45%] text-ink'
+          }
           disabled={props.branchLocked}
           title={
             props.branchLocked
@@ -339,7 +357,14 @@ export function RepositoryPicker(props: {
           trigger={
             <>
               <GitBranchIcon class="size-4 shrink-0" />
-              <span class="truncate">{props.branch}</span>
+              <span
+                class="truncate"
+                classList={{
+                  'font-mono text-[13px] text-ink-muted': props.compactPhone,
+                }}
+              >
+                {props.branch}
+              </span>
               <Show when={!props.branchLocked}>
                 <CaretDownIcon class="size-3 shrink-0" />
               </Show>

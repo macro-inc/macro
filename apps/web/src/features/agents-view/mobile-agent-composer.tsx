@@ -1,6 +1,6 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useUserId } from '@core/context/user';
-import { createEffect, Suspense } from 'solid-js';
+import { createEffect, onCleanup, Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { startPendingSession } from '../block-agent/context/pending-session';
 import { modeForKind } from './core/agent-kind';
@@ -31,6 +31,11 @@ function Composer() {
     return selection ? modeForKind(selection.kind) : undefined;
   };
   let focus: (() => void) | undefined;
+  createEffect(() => {
+    const identity = userId();
+    if (!identity) return;
+    onCleanup(mobileAgentRequest.registerFocus(identity, () => focus?.()));
+  });
   createEffect(() => {
     const selected = requested();
     if (

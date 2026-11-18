@@ -21,11 +21,14 @@ import {
   Switch,
   splitProps,
 } from 'solid-js';
+import { AttachmentChip } from './attachment-chip/attachment-chip';
 import { useInput, useInputCommands } from './context';
 import type { InputAttachmentData, InputAttachmentKind } from './types';
 
 type AttachmentsProps = JSX.HTMLAttributes<HTMLDivElement> & {
   kind?: InputAttachmentKind | 'media';
+  /** Compact filename chips retain the same upload, removal, and media viewer. */
+  appearance?: 'preview' | 'chips';
 };
 
 function truncateFilename(name: string, maxLength = 24): string {
@@ -158,7 +161,12 @@ function DocumentAttachmentItem(props: {
 export function Attachments(props: AttachmentsProps) {
   const input = useInput();
   const commands = useInputCommands();
-  const [local, rest] = splitProps(props, ['class', 'children', 'kind']);
+  const [local, rest] = splitProps(props, [
+    'class',
+    'children',
+    'kind',
+    'appearance',
+  ]);
   const resolved = children(() => local.children);
 
   const [viewerOpen, setViewerOpen] = createSignal(false);
@@ -228,6 +236,19 @@ export function Attachments(props: AttachmentsProps) {
             <For each={visibleAttachments()}>
               {(attachment) => (
                 <Switch>
+                  <Match when={local.appearance === 'chips'}>
+                    <AttachmentChip
+                      attachment={attachment}
+                      onRemove={handleRemove}
+                      onOpen={
+                        !attachment.pending &&
+                        (attachment.kind === 'image' ||
+                          attachment.kind === 'video')
+                          ? () => handleOpen(attachment)
+                          : undefined
+                      }
+                    />
+                  </Match>
                   <Match
                     when={
                       attachment.kind === 'image' || attachment.kind === 'video'
