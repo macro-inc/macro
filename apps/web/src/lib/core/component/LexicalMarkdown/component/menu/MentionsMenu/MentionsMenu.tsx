@@ -845,12 +845,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const mode = controller.viewAllMode();
     return mode ? controller.getBucket(mode) : undefined;
   };
-  const viewAllLoadingRows = () => {
-    const mode = controller.viewAllMode();
-    return mode ? controller.loadingRows(mode) : 0;
-  };
+  const viewAllHolding = () => (activeViewAllBucket()?.heldRows?.() ?? 0) > 0;
   const viewAllEmpty = () =>
-    controller.combinedItems().length === 0 && viewAllLoadingRows() === 0;
+    controller.combinedItems().length === 0 && !viewAllHolding();
 
   const visibleBuckets = createMemo(() => {
     const currentBins = controller.bins();
@@ -900,6 +897,14 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       MAX_CONTENT_HEIGHT,
       Math.max(0, h - PANEL_DECORATION_HEIGHT)
     );
+  };
+
+  // A list holding rows back fills the rest of its height with loading rows:
+  // a menu above the caret would otherwise grow upward as they land.
+  const viewAllLoadingHeight = () => {
+    if (!viewAllHolding()) return 0;
+    const listed = controller.combinedItems().length * VIRTUAL_ITEM_HEIGHT;
+    return Math.max(0, (contentMaxHeight() ?? MAX_CONTENT_HEIGHT) - listed);
   };
 
   const floatWithElementProps = () =>
@@ -1058,9 +1063,17 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                   );
                 }}
               />
-              <Show when={viewAllLoadingRows()}>
-                {(count) => (
-                  <MentionLoadingRows count={count()} rowClass="h-9 sm:h-9" />
+              <Show when={viewAllLoadingHeight()}>
+                {(height) => (
+                  <div
+                    class="overflow-hidden"
+                    style={{ height: `${height()}px` }}
+                  >
+                    <MentionLoadingRows
+                      count={Math.ceil(height() / VIRTUAL_ITEM_HEIGHT)}
+                      rowClass="h-9 sm:h-9"
+                    />
+                  </div>
                 )}
               </Show>
             </Show>

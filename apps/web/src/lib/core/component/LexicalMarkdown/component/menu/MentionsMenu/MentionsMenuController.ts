@@ -130,16 +130,14 @@ class MentionsMenuController {
   });
 
   /**
-   * Placeholder rows a category shows below its listed rows for the ones it
-   * holds back, up to the People preview, so that nothing below them moves
-   * when they arrive.
+   * Placeholder rows a category's preview shows below its listed rows for the
+   * ones it holds back, up to the People preview, so that nothing below them
+   * moves when they arrive.
    */
   loadingRows(bucketId: string): number {
     const held = this.getBucket(bucketId)?.heldRows?.() ?? 0;
     if (held === 0) return 0;
-    const listed = this.viewAllMode()
-      ? this.combinedItems().length
-      : (this.bins()[bucketId] ?? 0);
+    const listed = this.bins()[bucketId] ?? 0;
     const shown = Math.min(
       listed + held,
       PEOPLE_PREVIEW_COUNT,
