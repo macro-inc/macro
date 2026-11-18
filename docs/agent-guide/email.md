@@ -479,6 +479,8 @@ continuation pages. Once replay commits (even after a reload), only those querie
 refresh from the server; they should not refetch over the optimistic state merely
 because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
+Press # right after opening a thread, while its mark read is still on its way:
+the row must leave the list and stay out once the mark read lands.
 Archive-based
 Mark Done, Mark Not Done, and Undo/Redo use `setEmailThreadArchived`: `inboxVisible`
 updates optimistically in the normalized cache, and each reversal is a distinct
@@ -653,7 +655,8 @@ that match its supported view/filter but are missing inside its covered sort
 range (including timestamp/ID ties). An exhausted page covers the remaining
 matching range, including an empty result. This checks at most 500 local matches
 per write; larger stale sets converge over refreshes. It preserves normalized
-threads and pending optimistic edits, and does not use cursor pages or backfill
+threads and the membership a pending optimistic edit creates (a queued mark read
+does not keep a thread the page left out), and does not use cursor pages or backfill
 gaps as negative evidence. An older open view's server snapshot cannot restore
 explicitly invalidated membership; pending local edits still take precedence.
 Invalidated facts stay unqueryable until a full canonical snapshot arrives,
