@@ -34,7 +34,7 @@ use scheduled_action::domain::event_runs::{
 };
 use scheduled_action::domain::models::CreatedItem;
 use scheduled_action::domain::ports::{
-    DraftHandBacks, DraftJobStore, KnobEntities, KnownPeople, RequestSessions,
+    DraftHandBacks, DraftJobStore, KnobEntities, KnownPeople, LiveItems, RequestSessions,
     ScheduledActionDispatcher, SessionCreations,
 };
 use scheduled_action::domain::program_runner::ProgramRunner;
@@ -458,6 +458,53 @@ impl KnownPeople for RoutinePeople {
     }
 }
 
+/// Whether an item an entity knob names is out of the trash, and a task
+/// still a task, from the domains that own each kind.
+struct RoutineLiveItems {
+    documents: documents::outbound::pg_document_repo::PgDocumentRepo<PgBotsRepo>,
+    projects: projects::outbound::pg_project_repo::PgProjectRepo<PgBotsRepo>,
+    chats: chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
+}
+
+impl LiveItems for RoutineLiveItems {
+    async fn live(&self, item: &routine_program::EntityValue) -> Result<bool, rootcause::Report> {
+        use chat::domain::ports::ChatRepo as _;
+        use documents::domain::ports::DocumentRepo as _;
+        use projects::domain::ports::ProjectRepo as _;
+        use routine_program::EntityKind;
+        let id = item.id.as_str();
+        match item.kind {
+            EntityKind::Document | EntityKind::Task => {
+                match self.documents.get_basic_document(id).await {
+                    Ok(document) => Ok(document.deleted_at.is_none()
+                        && (item.kind != EntityKind::Task
+                            || document.sub_type
+                                == Some(document_sub_type::DocumentSubType::Task))),
+                    Err(sqlx::Error::RowNotFound) => Ok(false),
+                    Err(error) => Err(rootcause::Report::new(error).into_dynamic()),
+                }
+            }
+            EntityKind::Project => match self.projects.get_basic_project(id).await {
+                Ok(project) => Ok(project.is_some_and(|project| project.deleted_at.is_none())),
+                Err(error) => Err(rootcause::report!("{error:?}")),
+            },
+            EntityKind::Chat => match self.chats.get_metadata(id).await {
+                Ok(chat) => Ok(chat.deleted_at.is_none()),
+                Err(chat::domain::models::ChatErr::NotFound) => Ok(false),
+                Err(error) => Err(rootcause::report!("{error:?}")),
+            },
+            // Deleted outright: the access check already found it gone.
+            EntityKind::Channel
+            | EntityKind::Database
+            | EntityKind::User
+            | EntityKind::EmailThread
+            | EntityKind::CrmCompany
+            | EntityKind::CrmContact
+            | EntityKind::Initiative => Ok(true),
+        }
+    }
+}
+
 /// Scheduling routes and workers owned by the harness process.
 pub struct SchedulingRuntime {
     pub router: Router,
@@ -519,6 +566,17 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         RoutinePeople(
             notification::outbound::user_existence_checker::DbUserExistenceChecker::new(db.clone()),
         ),
+        RoutineLiveItems {
+            documents: documents::outbound::pg_document_repo::PgDocumentRepo::new(
+                db.clone(),
+                registrar.clone(),
+            ),
+            projects: projects::outbound::pg_project_repo::PgProjectRepo::new(
+                db.clone(),
+                registrar.clone(),
+            ),
+            chats: chat::outbound::postgres::PgChatRepo::new(db.clone(), registrar.clone()),
+        },
     ));
     let event_access = Arc::new(EventAccessAdapter::new(
         access.as_ref().clone(),

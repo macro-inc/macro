@@ -31,6 +31,13 @@ pub trait TaskTargetValidator: Send + Sync + 'static {
         task: &serde_json::Value,
         owner: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The entity knobs of a saved task whose item its owner can't use now.
+    fn unusable_knobs(
+        &self,
+        task: &serde_json::Value,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<super::knob_entities::UnusableKnob>>> + Send;
 }
 
 /// Whether a routine's owner can use the item an entity knob names: it
@@ -68,6 +75,18 @@ pub trait KnownPeople: Send + Sync + 'static {
     fn exists(
         &self,
         user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
+}
+
+/// Whether an item its owner can open is still one an entity knob can use:
+/// not in the trash, and a task still a task. Documents, tasks, folders and
+/// chats go to the trash, where their owner can still open them; the other
+/// kinds are deleted outright, which the access check already catches.
+pub trait LiveItems: Send + Sync + 'static {
+    /// `Ok(false)` when it is trashed, gone, or no longer of its kind.
+    fn live(
+        &self,
+        item: &routine_program::EntityValue,
     ) -> impl Future<Output = Result<bool, Report>> + Send;
 }
 
@@ -383,6 +402,13 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<super::code_upgrade::CodeUpgrade>>> + Send;
+
+    /// The routine's entity knobs whose item its owner can't use now, checked
+    /// as the owner, as its runs will be.
+    fn get_unusable_knobs(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Vec<super::knob_entities::UnusableKnob>>> + Send;
 }
 
 /// A create's result: a new routine, or the sub-routine its key already named.

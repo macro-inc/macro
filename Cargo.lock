@@ -784,6 +784,7 @@ dependencies = [
  "opentelemetry_sdk",
  "pipedream_mcp",
  "png",
+ "projects",
  "prompt",
  "properties",
  "rate_limit",

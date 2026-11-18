@@ -9,7 +9,7 @@ use routine_program::{ProgramError, RoutineProgram};
 use serde_json::Value;
 
 use super::{
-    knob_entities::unusable_items,
+    knob_entities::{UnusableKnob, unusable_items, unusable_knobs},
     models::ResolvedTaskTarget,
     ports::{KnobEntities, TaskTargetValidator},
 };
@@ -63,6 +63,25 @@ impl TaskTargetValidator for ModelOnlyTargets {
             return Err(TargetValidationError::ItemsUnavailable.into());
         }
         Ok(())
+    }
+
+    /// Routines with entity knobs can't be saved here, so none has any.
+    async fn unusable_knobs(
+        &self,
+        task: &Value,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<UnusableKnob>> {
+        let Ok(program) = RoutineProgram::from_task(task) else {
+            return Ok(Vec::new());
+        };
+        if program
+            .code_steps()
+            .iter()
+            .any(|step| step.entities().next().is_some())
+        {
+            return Err(TargetValidationError::ItemsUnavailable.into());
+        }
+        Ok(Vec::new())
     }
 }
 
@@ -122,6 +141,30 @@ impl<Sessions: RoutineSessions> TaskTargetValidator for TargetValidation<Session
             .into());
         }
         Ok(())
+    }
+
+    async fn unusable_knobs(
+        &self,
+        task: &Value,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<UnusableKnob>> {
+        // A stored task that no longer parses has no knobs to show.
+        let Ok(program) = RoutineProgram::from_task(task) else {
+            return Ok(Vec::new());
+        };
+        if !program
+            .code_steps()
+            .iter()
+            .any(|step| step.entities().next().is_some())
+        {
+            return Ok(Vec::new());
+        }
+        let Some(entities) = &self.entities else {
+            return Err(TargetValidationError::ItemsUnavailable.into());
+        };
+        unusable_knobs(entities.as_ref(), owner, &program)
+            .await
+            .map_err(|error| anyhow::anyhow!("could not check a routine's items: {error}"))
     }
 }
 
