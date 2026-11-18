@@ -142,6 +142,9 @@ pub enum RecordedCallStatus {
     Failed,
     /// Execution ended before a response was observed.
     Unknown,
+    /// Never sent: the operation was outside what the permission gate checked
+    /// the program to call.
+    Refused,
 }
 
 /// Durable source and final outcome, with historical bridge calls when present.
