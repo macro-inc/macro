@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { PaneHiddenContext } from '@core/context/pane-visibility';
 import {
   Calendar,
   type DatesSetArg,
@@ -133,6 +134,39 @@ describe('FullCalendar Solid connector', () => {
     });
     expect(resetOptions).toHaveBeenCalledOnce();
     expect(resetOptions.mock.calls[0][1]).toEqual(['events']);
+  });
+
+  it('applies option changes made while its pane is hidden once it shows', () => {
+    const [events, setEvents] = createSignal([
+      { id: 'first', title: 'First', start: '2025-01-15' },
+    ]);
+    const [hidden, setHidden] = createSignal(false);
+    const resetOptions = vi.spyOn(Calendar.prototype, 'resetOptions');
+    render(() => (
+      <PaneHiddenContext.Provider value={hidden}>
+        <FullCalendar.Root
+          plugins={[dayGridPlugin]}
+          initialView="dayGridMonth"
+          initialDate="2025-01-15"
+          headerToolbar={false}
+          handleWindowResize={false}
+          events={events()}
+        >
+          <FullCalendar.Host />
+        </FullCalendar.Root>
+      </PaneHiddenContext.Provider>
+    ));
+    resetOptions.mockClear();
+
+    setHidden(true);
+    setEvents([{ id: 'first', title: 'Updated', start: '2025-01-16' }]);
+    setEvents([{ id: 'first', title: 'Latest', start: '2025-01-17' }]);
+    expect(resetOptions).not.toHaveBeenCalled();
+
+    setHidden(false);
+    expect(resetOptions).toHaveBeenCalledOnce();
+    expect(resetOptions.mock.calls[0]?.[1]).toEqual(['events']);
+    expect(screen.getByText('Latest')).toBeTruthy();
   });
 
   it('restores defaults when a reactive option is removed', () => {
