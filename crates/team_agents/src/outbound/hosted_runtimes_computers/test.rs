@@ -1,3 +1,4 @@
+use crate::domain::models::ComputerSize;
 use hosted_runtimes::domain::models::ComputerStatusKind;
 
 use super::*;
@@ -65,4 +66,22 @@ fn a_purchase_still_confirming_lists_as_purchasing() {
         ComputerState::Purchasing
     );
     assert!(roster_error(ComputerError::NotFound).is_err());
+}
+
+#[test]
+fn no_room_keeps_the_size_it_had_no_room_for() {
+    assert!(matches!(
+        purchase_error(ComputerError::SoldOut(ComputerSize::Large)),
+        TeamAgentError::NoRoom(ComputerSize::Large)
+    ));
+}
+
+#[test]
+fn a_declined_card_is_its_own_refusal() {
+    assert!(matches!(
+        purchase_error(ComputerError::Billing(
+            hosted_runtimes::domain::ports::BillingError::PaymentFailed
+        )),
+        TeamAgentError::PaymentDeclined
+    ));
 }

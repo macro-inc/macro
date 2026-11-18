@@ -22,9 +22,9 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: false }),
 }));
 vi.mock('@core/auth', () => ({ useHasPaidAccess: () => () => false }));
-vi.mock('@core/constant/featureFlags', () => ({
-  LOCAL_ONLY: false,
-  enableMacroComputers: {},
+vi.mock('@core/constant/featureFlags', () => ({ LOCAL_ONLY: false }));
+vi.mock('@queries/computers/computers', () => ({
+  useMacroComputersRollout: () => () => ({ enabled: false, loading: false }),
 }));
 vi.mock('@core/context/user', () => ({
   usePermissions: () => () => ['write:stripe_subscription'],

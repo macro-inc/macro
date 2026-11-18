@@ -2,7 +2,7 @@ import type {
   ApiChannelWithLatest,
   ChannelType,
 } from '../../../generated/storage/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { SearchOpts } from '../search/options';
 import type { Team } from '../teams/team';
@@ -93,40 +93,50 @@ export class ChannelNamespace {
   }
 
   /**
-   * Every channel the authenticated user is a member of, auto-paginated.
+   * Every channel the authenticated user is a member of, auto-paginated; `maxItems` caps the total.
    * Iterate with `for await`; collect with `Array.fromAsync`.
    *
    * @readonly
    */
-  async *list(): AsyncGenerator<Channel> {
-    for await (const record of this.records()) {
+  list(opts?: IterationOptions): AsyncGenerator<Channel> {
+    return iterate('channels.list', opts, {}, () => this.listed());
+  }
+
+  private async *listed(pageSize = CHANNEL_PAGE_SIZE): AsyncGenerator<Channel> {
+    for await (const record of this.records(pageSize)) {
       yield Channel.fromListing(this.client, record);
     }
   }
 
   /**
-   * Search the user's channels by name (the default) or by content. A name
-   * search matches, case-insensitively, channels whose name or other members'
-   * names contain every word of `query`; the server runs it, one request per
-   * page of matches, newest first. A blank query lists every channel.
+   * Search the user's channels by name (the default) or by content; `maxItems`
+   * caps the total. A name search matches, case-insensitively, channels whose
+   * name or other members' names contain every word of `query`; the server runs
+   * it, one request per page of matches, newest first. A blank query lists
+   * every channel.
    *
    * @readonly
    */
   search(query: string, opts?: SearchOpts): AsyncGenerator<Channel> {
     // The server refuses a blank query; a blank name matches every channel.
     if (!query.trim() && (opts?.searchOn ?? 'name') === 'name')
-      return this.list();
+      return iterate(
+        'channels.search',
+        opts,
+        { searchOn: true, pageSize: true },
+        () => this.listed(opts?.pageSize),
+      );
     return Channel.search(this.client, query, {
       ...opts,
       searchOn: opts?.searchOn ?? 'name',
     });
   }
 
-  private records(): AsyncGenerator<ApiChannelWithLatest> {
+  private records(pageSize: number): AsyncGenerator<ApiChannelWithLatest> {
     return paginate(async (cursor) => {
       const page = unwrap(
         await this.client.storage.getChannels({
-          query: { limit: CHANNEL_PAGE_SIZE, ...(cursor ? { cursor } : {}) },
+          query: { limit: pageSize, ...(cursor ? { cursor } : {}) },
         }),
       );
       return { items: page.items, nextCursor: page.next_cursor };

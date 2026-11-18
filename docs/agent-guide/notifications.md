@@ -411,7 +411,7 @@ computer id, name, and outcome; opening one reopens that computer's setup
 dialog on Bring your AI (see the Macro computers walkthrough in
 [settings.md](settings.md)). An agent teammate's computer notifies its
 inviter with the agent instead (`agent { userId, name }`): "<name> is ready",
-with **Message <name>** and, for owners and admins, **Bring your AI**, or
+with **Message <name>** and, for owners and admins, **Connect Claude plan**, or
 "<name> couldn't be set up" with **Retry**; opening it goes to the DM or to
 Team → Members (see Agent teammates in [settings.md](settings.md)).
 

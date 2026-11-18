@@ -33,6 +33,7 @@ futures = { workspace = true }
 harness_id = { path = "../harness_id" }
 harnesses = { path = "../harnesses", default-features = false }
 hex = { workspace = true }
+firecracker_host_api = { path = "../firecracker_host_api" }
 hosted_runtimes = { path = "../hosted_runtimes", default-features = false }
 lazy-regex = { workspace = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
@@ -46,6 +47,7 @@ opentelemetry_sdk = { workspace = true, features = ["trace", "rt-tokio"] }
 opentelemetry-otlp = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 ratatui = { workspace = true }
+rand = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 rootcause = { workspace = true }
 # The gateway dial is `wss` on every deployment but a local stack, and

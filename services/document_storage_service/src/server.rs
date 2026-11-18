@@ -1962,7 +1962,8 @@ async fn run_server() -> anyhow::Result<()> {
     // mutation metadata include viewer history.
     let primary_entity_soup = Arc::new(
         SoupImpl::new(
-            PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone()))
+                .with_source_items_enabled(config.soup_source_items_enabled),
             frecency_service.clone(),
             service::email_previews::ConsistentEmailPreviewReader::new(
                 ReadonlyEmailPreviewAdapter(email_service.clone()),
@@ -2015,7 +2016,8 @@ async fn run_server() -> anyhow::Result<()> {
     // leg reads the primary. Ordinary inbox lists keep using the replica.
     let soup_service = Arc::new(
         SoupImpl::new(
-            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone()))
+                .with_source_items_enabled(config.soup_source_items_enabled),
             frecency_service,
             service::email_previews::ConsistentEmailPreviewReader::new(
                 ReadonlyEmailPreviewAdapter(email_service.clone()),

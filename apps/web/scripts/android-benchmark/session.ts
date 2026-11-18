@@ -1,6 +1,7 @@
 import { Cdp } from './cdp';
 import type { Device } from './device';
 import { type CapturedSpan, parseOtlpTraces } from './otlp';
+import { cpuProbe, throttleInForce } from './throttle';
 
 /**
  * The benchmark build exports traces to this same-origin path. Tauri's asset
@@ -36,6 +37,10 @@ export class Session {
   exports = 0;
   /** Exports whose body could not be read: their spans are missing. */
   captureFailures = 0;
+  /** The CPU throttle this connection set; it ends with the connection. */
+  cpuThrottle = 1;
+  /** The CPU probe's fastest run before throttling, in milliseconds. */
+  #cpuBaselineMs: number | undefined;
   #listeners: (() => void)[] = [];
   /** Export bodies are read in request order, so a root never lands before its children. */
   #captures: Promise<void> = Promise.resolve();
@@ -245,6 +250,37 @@ export class Session {
       await sleep(100);
     }
     throw new Error(`Nothing to tap (${failure}): ${expression.slice(0, 120)}`);
+  }
+
+  /**
+   * Slows the WebView renderer by `rate` (1 leaves it alone) and checks that
+   * the rate took effect. Times the CPU probe first, unthrottled, as the
+   * reference for later checks; interference only adds time, so the fastest
+   * run is the reference.
+   */
+  async throttleCpu(rate: number): Promise<void> {
+    this.#cpuBaselineMs = Math.min(
+      ...(await this.cdp.evaluate<number[]>(cpuProbe(3)))
+    );
+    await this.cdp.send('Emulation.setCPUThrottlingRate', { rate });
+    this.cpuThrottle = rate;
+    await this.checkCpuThrottle();
+  }
+
+  /**
+   * Measures the slowdown in force by timing the CPU probe against its
+   * unthrottled time, and throws when it is not the rate this session set.
+   */
+  async checkCpuThrottle(): Promise<number> {
+    if (this.#cpuBaselineMs === undefined)
+      throw new Error('Call throttleCpu before measuring a step');
+    const [probeMs] = await this.cdp.evaluate<number[]>(cpuProbe(1));
+    const measured = probeMs / this.#cpuBaselineMs;
+    if (!throttleInForce(this.cpuThrottle, measured))
+      throw new Error(
+        `CPU throttle ${this.cpuThrottle}× is not in force: the page runs ${measured.toFixed(1)}× slower than unthrottled`
+      );
+    return measured;
   }
 
   async route(): Promise<string> {
