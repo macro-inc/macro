@@ -13,6 +13,11 @@ export async function main({ macro, run, trigger }: StepContext) {
       if ((room -= segment.content.length) < 0) break;
       transcript.push({ speaker: segment.speakerId, text: segment.content });
     }
+    if (transcript.length === 0) return { document: null };
+    // Say where it stops, so the cut transcript is not read as the whole call.
+    if (transcript.length < segments.length) {
+      transcript.push({ speaker: 'Macro', text: 'The rest of this call is too long to include.' });
+    }
   }
   const { outcome } = await macro.ai.structuredCompletion({
     model: 'google/gemini-3.8-flash',
