@@ -1,9 +1,21 @@
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { hashKey } from '@tanstack/solid-query';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
-import type { ContactDirectoryPage, RankedPerson } from './directory';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
+import {
+  type ContactDirectoryPage,
+  type RankedPerson,
+  readContactDirectory,
+} from './directory';
 import { createContactDirectoryWindow } from './directory-query';
+import { createContactSearchTrace } from './search-trace';
 
 /** Listed pages stay bounded however far a picker or menu is scrolled. */
 export const MAX_LISTED_CONTACTS = 500;
@@ -14,7 +26,8 @@ type WindowParameters = Parameters<typeof createContactDirectoryWindow>;
  * A directory window whose further pages are listed below the earlier ones, up
  * to a bound. Takes the window's arguments and returns its shape, with `data`
  * holding every listed row and the current continuation. Only `eligible` rows
- * are listed, so rows a caller drops never count toward the bound.
+ * are listed, so rows a caller drops never count toward the bound. Each
+ * search's paging is traced as one `contacts.search` span.
  */
 export function createContactDirectoryList(
   scope: WindowParameters[0],
@@ -24,9 +37,26 @@ export function createContactDirectoryList(
     eligible?: (user: IUser) => boolean;
   } = {}
 ) {
-  const window = createContactDirectoryWindow(scope, reader, enabled, options);
   const eligible = (users: IUser[]) =>
     options.eligible ? users.filter(options.eligible) : users;
+  const trace = createContactSearchTrace(
+    reader ?? readContactDirectory,
+    MAX_LISTED_CONTACTS,
+    eligible,
+    () => options.resetKey?.()
+  );
+  createEffect(
+    on(enabled, (active) => {
+      if (!active) trace.close();
+    })
+  );
+  onCleanup(trace.close);
+  const window = createContactDirectoryWindow(
+    scope,
+    trace.read,
+    enabled,
+    options
+  );
   /** What the listed pages belong to: the account, the text, and who is eligible. */
   const listKey = () => {
     const current = scope();

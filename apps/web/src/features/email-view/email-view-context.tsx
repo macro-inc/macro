@@ -105,7 +105,6 @@ import type {
 type EmailViewProviderProps = ContextProviderProps & {
   initialState?: EmailViewStateOptions;
   /** Saved-view sources; absent where the host has no saved views. */
-  savedViewsEnabled?: Accessor<boolean>;
   savedViewsSource?: () => SavedViewsSource;
   savedViewSource?: (id: Accessor<string | undefined>) => SavedViewSource;
 };
@@ -248,8 +247,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const state = persistedState;
 
   // Saved views: the URL names the open view; its definition fills the All tab.
-  const savedViewsEnabled = () =>
-    Boolean(props.savedViewSource && props.savedViewsEnabled?.());
+  const savedViewsEnabled = () => Boolean(props.savedViewSource);
   const selectedSavedViewId = () =>
     savedViewsEnabled() ? tabSearch.savedView : undefined;
   const savedViewsList = props.savedViewsSource?.();

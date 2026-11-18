@@ -26,12 +26,9 @@ dot, including desktop preview activation, keyboard opening, and phone navigatio
 The read is saved in the background; a failed request restores the dot so opening
 it again can retry. Marking read does not mark the notification done.
 
-**Rollout:** Sales Tasks, Sales Email, Sales Notes and Sales Calls require PostHog `enable-crm-activity`
-(off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
-this flag to decide whether to supply its task-composer preset, and with
-`enable-crm` to show the Customer / Contact pill when creating any task. With it off, only Companies and People
-appear in Records, activity queries do not run, and activity deep links return to
-Companies after flags finish loading. Global task creation uses the standard
+Records lists Sales Tasks, Sales Email, Sales Notes and Sales Calls beside Companies
+and People. CRM supplies its task-composer preset, and creating any task shows the
+Customer / Contact pill. Global task creation uses the standard
 composer; record-level New task still associates the new task with that record.
 With it on, the activity and contextual composer behavior below applies.
 Task creation opens immediately from the focused pane's registered preset,
@@ -92,8 +89,8 @@ uses the normal list and filter drawer. The default is open tasks grouped by dat
 Sales Email exposes the normal read/done, attachment, calendar and tag filters. Sales
 Notes has creator/tag filters and Sales Calls has audience/tag filters. Sales Notes' creator chooser
 uses bounded contact pages in the desktop submenu and mobile drawer; Me and
-persisted/unknown selections are independent of the suggestion window. Next
-options replaces the page, and Only affects creators without clearing other
+persisted/unknown selections are independent of the suggestion pages. Further
+pages list below the earlier ones as the end scrolls into view, and Only affects creators without clearing other
 facets or the fixed CRM association. Company owner/team selectors are unchanged.
 Desktop/phone regression: `src/lib/core/internal/browser-test/list-filters.browser.e2e.ts`
 with stand-in data. Sales Email, Sales Notes and Sales Calls support
@@ -692,16 +689,27 @@ company. A selected company with email sync disabled suppresses interaction and
 source updates while preserving the manual record. Both paths require the
 mailbox owner's exact-primary contribution consent and eligible stored history.
 Manual add-email and company link/switch remain available without consent and
-never enable sync or enroll a mailbox. In the contact company picker, Next
-options (or PageDown on desktop) appends later browse or search pages to the
-visible companies. The control shows loading and page failures with retry, and
-disappears at the end of the results. Selecting a company keeps singleton
+never enable sync or enroll a mailbox. In the contact company picker, later browse or
+search pages append to the visible companies as the end scrolls into view (or
+with PageDown on desktop). A failed page shows Retry options and waits for it. Selecting a company keeps singleton
 replacement and the separate Go to action unchanged. Vendor, brand and bulk-sender filters still
 apply. Turning the filter back on stops future
 capture without deleting contacts. The existing admin **Blocked domains**
 controls use the same team exclusions as the privacy dialog. Blocking or
 unblocking never archives or restores records. A partially failed multi-domain
 change retains successful blocks and offers **Retry failed domains**.
+
+Blocking a domain equal to or above an affected connected primary mailbox's
+domain is refused. Team exclusions protect every member's primary mailbox;
+personal exclusions protect your own. The reason appears below the input,
+which keeps the typed domain for correction. Company-domain reasons explain
+that colleagues on the mailbox's own domain are already excluded from CRM;
+personal-provider reasons explain only that the block would hide all of the
+mailbox's email. Existing matching entries show the same note beside the entry
+and retain **Remove** with its usual permissions. Nothing is removed automatically.
+Company email-sharing off and archive also refuse the same whole-mailbox exclusion.
+Verify both scopes, an exact and parent domain, an allowed child or unrelated
+domain, and removal of an existing warned entry at desktop and phone widths.
 
 Contacts without a company add no CRM thread-access grant. Archiving one
 suppresses its team's CRM-derived grant; independent ownership, delegation,

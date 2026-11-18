@@ -1,7 +1,5 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHasPaidAccess } from '@core/auth/license';
 import { defaultModelForPlan } from '@core/component/AI/constant';
-import { enableRoutineConditions } from '@core/constant/featureFlags';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import type { RoutineDraftStorage } from './context/routine-sources';
 import type { ScheduleDraft } from './core/draft';
@@ -28,7 +26,6 @@ export function RoutineNew(props: {
 }) {
   const source = createRoutineCreatorSource();
   const hasPaidAccess = useHasPaidAccess();
-  const decisions = useFeatureFlag(enableRoutineConditions);
   // Each start remounts the page, so its editors take the new draft.
   const [start, setStart] = createSignal<{ draft?: ScheduleDraft }>({});
   onCleanup(onRoutineDraftStarted((draft) => setStart({ draft })));
@@ -51,7 +48,7 @@ export function RoutineNew(props: {
             mobileHeader={(header) => <MobileRoutineEditorHeader {...header} />}
             source={source}
             defaultModel={defaultModelForPlan(hasPaidAccess())}
-            decisionsEnabled={decisions().enabled}
+            decisionsEnabled
             CreatedItem={RoutineCreatedItem}
             storage={storage}
             slots={{

@@ -39,7 +39,7 @@ pub struct CreateLabelResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization, link, request_body), fields(fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,

@@ -15,7 +15,6 @@ use axum::http::StatusCode;
 use axum::http::header::{CONNECTION, CONTENT_LENGTH, HOST, TRANSFER_ENCODING};
 use axum::response::{IntoResponse, Response};
 use rootcause::prelude::*;
-use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
@@ -52,7 +51,7 @@ impl RecordingProxy {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .context("could not build the recording proxy's HTTP client")?;
-        let listener = TcpListener::bind("127.0.0.1:0")
+        let listener = crate::host::local_listener()
             .await
             .context("could not bind the recording proxy")?;
         let address = listener.local_addr()?;

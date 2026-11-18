@@ -172,7 +172,6 @@ function Fixture() {
   };
 
   const base: Partial<CrmContext> = {
-    pipelinesEnabled: () => () => true,
     createAddToPipeline: createSource,
     feedback: {
       success: (message) => toast.success(message),

@@ -133,6 +133,10 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- Personal data stays off spans and logs (`.agents/rules/observability.md`);
+  here that also means a `MacroUserIdStr` parse error, which quotes the
+  address. `draft_save_and_delete_spans_record_no_personal_data` reads the
+  draft spans back.
 - Moving a thread into a folder (`update_thread_project`) calls
   `entity_access_db_utils::project_grants::refuse_filing_in` in the
   transaction that writes `project_id`, so a scoped agent session can't file
@@ -242,8 +246,21 @@ tools — hexagonal, heavily feature-gated.
   `NEW_INVITES_STAY_OUT` in `domain/focus/rule.rs` is the switch for new invites.
   `stale_threads` restates `domain/focus/calendar.rs`'s test for a change in SQL;
   change both.
+- Focus classifies an inbox only while its owner is in the rollout
+  (`FocusEnrollment`, the worker's locally evaluated `enable-email-focus` flag). Check it
+  after `thread_inbox` and before any mail is read. `enrolled_inboxes` checks every
+  `syncing_inboxes` owner, so an owner who joins is found without mail, and
+  `backfill` fills one inbox several threads at a time. The sweep goes inbox by
+  inbox (`inboxes_with_focus` plus those seen enrolled) and leaves an inbox being
+  backfilled to the backfill, so no thread is classified twice at once; `stale_threads` reads one
+  inbox through its latest-inbound and latest-outbound indexes; keep its
+  `OFFSET 0` fence, or the per-thread calendar and contact checks run on every
+  thread in the window.
 - A Focus thread's `due_on` is read when new mail is classified, only for a thread
-  with `is_focus` or `awaiting_reply`, and never on the re-decide path: that path
+  with `is_focus` or `awaiting_reply`, never for a thread the backfill's second pass
+  finds last active before its last 3 days (`DueDates::ReadSince`, which bounds a
+  rollout step's extractor cost),
+  and never on the re-decide path: that path
   keeps the stored date and calls no model, so `save` writes back what
   `StoredClassification` read. A failed or timed-out read stores no date and never
   fails the classification. `input.rs` gives the extractor each of the latest
@@ -266,9 +283,9 @@ tools — hexagonal, heavily feature-gated.
   page order from the record's address superset or from each contributing
   inbox's newest threads, and each gets the message match and the privacy rule
   until the page fills. Keep its `OFFSET 0` fences, or the planner checks the
-  whole stream before the LIMIT, and keep the superset stream's lookup by id
-  (`= ANY(ARRAY(…))`): as a semi-join the planner reads every thread of the
-  inboxes. `team_blocked` relies on `crm_companies_email_sync_off_idx`, or it
+  whole stream before the LIMIT. Fetch each distinct superset or selection
+  match through the fenced lateral primary-key lookup: even `id = ANY(…)`
+  can become a mailbox-wide index filter under stale statistics. `team_blocked` relies on `crm_companies_email_sync_off_idx`, or it
   scans every company. `push_allowed` restates `crm_email_thread_allowed`
   set-based, and the contributing inboxes in `dynamic/resolve.rs` restate its
   mailbox conditions (`allowed_restates_the_privacy_function` and
@@ -334,12 +351,21 @@ tools — hexagonal, heavily feature-gated.
   (`stage_thread_labels` / `commit_thread_label_write` in
   `domain/service/thread_labels.rs`); route new thread label actions through them.
   Message-label batches go through `domain/message_labels.rs`, with their atomic
-  staging and unqueued-write undo behind `MessageLabelRepository`. The queued
+  staging and unqueued-write undo behind `MessageLabelRepository`. A thread on
+  an Outlook inbox, or a message batch whose first message resolves to one,
+  takes its label as one category mailbox command (`enqueue_mailbox_action`)
+  instead of a Gmail label write. The queued
   half lives in `domain/message_labels/gmail_ops.rs`: it owns turn ordering,
   partial acceptance/reversion, retry routing, and delivery dispositions through
   link, settlement, provider, and retry-queue ports. Provider admission remains
   inside the host's existing Gmail adapter.
 - Recompute thread metadata inside staged Gmail SPAM/TRASH writes so restored All Mail previews, ordering, and signal state do not wait for the provider worker.
+- Gmail Report spam and Not spam move the thread between the inbox and Spam
+  (`set_gmail_thread_junk`): a SPAM write and an INBOX write, each its own
+  thread label write, and the agent tool `UpdateThreadLabels` routes `SPAM`
+  there too. Never send the SPAM label alone for them; only the REST and
+  GraphQL label routes (`update_thread_labels_for_user`) write exactly the
+  label they are given.
 - `domain/recent_inbox.rs` merges a user's newest messages read live from
   each of their own inboxes (50 by default, at most 100); an inbox whose read
   fails is skipped. Subjects are cut to 200 characters and snippets to the
@@ -399,6 +425,8 @@ tools — hexagonal, heavily feature-gated.
   `SharedThreadReplyAccess` (edit access to its thread; wired in
   `document_storage_service` with `with_shared_thread_replies`). The reply
   starts a thread in the caller's inbox; other hosts keep `NoSharedThreadReplies`.
+- Let first saves adopt unbound reply drafts by reply target. Keep separately
+  bound working copies distinct when Undo restores a draft for that target.
 - Sender discovery authorizes the inbox first. Gmail aliases use the sender
   provider; Outlook exposes its verified primary address without a Gmail lookup.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
@@ -442,6 +470,25 @@ tools — hexagonal, heavily feature-gated.
   Its `EffectFailure` names the effect (`outlook.effect`) and, for attachment
   uploads, the attachment (`outlook.attachment_id`); never return one without
   a cause.
+- `MailboxSyncService` reads through two gateways: `import_provider` for a
+  folder page claimed before the folder's first round completes and for
+  import reconciliation rows, `provider` for everything else. email-service
+  gives them the Microsoft gate's `Import` and `Live` budgets, so an import
+  cannot take the slot live mail and calendar need.
+- An import round's folder stream reads its next page only while its mailbox
+  has fewer than 200 import rows due (`IMPORT_QUEUED_AHEAD`, checked by
+  `pace_import` with a count capped there); otherwise it is put back for 10 s
+  unread and its enumerate span reads `outlook.outcome=paced`. Rows backed off
+  after their own failures don't count, so they never hold the walk. The count
+  reads the partial index `email_message_reconciliation_import_queued`; keep
+  its predicate and the query's identical, or a mailbox with fewer due rows
+  than the cap reads the whole table. Message claims are first in, first out
+  across mailboxes, so a walk that ran ahead would put every other mailbox's
+  import, and any message that waited for room, behind its whole backlog.
+  Gmail's backfill lists its next page behind the threads it queued for the
+  same reason. Live folder streams are never paced.
+  A message released after a failed read is due at once when a newer
+  revision arrived during the lease.
 - "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
   under the link lock, once per import run: the folder-catalog stream's
   `import_completed_at` is stamped when every folder is enumerated and no
@@ -464,6 +511,10 @@ tools — hexagonal, heavily feature-gated.
   owner, then actor id, retaining one binding per link and actor; the repository
   returns each binding's kind so custody cleanup runs before an owner disconnect
   can suppress it without processing a self-custodian twice.
+- `email_links.fusionauth_user_id` is the holder of the credentials a link
+  syncs with, not the inbox's owner (`macro_id`): another participant's
+  connection or a custody transfer changes it. Never read it as ownership. A
+  deleted user gets an owner binding only for an inbox of their own account.
 - `email_mailbox_folders.total_item_count` is Graph's `totalItemCount` from the
   latest catalog discovery (every 5 minutes, from the listing discovery already
   makes), and the discover span sums it as `outlook.provider_item_count`. It

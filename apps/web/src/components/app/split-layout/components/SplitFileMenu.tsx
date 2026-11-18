@@ -30,7 +30,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableEntityAppearance,
-  enableProjects,
   enableReminders,
 } from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
@@ -549,7 +548,6 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
 
   const [open, setOpen] = createSignal(false);
   const [assigningProject, setAssigningProject] = createSignal(false);
-  const projectsFlag = useFeatureFlag(enableProjects);
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const itemOperations = useItemOperations();
   const quickAccess = useQuickAccess();
@@ -893,7 +891,6 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       reminderOp(),
       addTagOp(),
       ...(props.entityKind === 'task' &&
-      projectsFlag().enabled &&
       (props.permissions === Permissions.OWNER ||
         props.permissions === Permissions.CAN_EDIT)
         ? [
@@ -915,13 +912,18 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     ].filter((op) => !!op);
   });
 
+  // Key each tool by its position before filtering: callers pass `tools` as
+  // a JSX array, which every read of `props.tools` rebuilds, so looking a tool
+  // up again by identity finds nothing and gives every row the same key.
   const filteredTools = createMemo(() =>
-    (props.tools ?? []).filter((tool) => !tool.condition || tool.condition())
+    (props.tools ?? [])
+      .map((tool, index) => ({ tool, id: `tool-${index}` }))
+      .filter(({ tool }) => !tool.condition || tool.condition())
   );
 
   const tools = createMemo<SplitFileMenuAction[]>(() =>
-    filteredTools().map((tool) => ({
-      id: `tool-${props.tools?.indexOf(tool)}`,
+    filteredTools().map(({ tool, id }) => ({
+      id,
       label: typeof tool.label === 'function' ? tool.label() : tool.label,
       disabledReason: tool.disabledReason,
       icon: tool.icon,
@@ -986,7 +988,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
           views={props.mobileViews}
         />
       </Show>
-      <Show when={projectsFlag().enabled && assigningProject()}>
+      <Show when={assigningProject()}>
         <ProjectAssignmentDialog
           taskIds={[props.id]}
           onClose={() => setAssigningProject(false)}

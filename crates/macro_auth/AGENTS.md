@@ -13,8 +13,10 @@ internal API key, and the Axum JWT-decode middleware.
   from every source (percent-decoded `macro-api-token` query keys, bearer,
   the access-token cookie decoded as cookie jars read it, user API key,
   bot, harness and internal key headers), kept in the request's
-  extensions. `macro_authorization`, `agent_correlation` and
-  `AccessTokenExtractor` all read it.
+  extensions. A repeated cookie authenticates with the last, as cookie jars
+  keep it. `macro_authorization` and `agent_correlation` read it;
+  `AccessTokenExtractor` reads `access_token_sources` from the same parse
+  (the first bearer, else the last cookie, nothing else), as it always has.
 - `src/macro_api_token.rs`: the Macro API token (JWT) shape and claims.
 - `src/internal_api_key.rs`: `InternalApiKey`, the shared-secret credential
   for service-to-service calls.

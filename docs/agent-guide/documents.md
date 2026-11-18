@@ -26,6 +26,17 @@ horizontally and removal remains available without hover. Composer fixture
 screenshots: [desktop](media/share-images/desktop.png) and
 [phone](media/share-images/mobile.png).
 
+Opening a document or file in a Drive, Home, CRM or Tasks detail view (tasks,
+snippets and skills included) records the open once in the user's history,
+which orders Recents and Cmd+K. On dev, expect one `POST /history/document/<id>`
+per open, none when access changes or a retry reloads the same document. Agent
+sessions opened from the Agents view, Tasks projects, CRM companies and contacts,
+and Drive folders record their opens the same way, as `agent_session`,
+`initiative`, `crm_company`, `crm_contact` and `project` history. An item
+already in Quick Access's history list is then first in empty Cmd+K; one opened
+for the first time outside that list is recorded but appears there only once the
+tab's cache learns the view.
+
 Verify **Public → View** links in a fresh signed-out browser context. The
 `/app/drive/md/<id>` route (including folder/tab document links and legacy
 `/app/md/<id>` redirects) must show the document without private Drive lists or
@@ -138,6 +149,11 @@ embeds and check that their preview bodies load; also check that a code or canva
 mention offers **Convert to Embed** in its preview menu.
 Drag an embed's bottom-right resize grip, then release and select the card. Its
 height should stay at the dragged size and persist after reopening the document.
+On a phone or tablet a canvas embed does not trap scrolling: swipe over it with
+one finger and the document scrolls; pinch or drag it with two fingers and the
+canvas zooms and pans. Tap **Interact** in its corner to move it with one finger
+(the document then stays put), and **Done**, or a tap elsewhere in the document,
+to hand scrolling back.
 Zoom to fit and menu/keyboard zoom use the full canvas viewport center; floating
 inspectors and details overlays do not reserve centering space. Verify with content
 on both sides of the canvas and the inspector visible. Press **.** to fit the
@@ -392,9 +408,8 @@ picker, displays, and editing.
 
 ## Spreadsheets
 
-Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog
-flag in every environment. Team targeting is configured in PostHog; ordinary
-document permissions continue to control access to each workbook.
+Spreadsheets are available to everyone. Ordinary document permissions control
+access to each workbook.
 
 Choose **Create → Spreadsheet**, or **New → Spreadsheet** in Files or a folder.
 From Files the new workbook opens inline in the open folder or tab
@@ -876,9 +891,10 @@ Right-click inside the cell text editor retains the native text-editing menu.
 Opening a saved spreadsheet from Files/Drive (including a favorite) keeps the
 Drive navigation sidebar in place. Collapse it with the sidebar control; the
 spreadsheet header then shows the navigation toggle to reopen it. Opening a
-spreadsheet does not change the saved sidebar preference. The header keeps the
-Files location breadcrumbs before the sheet title; click a location breadcrumb
-to return to that file listing.
+spreadsheet does not change the saved sidebar preference. Opened from a Drive
+list, the header keeps that list's location breadcrumbs before the sheet title;
+click a location breadcrumb to return to that file listing. Opened from anywhere
+else, the title stands alone.
 
 ## Spreadsheet comments
 

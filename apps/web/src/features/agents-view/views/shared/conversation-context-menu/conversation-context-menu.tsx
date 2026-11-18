@@ -6,6 +6,7 @@ import type { AgentConversationEntity } from '../../../core/recent-conversations
 
 export function ConversationContextMenu(props: {
   conversation: AgentConversationEntity;
+  focusKey?: string;
   list: EntityActionListState;
   children: JSX.Element;
 }) {
@@ -18,7 +19,7 @@ export function ConversationContextMenu(props: {
       as="div"
       class="block h-auto w-full shrink-0"
       onOpenChange={(open) => {
-        if (open) props.list.focus.set(props.conversation.id);
+        if (open) props.list.focus.set(props.focusKey ?? props.conversation.id);
       }}
     >
       {props.children}

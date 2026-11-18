@@ -78,9 +78,22 @@ changing the user or date range must not retain the old events. Verify both hand
 directions with delayed responses and delay calendar metadata past occurrences.
 If metadata fails, events remain usable with the default calendar presentation.
 Provider backfill shows a persistent `Syncing your calendar…` banner above the
-grid, explaining that events will appear automatically and Macro remains usable.
+grid, on desktop and phone: `Events are being imported. This may take a while.
+You can keep using Macro as normal.` It names no provider and shows no
+progress: the server reports one sync status across all of the viewer's
+calendar accounts, with no per-account or per-calendar import state. An Outlook
+import reads a window from a year back to two years ahead one event at a time,
+so the current month can stay empty while events on other dates have already
+arrived. The banner never suggests turning the calendar off, which deletes
+Macro's copy and starts the import again.
 The banner stays visible as partial results arrive and disappears when sync finishes.
 A routine sync of an already imported account never shows it.
+With the GraphQL calendar cache, months already in the cache fetch nothing, so
+the client reads the status itself: when the cache starts, whenever it catches
+up with the server (reconnect, coming online, becoming visible, a cache reset),
+and every minute while the server says syncing. Verify a reload during an
+import: load the calendar while the server reports syncing, let the background
+backfill settle, reload the same tab, and confirm the banner is back.
 Errors retain the separate retry state. Verify delayed occurrence
 responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
@@ -129,12 +142,6 @@ accumulate against the requested date and interrupt unfinished slides, without
 waiting for event responses or hidden-page redraws. Verify repeated forward clicks
 and mixed directions reach the cumulative date while events are still loading.
 Touch swipes retain their page-readiness gates.
-
-Quick-call creation, incoming invitations, Live lists, Macro meeting links, and
-the `/app/meet/*` routes require the PostHog flag `enable-quick-calls`. While the
-flag loads or is off, those controls stay hidden and meeting routes do not mount
-call setup. Existing channel calls and the upcoming-events list remain available.
-For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
 
 During a quick or scheduled call, signed-in participants can open **Call chat**
 with **Open chat** at the bottom-right. On desktop, **Copy Meeting Url** sits at
@@ -189,15 +196,6 @@ While an event response saves, a small spinner appears beside `Going?` within
 the RSVP footer on desktop and mobile; the row and buttons stay in place.
 Failures appear below the buttons inside the padded footer and allow retrying.
 
-Calendar scheduling is on by default in dev. Production uses the PostHog flag
-`enable-calendar-scheduling` and stays off unless enabled remotely. Set
-`VITE_ENABLE_CALENDAR_SCHEDULING=false` to test the disabled state locally.
-While off, the Scheduling workspace and calendar booking shortcuts are hidden;
-public booking and receipt links show an unavailable page without fetching
-scheduling data. When enabling a production rollout, include anonymous visitors
-so invitees can open those links. A public booking link stays available when
-the flag request gets no answer, for example when a browser blocks it.
-
 Calendar connections live in **Settings → Calendar** (`/app/settings/calendar`).
 Connected calendars offers Connect account (pick Gmail or Outlook / Microsoft 365,
 then consent; Outlook is offered only to accounts with the `enable-outlook` flag,
@@ -208,7 +206,7 @@ the only linked account lacks calendar permission, the Calendar accounts row
 shows just a filled Connect button for it, with no account list or
 visibility note. Disconnect removes calendar access/data, not the Gmail connection.
 Settings → Calendar lists only the viewer's own inboxes. The **Enable calendar**
-toast (behind `enable-calendar-prompt-web` and `enable-calendar-prompt-mobile`)
+toast
 follows the same rule: it asks once per own inbox missing calendar permission,
 never for an inbox another Macro user delegated to the viewer (a **Shared** row
 in Settings → Email, whose per-inbox Enable calendar button stays available).
@@ -522,7 +520,7 @@ Selecting `Macro call` on an owned editable event without one adds a call on sav
 choosing another option removes its generated Macro link from the invitation.
 Removing the link or deleting the calendar event does not revoke the reusable call.
 The AI's `CreateCalendarEvent` composer (chat, agent sessions, channel review cards)
-offers the same selector under the same quick-calls flag; `Macro call` there maps to
+offers the same selector; `Macro call` there maps to
 the tool's `addMacroCall`, and the call is created when the tool executes, before the
 event is written, so the single invitation already carries the link. The MCP server
 and channel bot accept `addMacroCall` directly. `addMacroCall` and `addGoogleMeet`
@@ -647,8 +645,9 @@ beside the calendar on desktop, as the full-screen composer on touch devices, in
 composer even when another one is open. Deleting an event asks first, and says guests will be
 notified only when someone besides you is on it.
 Guest pickers in event creation/editing, invitations/forwarding and AI drafts use
-paged personal suggestions. Type to find contacts outside the first window; Next
-options or PageDown replaces the page. Selected guests, their supplied/chosen
+paged personal suggestions. Type to find contacts outside the first page; scrolling
+to the end of the list, or PageDown on desktop, lists the next page below the
+earlier ones, and a failed page offers Retry options. Selected guests, their supplied/chosen
 names and custom addresses survive searches and paging. Known event guests are
 scoped extras, not personal-directory membership. Add-only editors exclude current
 and newly added guests case-insensitively without changing their stored address
@@ -855,8 +854,10 @@ instead of opening the calendar; on a touch device, tapping it opens the same ca
 sheet. That card also offers `Add to calendar` (behind the `enable-calendar-add-shared-event`
 flag, on in dev only until a real Google import has passed there), which imports a snapshot of
 the meeting onto the viewer's only writable Google calendar, or onto one they pick from a menu
-when they have several; Outlook calendars are not offered, since Microsoft cannot keep the
-meeting's iCalendar UID. Google imports an event only for its organizer or an attendee, so the
+when they have several. Microsoft cannot keep the meeting's iCalendar UID, so viewers
+with an Outlook calendar and no writable Google calendar see `Adding shared events
+requires a writable Google calendar.` beside the download. Google imports an event
+only for its organizer or an attendee, so the
 snapshot keeps the real organizer and lists the viewer, already accepted, as its only guest: the
 meeting's other guests and join link stay out and nobody is notified. If Google refuses anyway,
 the card says Google won't add the event to that calendar and points to `Download .ics`. The agent
@@ -1497,11 +1498,12 @@ file carries, through email service's
 The server reads the event from the saved email, never from the request. The card then
 resolves to the snapshot. A single occurrence, a cancelled event, a time that cannot be read,
 and mail saved before recurrence was recorded on the snapshot get no `Add to calendar`.
-Nor does a card whose check is not confirmed: it says `Checking your connected calendar…`
-while loading, `Connect a calendar to add this event.` without a calendar, and
-`Calendar unavailable. Saved event details are shown.` when the check fails; a failed
-refresh after an earlier `Not on your calendar.` keeps that line under the unavailable notice
-but withholds the button.
+An Outlook calendar without an eligible Google destination shows `Adding shared events
+requires a writable Google calendar.` with the shared event details.
+A card whose check is pending says `Checking your connected calendar…`. A reader without
+a calendar sees `Connect a calendar to add this event.` A failed check shows `Calendar
+unavailable. Saved event details are shown.` A failed refresh after an earlier `Not on your
+calendar.` keeps that line under the unavailable notice and withholds the button.
 
 A connected, resolved invitation shows the responding address and Yes / Maybe / No.
 Calendars connected through a linked inbox also resolve here, using that inbox's

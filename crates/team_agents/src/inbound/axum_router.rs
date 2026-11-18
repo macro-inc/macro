@@ -20,6 +20,7 @@ use entity_access::{
     },
     inbound::axum_extractors::MacroUserTeamExtractorV2,
 };
+use hosted_runtimes::domain::models::PurchaseRefusalCode;
 use hosted_runtimes::domain::{agent::AgentEnrollmentError, enrollment::EnrollmentGeneration};
 use macro_authorization::{
     AccountHolderOrInternal, InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService,
@@ -31,7 +32,9 @@ use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::domain::models::{ComputerId, CreateTeamAgent, TeamAgent, TeamAgentError, TeamAgents};
+use crate::domain::models::{
+    ComputerId, ComputerSize, CreateTeamAgent, TeamAgent, TeamAgentError, TeamAgents,
+};
 use crate::domain::ports::TeamAgentService;
 use crate::domain::voice::AgentVoice;
 
@@ -78,7 +81,11 @@ impl IntoResponse for TeamAgentError {
             Self::UnknownVoice => StatusCode::BAD_REQUEST,
             Self::NotFound | Self::NoVoice => StatusCode::NOT_FOUND,
             Self::NotEnabled | Self::Forbidden(_) => StatusCode::FORBIDDEN,
-            Self::ComputerUnavailable(_) | Self::PurchaseConfirming => StatusCode::CONFLICT,
+            Self::ComputerUnavailable(_)
+            | Self::NoRoom(_)
+            | Self::PurchaseConfirming
+            | Self::InviteInProgress => StatusCode::CONFLICT,
+            Self::PaymentDeclined => StatusCode::PAYMENT_REQUIRED,
             Self::RepoUnavailable(_) | Self::VoiceUnavailable(_) => StatusCode::BAD_GATEWAY,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
@@ -97,20 +104,47 @@ impl IntoResponse for TeamAgentError {
             }
             other => other.to_string(),
         };
+        let code = match &self {
+            Self::NoRoom(_) => Some(PurchaseRefusalCode::NoRoom),
+            Self::PaymentDeclined => Some(PurchaseRefusalCode::PaymentDeclined),
+            Self::InviteInProgress => Some(PurchaseRefusalCode::InviteInProgress),
+            _ => None,
+        };
+        let size = match &self {
+            Self::NoRoom(size) => Some(*size),
+            _ => None,
+        };
         (
             status,
-            Json(ErrorResponse {
-                message: message.into(),
+            Json(TeamAgentErrorBody {
+                message,
+                code,
+                size,
             }),
         )
             .into_response()
     }
 }
 
+/// [`ErrorResponse`] plus a stable code for refusals the invite dialog shows
+/// its own way rather than as a message.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct TeamAgentErrorBody {
+    /// Human-readable message.
+    message: String,
+    /// Set for refusals the client handles by kind.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    code: Option<PurchaseRefusalCode>,
+    /// The size there was no room for, with [`PurchaseRefusalCode::NoRoom`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    size: Option<ComputerSize>,
+}
+
 /// The team agents router:
 ///
 /// - `POST /` — a team admin invites an agent teammate and buys its computer.
 /// - `GET /` — a team member lists the team's agents.
+/// - `POST /me/online` — an agent reports that it is online.
 /// - `DELETE /{agent_user_id}` — a team admin removes an agent.
 /// - `GET`/`PUT /{agent_user_id}/voice` — a team admin reads or changes the
 ///   agent's call voice.
@@ -127,6 +161,7 @@ where
             post(create_team_agent_handler::<S, Eas, Auth>)
                 .get(list_team_agents_handler::<S, Eas, Auth>),
         )
+        .route("/me/online", post(agent_online_handler::<S, Eas, Auth>))
         .route(
             "/{agent_user_id}",
             delete(delete_team_agent_handler::<S, Eas, Auth>),
@@ -151,8 +186,9 @@ where
         (status = 201, body = TeamAgent),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 402, body = TeamAgentErrorBody, description = "The card was declined (`payment_declined`); nothing was created"),
         (status = 403, body = ErrorResponse),
-        (status = 409, body = ErrorResponse),
+        (status = 409, body = TeamAgentErrorBody, description = "No room for the size (`no_room`, with `size`), or the invite is in flight (`invite_in_progress`); nothing was created"),
         (status = 500, body = ErrorResponse),
         (status = 502, body = ErrorResponse),
     )
@@ -213,6 +249,40 @@ where
     Ok(Json(
         state.service.list(access.entity_access_receipt).await?,
     ))
+}
+
+/// The calling agent reports that it is online, with its own credential.
+/// The first report makes it `running` and tells its inviter it is ready;
+/// later ones change nothing. 404 for an account that isn't an agent of its
+/// team.
+#[utoipa::path(
+    post,
+    tag = "team-agents",
+    operation_id = "report_team_agent_online",
+    path = "/team_agents/me/online",
+    responses(
+        (status = 204),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn agent_online_handler<S, Eas, Auth>(
+    access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+) -> Result<StatusCode, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .agent_online(access.entity_access_receipt)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Path for one agent.

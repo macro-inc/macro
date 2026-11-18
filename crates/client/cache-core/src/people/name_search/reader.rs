@@ -50,17 +50,29 @@ fn text<'a>(record: &'a Record, field: &str) -> Option<&'a str> {
         _ => None,
     }
 }
-fn priority(stage: NameStage) -> u8 {
-    match stage {
-        NameStage::Browse => 0,
-        NameStage::Contains => 1,
-        NameStage::WordPrefix => 2,
-        NameStage::ExactName => 3,
-        NameStage::EmailPrefix => 4,
-        NameStage::Identity => 5,
+/// Among names matching at a word start, people with a positive interaction
+/// time rank above everyone else, however exactly a stranger's name matches; the
+/// name tier then orders each group. Contains-only matches stay below both
+/// groups, and address-only matches below those. The frontend publishes that time from direct-message channels: the
+/// first other participant of each, including group and never-written DMs.
+fn priority(stage: NameStage, messaged: bool) -> u8 {
+    match (stage, messaged) {
+        // Browse answers only an empty query and Address only a nonempty one,
+        // so they never meet in one search and can share the lowest rank.
+        (NameStage::Browse | NameStage::Address, _) => 0,
+        (NameStage::Contains, _) => 1,
+        (NameStage::WordPrefix, false) => 2,
+        (NameStage::ExactName, false) => 3,
+        (NameStage::WordPrefix, true) => 4,
+        (NameStage::ExactName, true) => 5,
+        (NameStage::EmailPrefix, _) => 6,
+        (NameStage::Identity, _) => 7,
     }
 }
-const SELF_PRIORITY: u8 = 6;
+fn in_stage(stage: NameStage, priority: u8) -> bool {
+    priority == self::priority(stage, false) || priority == self::priority(stage, true)
+}
+const SELF_PRIORITY: u8 = 8;
 fn compare(a: &PersonHit, b: &PersonHit) -> std::cmp::Ordering {
     b.match_rank
         .cmp(&a.match_rank)
@@ -188,12 +200,17 @@ impl<'a> NameSearchRead<'a> {
             NameSearch::EmailPrefix(_) => vec![NameStage::EmailPrefix],
             NameSearch::Name(q) if q.normalized().is_empty() => vec![NameStage::Browse],
             NameSearch::Name(q) if q.words().next().is_none() => {
-                vec![NameStage::ExactName, NameStage::Contains]
+                vec![
+                    NameStage::ExactName,
+                    NameStage::Contains,
+                    NameStage::Address,
+                ]
             }
             NameSearch::Name(_) => vec![
                 NameStage::ExactName,
                 NameStage::WordPrefix,
                 NameStage::Contains,
+                NameStage::Address,
             ],
         };
         stages
@@ -201,16 +218,18 @@ impl<'a> NameSearchRead<'a> {
             .filter(|stage| {
                 self.after
                     .as_ref()
-                    .is_none_or(|a| priority(*stage) <= a.priority)
+                    .is_none_or(|a| priority(*stage, false) <= a.priority)
             })
             .collect()
     }
-    /// Exclusive stored rank-key bound for a same-stage continuation.
+    /// Exclusive stored rank-key bound for a same-stage continuation. A stage's
+    /// messaged rows all have earlier keys than its unmessaged ones, so the
+    /// bound holds whichever of the two groups the continuation stopped in.
     pub fn after_key(&self, stage: NameStage) -> Option<Vec<u8>> {
         let after = self
             .after
             .as_ref()
-            .filter(|a| a.priority == priority(stage))?;
+            .filter(|a| in_stage(stage, a.priority))?;
         let user = MacroUserIdStr::parse_from_str(&after.user).ok()?;
         Some(
             RecentKey::new(Some(after.timestamp), &user)
@@ -265,14 +284,6 @@ impl<'a> NameSearchRead<'a> {
             return None;
         }
         let stage = self.query.classify(&normalize_text(name), &user)?;
-        let priority = if self.request.mode == PeopleMode::Property
-            && self.browsing()
-            && user.as_ref() == self.request.scope.identity
-        {
-            SELF_PRIORITY
-        } else {
-            priority(stage)
-        };
         let timestamp = if self.substitutes_dm() {
             facts
                 .direct_message
@@ -283,6 +294,14 @@ impl<'a> NameSearchRead<'a> {
             facts.last_interaction_ms
         }
         .unwrap_or(0);
+        let priority = if self.request.mode == PeopleMode::Property
+            && self.browsing()
+            && user.as_ref() == self.request.scope.identity
+        {
+            SELF_PRIORITY
+        } else {
+            priority(stage, timestamp > 0)
+        };
         Some(Evaluated {
             user,
             name,
@@ -307,7 +326,7 @@ impl<'a> NameSearchRead<'a> {
             return;
         };
         if !self.after(&p)
-            || stage.is_some_and(|stage| priority(stage) != p.priority)
+            || stage.is_some_and(|stage| !in_stage(stage, p.priority))
             || self.users.contains(p.user.as_ref())
         {
             return;
@@ -386,15 +405,17 @@ impl<'a> NameSearchRead<'a> {
             && self
                 .best
                 .last()
-                .is_some_and(|last| last.match_rank > priority(stage))
+                .is_some_and(|last| last.match_rank > priority(stage, true))
     }
-    /// All future rows in this ordered stage have keys at least `key`.
+    /// All future rows in this ordered stage have keys at least `key`, so they
+    /// are messaged only while the key's own time is positive.
     /// Only use for a validated projection within the same storage transaction.
     pub fn can_stop_at(&self, stage: NameStage, key: &[u8]) -> bool {
+        let best = priority(stage, RecentKey::timestamp(key).is_none_or(|time| time > 0));
         self.full()
             && self.best.last().is_some_and(|worst| {
-                worst.match_rank > priority(stage)
-                    || worst.match_rank == priority(stage)
+                worst.match_rank > best
+                    || worst.match_rank == best
                         && RecentKey::new(Some(worst.timestamp_ms), &worst.user_id).as_bytes()
                             <= key
             })

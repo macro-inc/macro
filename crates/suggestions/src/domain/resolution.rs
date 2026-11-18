@@ -3,9 +3,10 @@
 //!
 //! Kept literal on purpose. An event names an item; the open suggestions about that
 //! item that the event settles are resolved, with the reason in
-//! `state_reason`. Anything that takes judgement (a suggestion that stopped
-//! mattering, a reply that didn't really answer) is left to the next
-//! generation session.
+//! `state_reason`, except that the person's own reply makes the reply
+//! suggestions it answers done: they did what those asked. Anything that
+//! takes judgement (a suggestion that stopped mattering, a reply that didn't
+//! really answer) is left to the next generation session.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -110,13 +111,23 @@ impl ResolutionEvent {
         }
     }
 
-    fn reason(&self) -> ResolveReason {
+    /// What the event does to an open suggestion it settles.
+    fn settlement(&self) -> Settlement {
         match self {
-            Self::Replied { .. } => ResolveReason::Replied,
-            Self::Deleted { .. } => ResolveReason::Deleted,
-            Self::AccessChanged { .. } => ResolveReason::AccessLost,
+            Self::Replied { .. } => Settlement::Answered,
+            Self::Deleted { .. } => Settlement::Resolved(ResolveReason::Deleted),
+            Self::AccessChanged { .. } => Settlement::Resolved(ResolveReason::AccessLost),
         }
     }
+}
+
+/// What an event does to an open suggestion it settles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Settlement {
+    /// The person answered it: done.
+    Answered,
+    /// It ended without being done.
+    Resolved(ResolveReason),
 }
 
 /// What resolving an event did.
@@ -124,7 +135,7 @@ impl ResolutionEvent {
 pub struct Resolved {
     /// Open suggestions the event matched.
     pub matched: u32,
-    /// Of those, the ones it resolved.
+    /// Of those, the ones it closed: resolved, or done when answered.
     pub resolved: u32,
 }
 
@@ -234,11 +245,13 @@ impl<Repo: SuggestionRepo, Access: SuggestionAccess> ResolveSuggestions
         let now = Utc::now();
         let mut resolved = 0;
         for (suggestion, user) in settled {
-            let moved = self
-                .repo
-                .resolve(&user, suggestion, event.reason(), now)
-                .await
-                .map_err(SuggestionError::internal)?;
+            let moved = match event.settlement() {
+                Settlement::Answered => self.repo.answer(&user, suggestion, now).await,
+                Settlement::Resolved(reason) => {
+                    self.repo.resolve(&user, suggestion, reason, now).await
+                }
+            }
+            .map_err(SuggestionError::internal)?;
             resolved += u32::from(moved);
         }
 

@@ -21,7 +21,9 @@ whose `DoneReceipt` is the undo token. Subscriptions run `FeedTriggers` through
 - `src/domain/models.rs`: keys, revisions, cursors, receipts, candidates.
 - `src/domain/reader.rs`: paging with refill, recompute by key.
 - `src/domain/keying.rs`: which candidate a notification belongs to.
-- `src/outbound/soup.rs`: the candidate source over Soup's attention query.
+- `src/outbound/soup.rs`: the candidate source over Soup's attention query,
+  and the keys that may hold something unread (`unread_keys`), which a feed
+  reads through `FeedReader::current` before trusting one.
 
 ## Scope
 

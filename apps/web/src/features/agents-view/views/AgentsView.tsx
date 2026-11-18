@@ -360,7 +360,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   };
   const openConversation = (
     conversation: AgentConversationTarget,
-    event?: MouseEvent,
+    newSplit = false,
     targetMode: AgentsMode = mode()
   ) => {
     if (mobileLayout()) {
@@ -377,12 +377,12 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       type: 'component' as const,
       id: agentsRouteId({ mode: targetMode, conversation }),
     };
-    if (!event?.shiftKey && panel.handle.content().id === next.id) {
+    if (!newSplit && panel.handle.content().id === next.id) {
       selectConversation(conversation);
       return;
     }
     const result = layout.openWithSplit(next, {
-      preferNewSplit: event?.shiftKey,
+      preferNewSplit: newSplit,
       referredFrom: 'agents',
     });
     if (result.status === 'reused' && result.owner !== result.sourceOwner) {
@@ -397,7 +397,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     });
     openConversation(
       { id, type: 'agent_session' },
-      undefined,
+      false,
       modeForKind(kindForBot(start.botId, rosterSource.roster()))
     );
   };
@@ -438,7 +438,11 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     event?: MouseEvent
   ) => {
     markRowNotificationsSeenOnOpen(conversation, notifications);
-    openConversation(conversation, event, modeForConversation(conversation));
+    openConversation(
+      conversation,
+      event?.shiftKey ?? false,
+      modeForConversation(conversation)
+    );
   };
   const actions: ConversationActions = {
     openPullRequest: (pr, event) => {
@@ -564,7 +568,14 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       onSearchChange={setSearch}
       showUnlistedRuns={showUnlistedRuns()}
       onShowUnlistedRunsChange={setShowUnlistedRuns}
-      onOpenConversation={openListedConversation}
+      onOpenConversation={(conversation, newSplit) => {
+        markRowNotificationsSeenOnOpen(conversation, notifications);
+        openConversation(
+          conversation,
+          newSplit,
+          modeForConversation(conversation)
+        );
+      }}
       onRetry={() => fireAndForget(query.refetch(), 'agents-view')}
       onLoadMore={() => fireAndForget(query.fetchNextPage(), 'agents-view')}
     />
@@ -691,7 +702,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                               if (session)
                                 openConversation(
                                   session,
-                                  undefined,
+                                  false,
                                   modeForConversation(session)
                                 );
                             }}

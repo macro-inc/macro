@@ -1,6 +1,11 @@
 import { deepEqual } from '@core/util/compareUtils';
-import { createFreshSearch, NAME_MATCH_RANKING } from '@core/util/freshSort';
-import { normalizeNameText } from '@core/util/name-match-score';
+import {
+  createFreshSearch,
+  NAME_MATCH_RANKING,
+  NAME_STARTS_WITH_QUERY_RANK,
+} from '@core/util/freshSort';
+import { ANY_SCRIPT_FUZZY_OPTIONS } from '@core/util/fuzzy';
+import { normalizeNameText, startsWordsOf } from '@core/util/name-match-score';
 import { preservePersonOrder } from '@core/util/ordered-window';
 import uFuzzy from '@leeoniya/ufuzzy';
 import { match } from 'ts-pattern';
@@ -8,7 +13,7 @@ import type { CommandMenuItem } from './useCommandItems';
 
 // Command keyword eligibility is not a database-person lookup. Keep its existing
 // matcher for commands and ordinary entities; personal windows retain core order.
-const COMMAND_MATCHER = new uFuzzy({});
+const COMMAND_MATCHER = new uFuzzy(ANY_SCRIPT_FUZZY_OPTIONS);
 
 /** The label a row shows; its search text can add emails, aliases, or command keywords. */
 function displayName(item: CommandMenuItem): string {
@@ -56,23 +61,53 @@ function isPeopleItem(item: CommandMenuItem) {
   );
 }
 
-/** Keep the existing order within each group and the positions of other results. */
-function prioritizeInternalPeople<T extends CommandMenuItem>(items: T[]): T[] {
-  const people = items
-    .filter(isPeopleItem)
-    .sort(
-      (left, right) =>
-        Number(left.bucket === 'crm_contact') -
-        Number(right.bucket === 'crm_contact')
+/** Within each run of adjacent people in one relationship group, Macro users
+ * and DMs lead CRM contacts. Each keeps its order, and no person moves past
+ * another result or into a better group. */
+function prioritizeInternalPeople<T extends CommandMenuItem>(
+  items: T[],
+  groupOf: (item: T) => number | undefined
+): T[] {
+  const ordered: T[] = [];
+  let run: T[] = [];
+  let runGroup: number | undefined;
+  const flushRun = () => {
+    ordered.push(
+      ...run.filter((item) => item.bucket !== 'crm_contact'),
+      ...run.filter((item) => item.bucket === 'crm_contact')
     );
-  let nextPerson = 0;
-  return items.map((item) =>
-    isPeopleItem(item) ? people[nextPerson++] : item
-  );
+    run = [];
+  };
+
+  for (const item of items) {
+    if (!isPeopleItem(item)) {
+      flushRun();
+      ordered.push(item);
+      continue;
+    }
+
+    const group = groupOf(item);
+    if (group !== runGroup) flushRun();
+    runGroup = group;
+    run.push(item);
+  }
+  flushRun();
+  return ordered;
 }
 
 function isMacroPerson(item: CommandMenuItem) {
   return item.bucket === 'dm' || item.bucket === 'person';
+}
+
+/** Whether the viewer has a direct message with this person, as the people
+ * window decides it: a DM row, or a person with an interaction time, which
+ * comes only from DMs. CRM contacts are email correspondents and never count. */
+function hasDirectMessage(item: CommandMenuItem) {
+  if (item.bucket === 'dm') return true;
+  if (item.kind !== 'user') return false;
+
+  const interaction = item.timestamps.lastInteraction;
+  return interaction != null && new Date(interaction).getTime() > 0;
 }
 
 /**
@@ -153,24 +188,49 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
     );
     return others.length === 1 && team.has(others[0]);
   };
-  // Match quality decides first. Among equally good matches, teammates and
+  // People the viewer never talked to: no teammate and no direct message.
+  const isStranger = (item: CommandMenuItem) =>
+    isPeopleItem(item) && !withTeammate(item) && !hasDirectMessage(item);
+  // Among names with a word starting with each typed term, the viewer's own
+  // results and people they know come first, then strangers, however exactly
+  // a stranger's name matches. Names that only contain the query follow,
+  // strangers last in each tier.
+  const relationshipGroup = (
+    item: CommandMenuItem,
+    nameMatchRank: number,
+    stranger: boolean
+  ) => {
+    const startsWords =
+      nameMatchRank >= NAME_STARTS_WITH_QUERY_RANK ||
+      startsWordsOf(displayName(item), term);
+    if (!startsWords) return 0;
+    return stranger ? 1 : 2;
+  };
+  // Match quality decides next. Among equally good matches, teammates and
   // conversations with them lead, then other Macro users and DMs, then
   // documents and channels.
   const scored = search(eligible, query)
-    .map((result) =>
-      result.item.kind === 'command'
-        ? {
-            ...result,
-            nameMatchRank: Math.max(
+    .map((result) => {
+      const nameMatchRank =
+        result.item.kind === 'command'
+          ? Math.max(
               result.nameMatchRank,
               commandNameRank(displayName(result.item), term)
-            ),
-          }
-        : result
-    )
+            )
+          : result.nameMatchRank;
+      const stranger = isStranger(result.item);
+      return {
+        ...result,
+        nameMatchRank,
+        stranger,
+        group: relationshipGroup(result.item, nameMatchRank, stranger),
+      };
+    })
     .sort(
       (left, right) =>
+        right.group - left.group ||
         right.nameMatchRank - left.nameMatchRank ||
+        Number(left.stranger) - Number(right.stranger) ||
         Number(withTeammate(right.item)) - Number(withTeammate(left.item)) ||
         Number(isMacroPerson(right.item)) - Number(isMacroPerson(left.item)) ||
         right.combinedScore - left.combinedScore ||
@@ -182,16 +242,31 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   const nameRanks = new Map(
     scored.map(({ item, nameMatchRank }) => [item.id, nameMatchRank])
   );
-  // Window order holds among people who match equally well and are equally
-  // close to the viewer, so a teammate keeps the lead the sort gave them.
-  const nameRank = (item: T) =>
-    (nameRanks.get(item.id) ?? -Infinity) * 2 + Number(withTeammate(item));
+  const groups = new Map(scored.map(({ item, group }) => [item.id, group]));
+  const groupOf = (item: T) => groups.get(item.id);
+  // Window order holds among people in the same group who match equally well
+  // and are equally close to the viewer, so a teammate or someone the viewer
+  // messages keeps the lead the sort gave them.
+  const closeness = (item: T) => {
+    if (withTeammate(item)) return 'teammate';
+    return isStranger(item) ? 'stranger' : 'known';
+  };
+  const tiers = new Map<string, number>();
+  const nameRank = (item: T) => {
+    const rank = nameRanks.get(item.id);
+    if (rank === undefined) return -Infinity;
+
+    const key = `${groupOf(item)}:${rank}:${closeness(item)}`;
+    const tier = tiers.get(key) ?? tiers.size;
+    tiers.set(key, tier);
+    return tier;
+  };
   const preserved = (item: CommandMenuItem) =>
     options.preservedIds?.has(item.id) ||
     (options.preserveAdditionalEntityMatches && item.kind === 'entity');
   if (!options.preserveAdditionalEntityMatches && !options.preservedIds?.size)
     return preservePersonOrder(
-      prioritizeInternalPeople(ranked),
+      prioritizeInternalPeople(ranked, groupOf),
       items,
       nameRank
     );
@@ -203,7 +278,7 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
     .filter((item) => preserved(item) && !matchedIds.has(item.id))
     .sort(compareRecency);
   return preservePersonOrder(
-    prioritizeInternalPeople([...ranked, ...additional]),
+    prioritizeInternalPeople([...ranked, ...additional], groupOf),
     items,
     nameRank
   );

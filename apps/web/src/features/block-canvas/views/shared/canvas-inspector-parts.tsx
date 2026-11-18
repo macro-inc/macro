@@ -32,7 +32,13 @@ import { useCanvasView } from './canvas-view-parts';
  * actions. The view decides where it sits (a side panel, a sheet) and
  * scrolls it.
  */
-export function CanvasInspectorSections() {
+export function CanvasInspectorSections(sectionProps: {
+  /**
+   * List colour swatches in the inspector itself: for one too short on room
+   * to open a picker beside the shape being coloured.
+   */
+  swatchRows?: boolean;
+}) {
   const view = useCanvasView();
   const { props, state, editor, selectedItem } = view;
   const { lockAspectRatio, setLockAspectRatio } = view;
@@ -138,6 +144,7 @@ export function CanvasInspectorSections() {
         }
       />
       <StyleInspector
+        swatchRows={sectionProps.swatchRows}
         fill={styleKinds().some(
           (kind) => kind === 'rectangle' || kind === 'ellipse'
         )}
@@ -198,7 +205,7 @@ export function CanvasInspectorSections() {
           onScrub={() => state.text.scrubFontSize(state.inspector)}
         />
       </Show>
-      <Show when={view.artifactsEnabled() && selectedArtifact()}>
+      <Show when={selectedArtifact()}>
         {(artifact) => (
           <>
             <ArtifactInspector

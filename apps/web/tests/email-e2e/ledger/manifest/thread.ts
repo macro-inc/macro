@@ -224,7 +224,7 @@ export const thread = {
       source: [HOTKEYS, 'src/features/block-email/EmailThreadHostView.tsx'],
       registered: ['email.createEvent'],
       viewports: ['desktop'],
-      flag: 'enable-calendar-ui; enable-universal-input for extraction',
+      flag: 'enable-universal-input for extraction',
     },
     {
       id: 'AL-137',
@@ -662,7 +662,6 @@ export const thread = {
         INVITATION,
         'src/features/calendar/hooks/create-calendar-rsvp-controller.ts',
       ],
-      flag: 'enable-calendar-ui',
       needs: 'the calendar service',
     },
     {
@@ -672,7 +671,6 @@ export const thread = {
       action: 'choose the scope of an RSVP to a recurring event',
       trigger: 'RSVP on a recurring invitation, then the scope dialog',
       source: [INVITATION],
-      flag: 'enable-calendar-ui',
       needs: 'the calendar service',
     },
     {
@@ -682,7 +680,6 @@ export const thread = {
       action: 'Join meeting',
       trigger: 'card "Join" button',
       source: [CARD],
-      flag: 'enable-calendar-ui',
       needs: 'the calendar service',
     },
     {
@@ -692,7 +689,6 @@ export const thread = {
       action: 'Open in calendar (Shift = new split)',
       trigger: 'card "Open in calendar" icon button',
       source: [CARD, INVITATION],
-      flag: 'enable-calendar-ui',
       needs: 'the calendar service',
     },
     {
@@ -702,7 +698,6 @@ export const thread = {
       action: 'View your day (expand / collapse the day agenda)',
       trigger: 'card "View your day"; "Close" in the "Your day" section',
       source: [CARD, INVITATION, DAY],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'AL-182',
@@ -712,7 +707,6 @@ export const thread = {
         'Connect calendar (starts the add-inbox flow with calendar scope)',
       trigger: 'card "Connect calendar" button when no calendar is connected',
       source: [CARD, INVITATION],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'AL-183',
@@ -724,7 +718,7 @@ export const thread = {
         INVITATION,
         'src/features/calendar-view/components/AddToCalendarButton.tsx',
       ],
-      flag: 'enable-calendar-ui; enable-calendar-add-shared-event',
+      flag: 'enable-calendar-add-shared-event',
       needs: 'the calendar service',
     },
     {
@@ -734,7 +728,6 @@ export const thread = {
       action: 'Retry calendar',
       trigger: 'card "Retry calendar" button under the unavailable notice',
       source: [CARD, INVITATION],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'AL-185',
@@ -881,7 +874,6 @@ export const thread = {
         'read receipt "Opened" / "Not opened" beside the date; "Not opened yet" or open count and times in tooltip and details',
       trigger: 'sent message from an inbox with read receipts on',
       source: ['src/features/email-message/core/read-receipt.ts', TOP_BAR],
-      flag: 'enable-email-read-receipts',
     },
     {
       id: 'STL-089',
@@ -974,6 +966,18 @@ export const thread = {
         'src/features/email-thread/thread-completion-adapter.tsx#Failed to mark as not done',
       ],
       note: 'the same toasts are raised from the header and title menu of an open thread (was STL-613)',
+    },
+    {
+      id: 'STL-991',
+      surface: 'SL-28',
+      fn: ['F-071'],
+      state: 'result: the thread leaves the inbox at the provider',
+      trigger:
+        'Mark done after a reload that cut off the mark read of a thread just opened',
+      source: [
+        'src/lib/graphql-cache/exchange/mutation-queue-runner.ts',
+        'src/lib/graphql-cache/exchange/mutation-queue-owner.ts',
+      ],
     },
     {
       id: 'STL-076',
@@ -1187,7 +1191,6 @@ export const thread = {
       state: '"Your response" tabs Yes / Maybe / No with the current answer',
       trigger: 'request invitation the viewer can answer',
       source: [CARD],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'STL-096',
@@ -1206,7 +1209,6 @@ export const thread = {
         'notice "Calendar unavailable. Showing saved invitation details." / "…last-known details and response." with "Retry calendar"',
       trigger: 'calendar lookup failed',
       source: [CARD, INVITATION],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'STL-098',
@@ -1227,7 +1229,7 @@ export const thread = {
       toasts: [
         'src/features/email-thread/calendar-invitation.tsx#Added to your calendar',
       ],
-      flag: 'enable-calendar-ui; enable-calendar-add-shared-event',
+      flag: 'enable-calendar-add-shared-event',
       needs: 'the calendar service',
     },
     {
@@ -1238,7 +1240,6 @@ export const thread = {
         '"Your day": "Loading your day…" / "Loading calendar…", agenda rows with "This invitation" and "Overlaps this invitation", "No events found for this day.", "Calendar unavailable. Conflicts could not be checked.", "Calendar is syncing. This agenda may be incomplete."',
       trigger: 'View your day',
       source: [INVITATION, DAY],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'STL-514',
@@ -1275,7 +1276,6 @@ export const thread = {
       trigger:
         'answering an invitation; saved answer on an unresolved invitation',
       source: [CARD, INVITATION],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'STL-518',
@@ -1288,7 +1288,7 @@ export const thread = {
         INVITATION,
         'src/features/calendar-view/components/AddToCalendarButton.tsx',
       ],
-      flag: 'enable-calendar-ui; enable-calendar-add-shared-event',
+      flag: 'enable-calendar-add-shared-event',
       needs: 'the calendar service',
     },
     {
@@ -1298,6 +1298,17 @@ export const thread = {
       state: 'saved card without RSVP, Join, Open in calendar or View your day',
       trigger: 'invitation message with the calendar off',
       source: [INVITATION, CARD],
+    },
+    {
+      id: 'STL-522',
+      surface: 'SL-40',
+      fn: ['F-156'],
+      state: '"Adding shared events requires a writable Google calendar."',
+      trigger: 'open a shared event with Outlook as the only calendar',
+      source: ['src/features/calendar-view/components/AddToCalendarButton.tsx'],
+      providers: ['outlook'],
+      flag: 'enable-calendar-add-shared-event',
+      needs: 'the calendar service',
     },
     // SL-43
     {
@@ -1542,7 +1553,6 @@ export const thread = {
         'src/features/email-compose/email-event.ts',
       ],
       viewports: ['desktop'],
-      flag: 'enable-calendar-ui',
       needs: 'the calendar service',
     },
   ],

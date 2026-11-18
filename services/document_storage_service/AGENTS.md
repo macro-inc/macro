@@ -108,14 +108,19 @@ threads, pins, recents, notifications, folders, activity.
 - The REST `/items` routes and `/search` hide Macro's own sign-in emails from a program (`hide_sign_in_emails_from_programs` in `src/api.rs`), so a code-mode run cannot read a sign-in code from workspace previews or search hits. GraphQL (`/items/soup/graphql` and its websocket) refuses programs outright: a query picks its own fields, so no rewrite can find the email. Nothing program-side calls it.
 - Inject the shared PostHog client into CRM's thread-exclusion gate; missing or
   failed `enable-crm-thread-exclusions` evaluation must refuse API writes.
+- Inject the same client into CRM's selective contribution gate. The owner-only
+  policy API stays default-off for grants; GET never initializes identity,
+  including when the flag is on. Keep its OpenAPI contract and generated storage
+  SDK current; public SDK wrappers are deferred to the next phase.
+  Keep the email-policy enum closure modifier in `api/swagger/email_policy.rs`
+  until schema generation propagates `deny_unknown_fields` to variant objects.
 
 - Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
   the CRM domain owns authorization, normalization and relation invariants.
 
-- Provision required `POSTHOG_API_KEY` before startup; `enable-call-channel-thread`
-  evaluation has a 300 ms timeout and keeps the call's own chat on failure.
-- The same flag client evaluates `enable-programmatic-calls` per caller for the
-  explicit call start, join, and leave routes; failures disable those routes.
+- Provision required `POSTHOG_API_KEY` before startup; the flag client
+  evaluates `enable-programmatic-calls` per caller for the explicit call start,
+  join, and leave routes; failures disable those routes.
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 

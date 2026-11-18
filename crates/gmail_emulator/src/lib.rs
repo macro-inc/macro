@@ -240,7 +240,12 @@ impl GmailEmulator {
 
     /// Starts an emulator on a given address.
     pub async fn start_on(address: SocketAddr, seed: Seed) -> Result<Self, StartError> {
-        let listener = TcpListener::bind(address).await?;
+        Self::start_with_listener(TcpListener::bind(address).await?, seed)
+    }
+
+    /// Starts an emulator on a listener the caller bound, for a caller that
+    /// picks its own port. Call it inside a Tokio runtime.
+    pub fn start_with_listener(listener: TcpListener, seed: Seed) -> Result<Self, StartError> {
         let address = listener.local_addr()?;
         let mut state = State::default();
         state.apply_seed(&seed)?;

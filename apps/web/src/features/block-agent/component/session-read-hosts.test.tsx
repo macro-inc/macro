@@ -65,6 +65,7 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ isPanelActive: () => mocks.active() }),
 }));
 vi.mock('@core/block', () => ({ useBlockId: () => 'placeholder-session' }));
+vi.mock('@core/internal/open-tracker', () => ({ createOpenTracker: vi.fn() }));
 vi.mock('@core/orchestrator', () => ({
   createMethodRegistration: (
     _handle: unknown,

@@ -2,7 +2,9 @@ use super::mutations::{IssuedToken, NoOpenClients, OWNER, connected_mailbox, lin
 use super::*;
 use calendar_events::outbound::pg::PgCalendarRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_event_broker::NoopMacroEventBroker;
 use sqlx::PgPool;
+use std::sync::{Arc, Mutex};
 use wiremock::matchers::query_param_is_missing;
 
 type Sync = OutlookCalendarSync<
@@ -461,5 +463,389 @@ async fn a_first_import_brings_this_month_and_next_in_before_last_year(pool: PgP
         (bound("startDateTime"), bound("endDateTime")),
         (Some(near.starts_at), Some(near.ends_at)),
         "the first listing is this month and next"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_first_import_reads_the_events_closest_to_today_first(pool: PgPool) {
+    let (server, sync) = connected(&pool).await;
+    // In ID order the near window would read next month's meeting first and
+    // tomorrow's last.
+    let near = [
+        meeting_in("AAMkEndOfNextMonth", chrono::Duration::days(25)),
+        meeting_in("AAMkLastWeek", -chrono::Duration::days(6)),
+        meeting_in("AAMkTomorrow", chrono::Duration::days(1)),
+    ];
+    serve_near_window(&server, &near).await;
+    serve_delta(
+        &server,
+        None,
+        &[
+            single("AAMkEndOfNextMonth"),
+            single("AAMkLastWeek"),
+            single("AAMkTomorrow"),
+        ],
+        "complete",
+    )
+    .await;
+    for event in near {
+        serve_event(&server, event).await;
+    }
+
+    let mut arrivals: Vec<String> = vec![];
+    for _ in 0..16 {
+        if !matches!(sync.run_once().await, Ok(true)) {
+            break;
+        }
+        for id in imported(&pool).await {
+            if !arrivals.contains(&id) {
+                arrivals.push(id);
+            }
+        }
+    }
+
+    assert_eq!(
+        arrivals,
+        ["AAMkTomorrow", "AAMkLastWeek", "AAMkEndOfNextMonth"],
+        "the near window reads tomorrow, then last week, then next month"
+    );
+    assert_synced(&pool).await;
+}
+
+/// Macro's per-mailbox admission, refusing every request as a mailbox whose
+/// in-flight slots mail sync holds.
+struct BusyMailbox;
+
+impl crate::domain::ports::MailboxRequestGate for BusyMailbox {
+    fn acquire(
+        &self,
+        _: crate::domain::models::MailboxAccess,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Uuid, EmailApiError>> + Send + '_>> {
+        Box::pin(async {
+            Err(EmailApiError::RateLimited {
+                retry_after: Some(std::time::Duration::from_millis(2_500)),
+                origin: RateLimitOrigin::Gate(crate::domain::models::GateLimit::Concurrency),
+            })
+        })
+    }
+    fn finish(
+        &self,
+        _: crate::domain::models::MailboxAccess,
+        _: Uuid,
+        _: Option<std::time::Duration>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async {})
+    }
+    fn admitted(
+        &self,
+        _: crate::domain::models::MailboxAccess,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<u64>> + Send + '_>> {
+        Box::pin(async { None })
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_step_the_request_gate_refuses_waits_without_counting_a_failure(pool: PgPool) {
+    // Discovered already, so the first step is the near window's listing.
+    let (server, _) = connected(&pool).await;
+    serve_near_window(&server, &[]).await;
+    let mut busy = OutlookApiClientRepository::for_test(&format!("{}/v1.0/", server.uri()));
+    busy.gate = Some(std::sync::Arc::new(BusyMailbox));
+    let busy = OutlookCalendarSync::new(
+        PgCalendarRepository::new(pool.clone()),
+        busy,
+        IssuedToken,
+        NoOpenClients,
+    );
+
+    assert!(
+        matches!(busy.run_once().await, Ok(true)),
+        "a deferred step is not an error, and the loop moves on"
+    );
+
+    let work = sqlx::query!(
+        r#"SELECT w.attempts,w.last_error,w.lease_until,c.consecutive_sync_failures,c.last_sync_error,a.sync_status,
+            extract(epoch FROM w.next_run_at-now())::float8 AS "wait!"
+        FROM calendar_outlook_work w JOIN calendars c ON c.id=w.calendar_id JOIN calendar_accounts a ON a.id=w.account_id
+        WHERE c.provider_calendar_id='AAMkCalendar'"#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(work.lease_until.is_none());
+    assert!(
+        (1.0..=2.5).contains(&work.wait),
+        "retries after the gate's delay, not {}",
+        work.wait
+    );
+    assert_eq!(
+        (
+            work.attempts,
+            work.last_error,
+            work.consecutive_sync_failures,
+            work.last_sync_error
+        ),
+        (0, None, 0, None),
+        "nothing reached Microsoft, so nothing failed"
+    );
+    assert_eq!(work.sync_status, "syncing");
+    assert!(
+        server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|request| request.url.path() != "/v1.0/me/calendars/AAMkCalendar/calendarView"),
+        "the gate sent nothing"
+    );
+}
+
+/// The team out-of-office hint of each refresh viewers and teammates get.
+#[derive(Clone, Default)]
+struct TeamHints(Arc<Mutex<Vec<bool>>>);
+
+impl CalendarRefreshNotifier for TeamHints {
+    async fn calendar_changed(&self, _: &str, _: Uuid, team_ooo_changed: bool) {
+        self.0.lock().unwrap().push(team_ooo_changed);
+    }
+    async fn join_request_answered(&self, _: &str, _: Uuid) {}
+}
+
+/// Publishes every committed change, returning the hint each refresh carried.
+async fn published_hints(pool: &PgPool) -> Vec<bool> {
+    let hints = TeamHints::default();
+    let relay = CalendarProjectionRelay::new(
+        PgCalendarRepository::new(pool.clone()),
+        NoopMacroEventBroker,
+        hints.clone(),
+    );
+    while relay.run_once().await.unwrap() {}
+    hints.0.lock().unwrap().clone()
+}
+
+/// A delta round after `cursor` that lists `entries`, Graph answering with
+/// `events` and with 404 for any other event.
+async fn delta_round(
+    server: &MockServer,
+    pool: &PgPool,
+    sync: &Sync,
+    (cursor, next): (&str, &str),
+    entries: &[Value],
+    events: Vec<Value>,
+) {
+    server.reset().await;
+    serve_delta(server, Some(cursor), entries, next).await;
+    for event in events {
+        serve_event(server, event).await;
+    }
+    next_round(pool).await;
+    sync_until_idle(sync).await;
+    assert_synced(pool).await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_regular_meeting_never_clears_teammates_out_of_office_rows(pool: PgPool) {
+    let (server, sync) = connected(&pool).await;
+    serve_near_window(&server, &[]).await;
+    serve_delta(&server, None, &[single("AAMkMeeting")], "imported").await;
+    serve_event(&server, upcoming("AAMkMeeting")).await;
+    sync_until_idle(&sync).await;
+    assert_eq!(imported(&pool).await, vec!["AAMkMeeting"]);
+    assert_eq!(published_hints(&pool).await, vec![false], "its import");
+
+    let mut moved = meeting_in("AAMkMeeting", chrono::Duration::days(2));
+    moved["lastModifiedDateTime"] = json!(Utc::now().to_rfc3339());
+    delta_round(
+        &server,
+        &pool,
+        &sync,
+        ("imported", "moved"),
+        &[single("AAMkMeeting")],
+        vec![moved],
+    )
+    .await;
+    assert_eq!(published_hints(&pool).await, vec![false], "its move");
+
+    delta_round(
+        &server,
+        &pool,
+        &sync,
+        ("moved", "deleted"),
+        &[json!({"id":"AAMkMeeting","@removed":{"reason":"deleted"}})],
+        vec![],
+    )
+    .await;
+    assert!(imported(&pool).await.is_empty());
+    assert_eq!(published_hints(&pool).await, vec![false], "its deletion");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn every_change_to_an_out_of_office_event_clears_teammates_rows(pool: PgPool) {
+    let (server, sync) = connected(&pool).await;
+    let mut away = upcoming("AAMkAway");
+    away["showAs"] = json!("oof");
+    serve_near_window(&server, &[]).await;
+    serve_delta(&server, None, &[single("AAMkAway")], "imported").await;
+    serve_event(&server, away).await;
+    sync_until_idle(&sync).await;
+    assert_eq!(imported(&pool).await, vec!["AAMkAway"]);
+    assert_eq!(published_hints(&pool).await, vec![true], "its import");
+
+    let mut moved = meeting_in("AAMkAway", chrono::Duration::days(2));
+    moved["showAs"] = json!("oof");
+    moved["lastModifiedDateTime"] = json!(Utc::now().to_rfc3339());
+    delta_round(
+        &server,
+        &pool,
+        &sync,
+        ("imported", "moved"),
+        &[single("AAMkAway")],
+        vec![moved],
+    )
+    .await;
+    assert_eq!(published_hints(&pool).await, vec![true], "its move");
+
+    delta_round(
+        &server,
+        &pool,
+        &sync,
+        ("moved", "deleted"),
+        &[json!({"id":"AAMkAway","@removed":{"reason":"deleted"}})],
+        vec![],
+    )
+    .await;
+    assert!(imported(&pool).await.is_empty());
+    assert_eq!(published_hints(&pool).await, vec![true], "its deletion");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_event_that_stops_being_out_of_office_clears_teammates_rows(pool: PgPool) {
+    let (server, sync) = connected(&pool).await;
+    let mut away = upcoming("AAMkAway");
+    away["showAs"] = json!("oof");
+    serve_near_window(&server, &[]).await;
+    serve_delta(&server, None, &[single("AAMkAway")], "imported").await;
+    serve_event(&server, away).await;
+    sync_until_idle(&sync).await;
+    assert_eq!(published_hints(&pool).await, vec![true], "its import");
+
+    let mut busy = upcoming("AAMkAway");
+    busy["showAs"] = json!("busy");
+    busy["lastModifiedDateTime"] = json!(Utc::now().to_rfc3339());
+    delta_round(
+        &server,
+        &pool,
+        &sync,
+        ("imported", "busy"),
+        &[single("AAMkAway")],
+        vec![busy],
+    )
+    .await;
+    assert_eq!(
+        published_hints(&pool).await,
+        vec![true],
+        "teammates held it as out of office"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rediscovery_refreshes_viewers_only_when_a_calendar_changed(pool: PgPool) {
+    let (server, api) = setup().await;
+    let repo = linked_mailbox(
+        &pool,
+        &server,
+        mailbox_settings(Some("Pacific Standard Time")),
+        json!([default_calendar("AAMkCalendar")]),
+    )
+    .await;
+    let hints = TeamHints::default();
+    let sync = OutlookCalendarSync::new(repo, api, IssuedToken, hints.clone());
+    assert!(sync.run_once().await.unwrap());
+    assert_eq!(*hints.0.lock().unwrap(), vec![true], "a new calendar");
+
+    // The discovery is due again before the calendar's own first round.
+    let rediscover = async || {
+        sqlx::query!(
+            "UPDATE calendar_outlook_work SET next_run_at = CASE WHEN calendar_id IS NULL THEN now() ELSE now() + interval '1 hour' END"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(sync.run_once().await.unwrap());
+    };
+    rediscover().await;
+    assert_eq!(
+        *hints.0.lock().unwrap(),
+        vec![true],
+        "the same calendars again"
+    );
+
+    let mut renamed = default_calendar("AAMkCalendar");
+    renamed["name"] = json!("Work");
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailboxSettings"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(mailbox_settings(Some("Pacific Standard Time"))),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[renamed]})))
+        .mount(&server)
+        .await;
+    rediscover().await;
+    assert_eq!(
+        *hints.0.lock().unwrap(),
+        vec![true, true],
+        "a renamed calendar, as on Google"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn viewers_hear_when_a_sync_error_badge_shows_and_when_it_clears(pool: PgPool) {
+    let (server, api) = setup().await;
+    let repo = linked_mailbox(
+        &pool,
+        &server,
+        mailbox_settings(Some("Pacific Standard Time")),
+        json!([default_calendar("AAMkCalendar")]),
+    )
+    .await;
+    let hints = TeamHints::default();
+    let sync = OutlookCalendarSync::new(repo, api, IssuedToken, hints.clone());
+    assert!(sync.run_once().await.unwrap(), "the discovery");
+    hints.0.lock().unwrap().clear();
+
+    // Microsoft fails the calendar's first listing, one more time than it
+    // takes to show the badge.
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/AAMkCalendar/calendarView"))
+        .respond_with(ResponseTemplate::new(503))
+        .mount(&server)
+        .await;
+    for _ in 0..=CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD {
+        next_round(&pool).await;
+        assert!(sync.run_once().await.is_err());
+    }
+    assert_eq!(
+        *hints.0.lock().unwrap(),
+        vec![true],
+        "only the failure that shows the badge refreshes viewers"
+    );
+
+    server.reset().await;
+    serve_near_window(&server, &[]).await;
+    serve_delta(&server, None, &[], "complete").await;
+    next_round(&pool).await;
+    // The near window, the whole window's page and the finish.
+    while sync.run_once().await.unwrap() {}
+    assert_synced(&pool).await;
+    assert_eq!(
+        *hints.0.lock().unwrap(),
+        vec![true, true],
+        "the round that clears the badge refreshes them again"
     );
 }

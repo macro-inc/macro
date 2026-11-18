@@ -13,6 +13,11 @@ pub enum ComputerSetupOutcome {
         /// Why, in the words the computer's status shows.
         #[serde(rename = "failureReason")]
         failure_reason: String,
+        /// Setup gave up a second time, so the computer was released and its
+        /// purchase refunded (and an agent teammate taken back): there is
+        /// nothing to retry.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        released: bool,
     },
 }
 
@@ -73,7 +78,17 @@ impl NotificationTitle for ComputerSetupMetadata {
         if let Some(agent) = &self.agent {
             return Ok(match &self.outcome {
                 ComputerSetupOutcome::Ready => format!("Message {} to get started.", agent.name),
-                ComputerSetupOutcome::Failed { failure_reason } => format!(
+                ComputerSetupOutcome::Failed {
+                    failure_reason,
+                    released: true,
+                } => format!(
+                    "{failure_reason} We refunded its computer and removed {}; you can add the agent again.",
+                    agent.name
+                ),
+                ComputerSetupOutcome::Failed {
+                    failure_reason,
+                    released: false,
+                } => format!(
                     "{failure_reason} Retry from {}'s row in Members.",
                     agent.name
                 ),
@@ -84,9 +99,14 @@ impl NotificationTitle for ComputerSetupMetadata {
                 "{} is up. Bring your AI, then create an agent on it.",
                 self.computer_name
             ),
-            ComputerSetupOutcome::Failed { failure_reason } => {
-                format!("{failure_reason} Retry from the setup flow.")
-            }
+            ComputerSetupOutcome::Failed {
+                failure_reason,
+                released: true,
+            } => format!("{failure_reason} We released it and refunded the purchase."),
+            ComputerSetupOutcome::Failed {
+                failure_reason,
+                released: false,
+            } => format!("{failure_reason} Retry from the setup flow."),
         })
     }
 }

@@ -31,7 +31,6 @@ import type { SpreadsheetData } from './definition';
 import { createSpreadsheetDownload } from './primitives/create-spreadsheet-download';
 import type { SpreadsheetStore } from './primitives/create-spreadsheet-store';
 import { createSpreadsheetStore } from './primitives/create-spreadsheet-store';
-import { useSpreadsheetAccess } from './primitives/use-spreadsheet-access';
 import { createSpreadsheetSession } from './queries/spreadsheet-session';
 import { SpreadsheetComments } from './SpreadsheetComments';
 import { spreadsheetMentions } from './spreadsheet-mentions';
@@ -40,23 +39,13 @@ import { SpreadsheetEditor } from './views/SpreadsheetEditor';
 import { SpreadsheetHeader } from './views/spreadsheet-header';
 
 export default function SpreadsheetBlock(props: { share?: string }) {
-  const enabled = useSpreadsheetAccess();
   const params = createParamsState();
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: params.navigate,
   });
   return (
     <ParamsProvider state={params}>
-      <Show
-        when={enabled()}
-        fallback={
-          <div class="p-6 text-ink-muted">
-            Spreadsheets are not enabled for this account.
-          </div>
-        }
-      >
-        <SpreadsheetBlockContent share={props.share} />
-      </Show>
+      <SpreadsheetBlockContent share={props.share} />
     </ParamsProvider>
   );
 }

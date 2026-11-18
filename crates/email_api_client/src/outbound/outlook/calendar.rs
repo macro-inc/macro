@@ -11,7 +11,7 @@ mod zones;
 
 use super::OutlookApiClientRepository;
 use crate::domain::{
-    models::{AccessToken, EmailApiError, MailboxAccess, StreamToken},
+    models::{AccessToken, EmailApiError, MailboxAccess, RateLimitOrigin, StreamToken},
     ports::ScopedMailboxRepository,
 };
 use calendar_events::domain::{ics::EventSnapshot, models::*, outlook::*, ports::*};
@@ -106,6 +106,18 @@ fn unsupported(message: &str) -> CalendarProviderError {
     CalendarProviderError::new(CalendarProviderErrorKind::Permanent, message)
 }
 fn error(error: EmailApiError) -> CalendarProviderError {
+    // Macro's own admission sent nothing, so a sync retries it shortly
+    // instead of counting a failure.
+    if let EmailApiError::RateLimited {
+        retry_after,
+        origin: RateLimitOrigin::Gate(_) | RateLimitOrigin::Local,
+    } = &error
+    {
+        return CalendarProviderError::deferred(
+            *retry_after,
+            "Microsoft request admission deferred the call",
+        );
+    }
     let kind = match &error {
         EmailApiError::AuthRequired => CalendarProviderErrorKind::ReauthRequired,
         EmailApiError::OutdatedCursor => CalendarProviderErrorKind::SyncTokenExpired,
@@ -435,6 +447,11 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
                         .flatten()
                         .filter_map(|v| v.as_str().map(str::to_owned))
                         .collect(),
+                    owner_address: c["owner"]["address"]
+                        .as_str()
+                        .filter(|address| !address.is_empty())
+                        .map(str::to_owned),
+                    shared_with_me: c["isSharedWithMe"].as_bool() == Some(true),
                 })
             })
             .collect::<Result<_, CalendarProviderError>>()?;
@@ -494,10 +511,15 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
             if !event["@removed"].is_null() {
                 removed.push(id.to_owned());
             } else {
-                members.push((
-                    id.to_owned(),
-                    event["seriesMasterId"].as_str().unwrap_or(id).to_owned(),
-                ));
+                members.push(OutlookPageMember {
+                    provider_id: id.to_owned(),
+                    master_id: event["seriesMasterId"].as_str().unwrap_or(id).to_owned(),
+                    // Only orders a first import's reads, so a time Macro
+                    // cannot read is left out rather than failing the page.
+                    occurs: normalize::instant(&event["start"])
+                        .ok()
+                        .zip(normalize::instant(&event["end"]).ok()),
+                });
             }
         }
         Ok(OutlookCalendarPage {

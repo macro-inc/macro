@@ -2,7 +2,6 @@ import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-ta
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
 import { externalChatContent } from '@app/features/external-view/hosted-content';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -28,10 +27,7 @@ import {
   resolveBlockAlias,
   verifyBlockName,
 } from '@core/constant/allBlocks';
-import {
-  ENABLE_BLOCK_IN_BLOCK,
-  enableDatabases,
-} from '@core/constant/featureFlags';
+import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { canNestBlock } from '@core/orchestrator';
@@ -737,10 +733,7 @@ function DatabaseMention(props: DocumentMentionProps) {
         setEditable(value);
       })
     );
-  const enabled = useFeatureFlag(enableDatabases);
-  const detail = useDatabaseDetailQuery(() =>
-    enabled().enabled ? props.documentId : undefined
-  );
+  const detail = useDatabaseDetailQuery(() => props.documentId);
   const name = () =>
     detail.isSuccess ? detail.data.database.name : props.documentName;
   const expand = (event: MouseEvent) => {
@@ -781,9 +774,7 @@ function DatabaseMention(props: DocumentMentionProps) {
               if (result && result.status !== 'unavailable') props.onOpened?.();
             }}
           />
-          <Show
-            when={enabled().enabled && editable() && wrapper?.isInteractable()}
-          >
+          <Show when={editable() && wrapper?.isInteractable()}>
             <Button
               variant="ghost"
               size="icon-xs"
