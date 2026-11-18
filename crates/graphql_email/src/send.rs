@@ -4,7 +4,7 @@ use crate::{
     EmailThreadMutationOutput, GraphqlSoupEmailMessage, SaveEmailDraftInput,
     loaders::EmailContentMessage,
 };
-use async_graphql::{Context, Enum, ID, InputObject, Object};
+use async_graphql::{Context, Enum, ErrorExtensions as _, ID, InputObject, Object};
 use email::domain::send_attempt::{
     EmailSendService, SendAttempt, SendAttemptId, SendAttemptStatus, SendSnapshot,
 };
@@ -117,6 +117,22 @@ impl<O: EmailThreadMutationOutput> SendEmailAttemptPayload<O> {
     }
 }
 
+/// Refuse a send an agent's program asked for, as the send route does
+/// (`refuse_program_send`): GraphQL sends in-process, so no route's guard
+/// runs. A request whose program the host never recorded can't send.
+pub(crate) fn refuse_program_send(ctx: &Context<'_>) -> async_graphql::Result<()> {
+    let program = ctx.data::<macro_authorization::ForwardedProgram>()?;
+    email::inbound::axum::send_router::refuse_program_send(
+        program.attribution(),
+        &program.headers(),
+        None,
+    )
+    .map_err(|refusal| {
+        async_graphql::Error::new(refusal.to_string())
+            .extend_with(|_, extensions| extensions.set("code", "CONFIRMATION_REQUIRED"))
+    })
+}
+
 /// Independent mutation root for send/cancel operations.
 pub struct GraphqlEmailSendMutation<S, O>(PhantomData<fn() -> (S, O)>);
 impl<S, O> Default for GraphqlEmailSendMutation<S, O> {
@@ -135,6 +151,7 @@ impl<S: EmailSendService + 'static, O: EmailThreadMutationOutput> GraphqlEmailSe
         input: SendEmailAttemptInput,
     ) -> async_graphql::Result<SendEmailAttemptPayload<O>> {
         let actor = require_authenticated_user(ctx)?;
+        refuse_program_send(ctx)?;
         let link = parse_id(input.attempt.link_id, "linkId")?;
         let attempt = SendAttemptId(parse_id(input.attempt.attempt_id, "attemptId")?);
         let mut message = draft_input_from_graphql(input.message)?;

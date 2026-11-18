@@ -31,6 +31,7 @@ pub(super) async fn send<S: EmailMutationService>(
     input: SendEmailMessageInput,
 ) -> async_graphql::Result<SendEmailMessagePayload> {
     let user_id = require_authenticated_user(ctx)?;
+    crate::send::refuse_program_send(ctx)?;
     let link_id = input
         .draft
         .link_id

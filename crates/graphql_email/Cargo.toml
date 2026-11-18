@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
 chrono = { workspace = true }
-email = { path = "../email", default-features = false, features = ["ports"] }
+email = { path = "../email", default-features = false, features = ["axum", "inbound", "ports"] }
 email_utils = { path = "../email_utils" }
 entity_access = { path = "../entity_access", default-features = false }
 futures = { workspace = true }

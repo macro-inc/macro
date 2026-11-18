@@ -67,8 +67,11 @@ impl CalendarServiceMutations {
     /// so the calendar service refuses the caller's program as it would the
     /// program's own request.
     #[must_use]
-    pub fn forwarding(&self, _forwarded: reqwest::header::HeaderMap) -> Self {
-        self.clone()
+    pub fn forwarding(&self, forwarded: reqwest::header::HeaderMap) -> Self {
+        Self {
+            forwarded,
+            ..self.clone()
+        }
     }
 
     fn request(
@@ -79,6 +82,7 @@ impl CalendarServiceMutations {
     ) -> reqwest::RequestBuilder {
         self.http
             .request(method, format!("{}{path}", self.base_url))
+            .headers(self.forwarded.clone())
             .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
             .header(INTERNAL_MACRO_USER_ID_HEADER, requester_id)
     }
