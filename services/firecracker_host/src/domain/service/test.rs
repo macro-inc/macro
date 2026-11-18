@@ -10,10 +10,10 @@ use firecracker_host_api::{
 };
 use uuid::Uuid;
 
-use super::{HostError, HostMeasurement, HostProbe, HostService, ServiceSettings};
+use super::{HostError, HostMeasurement, HostProbe, HostService, ServiceSettings, SwapPlacement};
 use crate::domain::model::{ComputerRecord, Process, Slot};
 use crate::domain::ports::{
-    BootSource, ComputerDisks, Disks, DriveBacking, GoldenAvailability, Goldens, Jail,
+    BootSource, ComputerDisks, Disks, DriveBacking, GoldenAvailability, Goldens, GuestSwap, Jail,
     LaunchPhases, Launched, Machines, Store,
 };
 
@@ -146,8 +146,8 @@ pub(super) struct FakeMachines {
     pub(super) weights: Arc<Mutex<HashMap<ComputerId, u16>>>,
     /// Computers whose memory was reclaimed, in order.
     pub(super) reclaims: Arc<Mutex<Vec<ComputerId>>>,
-    /// Every `memory.swap.max` write: whether VMs may swap.
-    pub(super) guest_swap: Arc<Mutex<Vec<bool>>>,
+    /// Every `memory.swap.max` write.
+    pub(super) guest_swap: Arc<Mutex<Vec<GuestSwap>>>,
 }
 
 impl Machines for FakeMachines {
@@ -244,8 +244,8 @@ impl Machines for FakeMachines {
     async fn set_guest_memory_max(&self, _: u64) -> Result<(), FakeError> {
         Ok(())
     }
-    async fn set_guest_swap(&self, allowed: bool) -> Result<(), FakeError> {
-        self.guest_swap.lock().unwrap().push(allowed);
+    async fn set_guest_swap(&self, swap: GuestSwap) -> Result<(), FakeError> {
+        self.guest_swap.lock().unwrap().push(swap);
         Ok(())
     }
     fn usage(&self, record: &ComputerRecord, _: Process) -> Option<Usage> {
@@ -316,12 +316,12 @@ impl Machines for FakeMachines {
 #[derive(Clone)]
 pub(super) struct FakeProbe(
     pub(super) Arc<Mutex<u64>>,
-    pub(super) Arc<Mutex<Option<u32>>>,
+    pub(super) Arc<Mutex<SwapPlacement>>,
 );
 
 impl Default for FakeProbe {
     fn default() -> Self {
-        Self(Arc::default(), Arc::new(Mutex::new(Some(0))))
+        Self(Arc::default(), Arc::new(Mutex::new(SwapPlacement::RamOnly)))
     }
 }
 
@@ -331,7 +331,7 @@ impl HostProbe for FakeProbe {
         HostMeasurement {
             memory_total_bytes: total,
             memory_available_bytes: total - *self.0.lock().unwrap(),
-            disk_swap_devices: *self.1.lock().unwrap(),
+            swap_placement: *self.1.lock().unwrap(),
             ..HostMeasurement::default()
         }
     }

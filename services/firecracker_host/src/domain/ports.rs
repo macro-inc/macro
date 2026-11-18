@@ -305,7 +305,8 @@ pub trait Machines: Send + Sync + 'static {
 
     /// Let all VMs swap, or none (`memory.swap.max` of their parent cgroup:
     /// `max` or 0).
-    fn set_guest_swap(&self, allowed: bool) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn set_guest_swap(&self, swap: GuestSwap)
+    -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Set the VM cgroup's `cpu.weight` (1..=10000; the default is 100).
     fn set_cpu_weight(
@@ -417,4 +418,13 @@ pub trait HostOperations: Send + Sync + 'static {
         &self,
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<Self::GuestStream, HostError>> + Send;
+}
+
+/// Whether the VMs may swap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuestSwap {
+    /// As much as the kernel wants (all swap is in RAM).
+    Allowed,
+    /// Not at all (swap may reach a disk).
+    Off,
 }

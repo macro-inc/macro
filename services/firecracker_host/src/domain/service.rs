@@ -19,7 +19,9 @@ use tracing::Instrument;
 use crate::crash_point::{self, CrashPoint};
 use crate::domain::metrics::{HostMetrics, Operation};
 use crate::domain::model::{ComputerRecord, Process, SlotPool};
-use crate::domain::ports::{BootSource, Disks, GoldenAvailability, Goldens, Machines, Store};
+use crate::domain::ports::{
+    BootSource, Disks, GoldenAvailability, Goldens, GuestSwap, Machines, Store,
+};
 use crate::domain::power::{Step, after, plan};
 
 mod enrollment;
@@ -207,17 +209,24 @@ pub struct HostMeasurement {
     pub swap_used_bytes: u64,
     /// RAM zram devices hold, compressed (`mm_stat` `mem_used_total`).
     pub zram_used_bytes: u64,
-    /// Active swap devices that put pages on a disk (`/proc/swaps`): any
-    /// but zram, and zram with a writeback device. `None` when unreadable,
-    /// which counts as on disk.
-    pub disk_swap_devices: Option<u32>,
+    /// Where swapped pages can go (`/proc/swaps`).
+    pub swap_placement: SwapPlacement,
 }
 
-impl HostMeasurement {
-    /// Whether all swap is known to stay in RAM (zram without writeback).
-    pub fn swap_only_in_ram(&self) -> bool {
-        self.disk_swap_devices == Some(0)
-    }
+/// Where the host's swap puts pages.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SwapPlacement {
+    /// Only zram without a writeback device, or no swap at all.
+    RamOnly,
+    /// Swap devices that write to a disk: any but zram, and zram with a
+    /// writeback device.
+    Disk {
+        /// How many.
+        devices: u32,
+    },
+    /// `/proc/swaps` is unreadable: treated as on disk.
+    #[default]
+    Unknown,
 }
 
 type Entry = Arc<Mutex<Option<ComputerRecord>>>;
@@ -255,7 +264,7 @@ pub struct HostService<S, D, G, M, P> {
     /// Running computers' activity and squeeze state (`pressure`).
     activity: std::sync::Mutex<HashMap<ComputerId, pressure::Tracked>>,
     /// Whether VMs may swap, as last applied (`None`: not yet).
-    guest_swap: std::sync::Mutex<Option<bool>>,
+    guest_swap: std::sync::Mutex<Option<GuestSwap>>,
 }
 
 impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D, G, M, P> {

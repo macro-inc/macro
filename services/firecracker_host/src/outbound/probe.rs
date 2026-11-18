@@ -1,6 +1,6 @@
 //! [`HostProbe`] from `/proc` and the VMs' cgroup.
 
-use crate::domain::service::{HostMeasurement, HostProbe};
+use crate::domain::service::{HostMeasurement, HostProbe, SwapPlacement};
 use crate::outbound::cgroup::vms_memory_current;
 
 #[cfg(test)]
@@ -41,9 +41,13 @@ impl HostProbe for ProcProbe {
             swap_total_bytes: kib("SwapTotal"),
             swap_used_bytes: kib("SwapTotal").saturating_sub(kib("SwapFree")),
             zram_used_bytes: zram_used_bytes(),
-            disk_swap_devices: std::fs::read_to_string("/proc/swaps")
-                .ok()
-                .map(|swaps| disk_swap_devices(&swaps, zram_backing_device)),
+            swap_placement: match std::fs::read_to_string("/proc/swaps") {
+                Err(_) => SwapPlacement::Unknown,
+                Ok(swaps) => match disk_swap_devices(&swaps, zram_backing_device) {
+                    0 => SwapPlacement::RamOnly,
+                    devices => SwapPlacement::Disk { devices },
+                },
+            },
         }
     }
 }

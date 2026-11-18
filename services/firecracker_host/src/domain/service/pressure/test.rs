@@ -3,10 +3,12 @@ use std::time::{Duration, Instant};
 use firecracker_host_api::{Action, ComputerId, HostLimits, Usage};
 use uuid::Uuid;
 
+use super::super::SwapPlacement;
 use super::super::test::{FakeMachines, FakeStore, computer_id, create_request, host_with};
 use super::{SQUEEZE_AFTER, SqueezeView, SqueezeWindow, Squeezed, squeeze_candidate};
 use crate::domain::activity::ActivitySettings;
 use crate::domain::health::HealthCheck;
+use crate::domain::ports::GuestSwap;
 
 const GIB: u64 = 1024 * 1024 * 1024;
 const WINDOW: SqueezeWindow = SqueezeWindow {
@@ -224,7 +226,7 @@ async fn a_disk_swap_device_fails_the_swap_check_and_stops_the_squeeze() {
         .unwrap()
         .insert(computer_id(), usage(0));
     *host.probe.0.lock().unwrap() = 95 * GIB;
-    *host.probe.1.lock().unwrap() = Some(1);
+    *host.probe.1.lock().unwrap() = SwapPlacement::Disk { devices: 1 };
     let settings = ActivitySettings::default();
     let start = Instant::now();
     host.service.activity_pass(start, &settings);
@@ -252,19 +254,35 @@ async fn vms_may_swap_only_while_all_swap_is_in_ram_and_the_limit_is_applied_on_
 
     host.service.guard_guest_swap().await;
     host.service.guard_guest_swap().await;
-    assert_eq!(writes(), [true], "zram only: allowed, written once");
+    assert_eq!(
+        writes(),
+        [GuestSwap::Allowed],
+        "zram only: allowed, written once"
+    );
 
-    *host.probe.1.lock().unwrap() = Some(1);
+    *host.probe.1.lock().unwrap() = SwapPlacement::Disk { devices: 1 };
     host.service.guard_guest_swap().await;
-    assert_eq!(writes(), [true, false], "a disk swap device: none");
+    assert_eq!(
+        writes(),
+        [GuestSwap::Allowed, GuestSwap::Off],
+        "a disk swap device: none"
+    );
 
-    *host.probe.1.lock().unwrap() = None;
+    *host.probe.1.lock().unwrap() = SwapPlacement::Unknown;
     host.service.guard_guest_swap().await;
-    assert_eq!(writes(), [true, false], "unreadable stays none");
+    assert_eq!(
+        writes(),
+        [GuestSwap::Allowed, GuestSwap::Off],
+        "unreadable stays none"
+    );
 
-    *host.probe.1.lock().unwrap() = Some(0);
+    *host.probe.1.lock().unwrap() = SwapPlacement::RamOnly;
     host.service.guard_guest_swap().await;
-    assert_eq!(writes(), [true, false, true], "back to zram only");
+    assert_eq!(
+        writes(),
+        [GuestSwap::Allowed, GuestSwap::Off, GuestSwap::Allowed],
+        "back to zram only"
+    );
 }
 
 #[tokio::test]
@@ -280,7 +298,7 @@ async fn an_unreadable_swap_list_fails_the_swap_check_and_stops_the_squeeze() {
         .unwrap()
         .insert(computer_id(), usage(0));
     *host.probe.0.lock().unwrap() = 95 * GIB;
-    *host.probe.1.lock().unwrap() = None;
+    *host.probe.1.lock().unwrap() = SwapPlacement::Unknown;
     let settings = ActivitySettings::default();
     let start = Instant::now();
     host.service.activity_pass(start, &settings);

@@ -15,7 +15,9 @@ use super::{
 };
 use crate::crash_point::{self, CrashPoint};
 use crate::domain::model::{ComputerRecord, Process, Slot};
-use crate::domain::ports::{BootSource, ComputerDisks, Jail, LaunchPhases, Launched, Machines};
+use crate::domain::ports::{
+    BootSource, ComputerDisks, GuestSwap, Jail, LaunchPhases, Launched, Machines,
+};
 use crate::outbound::file_clone::move_file;
 use crate::outbound::firecracker_api::{FirecrackerApiError, SnapshotCreate, VmState};
 use crate::outbound::inventory;
@@ -259,11 +261,15 @@ impl Machines for Jails {
     }
 
     #[tracing::instrument(name = "firecracker_host.guest_swap", skip(self), err)]
-    async fn set_guest_swap(&self, allowed: bool) -> Result<(), JailError> {
+    async fn set_guest_swap(&self, swap: GuestSwap) -> Result<(), JailError> {
         let path = Path::new("/sys/fs/cgroup")
             .join(&self.settings.cgroup_parent)
             .join("memory.swap.max");
-        tokio::fs::write(&path, if allowed { "max" } else { "0" })
+        let limit = match swap {
+            GuestSwap::Allowed => "max",
+            GuestSwap::Off => "0",
+        };
+        tokio::fs::write(&path, limit)
             .await
             .map_err(io("write", &path))
     }

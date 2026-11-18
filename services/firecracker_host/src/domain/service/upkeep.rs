@@ -6,10 +6,10 @@ use std::sync::atomic::Ordering;
 
 use firecracker_host_api::{GoldenKey, GoldenState, PowerState};
 
-use super::{HostProbe, HostService};
+use super::{HostProbe, HostService, SwapPlacement};
 use crate::domain::health::{CheckOutcome, HealthCheck, HealthReport};
 use crate::domain::metrics::{HostSample, StorageUsage};
-use crate::domain::ports::{Disks, GoldenAvailability, Goldens, Machines, Store};
+use crate::domain::ports::{Disks, GoldenAvailability, Goldens, GuestSwap, Machines, Store};
 
 impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D, G, M, P> {
     /// Finish deferred disk deletes; failures are logged, the next pass
@@ -48,29 +48,34 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
     /// disk (say, one added by hand) gets none of their memory, whether the
     /// squeeze or the kernel's own reclaim would push it. Applied on change.
     pub async fn guard_guest_swap(&self) {
-        let allowed = self.probe.measure().swap_only_in_ram();
+        let placement = self.probe.measure().swap_placement;
+        let swap = match placement {
+            SwapPlacement::RamOnly => GuestSwap::Allowed,
+            SwapPlacement::Disk { .. } | SwapPlacement::Unknown => GuestSwap::Off,
+        };
         if *self
             .guest_swap
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            == Some(allowed)
+            == Some(swap)
         {
             return;
         }
-        match self.machines.set_guest_swap(allowed).await {
+        match self.machines.set_guest_swap(swap).await {
             Ok(()) => {
                 *self
                     .guest_swap
                     .lock()
-                    .unwrap_or_else(PoisonError::into_inner) = Some(allowed);
-                if allowed {
-                    tracing::info!("all swap is in RAM: VMs may swap");
-                } else {
-                    tracing::warn!("swap may reach a disk: VMs may not swap");
+                    .unwrap_or_else(PoisonError::into_inner) = Some(swap);
+                match swap {
+                    GuestSwap::Allowed => tracing::info!("all swap is in RAM: VMs may swap"),
+                    GuestSwap::Off => {
+                        tracing::warn!(placement = ?placement, "swap may reach a disk: VMs may not swap");
+                    }
                 }
             }
             Err(error) => {
-                tracing::error!(error = ?error, allowed, "setting the VMs' swap limit failed; retrying next pass");
+                tracing::error!(error = ?error, swap = ?swap, "setting the VMs' swap limit failed; retrying next pass");
             }
         }
     }
@@ -150,23 +155,24 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
             )
         };
         let measurement = self.probe.measure();
-        let swap = if measurement.disk_swap_devices.is_none() {
-            CheckOutcome::failed(
+        let swap = match measurement.swap_placement {
+            SwapPlacement::Unknown => CheckOutcome::failed(
                 HealthCheck::Swap,
                 "/proc/swaps is unreadable: swap may be on disk, so VMs may not swap",
-            )
-        } else if !measurement.swap_only_in_ram() {
-            CheckOutcome::failed(
+            ),
+            SwapPlacement::Disk { .. } => CheckOutcome::failed(
                 HealthCheck::Swap,
                 "a swap device that writes to disk is active (not zram, or zram with writeback): VMs may not swap",
-            )
-        } else if self.squeeze_window().is_some() && measurement.swap_total_bytes == 0 {
-            CheckOutcome::failed(
-                HealthCheck::Swap,
-                "the host limits ask for the zram squeeze, but the host has no swap",
-            )
-        } else {
-            CheckOutcome::passed(HealthCheck::Swap)
+            ),
+            SwapPlacement::RamOnly
+                if self.squeeze_window().is_some() && measurement.swap_total_bytes == 0 =>
+            {
+                CheckOutcome::failed(
+                    HealthCheck::Swap,
+                    "the host limits ask for the zram squeeze, but the host has no swap",
+                )
+            }
+            SwapPlacement::RamOnly => CheckOutcome::passed(HealthCheck::Swap),
         };
         let home_templates = if self
             .disks
