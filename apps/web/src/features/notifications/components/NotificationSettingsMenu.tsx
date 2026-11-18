@@ -46,6 +46,9 @@ const PRESETS = ['all', 'involving', 'custom', 'nothing'] as const;
 /** Desktop submenu: one choice of All, Involving me, Custom or Nothing. */
 export function NotificationSettingsMenu(props: NotificationSettingsMenuProps) {
   const choose = (preset: NotificationPreset) => {
+    // Close the host menu before Custom opens its dialog: dismissing a menu
+    // after the dialog is up would dismiss the dialog with it.
+    props.onActionComplete?.();
     if (preset === 'custom') {
       openCustomNotificationSettings({
         targetName: props.targetName,
@@ -55,7 +58,6 @@ export function NotificationSettingsMenu(props: NotificationSettingsMenuProps) {
     } else {
       props.onPreset(preset);
     }
-    props.onActionComplete?.();
   };
 
   return (
