@@ -6,14 +6,16 @@ use document_storage_service_client::document::CreateDocumentInternalError;
 use email_api_client::domain::models::EmailApiError;
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
-use model::document::MAX_DOCUMENT_NAME_GRAPHEMES;
 use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
+use model::document::{FileTypeExt, MAX_DOCUMENT_NAME_GRAPHEMES};
+use model_file_type::FileType;
 use models_email::service::attachment::{
     AttachmentSfs, AttachmentUploadArgs, AttachmentUploadMetadata,
 };
 use models_email::service::link;
 use sha2::{Digest, Sha256};
 use static_file_service_client::StaticFileServiceClient;
+use std::str::FromStr;
 use std::sync::Arc;
 use system_properties::{
     EmailAttachmentInput, EmailAttachmentProperty, PgSystemPropertiesRepository, SourceEntity,
@@ -253,8 +255,15 @@ fn calculate_hashes(data: &[u8]) -> (String, String) {
     (hex_hash, base64_hash)
 }
 
-/// Determines the file name (without extension) and file type (extension) from the payload.
-fn determine_file_metadata(
+/// Determines the document name and file type (extension) from the payload.
+///
+/// A Macro file type's extension on the filename wins, and the name is the
+/// filename without it, as uploads name documents. Mail clients send many
+/// files as `application/octet-stream`, the first extension `mime_guess`
+/// lists for a broad MIME type is arbitrary (`text/plain` gives `asm`), and a
+/// heic file's MIME type is sometimes heif. Without such an extension the MIME
+/// type decides and the whole filename is the name.
+pub fn determine_file_metadata(
     p: &AttachmentUploadMetadata,
 ) -> Result<(String, String), UploadAttachmentError> {
     // documents must have a file name to be inserted into Document table.
@@ -263,36 +272,32 @@ fn determine_file_metadata(
         .as_deref()
         .ok_or(UploadAttachmentError::FilenameMissing)?;
 
-    let file_name = original_file_name
-        .split('.')
-        .next()
-        .unwrap_or(original_file_name);
-    let file_name = truncate_document_name(file_name).to_string();
+    let known = FileType::split_suffix_match(original_file_name)
+        .filter(|(name, _)| !name.trim().is_empty())
+        .and_then(|(name, extension)| Some((name, FileType::from_str(extension).ok()?)));
 
-    let file_type = match original_file_name
-        .rsplit_once('.')
-        .map(|(_, ext)| ext.trim())
-        .filter(|ext| !ext.is_empty())
-    {
-        // if it's a heic, the mime_type can sometimes be heif. hardcode file_type to match file name
-        Some(ext) if ext.eq_ignore_ascii_case("heic") => "heic".to_string(),
-        _ => mime_guess::get_mime_extensions_str(&p.mime_type)
-            .and_then(|exts| exts.first().map(|s| s.to_string()))
-            .or_else(|| {
-                // if mime_guess fails, use everything after the last '.' in the original filename
-                original_file_name
-                    .rsplit_once('.')
-                    .map(|(_, ext)| ext.trim())
-                    .filter(|ext| !ext.is_empty())
-                    .map(|ext| ext.to_string())
-            })
-            .ok_or_else(|| UploadAttachmentError::FileExtensionDeterminationFailed {
-                mime_type: p.mime_type.clone(),
-                filename: original_file_name.to_string(),
-            })?,
+    let (file_name, file_type) = match known {
+        Some((name, file_type)) => (name, file_type.as_str().to_string()),
+        None => (
+            original_file_name,
+            mime_guess::get_mime_extensions_str(&p.mime_type)
+                .and_then(|exts| exts.first().map(|s| s.to_string()))
+                .or_else(|| {
+                    // if mime_guess fails, use everything after the last '.' in the original filename
+                    original_file_name
+                        .rsplit_once('.')
+                        .map(|(_, ext)| ext.trim())
+                        .filter(|ext| !ext.is_empty())
+                        .map(|ext| ext.to_string())
+                })
+                .ok_or_else(|| UploadAttachmentError::FileExtensionDeterminationFailed {
+                    mime_type: p.mime_type.clone(),
+                    filename: original_file_name.to_string(),
+                })?,
+        ),
     };
 
-    Ok((file_name, file_type))
+    Ok((truncate_document_name(file_name).to_string(), file_type))
 }
 
 /// DSS rejects longer names, so keep only the leading graphemes rather than drop the attachment.
