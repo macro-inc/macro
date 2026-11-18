@@ -7,6 +7,7 @@ import { createMenuOperations } from '../../../shared/inlineMenu';
 import type { MentionItem } from '../../../utils/mentionsUtils';
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import { MentionsMenu } from './MentionsMenu';
+import type { MentionBucketId } from './MentionsMenuController';
 import { createItemHandler } from './utils/mentionHandlers';
 import * as mobileSort from './utils/mobileSort';
 
@@ -24,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   peopleLoading: (): boolean => false,
   people: (): import('@core/context/quickAccess').UserItem[] => [],
   peopleError: (): unknown => undefined,
+  bookingLinks:
+    (): import('../../../utils/mentionsUtils').BookingLinkMentionItem[] => [],
   retryPeople: vi.fn(async () => {}),
   contactsLoadingMore: (): boolean => false,
   loadMoreContacts: vi.fn(async () => {}),
@@ -191,7 +194,7 @@ vi.mock('./hooks/useEmailSearchMention', () => ({
 }));
 vi.mock('./hooks/useBookingLinkMention', () => ({
   useBookingLinkMention: () => ({
-    bookingLinks: () => [],
+    bookingLinks: () => mocks.bookingLinks(),
     isLoading: () => false,
   }),
 }));
@@ -242,6 +245,7 @@ afterEach(() => {
   mocks.peopleLoading = () => false;
   mocks.people = () => [];
   mocks.peopleError = () => undefined;
+  mocks.bookingLinks = () => [];
   mocks.retryPeople.mockClear();
   mocks.contactsLoadingMore = () => false;
   mocks.loadMoreContacts.mockReset();
@@ -857,6 +861,7 @@ function openWhilePeopleLoad(options: {
   agents: IUser[];
   phone?: boolean;
   term?: string;
+  sources?: MentionBucketId[];
   onPick?: (item: MentionItem) => void;
 }) {
   mocks.crmEnabled = true;
@@ -882,14 +887,14 @@ function openWhilePeopleLoad(options: {
     options.phone ? (
       <MentionsMenu
         menu={menu}
-        sources={['users', 'crm']}
+        sources={options.sources ?? ['users', 'crm']}
         transformUsers={transformUsers}
         editor={createEditor()}
       />
     ) : (
       <MentionsMenu
         menu={menu}
-        sources={['users', 'crm']}
+        sources={options.sources ?? ['users', 'crm']}
         transformUsers={transformUsers}
         anchor={document.createElement('div')}
         onPick={options.onPick ?? vi.fn()}
@@ -1027,6 +1032,62 @@ it('waits for the re-read when a later read fails, instead of moving the rows be
   people.land();
   expect(screen.getByText('Ana Lima')).toBeTruthy();
   expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('keeps People in place while it loads even when no agent matches, so the sections below stay put', () => {
+  const onPick = vi.fn();
+  const people = openWhilePeopleLoad({
+    agents: [codex, macroAgent],
+    term: 'te',
+    onPick,
+  });
+  expect(placeholderRows('Loading people')).toBe(3);
+  expect(contactRows()).toBe(5);
+  const contact = screen.getByText('Acme contact 1');
+
+  people.land();
+  expect(screen.getByText('Ana Lima')).toBeTruthy();
+  expect(screen.getByText('Acme contact 1')).toBe(contact);
+  fireEvent.keyDown(document, { key: 'Enter' });
+  expect(onPick).toHaveBeenCalledWith(
+    expect.objectContaining({ id: 'contact-1' })
+  );
+});
+
+it('lists booking links that arrive late below People, leaving the highlighted row in place', () => {
+  const onPick = vi.fn();
+  const [links, setLinks] = createSignal<
+    import('../../../utils/mentionsUtils').BookingLinkMentionItem[]
+  >([]);
+  mocks.bookingLinks = links;
+  const people = openWhilePeopleLoad({
+    agents: [macroAgent],
+    sources: ['users', 'bookingLinks', 'crm'],
+    onPick,
+  });
+  people.land();
+  const macro = screen.getByText('Macro');
+
+  setLinks([
+    {
+      kind: 'bookingLink',
+      id: 'profile-1:intro',
+      data: {
+        profileId: 'profile-1',
+        slug: 'intro',
+        title: 'Intro call',
+        durationMinutes: 30,
+        owner: 'Personal',
+      },
+    },
+  ]);
+  const text = document.body.textContent ?? '';
+  expect(text.indexOf('Bo Chen')).toBeLessThan(text.indexOf('Intro call'));
+  expect(screen.getByText('Macro')).toBe(macro);
+  fireEvent.keyDown(document, { key: 'Enter' });
+  expect(onPick).toHaveBeenCalledWith(
+    expect.objectContaining({ id: macroAgent.id })
+  );
 });
 
 it('reads a failed people window again by itself, holding the People rows meanwhile', () => {
