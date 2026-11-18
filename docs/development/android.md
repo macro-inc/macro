@@ -54,7 +54,8 @@ PORT=3004 just android-dev --no-watch --no-dev-server-wait --config '{"build":{"
 
 That address is emulator-only; the host-side server check must be skipped.
 
-Build commands embed the production frontend. Outputs are under
+Build commands embed the production frontend, without its source maps (see
+[building bundles](../../apps/web/tauri/src-tauri/README.md#building-bundles)). Outputs are under
 `tauri/src-tauri/gen/android/app/build/outputs/`. The launcher defaults to ARM64.
 Release builds automatically prepare the signing configuration below and produce
 signed artifacts. Debug builds do not fetch release signing credentials.
@@ -63,6 +64,16 @@ The app's Gradle packaging excludes the duplicate
 `META-INF/versions/9/OSGI-INF/MANIFEST.MF` from JSpecify and OpenTelemetry. This
 OSGi metadata is unused on Android. Keep the exclusion exact: broad `META-INF`
 exclusions can remove service-provider registrations used by OpenTelemetry.
+
+## Performance benchmark
+
+`just android-benchmark --serial <emulator>` (from `apps/web`) times cold start, view
+switches, opening a channel and documents, and going back, on a signed-in benchmark build,
+using the app's own perf spans so lab and Datadog field numbers compare. It navigates and
+reads only. Building the benchmark APK, the emulator settings it was baselined on, the
+private targets file and how to read its noise figures are in
+[`apps/web/scripts/android-benchmark/README.md`](../../apps/web/scripts/android-benchmark/README.md).
+Measure before and after every Android performance change with it.
 
 ## Release signing
 

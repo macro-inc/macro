@@ -1,6 +1,6 @@
 //! `Deploy Production Release` — ships a published GitHub release to prod. The
 //! same order as [`crate::workflows::deploy_on_push`] for dev: cloud storage,
-//! then the sync service and the AI editing worker, then the web app, whose
+//! then the sync service and the Cloudflare workers, then the web app, whose
 //! build overlaps the backend deploy. The website deploys alongside, and the
 //! held iOS App Store version is released once the web app is live. Generated
 //! into `release-production.yml`, the name it had when it was hand-written,
@@ -37,6 +37,7 @@ pub fn release_production() -> Workflow {
         .add_job("deploy-cloud-storage", deploy_cloud_storage())
         .add_job("deploy-sync-service", deploy_sync_service())
         .add_job("deploy-ai-editing-worker", deploy_ai_editing_worker())
+        .add_job("deploy-mcp-chatgpt-worker", deploy_mcp_chatgpt_worker())
         .add_job("deploy-website", deploy_website())
         .add_job("publish-ios", publish_ios())
         .add_job("build", build())
@@ -62,6 +63,7 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
         ),
         ("deploy-sync-service", true, "inherit"),
         ("deploy-ai-editing-worker", true, "inherit"),
+        ("deploy-mcp-chatgpt-worker", true, "inherit"),
         (
             "deploy-website",
             true,
@@ -125,6 +127,15 @@ fn deploy_ai_editing_worker() -> Job {
             "deploy-sync-service".to_string(),
         ])
         .uses("./.github/workflows/deploy_ai_editing_worker.yml")
+}
+
+/// Calls the backend at prod URLs through the SDK and takes its tokens from
+/// the MCP auth broker, so it ships behind cloud storage. Nothing waits on it.
+fn deploy_mcp_chatgpt_worker() -> Job {
+    Job::default()
+        .name("Deploy MCP ChatGPT Worker")
+        .needs(vec!["deploy-cloud-storage".to_string()])
+        .uses("./.github/workflows/deploy_mcp_chatgpt_worker.yml")
 }
 
 /// Also owns the macro.com CloudFront distribution in front of the web app.

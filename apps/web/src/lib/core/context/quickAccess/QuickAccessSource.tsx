@@ -9,15 +9,7 @@ import {
 import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { scheduleToEntity } from '@app/features/routines/queries/entities';
 import { useSchedulesQuery } from '@app/features/routines/queries/schedules';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
-import {
-  enableCrm,
-  enableDatabases,
-  enableForms,
-  enableGraphqlSoup,
-  enableProjects,
-} from '@core/constant/featureFlags';
 import {
   useChannelsContext,
   useDmActivityByUserId,
@@ -393,9 +385,6 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
-  const crmFlag = useFeatureFlag(enableCrm);
-  const projectsFlag = useFeatureFlag(enableProjects);
-  const graphqlFlag = useFeatureFlag(enableGraphqlSoup);
   // queries
   const historyQuery = useHistoryQuery();
   const { channels, isLoading: channelsLoading } = useChannelsContext();
@@ -409,13 +398,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // Read reactively: if the session abandons its cache mid-session, Quick
   // Access falls back to the REST channel list instead of the dead host. The
   // memo keeps the subscription below until the host itself changes.
-  const cacheHost = createMemo(() => {
-    // The host getter reads PostHog imperatively; retry when the remote flag
-    // arrives after mount, while leaving cache lifetime decisions to the getter.
-    graphqlFlag();
-    return getGraphqlSoupCacheHost();
-  });
-  const localDrafts = createLocalDraftSource(() => graphqlFlag().enabled);
+  const cacheHost = createMemo(() => getGraphqlSoupCacheHost());
+  const localDrafts = createLocalDraftSource(() => true);
   const draftItems = createMemo(() =>
     localDraftQuickAccessItems(localDrafts.drafts())
   );
@@ -447,9 +431,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const { query: agentSessionsQuery, sessions: agentSessionsAccessor } =
     useQuickAccessAgentSessionsQuery();
   const databasesQuery = useDatabasesQuery();
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const formsQuery = useFormsQuery();
-  const formsFlag = useFeatureFlag(enableForms);
   const schedulesQuery = useSchedulesQuery(() => true);
   const { query: initiativesQuery, initiatives: initiativesAccessor } =
     useQuickAccessInitiativesQuery();
@@ -837,7 +819,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // Databases are not Soup entities and have no view history, so creation
   // time is the only timestamp to sort on.
   const databaseEntries = createLazyMemo(() => {
-    if (!databasesFlag().enabled) return [];
     const entries: IndexEntry[] = [];
     const listed = databasesQuery.isSuccess ? databasesQuery.data : [];
     for (const { database, grant } of listed) {
@@ -875,7 +856,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   // Forms, like databases, have only a creation time to sort on.
   const formEntries = createLazyMemo(() => {
-    if (!formsFlag().enabled) return [];
     const entries: IndexEntry[] = [];
     const listed = formsQuery.isSuccess ? formsQuery.data : [];
     for (const { form, access } of listed) {
@@ -1086,12 +1066,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const options = typeof first === 'object' ? first : undefined;
     const buckets = options ? [...options.buckets] : (args as Bucket[]);
     const projectedBuckets = createMemo(() =>
-      (buckets.length ? buckets : BUCKET_COMBINATIONS.all).filter(
-        (bucket) =>
-          ((bucket !== 'crm_company' && bucket !== 'crm_contact') ||
-            crmFlag().enabled) &&
-          (bucket !== 'initiative' || projectsFlag().enabled)
-      )
+      buckets.length ? buckets : BUCKET_COMBINATIONS.all
     );
     const personExclusions = createContactExclusions(
       function* () {
@@ -1425,6 +1400,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       loadMore: async () => {
         await Promise.all([personList.loadMore(), projected?.loadMore()]);
       },
+      // Each failed source reads its page again; the projected list retries
+      // through its ordinary pagination.
+      retry: async () => {
+        await Promise.all([
+          personList.error() ? personList.retry?.() : undefined,
+          projected?.error() ? projected.loadMore() : undefined,
+        ]);
+      },
     };
   }) as QuickAccessContextValue['useList'];
 
@@ -1445,10 +1428,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     fireAndForget(snippetsQuery.refetch(), 'quick-access');
     fireAndForget(skillsQuery.refetch(), 'quick-access');
     fireAndForget(agentSessionsQuery.refetch(), 'quick-access');
-    if (databasesFlag().enabled)
-      fireAndForget(databasesQuery.refetch(), 'quick-access');
-    if (formsFlag().enabled)
-      fireAndForget(formsQuery.refetch(), 'quick-access');
+    fireAndForget(databasesQuery.refetch(), 'quick-access');
+    fireAndForget(formsQuery.refetch(), 'quick-access');
     fireAndForget(schedulesQuery.refetch(), 'quick-access');
     fireAndForget(initiativesQuery.refetch(), 'quick-access');
   };

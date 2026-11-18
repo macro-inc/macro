@@ -1,19 +1,20 @@
 /**
  * Compact header chip for the session's linked pull request: `#N` plus
- * status, opening the PR entity once GitHub has synced it. Cloud runtimes
- * can report the URL before the webhook entity exists; until then this is
- * a GitHub link with the same face.
+ * status, opening the PR on GitHub. Once GitHub has synced the PR the chip
+ * follows its status and previews it on hover. Cloud runtimes can report the
+ * URL before the webhook entity exists; until then this is a GitHub link with
+ * the same face.
  */
 
 import { GithubPullRequestStatusIcon } from '@app/features/block-pr/side-panel/github-pull-request';
+import { pullRequestGithubUrl } from '@app/features/block-pr/util/pr-github-url';
 import {
   parseGithubPrUrl,
   toGithubKey,
 } from '@app/features/block-pr/util/prKey';
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { HoverCard } from '@core/component/HoverCard';
 import { PullRequestPreviewCard } from '@core/component/LexicalMarkdown/component/decorator/PullRequestMention';
-import { openInNewSplitForMention } from '@core/util/openInNewSplit';
+import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { usePullRequestByGithubKeyQuery } from '@queries/storage/pr-mention';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
@@ -110,14 +111,16 @@ function GithubFallback(props: { url: string; number?: number }): JSX.Element {
 
 function EntityChip(props: {
   entity: ForeignEntity;
+  url: string;
   number?: number;
 }): JSX.Element {
-  const { openWithSplit } = useSplitLayout();
   const status = () => pullRequestStatus(props.entity);
   const title = () => pullRequestTitle(props.entity);
-  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>((event) =>
-    openPullRequestEntity(openWithSplit, props.entity.id, event)
-  );
+  // PRs open on GitHub for now, not in the PR split.
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>((event) => {
+    event.stopPropagation();
+    openExternalUrl(pullRequestGithubUrl(props.entity) ?? props.url);
+  });
 
   return (
     <HoverCard
@@ -157,18 +160,6 @@ function useLinkedPullRequest(url: Accessor<string>) {
   return { reference, entity };
 }
 
-function openPullRequestEntity(
-  openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'],
-  entityId: string,
-  event: MouseEvent | KeyboardEvent
-) {
-  event.stopPropagation();
-  openWithSplit(
-    { type: 'pr', id: entityId },
-    { preferNewSplit: openInNewSplitForMention(event.shiftKey, true) }
-  );
-}
-
 export function AgentPullRequestChip(props: { url: string }): JSX.Element {
   const { reference, entity } = useLinkedPullRequest(() => props.url);
 
@@ -181,7 +172,11 @@ export function AgentPullRequestChip(props: { url: string }): JSX.Element {
         }
       >
         {(synced) => (
-          <EntityChip entity={synced()} number={reference()?.number} />
+          <EntityChip
+            entity={synced()}
+            url={props.url}
+            number={reference()?.number}
+          />
         )}
       </Show>
     </Layer>

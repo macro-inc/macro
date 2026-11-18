@@ -8,10 +8,7 @@ import {
   selectThreadMessages,
   selectThreadParticipants,
 } from '@app/features/email-thread/core/thread-messages';
-import {
-  EmailThread,
-  type EmailThreadProps,
-} from '@app/features/email-thread/email-thread';
+import { EmailThread } from '@app/features/email-thread/email-thread';
 import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -37,7 +34,6 @@ export type EmailThreadHostViewProps = {
   titleTrailing?: JSX.Element;
   threadId: Accessor<string>;
   source: EmailThreadSource;
-  threadTransport: EmailThreadProps['threadTransport'];
   host: EmailThreadHost;
   topBar?: (context: EmailThreadHostViewContext) => JSX.Element;
   /** Header actions the host adds through `SidePanel.HeaderActions`. */
@@ -49,7 +45,7 @@ export type EmailThreadHostViewProps = {
 /** What the email block hands its desktop or mobile view. */
 export type EmailBlockViewProps = Pick<
   EmailThreadHostViewProps,
-  'title' | 'threadId' | 'source' | 'threadTransport' | 'host'
+  'title' | 'threadId' | 'source' | 'host'
 >;
 
 /**
@@ -83,9 +79,7 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
   const loginEmail = useEmail();
   // Until the inbox addresses load, the viewer's own alias would be invited.
   const canCreateEvent = () =>
-    emailEvent.enabled() &&
-    !!props.source.thread() &&
-    queryReadyGate(emailLinks);
+    !!props.source.thread() && queryReadyGate(emailLinks);
   const createEvent = () => {
     const thread = props.source.thread();
     if (!thread || !canCreateEvent()) return false;
@@ -116,7 +110,6 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       titleTrailing={props.titleTrailing}
       threadId={props.threadId}
       source={props.source}
-      threadTransport={props.threadTransport}
       host={host}
       openCalendar={(target) => {
         fireAndForget(openCalendarEventSplit(target), 'email-thread');

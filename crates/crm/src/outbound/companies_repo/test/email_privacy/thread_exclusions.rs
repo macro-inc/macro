@@ -40,13 +40,13 @@ async fn thread_exclusion_is_retroactive_and_population_cannot_restore_it(
     assert_eq!(count_contacts(&pool, company).await?, 1);
     assert_eq!(fetch_company_hidden(&pool, company).await?, Some(false));
     assert_eq!(fetch_company_interactions(&pool, company).await?, history);
-    let listed = repo.excluded_email_threads(team, OWNER, None).await?;
+    let listed = repo.excluded_email_threads(team, OWNER, None, None).await?;
     assert_eq!(listed.threads.len(), 1);
     assert_eq!(listed.threads[0].thread_id, thread);
     assert_eq!(listed.threads[0].link_id, link);
     assert!(listed.next_cursor.is_none());
     assert!(
-        repo.excluded_email_threads(team, OWNER, Some(thread))
+        repo.excluded_email_threads(team, OWNER, Some(thread), None)
             .await?
             .threads
             .is_empty()
@@ -66,7 +66,7 @@ async fn thread_exclusion_is_retroactive_and_population_cannot_restore_it(
             .await?
     );
     assert!(
-        repo.excluded_email_threads(team, OWNER, None)
+        repo.excluded_email_threads(team, OWNER, None, None)
             .await?
             .threads
             .is_empty()
@@ -143,7 +143,7 @@ async fn thread_exclusion_does_not_affect_teammates_copy_and_is_owner_only(
     assert!(!allowed(&pool, team, mine).await?);
     assert!(allowed(&pool, team, theirs).await?);
     assert!(
-        repo.excluded_email_threads(team, other, None)
+        repo.excluded_email_threads(team, other, None, None)
             .await?
             .threads
             .is_empty()
@@ -180,7 +180,7 @@ async fn thread_exclusion_does_not_affect_teammates_copy_and_is_owner_only(
         .execute(&pool)
         .await?;
     assert!(
-        repo.excluded_email_threads(team, OWNER, None)
+        repo.excluded_email_threads(team, OWNER, None, None)
             .await?
             .threads
             .is_empty()
@@ -202,12 +202,23 @@ async fn excluded_threads_are_paged_by_id_and_removed_with_membership(
     .execute(&pool)
     .await?;
     sqlx::query!("INSERT INTO crm_email_thread_exclusions (team_id, user_id, link_id, thread_id) SELECT $1, $2, $3, id FROM unnest($4::uuid[]) id", team, OWNER, link, &ids).execute(&pool).await?;
-    let first = repo.excluded_email_threads(team, OWNER, None).await?;
+    let first = repo.excluded_email_threads(team, OWNER, None, None).await?;
     assert_eq!(first.threads.len(), 50);
     let second = repo
-        .excluded_email_threads(team, OWNER, first.next_cursor)
+        .excluded_email_threads(team, OWNER, first.next_cursor, None)
         .await?;
     assert_eq!(second.threads.len(), 5);
+    let target = second.threads[4].thread_id;
+    let exact = repo
+        .excluded_email_threads(team, OWNER, None, Some(target))
+        .await?;
+    assert_eq!(exact.threads.len(), 1);
+    assert_eq!(exact.threads[0].thread_id, target);
+    assert!(exact.next_cursor.is_none());
+    let foreign = repo
+        .excluded_email_threads(Uuid::now_v7(), OWNER, None, Some(target))
+        .await?;
+    assert!(foreign.threads.is_empty());
     assert!(second.next_cursor.is_none());
     let listed: Vec<_> = first
         .threads
@@ -226,7 +237,7 @@ async fn excluded_threads_are_paged_by_id_and_removed_with_membership(
     .execute(&pool)
     .await?;
     assert!(
-        repo.excluded_email_threads(team, OWNER, None)
+        repo.excluded_email_threads(team, OWNER, None, None)
             .await?
             .threads
             .is_empty()

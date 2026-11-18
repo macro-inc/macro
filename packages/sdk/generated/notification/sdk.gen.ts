@@ -86,7 +86,8 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Unsubscribes a user from a given item for notifications.
+     * Unsubscribes a user from a given item for notifications, or, with
+     * `mentions_only`, from everything on a channel but their direct mentions.
      */
     public unsubscribeItem<ThrowOnError extends boolean = false>(options: Options<UnsubscribeItemData, ThrowOnError>): RequestResult<UnsubscribeItemResponses, UnsubscribeItemErrors, ThrowOnError> {
         return (options.client ?? this.client).post<UnsubscribeItemResponses, UnsubscribeItemErrors, ThrowOnError>({ url: '/unsubscribe/item/{item_type}/{item_id}', ...options });

@@ -77,6 +77,11 @@
   animation: macro-toast-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* A toast updated in place to new timing remounts; it is already on screen. */
+.macro-toast[data-replaced][data-opened] {
+  animation: none;
+}
+
 .macro-toast[data-closed] {
   animation: macro-toast-out 160ms ease-in forwards;
   pointer-events: none;

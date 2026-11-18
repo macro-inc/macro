@@ -139,6 +139,9 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
 /// `MCP_CREDENTIALS_KEY_SECRET_NAME` enables import tools on hosts with access
 /// to the shared connector encryption key; hosts without it remain unwired.
 ///
+/// `TYPESAFE_API_KEY` enables the memory privacy judge; without it every memory
+/// save is refused.
+///
 /// Service URLs are resolved through the `macro_service_urls` crate, and queue
 /// names through the `macro_queues` crate (both using optional `OVERRIDE_*` env
 /// vars before environment defaults).
@@ -429,10 +432,6 @@ pub async fn build_tool_service_context_from_env(
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
-    let document_tool_context = match crate::canvas_artifacts_rollout_from_env(environment)? {
-        Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
-        None => document_tool_context,
-    };
 
     let properties_tool_context = crate::tool_context::build_properties_tool_context(
         properties_service.clone(),

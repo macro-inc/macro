@@ -368,7 +368,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     }
     if (
       !hasDraftContent(
-        prepared.bodyText,
+        prepared.hasWrittenContent,
         form.subject(),
         form.attachments.list().length,
         form.recipients().to.length +
@@ -930,7 +930,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
     }
     if (scheduleAction === 'schedule' || scheduleAction === 'update') {
       const result = await schedule.submit();
-      if (result === 'scheduled') {
+      // Another composer may have cancelled the schedule while it committed.
+      if (result === 'scheduled' && schedule.state().type === 'scheduled') {
         const scheduledDraftId = currentDraftId();
         if (scheduledDraftId) rememberForUndo(scheduledDraftId, currentLink.id);
         setCompleted(true);

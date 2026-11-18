@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT metadata,user_id,grants,deleting,revision,totp_key_id FROM password_item_entities WHERE team_id=$1 AND deleted_at IS NULL AND NOT deleting AND (grants @> $3 OR grants @> $4 OR user_id=$5) AND ($6::uuid IS NULL OR id < $6) AND (lower(metadata->>'name') || ' ' || lower(COALESCE(metadata->>'url',''))) LIKE lower($2) ESCAPE '\\' ORDER BY id DESC LIMIT $7",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "grants",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "deleting",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "totp_key_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "1eb020b6e6ab7de1591e519acc631be6b2dce475e73d9c2efe798d2051168a42"
+}

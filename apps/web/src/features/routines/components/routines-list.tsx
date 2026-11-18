@@ -1,4 +1,4 @@
-import { SearchBar, ViewShell } from '@app/components/view-shell';
+import { SearchBar, ViewShell, ViewSidebar } from '@app/components/view-shell';
 import {
   ListHeader,
   ListHeaderSearch,
@@ -137,7 +137,10 @@ export function RoutinesList(props: {
                 Routines
               </h1>
             </Show>
-            <div class="mb-3">{tabs()}</div>
+            <div class="mb-3 flex min-w-0 items-center gap-2">
+              <ViewSidebar.Toggle action="expand" presentation="pill" />
+              {tabs()}
+            </div>
             <div class="flex min-w-0 items-center justify-between gap-3">
               <SearchBar
                 ref={(input) =>

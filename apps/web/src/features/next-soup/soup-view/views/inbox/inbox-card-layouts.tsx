@@ -40,6 +40,7 @@ import FilesIcon from '@icon/system/regular/files.svg';
 import GitMergeIcon from '@icon/system/regular/git-merge.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg?component-solid';
+import KeyIcon from '@icon/system/regular/key.svg?component-solid';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg?component-solid';
 import PhoneIcon from '@icon/system/regular/phone.svg?component-solid';
 import QuestionIcon from '@icon/system/regular/question.svg?component-solid';
@@ -94,7 +95,7 @@ export interface InboxCardLayoutProps {
 
 /** Glyph size inside the card's avatar bubble — grows with the circle on
  * mobile, matching the narrow rows' icon factor (see InboxCard.Icon). */
-const AVATAR_GLYPH_CLASS = 'size-4 mobile:size-6';
+const AVATAR_GLYPH_CLASS = 'size-4 touch:size-6';
 
 type NotificationTag = ReturnType<typeof getNotificationTag>;
 
@@ -291,6 +292,9 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     ))
     .with('calendar_event_join_request', () => () => (
       <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('password_access_requested', () => () => (
+      <KeyIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with(
       'github_pr_status_changed',
@@ -568,7 +572,7 @@ function BaseCard(props: {
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
           <Show when={props.showUnreadIndicator && props.item.unread}>
-            <UnreadIndicator active class="mobile:hidden" />
+            <UnreadIndicator active class="touch:hidden" />
           </Show>
           <InboxCard.Title class="flex items-center gap-1">
             {props.titleLeading}
@@ -945,7 +949,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
         <div class={cn('col-start-2 row-start-2')}>
           <InboxCard.Header class="self-center">
             <Show when={props.showUnreadIndicator && props.item.unread}>
-              <UnreadIndicator active class="mobile:hidden" />
+              <UnreadIndicator active class="touch:hidden" />
             </Show>
             <InboxCard.Title class="flex items-center gap-1">
               <span class="truncate">{text().title}</span>

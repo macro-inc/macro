@@ -240,7 +240,12 @@ impl GmailEmulator {
 
     /// Starts an emulator on a given address.
     pub async fn start_on(address: SocketAddr, seed: Seed) -> Result<Self, StartError> {
-        let listener = TcpListener::bind(address).await?;
+        Self::start_with_listener(TcpListener::bind(address).await?, seed)
+    }
+
+    /// Starts an emulator on a listener the caller bound, for a caller that
+    /// picks its own port. Call it inside a Tokio runtime.
+    pub fn start_with_listener(listener: TcpListener, seed: Seed) -> Result<Self, StartError> {
         let address = listener.local_addr()?;
         let mut state = State::default();
         state.apply_seed(&seed)?;
@@ -484,6 +489,25 @@ impl GmailEmulator {
     pub fn expire_history(&self, email: &str) -> Result<(), EmulatorError> {
         self.with_state(|state| {
             state.mailbox_mut(email)?.expire_history();
+            Ok(())
+        })
+    }
+
+    /// Sets the HTML signature of a mailbox's primary address, as its owner
+    /// does in Gmail's settings. `settings.sendAs.list` answers it.
+    pub fn set_signature(&self, email: &str, signature: &str) -> Result<(), EmulatorError> {
+        self.with_state(|state| {
+            state.mailbox_mut(email)?.signature = signature.to_string();
+            Ok(())
+        })
+    }
+
+    /// Replaces a mailbox's send-as aliases, as its owner does in Gmail's
+    /// settings (adding, removing or verifying one). `settings.sendAs.list`
+    /// answers the new set after the primary address.
+    pub fn set_send_as(&self, email: &str, aliases: Vec<SeedSendAs>) -> Result<(), EmulatorError> {
+        self.with_state(|state| {
+            state.mailbox_mut(email)?.send_as = aliases;
             Ok(())
         })
     }

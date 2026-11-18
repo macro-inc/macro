@@ -6,6 +6,7 @@ import {
   type GraphicsEditor,
   translation,
 } from '@macro-inc/graphics';
+import type { GraphicsInputOptions } from '@macro-inc/graphics/browser';
 import { createLoroGraphicsBackendFromDoc } from '@macro-inc/graphics/loro';
 import { CollaborativeGraphicsSurface } from '@macro-inc/graphics/loro/solid';
 import type { LoroDoc } from 'loro-crdt';
@@ -36,11 +37,16 @@ const people = new Map<
   string,
   { editor: GraphicsEditor; session: CanvasSession }
 >();
+type FixtureTool = NonNullable<
+  ReturnType<NonNullable<GraphicsInputOptions['tool']>>
+>;
+const [tool, setTool] = createSignal<FixtureTool>('select');
 declare global {
   interface Window {
     canvasFixture: {
       people: typeof people;
       reopen: (name: string) => void;
+      setTool: (tool: FixtureTool) => void;
     };
   }
 }
@@ -112,7 +118,7 @@ function Scene(props: { doc: LoroDoc; session: CanvasSession; name: string }) {
     <CollaborativeGraphicsSurface
       editor={editor}
       presence={presence}
-      input={{ tool: () => 'select', editing: props.name !== 'Viewer' }}
+      input={{ tool, editing: props.name !== 'Viewer' }}
     />
   );
 }
@@ -120,6 +126,7 @@ function Fixture() {
   const [attempts, setAttempts] = createSignal({ Alice: 1, Bob: 1, Viewer: 1 });
   window.canvasFixture = {
     people,
+    setTool,
     reopen: (name) =>
       setAttempts((value) => ({
         ...value,

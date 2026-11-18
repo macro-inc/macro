@@ -23,6 +23,7 @@ import {
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
+import { onlyType } from '../search/exclusions';
 import { entitySearch } from '../search/options';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
@@ -47,7 +48,8 @@ export type ChannelAttachment =
  */
 export class Channel extends PropertiedEntity<ChannelDetail> {
   /**
-   * Start or join this channel's call, ringing members if a new call starts.
+   * Start or join this channel's call, ringing members if a new call starts;
+   * refused to an agent's program (ExecuteCode, a routine).
    *
    * @write
    * @mcp-exclude Returns a live call room credential; MCP calls carry JSON only.
@@ -228,10 +230,13 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   readonly type = this.field('channel_type');
 
   /**
-   * Post a message. Plain text, or a rich body composed with `msg`.
+   * Post a message; pass `silent: true` for a routine update that should
+   * notify nobody. Plain text, or a rich body composed with `msg`.
    * `images` attaches static images, such as one from
    * `macro.images.generate()`, below the text; `documents` attaches Macro
    * documents as file chips, such as a file from `macro.documents.upload()`.
+   * `silent` sends no push, email or inbox entry to anyone, mentioned people
+   * included; the message still appears in the channel.
    *
    * Works with a channel webhook token as well as a normal one — see
    * {@link postToChannel} for which endpoint that picks and what it costs.
@@ -243,6 +248,11 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
    * await channel.send('Q3 numbers attached.', { documents: [file] });
    * ```
    *
+   * @example Post a routine status update without notifying anyone.
+   * ```js
+   * await channel.send('Nightly sync finished: 42 records.', { silent: true });
+   * ```
+   *
    * @write
    */
   async send(
@@ -251,6 +261,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
       thread?: Thread;
       images?: StaticImage[];
       documents?: Document[];
+      silent?: boolean;
     },
   ): Promise<Message> {
     const id = await postToChannel(
@@ -555,6 +566,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /** Search channels by content, most relevant first, auto-paginated. */
   static search = entitySearch({
     type: 'channel',
+    filters: onlyType('channel'),
     make: (client, hit) => new Channel(client, hit.channel_id),
   });
 }

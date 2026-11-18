@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT notification_id\n            FROM user_notification\n            WHERE user_id = $1\n              AND deleted_at IS NULL\n              AND state <> 'done'\n              AND notification_event_type = ANY($2)\n            ORDER BY created_at DESC, notification_id DESC\n            LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1ef75c2c2ec49b871c5ad0dc5b1392d46f9e8eda3504b94894174ad1a1c5d909"
+}

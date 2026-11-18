@@ -253,11 +253,12 @@ export class Suggestion {
    * Mark this suggestion as taken up for the user. Only the user starts a
    * background prompt suggestion's run, from the app: accepting one here only
    * takes it on (`state` becomes `accepted`, no run), so tell the user it is
-   * ready for them to run. A routine suggestion fails with 400: the user saves
-   * its routine from the app. Any other suggestion becomes done, so do what it
-   * suggests yourself. Fails with 409 when the suggestion changed since it was
-   * read: read it again. For the user's own agent; a generation session
-   * gets a 403.
+   * ready for them to run. A reply suggestion is also only taken on: it stays
+   * open until the user replies on its item. A routine suggestion fails with
+   * 400: the user saves its routine from the app. Any other suggestion becomes
+   * done, so do what it suggests yourself. Fails with 409 when the suggestion
+   * changed since it was read: read it again. For the user's own agent; a
+   * generation session gets a 403.
    */
   async accept(): Promise<void> {
     unwrap(

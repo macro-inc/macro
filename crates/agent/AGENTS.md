@@ -12,11 +12,18 @@ and usage metering.
 - `src/agent_loop.rs`: `AgentLoop`/`Session` — runs a turn, dispatches tool
   calls, loops until a final response.
 - `src/model/`: provider adapters (`anthropic.rs`, `openai.rs`, `gemini.rs`)
-  behind `model/router.rs`, plus `predefined_model.rs`/`speed.rs` (the
+  behind `model/router.rs` (the Gemini client's host is
+  `macro_service_urls`' `GoogleGenerativeAiApiUrl`, so a local stack can
+  point it at `crates/model_emulator`), plus `predefined_model.rs`/`speed.rs` (the
   product-facing model/speed vocabulary) and `metering.rs` (usage recording
   hook into `ai_usage`).
 - `AgentLoop::with_streamed_tool_calls` opts hosts into early tool-call
   announcements and argument deltas; the accumulator persists only final calls.
+- `src/system_prompt.rs`: `SystemPrompt`, built from named `PromptSection`s
+  in a shared, per-session and per-turn part; every model call records each
+  section's bytes and hash (`macro.genai.prompt.<section>.*`), plus tool
+  schema and history sizes, on rig's `chat_streaming` span whatever the
+  content policy (`src/telemetry.rs`).
 - `src/stream.rs`: `StreamPart`/`ChatCompletionStream`, the wire shape
   callers consume.
 - `src/completion.rs`: one-shot, non-looping completions (no tools).
@@ -42,8 +49,8 @@ and usage metering.
 
 - Depends on: `ai_usage` (metering), `ai_toolset` (tool adapter trait),
   `attachment`, `genai_telemetry`, `prompt`, `rig-core`/`rig-agent`.
-- Used by: `agent_inmem`, `ai_tools`, `ai_projections` (`agent` feature),
-  and most AI-surface crates that run a turn (directly or via `ai_tools`).
+- Used by: `agent_inmem`, `ai_tools`, and most AI-surface crates that run a
+  turn (directly or via `ai_tools`).
 
 ## Recipes
 

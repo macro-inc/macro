@@ -9,6 +9,7 @@ import type { NewAttachment } from './newAttachment';
 import type { PostMessageAnchor } from './postMessageAnchor';
 import type { PostMessageId } from './postMessageId';
 import type { PostMessageNonce } from './postMessageNonce';
+import type { PostMessageNotificationPolicy } from './postMessageNotificationPolicy';
 import type { PostMessageThreadId } from './postMessageThreadId';
 import type { SimpleMention } from './simpleMention';
 
@@ -28,6 +29,10 @@ already carries its final id; the server mints one when absent. */
   mentions?: SimpleMention[];
   /** Client nonce for optimistic reconciliation. */
   nonce?: PostMessageNonce;
+  /** Who hears about this post. `Silent` still delivers and shows the
+message, but sends no notification of any kind, mentions included.
+Channel messages only; other parents accept only `Default`. */
+  notification_policy?: PostMessageNotificationPolicy;
   /** Root to reply to, if this is a reply. */
   thread_id?: PostMessageThreadId;
 }

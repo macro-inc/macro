@@ -225,3 +225,24 @@ fn a_token_that_signs_a_scope_is_a_scoped_macro_api_jwt() {
     assert_eq!(credential.origin, CredentialOrigin::ScopedMacroApiJwt);
     assert_eq!(credential.identity.user_id, MACRO_USER_ID);
 }
+
+#[test]
+fn maps_a_signed_routine_with_no_agent() {
+    let routine = uuid::Uuid::from_u128(0x7001);
+    let credential = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
+        agent_correlation_id: None,
+        agent_session_id: None,
+        routine_id: Some(routine),
+        agent_scope: None,
+        agent_id: None,
+        agent_via: None,
+        exp: unix_timestamp() + 60,
+        iss: String::new(),
+        fusion_user_id: FUSION_USER_ID.into(),
+        macro_user_id: MACRO_USER_ID.into(),
+        macro_organization_id: None,
+    }));
+    assert_eq!(credential.identity.routine_id, Some(routine));
+    assert_eq!(credential.identity.agent_id, None);
+    assert_eq!(credential.identity.user_id, MACRO_USER_ID);
+}

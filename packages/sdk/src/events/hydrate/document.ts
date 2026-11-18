@@ -82,6 +82,19 @@ export function hydrateDocumentEvent(
       metadata,
       document: Document.byId(client, metadata.document_id),
     }))
+    .with(
+      { event_type: 'document.email_attachments_released' },
+      ({ metadata }) => ({
+        event_type: 'document.email_attachments_released' as const,
+        metadata,
+        trashedDocuments: metadata.trashed_document_ids.map((id) =>
+          Document.byId(client, id),
+        ),
+        keptDocuments: metadata.kept_document_ids.map((id) =>
+          Document.byId(client, id),
+        ),
+      }),
+    )
     .exhaustive((unknown) => {
       console.warn('macro sdk: unknown document event', unknown);
       return undefined;

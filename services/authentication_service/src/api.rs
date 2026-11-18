@@ -160,7 +160,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 ),
             )),
         )
-        .nest("/link", link::router())
+        .nest("/link", link::router(state.clone()))
         .nest("/cursor-api-key", cursor_api_key::router())
         .nest("/agents", agent_api_keys::router())
         .nest("/codex", codex::router())
