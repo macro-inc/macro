@@ -90,7 +90,9 @@ impl NotionPlanRepo for PgImportRepo {
                      review_id)
                 VALUES ($1, $2, $3, $4, 'staged', 'chat', $5, $6, $7)
                 ON CONFLICT (user_id, source, foreign_id) DO UPDATE
-                SET kind = EXCLUDED.kind, metadata = EXCLUDED.metadata,
+                SET kind = EXCLUDED.kind, metadata = EXCLUDED.metadata || jsonb_strip_nulls(jsonb_build_object(
+                        'personalFolderId', import_entity.metadata -> 'personalFolderId',
+                        'separateFolder', import_entity.metadata -> 'separateFolder')),
                     parent_id = EXCLUDED.parent_id, status = 'staged',
                     review_id = EXCLUDED.review_id, last_error = NULL, updated_at = NOW()
                 WHERE import_entity.status IN ('staged', 'discarded')

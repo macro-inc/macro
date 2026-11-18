@@ -549,7 +549,7 @@ async fn personal_mirror_updates_require_an_existing_run(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn folder_report_updates_validate_the_target_items_owner(pool: PgPool) {
-    use crate::domain::{models::Initiator, ports::ImportVisibility};
+    use crate::domain::models::Initiator;
     let repo = PgImportRepo::new(pool);
     let owner = user("folder-report-owner");
     let other = user("folder-report-other");
@@ -579,9 +579,24 @@ async fn folder_report_updates_validate_the_target_items_owner(pool: PgPool) {
             .is_err()
     );
     assert!(
-        repo.record_separate_folder(&other, row.id, folder, ImportVisibility::Shared)
-            .await
-            .is_err()
+        repo.record_separate_folder(
+            &other,
+            row.id,
+            folder,
+            crate::domain::ports::FolderSeparation::SharedFromPersonal
+        )
+        .await
+        .is_err()
+    );
+    assert!(
+        repo.record_task_notice(
+            &other,
+            row.id,
+            folder,
+            crate::domain::ports::TaskImportNoticeReason::PersonalAssigneeOmitted
+        )
+        .await
+        .is_err()
     );
     assert_eq!(
         repo.get(&owner, row.id).await.unwrap().unwrap().metadata,
@@ -597,13 +612,169 @@ async fn folder_report_updates_validate_the_target_items_owner(pool: PgPool) {
     repo.record_personal_relocation(&owner, row.id, folder)
         .await
         .unwrap();
-    repo.record_separate_folder(&owner, row.id, folder, ImportVisibility::Shared)
-        .await
-        .unwrap();
+    repo.record_separate_folder(
+        &owner,
+        row.id,
+        folder,
+        crate::domain::ports::FolderSeparation::SharedFromPersonal,
+    )
+    .await
+    .unwrap();
     let saved = repo.get(&owner, row.id).await.unwrap().unwrap();
     assert_eq!(saved.metadata["personalFolderId"], folder.to_string());
     assert_eq!(
         saved.metadata["separateFolder"]["folderId"],
         folder.to_string()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn restaging_keeps_folder_report_fields(pool: PgPool) {
+    use crate::domain::models::Initiator;
+    let repo = PgImportRepo::new(pool);
+    let owner = user("restaged-report");
+    let folder = Uuid::now_v7();
+    let first = serde_json::json!({"title":"Old", "personalFolderId":folder, "separateFolder":{"visibility":"shared","reason":"sharing_removed","folderId":folder}});
+    repo.upsert_staged(
+        &owner,
+        ImportSource::Notion,
+        ImportKind::Page,
+        Initiator::Manual,
+        &"a".repeat(32),
+        &first,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let next = repo
+        .upsert_staged(
+            &owner,
+            ImportSource::Notion,
+            ImportKind::Page,
+            Initiator::Manual,
+            &"a".repeat(32),
+            &serde_json::json!({"title":"New"}),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(next.metadata["title"], "New");
+    assert_eq!(next.metadata["personalFolderId"], first["personalFolderId"]);
+    assert_eq!(next.metadata["separateFolder"], first["separateFolder"]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn task_notices_are_deduplicated_owned_and_do_not_rewrite_source_metadata(pool: PgPool) {
+    use crate::domain::{models::Initiator, ports::TaskImportNoticeReason};
+    let repo = PgImportRepo::new(pool.clone());
+    let owner = user("notice-owner");
+    let other = user("notice-other");
+    let metadata = serde_json::json!({"title":"Tasks"});
+    let first = repo
+        .upsert_staged(
+            &owner,
+            ImportSource::Notion,
+            ImportKind::DataSource,
+            Initiator::Manual,
+            "first",
+            &metadata,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let second = repo
+        .upsert_staged(
+            &owner,
+            ImportSource::Notion,
+            ImportKind::DataSource,
+            Initiator::Manual,
+            "second",
+            &metadata,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let task = Uuid::now_v7();
+    for _ in 0..2 {
+        repo.record_task_notice(
+            &owner,
+            first.id,
+            task,
+            TaskImportNoticeReason::PersonalAssigneeOmitted,
+        )
+        .await
+        .unwrap();
+    }
+    repo.record_task_notice(
+        &owner,
+        second.id,
+        Uuid::now_v7(),
+        TaskImportNoticeReason::PersonalAssigneeOmitted,
+    )
+    .await
+    .unwrap();
+    let reordered =
+        format!("{{ \"reason\": \"personal_assignee_omitted\", \"task_id\": \"{task}\" }}");
+    sqlx::query!("INSERT INTO import_entity_written (import_id,kind,object,macro_id) VALUES ($1,'task_notice',$2,$3)",first.id,reordered,task).execute(&pool).await.unwrap();
+    assert_eq!(
+        repo.get(&owner, first.id).await.unwrap().unwrap().metadata,
+        metadata
+    );
+    let counts = repo
+        .task_notice_counts(&owner, &[first.id, first.id])
+        .await
+        .unwrap();
+    assert_eq!(counts.len(), 1);
+    assert_eq!(counts[0].count, 1);
+    assert!(
+        repo.task_notice_counts(&other, &[first.id])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(repo.clear_task_notices(&other, first.id).await.is_err());
+    repo.clear_task_notices(&owner, first.id).await.unwrap();
+    assert!(
+        repo.task_notice_counts(&owner, &[first.id])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        repo.task_notice_counts(&owner, &[second.id]).await.unwrap()[0].count,
+        1
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn malformed_task_notice_payloads_fail_loudly(pool: PgPool) {
+    use crate::domain::models::Initiator;
+    let repo = PgImportRepo::new(pool.clone());
+    let owner = user("bad-notice-owner");
+    let row = repo
+        .upsert_staged(
+            &owner,
+            ImportSource::Notion,
+            ImportKind::DataSource,
+            Initiator::Manual,
+            "tasks",
+            &serde_json::json!({"title":"Tasks"}),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let task = Uuid::now_v7();
+    for payload in [
+        serde_json::json!({"task_id":task,"reason":"unknown"}).to_string(),
+        serde_json::json!({"task_id":task}).to_string(),
+        serde_json::json!({"task_id":Uuid::now_v7(),"reason":"personal_assignee_omitted"})
+            .to_string(),
+        serde_json::json!({"task_id":task,"reason":"personal_assignee_omitted","extra":true})
+            .to_string(),
+        "not json".to_string(),
+    ] {
+        sqlx::query!("INSERT INTO import_entity_written (import_id,kind,object,macro_id) VALUES ($1,'task_notice',$2,$3)",row.id,payload,task).execute(&pool).await.unwrap();
+        assert!(repo.task_notice_counts(&owner, &[row.id]).await.is_err());
+        repo.clear_task_notices(&owner, row.id).await.unwrap();
+    }
 }

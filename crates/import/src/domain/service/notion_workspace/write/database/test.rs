@@ -38,52 +38,8 @@ fn source_item(title: &str) -> WriteItem {
     }
 }
 
-/// What earlier attempts recorded, kept the way the ledger keeps it: the
-/// first record of an object wins.
-#[derive(Default)]
-struct FakeStore(Mutex<Vec<WrittenObject>>);
-
-impl WrittenObjects for FakeStore {
-    async fn written(
-        &self,
-        _user: &MacroUserIdStr<'static>,
-        import_ids: &[Uuid],
-    ) -> crate::domain::ports::Result<Vec<WrittenObject>> {
-        Ok(self
-            .0
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|object| import_ids.contains(&object.import_id))
-            .cloned()
-            .collect())
-    }
-
-    async fn record_written(
-        &self,
-        _user: &MacroUserIdStr<'static>,
-        objects: &[WrittenObject],
-    ) -> crate::domain::ports::Result<Vec<WrittenObject>> {
-        let mut stored = self.0.lock().unwrap();
-        Ok(objects
-            .iter()
-            .map(|object| {
-                let existing = stored.iter().find(|known| {
-                    known.import_id == object.import_id
-                        && known.kind == object.kind
-                        && known.object == object.object
-                });
-                match existing {
-                    Some(known) => known.clone(),
-                    None => {
-                        stored.push(object.clone());
-                        object.clone()
-                    }
-                }
-            })
-            .collect())
-    }
-}
+mod store;
+use store::FakeStore;
 
 /// A Notion workspace holding one data source with two rows.
 struct FakeNotion {
@@ -164,6 +120,7 @@ struct WrittenDocument {
 /// leave it.
 #[derive(Default)]
 struct FakeWriter {
+    task_notice: Option<crate::domain::ports::TaskImportNoticeReason>,
     databases: Mutex<usize>,
     tasks: Mutex<Vec<crate::domain::ports::ImportVisibility>>,
     task_folders: Mutex<Vec<Option<Uuid>>>,
@@ -199,7 +156,7 @@ impl WorkspaceWriter for FakeWriter {
         _: &str,
         _: &ImportedTaskProperties,
         _visibility: crate::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<crate::domain::ports::CreatedImportTask> {
         unreachable!("Notion-only test writer")
     }
     async fn link_tracker_task(
@@ -296,10 +253,13 @@ impl WorkspaceWriter for FakeWriter {
         folder: Option<Uuid>,
         _dates: Option<SourceDates>,
         visibility: crate::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<crate::domain::ports::CreatedImportTask> {
         self.tasks.lock().unwrap().push(visibility);
         self.task_folders.lock().unwrap().push(folder);
-        Ok(id.to_string())
+        Ok(crate::domain::ports::CreatedImportTask {
+            id: id.to_string(),
+            notice: self.task_notice,
+        })
     }
 
     async fn create_database(

@@ -30,7 +30,9 @@ Every other app opens Pipedream's Connect UI inside the dialog. A connected row
   **Open full review** uses the existing full-height sheet. Approve on the card,
   or say yes and let the agent submit it with `DecideReview`; planning must be ready.
   Stop affects the selected source only, and completed copies stay in Macro.
-Personal choices create owner-only copies. For Notion, when an old destination
+Personal choices create owner-only copies. Personal tasks omit teammate
+assignees because assignment grants access; the import report lists the omitted
+assignee count. For Notion, when an old destination
 folder was explicitly shared, personal copies go into the matching path under
 **Notion (personal)**. The import report lists each relocation; the old shared
 folder stays as it is. A later shared plan uses a separate shared folder when

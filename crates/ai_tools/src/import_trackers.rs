@@ -65,7 +65,7 @@ impl ToolEntityCreator {
         markdown: &str,
         properties: &ImportedTaskProperties,
         visibility: import::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<import::domain::ports::CreatedImportTask> {
         let created = self
             .create_imported_task(
                 user,
@@ -79,12 +79,14 @@ impl ToolEntityCreator {
                 visibility,
             )
             .await;
-        let task = crate::import_workspace::already_created(created, id)?;
+        let initial_notice = created.as_ref().ok().and_then(|created| created.notice);
+        let task = crate::import_workspace::already_created(created.map(|created| created.id), id)?;
         // A replay may have returned a document created just before a crash.
         // Apply enrichment again and keep the explicit team grant off until
         // the import domain has linked relationships successfully.
         let (_, roster) = self.team_roster(user).await;
-        self.apply_task_properties(user, &task, properties, &roster)
+        let notice = self
+            .apply_task_properties(user, &task, properties, &roster, visibility)
             .await;
         let receipt = self
             .entity_access_service
@@ -97,7 +99,10 @@ impl ToolEntityCreator {
             .await
             .map_err(|error| anyhow::anyhow!("no edit access to imported task: {error:?}"))?;
         self.document_service.set_team_share(receipt, false).await?;
-        Ok(task)
+        Ok(import::domain::ports::CreatedImportTask {
+            id: task,
+            notice: notice.or(initial_notice),
+        })
     }
 
     #[tracing::instrument(skip_all, fields(task_id = %id), err)]

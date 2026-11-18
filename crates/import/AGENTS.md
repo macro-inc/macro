@@ -231,8 +231,20 @@ locks serialize parallel mirror resolutions within a process. Never hold a
 process-wide lock across folder creation calls.
 
 Treat a Shared re-review of an incomplete data source as consent to share that
-source's existing database, task list and body folders; do not share a parent
-that also holds unrelated personal items.
+source's existing database, task list and body folders, plus direct grants on
+its recorded tasks and row bodies that may have been relocated into the personal
+mirror. Do not share a mirror or parent that also holds unrelated personal items.
+Personal task imports omit teammate assignees to prevent assignment grants;
+persist a typed `WrittenKind::TaskNotice` payload per task. Aggregate notice
+counts once per source in report warnings; do not rewrite growing source metadata.
+Use a dedicated written kind and typed payload for notices, never document markers.
+Older workers reject TaskNotice markers until upgraded; interrupted writes resume
+on updated workers.
+Read counts only for Personal items in the current review, reject malformed
+payloads, and clear the source's notices after a successful Shared retry. Preserve
+writer-owned folder report fields when staging or updating plans. Keep verdict
+updates behind the exact-key lookup fence and recheck the owner on the updated
+tuple; stale statistics must not turn a small batch into a user-wide ledger scan.
 
 ## Issue tracker workspace imports
 

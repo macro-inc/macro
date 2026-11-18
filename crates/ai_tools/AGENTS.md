@@ -31,6 +31,8 @@ execution, display) that don't belong to a single domain.
   Notion's dates. Reviewed workspace imports carry a typed `ImportVisibility`
   through document, task, folder and tracker-project creation: personal items
   get an exact OFF override before insertion; shared items retain defaults.
+  Personal tasks also omit teammate assignees, returning a typed notice for the
+  import report; keep the same verdict on every property pass, including retries.
   Notion tasks have no direct team grant; shared lists grant team access
   through their folder, while single tracked tasks (Linear) stay team-shared
   at creation.

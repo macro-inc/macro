@@ -418,6 +418,16 @@ async fn an_unshared_marked_folder_is_preserved_and_its_replacement_is_reused(po
             "the user's removed grant was restored"
         );
     }
+    let saved = service
+        .repo
+        .get(&owner, parent_row.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        saved.metadata["separateFolder"]["reason"],
+        "sharing_removed"
+    );
     assert_eq!(
         service
             .creator
@@ -462,4 +472,107 @@ async fn a_teamless_shared_verdict_still_reaches_each_notion_writer(pool: PgPool
             .all(|(_, visibility)| *visibility == ImportVisibility::Shared)
     );
     assert!(service.creator.shares.lock().unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn shared_notion_re_review_clears_only_its_own_task_notices(pool: PgPool) {
+    use crate::domain::{
+        models::{Initiator, WrittenKind, WrittenObject},
+        ports::{TaskImportNoticeReason, WrittenObjects},
+    };
+    let owner = teammate(&pool, "shared-notice-retry", Uuid::now_v7()).await;
+    let service = service(
+        &pool,
+        Writer::default(),
+        CancellationToken::new(),
+        TaskTracker::new(),
+    );
+    service
+        .repo
+        .start_run(&owner, ImportSource::Notion, &[])
+        .await
+        .unwrap();
+    let mut planned = planned_page('a', "Tasks", false);
+    planned.kind = ImportKind::DataSource;
+    planned.metadata["plan"]["decision"] = "tasks".into();
+    let source = service
+        .repo
+        .upsert_staged(
+            &owner,
+            ImportSource::Notion,
+            ImportKind::DataSource,
+            Initiator::Manual,
+            page_id('a').as_str(),
+            &planned.metadata,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let unrelated = service
+        .repo
+        .upsert_staged(
+            &owner,
+            ImportSource::Notion,
+            ImportKind::Page,
+            Initiator::Manual,
+            page_id('b').as_str(),
+            &planned_page('b', "Unrelated", false).metadata,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let task = Uuid::now_v7();
+    service
+        .repo
+        .record_written(
+            &owner,
+            &[WrittenObject::for_row(
+                source.id,
+                WrittenKind::Task,
+                &page_id('f'),
+                task,
+            )],
+        )
+        .await
+        .unwrap();
+    for row in [&source, &unrelated] {
+        service
+            .repo
+            .record_task_notice(
+                &owner,
+                row.id,
+                task,
+                TaskImportNoticeReason::PersonalAssigneeOmitted,
+            )
+            .await
+            .unwrap();
+    }
+    planned.metadata["plan"]["shared"] = true.into();
+    write_plan_rows(&service, &owner, &[planned]).await;
+    assert!(
+        service
+            .repo
+            .task_notice_counts(&owner, &[source.id])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        service
+            .repo
+            .task_notice_counts(&owner, &[unrelated.id])
+            .await
+            .unwrap()[0]
+            .count,
+        1
+    );
+    assert!(
+        service
+            .repo
+            .written(&owner, &[source.id])
+            .await
+            .unwrap()
+            .iter()
+            .any(|marker| marker.kind == WrittenKind::Task && marker.macro_id == task)
+    );
 }

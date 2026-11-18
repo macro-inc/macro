@@ -441,13 +441,17 @@ impl NotionRunRepo for PgImportRepo {
         user: &MacroUserIdStr<'static>,
         import_id: Uuid,
         folder: Uuid,
-        visibility: crate::domain::ports::ImportVisibility,
+        reason: crate::domain::ports::FolderSeparation,
     ) -> Result<()> {
-        let visibility = match visibility {
-            crate::domain::ports::ImportVisibility::Personal => "personal",
-            crate::domain::ports::ImportVisibility::Shared => "shared",
+        use crate::domain::ports::FolderSeparation;
+        let visibility = match reason {
+            FolderSeparation::PersonalFromShared => "personal",
+            FolderSeparation::SharedFromPersonal | FolderSeparation::SharedAfterGrantRemoval => {
+                "shared"
+            }
         };
-        let record = serde_json::json!({"visibility":visibility, "folderId":folder});
+        let record =
+            serde_json::json!({"visibility":visibility, "folderId":folder, "reason":reason});
         // Fence the tuple's owner check so stale statistics cannot drive this
         // one-item update through the user's entire ledger instead of its PK.
         let updated = sqlx::query!(
@@ -516,6 +520,124 @@ impl NotionRunRepo for PgImportRepo {
 }
 
 impl WrittenObjects for PgImportRepo {
+    #[tracing::instrument(skip(self, user), err)]
+    async fn record_task_notice(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        task_id: Uuid,
+        reason: crate::domain::ports::TaskImportNoticeReason,
+    ) -> Result<()> {
+        let payload =
+            serde_json::to_string(&crate::domain::ports::TaskImportNotice { task_id, reason })?;
+        let owned = sqlx::query_scalar!(
+            r#"
+WITH owned AS MATERIALIZED (
+    SELECT entity.id FROM import_entity AS entity
+    WHERE entity.id = $2 AND (SELECT entity.user_id OFFSET 0) = $1
+), inserted AS (
+    INSERT INTO import_entity_written (import_id, kind, object, macro_id)
+    SELECT owned.id, 'task_notice', $3, $4 FROM owned
+    ON CONFLICT (import_id, kind, object) DO NOTHING
+    RETURNING import_id
+)
+SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
+        "#,
+            user.as_ref(),
+            import_id,
+            payload,
+            task_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        if !owned {
+            return Err(
+                anyhow::anyhow!("import item is missing or not owned by the caller").into(),
+            );
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, user, import_ids), fields(items=import_ids.len()), err)]
+    async fn task_notice_counts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_ids: &[Uuid],
+    ) -> Result<Vec<crate::domain::ports::TaskImportNoticeCount>> {
+        if import_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let ids: Vec<_> = import_ids
+            .iter()
+            .copied()
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        let rows = sqlx::query!(
+            r#"
+SELECT written.import_id, written.object::jsonb ->> 'reason' AS reason,
+    count(DISTINCT written.macro_id) AS "count!",
+    bool_and((written.object::jsonb - ARRAY['task_id', 'reason']) = '{}'::jsonb
+        AND (written.object::jsonb ->> 'task_id')::uuid = written.macro_id) AS valid
+FROM UNNEST($2::uuid[]) AS wanted(import_id)
+JOIN import_entity AS entity ON entity.id = wanted.import_id
+    AND (SELECT entity.user_id OFFSET 0) = $1
+JOIN import_entity_written AS written ON written.import_id = entity.id
+    AND written.kind = 'task_notice'
+GROUP BY written.import_id, written.object::jsonb ->> 'reason'
+        "#,
+            user.as_ref(),
+            &ids
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                anyhow::ensure!(row.valid == Some(true), "invalid task notice identity");
+                let reason = row
+                    .reason
+                    .ok_or_else(|| anyhow::anyhow!("task notice reason is missing"))?;
+                Ok(crate::domain::ports::TaskImportNoticeCount {
+                    import_id: row.import_id,
+                    reason: serde_json::from_value(serde_json::Value::String(reason))?,
+                    count: u32::try_from(row.count).map_err(anyhow::Error::from)?,
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn clear_task_notices(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+    ) -> Result<()> {
+        let owned = sqlx::query_scalar!(
+            r#"
+WITH owned AS MATERIALIZED (
+    SELECT entity.id FROM import_entity AS entity
+    WHERE entity.id = $2 AND (SELECT entity.user_id OFFSET 0) = $1
+), removed AS (
+    DELETE FROM import_entity_written AS written USING owned
+    WHERE written.import_id = owned.id AND written.kind = 'task_notice'
+    RETURNING written.import_id
+)
+SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
+        "#,
+            user.as_ref(),
+            import_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        if !owned {
+            return Err(
+                anyhow::anyhow!("import item is missing or not owned by the caller").into(),
+            );
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self, import_ids), fields(rows = import_ids.len()), err)]
     async fn written(
         &self,

@@ -123,6 +123,9 @@ where
                 self.repo
                     .mark_imported(user, item.import_id, &entity_id, &entity_type, None)
                     .await?;
+                if item.shared && item.kind == ImportKind::DataSource {
+                    progress.clear_task_notices().await?;
+                }
                 return Ok(Written::Done);
             }
             TeamClaim::Waiting { holder } => return Ok(Written::Waiting(holder)),
@@ -252,6 +255,9 @@ where
                 (document, write::DOCUMENT_ENTITY)
             }
         };
+        if item.shared && item.kind == ImportKind::DataSource {
+            progress.clear_task_notices().await?;
+        }
         // The row's team claim, taken before writing, stays on it.
         self.repo
             .mark_imported(user, item.import_id, &entity_id, entity_type, None)

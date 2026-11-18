@@ -438,6 +438,9 @@ where
                     self.repo
                         .mark_imported(user, row.id, &entity_id, &entity_type, None)
                         .await?;
+                    if matches!(meta.object, TrackerObject::Issue(_)) {
+                        self.repo.clear_task_notices(user, row.id).await?;
+                    }
                     return Ok(());
                 }
                 TeamClaim::Waiting { .. } => return Ok(()),
@@ -469,7 +472,8 @@ where
                     .await?;
             }
             TrackerObject::Issue(issue) => {
-                self.creator
+                let created = self
+                    .creator
                     .create_tracker_task(
                         user,
                         id,
@@ -479,9 +483,17 @@ where
                         visibility,
                     )
                     .await?;
+                if let Some(notice) = created.notice {
+                    self.repo
+                        .record_task_notice(user, row.id, id, notice)
+                        .await?;
+                }
                 self.repo
                     .record_written(user, &[WrittenObject::own(row.id, WrittenKind::Task, id)])
                     .await?;
+                if meta.plan.shared {
+                    self.repo.clear_task_notices(user, row.id).await?;
+                }
             }
         }
         Ok(())

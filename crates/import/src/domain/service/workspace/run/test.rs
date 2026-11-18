@@ -147,6 +147,7 @@ impl NotionConnections for Connected {
 /// as a write cut off by a deploy does.
 #[derive(Default)]
 struct Writer {
+    task_notice: Option<crate::domain::ports::TaskImportNoticeReason>,
     folders: Mutex<Vec<String>>,
     folder_delay: Option<std::time::Duration>,
     folder_visibilities: Mutex<Vec<(String, crate::domain::ports::ImportVisibility)>>,

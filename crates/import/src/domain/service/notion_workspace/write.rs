@@ -296,6 +296,26 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
             .unwrap_or_default()
     }
 
+    /// Record a typed task notice before its written marker makes retries skip it.
+    pub async fn record_task_notice(
+        &self,
+        task: Uuid,
+        reason: crate::domain::ports::TaskImportNoticeReason,
+    ) -> anyhow::Result<()> {
+        self.store
+            .record_task_notice(self.user, self.import_id, task, reason)
+            .await?;
+        Ok(())
+    }
+
+    /// Clear historical owner-only omission notices when the source is re-reviewed Shared.
+    pub async fn clear_task_notices(&self) -> anyhow::Result<()> {
+        self.store
+            .clear_task_notices(self.user, self.import_id)
+            .await?;
+        Ok(())
+    }
+
     /// Record the row's own object of `kind`.
     pub async fn record(&self, kind: WrittenKind, macro_id: Uuid) -> anyhow::Result<()> {
         self.record_all(vec![WrittenObject::own(self.import_id, kind, macro_id)])
@@ -397,6 +417,14 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
             .share_with_team(user, SharedEntity::Folder(tasks_folder))
             .await?;
     }
+    if share {
+        for task in progress.all(WrittenKind::Task).values() {
+            cancel.ensure_running()?;
+            writer
+                .share_with_team(user, SharedEntity::Document(*task))
+                .await?;
+        }
+    }
     let failures = Mutex::new(0usize);
     stream::iter(rows.iter().cloned())
         .map(|row| {
@@ -419,7 +447,7 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                         row.title.trim()
                     };
                     let id = derived_id(item.import_id, &format!("task/{}", row.id.as_str()));
-                    writer
+                    let created = writer
                         .create_task(
                             user,
                             id,
@@ -432,6 +460,9 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                             visibility,
                         )
                         .await?;
+                    if let Some(notice) = created.notice {
+                        progress.record_task_notice(id, notice).await?;
+                    }
                     progress.record_for(WrittenKind::Task, &row.id, id).await?;
                     Ok(())
                 }

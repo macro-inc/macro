@@ -611,6 +611,47 @@ impl ImportVisibility {
     }
 }
 
+pub use super::models::{TaskImportNotice, TaskImportNoticeCount, TaskImportNoticeReason};
+
+/// The task created by the writer and any permission-preserving omission.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreatedImportTask {
+    /// The created or resumed document's id.
+    pub id: String,
+    /// A notice the import must persist before recording the task as complete.
+    pub notice: Option<TaskImportNoticeReason>,
+}
+
+/// Why a new structural folder is separate from an existing branch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum FolderSeparation {
+    /// Keep Personal contents apart from a Shared branch.
+    #[serde(rename = "shared_branch")]
+    PersonalFromShared,
+    /// Avoid granting access to earlier Personal contents.
+    #[serde(rename = "personal_contents")]
+    SharedFromPersonal,
+    /// Preserve the user's removal of a Shared branch's team grant.
+    #[serde(rename = "sharing_removed")]
+    SharedAfterGrantRemoval,
+}
+
+impl ImportVisibility {
+    /// Assignment grants are allowed only by a Shared verdict or to the owner.
+    pub fn task_assignee_notice(
+        self,
+        owner: &MacroUserIdStr<'_>,
+        assignee: &MacroUserIdStr<'_>,
+    ) -> Option<TaskImportNoticeReason> {
+        match self {
+            Self::Personal if owner != assignee => {
+                Some(TaskImportNoticeReason::PersonalAssigneeOmitted)
+            }
+            _ => None,
+        }
+    }
+}
+
 /// Creates the Macro side of a workspace import: folders mirroring the
 /// source's tree, documents and tasks inside them, and databases.
 ///
@@ -631,7 +672,8 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
 
     /// Idempotently create a task from ordinary markdown, applying normalized
     /// task properties and approved visibility. Explicit team grants are deferred
-    /// until relationship enrichment succeeds. Never uses Notion conversion.
+    /// until relationship enrichment succeeds. Persist any returned omission notice.
+    /// Never uses Notion conversion.
     fn create_tracker_task(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -640,7 +682,7 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         markdown: &str,
         properties: &ImportedTaskProperties,
         visibility: ImportVisibility,
-    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+    ) -> impl Future<Output = anyhow::Result<CreatedImportTask>> + Send;
 
     /// Apply project, parent/subtask relationships and labels after all tasks
     /// exist. Safe to repeat; never points at a failed or excluded row.
@@ -706,7 +748,7 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
     /// Create task `id` from a Notion page (as for [`Self::create_document`],
     /// and as safe to repeat) inside `folder` when given, applying
     /// `properties` best-effort and keeping the page's `dates`. Returns the
-    /// task id.
+    /// task and any omission notice, which the caller must persist.
     #[expect(
         clippy::too_many_arguments,
         reason = "a task carries its id, content, links, properties, folder and dates"
@@ -722,7 +764,7 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
         visibility: ImportVisibility,
-    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+    ) -> impl Future<Output = anyhow::Result<CreatedImportTask>> + Send;
 
     /// Create an empty database named `name`.
     fn create_database(
@@ -1019,7 +1061,7 @@ pub trait NotionRunRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         import_id: Uuid,
         folder: Uuid,
-        visibility: ImportVisibility,
+        reason: FolderSeparation,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Record `folder` as the user's "Notion" folder.
@@ -1043,6 +1085,29 @@ pub trait NotionRunRepo: Send + Sync + 'static {
 /// What workspace writes created for each ledger row, recorded as they go so
 /// a resumed write reuses it instead of creating it again.
 pub trait WrittenObjects: Send + Sync + 'static {
+    /// Persist a task notice once by task id, so resumed writes do not inflate report counts.
+    fn record_task_notice(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        task_id: Uuid,
+        reason: TaskImportNoticeReason,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Count valid typed notices only for these owned ledger items; malformed payloads fail.
+    fn task_notice_counts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<TaskImportNoticeCount>>> + Send;
+
+    /// Clear only this owned source's notice records after a Shared re-review.
+    fn clear_task_notices(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Everything recorded for the user's ledger rows `import_ids`.
     fn written(
         &self,

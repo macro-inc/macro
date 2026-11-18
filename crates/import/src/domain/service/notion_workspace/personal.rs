@@ -89,7 +89,12 @@ where
                 };
                 if shared_branch.is_some() {
                     self.repo
-                        .record_separate_folder(user, item.import_id, folder, plan.visibility)
+                        .record_separate_folder(
+                            user,
+                            item.import_id,
+                            folder,
+                            crate::domain::ports::FolderSeparation::PersonalFromShared,
+                        )
                         .await?;
                 }
                 progress.record(WrittenKind::Folder, folder).await?;
@@ -127,7 +132,16 @@ where
                     .await?;
                 if previous.is_some() || shared_branch.is_some() {
                     self.repo
-                        .record_separate_folder(user, item.import_id, folder, plan.visibility)
+                        .record_separate_folder(
+                            user,
+                            item.import_id,
+                            folder,
+                            if shared_branch.is_some() {
+                                crate::domain::ports::FolderSeparation::SharedAfterGrantRemoval
+                            } else {
+                                crate::domain::ports::FolderSeparation::SharedFromPersonal
+                            },
+                        )
                         .await?;
                 }
                 self.repo

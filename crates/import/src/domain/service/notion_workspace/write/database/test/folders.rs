@@ -23,7 +23,11 @@ async fn task_lists_apply_the_reviewed_link_policy_to_each_task_and_folder() {
             ],
             bodies: [(id('1'), "Task body".into())].into(),
         };
-        let writer = FakeWriter::default();
+        let writer = FakeWriter {
+            task_notice: (!shared)
+                .then_some(crate::domain::ports::TaskImportNoticeReason::PersonalAssigneeOmitted),
+            ..Default::default()
+        };
         let store = FakeStore::default();
         let user = user();
         let mut item = source_item("Tasks");
@@ -44,6 +48,15 @@ async fn task_lists_apply_the_reviewed_link_policy_to_each_task_and_folder() {
         )
         .await
         .unwrap();
+        let notices = store.notices.lock().unwrap();
+        assert_eq!(notices.len(), if shared { 0 } else { 2 });
+        assert!(
+            notices
+                .iter()
+                .all(|((source, _), reason)| *source == item.import_id
+                    && *reason
+                        == crate::domain::ports::TaskImportNoticeReason::PersonalAssigneeOmitted)
+        );
         assert_eq!(*writer.tasks.lock().unwrap(), vec![expected, expected]);
         assert_eq!(*writer.folder_visibilities.lock().unwrap(), vec![expected]);
     }
@@ -118,6 +131,69 @@ async fn private_destinations_override_old_body_and_task_folder_markers() {
             }
             _ => unreachable!(),
         }
+        let mut reviewed_shared = item.clone();
+        reviewed_shared.shared = true;
+        match kind {
+            WrittenKind::TasksFolder => {
+                write_tasks(
+                    &notion,
+                    &writer,
+                    &user,
+                    &reviewed_shared,
+                    Uuid::from_u128(42),
+                    true,
+                    &PeopleMap::new(),
+                    &NotionLinks::default(),
+                    &progress,
+                    &Cancel::default(),
+                    None,
+                )
+                .await
+                .unwrap();
+            }
+            WrittenKind::BodiesFolder => {
+                write_database(
+                    &notion,
+                    &writer,
+                    &user,
+                    &reviewed_shared,
+                    Uuid::from_u128(42),
+                    true,
+                    &PeopleMap::new(),
+                    &NotionLinks::default(),
+                    &progress,
+                    &Cancel::default(),
+                    None,
+                )
+                .await
+                .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let document = progress
+            .get_for(
+                if kind == WrittenKind::TasksFolder {
+                    WrittenKind::Task
+                } else {
+                    WrittenKind::Body
+                },
+                id('1').as_str(),
+            )
+            .unwrap();
+        let shares = writer.shares.lock().unwrap();
+        assert!(
+            shares
+                .iter()
+                .any(|share| matches!(share, SharedEntity::Document(id) if *id == document)),
+            "the relocated output must follow its source's Shared re-review"
+        );
+        assert!(
+            shares
+                .iter()
+                .all(|share| !matches!(share, SharedEntity::Folder(id) if *id == private)),
+            "never share the mirror itself"
+        );
+        drop(shares);
         assert!(
             writer.folders.lock().unwrap().is_empty(),
             "the recorded shared folder is never reused or changed"
@@ -192,7 +268,10 @@ async fn sharing_an_incomplete_source_reuses_only_that_sources_private_outputs()
             }
             _ => unreachable!(),
         }
-        let store = FakeStore(Mutex::new(previous.clone()));
+        let store = FakeStore {
+            written: Mutex::new(previous.clone()),
+            ..Default::default()
+        };
         let progress = Progress::new(&store, &user, item.import_id, &previous);
         match kind {
             WrittenKind::TasksFolder => {
@@ -244,6 +323,7 @@ async fn sharing_an_incomplete_source_reuses_only_that_sources_private_outputs()
             _ => unreachable!(),
         }
         let shares = writer.shares.lock().unwrap();
+        assert!(shares.iter().any(|share| matches!(share, SharedEntity::Document(document) if *document == Uuid::from_u128(600))), "earlier rows can live outside the recorded folder after a personal relocation");
         assert!(
             shares.iter().any(
                 |share| matches!(share, SharedEntity::Folder(folder) if *folder == own_folder)
@@ -254,7 +334,7 @@ async fn sharing_an_incomplete_source_reuses_only_that_sources_private_outputs()
                 SharedEntity::Folder(folder) => *folder == own_folder,
                 SharedEntity::Database(database) =>
                     kind == WrittenKind::BodiesFolder && *database == DATABASE,
-                _ => false,
+                SharedEntity::Document(document) => *document == Uuid::from_u128(600),
             }),
             "unrelated private outputs and the shared parent must remain unchanged"
         );

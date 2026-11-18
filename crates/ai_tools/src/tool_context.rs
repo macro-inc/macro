@@ -1810,7 +1810,7 @@ impl ToolEntityCreator {
         dates: Option<import::domain::ports::SourceDates>,
         share_with_team: bool,
         visibility: import::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<import::domain::ports::CreatedImportTask> {
         // Same team resolution as the CreateDocument tool, so imported tasks
         // number correctly within the user's team; the roster doubles as the
         // assignee-email lookup. A teamless user gets a private task.
@@ -1823,9 +1823,13 @@ impl ToolEntityCreator {
         let task_id = self
             .create_doc(user, id, name, content, subtype, folder, dates, visibility)
             .await?;
-        self.apply_task_properties(user, &task_id, properties, &roster)
+        let notice = self
+            .apply_task_properties(user, &task_id, properties, &roster, visibility)
             .await;
-        Ok(task_id)
+        Ok(import::domain::ports::CreatedImportTask {
+            id: task_id,
+            notice,
+        })
     }
 
     /// Create an imported markdown document, in `folder` when given and with
@@ -1892,7 +1896,8 @@ impl ToolEntityCreator {
         task_id: &str,
         properties: &import::domain::ports::ImportedTaskProperties,
         roster: &[MacroUserIdStr<'static>],
-    ) {
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> Option<import::domain::ports::TaskImportNoticeReason> {
         use models_properties::api::requests::SetPropertyValue;
         use system_properties::SystemPropertyKey;
 
@@ -1967,12 +1972,12 @@ impl ToolEntityCreator {
         if let Some(email) = properties.assignee_email.as_deref() {
             // Only assign teammates — an email with no roster match (an
             // external collaborator, a bot) is silently skipped.
-            let Some(assignee) = roster
+            let assignee = roster
                 .iter()
-                .find(|member| member.email_str().eq_ignore_ascii_case(email))
-            else {
-                return;
-            };
+                .find(|member| member.email_str().eq_ignore_ascii_case(email))?;
+            if let Some(notice) = visibility.task_assignee_notice(user, assignee) {
+                return Some(notice);
+            }
             let reference = models_properties::EntityReference::new(
                 assignee.as_ref().to_string(),
                 models_properties::EntityType::User,
@@ -1992,6 +1997,7 @@ impl ToolEntityCreator {
                 tracing::warn!(task_id, email, error = ?e, "failed to set imported task assignee");
             }
         }
+        None
     }
 }
 
@@ -2067,6 +2073,7 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             import::domain::ports::ImportVisibility::Shared,
         )
         .await
+        .map(|created| created.id)
     }
 
     async fn create_notion_document(

@@ -116,6 +116,14 @@ pub(in super::super) async fn write_database<
             .share_with_team(user, SharedEntity::Database(created.database_id))
             .await?;
     }
+    if share {
+        for document in progress.all(WrittenKind::Body).values() {
+            cancel.ensure_running()?;
+            writer
+                .share_with_team(user, SharedEntity::Document(*document))
+                .await?;
+        }
+    }
     let table = created.table;
     let plan = ColumnPlan::new(&source, created.database_id);
     let page_column = PageColumn {

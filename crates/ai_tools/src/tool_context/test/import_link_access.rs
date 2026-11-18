@@ -69,6 +69,10 @@ async fn imported_access(
         .create_folder(&users.owner, "Imported", None, ImportVisibility::Personal)
         .await?;
     let access = PgAccessRepository::new(pool.clone());
+    let task_properties = import::domain::ports::ImportedTaskProperties {
+        assignee_email: Some(users.teammate.email_str().to_string()),
+        ..Default::default()
+    };
     for scope in ["TEAM", "PUBLIC"] {
         sqlx::query!(
             "UPDATE team SET default_link_share = $2 WHERE id = $1",
@@ -109,12 +113,13 @@ async fn imported_access(
                             kind,
                             "Body",
                             &Default::default(),
-                            &Default::default(),
+                            &task_properties,
                             Some(folder),
                             None,
                             visibility,
                         )
                         .await?
+                        .id
                 }
                 _ => {
                     host.creator
@@ -123,10 +128,11 @@ async fn imported_access(
                             id,
                             kind,
                             "Body",
-                            &Default::default(),
+                            &task_properties,
                             visibility,
                         )
                         .await?
+                        .id
                 }
             };
             assert_eq!(
@@ -447,6 +453,7 @@ async fn teamless_shared_imports_keep_markdown_defaults(pool: PgPool) -> anyhow:
                             visibility,
                         )
                         .await?
+                        .id
                 }
                 _ => {
                     host.creator
@@ -459,6 +466,7 @@ async fn teamless_shared_imports_keep_markdown_defaults(pool: PgPool) -> anyhow:
                             visibility,
                         )
                         .await?
+                        .id
                 }
             };
             let expected = match visibility {
@@ -474,5 +482,143 @@ async fn teamless_shared_imports_keep_markdown_defaults(pool: PgPool) -> anyhow:
             );
         }
     }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn shared_imports_keep_assignee_access_with_links_off(pool: PgPool) -> anyhow::Result<()> {
+    let users = users(&pool).await?;
+    sqlx::query!(
+        "UPDATE team SET default_link_share = NULL WHERE id = $1",
+        users.team
+    )
+    .execute(&pool)
+    .await?;
+    let host = host::host(&pool).await;
+    let properties = import::domain::ports::ImportedTaskProperties {
+        assignee_email: Some(users.teammate.email_str().to_string()),
+        ..Default::default()
+    };
+    for tracker in [false, true] {
+        let id = Uuid::now_v7();
+        for _ in 0..2 {
+            let created = if tracker {
+                host.creator
+                    .create_tracker_task(
+                        &users.owner,
+                        id,
+                        "Assigned task",
+                        "Body",
+                        &properties,
+                        ImportVisibility::Shared,
+                    )
+                    .await?
+            } else {
+                host.creator
+                    .create_task(
+                        &users.owner,
+                        id,
+                        "Assigned task",
+                        "Body",
+                        &Default::default(),
+                        &properties,
+                        None,
+                        None,
+                        ImportVisibility::Shared,
+                    )
+                    .await?
+            };
+            assert_eq!(
+                created.notice, None,
+                "the enrichment pass must use the Shared verdict even without a team claim"
+            );
+            assert_eq!(
+                PgAccessRepository::new(pool.clone())
+                    .get_document_access(&created.id, Some(&users.teammate.0))
+                    .await?,
+                Some(AccessLevel::Edit)
+            );
+        }
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn omitted_personal_assignees_are_counted_once_in_the_import_report(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use import::domain::{
+        models::{ImportKind, Initiator},
+        ports::{TaskImportNoticeReason, WrittenObjects},
+        service::NotionWorkspaceImporter,
+    };
+    let users = users(&pool).await?;
+    let host = host::host(&pool).await;
+    let creator = Arc::new(host.creator);
+    let repo = import::outbound::pg_import_repo::PgImportRepo::new(pool.clone());
+    let row = repo.upsert_staged(&users.owner, ImportSource::Notion, ImportKind::DataSource, Initiator::Manual, &"a".repeat(32), &serde_json::json!({"title":"Tasks", "url":null, "summary":null, "plan":{"decision":"tasks", "shared":false,"shareable":true}})).await?.unwrap();
+    let properties = import::domain::ports::ImportedTaskProperties {
+        assignee_email: Some(users.teammate.email_str().to_string()),
+        ..Default::default()
+    };
+    for tracker in [false, true] {
+        let id = Uuid::now_v7();
+        for _ in 0..2 {
+            let created = if tracker {
+                creator
+                    .create_tracker_task(
+                        &users.owner,
+                        id,
+                        "Personal task",
+                        "Body",
+                        &properties,
+                        ImportVisibility::Personal,
+                    )
+                    .await?
+            } else {
+                creator
+                    .create_task(
+                        &users.owner,
+                        id,
+                        "Personal task",
+                        "Body",
+                        &Default::default(),
+                        &properties,
+                        None,
+                        None,
+                        ImportVisibility::Personal,
+                    )
+                    .await?
+            };
+            assert_eq!(
+                created.notice,
+                Some(TaskImportNoticeReason::PersonalAssigneeOmitted)
+            );
+            assert_eq!(
+                PgAccessRepository::new(pool.clone())
+                    .get_document_access(&created.id, Some(&users.teammate.0))
+                    .await?,
+                None
+            );
+            repo.record_task_notice(&users.owner, row.id, id, created.notice.unwrap())
+                .await?;
+        }
+    }
+    let service = import::domain::service::ImportServiceImpl::new(
+        repo,
+        Arc::new(NoConnector),
+        creator,
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    );
+    assert!(
+        service
+            .notion_import_report(&users.owner)
+            .await?
+            .warnings
+            .iter()
+            .any(
+                |warning| warning.contains("2 teammate assignees omitted to keep tasks owner-only")
+            )
+    );
     Ok(())
 }

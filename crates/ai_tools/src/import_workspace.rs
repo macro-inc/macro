@@ -128,7 +128,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         markdown: &str,
         properties: &ImportedTaskProperties,
         visibility: import::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<import::domain::ports::CreatedImportTask> {
         self.create_tracker_task_impl(user, id, name, markdown, properties, visibility)
             .await
     }
@@ -209,7 +209,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
         visibility: import::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<import::domain::ports::CreatedImportTask> {
         let created = self
             .create_imported_task(
                 user,
@@ -224,7 +224,17 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 visibility,
             )
             .await;
-        already_created(created, id)
+        match created {
+            Ok(created) => Ok(created),
+            Err(error) => {
+                let task = already_created(Err(error), id)?;
+                let (_, roster) = self.team_roster(user).await;
+                let notice = self
+                    .apply_task_properties(user, &task, properties, &roster, visibility)
+                    .await;
+                Ok(import::domain::ports::CreatedImportTask { id: task, notice })
+            }
+        }
     }
 
     #[tracing::instrument(skip(self, user), err)]

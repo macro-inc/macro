@@ -32,13 +32,18 @@ impl WorkspaceWriter for Writer {
         _: &str,
         _: &ImportedTaskProperties,
         visibility: crate::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<crate::domain::ports::CreatedImportTask> {
         self.visibilities.lock().unwrap().push((id, visibility));
         let mut tasks = self.tracker_tasks.lock().unwrap();
         if !tasks.contains(&id) {
             tasks.push(id);
         }
-        Ok(id.to_string())
+        Ok(crate::domain::ports::CreatedImportTask {
+            id: id.to_string(),
+            notice: self
+                .task_notice
+                .filter(|_| visibility == crate::domain::ports::ImportVisibility::Personal),
+        })
     }
     async fn link_tracker_task(
         &self,
@@ -170,10 +175,15 @@ impl WorkspaceWriter for Writer {
         folder: Option<Uuid>,
         _: Option<SourceDates>,
         visibility: crate::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<crate::domain::ports::CreatedImportTask> {
         self.visibilities.lock().unwrap().push((id, visibility));
         self.task_folders.lock().unwrap().push(folder);
-        Ok(id.to_string())
+        Ok(crate::domain::ports::CreatedImportTask {
+            id: id.to_string(),
+            notice: self
+                .task_notice
+                .filter(|_| visibility == crate::domain::ports::ImportVisibility::Personal),
+        })
     }
 
     async fn create_database(

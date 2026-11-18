@@ -64,6 +64,35 @@ pub struct RunReview {
     pub session_id: AgentSessionId,
 }
 
+/// Why importing a task omitted a property that would grant another user access.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskImportNoticeReason {
+    /// Assigning a teammate would expose a Personal task to that teammate.
+    PersonalAssigneeOmitted,
+}
+
+/// A typed notice payload recorded once per task in the written-object ledger.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TaskImportNotice {
+    /// The task whose imported property was omitted.
+    pub task_id: Uuid,
+    /// Why the property could not be applied.
+    pub reason: TaskImportNoticeReason,
+}
+
+/// A validated count of one notice reason for an owned source item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskImportNoticeCount {
+    /// The source ledger item.
+    pub import_id: Uuid,
+    /// The validated reason.
+    pub reason: TaskImportNoticeReason,
+    /// Distinct tasks carrying that notice.
+    pub count: u32,
+}
+
 /// One thing a write created for a ledger row, recorded as it is created so
 /// a resumed write reuses it.
 #[derive(
@@ -95,6 +124,8 @@ pub enum WrittenKind {
     TasksFolder,
     /// A task, by its row's Notion id; minted before it is written.
     Task,
+    /// A task-property omission; object holds a serialized TaskImportNotice payload.
+    TaskNotice,
     /// A relation column, by its Notion property name.
     Relation,
     /// A relation column whose rows are all linked, by property name.
@@ -110,7 +141,7 @@ pub struct WrittenObject {
     pub import_id: Uuid,
     /// What it is.
     pub kind: WrittenKind,
-    /// The Notion row/property or folder visibility branch; empty for the row's own object.
+    /// The Notion row/property, folder branch, or typed task-notice JSON; empty for an own object.
     pub object: String,
     /// The Macro id.
     pub macro_id: Uuid,
