@@ -199,16 +199,17 @@ pub(crate) async fn replay_broker_event(
     let (event, topic) = match (decoded, subscribed_topic(&replay.topic)) {
         (Ok(event), Some(topic)) => (event, topic),
         (decoded, _) => {
-            // The indexer encoded this record from one it had decoded, so no
-            // later delivery can decode it either.
+            // A release that reads this event's schema can still apply it, so
+            // the replay stays for the dead-letter queue and a redrive.
             super::record_span_error(&span, "undecodable replay");
             tracing::error!(
                 parent: &span,
                 error = ?decoded.err(),
                 event_id = replay.event_id,
-                "dropping a search-index replay that does not decode"
+                receive_count,
+                "a search-index replay does not decode; leaving it for the dead-letter queue"
             );
-            return ReplayDone::Finished;
+            return ReplayDone::Redeliver;
         }
     };
     let received = ReceivedEvent {
