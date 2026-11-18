@@ -1,8 +1,10 @@
+import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import type {
   EntityActionListState,
   EntityActionViewContext,
 } from '@app/features/next-soup/actions';
-import type { EntityData } from '@entity';
+import { makeDeleteAction } from '@app/features/next-soup/actions/make-delete-action';
+import type { EntityData, TaskEntity } from '@entity';
 import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
 import {
   cleanup,
@@ -30,12 +32,16 @@ type TestAction = {
 };
 
 const actions = vi.hoisted(() => ({ items: [] as TestAction[] }));
+const mutateAsync = vi.hoisted(() => vi.fn());
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@core/directive/touchHandler', () => ({ touchHandler: () => {} }));
 vi.mock('@entity', async () => {
   const { createContext } = await import('solid-js');
-  return { EntityDragSelectionContext: createContext() };
+  return {
+    EntityDragSelectionContext: createContext(),
+    isEmailEntity: (entity: EntityData) => entity.type === 'email',
+  };
 });
 vi.mock('@app/features/next-soup/actions', () => ({
   makeAddTagAction: () => ({ canExecute: () => false }),
@@ -60,6 +66,7 @@ vi.mock('./SoupEntityMenuPickers', () => ({
   }),
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
+  globalRemoveFromSplitHistory: () => {},
   useSplitPanelOrThrow: () => ({
     handle: { content: () => ({ type: 'email', id: 'mail' }) },
   }),
@@ -70,6 +77,23 @@ vi.mock('./createSoupEntityActions', () => ({
   }),
   viewedProjectIdFromContent: () => undefined,
 }));
+
+// Delete's own action, its confirmation and focus moves; only the request is
+// replaced.
+vi.mock('@app/features/next-soup/utils', () => ({
+  restoreSoupFocus: async () => {},
+}));
+vi.mock('@app/signal/splitLayout', () => ({ globalSplitManager: () => {} }));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { success: () => {}, failure: () => {} },
+}));
+vi.mock('@app/features/entity/queries/dss', () => ({
+  createBulkDeleteDssItemsMutation: () => ({ mutateAsync }),
+}));
+vi.mock(
+  '@app/features/entity/bulk-edit/components/EntityActionSelection',
+  () => ({ EntityActionSelection: () => null })
+);
 
 const entity = { id: 'thread-1', type: 'email', name: 'Lunch?' } as EntityData;
 const viewContext: EntityActionViewContext = {
@@ -85,24 +109,28 @@ const TestDialog = (props: ManagedDialogProps) => (
   </Dialog>
 );
 
-function renderRow() {
+function renderRow(
+  row: EntityData = entity,
+  list = {} as EntityActionListState
+) {
   render(() => (
     <>
       <SoupEntityContextMenu
-        entity={entity}
-        list={{} as EntityActionListState}
+        entity={row}
+        list={list}
         selectedEntities={() => []}
         viewContext={viewContext}
       >
-        <button type="button">Lunch?</button>
+        <button type="button">{row.name}</button>
       </SoupEntityContextMenu>
       <ImperativeDialogHost />
+      <GlobalBulkEditEntityModal />
     </>
   ));
 }
 
-async function openMenu() {
-  fireEvent.contextMenu(screen.getByRole('button', { name: 'Lunch?' }), {
+async function openMenu(name = 'Lunch?') {
+  fireEvent.contextMenu(screen.getByRole('button', { name }), {
     clientX: 20,
     clientY: 20,
   });
@@ -143,6 +171,7 @@ beforeEach(() => {
   );
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   actions.items = [];
+  mutateAsync.mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -171,6 +200,46 @@ describe('row context menu', () => {
     await settle();
 
     expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  // The same failure, through Delete's real action and confirmation: Delete
+  // on a task did nothing while the menu dismissed itself after items.
+  it("keeps a task's delete confirmation open, and deletes on confirm", async () => {
+    const task: TaskEntity = {
+      id: 'task',
+      name: 'Write the plan',
+      ownerId: 'owner',
+      type: 'document',
+      fileType: 'md',
+      subType: { type: 'task' },
+    };
+    const list = {
+      focus: { id: () => 'task', index: () => 0, set: () => {} },
+      navigate: { peekOffset: () => undefined },
+      items: { count: () => 1, get: () => undefined, at: () => undefined },
+      selection: { clear: () => {} },
+    } as unknown as EntityActionListState;
+    const deleteAction = makeDeleteAction({ userId: () => 'owner' });
+    actions.items = [
+      {
+        id: 'delete',
+        label: 'Delete',
+        onClick: () => deleteAction.executeWithSoup([task], list),
+      },
+    ];
+    renderRow(task, list);
+    await openMenu('Write the plan');
+    choose('Delete');
+    await settle();
+
+    expect(screen.getByRole('dialog', { name: 'Delete item?' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete item' }));
+
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledExactlyOnceWith([task])
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('keeps the dialog of a custom mute open', async () => {
