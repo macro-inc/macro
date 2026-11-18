@@ -355,7 +355,9 @@ tools — hexagonal, heavily feature-gated.
 - Recompute thread metadata inside staged Gmail SPAM/TRASH writes so restored All Mail previews, ordering, and signal state do not wait for the provider worker.
 - Gmail Report spam and Not spam move the thread between the inbox and Spam
   (`set_gmail_thread_junk`): a SPAM write and an INBOX write, each its own
-  thread label write. Never send the SPAM label alone for them.
+  thread label write, and the agent tool `UpdateThreadLabels` routes `SPAM`
+  there too. Never send the SPAM label alone for them; only the label routes
+  (`update_thread_labels`) write exactly the label they are given.
 - `domain/recent_inbox.rs` merges a user's newest messages read live from
   each of their own inboxes (50 by default, at most 100); an inbox whose read
   fails is skipped. Subjects are cut to 200 characters and snippets to the
