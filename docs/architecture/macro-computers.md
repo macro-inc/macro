@@ -5,6 +5,8 @@ shows up in Settings → Runtimes like a paired machine. The code lives in
 `crates/hosted_runtimes` (see its `AGENTS.md` for navigation), with the control
 plane wired in `services/agent_harness_service/src/computers.rs` and the routes
 mounted by authentication_service.
+Their isolation and threat model is in
+[Firecracker computers: security and isolation](firecracker-computers-security.md).
 
 ## How it works
 
