@@ -8,6 +8,8 @@
 //! `analyzer/test/test_registry.ml` fails when an operation of the generated
 //! SDK is missing from it or it names one that no longer exists.
 
+#![deny(missing_docs)]
+
 use serde::Deserialize;
 use std::{collections::BTreeMap, sync::LazyLock};
 
@@ -19,8 +21,11 @@ mod test;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Action {
+    /// Makes something new.
     Create,
+    /// Reads, lists or searches; changes nothing.
     Read,
+    /// Changes something that exists.
     Update,
     /// Deletes or permanently removes something.
     Destroy,
@@ -47,6 +52,7 @@ pub struct Group {
 pub struct Operation {
     /// The [`Group::id`] it belongs to.
     pub group: String,
+    /// What it does to the group's data.
     pub action: Action,
     /// What it does, e.g. "Send email".
     pub label: String,
@@ -62,6 +68,8 @@ struct Registry {
 
 const REGISTRY_JSON: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/registry.json"));
 
+// The file is compiled in and its tests parse it, so a build that passes
+// them cannot fail here.
 static REGISTRY: LazyLock<Registry> = LazyLock::new(|| {
     serde_json::from_str(REGISTRY_JSON).expect("registry.json is checked by its tests")
 });
