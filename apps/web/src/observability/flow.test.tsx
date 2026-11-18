@@ -530,3 +530,37 @@ describe('TraceFlow in a hidden (parked) pane', () => {
     expect(operations).toEqual([{ name: 'view.mail', outcome: 'cancelled' }]);
   });
 });
+
+describe('loads in a hidden (parked) pane under an app-level flow', () => {
+  beforeEach(() => {
+    spans.length = 0;
+    operations.length = 0;
+    contexts.length = 0;
+  });
+
+  it('never hold the flow above the pane', async () => {
+    const [isHidden, setHidden] = createSignal(false);
+    const [loading] = createSignal(true);
+    function List() {
+      usePending('soup.network', loading);
+      return null;
+    }
+    render(() => (
+      <TraceFlow name="view.app">
+        <PaneVisibilityContext.Provider
+          value={{ hidden: isHidden, suspended: isHidden }}
+        >
+          <List />
+        </PaneVisibilityContext.Provider>
+      </TraceFlow>
+    ));
+    await flush();
+    expect(operations).toEqual([{ name: 'view.app', outcome: undefined }]);
+
+    // Parked while its list still loads (suspended, it would never finish).
+    setHidden(true);
+    await flush();
+    await flush();
+    expect(operations).toEqual([{ name: 'view.app', outcome: 'painted' }]);
+  });
+});

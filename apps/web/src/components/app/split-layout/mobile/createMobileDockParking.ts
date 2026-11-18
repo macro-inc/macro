@@ -37,7 +37,12 @@ export type MobileDockParking = {
    * parked (kept mounted, hidden) instead of closed, and a parked `content`
    * comes back as it was instead of rendering again.
    */
-  show(content: SplitContent, options: ReplaceAllSplitsOptions): void;
+  show(
+    content: SplitContent,
+    options: ReplaceAllSplitsOptions,
+    /** Whether the dock can show `view` again; a view it cannot is not parked. */
+    returnsTo: (view: string) => boolean
+  ): void;
 };
 
 /**
@@ -145,7 +150,8 @@ export function createMobileDockParking(options: {
 
   const show = (
     content: SplitContent,
-    showOptions: ReplaceAllSplitsOptions
+    showOptions: ReplaceAllSplitsOptions,
+    returnsTo: (view: string) => boolean
   ) => {
     const current = untrack(settings);
     const target = dockViewOf(content);
@@ -169,7 +175,9 @@ export function createMobileDockParking(options: {
     );
     // The stack mounts only its front two panes; parking a deeper root would
     // mount it now, hidden, and cost a render on the way out.
-    const park = root && rootView && open.length <= 2 ? [root] : [];
+    const parkable =
+      rootView !== undefined && returnsTo(rootView) && open.length <= 2;
+    const park = root && parkable ? [root] : [];
     // An older parked copy of the view being parked is superseded by it.
     const superseded =
       park.length > 0

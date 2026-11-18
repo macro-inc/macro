@@ -123,7 +123,15 @@ export function useMobileNavNavigate(): (id: MobileDockNavId) => void {
         id === 'search' ? { sessionId: crypto.randomUUID() } : undefined;
       // Search taps intentionally start a new search session.
       const replaceOptions = { routeState, resume: id !== 'search' };
-      if (dockParking) dockParking.show(content, replaceOptions);
+      // The bell opens one of Home and Notifications; the other (Home is
+      // where the app starts) is never shown by the dock again.
+      const bellElsewhere = unifiedNotifications() ? 'home' : 'notifications';
+      if (dockParking)
+        dockParking.show(
+          content,
+          replaceOptions,
+          (view) => view !== bellElsewhere
+        );
       else replaceAllSplits(content, replaceOptions);
       return;
     }

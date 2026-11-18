@@ -44,7 +44,7 @@ import { createMobileDockParking } from '../mobile/createMobileDockParking';
 const pane = (id: number) => `pane-${id}` as PaneId;
 const settle = () => new Promise((done) => setTimeout(done));
 
-function setup(url: string) {
+function setup(url: string, returnsTo: (view: string) => boolean = () => true) {
   const [sessionKey, setSessionKey] = createSignal<string | undefined>('user');
   const kept: string[] = [];
   const activated: string[] = [];
@@ -79,7 +79,7 @@ function setup(url: string) {
     } as unknown as SplitManager;
     const parking = createMobileDockParking({ router, manager, sessionKey });
     const show = async (id: string) => {
-      parking.show({ type: 'component', id }, { resume: true });
+      parking.show({ type: 'component', id }, { resume: true }, returnsTo);
       await settle();
     };
     const parked = () =>
@@ -181,6 +181,13 @@ describe('mobile dock parking', () => {
 
     await router.navigate('/home');
     expect(router.panes().map(viewOf)).toEqual(['home']);
+    expect(parked()).toEqual([]);
+  });
+
+  it('does not park a view the dock cannot show again', async () => {
+    const { show, parked } = track(setup('/home', (view) => view !== 'home'));
+
+    await show('mail');
     expect(parked()).toEqual([]);
   });
 
