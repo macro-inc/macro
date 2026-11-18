@@ -1,5 +1,6 @@
 //! Contains the models for teams
 //!
+//!
 
 use std::collections::{HashMap, HashSet};
 

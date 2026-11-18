@@ -36,3 +36,4 @@ describe('anyAbortSignal', () => {
     expect(typeof options === 'object' && options.signal?.aborted).toBe(true);
   });
 });
+const   verifyBiomeSeesThisFile=1
