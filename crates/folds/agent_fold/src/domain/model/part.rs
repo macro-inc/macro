@@ -105,8 +105,6 @@ pub enum MessagePart {
         /// For a hold on the agent's permissions (`macro-sdk`), the only
         /// person who may approve or decline it; absent on other holds,
         /// whose approver is the session's owner.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[specta(optional)]
         approver: Option<String>,
     },
     /// A user-issued control operation on the session.

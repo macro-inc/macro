@@ -255,22 +255,14 @@ fn a_permission_hold_names_who_may_answer_it() {
         "macro|wolf@macro.com"
     );
 
-    // Any other hold's part and interaction read as before.
+    // Any other hold names none: its approver is the session's owner.
     let mut machine = FoldMachineImpl::new();
     prompt(&mut machine, "p");
     push(&mut machine, "to_server", tool_approval("pending", None));
-    assert!(
-        serde_json::to_value(approval_part(&machine))
-            .unwrap()
-            .get("approver")
-            .is_none()
-    );
-    assert!(
-        serde_json::to_value(&machine.metadata().pending_interactions[0])
-            .unwrap()
-            .get("approver")
-            .is_none()
-    );
+    assert!(matches!(
+        approval_part(&machine),
+        MessagePart::ToolApproval { approver: None, .. }
+    ));
 }
 
 #[test]

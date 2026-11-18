@@ -63,7 +63,10 @@ export function createCodeActivityRows(
             item.status === 'unknown' ||
             (item.status === 'running' && reply()?.stop !== null)
               ? 'interrupted'
-              : item.status,
+              : // A request the permission gate refused never ran.
+                item.status === 'refused'
+                ? 'failed'
+                : item.status,
         }))
       );
     });
