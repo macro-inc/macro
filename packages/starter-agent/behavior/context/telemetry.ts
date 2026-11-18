@@ -80,6 +80,37 @@ export const trace: Trace = (name, run) =>
     })
   );
 
+/** Where the image puts the computer's setup trace, so the agent's start joins it. */
+export const setupTraceparentVariable = 'MACRO_SETUP_TRACEPARENT';
+
+/** Times one step of the agent's start as a child span of it. */
+export type StartPhase = <Value>(
+  name: string,
+  run: () => Promise<Value>
+) => Promise<Value>;
+
+/**
+ * Runs the agent's start as one `agent.start` span, from the process's own
+ * start (so loading the code counts), under the computer's setup trace when
+ * the image passes one. Work begun inside, such as the greeting, joins it;
+ * the event loop must start outside (a context captured before this), so
+ * each wake stays a trace of its own.
+ */
+export const traceStart = <Value>(
+  environment: Environment,
+  run: (phase: StartPhase) => Promise<Value>
+): Promise<Value> => {
+  const processStart = Date.now() - process.uptime() * 1000;
+  const start = () =>
+    Telemetry.span('agent.start', { startTime: processStart }, (span) =>
+      run((name, step) => span.span(name, () => step()))
+    );
+  const traceparent = environment[setupTraceparentVariable];
+  return traceparent === undefined || traceparent === ''
+    ? start()
+    : Telemetry.remoteContext(traceparent).run(start);
+};
+
 /** Runs `run` under the span a parent process passed in TRACEPARENT, if any. */
 export const underParent = <Value>(
   environment: Environment,
