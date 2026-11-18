@@ -12,6 +12,19 @@
 -- The uuid comparisons only cast a source shaped like a lowercase uuid, so a
 -- source that is not one never matches and never raises. That is the same as
 -- comparing text with channel_id::text, which is always lowercase.
+--
+-- Both membership functions must stay inlinable: Postgres then plans their
+-- lookups as index probes inside the calling statement, instead of running a
+-- function call for every grant it checks. It inlines a function called in
+-- FROM only while:
+--   the function is plain LANGUAGE sql (not plpgsql), with a single SELECT as
+--   its body (UNION ALL is fine);
+--   it returns SETOF and is STABLE or IMMUTABLE, never VOLATILE;
+--   it has no STRICT, no SET clause and no SECURITY DEFINER;
+--   the call's arguments hold no subquery and no volatile function, and the
+--   call has no WITH ORDINALITY and shares no ROWS FROM with another function.
+-- The entity_access test the_planner_inlines_the_membership_functions fails
+-- if either function stops being inlined.
 
 -- One row when `source` is one of the viewer's sources, none otherwise. Called
 -- as EXISTS (SELECT FROM entity_access_source_matches(x, viewer, scope)), which
