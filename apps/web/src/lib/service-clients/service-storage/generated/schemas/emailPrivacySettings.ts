@@ -6,6 +6,8 @@
  */
 import type { EmailPrivacySettingsMailboxEmail } from './emailPrivacySettingsMailboxEmail';
 import type { EmailPrivacySettingsMailboxLinkId } from './emailPrivacySettingsMailboxLinkId';
+import type { EmailPrivacySettingsPersonalDomainWarnings } from './emailPrivacySettingsPersonalDomainWarnings';
+import type { EmailPrivacySettingsTeamDomainWarnings } from './emailPrivacySettingsTeamDomainWarnings';
 
 /**
  * Current consent and exclusions, readable by any team member.
@@ -19,8 +21,12 @@ export interface EmailPrivacySettings {
   mailbox_email?: EmailPrivacySettingsMailboxEmail;
   /** Exact current primary connection; clients bind opt-in to this identifier. */
   mailbox_link_id?: EmailPrivacySettingsMailboxLinkId;
+  /** Existing personal exclusions that cover the caller's whole mailbox. */
+  personal_domain_warnings: EmailPrivacySettingsPersonalDomainWarnings;
   /** Domains excluded only for the caller's contributions. */
   personal_domains: string[];
+  /** Existing team exclusions that cover a connected member's whole mailbox. */
+  team_domain_warnings: EmailPrivacySettingsTeamDomainWarnings;
   /** Domains excluded across the team, including legacy company exclusions. */
   team_domains: string[];
 }

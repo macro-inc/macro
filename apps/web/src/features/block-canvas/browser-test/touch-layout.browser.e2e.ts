@@ -535,3 +535,108 @@ test('turning the device keeps what was in the middle in the middle', async ({
     .toBeLessThan(48);
   expect((await middleOfView(page)).scale).toBe(before.scale);
 });
+
+test('a fill is picked from swatches in the sheet, with the shape still in view', async ({
+  page,
+}) => {
+  const shape = await filledShape(page);
+  await page.touchscreen.tap(shape.x, shape.y);
+  await page.getByRole('button', { name: 'Style' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Canvas inspector' });
+  await settle(sheet);
+
+  const swatches = sheet.getByRole('group', { name: 'Fill colors' });
+  const accent = swatches.getByRole('button', { name: 'Fill: Accent' });
+  await accent.scrollIntoViewIfNeeded();
+  const box = await accent.boundingBox();
+  expect(box?.width).toBeGreaterThanOrEqual(44);
+  expect(box?.height).toBeGreaterThanOrEqual(44);
+  await accent.tap();
+
+  // The colour is on the shape, and no picker opened over it.
+  await expect(accent).toHaveAttribute('aria-pressed', 'true');
+  const customPicker = page.getByRole('textbox', { name: 'hex' });
+  await expect(customPicker).toHaveCount(0);
+  const fill = await page.evaluate(() => {
+    const item = window.canvasTouchFixture.editor.document.items.filled;
+    return item?.type === 'rectangle' ? item.appearance.fill : undefined;
+  });
+  expect(fill).toBe('var(--color-accent)');
+  await expect(sheet).toBeVisible();
+  const [sheetBox, bounds] = await Promise.all([
+    sheet.boundingBox(),
+    page.locator('[data-graphics-selection-bounds]').boundingBox(),
+  ]);
+  if (!sheetBox || !bounds) throw new Error('Nothing is selected');
+  expect(bounds.y + bounds.height).toBeLessThan(sheetBox.y);
+
+  // A custom colour is still one tap away.
+  await sheet.getByRole('button', { name: 'Fill color picker' }).tap();
+  await expect(customPicker).toBeVisible();
+});
+
+/** A pen going down or lifting: CDP sends a pen as a mouse of pointer type pen. */
+async function pen(
+  cdp: CDPSession,
+  type: 'mousePressed' | 'mouseReleased',
+  point: Point
+) {
+  await cdp.send('Input.dispatchMouseEvent', {
+    type,
+    x: point.x,
+    y: point.y,
+    button: 'left',
+    buttons: type === 'mousePressed' ? 1 : 0,
+    clickCount: 1,
+    pointerType: 'pen',
+  });
+}
+
+/**
+ * Where the text being started sits in the scene, if one is. The fixture's
+ * camera is at rest, so that is also where it is on screen. (The editor itself
+ * needs the app's providers and does not mount here.)
+ */
+const textBeingEdited = (page: Page) =>
+  page.evaluate(() => {
+    const draft = window.canvasTouchFixture.state.text.draft();
+    if (!draft) return undefined;
+    return {
+      x: Math.round(draft.transform[4]),
+      y: Math.round(draft.transform[5]),
+    };
+  });
+
+test('with the Text tool a pen keeps its press whichever of pen and palm lands first', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  const textTool = page.getByRole('button', { name: 'Text tool' });
+  const palm = { x: 120, y: 560 };
+
+  // The pen presses, then the palm comes to rest and lifts.
+  const first = { x: 280, y: 120 };
+  await textTool.tap();
+  await pen(cdp, 'mousePressed', first);
+  await touch(cdp, 'touchStart', [palm]);
+  await touch(cdp, 'touchEnd', []);
+  expect(await textBeingEdited(page)).toBeUndefined();
+  await pen(cdp, 'mouseReleased', first);
+  const afterPenFirst = await textBeingEdited(page);
+  expect(Math.abs((afterPenFirst?.x ?? 0) - first.x)).toBeLessThan(12);
+  await page.evaluate(() => window.canvasTouchFixture.state.text.finish());
+
+  // The palm rests first; the pen then taps while it is still down.
+  const second = { x: 260, y: 240 };
+  await textTool.tap();
+  await touch(cdp, 'touchStart', [palm]);
+  await pen(cdp, 'mousePressed', second);
+  await pen(cdp, 'mouseReleased', second);
+  const afterPalmFirst = await textBeingEdited(page);
+  expect(Math.abs((afterPalmFirst?.x ?? 0) - second.x)).toBeLessThan(12);
+  expect(Math.abs((afterPalmFirst?.y ?? 0) - second.y)).toBeLessThan(40);
+  // The palm lifting afterwards starts nothing of its own.
+  await touch(cdp, 'touchEnd', []);
+  const stillThePensText = await textBeingEdited(page);
+  expect(stillThePensText).toEqual(afterPalmFirst);
+});
