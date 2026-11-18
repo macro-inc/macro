@@ -13,11 +13,13 @@ import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   CopyMenuItem,
+  MenuGroup,
   MenuItem,
   MenuSeparator,
 } from '@core/component/ContextMenu';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import type { MenuGroup as MenuGroupId } from '@core/menu/group-menu-items';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ProjectEntity } from '@entity';
 import ShareIcon from '@icon/share.svg';
@@ -29,8 +31,9 @@ import StarIcon from '@icon/system/regular/star.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { refreshActiveGraphqlFoldersQueries } from '@queries/storage/graphql-folders';
-import { Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import type { DriveFolderMetadata } from './context/drive-source';
+import { type FolderMenuAction, folderMenuGroups } from './core/folder-menu';
 
 /** App wiring for sidebar folder actions using the shared list dialogs and mutations. */
 export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
@@ -78,72 +81,152 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
     });
   };
 
+  const items = (): {
+    id: FolderMenuAction;
+    group: MenuGroupId;
+    content: JSX.Element;
+  }[] => [
+    {
+      id: 'share',
+      group: 'most-used',
+      content: (
+        <MenuItem
+          text={t('entityActions.share')}
+          icon={ShareIcon}
+          onClick={() => fireAndForget(share.execute([entity()]), 'drive-view')}
+        />
+      ),
+    },
+    {
+      id: 'favorite',
+      group: 'most-used',
+      content: (
+        <MenuItem
+          text={
+            favorite.isFavorited(entity())
+              ? t('entityActions.unfavorite')
+              : t('entityActions.favorite')
+          }
+          icon={StarIcon}
+          onClick={() =>
+            fireAndForget(favorite.execute([entity()]), 'drive-view')
+          }
+        />
+      ),
+    },
+    {
+      id: 'copy-link',
+      group: 'copy',
+      content: (
+        <CopyMenuItem
+          text={t('entityActions.copyLink')}
+          icon={LinkIcon}
+          onCopy={() => copyLink.execute([entity()])}
+        />
+      ),
+    },
+    {
+      id: 'copy-id',
+      group: 'copy',
+      content: (
+        <CopyMenuItem
+          text={t('entityActions.copyId')}
+          icon={CopyIcon}
+          onCopy={() => copyEntityId.executeById(entity().id)}
+        />
+      ),
+    },
+    ...(entity().ownerId === userId()
+      ? [
+          {
+            id: 'rename' as const,
+            group: 'modify' as const,
+            content: (
+              <MenuItem
+                text={t('entityActions.rename')}
+                icon={PencilIcon}
+                onClick={() => editFolder('rename')}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(duplicate.canExecute(entity())
+      ? [
+          {
+            id: 'duplicate' as const,
+            group: 'modify' as const,
+            content: (
+              <MenuItem
+                text={t('entityActions.duplicate')}
+                icon={CopyIcon}
+                onClick={() =>
+                  fireAndForget(duplicate.execute([entity()]), 'drive-view')
+                }
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(entity().ownerId === userId()
+      ? [
+          {
+            id: 'move' as const,
+            group: 'modify' as const,
+            content: (
+              <MenuItem
+                text={t('entityActions.moveToFolder')}
+                icon={FolderIcon}
+                onClick={() => editFolder('moveToProject')}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(mute.canExecute(entity())
+      ? [
+          {
+            id: 'mute' as const,
+            group: 'state' as const,
+            content: <NotificationMuteMenu {...mute.menu([entity()])} />,
+          },
+        ]
+      : []),
+    ...(deleteFolder.canExecute(entity())
+      ? [
+          {
+            id: 'delete' as const,
+            group: 'delete' as const,
+            content: (
+              <MenuItem
+                text={t('entityActions.delete')}
+                icon={TrashIcon}
+                class="text-failure-ink"
+                onClick={() =>
+                  fireAndForget(deleteFolder.execute([entity()]), 'drive-view')
+                }
+              />
+            ),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <>
-      <MenuSeparator />
-      <Show when={entity().ownerId === userId()}>
-        <MenuItem
-          text={t('entityActions.rename')}
-          icon={PencilIcon}
-          onClick={() => editFolder('rename')}
-        />
-      </Show>
-      <MenuItem
-        text={
-          favorite.isFavorited(entity())
-            ? t('entityActions.unfavorite')
-            : t('entityActions.favorite')
-        }
-        icon={StarIcon}
-        onClick={() =>
-          fireAndForget(favorite.execute([entity()]), 'drive-view')
-        }
-      />
-      <Show when={mute.canExecute(entity())}>
-        <NotificationMuteMenu {...mute.menu([entity()])} />
-      </Show>
-      <Show when={entity().ownerId === userId()}>
-        <MenuItem
-          text={t('entityActions.moveToFolder')}
-          icon={FolderIcon}
-          onClick={() => editFolder('moveToProject')}
-        />
-      </Show>
-      <Show when={duplicate.canExecute(entity())}>
-        <MenuItem
-          text={t('entityActions.duplicate')}
-          icon={CopyIcon}
-          onClick={() =>
-            fireAndForget(duplicate.execute([entity()]), 'drive-view')
-          }
-        />
-      </Show>
-      <CopyMenuItem
-        text={t('entityActions.copyLink')}
-        icon={LinkIcon}
-        onCopy={() => copyLink.execute([entity()])}
-      />
-      <CopyMenuItem
-        text={t('entityActions.copyId')}
-        icon={CopyIcon}
-        onCopy={() => copyEntityId.executeById(entity().id)}
-      />
-      <MenuItem
-        text={t('entityActions.share')}
-        icon={ShareIcon}
-        onClick={() => fireAndForget(share.execute([entity()]), 'drive-view')}
-      />
-      <Show when={deleteFolder.canExecute(entity())}>
-        <MenuSeparator />
-        <MenuItem
-          text={t('entityActions.delete')}
-          icon={TrashIcon}
-          class="text-failure-ink"
-          onClick={() =>
-            fireAndForget(deleteFolder.execute([entity()]), 'drive-view')
-          }
-        />
-      </Show>
+      <MenuSeparator class="touch:border-transparent" />
+      <For each={folderMenuGroups(items())}>
+        {(section, index) => (
+          <>
+            <Show when={index() > 0}>
+              <MenuSeparator class="touch:border-transparent" />
+            </Show>
+            <MenuGroup class="touch:mt-2">
+              <For each={section.items}>{(item) => item.content}</For>
+            </MenuGroup>
+          </>
+        )}
+      </For>
     </>
   );
 }
