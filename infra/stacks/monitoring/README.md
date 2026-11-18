@@ -117,7 +117,7 @@ The gate is that preview:
   of the channel), and the GraphQL soup volume, websocket upgrade, gateway
   connections and task count monitors their `query` and thresholds (volume
   and websocket upgrades also gain recovery thresholds).
-- **122 resources to create**: 83 monitors (39 prod threshold and anomaly, 19 GraphQL soup, 9
+- **124 resources to create**: 85 monitors (41 prod threshold and anomaly, 19 GraphQL soup, 9
   notification retention, 10 WhatsApp session, 1 native call push, 2 harness
   presence, 3 OAuth), 2 webhooks,
   16 log-based metrics, 9 span-based metrics and 1 APM retention filter (6, 3
@@ -390,3 +390,40 @@ The eager, lazy and skipped metrics stay empty until the agent-harness-service
 release that records those span fields; the dials, sessions and starvation
 metrics read fields prod emits today. Span-based metrics count from deploy
 onward.
+
+## Kafka consumer lag coverage
+
+`monitors/queues.ts` adds **two monitors** on every prod consumer group's
+committed-offset lag per topic (`aws.kafka.sum_offset_lag`, multi-alert by
+`consumer_group` and `topic`), and a Kafka consumer lag group on the Queue
+alerts dashboard. Neither pages. [The runbook](../../../docs/runbooks/queues.md#kafka-consumer-lag)
+covers both.
+
+- **Not caught up in a day** (sustained backlog): the lag has not dropped below
+  1,000 in 24 hours. Over the 30 days to 2026-11-18 every group drained to
+  near zero within 18 hours, bursts included, so one floor fits every group and
+  topic. A group's oldest unread event is no older than the last time it
+  caught up, so the first alert leaves about six of the topics' seven
+  retention days.
+- **Far behind** (ceiling): the 15-minute average lag is above 5M, warning at
+  2M. Ordinary bursts peaked at 0.95M on search-processing-service's
+  `macro.email`, the busiest topic, and under 135k on every other group and
+  topic. The ceiling catches a large backlog within hours; the day-long
+  monitor covers quieter topics.
+
+In that backtest, both fired only for search-processing-service, whose
+`macro.email` backlog grew from 2.1M to 28.4M from 2026-11-09: the warning by
+23:30Z on 11-09, the day-long alert by 14:30Z on 11-10 (also on its
+`macro.documents`, `macro.calendar` and `macro.agent_session_lifecycle`
+lag) and the critical by 17:30Z on 11-10. The 10-28 and 11-04 bursts stayed
+quiet, and no other group fired.
+
+A growth-rate alert (lag above its level 24 hours earlier for a whole day)
+fired at the same time and implies the day-long one, so it is not declared.
+MSK's `estimated_max_time_lag` and `rolling_estimated_time_lag_max` divide lag
+by the current consumption rate, not event age, and swing by orders of
+magnitude, so nothing alerts on them. Lag goes missing while a group
+rebalances, and the monitors do not notify on missing data: a crash-looping
+consumer shows gaps, not an alert. Consumers that commit no offsets, such as
+the independent notification consumers, report no lag
+([Notification retention coverage](#notification-retention-coverage)).

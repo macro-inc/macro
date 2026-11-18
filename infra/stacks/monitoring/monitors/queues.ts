@@ -1,4 +1,5 @@
-// Prod SQS queues: dead letters, backlog age and backlog growth.
+// Prod SQS queues: dead letters, backlog age and backlog growth. Prod Kafka
+// consumer groups: committed-offset lag on every topic they read.
 //
 // The two queue-age monitors also exist in Grafana
 // (infra/stacks/observability/nixos/prod-alerts.nix); change both together.
@@ -6,11 +7,16 @@
 import * as datadog from '@pulumi/datadog';
 import { graphGroup, prodMonitor, thresholdGraph } from '../prod-monitor';
 
-// One graph per monitor below, titled like it, with its thresholds.
+const KAFKA_SCOPE =
+  '{cluster_name:prod-macro-event-kafka-cluster,!topic:_amazon_msk_canary}';
+const KAFKA_LAG = `max:aws.kafka.sum_offset_lag${KAFKA_SCOPE} by {consumer_group,topic}`;
+
+// One graph per monitor below, titled like it, with its thresholds, and a
+// per-partition Kafka graph for hot keys.
 const dashboard = new datadog.Dashboard('queue-alerts', {
   title: 'Queue alerts',
   description:
-    'Every prod SQS monitor against its thresholds. Declared in infra/stacks/monitoring/monitors/queues.ts; see docs/runbooks/queues.md.',
+    'Every prod SQS and Kafka consumer lag monitor against its thresholds. Declared in infra/stacks/monitoring/monitors/queues.ts; see docs/runbooks/queues.md.',
   layoutType: 'ordered',
   widgets: [
     graphGroup('Dead letters', [
@@ -42,6 +48,26 @@ const dashboard = new datadog.Dashboard('queue-alerts', {
         title: 'Email backfill backlog growing abnormally',
         query:
           "anomalies(max:aws.sqs.approximate_number_of_messages_visible{queuename:email-service-backfill-queue-prod}, 'agile', 3)",
+      }),
+    ]),
+    graphGroup('Kafka consumer lag', [
+      thresholdGraph({
+        title: 'Kafka consumer far behind',
+        query: KAFKA_LAG,
+        critical: '5000000',
+        warning: '2000000',
+      }),
+      thresholdGraph({
+        // The lowest lag over the trailing day, as the monitor evaluates it.
+        title: 'Kafka consumer has not caught up in a day',
+        query: `moving_rollup(${KAFKA_LAG}, 86400, 'min')`,
+        critical: '1000',
+      }),
+      thresholdGraph({
+        // Close to the topic's whole lag when one of its six partitions holds
+        // the backlog.
+        title: 'Kafka lag on the most-behind partition',
+        query: `max:aws.kafka.max_offset_lag${KAFKA_SCOPE} by {consumer_group,topic}`,
       }),
     ]),
   ],
@@ -104,4 +130,34 @@ prodMonitor('sqs-email-backfill-backlog-anomaly', {
     'Visible messages in email-service-backfill-queue-prod are above their usual band. A jump in enqueues loads macrodb through the backfill workers.',
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/queues.md#backlog',
+});
+
+// Datadog only, like the two above: Grafana copies exist for the alerts it
+// pages on, and these only notify.
+prodMonitor('kafka-consumer-lag-high', {
+  title: 'Kafka consumer far behind',
+  service: 'kafka',
+  query: `avg(last_15m):${KAFKA_LAG} > 5000000`,
+  monitorThresholds: { critical: '5000000', warning: '2000000' },
+  pages: false,
+  description:
+    '{{consumer_group.name}} is {{value}} events behind on {{topic.name}}. Normal bursts on the busiest topic, macro.email, peak under 1M and drain within a day. Topics keep events for 7 days; the group never reads events deleted before it reaches them.',
+  dashboard: dashboard.url,
+  runbook: 'docs/runbooks/queues.md#kafka-consumer-lag',
+});
+
+// Every healthy group drains to near zero within 18 hours, even after a
+// burst, so one floor fits every group and topic. A group's oldest unread
+// event is no older than the last time it caught up, so the first alert
+// leaves about six of the topic's seven retention days.
+prodMonitor('kafka-consumer-not-caught-up', {
+  title: 'Kafka consumer has not caught up in a day',
+  service: 'kafka',
+  query: `min(last_1d):${KAFKA_LAG} > 1000`,
+  monitorThresholds: { critical: '1000' },
+  pages: false,
+  description:
+    "{{consumer_group.name}}'s lag on {{topic.name}} has not dropped below {{value}} events in 24 hours. Healthy groups drain to near zero within 18 hours. When this first fires, its oldest unread event is about a day old at most: about six days remain before the topic's 7-day retention deletes events the group has not read.",
+  dashboard: dashboard.url,
+  runbook: 'docs/runbooks/queues.md#kafka-consumer-lag',
 });
