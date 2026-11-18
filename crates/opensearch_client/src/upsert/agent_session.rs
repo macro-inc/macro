@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use models_opensearch::SearchIndex;
 use opensearch::BulkParts;
 use serde::Serialize;
@@ -90,7 +92,8 @@ struct ParentDocument<'a> {
     created_at_millis: EpochMillis,
     updated_at_millis: EpochMillis,
     agent_session_relation: &'static str,
-    /// Child id to content hash of every message this parent's children hold.
+    /// Child id to content hash of each child this parent vouches for: every
+    /// message, except while a reconcile changes some and names them pending.
     /// Kept in `_source` only: the mapping is not dynamic, so it is never indexed.
     indexed_messages: &'a IndexedMessages,
     /// Children a reconcile set out to write or delete and did not confirm:
@@ -199,6 +202,7 @@ fn plan(
     previous: Option<&IndexedMessages>,
     pending: &[String],
 ) -> Result<ReconcilePlan> {
+    let pending: BTreeSet<&str> = pending.iter().map(String::as_str).collect();
     let mut plan = ReconcilePlan::default();
     for message in &args.messages {
         let id = child_id(&args.agent_session_id, message);
@@ -208,7 +212,7 @@ fn plan(
         let hash = content_hash(&document);
 
         let recorded = previous.and_then(|record| record.get(&id)) == Some(&hash);
-        if recorded && !pending.contains(&id) {
+        if recorded && !pending.contains(id.as_str()) {
             plan.unchanged += 1;
         } else {
             plan.write.push((id.clone(), document));
@@ -216,15 +220,15 @@ fn plan(
         plan.record.insert(id, hash);
     }
 
-    let known: std::collections::BTreeSet<&String> = previous
+    let known: BTreeSet<&str> = previous
         .into_iter()
-        .flat_map(|record| record.keys())
+        .flat_map(|record| record.keys().map(String::as_str))
         .chain(pending)
         .collect();
     plan.delete = known
         .into_iter()
         .filter(|id| !plan.record.contains_key(*id))
-        .cloned()
+        .map(str::to_owned)
         .collect();
     Ok(plan)
 }
@@ -243,10 +247,11 @@ impl ReconcilePlan {
             .map(|(id, _)| id.clone())
             .chain(self.delete.iter().cloned())
             .collect();
+        let touched_ids: BTreeSet<&str> = touched.iter().map(String::as_str).collect();
         let untouched = self
             .record
             .iter()
-            .filter(|(id, _)| !touched.contains(*id))
+            .filter(|(id, _)| !touched_ids.contains(id.as_str()))
             .map(|(id, hash)| (id.clone(), hash.clone()))
             .collect();
         (untouched, touched)
@@ -403,9 +408,12 @@ async fn write_parent(
 /// Nothing waits for a refresh: no caller reads the index back, and every
 /// write and delete names its document by id, which needs no refresh to apply.
 /// While children change the parent names them pending, and it records them
-/// only after they were written, so after a failure at any step the next
-/// reconcile rewrites or deletes exactly what might differ. The sweep comes
-/// last so a failed sweep never leaves the parent's name or recency stale.
+/// only after they were written, so after a failed request the next reconcile
+/// rewrites or deletes exactly what might differ. That holds for requests that
+/// finish before this function returns; none of these writes is conditional,
+/// so a request that times out here and applies later can still roll a child
+/// back. The sweep comes last so a failed sweep never leaves the parent's name
+/// or recency stale.
 pub(crate) async fn reconcile_agent_session(
     client: &opensearch::OpenSearch,
     args: &ReconcileAgentSessionArgs,

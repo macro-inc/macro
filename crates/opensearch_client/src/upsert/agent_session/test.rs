@@ -487,6 +487,37 @@ async fn a_recorded_child_left_pending_is_rewritten_though_its_hash_matches() {
 }
 
 #[tokio::test]
+async fn a_pending_child_the_snapshot_no_longer_has_is_deleted_by_id() {
+    // A reconcile wrote turn 5's reply, then failed before recording it; the
+    // snapshot has since lost that turn.
+    let mut stored = stored_parent_source(&args());
+    stored["pending_messages"] = json!(["session-1:5:agent"]);
+
+    let (requests, result) = serve_reconcile(
+        vec![found(stored), ok("{}"), ok(BULK_OK), ok("{}"), ok(PRUNE_OK)],
+        args(),
+        None,
+    )
+    .await;
+
+    assert_eq!(result.unwrap().messages_deleted, 1);
+    assert_eq!(
+        requests[2].body.trim(),
+        r#"{"delete":{"_id":"session-1:5:agent","routing":"session-1"}}"#
+    );
+    let recorded: serde_json::Value = serde_json::from_str(&requests[3].body).unwrap();
+    assert_eq!(recorded, stored_parent_source(&args()));
+    let sweep: serde_json::Value = serde_json::from_str(&requests[4].body).unwrap();
+    assert!(
+        sweep["query"]["bool"]["must_not"][0]["ids"]["values"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("session-1:5:agent")),
+        "{sweep}"
+    );
+}
+
+#[tokio::test]
 async fn a_load_balancer_error_page_on_prune_is_reported_with_its_body() {
     let (_, result) = serve_reconcile(
         vec![
