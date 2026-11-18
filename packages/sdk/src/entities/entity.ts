@@ -297,7 +297,8 @@ export abstract class PropertiedEntity<Detail>
   }
 
   /**
-   * Remove a property from this entity, given its {@link properties} entry.
+   * Clear one property's value on this item, given its {@link properties}
+   * entry; the item itself and the property's definition are kept.
    *
    * @destructive
    * @idempotent
