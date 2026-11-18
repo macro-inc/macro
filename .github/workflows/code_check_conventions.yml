@@ -6,36 +6,7 @@ on:
 permissions:
   contents: read
 jobs:
-  path-check:
-    runs-on: namespace-profile-linux-small
-    outputs:
-      should_run: ${{ steps.filter.outputs.should_run }}
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-        with:
-          clean: 'false'
-          persist-credentials: 'false'
-      - id: filter
-        name: Filter changed paths
-        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
-        with:
-          filters: |
-            should_run:
-              - 'crates/**'
-              - 'services/**'
-              - 'tooling/xtask/**'
-              - 'apps/web/**'
-              - 'packages/**'
-              - 'rules/**'
-              - 'sgconfig.yml'
-              - '.github/actions/teardown-nix/**'
-              - '.github/workflows/code_check_conventions.yml'
   ast-grep:
-    needs:
-      - path-check
-    if: needs.path-check.outputs.should_run == 'true'
     name: ast-grep Conventions
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     timeout-minutes: 15
@@ -60,32 +31,3 @@ jobs:
       - name: Teardown Nix
         if: always()
         uses: ./.github/actions/teardown-nix
-  status-check:
-    needs:
-      - path-check
-      - ast-grep
-    if: always()
-    name: Conventions Status Check
-    runs-on: namespace-profile-linux-small
-    timeout-minutes: 5
-    steps:
-      - name: Check job results
-        run: |
-          echo "path-check: $PATH_CHECK_RESULT"
-          echo "ast-grep: $AST_GREP_RESULT"
-
-          # Only success and skipped are OK. A job that hits its timeout reports
-          # cancelled, and passing on that would merge code whose checks never ran.
-          for result in \
-            "$PATH_CHECK_RESULT" \
-            "$AST_GREP_RESULT"; do
-            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-              echo "❌ One or more jobs failed or were cancelled"
-              exit 1
-            fi
-          done
-
-          echo "✅ All jobs passed or were skipped"
-        env:
-          PATH_CHECK_RESULT: ${{ needs.path-check.result }}
-          AST_GREP_RESULT: ${{ needs.ast-grep.result }}

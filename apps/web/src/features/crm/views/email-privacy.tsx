@@ -3,24 +3,40 @@ import { t } from '@app/lib/i18n';
 import { enableCrmThreadExclusions } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, Dialog, Panel } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, createUniqueId, For, Show } from 'solid-js';
+import { createStore } from 'solid-js/store';
+import { match } from 'ts-pattern';
 import {
   SettingsCard,
   SettingsRow,
   SettingsSection,
 } from '../../settings/primitives';
 import { useCrmContext } from '../context/crm-context';
-import type { EmailBlockScope } from '../core/email-privacy';
+import type {
+  EmailBlockScope,
+  MailboxDomainConflict,
+} from '../core/email-privacy';
 
 type PrivacySource = ReturnType<
   ReturnType<typeof useCrmContext>['createEmailPrivacy']
 >;
 
+function domainWarningText(reason: MailboxDomainConflict | undefined) {
+  if (!reason) return undefined;
+  return match(reason)
+    .with('company', () => t('crm.privacyCompanyMailboxDomain'))
+    .with('personal_provider', () => t('crm.privacyPersonalMailboxDomain'))
+    .exhaustive(() => undefined);
+}
+
 function DomainBlocklist(props: {
   source: PrivacySource;
   scope: EmailBlockScope;
 }) {
-  const [domain, setDomain] = createSignal('');
+  const [input, setInput] = createStore<{ domain: string; error?: string }>({
+    domain: '',
+  });
+  const errorId = createUniqueId();
   const settings = () =>
     props.source.query.isSuccess ? props.source.query.data : undefined;
   const domains = () =>
@@ -29,14 +45,27 @@ function DomainBlocklist(props: {
       : settings()?.personalDomains;
   const canRemove = () =>
     props.scope === 'personal' || settings()?.canRemoveTeamDomains;
+  const warnings = () =>
+    props.scope === 'team'
+      ? settings()?.teamDomainWarnings
+      : settings()?.personalDomainWarnings;
   const busy = () => props.source.update.isPending;
   const add = (event: SubmitEvent) => {
     event.preventDefault();
-    if (!domain().trim() || busy()) return;
+    const domain = input.domain.trim();
+    if (!domain || busy()) return;
+    setInput('error', undefined);
     props.source.update.mutate(
-      { action: 'add_domain', scope: props.scope, domain: domain().trim() },
+      { action: 'add_domain', scope: props.scope, domain },
       {
-        onSuccess: () => setDomain(''),
+        onSuccess: () => {
+          if (input.domain.trim() === domain)
+            setInput({ domain: '', error: undefined });
+        },
+        onError: (error) => {
+          if (input.domain.trim() === domain)
+            setInput('error', error.message || t('crm.privacyUpdateFailed'));
+        },
       }
     );
   };
@@ -64,7 +93,10 @@ function DomainBlocklist(props: {
           }
         >
           {(item) => (
-            <SettingsRow label={item}>
+            <SettingsRow
+              label={item}
+              description={domainWarningText(warnings()?.[item])}
+            >
               <Button
                 variant="ghost"
                 size="sm"
@@ -83,33 +115,48 @@ function DomainBlocklist(props: {
             </SettingsRow>
           )}
         </For>
-        <form onSubmit={add} class="flex gap-2 px-6 py-3">
-          <input
-            aria-label={
-              props.scope === 'team'
-                ? t('crm.privacyTeamDomainLabel')
-                : t('crm.privacyPersonalDomainLabel')
-            }
-            class="settings-input min-w-0 flex-1"
-            placeholder={t('crm.privacyDomainPlaceholder')}
-            value={domain()}
-            onInput={(e) => setDomain(e.currentTarget.value)}
-          />
-          <Button
-            type="submit"
-            variant="secondary"
-            size="sm"
-            disabled={busy() || !domain().trim()}
-          >
-            {t('crm.privacyAddDomain')}
-          </Button>
+        <form onSubmit={add} class="flex flex-col gap-2 px-6 py-3">
+          <div class="flex gap-2">
+            <input
+              aria-label={
+                props.scope === 'team'
+                  ? t('crm.privacyTeamDomainLabel')
+                  : t('crm.privacyPersonalDomainLabel')
+              }
+              class="settings-input min-w-0 flex-1"
+              aria-invalid={!!input.error}
+              aria-describedby={input.error ? errorId : undefined}
+              placeholder={t('crm.privacyDomainPlaceholder')}
+              value={input.domain}
+              onInput={(e) =>
+                setInput({ domain: e.currentTarget.value, error: undefined })
+              }
+            />
+            <Button
+              type="submit"
+              variant="secondary"
+              size="sm"
+              disabled={busy() || !input.domain.trim()}
+            >
+              {t('crm.privacyAddDomain')}
+            </Button>
+          </div>
+          <Show when={input.error}>
+            <p id={errorId} class="text-sm text-failure" role="alert">
+              {input.error}
+            </p>
+          </Show>
         </form>
       </SettingsCard>
     </SettingsSection>
   );
 }
 
-function ThreadExclusions(props: { source: PrivacySource }) {
+function ThreadExclusions(props: {
+  source: PrivacySource;
+  onOpenThread?: () => void;
+}) {
+  const { EmailThreadMention } = useCrmContext();
   const [after, setAfter] = createSignal<string>();
   const query = props.source.createExcludedThreads(after);
   return (
@@ -156,9 +203,11 @@ function ThreadExclusions(props: { source: PrivacySource }) {
             {(thread) => (
               <SettingsRow
                 label={
-                  <span class="break-words">
-                    {thread.subject || t('crm.privacyThreadNoSubject')}
-                  </span>
+                  <EmailThreadMention
+                    threadId={thread.threadId}
+                    subject={thread.subject || t('crm.privacyThreadNoSubject')}
+                    onOpened={props.onOpenThread}
+                  />
                 }
               >
                 <Button
@@ -209,7 +258,10 @@ function ThreadExclusions(props: { source: PrivacySource }) {
   );
 }
 
-export function CrmEmailPrivacySettings(props: { onOptIn?: () => void }) {
+export function CrmEmailPrivacySettings(props: {
+  onOptIn?: () => void;
+  onOpenThread?: () => void;
+}) {
   const threadExclusions = useFeatureFlag(enableCrmThreadExclusions);
   const source = useCrmContext().createEmailPrivacy();
   const settings = () =>
@@ -256,7 +308,7 @@ export function CrmEmailPrivacySettings(props: { onOptIn?: () => void }) {
       <DomainBlocklist source={source} scope="team" />
       <DomainBlocklist source={source} scope="personal" />
       <Show when={threadExclusions().enabled}>
-        <ThreadExclusions source={source} />
+        <ThreadExclusions source={source} onOpenThread={props.onOpenThread} />
       </Show>
       <div class="flex justify-end">
         <Button
@@ -334,7 +386,10 @@ export function CrmEmailPrivacyDialog(props: {
           </Dialog.CloseButton>
         </Panel.Header>
         <Panel.Body scroll class="p-4 flex flex-col gap-4">
-          <CrmEmailPrivacySettings onOptIn={() => props.onOpenChange(false)} />
+          <CrmEmailPrivacySettings
+            onOptIn={() => props.onOpenChange(false)}
+            onOpenThread={() => props.onOpenChange(false)}
+          />
         </Panel.Body>
       </Panel>
     </Dialog>

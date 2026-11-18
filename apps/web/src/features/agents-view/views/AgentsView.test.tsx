@@ -1,5 +1,10 @@
+import {
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '@components/app/split-layout/context';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import {
+  type ComponentProps,
   createResource,
   createSignal,
   For,
@@ -9,7 +14,22 @@ import {
 } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
-import { AgentsView } from './AgentsView';
+import { AgentsView as Workspace } from './AgentsView';
+
+function AgentsView(props: ComponentProps<typeof Workspace>) {
+  const panel = {
+    panelSize: {
+      get width() {
+        return state.width();
+      },
+    },
+  } as SplitPanelContextType;
+  return (
+    <SplitPanelContext.Provider value={panel}>
+      <Workspace {...props} />
+    </SplitPanelContext.Provider>
+  );
+}
 
 /** A split history entry: what it shows and the view state captured into it. */
 type FakeEntry = {
@@ -18,6 +38,8 @@ type FakeEntry = {
 };
 
 const state = vi.hoisted(() => ({
+  touch: false,
+  width: (): number => 1000,
   contentId: { current: 'agents' },
   entry: { current: undefined as (() => FakeEntry) | undefined },
   captors: new Map<string, () => unknown>(),
@@ -37,6 +59,10 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('@app/components/view-shell', () => ({
+  useViewShell: () => ({
+    breakpoints: { narrow: () => false },
+    aside: { isOverlay: () => false },
+  }),
   ViewShell: { Root: state.pass, Aside: state.pass, Main: state.pass },
 }));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({
@@ -112,7 +138,9 @@ vi.mock(
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { alert: vi.fn() } }));
 vi.mock('@core/constant/featureFlags', () => ({ enableAgentUpdates: {} }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
-vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => state.touch,
+}));
 vi.mock('@entity', () => ({ ListEntityMetadataQueryProvider: state.pass }));
 vi.mock('@notifications/mark-row-seen', () => ({
   markRowNotificationsSeenOnOpen: () => {},
@@ -267,6 +295,8 @@ function row(name: string) {
 }
 
 beforeEach(() => {
+  state.touch = false;
+  state.width = () => 1000;
   state.contentId.current = 'agents';
   state.entry.current = undefined;
   state.captors.clear();
@@ -311,6 +341,27 @@ it('keeps the open conversation mounted when it is selected again', async () => 
   expect(screen.getByTestId('pane').textContent).toBe('Session a');
   expect(state.mounts).toEqual(['a']);
 });
+
+it.each(['restored', 'selected'])(
+  'retains the %s touch conversation when its pane folds',
+  async (selection) => {
+    state.touch = true;
+    const [width, setWidth] = createSignal(1000);
+    state.width = width;
+    await openLoadedConversation();
+    if (selection === 'selected') {
+      fireEvent.click(row('b'));
+      state.loads.get('b')?.('Session b');
+      await screen.findByText('Session b');
+    }
+    const pane = screen.getByTestId('pane');
+    const mounted = [...state.mounts];
+    setWidth(600);
+    expect(pane.closest('main')?.classList.contains('hidden')).toBe(false);
+    expect(screen.getByTestId('pane')).toBe(pane);
+    expect(state.mounts).toEqual(mounted);
+  }
+);
 
 it('does not restore a sent Ask Macro draft when Back mounts the composer again', () => {
   const asked = composerEntry('request-1', '@message ');

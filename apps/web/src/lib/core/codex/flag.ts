@@ -1,13 +1,9 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  enableChatV3Agents,
-  enableCodexAgents,
-} from '@core/constant/featureFlags';
+import { enableCodexAgents } from '@core/constant/featureFlags';
 import type { Accessor } from 'solid-js';
 
-/** Codex surfaces require both the agent rollout and the Codex rollout. */
+/** Whether the Codex surfaces are rolled out to this user. */
 export function useCodexAgentsAccess(): Accessor<boolean> {
-  const agents = useFeatureFlag(enableChatV3Agents);
   const codex = useFeatureFlag(enableCodexAgents);
-  return () => agents().enabled && codex().enabled;
+  return () => codex().enabled;
 }

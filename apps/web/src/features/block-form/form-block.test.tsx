@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { type Accessor, createSignal, type ParentProps } from 'solid-js';
+import type { Accessor, ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FormContext } from './context/form-context';
 import FormBlock from './form-block';
@@ -16,7 +16,6 @@ const state = vi.hoisted(() => ({
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => state.flag,
 }));
-vi.mock('@core/constant/featureFlags', () => ({ enableForms: {} }));
 vi.mock('../entity-appearance/entity-appearance', () => ({
   EntityAppearanceTrigger: () => null,
 }));
@@ -36,13 +35,14 @@ vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
 }));
 vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
   BlockItemSplitLabel: () => null,
+  SplitPermissionsBadge: () => null,
   SplitTitleFileMenu: (props: ParentProps) => props.children,
 }));
 vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
   SplitFileMenu: () => null,
 }));
-vi.mock('@components/app/ResponsiveBlockToolbar', () => ({
-  ResponsivePermissionsBadge: () => null,
+vi.mock('./views/mobile/form-block-header', () => ({
+  MobileFormBlockHeader: () => null,
 }));
 vi.mock('@core/component/DocumentBlockContainer', () => ({
   DocumentBlockContainer: (props: ParentProps) => props.children,
@@ -121,40 +121,6 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Forms authoring rollout', () => {
-  it('does not mount the editor before the flag resolves, even for an owner', () => {
-    const [flag, setFlag] = createSignal({ enabled: false, loading: true });
-    state.flag = flag;
-    render(() => <FormBlock />);
-
-    expect(screen.queryByText('Form editor')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
-    expect(state.editorMounted).not.toHaveBeenCalled();
-    expect(screen.getByText('Fill out the form')).toBeTruthy();
-    expect(screen.queryByText('Live editors')).toBeNull();
-
-    setFlag({ enabled: true, loading: false });
-    expect(screen.getByText('Form editor')).toBeTruthy();
-    expect(screen.getByText('Live editors')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Preview' })).toBeTruthy();
-    expect(state.editorMounted).toHaveBeenCalledOnce();
-
-    setFlag({ enabled: false, loading: false });
-    expect(screen.queryByText('Form editor')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
-    expect(screen.getByText('Fill out the form')).toBeTruthy();
-    expect(screen.queryByText('Live editors')).toBeNull();
-  });
-
-  it('keeps an explicitly disabled owner on the respondent view', () => {
-    state.flag = () => ({ enabled: false, loading: false });
-    render(() => <FormBlock />);
-
-    expect(screen.queryByText('Form editor')).toBeNull();
-    expect(state.editorMounted).not.toHaveBeenCalled();
-    expect(screen.getByText('Fill out the form')).toBeTruthy();
-    expect(screen.queryByText('Live editors')).toBeNull();
-  });
-
   it('keeps a respondent link in respondent mode when authoring is enabled', () => {
     state.flag = () => ({ enabled: true, loading: false });
     render(() => <FormBlock view="respond" />);

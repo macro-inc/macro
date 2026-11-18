@@ -57,6 +57,7 @@ workspace-members = [
     "xtask_workflows",
     # The workflow model xtask_workflows builds, vendored from gh-workflow.
     "gh_workflow",
+    "xtask_email_coverage",
     "xtask_local",
     "xtask_ports",
     "xtask_local_telemetry",

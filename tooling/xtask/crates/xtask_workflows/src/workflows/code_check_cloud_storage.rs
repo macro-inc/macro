@@ -11,7 +11,7 @@
 //! `graphql-schema-compat` run alongside `test`.
 
 use gh_workflow::expr::typed::{
-    Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, always, env,
+    Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, env,
 };
 use gh_workflow::{Container, Env, Event, Job, Port, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RuntimePath;
@@ -112,7 +112,6 @@ pub fn code_check_cloud_storage() -> Workflow {
         .add_job(TEST, test())
         .add_job(BUILD_SERVICE_BINS, build_service_bins())
         .add_job(GRAPHQL_SCHEMA_COMPAT, graphql_schema_compat())
-        .add_job("status-check", status_check())
 }
 
 /// Where `path-check` keeps the release `xtask_nextest_filter` binary (keyed by
@@ -293,7 +292,7 @@ fn test() -> Job {
 
 /// The env the jobs that compile for `test` share, so their sccache keys stay
 /// identical.
-fn with_test_compile_env(job: Job) -> Job {
+pub(crate) fn with_test_compile_env(job: Job) -> Job {
     // Debug info is most of what test builds write and link. Panic locations
     // don't depend on it; only backtrace frames lose their file and line.
     job.add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
@@ -368,25 +367,6 @@ fn test_execution_runtime() -> Step<Run> {
         .run(include_str!("scripts/run_tests.sh"))
         .add_env(("NEXTEST_RUN_DENO_TESTS", "true"))
         .if_condition(tests_execution_runtime())
-}
-
-/// Always-run collector used as the required status check. Its name must stay
-/// stable — branch protection references it.
-fn status_check() -> Job {
-    Job::default()
-        .timeout_minutes(5u32)
-        .name("Cloud Storage Status Check")
-        .runs_on(runners::Runner::Small.to_string())
-        .cond(always())
-        .needs(vec![
-            PATH_CHECK.to_string(),
-            CHECK.to_string(),
-            DOPPLER_CONFIG.to_string(),
-            TEST.to_string(),
-            BUILD_SERVICE_BINS.to_string(),
-            GRAPHQL_SCHEMA_COMPAT.to_string(),
-        ])
-        .add_step(check_job_results())
 }
 
 // --- workflow-specific steps -------------------------------------------------
@@ -517,7 +497,7 @@ fn cargo_clippy() -> Step<Run> {
 /// database per test, and those file operations are what limit the test run on
 /// the runner's disk. A bind mount, not `--tmpfs`: `configure_postgres` restarts
 /// the container, and a restart empties a `--tmpfs` mount.
-fn postgres_service() -> Container {
+pub(crate) fn postgres_service() -> Container {
     Container::default()
         .image("pgvector/pgvector:pg14")
         .env(
@@ -534,7 +514,7 @@ fn postgres_service() -> Container {
 }
 
 /// redis service container.
-fn redis_service() -> Container {
+pub(crate) fn redis_service() -> Container {
     Container::default()
         .image("redis:7")
         .ports(vec![Port::Name("6379:6379".to_string())])
@@ -545,7 +525,7 @@ fn redis_service() -> Container {
 }
 
 /// Tune the postgres service container for fast concurrent tests.
-fn configure_postgres() -> Step<Run> {
+pub(crate) fn configure_postgres() -> Step<Run> {
     Step::new("configure postgres for concurrent tests")
         .run(include_str!("scripts/configure_postgres.sh"))
 }
@@ -560,21 +540,4 @@ fn prepare_tests() -> Step<Run> {
 /// Run the test suite (no AWS credentials; sccache uses Namespace's remote cache).
 fn run_tests() -> Step<Run> {
     Step::new("run tests").run(include_str!("scripts/run_tests.sh"))
-}
-
-/// Aggregate the upstream job results into a single required status check.
-fn check_job_results() -> Step<Run> {
-    Step::new("Check job results")
-        .run(include_str!(
-            "code_check_cloud_storage/check_job_results.sh"
-        ))
-        .add_env(("PATH_CHECK_RESULT", PATH_CHECK.result()))
-        .add_env(("CHECK_RESULT", CHECK.result()))
-        .add_env(("DOPPLER_CONFIG_RESULT", DOPPLER_CONFIG.result()))
-        .add_env(("TEST_RESULT", TEST.result()))
-        .add_env(("BUILD_SERVICE_BINS_RESULT", BUILD_SERVICE_BINS.result()))
-        .add_env((
-            "GRAPHQL_SCHEMA_COMPAT_RESULT",
-            GRAPHQL_SCHEMA_COMPAT.result(),
-        ))
 }

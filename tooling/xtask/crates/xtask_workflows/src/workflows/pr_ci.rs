@@ -39,7 +39,8 @@ use crate::workflows::actions::{
 };
 use crate::workflows::{
     cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
-    check_tauri_lockfiles, observability_image, runners, sdk_check, steps, test_macrod_update,
+    check_tauri_lockfiles, code_check_conventions, code_check_infra, observability_image, runners,
+    sdk_check, steps, test_macrod_update,
 };
 
 #[cfg(test)]
@@ -101,13 +102,13 @@ const CALLS: &[Call] = &[
         id: "infra",
         name: "Infra",
         workflow: || CallCodeCheckInfra::new().job(),
-        paths: None,
+        paths: Some(code_check_infra::PATHS),
     },
     Call {
         id: "conventions",
         name: "Conventions",
         workflow: || CallCodeCheckConventions::new().job(),
-        paths: None,
+        paths: Some(code_check_conventions::PATHS),
     },
     Call {
         id: "cargo-deny",

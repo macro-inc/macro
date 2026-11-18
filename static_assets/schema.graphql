@@ -10880,7 +10880,12 @@ type GraphqlUser {
 	"""
 	One initiative accessible to the authenticated viewer.
 	"""
-	initiative(initiativeId: ID!): GraphqlSoupInitiative!
+	initiative(initiativeId: ID!): GraphqlSoupInitiative! @deprecated(reason: "Use visibleInitiative, which answers a missing or hidden project with null instead of NOT_FOUND. Remove after 2026-12-31.")
+	"""
+	One initiative accessible to the authenticated viewer, or null when it
+	is missing or not visible to them.
+	"""
+	visibleInitiative(initiativeId: ID!): GraphqlSoupInitiative
 	"""
 	A permission-filtered page of task identifiers within an initiative.
 	"""

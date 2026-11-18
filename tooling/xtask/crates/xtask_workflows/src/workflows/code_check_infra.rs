@@ -1,14 +1,23 @@
 //! `infra code check` — PR checks for the infra (Pulumi TypeScript) workspace.
-//! Generated into `code_check_infra.yml` (replaces the hand-written
-//! `code-check-infra.yml`; the required status check is the job name
-//! `Infra Status Check`, which is unchanged, so branch protection is
-//! unaffected by the file rename).
+//! Generated into `code_check_infra.yml`. `PR CI` calls it only when [`PATHS`]
+//! changed, and `CI gate` reads the call's result, so it has no path-check or
+//! roll-up job of its own.
 
-use gh_workflow::expr::typed::{Flag, JobHandle, JobOutput, StepHandle, StepOutput, always};
 use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall, ZizmorRule};
+use xtask_paths::RepoGlob;
 
-use crate::workflows::actions::{ActionsCheckout, DornyPathsFilter};
+use crate::workflows::actions::ActionsCheckout;
 use crate::workflows::{runners, steps, vars};
+
+/// Files whose change makes `PR CI` call this workflow.
+pub const PATHS: &[RepoGlob<'static>] = &[
+    xtask_paths::repo_glob!("infra/**"),
+    xtask_paths::repo_glob!("flake.nix"),
+    xtask_paths::repo_glob!("flake.lock"),
+    xtask_paths::repo_glob!(".github/actions/setup-nix-dev-shell/**"),
+    xtask_paths::repo_glob!(".github/actions/teardown-nix/**"),
+    xtask_paths::repo_glob!(".github/workflows/code_check_infra.yml"),
+];
 
 /// The infra checks need the same cache content as the web checks (Nix
 /// dev-shell closure + bun cache), so they share the `web-ci` volume — cache
@@ -19,57 +28,16 @@ fn infra_runner() -> String {
     runners::Runner::Small.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
 
-struct PathCheckOutputs {
-    /// Whether the checks should run at all; read by [`steps::gated_job`].
-    should_run: JobOutput<Flag>,
-}
-
-const PATH_CHECK: JobHandle<PathCheckOutputs> = JobHandle::new(
-    "path-check",
-    PathCheckOutputs {
-        should_run: JobOutput::new("path-check", "should_run"),
-    },
-);
-
-const BIOME_CHECK: JobHandle<()> = JobHandle::new("biome-check", ());
-const CHECK: JobHandle<()> = JobHandle::new("check", ());
-
-struct FilterOutputs {
-    /// The `should_run` filter's match.
-    should_run: StepOutput<Flag>,
-}
-
-const FILTER: StepHandle<FilterOutputs> = StepHandle::new(
-    "filter",
-    FilterOutputs {
-        should_run: StepOutput::new("filter", "should_run"),
-    },
-);
-
 /// Build the workflow.
 pub fn code_check_infra() -> Workflow {
     Workflow::new("infra code check")
         .on(Event::default().workflow_call(WorkflowCall::default()))
-        .add_job(PATH_CHECK, path_check())
-        .add_job(BIOME_CHECK, biome_check())
-        .add_job(CHECK, check())
-        .add_job("status-check", status_check())
-}
-
-fn path_check() -> Job {
-    Job::default()
-        .timeout_minutes(10u32)
-        .runs_on(runners::Runner::Small.to_string())
-        .add_output(
-            PATH_CHECK.outputs.should_run.name(),
-            FILTER.outputs.should_run.read(),
-        )
-        .add_step(checkout(false))
-        .add_step(paths_filter())
+        .add_job("biome-check", biome_check())
+        .add_job("check", check())
 }
 
 fn biome_check() -> Job {
-    steps::gated_job(&PATH_CHECK.outputs.should_run)
+    Job::default()
         .timeout_minutes(15u32)
         .name("Biome Check")
         .runs_on(infra_runner())
@@ -82,7 +50,7 @@ fn biome_check() -> Job {
 }
 
 fn check() -> Job {
-    steps::gated_job(&PATH_CHECK.outputs.should_run)
+    Job::default()
         .timeout_minutes(15u32)
         .runs_on(infra_runner())
         .add_step(checkout(false))
@@ -92,22 +60,6 @@ fn check() -> Job {
         .add_step(bun_install())
         .add_step(bun_check())
         .add_step(steps::teardown_nix())
-}
-
-/// Always-run collector used as the required status check. Its name must stay
-/// stable because branch protection references it.
-fn status_check() -> Job {
-    Job::default()
-        .timeout_minutes(5u32)
-        .name("Infra Status Check")
-        .cond(always())
-        .needs(vec![
-            PATH_CHECK.to_string(),
-            BIOME_CHECK.to_string(),
-            CHECK.to_string(),
-        ])
-        .runs_on(runners::Runner::Small.to_string())
-        .add_step(check_job_results())
 }
 
 fn checkout(full_history: bool) -> Step<Use> {
@@ -121,23 +73,6 @@ fn checkout(full_history: bool) -> Step<Use> {
         ZizmorRule::Artipacked,
         "bun and Pulumi tooling run from the checkout",
     )
-}
-
-fn paths_filter() -> Step<Use> {
-    DornyPathsFilter::new(
-        "Filter changed paths",
-        indoc::indoc! {r#"
-                should_run:
-                  - 'infra/**'
-                  - 'flake.nix'
-                  - 'flake.lock'
-                  - '.github/actions/setup-nix-dev-shell/**'
-                  - '.github/actions/teardown-nix/**'
-                  - '.github/workflows/code_check_infra.yml'
-            "#},
-    )
-    .step()
-    .id(FILTER.id())
 }
 
 fn run_biome() -> Step<Run> {
@@ -156,12 +91,4 @@ fn bun_check() -> Step<Run> {
     Step::new("check")
         .run("bun run check")
         .working_directory(xtask_paths::repo_dir!("infra"))
-}
-
-fn check_job_results() -> Step<Run> {
-    Step::new("Check job results")
-        .run(include_str!("code_check_infra/check_job_results.sh"))
-        .add_env(("PATH_CHECK_RESULT", PATH_CHECK.result()))
-        .add_env(("BIOME_CHECK_RESULT", BIOME_CHECK.result()))
-        .add_env(("CHECK_RESULT", CHECK.result()))
 }

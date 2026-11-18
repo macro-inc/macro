@@ -2,11 +2,8 @@ import { openAgentComposer } from '@app/features/agents-view/primitives/open-com
 import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
-import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
-import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
-import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { NEW_TASK_TITLE_SELECTOR } from '@app/features/task-composer/new-task-title-focus';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
@@ -18,12 +15,8 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   enableAiEditor,
   enableCarouselCreateMenu,
-  enableDatabases,
   enableFigViewer,
-  enableForms,
-  enableProjects,
   enablePsdEditor,
-  enableSnippets,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import {
@@ -47,6 +40,7 @@ import {
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazy } from '@core/util/lazy';
 import ChatIcon from '@icon/system/regular/chat.svg';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
@@ -71,7 +65,6 @@ import {
   createMemo,
   createSignal,
   type JSX,
-  lazy,
   onCleanup,
   onMount,
   Show,
@@ -308,7 +301,6 @@ export function runCreateAction(
       return;
     }
     case 'spreadsheet':
-      if (!isSpreadsheetEnabledForCurrentUser()) return;
       fireAndForget(
         createBlock({
           blockName: 'spreadsheet',
@@ -387,7 +379,6 @@ export function runCreateAction(
       });
       return;
     case 'initiative':
-      if (!isFeatureEnabled(enableProjects)) return;
       createComponent({
         componentId: 'project-compose',
         asPopover: true,
@@ -440,7 +431,6 @@ export function runCreateAction(
       });
       return;
     case 'database':
-      if (!isFeatureEnabled(enableDatabases)) return;
       createBlock({
         blockName: 'database',
         loading: true,
@@ -460,7 +450,6 @@ export function runCreateAction(
       }).catch(reportCreateBlockError);
       return;
     case 'form':
-      if (!isFeatureEnabled(enableForms)) return;
       createBlock({
         blockName: 'form',
         loading: true,
@@ -602,7 +591,6 @@ const createBlocks = (
     },
     keywords: ['new', 'make', 'add', 'database', 'table', 'db'],
     blockName: 'database',
-    enabled: () => isFeatureEnabled(enableDatabases),
     hotkeyToken: TOKENS.create.database,
     altHotkeyToken: TOKENS.create.databaseNewSplit,
     hotkey: 'l',
@@ -623,7 +611,6 @@ const createBlocks = (
     },
     keywords: ['new', 'make', 'add', 'form', 'survey', 'questionnaire', 'poll'],
     blockName: 'form',
-    enabled: () => isFeatureEnabled(enableForms),
     hotkeyToken: TOKENS.create.form,
     altHotkeyToken: TOKENS.create.formNewSplit,
     hotkey: 'q',
@@ -694,7 +681,6 @@ const createBlocks = (
     description: () => t('create.projectDescription'),
     keywords: ['new', 'make', 'add', 'project'],
     blockName: 'initiative',
-    enabled: () => isFeatureEnabled(enableProjects),
     hotkeyToken: TOKENS.create.initiative,
     hotkey: 'p',
     keyDownHandler: () => {
@@ -857,7 +843,6 @@ const createBlocks = (
     get label() {
       return t('create.spreadsheetLabel');
     },
-    enabled: isSpreadsheetEnabledForCurrentUser,
     icon: getIconConfig('spreadsheet').icon,
     description: () => t('create.spreadsheetDescription'),
     get launcherHint() {
@@ -916,13 +901,11 @@ export const CREATABLE_BLOCKS = createBlocks(runCreateAction);
 /** Router-backed commands are bound once in each host's component owner. */
 export function useCreateCommands(): CreatableBlock[] {
   const navigate = useNavigate();
-  const quickCalls = useQuickCallsFlag();
   return [
     ...createBlocks(useCreateAction()),
     createCallCommand({
       navigate,
       close: () => setCreateMenuOpen(false, false),
-      enabled: () => quickCalls().enabled,
     }),
   ];
 }
@@ -938,27 +921,17 @@ export function useCreateMenuBlocks(
   source: () => CreatableBlock[] | undefined = () => undefined
 ): Accessor<CreatableBlock[]> {
   const commands = useCreateCommands();
-  const spreadsheets = useSpreadsheetAccess();
-  const snippetsFlag = useFeatureFlag(enableSnippets);
-  const projectsFlag = useFeatureFlag(enableProjects);
   // Subscribed to rather than left to the block's own `enabled`, which reads
   // PostHog without tracking it: this memo has no other reason to re-run, so a
   // flag that resolves after mount would leave the menu as it was until reload.
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const psdFlag = useFeatureFlag(enablePsdEditor);
   const figFlag = useFeatureFlag(enableFigViewer);
   const aiFlag = useFeatureFlag(enableAiEditor);
-  const formsFlag = useFeatureFlag(enableForms);
   return createMemo(() => {
-    databasesFlag();
     psdFlag();
     figFlag();
     aiFlag();
-    formsFlag();
     return (source() ?? commands).filter((block) => {
-      if (block.blockName === 'spreadsheet') return spreadsheets();
-      if (block.blockName === 'snippet') return snippetsFlag().enabled;
-      if (block.blockName === 'initiative') return projectsFlag().enabled;
       return block.enabled?.() ?? true;
     });
   });

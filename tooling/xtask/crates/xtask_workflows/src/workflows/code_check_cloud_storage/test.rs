@@ -63,37 +63,6 @@ fn filter_binary_cache_is_trusted_only() {
     );
 }
 
-/// The required status check fails when any job it gathers failed, including
-/// the new Doppler job.
-#[test]
-fn status_check_covers_every_job() {
-    let status = serde_json::to_value(status_check()).unwrap();
-    let script = status["steps"][0]["run"].as_str().unwrap();
-    let env = status["steps"][0]["env"].as_object().unwrap();
-    for needed in [
-        "path-check",
-        "check",
-        "doppler-config",
-        "test",
-        "build-service-bins",
-        "graphql-schema-compat",
-    ] {
-        let expression = format!("${{{{ needs.{needed}.result }}}}");
-        let (name, _) = env
-            .iter()
-            .find(|(_, value)| value.as_str() == Some(expression.as_str()))
-            .unwrap_or_else(|| panic!("{needed} is missing from the env: {env:?}"));
-        let check = format!(r#""${name}""#);
-        assert!(script.contains(&check), "{check}: {script}");
-        assert!(
-            status["needs"]
-                .as_array()
-                .unwrap()
-                .contains(&serde_json::json!(needed))
-        );
-    }
-}
-
 #[test]
 fn package_selection_does_not_pass_lib() {
     let script = include_str!("../scripts/run_tests.sh");
@@ -308,7 +277,6 @@ fn rust_jobs_have_timeouts() {
         doppler_config(),
         graphql_schema_compat(),
         test(),
-        status_check(),
     ] {
         let job = serde_json::to_value(job).unwrap();
         assert!(job["timeout-minutes"].is_u64(), "{job}");
@@ -323,20 +291,6 @@ fn rust_jobs_have_timeouts() {
             .expect("dev shell step");
         assert_eq!(shell["timeout-minutes"], vars::DEV_SHELL_TIMEOUT_MINUTES);
     }
-}
-
-/// A job that hits its timeout reports `cancelled`, so the required check can't
-/// treat only `failure` as a problem.
-#[test]
-fn status_check_rejects_cancelled_jobs() {
-    let status = serde_json::to_value(status_check()).unwrap();
-    let script = status["steps"][0]["run"].as_str().unwrap();
-    let env = status["steps"][0]["env"].as_object().unwrap();
-    assert!(
-        script.contains(r#"[[ "$result" != "success" && "$result" != "skipped" ]]"#),
-        "{script}"
-    );
-    assert_eq!(env["TEST_RESULT"], "${{ needs.test.result }}");
 }
 
 /// Plain `cargo test` here rebuilt hundreds of crates under different flags to run

@@ -5,11 +5,9 @@
  * contract from `context/form-context`.
  */
 import { createPublicBookingSource } from '@app/features/scheduling/queries/public';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DatabaseMentionValue } from '@block-database/database-mentions';
 import { exportDatabaseTableCsv } from '@block-database/queries/transfer';
 import { toast } from '@core/component/Toast/Toast';
-import { enableCalendarScheduling } from '@core/constant/featureFlags';
 import {
   staticFileIdEndpoint,
   staticFileSizedEndpoint,
@@ -110,7 +108,6 @@ export type FormHostActions = {
 export function createAppFormContext(host: FormHostActions): FormContext {
   const userId = useUserId();
   const navigate = useNavigate();
-  const scheduling = useFeatureFlag(enableCalendarScheduling);
   return {
     viewer: { userId },
     createFormSource: createFormDetailSource,
@@ -148,12 +145,8 @@ export function createAppFormContext(host: FormHostActions): FormContext {
       imageUrl: staticFileSizedEndpoint,
     },
     booking: {
-      available: () => scheduling().enabled,
-      createLinks: (enabled) =>
-        createBookingLinksSource(
-          userId,
-          () => enabled() && scheduling().enabled
-        ),
+      available: () => true,
+      createLinks: (enabled) => createBookingLinksSource(userId, enabled),
       createEvent: createBookingEventSource,
       createSource: createPublicBookingSource,
       // The public booking page's own receipt, reached the way it reaches it.

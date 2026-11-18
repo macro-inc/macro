@@ -2,7 +2,7 @@
 //! Generated into `web-app-check-main.yml`.
 
 use gh_workflow::expr::typed::{
-    Flag, JobHandle, JobOutput, Num, StepHandle, StepOutput, always, github, matrix,
+    Flag, JobHandle, JobOutput, Num, StepHandle, StepOutput, github, matrix,
 };
 use gh_workflow::{
     Event, Job, Level, Permissions, Run, Step, Strategy, Use, Workflow, WorkflowCall, ZizmorRule,
@@ -122,11 +122,10 @@ pub fn web_app_check_main() -> Workflow {
         .add_job(CYCLES, cycles())
         .add_job(BUILD, build())
         .add_job(ios_native_check::JOB, ios_native_check::job())
-        .add_job("status-check", status_check())
 }
 
-/// Always run so the required collector can distinguish a successful native
-/// check from a cancelled or skipped one, including frontend/backend-only PRs.
+/// Always runs, on frontend- and backend-only PRs too, so `CI gate` sees the
+/// native check pass rather than skip.
 fn android_native_check() -> Job {
     android_native_check::job()
 }
@@ -176,7 +175,7 @@ fn typescript() -> Job {
         .runs_on(mid_web_runner())
         // Entity icon permanence checks compare every committed name list.
         .add_step(checkout("Checkout Repo", true))
-        .add_step(steps::mount_web_cache_volume(false))
+        .add_step(steps::mount_web_check_cache_volume(false))
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
         .add_step(
@@ -337,7 +336,7 @@ fn generated_code() -> Job {
         // the same reason: RUSTFLAGS is part of every unit's fingerprint.
         .add_env(("RUSTFLAGS", "-C link-arg=-fuse-ld=mold"))
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_cache_volume(true))
+        .add_step(steps::mount_web_check_cache_volume(true))
         .add_step(steps::setup_nix_with_seed())
         .add_step(
             steps::setup_reqs_web("Setup Prereqs", false)
@@ -400,7 +399,7 @@ fn functional() -> Job {
         .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::mount_web_build_check_cache_volume(true))
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
@@ -457,7 +456,7 @@ fn build() -> Job {
                 .pull_requests(Level::Write),
         )
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::mount_web_build_check_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
@@ -469,32 +468,6 @@ fn build() -> Job {
         .into_iter()
         .fold(job, Job::add_step)
         .add_step(steps::teardown_nix())
-}
-
-/// Always-run collector used as the required status check. Its name must stay
-/// stable because branch protection can reference it. New gates join the
-/// `needs` list (and [`check_job_results`]) rather than the ruleset: the
-/// [`ios_native_check`] job is required this way.
-fn status_check() -> Job {
-    Job::default()
-        .name("Web App Status Check")
-        .timeout_minutes(5u32)
-        .cond(always())
-        .needs(vec![
-            PATH_CHECK.to_string(),
-            android_native_check::JOB.to_string(),
-            TYPESCRIPT.to_string(),
-            GENERATED_CODE.to_string(),
-            BIOME_CHECK.to_string(),
-            TEST.to_string(),
-            FUNCTIONAL.to_string(),
-            BROWSER.to_string(),
-            CYCLES.to_string(),
-            BUILD.to_string(),
-            ios_native_check::JOB.to_string(),
-        ])
-        .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_step(check_job_results())
 }
 
 fn gated_web_job(name: &str) -> Job {
@@ -819,7 +792,7 @@ const PR_WASM_ENV: [(&str, &str); 6] = [
     ("CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS", "16"),
 ];
 
-fn with_pr_wasm_env(step: Step<Run>) -> Step<Run> {
+pub(crate) fn with_pr_wasm_env(step: Step<Run>) -> Step<Run> {
     with_wasm_pkg_cache(PR_WASM_ENV.into_iter().fold(step, Step::add_env))
 }
 
@@ -832,23 +805,4 @@ fn run_build() -> Step<Run> {
         ),
         Step::add_env,
     )
-}
-
-fn check_job_results() -> Step<Run> {
-    Step::new("Check job results")
-        .run(include_str!("web_app_check_main/check_job_results.sh"))
-        .add_env(("PATH_CHECK_RESULT", PATH_CHECK.result()))
-        .add_env((
-            "ANDROID_NATIVE_CHECK_RESULT",
-            android_native_check::JOB.result(),
-        ))
-        .add_env(("TYPESCRIPT_RESULT", TYPESCRIPT.result()))
-        .add_env(("GENERATED_CODE_RESULT", GENERATED_CODE.result()))
-        .add_env(("BIOME_CHECK_RESULT", BIOME_CHECK.result()))
-        .add_env(("TEST_RESULT", TEST.result()))
-        .add_env(("FUNCTIONAL_RESULT", FUNCTIONAL.result()))
-        .add_env(("BROWSER_RESULT", BROWSER.result()))
-        .add_env(("CYCLES_RESULT", CYCLES.result()))
-        .add_env(("BUILD_RESULT", BUILD.result()))
-        .add_env(("IOS_NATIVE_CHECK_RESULT", ios_native_check::JOB.result()))
 }

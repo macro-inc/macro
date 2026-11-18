@@ -2,11 +2,11 @@
 //! Classifies email threads for the Focus view.
 //!
 //! Reads `macro.email` for new and sent messages, asks Jev about each signal
-//! thread and key mail in an allowlisted inbox with the owner's stored memory
-//! as context, asks the agent harness for the day a thread that can be in Focus
-//! is due, stores both in `email_thread_focus`, and tells the inbox's readers
-//! through the connection gateway. An hourly sweep catches what the
-//! event stream missed.
+//! thread and key mail in an inbox whose owner is in the Focus rollout (their
+//! `enable-email-focus` flag) with the owner's stored memory as context, asks
+//! the agent harness for the day a thread that can be in Focus is due, stores
+//! both in `email_thread_focus`, and tells the inbox's readers through the
+//! connection gateway. An hourly sweep catches what the event stream missed.
 
 mod config;
 mod inbound {
@@ -14,6 +14,7 @@ mod inbound {
     pub mod sweep;
 }
 mod outbound {
+    pub mod flag_enrollment;
     pub mod gateway_notifier;
     pub mod harness_due_dates;
     pub mod jev_classifier;
@@ -25,9 +26,10 @@ use std::{sync::Arc, time::Duration};
 use calendar_events::outbound::pg::PgCalendarRepository;
 use connection_gateway_client::ConnectionGatewayClient;
 use email::{domain::focus::FocusService, outbound::FocusPgRepository};
+use feature_flags::outbound::posthog::PostHogFeatureFlags;
 use jev::{domain::JevClassifier, outbound::SystemOneJev};
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
-use macro_service_urls::{AgentHarnessServiceUrl, ConnectionGatewayUrl};
+use macro_service_urls::{AgentHarnessServiceUrl, ConnectionGatewayUrl, TypesafeApiUrl};
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use rootcause::Report;
 use sqlx::postgres::PgPoolOptions;
@@ -37,6 +39,7 @@ use crate::{
     config::Config,
     inbound::{kafka_consumer::run_focus_consumer, sweep::run_sweeps},
     outbound::{
+        flag_enrollment::FlagEnrollment,
         gateway_notifier::{CoalescingNotifier, GatewayDelivery},
         harness_due_dates::HarnessDueDates,
         jev_classifier::JevFocusClassifier,
@@ -44,24 +47,34 @@ use crate::{
     },
 };
 
+/// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
+const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
+/// Longest a flag read holds up a classification or the sweep.
+const FLAG_TIMEOUT: Duration = Duration::from_secs(3);
+
 #[tokio::main]
 async fn main() -> Result<(), Report> {
     let config = Config::from_env()?;
     MacroEntrypoint::new(config.environment).init();
     let enforcement = ai_usage::config::load_ai_usage_enforcement()?;
 
-    let domains = config.enabled_domains();
+    let flags = PostHogFeatureFlags::new(
+        config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+        config.posthog_api_key.as_ref().to_owned(),
+        FLAG_TIMEOUT,
+        config.environment,
+    )?;
     let provider = config
         .typesafe_api_key
         .value()
-        .map(SystemOneJev::typesafe)
+        .map(|api_key| -> Result<_, Report> {
+            let url = TypesafeApiUrl::new()?;
+            Ok(SystemOneJev::typesafe_at(api_key, url.as_ref())?)
+        })
         .transpose()?;
-    let Some(provider) = provider.filter(|_| !domains.is_empty()) else {
-        // Off until both are configured; stay up so the deployment stays healthy.
-        tracing::warn!(
-            enabled_domains = domains.len(),
-            "email focus is off: set TYPESAFE_API_KEY and FOCUS_ENABLED_EMAIL_DOMAINS"
-        );
+    let Some(provider) = provider else {
+        // Off until configured; stay up so the deployment stays healthy.
+        tracing::warn!("email focus is off: set TYPESAFE_API_KEY");
         shutdown_signal().await;
         return Ok(());
     };
@@ -96,10 +109,9 @@ async fn main() -> Result<(), Report> {
             AgentHarnessServiceUrl::new()?.as_ref(),
             config.internal_api_key.as_ref(),
         )?,
-        domains,
+        FlagEnrollment::new(flags),
     ));
     tracing::info!(
-        domains = ?config.enabled_domains(),
         window_days = config.focus_window_days,
         "email focus worker started"
     );

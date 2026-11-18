@@ -38,9 +38,15 @@ pub fn setup_reqs_web() -> CompositeAction {
             .run("echo \"[run]\" >> bunfig.toml\necho \"bun = true\" >> bunfig.toml\n")
             .shell("bash"),
     )
+    // The web PR checks keep the root node_modules on their cache volume
+    // (`vars::NODE_MODULES_VOLUME_DIR`), so there this only checks the tree
+    // against bun.lock. Bun adds and updates packages but never removes one the
+    // lockfile dropped, so a tree another lockfile installed is emptied first:
+    // a package left over from another PR must not make imports resolve.
+    // node_modules can be a mount point, so it is emptied rather than removed.
     .add_step(
         Step::new("Install Dependencies")
-            .run("bun install --frozen-lockfile")
+            .run(include_str!("setup_reqs_web/install_dependencies.sh"))
             .shell("bash"),
     )
     .add_step(

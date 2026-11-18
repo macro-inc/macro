@@ -61,6 +61,10 @@ mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
 mod desktop_qa_macos;
+mod email_e2e;
+mod email_e2e_alert;
+mod email_e2e_browser;
+mod email_e2e_full_stack;
 mod ensure_daytona_snapshot;
 mod export_ci_telemetry;
 mod export_datadog_observability;
@@ -173,6 +177,21 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "build_desktop_on_tag",
         file_name: "build_desktop_on_tag.yml",
         render_yaml: || render_gh_workflow(build_desktop_on_tag::build_desktop_on_tag)(),
+    },
+    WorkflowFile {
+        slug: "email_e2e",
+        file_name: "email_e2e.yml",
+        render_yaml: || email_e2e::render(email_e2e::email_e2e),
+    },
+    WorkflowFile {
+        slug: "email_e2e_browser",
+        file_name: "email_e2e_browser.yml",
+        render_yaml: || email_e2e::render(email_e2e_browser::email_e2e_browser),
+    },
+    WorkflowFile {
+        slug: "email_e2e_full_stack",
+        file_name: "email_e2e_full_stack.yml",
+        render_yaml: || email_e2e::render(email_e2e_full_stack::email_e2e_full_stack),
     },
     WorkflowFile {
         slug: "code_check_infra",

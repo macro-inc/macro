@@ -1194,6 +1194,9 @@ impl CalendarRepository for PgCalendarRepository {
         let cursor_starts_at = cursor.as_ref().map(|cursor| cursor.starts_at);
         let cursor_event_id = cursor.as_ref().map(|cursor| cursor.event_id);
         let cursor_occurrence_key = cursor.as_ref().map(|cursor| cursor.occurrence_key.as_str());
+
+        // Materialize the owner set so Postgres can use owner_id in each
+        // occurrence index condition alongside the time window.
         let rows = sqlx::query_as!(
             OccurrenceJoinRow,
             r#"
@@ -1248,13 +1251,13 @@ impl CalendarRepository for PgCalendarRepository {
             LEFT JOIN calendar_event_overrides override
                 ON override.event_id = occurrence.event_id
                AND override.recurrence_id = occurrence.recurrence_id
-            WHERE occurrence.owner_id IN (
+            WHERE occurrence.owner_id = ANY(ARRAY(
                     SELECT $1::text
                     UNION
                     SELECT link.child_macro_id
                     FROM macro_user_links link
                     WHERE link.primary_macro_id = $1
-              )
+              ))
               AND event.status <> 'cancelled'
               AND NOT occurrence.is_cancelled
               AND (
@@ -3032,6 +3035,10 @@ async fn upsert_calendar_tx(
     // Snapshot the reminder-relevant state before the upsert: a change to the
     // default reminders or the zone that anchors all-day starts invalidates
     // the firing schedule of every event that follows this calendar.
+    // A source under another role counts only if written since the last
+    // committed sync. A full snapshot keeps a stored copy newer than Google's
+    // and its old role, and reading the calendar again keeps it again, so
+    // counting older sources would rebuild such a calendar on every poll.
     let previous = sqlx::query!(
         r#"
         SELECT
@@ -3040,6 +3047,7 @@ async fn upsert_calendar_tx(
                 SELECT 1 FROM calendar_event_sources source
                 WHERE source.calendar_id = calendars.id
                   AND source.provider_access_role IS DISTINCT FROM calendars.access_role
+                  AND source.last_seen_at >= calendars.synced_at
             )) AS "needs_verification!"
         FROM calendars
         WHERE account_id = $1 AND provider_calendar_id = $2
