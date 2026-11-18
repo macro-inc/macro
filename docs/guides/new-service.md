@@ -47,8 +47,9 @@ Follow `services/calendar_service/src/main.rs`, except that `main` returns
 2. Load config once: a `#[derive(MacroConfig)]` struct in `src/config.rs`, loaded
    with `macro_config::ConfigLoader::load`. See the
    [config rule](../../.agents/rules/config-and-service-urls.md).
-3. Build clients: `macro_aws_config`, Postgres pool, `XServiceUrl::new()` for every
-   service you call.
+3. Build clients: `macro_aws_config`, Postgres pool (connect a request-serving
+   pool with `macro_db_pool::with_request_timeouts`), `XServiceUrl::new()` for
+   every service you call.
 4. If the binary dials TLS through rustls directly (not via `reqwest`), install the
    `aws_lc_rs` crypto provider before anything else, or rustls panics.
 5. Auth state (`MacroAuthorizationState`, internal API key, user API keys).

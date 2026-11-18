@@ -28,11 +28,14 @@ impl PgGithubRepo {
         let locks = sqlx::postgres::PgPoolOptions::new()
             .max_connections(5)
             .acquire_timeout(Duration::from_secs(5))
-            .connect_lazy_with(
-                (*pool.connect_options())
-                    .clone()
-                    .options([("lock_timeout", "5s"), ("statement_timeout", "10s")]),
-            );
+            .connect_lazy_with((*pool.connect_options()).clone().options([
+                ("lock_timeout", "5s"),
+                ("statement_timeout", "10s"),
+                (
+                    "idle_in_transaction_session_timeout",
+                    macro_db_pool::LOCK_GUARD_IDLE_IN_TRANSACTION_TIMEOUT,
+                ),
+            ]));
         Self { locks, pool }
     }
 

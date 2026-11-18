@@ -46,6 +46,7 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_config = { path = "../../crates/macro_config" }
+macro_db_pool = { path = "../../crates/macro_db_pool" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 doppler-config = { workspace = true }
 

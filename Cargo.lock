@@ -753,6 +753,7 @@ dependencies = [
  "macro_cors",
  "macro_db_client",
  "macro_db_migrator",
+ "macro_db_pool",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -2347,6 +2348,7 @@ dependencies = [
  "macro_cors",
  "macro_db_client",
  "macro_db_migrator",
+ "macro_db_pool",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -4050,6 +4052,7 @@ dependencies = [
  "macro_config",
  "macro_cors",
  "macro_db_migrator",
+ "macro_db_pool",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -5151,6 +5154,7 @@ dependencies = [
  "macro_authorization",
  "macro_aws_config",
  "macro_config",
+ "macro_db_pool",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -5347,6 +5351,7 @@ dependencies = [
  "macro_aws_config",
  "macro_config",
  "macro_cors",
+ "macro_db_pool",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -5406,6 +5411,7 @@ dependencies = [
  "macro_config",
  "macro_cors",
  "macro_db_client",
+ "macro_db_pool",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -6842,6 +6848,7 @@ dependencies = [
  "macro_cors",
  "macro_db_client",
  "macro_db_migrator",
+ "macro_db_pool",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -7803,6 +7810,7 @@ dependencies = [
  "macro_cors",
  "macro_db_client",
  "macro_db_migrator",
+ "macro_db_pool",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -9212,6 +9220,7 @@ dependencies = [
  "lru 0.16.4",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_db_pool",
  "macro_env",
  "macro_env_var",
  "macro_event_broker",
@@ -12877,6 +12886,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_db_pool"
+version = "0.1.0"
+dependencies = [
+ "sqlx",
+ "workspace-hack",
+]
+
+[[package]]
 name = "macro_entrypoint"
 version = "0.1.0"
 dependencies = [
@@ -14483,6 +14500,7 @@ dependencies = [
  "macro_aws_config",
  "macro_config",
  "macro_cors",
+ "macro_db_pool",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -20963,6 +20981,7 @@ dependencies = [
  "generic_email_domains",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_db_pool",
  "macro_entrypoint",
  "macro_event_broker",
  "macro_event_topics",

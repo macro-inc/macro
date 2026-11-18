@@ -22,6 +22,7 @@ link = ["dep:entity_access", "github_pull_requests/ports", "ports"]
 outbound = [
   "dep:connection_gateway_client",
   "dep:fusionauth",
+  "dep:macro_db_pool",
   "dep:redis",
   "dep:reqwest",
   "dep:sqlx",
@@ -64,6 +65,7 @@ hex = { workspace = true }
 hmac = { workspace = true }
 jsonwebtoken = { workspace = true }
 lru = { workspace = true }
+macro_db_pool = { path = "../macro_db_pool", optional = true }
 macro_env = { path = "../macro_env" }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }

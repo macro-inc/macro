@@ -111,6 +111,10 @@ compatible with the service code currently deployed, not just the code in its PR
    `query_file!`) by default. Dynamic SQL is only for genuinely dynamic queries;
    bind values and allowlist dynamic identifiers. Check macro use and
    access-control predicates with the [SQLx query validator](../../.agents/skills/sqlx-query-validator/SKILL.md).
+   Request-serving pools cancel a statement after 30 s and a transaction left
+   idle for 60 s ([`macro_db_pool`](../../crates/macro_db_pool/AGENTS.md)); a
+   statement that legitimately runs longer raises the bound with
+   `SET LOCAL statement_timeout` in its transaction.
 
 3. **Apply schema changes** to the local database:
 

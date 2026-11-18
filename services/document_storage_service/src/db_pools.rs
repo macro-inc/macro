@@ -44,7 +44,9 @@ const APPLICATION_NAME: &str = "document_storage_service";
 const ACQUIRE_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub(crate) fn connect_options(database_url: &str) -> Result<PgConnectOptions, sqlx::Error> {
-    Ok(PgConnectOptions::from_str(database_url)?.application_name(APPLICATION_NAME))
+    Ok(macro_db_pool::with_request_timeouts(
+        PgConnectOptions::from_str(database_url)?.application_name(APPLICATION_NAME),
+    ))
 }
 
 /// Per task. Normally each task runs about one query at a time; a larger

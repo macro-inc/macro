@@ -18,27 +18,43 @@ use macro_authorization::{
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::ConnectionGatewayUrl;
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
-use sqlx::postgres::PgPoolOptions;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqs_worker::SQSWorker;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-async fn connect_to_database(config: &Config) -> anyhow::Result<sqlx::PgPool> {
+/// Pools for the HTTP handlers and for the SQS and outbox workers. Only the
+/// request pool carries the request timeouts; worker jobs may run longer.
+struct Pools {
+    request: sqlx::PgPool,
+    worker: sqlx::PgPool,
+}
+
+async fn connect_to_database(config: &Config) -> anyhow::Result<Pools> {
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (5, 30),
         Environment::Develop => (1, 25),
         Environment::Local => (1, 10),
     };
+    let worker_max_connections: u32 = match config.environment {
+        Environment::Production => 10,
+        Environment::Develop | Environment::Local => 5,
+    };
 
-    let database_url = &config.database_url;
+    let connect_options: PgConnectOptions = config.database_url.parse()?;
 
-    let db = PgPoolOptions::new()
+    let request = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(database_url)
+        .connect_with(macro_db_pool::with_request_timeouts(
+            connect_options.clone(),
+        ))
         .await
         .context("could not connect to db")?;
-    Ok(db)
+    let worker = PgPoolOptions::new()
+        .max_connections(worker_max_connections)
+        .connect_lazy_with(connect_options);
+    Ok(Pools { request, worker })
 }
 
 async fn create_sqs_worker(config: &Config) -> SQSWorker {
@@ -68,37 +84,44 @@ async fn main() -> anyhow::Result<()> {
 
     let config = Config::from_env().context("expected to be able to generate config")?;
 
-    let db = connect_to_database(&config).await?;
+    let Pools {
+        request: db,
+        worker: worker_db,
+    } = connect_to_database(&config).await?;
     let sqs_worker = create_sqs_worker(&config).await;
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
     );
 
-    let notifier = Some(
-        ConnectionGatewayNotifier::new(
-            config.internal_api_key.to_string(),
-            ConnectionGatewayUrl::new()?.to_string(),
-        )
-        .unwrap(),
-    );
+    let new_notifier = || -> anyhow::Result<_> {
+        Ok(Some(
+            ConnectionGatewayNotifier::new(
+                config.internal_api_key.to_string(),
+                ConnectionGatewayUrl::new()?.to_string(),
+            )
+            .unwrap(),
+        ))
+    };
 
-    let repository = DbContactsRepository::new(db.clone());
-    let outbox_repo = DbContactsRepository::new(db.clone());
     let service = Arc::new(ContactsDomainService {
-        repository,
-        notifier,
+        repository: DbContactsRepository::new(db.clone()),
+        notifier: new_notifier()?,
+    });
+    let worker_service = Arc::new(ContactsDomainService {
+        repository: DbContactsRepository::new(worker_db.clone()),
+        notifier: new_notifier()?,
     });
 
-    let worker = ContactsWorker::new(sqs_worker, service.clone());
+    let worker = ContactsWorker::new(sqs_worker, worker_service.clone());
     tokio::spawn(async move {
         worker.poll().await;
     });
 
     let outbox_worker = OutboxWorker {
         service: ContactsOutboxServiceImpl {
-            outbox_repo,
-            inner_service: service.clone(),
+            outbox_repo: DbContactsRepository::new(worker_db),
+            inner_service: worker_service,
         },
     };
     tokio::spawn(async move {
