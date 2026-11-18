@@ -1,0 +1,87 @@
+crates/folds/agent_fold/src/domain/fold/tool_approval.rs
+  s_a79cb5c5d752a9::t_518e07e3746092 44,62
+crates/agent_code_mode/src/inbound/toolset/session/ocaml_permissions.md
+  s_a79cb5c5d752a9::t_c00be4ed9bb283 1
+crates/folds/agent_fold/src/domain/model/part.rs
+  s_a79cb5c5d752a9::t_518e07e3746092 105-110
+crates/agent_session/src/domain/updates/test.rs
+  s_a79cb5c5d752a9::t_f27a9e088d067f 149
+crates/folds/agent_fold/src/domain/test/interactions.rs
+  s_a79cb5c5d752a9::t_f9bcec71ed2e4b 235-275
+  s_a79cb5c5d752a9::t_5b38bd4ee4af23 234
+packages/sdk/generated/agent-fold/index.ts
+  s_a79cb5c5d752a9::t_06c28fabff2128 1262,1282,1286,1296,1306,1332-1338,1344,1348,1364,1405,1412,1432,1436,1446,1456,1482-1488,1494,1498,1514,1555,1626-1629,1631,1633,1635,1637,1642,1644-1662,1677-1702,1715-1720,2083,2140
+services/agent_harness_service/src/api/test.rs
+  s_a79cb5c5d752a9::t_f6e4e9354d622a 489-507
+  s_a79cb5c5d752a9::t_251c2b57983b74 508-510
+services/agent_harness_service/src/api/swagger.rs
+  s_a79cb5c5d752a9::t_0e28968ca34242 155-165
+crates/folds/agent_fold/src/domain/model/interaction.rs
+  s_a79cb5c5d752a9::t_518e07e3746092 63-68
+apps/web/src/lib/service-clients/service-agent-fold/generated/types.ts
+  s_a79cb5c5d752a9::t_1abe3228fe75ab 1412,1463,1495,1536,1574,1626-1631,1662,1696,1743,1813,1845,1896,1928,1969,2007,2059-2064,2095,2129,2176,2246,2347-2351,2354-2357,2360-2363,2369-2396,2411-2438,2451-2456,2833,2890
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/declinedStatus.ts
+  s_a79cb5c5d752a9::t_13e7aca58435e3 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermission.ts
+  s_a79cb5c5d752a9::t_3c20c170ae6bc6 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermissionOneOf.ts
+  s_a79cb5c5d752a9::t_864537a6ba463c 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermissionOneOfOutcome.ts
+  s_a79cb5c5d752a9::t_6c62b1a5651f99 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermissionOneOfThree.ts
+  s_a79cb5c5d752a9::t_8013a53d4cabed 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermissionOneOfThreeOutcome.ts
+  s_a79cb5c5d752a9::t_5b36aa1571a087 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionReceipt.ts
+  s_a79cb5c5d752a9::t_c9fa0be3843597 1-28
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionReceiptError.ts
+  s_a79cb5c5d752a9::t_6213f6c4e308d9 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionReceiptPermission.ts
+  s_a79cb5c5d752a9::t_abb4c40e66185c 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecord.ts
+  s_a79cb5c5d752a9::t_708e3dab3b10ba 12,39
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecordPermission.ts
+  s_a79cb5c5d752a9::t_a1f8bd0c5cb97e 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/gatedOperation.ts
+  s_a79cb5c5d752a9::t_ff4c73693ba66a 1-33
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/gatedOperationAction.ts
+  s_a79cb5c5d752a9::t_279b74dc45b073 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/groupSelection.ts
+  s_a79cb5c5d752a9::t_6afe35e771fed6 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_a79cb5c5d752a9::t_2e51acb0cf1372 223,265-272,276,288-289,294,479-482,517
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/recordedCallStatus.ts
+  s_a79cb5c5d752a9::t_97f921362c2e4e 20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/showPermissionsResult.ts
+  s_a79cb5c5d752a9::t_37814feb45d67f 1-28
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/showPermissionsResultReason.ts
+  s_a79cb5c5d752a9::t_da9f6a82942ecd 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/showPermissionsSelection.ts
+  s_a79cb5c5d752a9::t_40504e5d97295f 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/shownPermission.ts
+  s_a79cb5c5d752a9::t_04cc06fbe78be7 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolSelection.ts
+  s_a79cb5c5d752a9::t_b2778a4f14b131 1-16
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_a79cb5c5d752a9::t_e2439fb61eeaa8 3468,6808-6812,7214-7298,7345-7355,7482-7535,7550-7568,8356,9171-9244,9679-9694
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_a79cb5c5d752a9::t_a79346cab29f3c 20940,20963-21187
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_a79cb5c5d752a9::t_332deb967c3b81 4923-4965,16748-16752,16768-16801
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8130cc6a57ce706f77afc7640c778faff0f7b5fb",
+  "prompts": {},
+  "sessions": {
+    "s_a79cb5c5d752a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8bf8f92a-181b-4d3a-aaa6-3d5c01f60534",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
