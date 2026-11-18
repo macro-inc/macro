@@ -168,7 +168,7 @@ impl FusionAuthClient {
         state: Option<T>,
     ) -> anyhow::Result<String>
     where
-        T: serde::Serialize + std::fmt::Debug + 'static,
+        T: serde::Serialize + 'static,
     {
         self.oauth2_authorize_url(Some(idp_id), login_hint, None, state)
     }
@@ -186,7 +186,7 @@ impl FusionAuthClient {
         state: Option<T>,
     ) -> anyhow::Result<String>
     where
-        T: serde::Serialize + std::fmt::Debug + 'static,
+        T: serde::Serialize + 'static,
     {
         self.oauth2_authorize_url(Some(idp_id), login_hint, Some(prompt), state)
     }
@@ -195,7 +195,7 @@ impl FusionAuthClient {
     /// FusionAuth's own login page (password and every provider).
     pub fn construct_oauth2_login_page_url<T>(&self, state: Option<T>) -> anyhow::Result<String>
     where
-        T: serde::Serialize + std::fmt::Debug + 'static,
+        T: serde::Serialize + 'static,
     {
         self.oauth2_authorize_url(None, None, None, state)
     }
@@ -208,7 +208,7 @@ impl FusionAuthClient {
         state: Option<T>,
     ) -> anyhow::Result<String>
     where
-        T: serde::Serialize + std::fmt::Debug + 'static,
+        T: serde::Serialize + 'static,
     {
         let mut url = Url::parse(&format!("{}/oauth2/authorize", self.fusion_auth_public_url))
             .expect("Invalid base URL");
@@ -225,7 +225,8 @@ impl FusionAuthClient {
         }
 
         if let Some(state) = state {
-            tracing::trace!(state=?state, "state provided");
+            // Never log the state: it carries the return URL and the
+            // sign-in's session code challenge.
             let state_str = serde_json::to_string(&state)
                 .context("should be able to deserialize state into string")?;
             url.query_pairs_mut().append_pair("state", &state_str);
