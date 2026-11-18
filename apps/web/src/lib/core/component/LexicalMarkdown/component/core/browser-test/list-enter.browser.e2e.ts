@@ -206,7 +206,6 @@ async function placeCaret(page: Page, text: string, edge: 'start' | 'end') {
 
 for (const surface of ['document', 'markdown', 'chat']) {
   test.describe(`${surface} editor`, () => {
-    test.describe.configure({ mode: 'serial' });
     let page: Page;
     const errors: string[] = [];
 
