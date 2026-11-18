@@ -18,4 +18,14 @@ describe('buildSidebarLinks', () => {
     const links = buildSidebarLinks(false, false, false, false, false);
     expect(linksOnKey(links, 'i')).toEqual(['home']);
   });
+
+  it('gives every go-to letter one destination, with Sent on g s', () => {
+    for (const flag of [false, true]) {
+      const links = buildSidebarLinks(flag, flag, flag, flag, flag);
+      const keys = links.flatMap((link) => [link.hotkey ?? []].flat());
+      expect(keys).toEqual([...new Set(keys)]);
+      expect(linksOnKey(links, 's')).toEqual(['mail']);
+      expect(linksOnKey(links, 't')).toEqual(['tasks']);
+    }
+  });
 });

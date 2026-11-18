@@ -771,6 +771,7 @@ async fn listed_server(
             name: name.to_owned(),
             client: Arc::new(client.unwrap()),
             tools,
+            trace_context: mcp_toolset::TraceContext::Withhold,
         },
     )
 }

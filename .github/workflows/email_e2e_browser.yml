@@ -80,6 +80,7 @@ jobs:
           KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
           KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
           KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1'
+          KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: '1'
           KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: '1'
           KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: '1'
           KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
@@ -300,7 +301,12 @@ jobs:
 
         echo "::group::fixture suites"
         if wait "$web"; then
-          grep -E '^ +[0-9]+ (passed|flaky|skipped)|^Running' "$fixtures_log" || true
+          # Each suite's counts, and the tests listed under its flaky count: those
+          # that passed only on a retry. A failed suite prints its whole log below.
+          awk '/^Running|^ +[0-9]+ (passed|skipped|did not run)/ { names = 0; print; next }
+            /^ +[0-9]+ flaky$/ { names = 1; print; next }
+            names && /^    / { print; next }
+            { names = 0 }' "$fixtures_log"
         else
           cat "$fixtures_log"
           echo "a fixture suite failed" >&2

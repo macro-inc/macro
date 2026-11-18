@@ -17,6 +17,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::sync::OnceCell;
+use tracing::Instrument as _;
 
 mod traced_client;
 use traced_client::TracedClient;
@@ -106,16 +107,21 @@ impl HttpActorMcpTransport {
                 cell
             }
         };
-        cell.get_or_try_init(|| async {
-            let transport = StreamableHttpClientTransport::with_client(self.client.clone(), config);
-            let client = tokio::time::timeout(
-                std::time::Duration::from_secs(30),
-                mcp_client::domain::models::client_info().serve(transport),
-            )
-            .await
-            .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?
-            .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?;
-            Ok(Arc::new(client))
+        cell.get_or_try_init(|| {
+            async {
+                let transport =
+                    StreamableHttpClientTransport::with_client(self.client.clone(), config);
+                let client = tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    mcp_client::domain::models::client_info().serve(transport),
+                )
+                .await
+                .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?
+                .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?;
+                Ok(Arc::new(client))
+            }
+            // A new upstream session's handshake, apart from the call it serves.
+            .instrument(tracing::info_span!("connected_app.mcp_connect"))
         })
         .await
         .cloned()
@@ -124,7 +130,7 @@ impl HttpActorMcpTransport {
 
 #[async_trait::async_trait]
 impl ActorMcpTransport for HttpActorMcpTransport {
-    #[tracing::instrument(skip_all, err, fields(session_id = %session, host = upstream.url().host_str()))]
+    // The caller's `connected_app.mcp_exchange` span is the outbound span.
     async fn exchange(
         &self,
         session: AgentSessionId,

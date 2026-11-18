@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE crm_email_policy_previews SET status='cancelled'\n               WHERE team_id=$1 AND user_id=$2 AND preview_id=$3\n                 AND EXISTS(SELECT 1 FROM team_user WHERE team_id=$1 AND user_id=$2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "931cb406ee408db6995c7f3ce7f2c1d63ad699d2404d5992b72b5e2ac8e4748c"
+}

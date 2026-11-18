@@ -3,7 +3,7 @@
 This service owns the search-event pipeline:
 
 - **Live calls**: the `search-processing-service` Kafka consumer reads call lifecycle events from `macro.calls` and indexes them into OpenSearch.
-- **Agent sessions**: the same consumer subscribes to `macro.agent_session_lifecycle`, rereads the primary database, and indexes messages produced by `agent_fold`. Both user prompts and agent replies are searchable; raw ACP envelopes are not indexed. Agent-session backfills use this same direct indexing path, not SQS.
+- **Agent sessions**: the same consumer subscribes to `macro.agent_session_lifecycle`, rereads the primary database, and indexes messages produced by `agent_fold`. User prompts and agent replies are searchable as a collapsed transcript shows them (`FoldedMessage::searchable_text`): thoughts and the work inside tool calls are not indexed, and raw ACP envelopes never are. Changing what is indexed takes effect for a session on its next reconcile; `POST /internal/backfill/agent-sessions` with `{}` brings every session up to date. Agent-session backfills use this same direct indexing path, not SQS.
 - **Other live entities**: Kafka handlers and legacy SQS workers drain events for the remaining search entities.
 - **Backfills**: internal HTTP endpoints start tracked jobs. Most enqueue records onto SQS; agent sessions, properties, and the email attachment status index directly.
 
@@ -35,14 +35,51 @@ ACP log through the owning agent-session/fold services, and an event that arrive
 while a reconcile for its session is still queued is covered by that reconcile
 (see the Kafka delivery contract). It never indexes the
 event's excerpt as a substitute for the transcript. Completed turns, questions,
-renames, and deletions therefore converge on current persisted state.
+renames, and deletions therefore converge on current persisted state. Three
+kinds change nothing search reads and are committed without a handoff, before
+they could take a session's reread claim: `settled`, `mentioned`, and
+`command_rejected` (`changes_search_projection`).
 
 Live events and backfills hold the same per-session PostgreSQL advisory lease
 through the OpenSearch write. Lease connections have their own pool so waiting
-workers cannot exhaust the pool used to load snapshots. Each reconcile writes
-the parent and both authors' folded messages, refreshes them, then removes
-documents from older projection generations. Missing sessions delete their
-entire projection, even when triggered by an older event.
+workers cannot exhaust the pool used to load snapshots. The parent keeps a
+record of a content hash per message child (`indexed_messages`, in `_source`
+only), read back in real time on each reconcile. A reconcile writes only the
+children whose hash changed and deletes recorded children the session no
+longer has by id. Before touching any, it rewrites the parent to name them in
+`pending_messages` and drop them from the record; once they succeed it writes
+the final record. So a reconcile whose request fails part way leaves the next
+one to rewrite or delete exactly those children, whatever their hashes say.
+Every write and delete carries an `external_gte` version: the time Postgres
+granted the reconcile's session lease, in microseconds. One clock serves every
+worker and a session's leases never overlap, so a request that times out and
+applies after a later reconcile is refused instead of rolling a child back; the
+refused reconcile fails; a live event's retry takes a new lease, and a backfill
+stops and is rerun. (A delete's tombstone
+keeps its version for the index's `gc_deletes`, 60 s by default. A delayed
+write of a deleted child arriving later than that is left to the sweep, and a
+delayed parent write of a deleted session can recreate its parent; search never
+shows it, because results hydrate from the database, which omits deleted
+sessions, and a backfill of that id removes it.) Last, a sweep searches for any
+child no record or pending list names and deletes it by id under the same
+version. A reconcile
+that changes no child writes the parent only when it changed; one that does
+writes it twice. Nothing waits for a refresh; writes are
+searchable after the index's next scheduled refresh. Missing sessions delete
+their entire projection, even when triggered by an older event. The reconcile
+span records the trigger (lifecycle kind or `backfill`) and the parent and
+messages it wrote, left unchanged, and deleted.
+
+The record lives in an unindexed object: the mapping is `dynamic: false` and
+maps `indexed_messages` with `enabled: false`, so its child-id keys never become
+fields. The real-time parent read needs the `agent_sessions` alias to point at
+exactly one index. A backfill to the alias trusts the record and rewrites only
+what it says changed; to rebuild every child, backfill into a fresh index with
+`index_override` and move the alias. Live updates and deletes during that
+backfill reach only the index behind the alias, so after the move, backfill the
+ids of the sessions changed or deleted since it started. Until then a changed
+session shows its older projection, and a deleted one's documents sit in the
+new index, hidden from results as above.
 
 Provision and verify the `agent_sessions` index and alias manually before
 deploying this consumer; deployment does not create indices. Normal parent and
@@ -167,6 +204,7 @@ cargo run --features disable_processing
 2. On the first deployment, the new `search-processing-service` group has no committed offsets, so `auto.offset.reset=earliest` replays the retained `macro.calls` history. This replay and the temporary dual delivery from Kafka and SQS are safe: call upserts are full idempotent overwrites, and deletes are idempotent delete-by-query operations.
 3. Before disabling live SQS call publication, confirm the consumer-group lag on `macro.calls` has caught up, worker errors are healthy, and the `call_records` index is fresh. Continue monitoring lag after cutover.
 4. Watch service logs for Kafka receive/decode/commit errors, processing retry warnings, events dropped after three attempts, and consumer supervisor restarts. A commit error can result in a safe duplicate; a dropped processing event or crash in the commit-after-handoff window can require recovery.
+5. Each Kafka record gets a `kafka.process` span (`kafka_util::consumer_span`), parented on the producer's trace when the record carries one. It covers handoff, the wait in the worker channel and processing, and records `macro.event.type`, `macro.event.id` and, for agent sessions, `agent.session.id`; a dropped event marks it failed. Its child `process_event` span covers processing alone and records `partition`, `offset`, `event_type`, `entity_id` (the producer key, except for entity properties, whose key can name a user), `record_age_ms` (how long after the broker recorded the event processing began) and `outcome`: `indexed`, `ignored`, `dropped` (error status), or `coalesced`, a zero-length span for an event a queued reread covered. `kafka.process` is the service's top-level consumer span, so exact per-topic throughput and error rates come from `trace.Consumer.hits` and `trace.Consumer.errors` grouped by `peer.messaging.destination`. Breakdowns by `@event_type` or `@outcome` come from indexed spans, which are a sample.
 
 For the local broker, inspect group lag with:
 

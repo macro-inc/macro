@@ -35,7 +35,6 @@ chrono = { workspace = true }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 email_db_client = { path = "../../crates/email_db_client" }
 email_utils = { path = "../../crates/email_utils" }
-futures = { workspace = true }
 google_token = { path = "../../crates/google_token" }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = [

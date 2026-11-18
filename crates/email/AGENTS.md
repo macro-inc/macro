@@ -455,6 +455,25 @@ tools — hexagonal, heavily feature-gated.
   Its `EffectFailure` names the effect (`outlook.effect`) and, for attachment
   uploads, the attachment (`outlook.attachment_id`); never return one without
   a cause.
+- `MailboxSyncService` reads through two gateways: `import_provider` for a
+  folder page claimed before the folder's first round completes and for
+  import reconciliation rows, `provider` for everything else. email-service
+  gives them the Microsoft gate's `Import` and `Live` budgets, so an import
+  cannot take the slot live mail and calendar need.
+- An import round's folder stream reads its next page only while its mailbox
+  has fewer than 200 import rows due (`IMPORT_QUEUED_AHEAD`, checked by
+  `pace_import` with a count capped there); otherwise it is put back for 10 s
+  unread and its enumerate span reads `outlook.outcome=paced`. Rows backed off
+  after their own failures don't count, so they never hold the walk. The count
+  reads the partial index `email_message_reconciliation_import_queued`; keep
+  its predicate and the query's identical, or a mailbox with fewer due rows
+  than the cap reads the whole table. Message claims are first in, first out
+  across mailboxes, so a walk that ran ahead would put every other mailbox's
+  import, and any message that waited for room, behind its whole backlog.
+  Gmail's backfill lists its next page behind the threads it queued for the
+  same reason. Live folder streams are never paced.
+  A message released after a failed read is due at once when a newer
+  revision arrived during the lease.
 - "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
   under the link lock, once per import run: the folder-catalog stream's
   `import_completed_at` is stamped when every folder is enumerated and no
@@ -477,6 +496,10 @@ tools — hexagonal, heavily feature-gated.
   owner, then actor id, retaining one binding per link and actor; the repository
   returns each binding's kind so custody cleanup runs before an owner disconnect
   can suppress it without processing a self-custodian twice.
+- `email_links.fusionauth_user_id` is the holder of the credentials a link
+  syncs with, not the inbox's owner (`macro_id`): another participant's
+  connection or a custody transfer changes it. Never read it as ownership. A
+  deleted user gets an owner binding only for an inbox of their own account.
 - `email_mailbox_folders.total_item_count` is Graph's `totalItemCount` from the
   latest catalog discovery (every 5 minutes, from the listing discovery already
   makes), and the discover span sums it as `outlook.provider_item_count`. It

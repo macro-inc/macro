@@ -35,6 +35,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   ends their work registrations first
   (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
+  Each call runs in an `internal_mcp.call_tool` span parented from the
+  request's `_meta` trace context, which the in-process agent sends
+  (`mcp_toolset::TraceContext::Propagate`), so `code_mode.execution` and the
+  sandbox's SDK calls join the session's trace.
 - `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
   and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
   on Macro credits (Claude Code on a Macro computer). Both values come from

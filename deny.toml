@@ -219,7 +219,9 @@ deny = [
   ], reason = "Use macro_aws_config for AWS configuration in workspace crates" },
   { crate = "tracing-subscriber", wrappers = [
     "agent",                     # GenAI span tests
+    "agent_egress",              # Connected-app exchange span tests only (dev-dependency)
     "agent_harness",             # Warm-claim and handshake span tests
+    "agent_harness_service",     # Code-execution trace parenting tests only (dev-dependency)
     "agent_inmem",               # GenAI trace propagation tests
     "agent_session",             # GenAI span tests
     "ai_billing",                # Background usage span propagation tests only
@@ -227,6 +229,7 @@ deny = [
     "authentication_service",    # Session-code and token redaction span tests only (dev-dependency)
     "calendar_service",          # HTTP server span export tests only (dev-dependency)
     "channels",                  # Dev logging only
+    "code_execution",            # Deno exit span field tests only (dev-dependency)
     "coding_agent_worker",       # Standalone daemon logging setup
     "convert_service",           # process_message span status tests only (dev-dependency)
     "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it
@@ -254,6 +257,7 @@ deny = [
     "macro_entrypoint",
     "macro_authorization",      # Credential-redaction span tests only
     "macro_tower_layers",        # OpenTelemetry layer tests
+    "mcp_toolset",               # MCP trace-context propagation tests only (dev-dependency)
     "name_search",               # Search-term redaction span tests only (dev-dependency)
     "native_app_server",         # Dev tooling only
     "notification",              # Call-push trace propagation and baggage-redaction tests only
@@ -262,6 +266,7 @@ deny = [
     "passwords",                 # Provider credential-redaction tests only (dev-dependency)
     "projects",                  # Dev logging only
     "rootcause-tracing",         # External rootcause integration requires tracing-subscriber
+    "search_processing_service", # Kafka consumer span tests only (dev-dependency)
     "search_service",            # Search-term redaction span tests only (dev-dependency)
     "sync_service",              # Cloudflare/WASM tracing setup uses tracing-web
     "tracing-opentelemetry",     # OpenTelemetry integration requires tracing-subscriber

@@ -217,6 +217,26 @@ always the user's. Each row names the item with a chip that opens it; edit and
 sharing rows expand to show the new text or settings. Verify with throwaway
 items, since these mutate real data.
 
+### Selective CRM email contribution
+
+The member's rule API is behind a default-off rollout flag; public code-mode SDK
+wrappers follow in the next phase. A member-authorized agent may activate rules
+directly once available. Inspecting settings is read-only and does not enroll the
+member or move backfill work. Use the exact returned policy observation for an
+explicit sharing mutation; a conflict requires inspecting and deciding again,
+never an automatic token refresh and retry. Scoped credentials cannot grant
+contribution.
+
+Explain that one matching participant shares the whole eligible thread, including
+past and future messages; contact/company selectors follow live records, and
+private-thread/domain exclusions always win. Preview results contain counts only,
+may be partial, and describe the member's own mailbox copies. A teammate may still
+contribute another copy. Narrowing or withdrawing preserves CRM records and
+interaction dates. Report active only after the server commits; a recorded retry
+is evidence of that earlier operation, not current state. Members can inspect
+private history and saved definitions even with CRM viewing off. A request to
+inspect mail is not permission to contribute it.
+
 ### Requesting access the user lacks
 
 A write the user can only view fails in code mode with `MacroForbiddenError`
@@ -1358,6 +1378,26 @@ permissions, and issuing the run credential requires execution approval.
 External coding harnesses keep their own tool selection. A runner that fails
 after its tools were advertised still produces an execution failure, not an
 automatic retry through a direct tool.
+
+CRM contribution rules use `macro.crm.emailPrivacy`, discovered under the
+`crmEmailPrivacy` code-mode category. The agent reads `get()`,
+validates selectors with `validateRules`, then directly activates an intended
+replacement with `replaceRules` and that exact policy token plus a unique
+idempotency key. No separate member confirmation is required. The server still
+refuses restricted credentials and unavailable rollout gates; CRM viewing
+permission is separate from these own-member controls. A conflict requires
+inspection and a new decision, never an automatic refresh and retry.
+
+The agent explains that a matching participant shares the whole past/future
+thread; contact/company selectors follow live records, all exclusions win, and
+narrowing leaves CRM records in place. Another member's eligible copy remains
+independent. `settings()` / `excludedThreads()` inspect exclusions. Count previews
+are optional and bounded: only complete counts are exact, partial counts are
+lower bounds, and stale/cancelled results are not current estimates. `history()`
+shows verified provenance and saved definitions. `withdraw` uses the current
+policy observation; legacy members without a token retain `setConsent(false)`.
+These SDK methods do not imply that the rollout is enabled or a rule editor is
+available in Settings.
 
 Team and referral invites exist only in the SDK: `team.invite(emails)` on
 `macro.teams.current()` (resolves `false` when every address was already a
