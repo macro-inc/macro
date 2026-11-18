@@ -25,7 +25,7 @@ mod test;
 /// in, so an unread thread whose notifications were all seen is found by the
 /// second read. One further back than `limit` pending mail notifications is
 /// not found.
-#[tracing::instrument(err, skip(db, types), fields(types = types.len()))]
+#[tracing::instrument(err, skip(db, user_id, types), fields(types = types.len()))]
 pub(super) async fn attention_unread_entities(
     db: &PgPool,
     user_id: MacroUserIdStr<'_>,
