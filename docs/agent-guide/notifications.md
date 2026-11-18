@@ -13,7 +13,8 @@ With the flag on, the rail's Notifications, Channels and Mail buttons (and the
 mobile dock's) show how many unread rows of this list they hold, in place of
 the unread dot: every kind for Notifications, the channel kinds for Channels,
 mail for Mail, and `99+` past ninety-nine. Home keeps a dot, lit while anything
-here is unread. The numbers are pushed by the server and follow reads, done,
+here is unread; on the mobile dock the bell is Home, opens this view, and
+carries the total. The numbers are pushed by the server and follow reads, done,
 clears and new activity within about a second, on every open tab; nothing
 polls. With the flag off the buttons keep their dots and show no number.
 
