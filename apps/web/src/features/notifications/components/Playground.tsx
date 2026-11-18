@@ -27,7 +27,6 @@ import {
 } from '../notification-resolvers';
 import { createNotificationSource } from '../notification-source';
 import type { UnifiedNotification } from '../types';
-import { createMockWebsocket } from '../utils/mock-websocket';
 import {
   PlatformNotificationProvider,
   type PlatformNotificationState,
@@ -500,7 +499,6 @@ function EmptyState(props: { title: string; description: string }) {
 }
 
 function PlaygroundContent() {
-  const { ws } = createMockWebsocket();
   const platformNotif = usePlatformNotificationState();
   const [markdown, setMarkdown] = createSignal(PLAYGROUND_INITIAL_VALUE);
   const markdownEditor = createConfiguredChannelMarkdownEditor({
@@ -511,7 +509,7 @@ function PlaygroundContent() {
   });
   markdownEditor.buildHandle();
 
-  const notificationSource = createNotificationSource(ws);
+  const notificationSource = createNotificationSource();
 
   const allNotifications = createMemo(() => notificationSource.notifications());
   const notificationsByType = createMemo(() =>

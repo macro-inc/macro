@@ -208,6 +208,10 @@ function describeNotification(
       action: join(actor, 'asked to join'),
       subject: target ?? entityName,
     }))
+    .with({ tag: 'password_access_requested' }, (metadata) => ({
+      action: join(actor, 'requested access to'),
+      subject: metadata.content.itemName,
+    }))
     .with({ tag: 'ai_response' }, () => ({
       action: 'Macro responded',
       subject: content ?? entityName,

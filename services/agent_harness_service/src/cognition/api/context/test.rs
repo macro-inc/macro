@@ -591,7 +591,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
-        user_code_mode: None,
         web_search_provider: std::sync::Arc::new(web_search::outbound::tavily::TavilyClient::new(
             &web_search::outbound::tavily::TavilyApiKey::new_unset(),
         )),
@@ -599,7 +598,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         recorder: recorder.clone(),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
-    let all_tools = ai_tools::tools_for_chat_code_mode();
+    let all_tools = ai_tools::tools_for(ai_tools::AiHost::Chat);
     let all_tools_toolset = all_tools.toolset.clone();
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
         Arc::new(all_tools.prompt.to_string());
@@ -677,31 +676,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         .with_enforcement(enforcement),
     );
 
-    let projection_generator =
-        ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
-            tool_service_context.clone(),
-            ai_tools::tools_for_chat_code_mode(),
-        );
-
-    let projection_notifier =
-        ai_projections::outbound::gateway_notifier::GatewayProjectionNotifier::new(Arc::new(
-            connection_gateway_client::ConnectionGatewayClient::new(
-                "testing".to_string(),
-                "http://localhost".to_string(),
-            ),
-        ));
-
-    let ai_projections_service = Arc::new(
-        ai_projections::domain::ai_projection_service::AiProjectionServiceImpl::new(
-            ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
-                pool.clone(),
-            ),
-            sqs_client.clone(),
-            projection_generator,
-            projection_notifier,
-        ),
-    );
-
     let authorization_state =
         MacroAuthorizationState::new(Arc::new(MacroAuthorizationServiceImpl::new(
             MacroAuthJwtValidator::new(
@@ -774,7 +748,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         document_tool_context: document_tool_context.clone(),
         memory_service,
         usage_service,
-        ai_projections_service,
         properties_tool_context,
         email_tool_context,
         call_tool_context,

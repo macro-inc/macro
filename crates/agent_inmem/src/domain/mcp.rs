@@ -23,14 +23,30 @@ mod test;
 /// it would give the model every Macro tool twice.
 pub const MACRO_MCP_NAME: &str = "macro";
 
+/// The name the harness gives its internal MCP server (code mode, reviews),
+/// which gates its own tools; every other server (connected apps, custom
+/// servers, previews) is reached through the egress proxy.
+pub const MACRO_INTERNAL_MCP_NAME: &str = "macro_internal";
+
 /// The servers this runtime should dial out of an ACP server list: HTTP
-/// entries other than Macro's own. SSE and stdio entries are not something an
-/// in-process runtime can serve and are dropped with a warning.
+/// entries other than Macro's own, each name once. SSE and stdio entries are
+/// not something an in-process runtime can serve and are dropped with a
+/// warning.
+///
+/// A name is the first entry's: the harness lists its own servers first, and
+/// a tool's server is told by the name it registered under
+/// ([`mcp_toolset::RemoteMcpToolSet::server_of`]), so an owner's app whose
+/// slug repeats [`MACRO_INTERNAL_MCP_NAME`] must never be dialed under it.
 pub fn dialable_servers(servers: Vec<AcpMcpServer>) -> Vec<McpServerHttp> {
+    let mut names = std::collections::BTreeSet::new();
     servers
         .into_iter()
         .filter_map(|server| match server {
             AcpMcpServer::Http(http) if http.name == MACRO_MCP_NAME => None,
+            AcpMcpServer::Http(http) if !names.insert(http.name.clone()) => {
+                tracing::warn!(server = %http.name, "a second MCP server under one name; skipped");
+                None
+            }
             AcpMcpServer::Http(http) => Some(http),
             other => {
                 tracing::warn!(
@@ -109,12 +125,13 @@ pub const CODE_MODE_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__ReadCodeDocs",
 ];
 
-/// Whether `tools` list every one of [`CODE_MODE_MCP_TOOLS`].
+/// Whether `tools` list every one of [`CODE_MODE_MCP_TOOLS`] from the
+/// harness's internal server, told by the server each registered under: a
+/// custom server named to mangle like it doesn't count.
 pub fn has_code_mode_tools(tools: Option<&RemoteMcpToolSet>) -> bool {
     tools.is_some_and(|tools| {
-        let catalog = <RemoteMcpToolSet as ai_toolset::ToolSet<()>>::searchable_catalog(tools);
         CODE_MODE_MCP_TOOLS
             .iter()
-            .all(|name| catalog.iter().any(|tool| tool.name == *name))
+            .all(|name| tools.server_of(name) == Some(MACRO_INTERNAL_MCP_NAME))
     })
 }

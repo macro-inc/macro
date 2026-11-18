@@ -297,8 +297,9 @@ messages in a `Scroll` (component/Block.tsx), `AgentInput` with an unwired `onSe
 7. **Input**: reuse `ChannelInput` or keep `AgentInput` but adopt
    the `InputSnapshot`/`InputHandle` contract, `persistenceKey` draft persistence
    (`makeInputValuePersistenceKey`-style, keyed by session id), and the send/restore flow.
-8. **WS routing**: nothing new needed — `SyncProvider` already routes `agent_session_log`
-   frames; subscribe through `agent-session-stream.ts` rather than adding a new socket path.
+8. **Live rows**: nothing new needed — an open `AgentSession` follows its log over the
+   GraphQL `agentSessionLogAppended` subscription (`lib/queries/agent-session/log.ts`);
+   the gateway's `agent_session_log` event only marks unopened sessions as active.
 
 ### Do NOT copy
 

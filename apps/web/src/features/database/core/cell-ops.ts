@@ -11,7 +11,10 @@ import type {
   DatabaseOp,
   OpEntityKind,
 } from '../../../lib/core/database-sql/generated/types';
-import { inferDatabaseNumber } from './column-inference';
+import {
+  inferDatabaseNumber,
+  inferDatabasePercentage,
+} from './column-inference';
 import type { DatabaseCellValue, DatabaseViewColumn } from './database-view';
 import { UNAVAILABLE_OPTION } from './grid-cells';
 import type { DatabaseRowMutation } from './table';
@@ -128,7 +131,11 @@ export function cellValue(
     .with('STRING', () => ok({ type: 'text', value: String(value) }))
     .with('NUMBER', () => {
       const number =
-        typeof value === 'number' ? value : inferDatabaseNumber(value);
+        typeof value === 'number'
+          ? value
+          : column.percentage && /%\s*$/.test(value)
+            ? inferDatabasePercentage(value)
+            : inferDatabaseNumber(value);
       return number !== undefined && Number.isFinite(number)
         ? ok({ type: 'number', value: number })
         : err({ kind: 'not-a-number' });

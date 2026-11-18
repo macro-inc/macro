@@ -778,15 +778,11 @@ a WebSocket when it connects; immediate permission revocation of an already-open
 connection is not implemented by this spreadsheet feature. Test fresh-token
 reconnection separately from that release-blocking security requirement.
 
-## Internal rollout and merge checklist
+## Merge checklist
 
-The `enable-spreadsheets` PostHog flag gates creation menus, keyboard creation,
-project creation, native block loading/editor mounting, and the development demo.
-PostHog controls it in every environment; there is no development default. The
-`VITE_ENABLE_SPREADSHEETS` override uses the app's standard flag mechanism.
-Target this flag to the Macro team in PostHog. There is no hard-coded email-domain
-restriction: existing document permissions and typed AI access receipts enforce
-access to each workbook independently of feature rollout targeting.
+Spreadsheets are available to everyone; there is no feature flag. Existing
+document permissions and typed AI access receipts enforce access to each
+workbook.
 
 Deploy the spreadsheet-enabled document service, sync Worker, AI editing Worker,
 and frontend together to dev. The AI Worker deployment watches
@@ -795,5 +791,4 @@ leave its bundle behind. After deploy, verify real staff login, creation, reopen
 sharing with another staff user, two-user edits/cursors, and Ask Macro against a
 closed workbook. The isolated local tests cover the production editor/session and
 sync Worker, but do not exercise hosted authentication/token refresh or document
-publication/search. Keep public rollout disabled until those checks and the
-existing live-permission-revocation limitation above are resolved. Keep the PostHog flag targeted to the Macro team for the internal pilot.
+publication/search.

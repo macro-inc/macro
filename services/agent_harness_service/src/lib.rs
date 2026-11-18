@@ -202,6 +202,8 @@ const RUNTIME_COMMAND_CONSUMER_ATTEMPTS: usize = 5;
 /// Routine code programs the harness runs at once. Steps beyond it wait for a
 /// slot before their credential is minted, so they never queue in the executor.
 const ROUTINE_CODE_SLOTS: usize = 4;
+/// Calls of one SDK operation a routine code step may make; sessions get 200.
+const ROUTINE_CALLS_PER_OPERATION: u32 = 1000;
 
 impl GroupName for AgentHarnessConsumerGroup {
     const GROUP_NAME: &'static str = "agent-harness-service";
@@ -629,8 +631,17 @@ pub async fn run() -> anyhow::Result<()> {
             matches!(config.environment, Environment::Local),
         )?
         .with_owner_approvals(Arc::clone(&tool_approvals))
+        // Each account's MCP exchanges are paced per upstream, after
+        // approvals, and a 429 is retried after its Retry-After.
         .with_actor_mcp(Arc::new(
-            agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new(mcp_address_policy)?,
+            agent_egress::outbound::budgeted_mcp::BudgetedMcpTransport::new(
+                Arc::new(
+                    agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new(
+                        mcp_address_policy,
+                    )?,
+                ),
+                agent_egress::outbound::budgeted_mcp::BudgetPolicy::DEFAULT,
+            ),
         )),
     );
 
@@ -691,10 +702,14 @@ pub async fn run() -> anyhow::Result<()> {
                     max_queued: 16,
                     max_cpu: Some(std::time::Duration::from_secs(10)),
                     background: true,
+                    // A routine step is reviewed code that may update every
+                    // row it was given, one call each; only a runaway loop
+                    // gets this far.
+                    max_calls_per_operation: ROUTINE_CALLS_PER_OPERATION,
                     ..Default::default()
                 },
             )?;
-            // The in-app chat (and its projections) gets a budget of its own,
+            // The in-app chat gets a budget of its own,
             // so chat traffic cannot exhaust the slots sessions rely on.
             let chat = code_execution::domain::ExecutionService::new(
                 Arc::clone(&runner),
@@ -725,6 +740,23 @@ pub async fn run() -> anyhow::Result<()> {
         }
         None => None,
     };
+    // One flag client for every per-user agent rollout.
+    let feature_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+                key.to_owned(),
+                std::time::Duration::from_secs(3),
+                config.environment,
+            )
+            .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
+        })
+        .transpose()?;
+    // Code runs reach the SDK hosts through the host's forwarder where the
+    // egress flag is on for the user they act as.
+    let code_egress = code_mode::EgressRollout::new(feature_flags.clone());
     // Suggestion generation sessions' code and tools are limited to reads
     // and their own writes, and background runs that send nothing to what
     // reaches nobody, wherever their credential is used.
@@ -747,6 +779,7 @@ pub async fn run() -> anyhow::Result<()> {
         Arc::new(agent_code_mode::domain::UserCodeModeService::new(
             Arc::new(chat_executor.clone()),
             Arc::new(code_mode::UserRunCredentials {
+                egress: code_egress.clone(),
                 correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
                 signer: MacroApiTokenSigner::new(
                     pool.clone(),
@@ -786,6 +819,7 @@ pub async fn run() -> anyhow::Result<()> {
                     &tool_context.calendar_tool_context.occurrences,
                 ))),
             )
+            .with_egress(code_egress.clone())
             .with_slots(ROUTINE_CODE_SLOTS),
         ),
         None => None,
@@ -818,25 +852,12 @@ pub async fn run() -> anyhow::Result<()> {
     )
     .await
     .map_err(|error| anyhow::anyhow!("{error}"))?;
-    // One flag client for every per-user agent rollout.
-    let feature_flags = config
-        .posthog_api_key
-        .value()
-        .map(|key| {
-            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
-                key.to_owned(),
-                std::time::Duration::from_secs(3),
-                config.environment,
-            )
-            .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
-        })
-        .transpose()?;
     let public_code_mode = match &code_runner {
         Some((_, public, _, _, _)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
+                    egress: code_egress.clone(),
                     correlations: agent_correlation::outbound::PgCorrelationRepository(
                         pool.clone(),
                     ),
@@ -931,9 +952,6 @@ pub async fn run() -> anyhow::Result<()> {
             store: Arc::clone(&execution_store),
             active: Arc::clone(&execution_turns),
             turns: Arc::new(code_mode::ui_commands::SessionUiTurns(session_repo.clone())),
-            flag: Arc::new(code_mode::ui_commands::NavigationFlag(
-                feature_flags.clone(),
-            )),
             budgets: Arc::new(code_mode::ui_commands::RedisUiBudgets(
                 rate_limit::RateLimitServiceImpl {
                     repo: rate_limit::RedisRateLimitAdapter {
@@ -952,6 +970,7 @@ pub async fn run() -> anyhow::Result<()> {
         Arc::new(agent_code_mode::domain::CodeModeService::new(
             code_executor,
             Arc::new(code_mode::RunCredentials {
+                egress: code_egress.clone(),
                 correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
                 signer: MacroApiTokenSigner::new(
                     pool.clone(),

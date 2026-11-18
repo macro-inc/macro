@@ -301,7 +301,7 @@ fn about_macro_reads_as_a_symbol() {
     let result = read_symbols(&[ABOUT_MACRO_SYMBOL.to_owned()]);
     assert_eq!(result.references.len(), 1);
     assert_eq!(result.references[0].reference, about_macro());
-    assert!(about_macro().contains("https://docs.macro.com/llms.txt"));
+    assert!(about_macro().contains("https://macro.com/docs/llms.txt"));
 }
 
 #[tokio::test]

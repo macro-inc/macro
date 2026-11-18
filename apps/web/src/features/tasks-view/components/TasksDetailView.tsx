@@ -1,46 +1,19 @@
-import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
 import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { useListNavigationHotkeys } from '@app/components/entity-detail/use-list-navigation-hotkeys';
 import { useListDetailNavigation } from '@app/components/list';
-import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { useRouteParams } from '@app/lib/split-router';
 import { taskDetailRoute } from '@app/routes/routes';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
-import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { Show } from 'solid-js';
 import { useTasksView } from '../tasks-view-context';
 import type { TaskDetailTarget } from '../types';
+import { MobileTaskDetailPane } from '../views/mobile/task-detail-pane';
+import { TaskDetailPane } from '../views/task-detail-pane';
 import { TaskDetail } from './TaskDetail';
-
-function TaskDetailTopBar(props: { documentId: string }) {
-  const panel = useSplitPanelOrThrow();
-  const openShare = useDocumentShareModal(() => ({
-    documentId: props.documentId,
-    blockAlias: 'task',
-  }));
-
-  return (
-    <ViewShell.TopBar class="touch:flex">
-      <ViewBreadcrumbs.Outlet
-        aria-label="Task location"
-        fallback={<EntityDetailBreadcrumbSkeleton />}
-      />
-      <div class="ml-auto flex shrink-0 items-center gap-1">
-        <SidePanel.HeaderActionsOutlet />
-        <ShareTrigger
-          onClick={openShare}
-          id={props.documentId}
-          blockType="task"
-          hotkeyScope={panel.splitHotkeyScope}
-        />
-        <SidePanel.Toggle />
-      </div>
-    </ViewShell.TopBar>
-  );
-}
 
 export function TasksDetailView(props: {
   task: TaskDetailTarget;
@@ -78,29 +51,39 @@ export function TasksDetailView(props: {
     fallbackName: props.task.fallbackName,
   });
 
+  const detail = () => (
+    <TaskDetail
+      task={props.task}
+      onDuplicate={(id, name) => openTask({ id, fallbackName: name })}
+      onDelete={props.onClose ?? closeTask}
+    >
+      {(context) => (
+        <MarkdownDetailBreadcrumbItem
+          value={breadcrumbValue()}
+          metadata={metadata()}
+          order={props.breadcrumbOrder ?? 1}
+          documentId={props.task.id}
+          kind="task"
+          fallbackName={props.task.fallbackName}
+          ownerId={context.data.metadata.owner}
+          projectId={context.data.metadata.projectId ?? undefined}
+          onClose={props.onClose ?? closeTask}
+          onDuplicate={(id, name) => openTask({ id, fallbackName: name })}
+        />
+      )}
+    </TaskDetail>
+  );
+
   return (
     <SidePanel.Root floating>
-      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <TaskDetailTopBar documentId={props.task.id} />
-        <div class="relative min-h-0 min-w-0 flex-1">
-          <TaskDetail task={props.task}>
-            {(context) => (
-              <MarkdownDetailBreadcrumbItem
-                value={breadcrumbValue()}
-                metadata={metadata()}
-                order={props.breadcrumbOrder ?? 1}
-                documentId={props.task.id}
-                kind="task"
-                fallbackName={props.task.fallbackName}
-                ownerId={context.data.metadata.owner}
-                projectId={context.data.metadata.projectId ?? undefined}
-                onClose={props.onClose ?? closeTask}
-                onDuplicate={(id, name) => openTask({ id, fallbackName: name })}
-              />
-            )}
-          </TaskDetail>
-        </div>
-      </div>
+      <Show
+        when={isTouchDevice()}
+        fallback={
+          <TaskDetailPane documentId={props.task.id}>{detail()}</TaskDetailPane>
+        }
+      >
+        <MobileTaskDetailPane>{detail()}</MobileTaskDetailPane>
+      </Show>
     </SidePanel.Root>
   );
 }

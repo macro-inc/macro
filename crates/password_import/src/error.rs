@@ -17,7 +17,7 @@ pub enum ImportError {
     /// Larger than [`crate::Limits::max_input_bytes`].
     #[error("the file is larger than the import limit")]
     TooLarge,
-    /// `export.data` inflates past [`crate::Limits::max_decompressed_bytes`].
+    /// `export.data` or `data.json` inflates past [`crate::Limits::max_decompressed_bytes`].
     #[error("the archive inflates past the import limit")]
     ZipBomb,
     /// More archive entries than [`crate::Limits::max_zip_entries`].
@@ -29,12 +29,13 @@ pub enum ImportError {
     /// An archive entry name with `..`, an absolute path or a backslash.
     #[error("the archive has an unsafe entry name")]
     PathTraversal,
-    /// Not a readable zip archive: entry names repeat, or `export.data` is
+    /// Not a readable zip archive: entry names repeat, or the data entry is
     /// encrypted or uses an unsupported compression method.
     #[error("the archive is not a readable zip file")]
     InvalidZip,
-    /// A zip archive without `export.data`.
-    #[error("the archive has no export.data entry")]
+    /// A zip archive with neither 1Password's `export.data` nor Bitwarden's
+    /// `data.json`.
+    #[error("the archive holds no 1Password or Bitwarden export data")]
     MissingExportData,
     /// A password-protected or account-encrypted Bitwarden export.
     #[error("the Bitwarden export is encrypted")]

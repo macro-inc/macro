@@ -6,17 +6,24 @@ import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { type JSX, Show } from 'solid-js';
+import { type Component, createSignal, type JSX, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SoupEntityActionDrawer } from './SoupEntityActionDrawer';
 import { SoupEntityActionsMenu } from './SoupEntityActionsMenu';
 
 type TestGroup = {
-  items: { id: string; label: string; onClick: () => void }[];
+  id: string;
+  items: {
+    id: string;
+    label: string;
+    onClick: () => void;
+    menuItem?: Component;
+  }[];
 };
 
 const actions = vi.hoisted(() => ({
   groups: [] as TestGroup[],
+  getGroups: undefined as (() => TestGroup[]) | undefined,
   context: undefined as
     | { viewedProjectId?: string; createActionNavigationHandler?: unknown }
     | undefined,
@@ -40,7 +47,7 @@ vi.mock('./createSoupEntityActions', () => ({
         context: typeof actions.context
       ) => {
         actions.context = context;
-        return actions.groups;
+        return actions.getGroups?.() ?? actions.groups;
       },
     };
   },
@@ -57,6 +64,7 @@ vi.mock('@core/component/ContextMenu', async (importOriginal) => ({
 }));
 
 const group = (...labels: string[]): TestGroup => ({
+  id: labels[0],
   items: labels.map((label) => ({ id: label, label, onClick: () => {} })),
 });
 
@@ -88,6 +96,46 @@ beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   actions.groups = [group('Favorite'), group('Delete')];
   actions.options = undefined;
+  actions.getGroups = undefined;
+});
+
+it('retains picker state when an optimistic update rebuilds menu actions', () => {
+  const [revision, setRevision] = createSignal(0);
+  const mount = vi.fn();
+  const Picker = () => {
+    mount();
+    const [search, setSearch] = createSignal('');
+    return (
+      <input
+        aria-label="Picker search"
+        value={search()}
+        onInput={(event) => setSearch(event.currentTarget.value)}
+      />
+    );
+  };
+  actions.getGroups = () => {
+    revision();
+    return [
+      {
+        id: 'edit',
+        items: [
+          {
+            id: 'appearance',
+            label: 'Change icon',
+            menuItem: Picker,
+            onClick() {},
+          },
+        ],
+      },
+    ];
+  };
+  renderMenu();
+  const search = screen.getByRole('textbox', { name: 'Picker search' });
+  fireEvent.input(search, { target: { value: 'star' } });
+  setRevision(1);
+  expect(screen.getByRole('textbox', { name: 'Picker search' })).toBe(search);
+  expect(search).toHaveProperty('value', 'star');
+  expect(mount).toHaveBeenCalledOnce();
 });
 
 describe('SoupEntityActionsMenu mark done', () => {

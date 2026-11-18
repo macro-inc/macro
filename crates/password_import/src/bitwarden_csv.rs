@@ -1,6 +1,8 @@
 //! Bitwarden CSV: `folder,favorite,type,name,notes,fields,reprompt,login_uri,
 //! login_username,login_password,login_totp`. `type` is `login` or `note`;
-//! `fields` is `name: value` lines; `login_uri` is comma-separated.
+//! `fields` is `name: value` lines, with `null` for a field without a value
+//! (linked fields included); `reprompt` is `1` when the item asks for the
+//! master password; `login_uri` is comma-separated.
 //! Organization exports have `collections` in place of `folder`, and every
 //! row of one is skipped as `SharedCollection`. Newer exports add
 //! `archivedDate` (ISO 8601, empty when live); a dated row is `Archived`.
@@ -10,7 +12,7 @@ use nom::bytes::complete::{tag, take_until};
 use crate::csv_table;
 use crate::draft::{Draft, Parts};
 use crate::error::ImportError;
-use crate::model::{FolderPath, ItemKind, Limits, Secret, SkipReason, SourceKey};
+use crate::model::{DroppedPart, FolderPath, ItemKind, Limits, Secret, SkipReason, SourceKey};
 
 pub(crate) const REQUIRED_COLUMNS: [&str; 5] = [
     "type",
@@ -31,6 +33,7 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
     let name = table.column("name");
     let notes = table.column("notes");
     let fields = table.column("fields");
+    let reprompt = table.column("reprompt");
     let uris = table.column("login_uri");
     let username = table.column("login_username");
     let password = table.column("login_password");
@@ -79,12 +82,18 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
         draft.add_one_time_password(row.take(one_time_password));
         draft.set_notes(row.take(notes));
         add_fields(&mut draft, &row.take(fields));
+        if row.text(reprompt).trim() == "1" {
+            draft.drop_part(DroppedPart::Reprompt, 1);
+        }
 
         parts.add(draft);
     }
 
     Ok(parts)
 }
+
+/// The value `bw` writes for a field without one.
+const NULL_VALUE: &str = "null";
 
 /// `name: value` lines. The CSV doesn't say which fields were hidden, so all
 /// are concealed.
@@ -94,6 +103,17 @@ fn add_fields(draft: &mut Draft, fields: &Secret) {
             Ok((value, (label, _))) => (label, value),
             Err(_) => ("", line),
         };
+
+        // `bw` can't tell an empty field from one whose text is `null`; an
+        // empty one is far more likely.
+        let trimmed = value.trim();
+        if trimmed.is_empty() || trimmed == NULL_VALUE {
+            if !label.trim().is_empty() {
+                draft.drop_part(DroppedPart::EmptyField, 1);
+            }
+            continue;
+        }
+
         draft.add_field(label, Secret::new(value.to_owned()), true);
     }
 }

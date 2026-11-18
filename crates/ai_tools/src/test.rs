@@ -283,9 +283,10 @@ fn code_mode_hides_tools_the_sdk_covers() {
 }
 
 #[test]
-fn code_mode_manages_bots_through_the_sdk_but_keeps_the_credential_card() {
+fn code_mode_manages_bots_and_presents_credential_cards_through_the_sdk() {
     let tools = tools_for_agent_code_mode();
     for name in [
+        "IssueBotCredential",
         "ListBots",
         "CreateBot",
         "ConfigureBot",
@@ -299,7 +300,6 @@ fn code_mode_manages_bots_through_the_sdk_but_keeps_the_credential_card() {
             "{name}"
         );
     }
-    assert!(tools.toolset.tools.contains_key("IssueBotCredential"));
 }
 
 #[test]

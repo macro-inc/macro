@@ -102,6 +102,18 @@ export async function invalidateGithubLinkStatus() {
 }
 
 /**
+ * The viewer's GitHub link status, read fresh, so a decision to send the
+ * browser to GitHub does not rest on a stale cache.
+ */
+export async function readGithubLinkStatus(): Promise<GithubLinkStatus> {
+  const link = await queryClient.fetchQuery({
+    ...githubLinkStatusQueryOptions(),
+    staleTime: 0,
+  });
+  return link.status;
+}
+
+/**
  * The GitHub authorization URL that links the user's account, or relinks one
  * whose token stopped working; the callback returns to `originalUrl`.
  */

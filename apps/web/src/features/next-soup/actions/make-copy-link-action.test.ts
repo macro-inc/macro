@@ -12,6 +12,7 @@ import {
   notFoundRoute,
 } from '@app/routes/routes';
 import { createMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { toast } from '@core/component/Toast/Toast';
 import type { EmailEntity } from '@entity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeCopyLinkAction } from './make-copy-link-action';
@@ -63,6 +64,7 @@ const thread: EmailEntity = {
 const writeText = vi.fn<(text: string) => Promise<void>>();
 
 beforeEach(() => {
+  vi.clearAllMocks();
   writeText.mockReset().mockResolvedValue(undefined);
   vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
 });
@@ -102,5 +104,26 @@ describe('copy link for an email thread', () => {
   it('copies the same link from the thread menu without a list entity', async () => {
     await makeCopyLinkAction().executeByBlock(threadId, 'email');
     expectOpensThread(copiedLink());
+  });
+
+  it('confirms silent menu copies only after the clipboard write succeeds', async () => {
+    let finish!: () => void;
+    writeText.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const action = makeCopyLinkAction({ silent: true });
+    const copied = action.executeByBlock(threadId, 'email');
+    expect(toast.success).not.toHaveBeenCalled();
+    finish();
+    expect(await copied).toBe(true);
+    expect(toast.success).not.toHaveBeenCalled();
+
+    writeText.mockRejectedValueOnce(new Error('Clipboard denied'));
+    expect(await action.executeByBlock(threadId, 'email')).toBe(false);
+    expect(toast.failure).toHaveBeenCalledOnce();
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });

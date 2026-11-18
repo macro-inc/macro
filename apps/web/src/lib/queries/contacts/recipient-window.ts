@@ -6,7 +6,8 @@ import type {
 } from '@core/user/recipient-source';
 import { createMemo } from 'solid-js';
 import { readContactDirectory } from './directory';
-import { createContactDirectoryWindow } from './directory-query';
+import { createContactDirectoryList } from './directory-list';
+import type { createContactDirectoryWindow } from './directory-query';
 import { createContactExclusions } from './exclusions';
 
 /** A selector's query, exclusions and domain reach the ranker before its limit. */
@@ -20,7 +21,7 @@ export function createContactRecipientSource(
     () => input.excludedIds?.() ?? [],
     () => (input.includeSelf() ? undefined : input.selfId())
   );
-  const directory = createContactDirectoryWindow(scope, reader, input.enabled, {
+  const directory = createContactDirectoryList(scope, reader, input.enabled, {
     search: input.search,
     resetKey: exclusions.key,
     policy: () => ({
@@ -28,13 +29,16 @@ export function createContactRecipientSource(
       excluded: exclusions.native(),
       senderDomain: input.senderDomain(),
     }),
+    // Roster members beyond the native budget never count toward the bound.
+    eligible: (user) =>
+      !exclusions.ids().has(user.id) && !isSecondaryInbox(user.id),
   });
   return {
     items: createMemo(() =>
       (directory.data()?.users ?? [])
         // Normal rosters are excluded before native limiting. A roster larger
-        // than the IPC budget can yield a short/empty
-        // window; retain its continuation rather than accumulating more rows.
+        // than the IPC budget can yield a short or empty page; its
+        // continuation remains, and the picker keeps reading further pages.
         .filter(
           (user) =>
             !exclusions.ids().has(user.id) &&

@@ -1,0 +1,247 @@
+{
+  "encrypted": false,
+  "folders": [
+    {
+      "id": "f1000000-0000-4000-8000-000000000002",
+      "name": "A/B"
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000004",
+      "name": "Personal"
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000001",
+      "name": "Slash at end/"
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000003",
+      "name": "Work"
+    }
+  ],
+  "items": [
+    {
+      "type": 1,
+      "name": "Health – work 1",
+      "favorite": false,
+      "reprompt": 0,
+      "id": "b1000000-0000-4000-8000-000000000001",
+      "collectionIds": null,
+      "organizationId": null,
+      "folderId": "f1000000-0000-4000-8000-000000000001",
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "uri": "https://192.0.2.10:8443/",
+            "match": 3
+          },
+          {
+            "uri": "^https://(www\\.)?health26\\.example\\.org/.*$"
+          },
+          {
+            "uri": "https://192.0.2.10:8443/",
+            "match": 1
+          }
+        ],
+        "fido2Credentials": [],
+        "username": "sdummyfield",
+        "password": "synthetic-password-1"
+      },
+      "passwordHistory": [],
+      "creationDate": "2026-11-16T18:53:34.825Z",
+      "revisionDate": "2026-11-16T18:53:34.825Z"
+    },
+    {
+      "type": 3,
+      "name": "Visa card 1",
+      "favorite": true,
+      "reprompt": 1,
+      "id": "b1000000-0000-4000-8000-000000000002",
+      "collectionIds": null,
+      "organizationId": null,
+      "folderId": null,
+      "fields": [],
+      "card": {
+        "cardholderName": "Alex Ñandú",
+        "brand": "Visa",
+        "number": "4111111111111111",
+        "expMonth": "2",
+        "expYear": "2033",
+        "code": "000"
+      },
+      "passwordHistory": [],
+      "creationDate": "2026-11-16T18:53:46.242Z",
+      "revisionDate": "2026-11-16T18:53:46.242Z"
+    },
+    {
+      "type": 1,
+      "name": "Gym – old 5",
+      "favorite": false,
+      "reprompt": 0,
+      "id": "b1000000-0000-4000-8000-000000000003",
+      "collectionIds": null,
+      "organizationId": null,
+      "folderId": "f1000000-0000-4000-8000-000000000002",
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "uri": "https://gym24.example.net/path/to/page#frag"
+          },
+          {
+            "uri": "iosapp://com.example.gym",
+            "match": 4
+          },
+          {
+            "uri": "https://login.gym24.example.net/auth?next=%2Fhome"
+          }
+        ],
+        "fido2Credentials": [],
+        "username": "yuki.synthetica@example.org",
+        "password": "synthetic-password-3"
+      },
+      "passwordHistory": [],
+      "creationDate": "2026-11-16T18:53:35.287Z",
+      "revisionDate": "2026-11-16T18:53:35.288Z",
+      "archivedDate": "2026-11-16T18:54:06.540Z"
+    },
+    {
+      "type": 1,
+      "name": "All custom field types",
+      "favorite": false,
+      "reprompt": 0,
+      "id": "b1000000-0000-4000-8000-000000000004",
+      "collectionIds": null,
+      "organizationId": null,
+      "folderId": "f1000000-0000-4000-8000-000000000003",
+      "fields": [
+        {
+          "type": 0,
+          "name": "Text field",
+          "value": "plain text value"
+        },
+        {
+          "type": 0,
+          "name": "Empty text field"
+        },
+        {
+          "type": 1,
+          "name": "Hidden field",
+          "value": "synthetic-hidden-4-3"
+        },
+        {
+          "type": 1,
+          "name": "Empty hidden field"
+        },
+        {
+          "type": 2,
+          "name": "Boolean true",
+          "value": "true"
+        },
+        {
+          "type": 2,
+          "name": "Boolean false",
+          "value": "false"
+        },
+        {
+          "type": 3,
+          "name": "Linked to username",
+          "linkedId": 100
+        },
+        {
+          "type": 3,
+          "name": "Linked to password",
+          "linkedId": 101
+        },
+        {
+          "type": 0,
+          "name": "Duplicate field name",
+          "value": "first"
+        },
+        {
+          "type": 0,
+          "name": "Duplicate field name",
+          "value": "second"
+        },
+        {
+          "type": 0,
+          "value": "field with empty name"
+        },
+        {
+          "type": 0,
+          "name": "Multiline value",
+          "value": "line one\nline two\nline three"
+        },
+        {
+          "type": 0,
+          "name": "Emoji 🔑 field",
+          "value": "värde ✓ 値"
+        }
+      ],
+      "login": {
+        "uris": [
+          {
+            "uri": "https://all.example.net/login"
+          }
+        ],
+        "fido2Credentials": [],
+        "username": "user4730@example.org",
+        "password": "synthetic-password-4"
+      },
+      "passwordHistory": [],
+      "creationDate": "2026-11-16T18:53:42.611Z",
+      "revisionDate": "2026-11-16T18:53:42.612Z"
+    },
+    {
+      "type": 1,
+      "name": "Photos – test 62",
+      "favorite": true,
+      "reprompt": 1,
+      "id": "b1000000-0000-4000-8000-000000000005",
+      "collectionIds": null,
+      "organizationId": null,
+      "folderId": "f1000000-0000-4000-8000-000000000002",
+      "fields": [],
+      "login": {
+        "uris": [
+          {
+            "uri": "photos42.example.com",
+            "match": 0
+          },
+          {
+            "uri": "https://192.0.2.10:8443/",
+            "match": 3
+          },
+          {
+            "uri": "photos42.example.com",
+            "match": 3
+          }
+        ],
+        "fido2Credentials": [],
+        "username": "user4267@example.com",
+        "password": "synthetic-password-5"
+      },
+      "passwordHistory": [],
+      "creationDate": "2026-11-16T18:53:39.962Z",
+      "revisionDate": "2026-11-16T18:53:39.962Z"
+    },
+    {
+      "type": 2,
+      "name": "Markdown note",
+      "favorite": true,
+      "reprompt": 0,
+      "id": "b1000000-0000-4000-8000-000000000006",
+      "collectionIds": null,
+      "organizationId": null,
+      "folderId": "f1000000-0000-4000-8000-000000000004",
+      "notes": "# Heading\n\nSome **bold** and _italic_ text, `inline code`, and a [link](https://example.com).\n\n- bullet one\n- bullet two\n  - nested\n\n1. first\n2. second\n\n```bash\necho \"code block\"\n```\n\n| col a | col b |\n|-------|-------|\n| 1     | 2     |\n",
+      "fields": [],
+      "secureNote": {
+        "type": 0
+      },
+      "passwordHistory": [],
+      "creationDate": "2026-11-16T18:53:49.239Z",
+      "revisionDate": "2026-11-16T18:53:49.240Z"
+    }
+  ]
+}

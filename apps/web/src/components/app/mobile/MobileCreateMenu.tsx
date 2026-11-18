@@ -23,7 +23,7 @@ export type MobileCreateMenuItem = {
   onSelect: () => void;
   /**
    * Runs in the tap, for an action that opens a field to type in: iOS only
-   * raises the keyboard inside the tap (see `raiseKeyboardForNewTaskTitle`).
+   * raises the keyboard inside the tap (see `triggerFocusNewElement`).
    */
   raiseKeyboard?: () => void;
   disabled?: boolean;

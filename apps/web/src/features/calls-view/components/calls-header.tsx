@@ -80,7 +80,7 @@ export function CallsHeader() {
           label="Search calls"
           value={view.searchText()}
           onValueChange={view.setSearchText}
-          onEscape={() => panel.panelRef()?.focus()}
+          focusResults={() => panel.panelRef()?.focus()}
           registerFocus={(focus) => (focusSearch = focus)}
         />
       </ListHeader>

@@ -225,6 +225,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       meetingInvitePermissions getCallRecord previewSmartTag getActivity getChannel
       getMyChannelAccessRequest getChannelAccessRequest getContactByEmail getContact getCompany
       getCrmPipeline getCrmPipelinePermissions getCrmPipelineStageRequirements getCrmPipelineTable
+      getCrmEmailPolicy getCrmEmailPrivacy getCrmEmailRulePreview getCrmEmailRuleRevision
       getCrmMemberAccess getCrmTeamSettings getDatabase getDatabasePermissions getDatabaseRowHistory
       getDatabaseViewPositions getDocumentByTeamSlug getDocumentPermissionsToken
       getBatchPreviewHandler getDocument getDocumentBranchName getDocumentGithubPullRequests
@@ -237,12 +238,14 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getProjectUserAccessLevel getProjectPermissionsV2 getEmailFollowup getDocumentPermissionsV2
       getWebhook whatsappAccount eventIcs getChannelJoinLink getCrmPipelineViewPositions
       exportDocument streamEvents
+      passwordsAgentDisclose passwordsAgentMyRequest passwordsAgentTotpCode
       exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
     `,
     listed: `
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
       listTeamCalendar listTeamOutOfOffice meetingList meetingListActive listChannelLabels
       getChannelAttachments listChannelBots getChannelParticipants getChannels listCrmBlockedDomains
+      listCrmEmailPolicyHistory listCrmExcludedEmailThreads
       listCompanyContacts listCrmPipelines listCrmPipelineDetails getCrmPipelineRows listDatabases listDatabaseColumnCasts
       listDatabaseWebhooks getUserDocumentsHandler getSystemSkillsHandler externalChats
       externalChatMessages externalChatMessageAttachments listFavorites listForms
@@ -253,10 +256,11 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getCallParticipants getLiveCalls listCrmRecordPipelineEntries listHarnessDirectory listHarnessResidents listSavedViewDefinitions pageInitiatives
     `,
     searched: `
-      searchContacts taskSimilaritySearchHandler
+      searchContacts taskSimilaritySearchHandler passwordsAgentSearch
       findCrmPipelineEntries searchCrmPipelineEntries
     `,
     queried: `
+      previewCrmEmailRules validateCrmEmailRules
       queryCrmPipelineRows queryDatabases postItemsSoupAst
       calculateSpreadsheet
     `,
@@ -265,7 +269,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       checkActiveCall getCallRingState getTeamAvailability
     `,
     requested:
-      'requestAccountManager requestChannelAccess accessRequestsSubmit',
+      'requestAccountManager requestChannelAccess accessRequestsSubmit passwordsAgentRequestAccess',
     created: `
       getOrCreateDm getOrCreatePrivate createAgent createAnchor createBot createBotToken
       createChannelLabel meetingCreate createChannel createCrmCompany createCrmContact
@@ -273,9 +277,11 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       createCanvasHandler createMarkdownHandler createSkillHandler createSnippetHandler
       createTaskHandler externalChatAdd createForm createHarnessPairing createInitiative
       entityMessageCreate createProjectHandler createUserApiKey createWebhook
-      createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall
+      createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall passwordsAgentCreate
     `,
     edited: `
+      passwordsAgentUpdate passwordsAgentSetTotp
+      updateCrmEmailPolicy updateCrmEmailPrivacy
       resetCrmTeamStages updateAgent editAnchor patchBot meetingUpdate editCallRecord
       editCallTranscript patchChannel setChannelPicture setEmailSync setCompanyHidden
       setCrmCompanyName setContactHidden setCrmContactName applyCrmPipelineOps
@@ -291,6 +297,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `
+      cancelCrmEmailRulePreview
       deleteAnchor deleteBot revokeBotToken deleteCallRecord deleteChannelLabel deleteEntityMention
       deleteChannel permanentlyDeleteDocument deleteDocument accessRequestsRemoveDirect
       externalChatRemove deleteDatabaseWebhook deleteSelfHarness deleteHarness deleteInitiative

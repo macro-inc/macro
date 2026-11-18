@@ -4,6 +4,9 @@ pub mod call_link;
 /// Postgres implementation of the companies repository
 #[cfg(feature = "outbound")]
 pub mod companies_repo;
+/// Remote rollout gate for selective contribution authoring.
+#[cfg(feature = "outbound")]
+pub mod email_policy;
 /// Postgres implementation of the message store's CRM parent reader
 #[cfg(feature = "lookup")]
 pub mod lookup;
@@ -18,6 +21,9 @@ pub mod search_repo;
 /// Properties-service implementation of the team stage definition store
 #[cfg(feature = "outbound")]
 pub mod stage_definitions;
+/// Remote rollout gate for owner-managed thread-exclusion writes.
+#[cfg(feature = "outbound")]
+pub mod thread_exclusions;
 /// Unfurl-backed implementation of the company metadata resolver
 #[cfg(feature = "outbound")]
 pub mod unfurl_resolver;

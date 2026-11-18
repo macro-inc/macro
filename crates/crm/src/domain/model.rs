@@ -483,6 +483,21 @@ pub struct CrmTeamSettingsPatch {
     pub exclude_personal_emails: Option<bool>,
 }
 
+/// Why a domain exclusion would hide an affected mailbox's entire history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, thiserror::Error)]
+#[cfg_attr(feature = "ports", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum MailboxDomainConflict {
+    /// A company mailbox already excludes colleagues on its own domain.
+    #[error(
+        "Colleagues on a mailbox's own company domain are already kept out of the CRM. Blocking this domain would hide all of that mailbox's email."
+    )]
+    Company,
+    /// A shared personal provider is not a company domain.
+    #[error("Blocking this domain would hide all of a connected mailbox's email from the CRM.")]
+    PersonalProvider,
+}
+
 /// Errors that can occur in the CRM domain.
 #[derive(Debug, thiserror::Error)]
 pub enum CrmError {
@@ -501,6 +516,9 @@ pub enum CrmError {
     /// Request rejected for a client-side reason (e.g. blank comment text).
     #[error("{0}")]
     InvalidRequest(String),
+    /// A domain exclusion would veto every thread in an affected mailbox.
+    #[error("{0}")]
+    BlocksConnectedMailbox(MailboxDomainConflict),
     /// The request asks for hidden CRM rows but the caller's team role is
     /// below admin/owner.
     #[error("Querying hidden CRM companies requires admin/owner team role")]
@@ -510,6 +528,24 @@ pub enum CrmError {
     /// is below admin/owner.
     #[error("changing CRM admin settings requires admin/owner team role")]
     SettingsAdminRequired,
+    /// The thread-exclusion rollout is disabled or its flag could not be loaded.
+    #[error("thread exclusions are not available")]
+    ThreadExclusionsUnavailable,
+    /// New policy authoring is disabled or the flag failed to load.
+    #[error("selective email contribution is not available")]
+    SelectiveEmailUnavailable,
+    /// The observed consent lifetime/version or retry command no longer matches.
+    #[error("email contribution changed; inspect the current policy before retrying")]
+    EmailPolicyConflict,
+    /// A scoped credential is not permitted to change sharing.
+    #[error("this credential cannot enable email contribution")]
+    EmailPolicySharingRefused,
+    /// Preview work is limited to one new request per member per thirty seconds.
+    #[error("wait before starting another email contribution preview")]
+    EmailPreviewRateLimited,
+    /// A count page reached its bounded statement/work budget.
+    #[error("email contribution preview reached its work budget")]
+    EmailPreviewBudgetExhausted,
     /// Caller's team role is below the team's `edit_stages_role`.
     #[error("editing deal stages requires the {} team role", .0.as_db_str())]
     StageEditRoleRequired(CrmPermissionRole),

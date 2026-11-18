@@ -267,6 +267,7 @@ impl NotificationRepository for MockRepository {
     async fn get_unsubscribed_users<'a>(
         &self,
         _item_id: &str,
+        _is_direct_mention: bool,
         _user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         Ok(self.unsubscribed_users.clone())
@@ -609,9 +610,12 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
     async fn get_unsubscribed_users<'a>(
         &self,
         item_id: &str,
+        is_direct_mention: bool,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
-        (**self).get_unsubscribed_users(item_id, user_ids).await
+        (**self)
+            .get_unsubscribed_users(item_id, is_direct_mention, user_ids)
+            .await
     }
 
     async fn create_notification<'a, T: Serialize + Send + Sync>(

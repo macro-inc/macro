@@ -78,9 +78,22 @@ changing the user or date range must not retain the old events. Verify both hand
 directions with delayed responses and delay calendar metadata past occurrences.
 If metadata fails, events remain usable with the default calendar presentation.
 Provider backfill shows a persistent `Syncing your calendar…` banner above the
-grid, explaining that events will appear automatically and Macro remains usable.
+grid, on desktop and phone: `Events are being imported. This may take a while.
+You can keep using Macro as normal.` It names no provider and shows no
+progress: the server reports one sync status across all of the viewer's
+calendar accounts, with no per-account or per-calendar import state. An Outlook
+import reads a window from a year back to two years ahead one event at a time,
+so the current month can stay empty while events on other dates have already
+arrived. The banner never suggests turning the calendar off, which deletes
+Macro's copy and starts the import again.
 The banner stays visible as partial results arrive and disappears when sync finishes.
 A routine sync of an already imported account never shows it.
+With the GraphQL calendar cache, months already in the cache fetch nothing, so
+the client reads the status itself: when the cache starts, whenever it catches
+up with the server (reconnect, coming online, becoming visible, a cache reset),
+and every minute while the server says syncing. Verify a reload during an
+import: load the calendar while the server reports syncing, let the background
+backfill settle, reload the same tab, and confirm the banner is back.
 Errors retain the separate retry state. Verify delayed occurrence
 responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
@@ -105,9 +118,8 @@ remain read-only and appear only when their details are shared.
 An existing Macro call can keep its schedule during point metadata edits; adding
 a new Macro call requires giving the event a duration first.
 
-Calendar reads come from the local GraphQL cache when both `enable-graphql-soup`
-and `enable-graphql-calendar` are on (PostHog in production, on by default in dev
-for the calendar flag; set `VITE_ENABLE_GRAPHQL_CALENDAR=false` to test the REST
+Calendar reads come from the local GraphQL cache when `enable-graphql-calendar`
+is on (PostHog in production, on by default in dev; set `VITE_ENABLE_GRAPHQL_CALENDAR=false` to test the REST
 path). A range the cache has covered renders with no occurrence request, and a far
 jump fetches only the uncovered weeks. Cached records survive deploys, so an
 occurrence cached by an older build can lack a field the current one selects;
@@ -130,12 +142,6 @@ accumulate against the requested date and interrupt unfinished slides, without
 waiting for event responses or hidden-page redraws. Verify repeated forward clicks
 and mixed directions reach the cumulative date while events are still loading.
 Touch swipes retain their page-readiness gates.
-
-Quick-call creation, incoming invitations, Live lists, Macro meeting links, and
-the `/app/meet/*` routes require the PostHog flag `enable-quick-calls`. While the
-flag loads or is off, those controls stay hidden and meeting routes do not mount
-call setup. Existing channel calls and the upcoming-events list remain available.
-For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
 
 During a quick or scheduled call, signed-in participants can open **Call chat**
 with **Open chat** at the bottom-right. On desktop, **Copy Meeting Url** sits at
@@ -190,15 +196,6 @@ While an event response saves, a small spinner appears beside `Going?` within
 the RSVP footer on desktop and mobile; the row and buttons stay in place.
 Failures appear below the buttons inside the padded footer and allow retrying.
 
-Calendar scheduling is on by default in dev. Production uses the PostHog flag
-`enable-calendar-scheduling` and stays off unless enabled remotely. Set
-`VITE_ENABLE_CALENDAR_SCHEDULING=false` to test the disabled state locally.
-While off, the Scheduling workspace and calendar booking shortcuts are hidden;
-public booking and receipt links show an unavailable page without fetching
-scheduling data. When enabling a production rollout, include anonymous visitors
-so invitees can open those links. A public booking link stays available when
-the flag request gets no answer, for example when a browser blocks it.
-
 Calendar connections live in **Settings → Calendar** (`/app/settings/calendar`).
 Connected calendars offers Connect account (pick Gmail or Outlook / Microsoft 365,
 then consent; Outlook is offered only to accounts with the `enable-outlook` flag,
@@ -209,7 +206,7 @@ the only linked account lacks calendar permission, the Calendar accounts row
 shows just a filled Connect button for it, with no account list or
 visibility note. Disconnect removes calendar access/data, not the Gmail connection.
 Settings → Calendar lists only the viewer's own inboxes. The **Enable calendar**
-toast (behind `enable-calendar-prompt-web` and `enable-calendar-prompt-mobile`)
+toast
 follows the same rule: it asks once per own inbox missing calendar permission,
 never for an inbox another Macro user delegated to the viewer (a **Shared** row
 in Settings → Email, whose per-inbox Enable calendar button stays available).
@@ -324,18 +321,23 @@ they open beside the row instead. With the overlay hidden they open beside the r
 A card opened beside a row stays there when the event's chip mounts later. The left-aligned
 `Settings` control with a gear icon fills the sidebar footer; booking management
 lives in the `Booking links` dropdown rather than a separate footer shortcut.
+On a tablet the footer adds `--mobile-content-inset-bottom` to its padding, so
+`Settings` sits above the floating dock instead of under it.
 An account checkbox toggles its calendars together in one update. The checkbox
 responds immediately; the upcoming list and each grid page refresh on deferred
 tasks rather than re-rendering all pages during the click.
 The sidebar can be resized or collapsed on desktop; in narrow desktop panes
 it opens over the grid. Phones do not show the sidebar or its navigation drawer.
 The mobile split header places a month selector and Today in its left island;
-selecting the month opens the date-selection drawer. The right island keeps
-full-sized Availability, Search, and Settings actions. The New menu
+selecting the month opens the date-selection drawer. On a phone the right
+island keeps full-sized Availability, `Booking links`, and Settings actions; on
+a tablet it holds the period selector, previous and next, Search, and (unless
+the pane is narrow, when the sidebar holds it) `Booking links`, and Settings
+stays in the sidebar footer. The New menu
 beside the bottom AI input offers Event, feature-gated Call, and feature-gated
-Reminder. Inline Calendar previews retain their host's chrome without adding
-another sidebar; their left header island has a compact New menu because the
-bottom New action follows the foreground host view.
+Reminder. Touch devices never show Calendar as an inline preview, so the touch
+header has no preview variant. On desktop, inline Calendar previews (Home,
+Notifications) keep their host's chrome without adding another sidebar.
 
 With `enable-calendar-team-sharing` enabled, **Settings → Calendar** also has
 **Team sharing**: one `Share with teammates` row whose select offers
@@ -390,8 +392,8 @@ Organizer and Attendee virtualize a bounded contact window, using shared
 name/email matching. Matching selected values stay pinned independently of the
 page; their labels resolve through explicit email lookup, including cached
 point reads offline. Unknown or external selections keep their email labels.
-Next contacts replaces the suggestion page without clearing selections. Empty
-server pages may still have a continuation; partial/offline caches are labeled
+Scrolling to the end lists the next contacts below without clearing selections.
+An empty page reads on until a page matches or the directory ends; partial/offline caches are labeled
 rather than claiming no contacts exist. Adding a valid email clears the contact
 search. Typing keeps focus in the input as async rows arrive, and ArrowDown moves
 into the checkbox rows. Desktop/phone coverage uses the production filters and
@@ -518,7 +520,7 @@ Selecting `Macro call` on an owned editable event without one adds a call on sav
 choosing another option removes its generated Macro link from the invitation.
 Removing the link or deleting the calendar event does not revoke the reusable call.
 The AI's `CreateCalendarEvent` composer (chat, agent sessions, channel review cards)
-offers the same selector under the same quick-calls flag; `Macro call` there maps to
+offers the same selector; `Macro call` there maps to
 the tool's `addMacroCall`, and the call is created when the tool executes, before the
 event is written, so the single invitation already carries the link. The MCP server
 and channel bot accept `addMacroCall` directly. `addMacroCall` and `addGoogleMeet`
@@ -534,8 +536,11 @@ group: a caret plus the account address header with a checkbox that shows or hid
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
 name, per-calendar checkbox). Accounts start collapsed. Subscribed system calendars
 (Google holidays, birthdays) carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
-warning icon whose tooltip shows the provider error; the account keeps syncing its other
-calendars and the badge clears on its own once that calendar syncs again.
+warning icon whose tooltip shows `Sync failed: <provider error>`, Settings → Calendar's
+wording; touch has no hover, so on phones and tablets that line is written under the
+calendar's name instead (the row grows to fit), as a menu item's disabled reason is. The
+account keeps syncing its other calendars and the badge clears on its own once that
+calendar syncs again.
 Phones have no sidebar, so the header gear's settings sheet carries the same list under
 `Calendars`, between Period and Display, laid out like the mobile filter drawer's
 groups (Tasks → Filters): each account is its own card whose header row shows or hides
@@ -546,8 +551,8 @@ neighbouring shown calendars join into one selection. Period, Week starts on and
 format use the same options as single choices, and Show weekends as a checkbox. Accounts
 start collapsed each time the sheet opens. The rows write the same browser-local
 visibility as the sidebar and Settings → Calendar, so all three agree. With accounts
-expanded the sheet scrolls under its pinned handle. The dropdown form of the header
-gear, which only a tablet's inline Calendar preview shows, still lists accounts only.
+expanded the sheet scrolls under its pinned handle. The gear's dropdown form (the
+sidebar footer's `Settings`) has no `Calendars` group: the sidebar lists them itself.
 
 On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and
@@ -640,8 +645,9 @@ beside the calendar on desktop, as the full-screen composer on touch devices, in
 composer even when another one is open. Deleting an event asks first, and says guests will be
 notified only when someone besides you is on it.
 Guest pickers in event creation/editing, invitations/forwarding and AI drafts use
-paged personal suggestions. Type to find contacts outside the first window; Next
-options or PageDown replaces the page. Selected guests, their supplied/chosen
+paged personal suggestions. Type to find contacts outside the first page; scrolling
+to the end of the list, or PageDown on desktop, lists the next page below the
+earlier ones, and a failed page offers Retry options. Selected guests, their supplied/chosen
 names and custom addresses survive searches and paging. Known event guests are
 scoped extras, not personal-directory membership. Add-only editors exclude current
 and newly added guests case-insensitively without changing their stored address
@@ -1538,3 +1544,6 @@ For an Outlook invitation you attend, `Open in Outlook` below the RSVP controls
 opens the actual occurrence so you can clear your own response there.
 
 Calendar's New menus explain Event, Call, and Booking link with icons and muted descriptions. Call and Booking link keep their existing feature gates. Booking link opens the personal Scheduling workspace with an unsaved link editor; canceling creates nothing. The URL request is consumed once after the profile is ready.
+
+On touch, Calendar workspace controls float within the calendar pane, beside the
+sidebar, with an explicit safe-area top gutter. They do not cover the sidebar title.

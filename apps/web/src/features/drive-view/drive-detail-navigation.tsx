@@ -4,10 +4,10 @@ import type {
   EntityDetailNavigationOptions,
   EntityDetailTarget,
 } from '@app/components/entity-detail/entity-detail-target';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { useNavigate, useParams, useRouteState } from '@app/lib/split-router';
 import { driveSplitRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
@@ -24,6 +24,8 @@ import {
   type DriveDetailTarget,
   detailRouteFromTarget,
   detailTargetFromRoute,
+  listTrail,
+  openedFromList,
   sameDocumentRoute,
 } from './primitives/drive-detail-trail';
 import {
@@ -35,12 +37,21 @@ import {
 
 type DriveDetailRootOptions = EntityDetailNavigationOptions & {
   location?: DriveLocation;
+  /**
+   * Opened from a sidebar shortcut (a favorite, the Databases section) rather
+   * than a list: it opens at My Files and names no location.
+   */
+  shortcut?: boolean;
 };
+
+const MY_FILES: DriveLocation = { kind: 'tab', tab: 'owned' };
 
 type DriveDetailNavigation = {
   activeCallId: Accessor<string | undefined>;
   entries: Accessor<readonly EntityDetailNavigationEntry[]>;
   active: Accessor<EntityDetailNavigationEntry | undefined>;
+  /** Whether the breadcrumbs name a Drive list the open item is listed in. */
+  showsLocation: Accessor<boolean>;
   navigate: (
     target: EntityDetailTarget,
     options?: EntityDetailNavigationOptions
@@ -56,8 +67,11 @@ type DriveDetailNavigation = {
 
 const Context = createContext<DriveDetailNavigation>();
 
-function opensInline(options?: EntityDetailNavigationOptions) {
-  if (isTouchDevice()) return false;
+function opensInline(
+  inlineLayout: boolean,
+  options?: EntityDetailNavigationOptions
+) {
+  if (!inlineLayout) return false;
 
   const event = options?.event;
   if (!event) return true;
@@ -75,6 +89,7 @@ export function DriveDetailNavigationProvider(
   const navigate = useNavigate();
   const routeTrail = useRouteState(driveSplitRoute);
   const selectPreview = createPreviewSelectionGuard();
+  const inlinePreviewLayout = useInlinePreviewLayout();
   const activeDocument = createMemo(() => driveDocumentFromParams(params));
   const activeCallId = () => params.callId;
   const activeTarget = createMemo(() =>
@@ -103,6 +118,15 @@ export function DriveDetailNavigationProvider(
     }))
   );
   const active = () => entries().at(-1);
+  const showsLocation = () => {
+    if (activeCallId()) return false;
+    if (!activeDocument()) return true;
+    const location = props.location();
+    // Every document opened from outside Drive lands on My Files' route, so
+    // only that route needs the trail to say it came from the list.
+    if (location.kind === 'folder' || location.tab !== 'owned') return true;
+    return openedFromList(trail());
+  };
 
   const resolveTarget = (
     target: EntityDetailTarget,
@@ -110,7 +134,7 @@ export function DriveDetailNavigationProvider(
   ):
     | { target: DriveDetailTarget; document: DriveDocumentRoute }
     | undefined => {
-    if (!opensInline(options)) return;
+    if (!opensInline(inlinePreviewLayout(), options)) return;
 
     if (target.type === 'database' || target.type === 'form') {
       if (!selectPreview(target)) return;
@@ -143,6 +167,7 @@ export function DriveDetailNavigationProvider(
     entries,
     activeCallId,
     active,
+    showsLocation,
 
     navigate(target, options) {
       const resolved = resolveTarget(target, options);
@@ -168,14 +193,15 @@ export function DriveDetailNavigationProvider(
       const resolved = resolveTarget(target, options);
       if (!resolved) return false;
 
+      const location = options?.shortcut
+        ? MY_FILES
+        : (options?.location ?? props.location());
       fireAndForget(
-        navigate(
-          driveDestination(
-            options?.location ?? props.location(),
-            resolved.document
-          ),
-          { state: [resolved.target] }
-        ),
+        navigate(driveDestination(location, resolved.document), {
+          state: options?.shortcut
+            ? [resolved.target]
+            : listTrail(resolved.target),
+        }),
         'drive-view'
       );
       return true;

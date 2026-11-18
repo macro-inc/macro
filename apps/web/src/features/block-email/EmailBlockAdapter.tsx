@@ -27,7 +27,6 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import type { EmailThreadHostViewProps } from './EmailThreadHostView';
 import { useEmailListNavigation } from './use-email-list-navigation';
 import { registerEmailHotkeys } from './util/emailHotkeys';
 import { EmailThread } from './views/email-thread';
@@ -41,7 +40,6 @@ export function EmailBlockAdapter(props: {
   title: string;
   threadId: Accessor<string>;
   source: EmailThreadSource;
-  threadTransport: EmailThreadHostViewProps['threadTransport'];
 }) {
   const [params] = useSearchParams();
   const [routeSearch] = createSearchParams(emailDetailSearch);
@@ -132,7 +130,6 @@ export function EmailBlockAdapter(props: {
           title={props.title}
           threadId={props.threadId}
           source={props.source}
-          threadTransport={props.threadTransport}
           host={host}
         />
       }
@@ -141,7 +138,6 @@ export function EmailBlockAdapter(props: {
         title={props.title}
         threadId={props.threadId}
         source={props.source}
-        threadTransport={props.threadTransport}
         host={host}
       />
     </Show>

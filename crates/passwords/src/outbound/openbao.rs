@@ -334,6 +334,7 @@ impl SecretProvider for OpenBaoProvider {
         }
         #[derive(Deserialize)]
         struct UsernameValue {
+            #[serde(default)]
             username: SecretString,
         }
         let version = u64::try_from(version).map_err(|_| Error::Invalid)?;

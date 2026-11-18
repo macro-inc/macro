@@ -41,16 +41,56 @@ impl OpensearchClient {
         .await
     }
 
-    /// Deletes a particular email message
-    pub async fn delete_email_message_by_id(
+    /// Deletes every document of a thread page's spam and trash messages in
+    /// one delete-by-query, visible to search when this returns. Fails when a
+    /// document changed after the page was read, so the caller rereads it.
+    #[tracing::instrument(
+        skip(self, message_ids),
+        fields(
+            messages = message_ids.len(),
+            deleted = tracing::field::Empty,
+            version_conflicts = tracing::field::Empty,
+        ),
+        err
+    )]
+    pub async fn delete_email_messages(
+        &self,
+        message_ids: &[String],
+        index_override: Option<&str>,
+    ) -> Result<()> {
+        let mut deleted = delete::email::DeletedByQuery::default();
+        for chunk in message_ids.chunks(delete::email::MESSAGE_IDS_PER_DELETE) {
+            deleted += resend_on_lost_connection(|| {
+                delete::email::delete_email_messages(&self.inner, chunk, index_override)
+            })
+            .await?;
+        }
+        let span = tracing::Span::current();
+        span.record("deleted", deleted.deleted);
+        span.record("version_conflicts", deleted.version_conflicts);
+        delete::email::fail_on_conflict(deleted).map(|_| ())
+    }
+
+    /// Deletes every document of one deleted email message, whatever thread
+    /// it was indexed under, visible to search when this returns.
+    #[tracing::instrument(
+        skip(self),
+        fields(deleted = tracing::field::Empty, passes = tracing::field::Empty),
+        err
+    )]
+    pub async fn delete_email_message(
         &self,
         message_id: &str,
         index_override: Option<&str>,
     ) -> Result<()> {
-        resend_on_lost_connection(|| {
-            delete::email::delete_email_message_by_id(&self.inner, message_id, index_override)
+        let deleted = resend_on_lost_connection(|| {
+            delete::email::delete_email_message(&self.inner, message_id, index_override)
         })
-        .await
+        .await?;
+        let span = tracing::Span::current();
+        span.record("deleted", deleted.deleted);
+        span.record("passes", deleted.passes);
+        Ok(())
     }
 
     /// Deletes all email messages with the specified link_id

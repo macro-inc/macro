@@ -285,6 +285,7 @@ fn name_queries_order_on_the_name_column_without_a_property_join() {
         &filter,
         false,
         sort,
+        DocumentGrants::Estimated,
         &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, false)),
     );
     let sql = query.sql().to_owned();

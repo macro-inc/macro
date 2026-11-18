@@ -9,29 +9,23 @@ const linksOnKey = (links: SidebarItem[], key: ValidHotkey) =>
 
 describe('buildSidebarLinks', () => {
   it('sends g i to Notifications when it is on the rail', () => {
-    const links = buildSidebarLinks(
-      false,
-      false,
-      false,
-      false,
-      true,
-      false,
-      false
-    );
+    const links = buildSidebarLinks(false, false, false, true, false);
     expect(linksOnKey(links, 'i')).toEqual(['notifications']);
     expect(linksOnKey(links, 'h')).toEqual(['home']);
   });
 
   it('keeps g i on Home without Notifications', () => {
-    const links = buildSidebarLinks(
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false
-    );
+    const links = buildSidebarLinks(false, false, false, false, false);
     expect(linksOnKey(links, 'i')).toEqual(['home']);
+  });
+
+  it('gives every go-to letter one destination, with Sent on g s', () => {
+    for (const flag of [false, true]) {
+      const links = buildSidebarLinks(flag, flag, flag, flag, flag);
+      const keys = links.flatMap((link) => [link.hotkey ?? []].flat());
+      expect(keys).toEqual([...new Set(keys)]);
+      expect(linksOnKey(links, 's')).toEqual(['mail']);
+      expect(linksOnKey(links, 't')).toEqual(['tasks']);
+    }
   });
 });

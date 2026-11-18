@@ -6,13 +6,18 @@ Their alerts link the **Agent harness runtimes** dashboard. None of them page.
 
 A runtime (macrod or another harness daemon) dials agent-harness-service and
 lists the ACP sessions it still serves. The replica it reached reattaches them
-in `reattach_live_sessions` (`crates/agent_harness/src/domain/service.rs`),
-under one `agent.runtime.reattach` span per dial:
+in `reattach_live_sessions` (`crates/agent_harness/src/domain/service/reattach.rs`),
+under one `agent.runtime.reattach` span per dial. Sessions with no activity for
+seven days and nothing waiting on them are dormant: the dial only counts them.
+A dial restores at most `MAX_EAGER_PER_DIAL` (50) sessions now, most recently
+active first; the rest bind on their next prompt or delivery. Sessions with a
+turn unfinished, a command in flight or a queued prompt are always restored,
+even past the cap.
 
 | What | Search |
 | --- | --- |
 | Dials | Spans: `service:agent-harness-service resource_name:agent.runtime.reattach`, by `@harness` |
-| Sessions per dial | `@agent.runtime.reattach_sessions`; `.reattach_eager`, `.reattach_lazy`, `.reattach_skipped`, `.reattach_failures` |
+| Sessions per dial | `@agent.runtime.reattach_sessions` (listed, not dormant); `.reattach_eager`, `.reattach_lazy`, `.reattach_capped` (recent, left lazy by the cap), `.reattach_required` (restored past any cap), `.reattach_dormant`, `.reattach_skipped`, `.reattach_failures` |
 | Connects and disconnects | Logs: `@telemetry_event:(harness_runtime_connected OR harness_runtime_disconnected)` `@harness:<id>` |
 | Starvation | Logs: `service:agent-harness-service "tokio runtime starvation detected"`, by `host`; `@delay_ms` |
 | Task memory | Metrics: `ecs.fargate.mem.rss` / `ecs.fargate.mem.limit`, `short_image:agent-harness-service-prod,container_name:service`, by `task_arn` |
@@ -35,9 +40,13 @@ One runtime listed more than 500 sessions to reattach in 15 minutes. Loading
 that many at once starves the replica it dialed and stalls every other
 session there.
 
-- Compare `reattach_eager` with `reattach_lazy` and `reattach_skipped` on its
-  spans: idle sessions should bind lazily, so a high eager count means many of
-  them look active.
+- Compare `reattach_eager` with `reattach_lazy`, `reattach_dormant` and
+  `reattach_skipped` on its spans: idle sessions should bind lazily and
+  week-old ones should be dormant, so a high eager count means many of them
+  look active. A runtime that keeps hitting the cap shows a non-zero
+  `reattach_capped`; `reattach_required` above 50 means that many sessions
+  had work waiting and were restored anyway (the replica also logs "a dial
+  restores more sessions with work in flight than its eager cap").
 - A high `reattach_failures` count means attaches are retrying; check the
   harness errors on that replica.
 

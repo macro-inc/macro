@@ -140,24 +140,55 @@ pub async fn get_all_documents(
     Ok((documents, count))
 }
 
-#[tracing::instrument(skip(db))]
+/// A document in trash since before the retention cutoff.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExpiredDocument {
+    /// The document's id.
+    pub id: String,
+    /// When the document was moved to trash.
+    pub deleted_at: chrono::NaiveDateTime,
+}
+
+/// Returns up to `limit` documents trashed at or before `cutoff`, oldest first,
+/// starting after `after`. Pass the last document of a page as `after` to read
+/// the next page.
+#[tracing::instrument(skip(db), err)]
 pub async fn get_documents_to_delete(
     db: &Pool<Postgres>,
-    date: &chrono::NaiveDateTime,
-) -> anyhow::Result<Vec<String>> {
-    let result = sqlx::query!(
+    cutoff: &chrono::NaiveDateTime,
+    after: Option<&ExpiredDocument>,
+    limit: i64,
+) -> anyhow::Result<Vec<ExpiredDocument>> {
+    let mut transaction = db.begin().await?;
+
+    // A page walks idx_document_deleted_at_id and stops at the limit. Without
+    // that index it would read the whole table, so give up instead.
+    sqlx::query!("SET LOCAL statement_timeout = '10s'")
+        .execute(&mut *transaction)
+        .await?;
+
+    let documents = sqlx::query_as!(
+        ExpiredDocument,
         r#"
-            SELECT d.id
+            SELECT d.id, d."deletedAt" AS "deleted_at!"
             FROM "Document" d
-            WHERE d."deletedAt" IS NOT NULL AND d."deletedAt" <= $1
+            WHERE d."deletedAt" IS NOT NULL
+              AND d."deletedAt" <= $1
+              AND (d."deletedAt", d.id) > (COALESCE($2, '-infinity'::timestamp), COALESCE($3, ''))
+            ORDER BY d."deletedAt", d.id
+            LIMIT $4
         "#,
-        date
+        cutoff,
+        after.map(|document| document.deleted_at),
+        after.map(|document| document.id.as_str()),
+        limit
     )
-    .map(|row| row.id)
-    .fetch_all(db)
+    .fetch_all(&mut *transaction)
     .await?;
 
-    Ok(result)
+    transaction.commit().await?;
+
+    Ok(documents)
 }
 
 /// Returns a paginated list of document IDs, sorting by ascending so we don't miss new ones

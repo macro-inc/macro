@@ -4,8 +4,8 @@ use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, CreatedRoutine,
-    DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun, RunCaller, RunHistory,
-    RunningRun, ScheduledAction, ScheduledActionUpdate, SubRoutineKey,
+    DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun, Requester, RunCaller,
+    RunHistory, RunningRun, ScheduledAction, ScheduledActionUpdate, SubRoutineKey,
 };
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
 use anyhow::Result;
@@ -272,6 +272,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         input: ActionConfiguration,
         template_id: Uuid,
         appearance: EntityAppearance,
+        requester: Requester,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// `create_action` for a routine saved from routine suggestion
@@ -282,6 +283,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         principal: &CreationPrincipal,
         input: ActionConfiguration,
         suggestion_id: Uuid,
+        requester: Requester,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Actions `user_id` can access, within `scope`. Legacy clients see cron
@@ -298,6 +300,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         input: ActionConfigurationUpdate,
+        requester: Requester,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Change the owner's routine presentation without changing its execution revision.
@@ -313,6 +316,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         enabled: bool,
+        requester: Requester,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     fn delete_action(
@@ -705,6 +709,7 @@ pub trait RoutineTemplateService: Send + Sync + 'static {
         principal: &CreationPrincipal,
         template_id: Uuid,
         input: ActionConfiguration,
+        requester: Requester,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 }
 

@@ -234,6 +234,7 @@ fn cast_of(target: PropertyType, cast: CastVerdict) -> ColumnCast {
         is_multi_select: target.is_multi_select,
         specific_entity_type: target.specific_entity_type,
         relation: target.relation,
+        percentage: target.percentage,
         cast,
         reason: None,
         failures: 0,

@@ -104,7 +104,6 @@ pub async fn build(
     event_broker_tracker: TaskTracker,
     import_jobs: ai_tools::ImportJobs,
     mcp_http: mcp_client::outbound::guarded_http::McpHttp,
-    user_code_mode: Arc<dyn agent_code_mode::domain::UserCodeMode>,
 ) -> anyhow::Result<CognitionRuntime> {
     let public_url = macro_service_urls::CognitionPublicUrl::new()?;
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -123,14 +122,12 @@ pub async fn build(
     let chat_delete_queue = macro_queues::ChatDeleteQueue::new();
     let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
     let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
-    let ai_projection_queue = macro_queues::AiProjectionQueue::new();
     let notification_queue = macro_queues::NotificationIngressQueue::new();
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
         .document_text_extractor_queue(&document_text_extractor_queue)
         .chat_delete_queue(&chat_delete_queue)
         .email_scheduled_queue(&email_scheduled_queue)
-        .gmail_ops_queue(&gmail_ops_queue)
-        .ai_projection_queue(&ai_projection_queue);
+        .gmail_ops_queue(&gmail_ops_queue);
 
     let internal_api_key = config.internal_api_key.to_string();
 
@@ -388,14 +385,6 @@ pub async fn build(
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
-    let document_tool_context = match ai_tools::canvas_artifacts_rollout(
-        config.posthog_api_key.value(),
-        config.posthog_host.value(),
-        config.environment,
-    )? {
-        Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
-        None => document_tool_context,
-    };
 
     tracing::info!("initialized document tool context");
 
@@ -966,17 +955,15 @@ pub async fn build(
         ),
         schedule_tool_context: ai_tools::build_routine_tool_context()?,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
-        user_code_mode: Some(user_code_mode),
         web_search_provider: ai_tools::build_web_search_provider_from_env(),
         admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
-    // Chat, structured completions and projections run in code mode.
-    let chat_tools = ai_tools::tools_for_chat_code_mode();
-    let all_tools_toolset = chat_tools.toolset.clone();
+    let all_tools = ai_tools::tools_for(ai_tools::AiHost::Chat);
+    let all_tools_toolset = all_tools.toolset.clone();
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
-        Arc::new(chat_tools.prompt.to_string());
+        Arc::new(all_tools.prompt.to_string());
 
     // Build memory service
     let memory_service = Arc::new(ai_tools::memory::build_memory_service(
@@ -996,51 +983,6 @@ pub async fn build(
     );
 
     tracing::info!("initialized ai cost service");
-
-    // Generator that materializes projections by running their prompt through
-    // the shared AI toolset, attributed to the requesting user.
-    let projection_generator =
-        ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
-            tool_service_context.clone(),
-            ai_tools::tools_for_chat_code_mode(),
-        );
-    // Notifier that pushes finished materializations to the target's connected
-    // clients through the connection gateway.
-    let projection_notifier =
-        ai_projections::outbound::gateway_notifier::GatewayProjectionNotifier::new(Arc::new(
-            connection_gateway_client::ConnectionGatewayClient::new(
-                internal_api_key.clone(),
-                ConnectionGatewayUrl::new()?.to_string(),
-            ),
-        ));
-    let ai_projections_service_impl =
-        ai_projections::domain::ai_projection_service::AiProjectionServiceImpl::new(
-            ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
-                db.clone(),
-            ),
-            sqs_client.clone(),
-            projection_generator,
-            projection_notifier,
-        );
-
-    // Spawn the inbound worker that polls ai_projection_queue and materializes
-    // projection instances. It owns its own clone of the service.
-    let ai_projection_worker = ai_projections::worker::AiProjectionWorker::new(
-        sqs_worker::SQSWorker::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            ai_projection_queue.to_string(),
-            10,
-            10,
-        ),
-        ai_projections_service_impl.clone(),
-    );
-    let ai_projection_worker_task = tokio::spawn(async move {
-        ai_projection_worker.poll().await;
-    });
-
-    let ai_projections_service = Arc::new(ai_projections_service_impl);
-
-    tracing::info!("initialized ai projections service");
 
     let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(
         onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
@@ -1130,15 +1072,27 @@ pub async fn build(
     .with_disconnected_hook(pipedream_disconnected_hook);
 
     let cancellation = tokio_util::sync::CancellationToken::new();
-    super::refresh::start(
-        db.clone(),
-        Arc::new(sqs_client.clone()),
-        cancellation.clone(),
-        event_broker_tracker.clone(),
-    );
     if !matches!(config.environment, Environment::Local) {
+        // Without a PostHog key there is no kill switch, and refresh runs.
+        let memory_flags = config
+            .posthog_api_key
+            .value()
+            .map(|key| {
+                feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                    config
+                        .posthog_host
+                        .value()
+                        .unwrap_or(crate::DEFAULT_POSTHOG_HOST),
+                    key.to_owned(),
+                    std::time::Duration::from_secs(3),
+                    config.environment,
+                )
+                .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
+            })
+            .transpose()?;
         memory::schedule::start(
             memory_service.clone(),
+            memory_flags,
             &event_broker_tracker,
             cancellation.clone(),
         )?;
@@ -1167,7 +1121,6 @@ pub async fn build(
         document_tool_context,
         memory_service,
         usage_service,
-        ai_projections_service,
         properties_tool_context,
         email_tool_context: email_tool_context.clone(),
         call_tool_context,
@@ -1192,12 +1145,10 @@ pub async fn build(
         onboarding_service,
         macro_event_broker: macro_event_broker.clone(),
     });
-    let mut workers = vec![tokio_util::task::AbortOnDropHandle::new(
-        ai_projection_worker_task,
-    )];
-    if let Some(worker) = granola_worker {
-        workers.push(tokio_util::task::AbortOnDropHandle::new(worker));
-    }
+    let workers = granola_worker
+        .into_iter()
+        .map(tokio_util::task::AbortOnDropHandle::new)
+        .collect();
     Ok(CognitionRuntime {
         router,
         workers,

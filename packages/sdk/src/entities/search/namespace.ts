@@ -19,6 +19,7 @@ import { Project } from '../projects/project';
 import { visibleTags } from '../workspace/items';
 import { WorkspaceQuery } from '../workspace/query';
 import type { WorkspaceTag } from '../workspace/types';
+import { exclusions } from './exclusions';
 import type {
   SearchOptions,
   SearchPage,
@@ -27,33 +28,7 @@ import type {
   SearchType,
 } from './types';
 
-const nil = '00000000-0000-0000-0000-000000000000';
-
 const DEFAULT_PAGE_SIZE = 50;
-
-/** How each kind is left out of a search: a nil id in its primary filter. */
-const exclusions: Record<
-  Exclude<SearchType, 'company'>,
-  (filters: EntityFilters) => EntityFilters
-> = {
-  agent_session: (f) => ({
-    ...f,
-    agent_session_filters: { ...f.agent_session_filters, ids: [nil] },
-  }),
-  document: (f) => ({ ...f, document_filters: { document_ids: [nil] } }),
-  chat: (f) => ({ ...f, chat_filters: { chat_ids: [nil] } }),
-  email: (f) => ({
-    ...f,
-    email_filters: { ...f.email_filters, email_thread_ids: [nil] },
-  }),
-  channel: (f) => ({ ...f, channel_filters: { channel_ids: [nil] } }),
-  project: (f) => ({ ...f, project_filters: { project_ids: [nil] } }),
-  call: (f) => ({ ...f, call_filters: { channel_ids: [nil] } }),
-  calendar_event: (f) => ({
-    ...f,
-    calendar_event_filters: { calendar_event_ids: [nil] },
-  }),
-};
 
 const searchTypes: readonly SearchType[] = [
   ...(Object.keys(exclusions) as SearchType[]),

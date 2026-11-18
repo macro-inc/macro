@@ -9,7 +9,7 @@ use axum::{
     Json, Router,
     body::Bytes,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -21,8 +21,8 @@ use entity_access::{
     inbound::axum_extractors::AgentSessionAccessLevelExtractor,
 };
 use macro_authorization::{
-    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOnly,
+    ActingUser, CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, UserOnly, is_program_run,
 };
 use macro_uuid::Uuid;
 use std::sync::Arc;
@@ -154,6 +154,20 @@ impl IntoResponse for CodeExecutionApiError {
             error @ CodeModeError::ConnectedAppUnreachable => {
                 (StatusCode::BAD_GATEWAY, error.to_string()).into_response()
             }
+            CodeModeError::ConnectedAppRateLimited { retry_after } => {
+                let message = CodeModeError::ConnectedAppRateLimited { retry_after }.to_string();
+                let seconds = retry_after
+                    .map_or(1, |wait| {
+                        wait.as_secs() + u64::from(wait.subsec_nanos() > 0)
+                    })
+                    .max(1);
+                (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    [(axum::http::header::RETRY_AFTER, seconds.to_string())],
+                    message,
+                )
+                    .into_response()
+            }
             error => {
                 tracing::error!(error = ?error, "code execution read failed");
                 (
@@ -275,16 +289,31 @@ pub async fn list_reviews<Access: EntityAccessService, Auth: MacroAuthorizationS
         .map(Json)
         .map_err(CodeExecutionApiError)
 }
+
+/// Only a person decides a review: any program (see [`is_program_run`])
+/// is refused, or it could approve the draft it presented itself.
+fn decode_user_decision(
+    attribution: CredentialAttribution,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<ReviewDecision, CodeExecutionApiError> {
+    if is_program_run(attribution, headers) {
+        return Err(CodeExecutionApiError(CodeModeError::Forbidden));
+    }
+    decode(body).map_err(CodeExecutionApiError)
+}
+
 #[utoipa::path(post, path = "/agent-sessions/{session_id}/reviews/{review_id}", tag = "agent-sessions", operation_id = "decide_session_review", params(("session_id" = Uuid, Path), ("review_id" = Uuid, Path)), request_body = ReviewDecision, responses((status = 200, body = ReviewRecord), (status = 403), (status = 409)))]
 /// Save edits or atomically claim the exact draft revision the user submitted.
 pub async fn decide_review<Access: EntityAccessService, Auth: MacroAuthorizationService>(
     access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
     caller: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     Path((_session, id)): Path<(Uuid, Uuid)>,
     body: Bytes,
 ) -> Result<Json<ReviewRecord>, CodeExecutionApiError> {
-    let decision: ReviewDecision = decode(&body).map_err(CodeExecutionApiError)?;
+    let decision = decode_user_decision(caller.authorization.attribution(), &headers, &body)?;
     state
         .reviews
         .decide(

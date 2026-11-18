@@ -63,6 +63,36 @@ describe('rulesSentence', () => {
       undefined
     );
   });
+
+  it('reads a percentage threshold in percentage points', () => {
+    const columns = new Map<string, FormColumn>([
+      [
+        'rate',
+        {
+          id: 'rate',
+          name: 'Rate',
+          kind: { type: 'number' },
+          options: [],
+          percentage: true,
+        },
+      ],
+    ]);
+    expect(
+      rulesSentence(
+        {
+          conjunction: 'and',
+          conditions: [
+            {
+              kind: 'condition',
+              column: 'rate',
+              test: { kind: 'number', operator: 'greaterThan', value: 0.25 },
+            },
+          ],
+        },
+        columns
+      )
+    ).toBe('IF Rate is more than 25%');
+  });
 });
 
 describe('availability', () => {
