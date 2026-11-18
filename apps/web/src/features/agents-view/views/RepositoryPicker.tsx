@@ -3,9 +3,8 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import GitBranchIcon from '@icon/system/regular/git-branch.svg';
-import { Popover } from '@kobalte/core/popover';
 import GithubIcon from '@phosphor/github-logo.svg';
-import { Button, createCommandListController } from '@ui';
+import { Button, createCommandListController, Dropdown, Input } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -115,6 +114,10 @@ export function RepositoryPicker(props: {
     choice.kind === 'automatic'
       ? !props.repoUrl
       : !!props.repoUrl && sameRepository(props.repoUrl, choice.url);
+  const selectedRepository = () => {
+    const choice = choices().find(chosen);
+    return choice?.kind === 'listed' ? choice.url : '';
+  };
   const rowLabel = (choice: RepositoryChoice) =>
     match(choice)
       .with({ kind: 'automatic' }, () => 'Auto-detect')
@@ -226,7 +229,7 @@ export function RepositoryPicker(props: {
           }}
           class="flex flex-col gap-2"
         >
-          <input
+          <Input
             role="combobox"
             aria-label="Search repositories"
             aria-expanded="true"
@@ -242,6 +245,7 @@ export function RepositoryPicker(props: {
               list.setSelectedIndex(0);
             }}
             onKeyDown={(event) => {
+              if (event.key !== 'Escape') event.stopPropagation();
               if (event.key === 'ArrowDown') {
                 event.preventDefault();
                 list.selectNext();
@@ -252,7 +256,7 @@ export function RepositoryPicker(props: {
                 scrollHighlightedIntoView();
               }
             }}
-            class="w-full rounded-lg border border-edge-muted bg-input px-3 py-2 outline-none focus:border-accent"
+            class="w-full"
           />
           <Show when={error()}>
             <p role="alert" class="text-xs text-failure">
@@ -266,27 +270,25 @@ export function RepositoryPicker(props: {
           aria-label="Repositories"
           class="mt-2 max-h-56 overflow-y-auto"
         >
-          <For each={choices()}>
-            {(choice, index) => (
-              <button
-                type="button"
-                role="option"
-                id={`${listId}-${index()}`}
-                aria-selected={list.isSelected(index())}
-                class="flex w-full touch:min-h-11 items-center gap-2 rounded-lg px-2 py-2 text-left not-touch:hover:bg-hover aria-selected:bg-active"
-                onClick={() => choose(choice)}
-                onMouseMove={() => list.setSelectedIndexFromPointer(index())}
-              >
-                <Show when={choice.kind !== 'automatic'}>
-                  <GithubIcon class="size-4 shrink-0" />
-                </Show>
-                <span class="truncate">{rowLabel(choice)}</span>
-                <Show when={chosen(choice)}>
-                  <CheckIcon class="ml-auto size-4 shrink-0" />
-                </Show>
-              </button>
-            )}
-          </For>
+          <RepositoryPickerOptions value={selectedRepository()}>
+            <For each={choices()}>
+              {(choice, index) => (
+                <RepositoryPickerOption
+                  value={choice.kind === 'automatic' ? '' : choice.url}
+                  id={`${listId}-${index()}`}
+                  highlighted={list.isSelected(index())}
+                  selected={chosen(choice)}
+                  onSelect={() => choose(choice)}
+                  onMouseMove={() => list.setSelectedIndexFromPointer(index())}
+                >
+                  <Show when={choice.kind !== 'automatic'}>
+                    <GithubIcon class="size-4 shrink-0" />
+                  </Show>
+                  <span class="truncate">{rowLabel(choice)}</span>
+                </RepositoryPickerOption>
+              )}
+            </For>
+          </RepositoryPickerOptions>
           <Switch>
             <Match when={props.repositoriesError}>
               <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs text-ink-muted">
@@ -378,7 +380,7 @@ export function RepositoryPicker(props: {
             }}
             class="flex flex-col gap-2"
           >
-            <input
+            <Input
               role="combobox"
               aria-label="Search branches"
               aria-expanded="true"
@@ -394,6 +396,7 @@ export function RepositoryPicker(props: {
                 branchList.setSelectedIndex(0);
               }}
               onKeyDown={(event) => {
+                if (event.key !== 'Escape') event.stopPropagation();
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
                   branchList.selectNext();
@@ -404,7 +407,7 @@ export function RepositoryPicker(props: {
                   scrollHighlightedBranchIntoView();
                 }
               }}
-              class="w-full rounded-lg border border-edge-muted bg-input px-3 py-2 outline-none focus:border-accent"
+              class="w-full"
             />
             <Show when={error()}>
               <p role="alert" class="text-xs text-failure">
@@ -418,36 +421,34 @@ export function RepositoryPicker(props: {
             aria-label="Branches"
             class="mt-2 max-h-56 overflow-y-auto"
           >
-            <For each={branchChoices()}>
-              {(choice, index) => (
-                <button
-                  type="button"
-                  role="option"
-                  id={`${branchListId}-${index()}`}
-                  aria-selected={branchList.isSelected(index())}
-                  class="flex w-full touch:min-h-11 items-center gap-2 rounded-lg px-2 py-2 text-left not-touch:hover:bg-hover aria-selected:bg-active"
-                  onClick={() => chooseBranch(choice)}
-                  onMouseMove={() =>
-                    branchList.setSelectedIndexFromPointer(index())
-                  }
-                >
-                  <GitBranchIcon class="size-4 shrink-0" />
-                  <span class="min-w-0 truncate">
-                    {choice.kind === 'typed'
-                      ? `Use ${choice.name}`
-                      : choice.name}
-                  </span>
-                  <Show when={choice.name === defaultBranch()}>
-                    <span class="shrink-0 text-xs text-ink-muted">
-                      {` (default)`}
+            <RepositoryPickerOptions value={props.branch}>
+              <For each={branchChoices()}>
+                {(choice, index) => (
+                  <RepositoryPickerOption
+                    value={choice.name}
+                    id={`${branchListId}-${index()}`}
+                    highlighted={branchList.isSelected(index())}
+                    selected={choice.name === props.branch}
+                    onSelect={() => chooseBranch(choice)}
+                    onMouseMove={() =>
+                      branchList.setSelectedIndexFromPointer(index())
+                    }
+                  >
+                    <GitBranchIcon class="size-4 shrink-0" />
+                    <span class="min-w-0 truncate">
+                      {choice.kind === 'typed'
+                        ? `Use ${choice.name}`
+                        : choice.name}
                     </span>
-                  </Show>
-                  <Show when={choice.name === props.branch}>
-                    <CheckIcon class="ml-auto size-4 shrink-0" />
-                  </Show>
-                </button>
-              )}
-            </For>
+                    <Show when={choice.name === defaultBranch()}>
+                      <span class="shrink-0 text-xs text-ink-muted">
+                        {` (default)`}
+                      </span>
+                    </Show>
+                  </RepositoryPickerOption>
+                )}
+              </For>
+            </RepositoryPickerOptions>
             <Switch>
               <Match when={props.branchesError}>
                 <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs text-ink-muted">
@@ -498,33 +499,46 @@ function RepositoryPickerMenu(props: {
   trigger: JSX.Element;
   children: JSX.Element;
 }) {
+  let content: HTMLDivElement | undefined;
   return (
     <Show
       when={isTouchDevice()}
       fallback={
-        <Popover
+        <Dropdown
           open={props.open}
           onOpenChange={props.onOpenChange}
           placement="top-start"
-          gutter={8}
         >
-          <Popover.Trigger
-            class={props.triggerClass}
+          <Dropdown.Trigger
+            variant="ghost"
+            class="min-w-0 max-w-full"
             aria-label={props.triggerLabel ?? props.label}
             disabled={props.disabled}
             title={props.title}
           >
             {props.trigger}
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content class="menu-surface z-action-menu w-80 max-w-[calc(100vw-1rem)] p-3 text-sm">
-              <Popover.Title class="mb-2 font-medium">
-                {props.label}
-              </Popover.Title>
+          </Dropdown.Trigger>
+          <Dropdown.Content
+            class="w-80 max-w-[calc(100vw-1rem)]"
+            ref={(element: HTMLDivElement) => {
+              content = element;
+            }}
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              setTimeout(() => {
+                if (content?.isConnected)
+                  content
+                    .querySelector<HTMLInputElement>('[role="combobox"]')
+                    ?.focus();
+              }, 0);
+            }}
+          >
+            <Dropdown.Group>
+              <Dropdown.GroupLabel>{props.label}</Dropdown.GroupLabel>
               {props.children}
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover>
+            </Dropdown.Group>
+          </Dropdown.Content>
+        </Dropdown>
       }
     >
       <MobileDrawer
@@ -556,6 +570,75 @@ function RepositoryPickerMenu(props: {
           </MobileDrawer.Content>
         </MobileDrawer.Portal>
       </MobileDrawer>
+    </Show>
+  );
+}
+
+/** Keep sheet options on touch and shared radio-item styling on desktop. */
+function RepositoryPickerOptions(props: {
+  value: string;
+  children: JSX.Element;
+}) {
+  return (
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <Dropdown.RadioGroup value={props.value}>
+          {props.children}
+        </Dropdown.RadioGroup>
+      }
+    >
+      {props.children}
+    </Show>
+  );
+}
+
+function RepositoryPickerOption(props: {
+  value: string;
+  id: string;
+  highlighted: boolean;
+  selected: boolean;
+  onSelect: () => void;
+  onMouseMove: () => void;
+  children: JSX.Element;
+}) {
+  return (
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <Dropdown.RadioItem
+          value={props.value}
+          id={props.id}
+          role="option"
+          aria-selected={props.highlighted}
+          data-highlighted={props.highlighted ? '' : undefined}
+          onSelect={props.onSelect}
+          onMouseMove={props.onMouseMove}
+        >
+          <Dropdown.ItemLabel class="flex min-w-0 flex-1 items-center gap-1.5">
+            {props.children}
+          </Dropdown.ItemLabel>
+          <Dropdown.ItemIndicator>
+            <CheckIcon class="size-3.5 shrink-0 text-accent" />
+          </Dropdown.ItemIndicator>
+        </Dropdown.RadioItem>
+      }
+    >
+      <MobileDrawer.Item
+        id={props.id}
+        role="option"
+        aria-selected={props.highlighted}
+        aria-checked={props.selected}
+        onClick={props.onSelect}
+        onMouseMove={props.onMouseMove}
+      >
+        <span class="flex min-w-0 flex-1 items-center gap-1.5">
+          {props.children}
+        </span>
+        <Show when={props.selected}>
+          <CheckIcon class="size-4.5 shrink-0 text-accent" />
+        </Show>
+      </MobileDrawer.Item>
     </Show>
   );
 }

@@ -56,7 +56,7 @@ export function DesktopModelSelector() {
           variant="ghost"
           disabled={state.disabled}
           aria-label={t('agentControls.modelSelector')}
-          class="h-8 min-w-0 max-w-[min(18rem,100%)] gap-1.5 rounded-full px-2 text-base font-normal hover:bg-hover"
+          class="min-w-0 max-w-[min(18rem,100%)]"
         >
           <UnifiedModelTriggerContent />
         </Dropdown.Trigger>
@@ -94,36 +94,37 @@ export function DesktopModelSelector() {
               class="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-extra-muted"
             />
           </div>
-          <div class="min-h-0 overflow-y-auto overscroll-contain px-1.5 pb-1.5">
+          <div class="min-h-0 overflow-y-auto overscroll-contain">
             <Show when={filtered().suggested.length}>
-              <Dropdown.Group class="py-0">
+              <Dropdown.Group>
                 <Dropdown.GroupLabel>
                   {t('agentControls.suggested')}
                 </Dropdown.GroupLabel>
-                <For each={filtered().suggested}>
-                  {(option) => (
-                    <Dropdown.Item
-                      closeOnSelect
-                      disabled={state.disabled || state.suggestedDisabled}
-                      class="min-h-8 gap-2 rounded-lg px-2"
-                      onSelect={() => chooseModel(option.id)}
-                    >
-                      <ModelIcon model={option.id} />
-                      <span class="min-w-0 flex-1 truncate">
-                        {option.label}
-                      </span>
-                      <ModelSpeedMarker model={option.id} />
-                      <Show
-                        when={
-                          state.suggestedSelected !== false &&
-                          option.id === state.model
-                        }
+                <Dropdown.RadioGroup
+                  value={
+                    state.suggestedSelected !== false ? state.model : undefined
+                  }
+                >
+                  <For each={filtered().suggested}>
+                    {(option) => (
+                      <Dropdown.RadioItem
+                        value={option.id}
+                        closeOnSelect
+                        disabled={state.disabled || state.suggestedDisabled}
+                        onSelect={() => chooseModel(option.id)}
                       >
-                        <Check class="size-3.5 text-accent" />
-                      </Show>
-                    </Dropdown.Item>
-                  )}
-                </For>
+                        <ModelIcon model={option.id} />
+                        <Dropdown.ItemLabel class="min-w-0 flex-1 truncate">
+                          {option.label}
+                        </Dropdown.ItemLabel>
+                        <ModelSpeedMarker model={option.id} />
+                        <Dropdown.ItemIndicator>
+                          <Check class="size-3.5 text-accent" />
+                        </Dropdown.ItemIndicator>
+                      </Dropdown.RadioItem>
+                    )}
+                  </For>
+                </Dropdown.RadioGroup>
               </Dropdown.Group>
             </Show>
             <Show
@@ -133,214 +134,259 @@ export function DesktopModelSelector() {
                   .length > 0
               }
             >
-              <Dropdown.Sub>
-                <Dropdown.SubTrigger class="h-8 gap-2">
-                  <Squares class="size-4" />
-                  <span class="flex-1">{t('agentControls.allModels')}</span>
-                  <CaretRight class="size-3.5" />
-                </Dropdown.SubTrigger>
-                <Dropdown.SubContent
-                  aria-label={t('agentControls.allModels')}
-                  class="w-72 max-h-[min(28rem,var(--kb-popper-content-available-height))] overflow-y-auto"
-                  onPointerDown={(event: PointerEvent) =>
-                    event.stopPropagation()
-                  }
-                  onMouseDown={(event: MouseEvent) => event.stopPropagation()}
-                >
-                  <ModelCatalogMenu
-                    disabled={state.disabled || state.suggestedDisabled}
-                    fullCatalog
-                    autoFocusSearch
-                    value={state.model ?? null}
-                    options={state.suggestedModels}
-                    onSelect={chooseModel}
-                  />
-                </Dropdown.SubContent>
-              </Dropdown.Sub>
+              <Dropdown.Group>
+                <Dropdown.Sub>
+                  <Dropdown.SubTrigger>
+                    <Squares class="size-4" />
+                    <span class="flex-1">{t('agentControls.allModels')}</span>
+                    <CaretRight class="size-3.5" />
+                  </Dropdown.SubTrigger>
+                  <Dropdown.SubContent
+                    aria-label={t('agentControls.allModels')}
+                    class="w-72 max-h-[min(28rem,var(--kb-popper-content-available-height))] overflow-y-auto"
+                    onPointerDown={(event: PointerEvent) =>
+                      event.stopPropagation()
+                    }
+                    onMouseDown={(event: MouseEvent) => event.stopPropagation()}
+                  >
+                    <ModelCatalogMenu
+                      disabled={state.disabled || state.suggestedDisabled}
+                      fullCatalog
+                      autoFocusSearch
+                      value={state.model ?? null}
+                      options={state.suggestedModels}
+                      onSelect={chooseModel}
+                    />
+                  </Dropdown.SubContent>
+                </Dropdown.Sub>
+              </Dropdown.Group>
             </Show>
             <For each={groups()}>
               {(group) => (
-                <Dropdown.Group class="py-0">
+                <Dropdown.Group>
                   <Dropdown.GroupLabel>{group.label}</Dropdown.GroupLabel>
-                  <For each={group.agents}>
-                    {(agent) => (
-                      <Dropdown.Item
-                        closeOnSelect={Boolean(agent.unavailableReason)}
-                        disabled={Boolean(
-                          agent.unavailableReason && !agent.connectLabel
-                        )}
-                        class="min-h-8 gap-2 rounded-lg px-2"
-                        onSelect={() => {
-                          if (agent.unavailableReason) {
-                            changeOpen(false);
-                            state.onConnect?.(agent);
-                          } else state.onAgent?.(agent);
-                        }}
-                      >
-                        <span class="flex size-4 shrink-0 items-center justify-center rounded-md bg-ink/5">
-                          <AgentIcon agent={agent} class="size-4" />
-                        </span>
-                        <span class="min-w-0 flex-1 truncate">
-                          {agent.name}
-                        </span>
-                        <Show when={agent.share !== 'system'}>
-                          <span class="truncate text-xs text-ink-extra-muted">
-                            {agent.runtime.label}
-                          </span>
+                  <Dropdown.RadioGroup value={state.agent?.id}>
+                    <For each={group.agents}>
+                      {(agent) => (
+                        <Show
+                          when={!agent.unavailableReason}
+                          fallback={
+                            <Dropdown.Item
+                              closeOnSelect
+                              disabled={!agent.connectLabel}
+                              onSelect={() => {
+                                changeOpen(false);
+                                state.onConnect?.(agent);
+                              }}
+                            >
+                              <span class="flex size-4 shrink-0 items-center justify-center rounded-md bg-ink/5">
+                                <AgentIcon agent={agent} class="size-4" />
+                              </span>
+                              <Dropdown.ItemLabel class="min-w-0 flex-1 truncate">
+                                {agent.name}
+                              </Dropdown.ItemLabel>
+                              <Show when={agent.share !== 'system'}>
+                                <span class="truncate text-xs text-ink-extra-muted">
+                                  {agent.runtime.label}
+                                </span>
+                              </Show>
+                            </Dropdown.Item>
+                          }
+                        >
+                          <Dropdown.RadioItem
+                            value={agent.id}
+                            closeOnSelect={false}
+                            onSelect={() => state.onAgent?.(agent)}
+                          >
+                            <span class="flex size-4 shrink-0 items-center justify-center rounded-md bg-ink/5">
+                              <AgentIcon agent={agent} class="size-4" />
+                            </span>
+                            <Dropdown.ItemLabel class="min-w-0 flex-1 truncate">
+                              {agent.name}
+                            </Dropdown.ItemLabel>
+                            <Show when={agent.share !== 'system'}>
+                              <span class="truncate text-xs text-ink-extra-muted">
+                                {agent.runtime.label}
+                              </span>
+                            </Show>
+                            <Dropdown.ItemIndicator>
+                              <Check class="size-3.5 text-accent" />
+                            </Dropdown.ItemIndicator>
+                          </Dropdown.RadioItem>
                         </Show>
-                        <Show when={agent.id === state.agent?.id}>
-                          <Check class="size-3.5 text-accent" />
-                        </Show>
-                      </Dropdown.Item>
-                    )}
-                  </For>
+                      )}
+                    </For>
+                  </Dropdown.RadioGroup>
                 </Dropdown.Group>
               )}
             </For>
-            <Show when={state.loading}>
-              <p role="status" class="px-2 py-1 text-xs text-ink-muted">
-                {t('agentControls.loadingAgents')}
-              </p>
-            </Show>
-            <Show when={state.onCreate}>
-              <Dropdown.Item
-                onSelect={() => {
-                  changeOpen(false);
-                  state.onCreate?.();
-                }}
-              >
-                <Plus class="size-4" />
-                {t('agentControls.createAgent')}
-              </Dropdown.Item>
+            <Show when={state.loading || state.onCreate}>
+              <Dropdown.Group>
+                <Show when={state.loading}>
+                  <p role="status" class="text-xs text-ink-muted">
+                    {t('agentControls.loadingAgents')}
+                  </p>
+                </Show>
+                <Show when={state.onCreate}>
+                  <Dropdown.Item
+                    onSelect={() => {
+                      changeOpen(false);
+                      state.onCreate?.();
+                    }}
+                  >
+                    <Plus class="size-4" />
+                    <Dropdown.ItemLabel>
+                      {t('agentControls.createAgent')}
+                    </Dropdown.ItemLabel>
+                  </Dropdown.Item>
+                </Show>
+              </Dropdown.Group>
             </Show>
           </div>
           <Show when={showOptions()}>
-            <div class="shrink-0 border-t border-edge-muted p-1.5">
-              <Show when={options().model}>
-                <Dropdown.Sub gutter={2} shift={-7}>
-                  <Dropdown.SubTrigger class="h-8 gap-2">
-                    <ModelIcon model={state.model} />
-                    <span class="flex-1">{t('agentControls.model')}</span>
-                    <span class="max-w-24 truncate text-ink-extra-muted">
-                      {
-                        state.models.find((option) => option.id === state.model)
-                          ?.label
-                      }
-                    </span>
-                    <CaretRight class="size-3.5" />
-                  </Dropdown.SubTrigger>
-                  <Dropdown.SubContent class="w-48 max-h-80 overflow-y-auto">
-                    <For each={state.models}>
-                      {(option) => (
-                        <Dropdown.Item
-                          closeOnSelect
-                          class="h-8"
-                          onSelect={() => {
-                            state.onModel(option.id);
-                            changeOpen(false);
-                          }}
-                        >
-                          {option.label}
-                          <Show when={state.model === option.id}>
-                            <Check class="ml-auto size-3.5 text-accent" />
-                          </Show>
-                        </Dropdown.Item>
-                      )}
-                    </For>
-                  </Dropdown.SubContent>
-                </Dropdown.Sub>
-              </Show>
-              <Show when={options().effort}>
-                <Dropdown.Sub gutter={2} shift={-7}>
-                  <Dropdown.SubTrigger
-                    disabled={state.effortDisabled}
-                    class="h-8 gap-2"
-                  >
-                    <Gauge class="size-4" />
-                    <span class="flex-1">
-                      {t('agentControls.reasoningEffort')}
-                    </span>
-                    <span class="text-ink-extra-muted">
-                      {
-                        state.effort?.options.find(
-                          (choice) =>
-                            choice.value ===
-                            (state.effortValue ?? state.effort?.currentValue)
-                        )?.name
-                      }
-                    </span>
-                    <CaretRight class="size-3.5" />
-                  </Dropdown.SubTrigger>
-                  <Dropdown.SubContent class="w-48 p-1.5">
-                    <For each={state.effort?.options}>
-                      {(choice) => (
-                        <Dropdown.Item
-                          closeOnSelect
-                          class="h-8"
-                          disabled={state.effortDisabled}
-                          onSelect={() => {
-                            if (state.effort && !state.effortDisabled)
-                              state.onEffort({
-                                configId: state.effort.id,
-                                value: choice.value,
-                                name: choice.name,
-                              });
-                            changeOpen(false);
-                          }}
-                        >
-                          {choice.name}
-                          <Show
-                            when={
+            <div class="shrink-0 border-t border-edge-muted">
+              <Dropdown.Group>
+                <Show when={options().model}>
+                  <Dropdown.Sub>
+                    <Dropdown.SubTrigger>
+                      <ModelIcon model={state.model} />
+                      <span class="flex-1">{t('agentControls.model')}</span>
+                      <span class="max-w-24 truncate text-ink-extra-muted">
+                        {
+                          state.models.find(
+                            (option) => option.id === state.model
+                          )?.label
+                        }
+                      </span>
+                      <CaretRight class="size-3.5" />
+                    </Dropdown.SubTrigger>
+                    <Dropdown.SubContent class="w-48 max-h-80 overflow-y-auto">
+                      <Dropdown.Group>
+                        <Dropdown.RadioGroup value={state.model}>
+                          <For each={state.models}>
+                            {(option) => (
+                              <Dropdown.RadioItem
+                                value={option.id}
+                                closeOnSelect
+                                onSelect={() => {
+                                  state.onModel(option.id);
+                                  changeOpen(false);
+                                }}
+                              >
+                                <Dropdown.ItemLabel class="flex-1">
+                                  {option.label}
+                                </Dropdown.ItemLabel>
+                                <Dropdown.ItemIndicator>
+                                  <Check class="size-3.5 text-accent" />
+                                </Dropdown.ItemIndicator>
+                              </Dropdown.RadioItem>
+                            )}
+                          </For>
+                        </Dropdown.RadioGroup>
+                      </Dropdown.Group>
+                    </Dropdown.SubContent>
+                  </Dropdown.Sub>
+                </Show>
+                <Show when={options().effort}>
+                  <Dropdown.Sub>
+                    <Dropdown.SubTrigger disabled={state.effortDisabled}>
+                      <Gauge class="size-4" />
+                      <span class="flex-1">
+                        {t('agentControls.reasoningEffort')}
+                      </span>
+                      <span class="text-ink-extra-muted">
+                        {
+                          state.effort?.options.find(
+                            (choice) =>
                               choice.value ===
                               (state.effortValue ?? state.effort?.currentValue)
-                            }
-                          >
-                            <Check class="ml-auto size-3.5 text-accent" />
-                          </Show>
-                        </Dropdown.Item>
-                      )}
-                    </For>
-                  </Dropdown.SubContent>
-                </Dropdown.Sub>
-              </Show>
-              <Show when={options().speed}>
-                <Dropdown.Sub gutter={2} shift={-7}>
-                  <Dropdown.SubTrigger class="h-8 gap-2">
-                    <Lightning class="size-4" />
-                    <span class="flex-1">{t('agentControls.speed')}</span>
-                    <span class="text-ink-extra-muted">
-                      {t(`agentControls.tier${speedTier(state.speedValue)}`)}
-                    </span>
-                    <CaretRight class="size-3.5" />
-                  </Dropdown.SubTrigger>
-                  <Dropdown.SubContent class="w-48 p-1.5">
-                    <For each={choices()}>
-                      {(choice) => (
-                        <Dropdown.Item
-                          closeOnSelect
-                          class="h-8"
-                          onSelect={() => {
-                            state.onSpeed(choice.value);
-                            changeOpen(false);
-                          }}
+                          )?.name
+                        }
+                      </span>
+                      <CaretRight class="size-3.5" />
+                    </Dropdown.SubTrigger>
+                    <Dropdown.SubContent class="w-48">
+                      <Dropdown.Group>
+                        <Dropdown.RadioGroup
+                          value={
+                            state.effortValue ?? state.effort?.currentValue
+                          }
                         >
-                          {t(`agentControls.tier${choice.tier}`)}
-                          <Show when={choice.tier !== 'standard'}>
-                            <span class="ml-2 text-xs text-ink-extra-muted">
-                              {choice.tier === 'fast'
-                                ? t('agentControls.usageFast')
-                                : t('agentControls.usageUltrafast')}
-                            </span>
-                          </Show>
-                          <Show when={choice.value === state.speedValue}>
-                            <Check class="ml-auto size-3.5 text-accent" />
-                          </Show>
-                        </Dropdown.Item>
-                      )}
-                    </For>
-                  </Dropdown.SubContent>
-                </Dropdown.Sub>
-              </Show>
+                          <For each={state.effort?.options}>
+                            {(choice) => (
+                              <Dropdown.RadioItem
+                                value={choice.value}
+                                closeOnSelect
+                                disabled={state.effortDisabled}
+                                onSelect={() => {
+                                  if (state.effort && !state.effortDisabled)
+                                    state.onEffort({
+                                      configId: state.effort.id,
+                                      value: choice.value,
+                                      name: choice.name,
+                                    });
+                                  changeOpen(false);
+                                }}
+                              >
+                                <Dropdown.ItemLabel class="flex-1">
+                                  {choice.name}
+                                </Dropdown.ItemLabel>
+                                <Dropdown.ItemIndicator>
+                                  <Check class="size-3.5 text-accent" />
+                                </Dropdown.ItemIndicator>
+                              </Dropdown.RadioItem>
+                            )}
+                          </For>
+                        </Dropdown.RadioGroup>
+                      </Dropdown.Group>
+                    </Dropdown.SubContent>
+                  </Dropdown.Sub>
+                </Show>
+                <Show when={options().speed}>
+                  <Dropdown.Sub>
+                    <Dropdown.SubTrigger>
+                      <Lightning class="size-4" />
+                      <span class="flex-1">{t('agentControls.speed')}</span>
+                      <span class="text-ink-extra-muted">
+                        {t(`agentControls.tier${speedTier(state.speedValue)}`)}
+                      </span>
+                      <CaretRight class="size-3.5" />
+                    </Dropdown.SubTrigger>
+                    <Dropdown.SubContent class="w-48">
+                      <Dropdown.Group>
+                        <Dropdown.RadioGroup value={state.speedValue}>
+                          <For each={choices()}>
+                            {(choice) => (
+                              <Dropdown.RadioItem
+                                value={choice.value}
+                                closeOnSelect
+                                onSelect={() => {
+                                  state.onSpeed(choice.value);
+                                  changeOpen(false);
+                                }}
+                              >
+                                <Dropdown.ItemLabel class="flex-1">
+                                  {t(`agentControls.tier${choice.tier}`)}
+                                </Dropdown.ItemLabel>
+                                <Show when={choice.tier !== 'standard'}>
+                                  <span class="text-xs text-ink-extra-muted">
+                                    {choice.tier === 'fast'
+                                      ? t('agentControls.usageFast')
+                                      : t('agentControls.usageUltrafast')}
+                                  </span>
+                                </Show>
+                                <Dropdown.ItemIndicator>
+                                  <Check class="size-3.5 text-accent" />
+                                </Dropdown.ItemIndicator>
+                              </Dropdown.RadioItem>
+                            )}
+                          </For>
+                        </Dropdown.RadioGroup>
+                      </Dropdown.Group>
+                    </Dropdown.SubContent>
+                  </Dropdown.Sub>
+                </Show>
+              </Dropdown.Group>
             </div>
           </Show>
         </div>

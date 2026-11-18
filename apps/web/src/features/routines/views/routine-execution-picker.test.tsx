@@ -151,7 +151,9 @@ async function expectClosed(trigger: HTMLElement) {
 }
 async function openModels(name: string) {
   const trigger = openPicker();
-  const agent = screen.getByRole('menuitem', { name: new RegExp(`^${name}`) });
+  const agent = screen.getByRole('menuitemradio', {
+    name: new RegExp(`^${name}`),
+  });
   agent.focus();
   fireEvent.keyDown(agent, { key: 'Enter' });
   const row = screen.getByRole('menuitem', { name: /^Model / });
@@ -203,7 +205,7 @@ describe('routine execution picker', () => {
       screen.getByRole('group', { name: 'Routine model or agent' })
     ).toBeTruthy();
     const trigger = openPicker();
-    const item = screen.getByRole('menuitem', { name: 'Other model' });
+    const item = screen.getByRole('menuitemradio', { name: 'Other model' });
     item.focus();
     fireEvent.keyDown(item, { key: 'Enter' });
     expect(selection()).toEqual({ kind: 'model', model: 'other-model' });
@@ -220,7 +222,7 @@ describe('routine execution picker', () => {
         modelOverride: 'old-model',
       });
       const trigger = openPicker();
-      const agent = screen.getByRole('menuitem', {
+      const agent = screen.getByRole('menuitemradio', {
         name: new RegExp(`^${name}`),
       });
       agent.focus();
@@ -242,7 +244,7 @@ describe('routine execution picker', () => {
     async (name, agentId, label, model) => {
       const { selection } = mount({ kind: 'model', model: 'chat-model' });
       const { trigger, menu } = await openModels(name);
-      const item = menu.getByRole('menuitem', { name: label });
+      const item = menu.getByRole('menuitemradio', { name: label });
       item.focus();
       fireEvent.keyDown(item, { key: 'Enter' });
       expect(selection()).toEqual({
@@ -263,7 +265,7 @@ describe('routine execution picker', () => {
         modelOverride: 'old',
       });
       const trigger = openPicker();
-      const row = screen.getByRole('menuitem', { name: /^Researcher/ });
+      const row = screen.getByRole('menuitemradio', { name: /^Researcher/ });
       row.focus();
       fireEvent.keyDown(row, { key });
       expect(selection()).toEqual({ kind: 'agent', agentId: managedId });
@@ -310,9 +312,12 @@ describe('routine execution picker', () => {
       }
     );
     const trigger = openPicker();
-    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Other model' }), {
-      key: 'Enter',
-    });
+    fireEvent.keyDown(
+      screen.getByRole('menuitemradio', { name: 'Other model' }),
+      {
+        key: 'Enter',
+      }
+    );
     await expectClosed(trigger);
     setLoading(false);
     expect(selection()).toEqual({ kind: 'model', model: 'other-model' });
@@ -417,7 +422,7 @@ describe('routine execution picker', () => {
     fireEvent.input(prompt, { target: { value: 'Keep writing' } });
     expect(screen.getByRole('status').textContent).toContain('Loading models');
     const trigger = openPicker();
-    const agent = screen.getByRole('menuitem', { name: /Researcher/ });
+    const agent = screen.getByRole('menuitemradio', { name: /Researcher/ });
     agent.focus();
     fireEvent.keyDown(agent, { key: 'Enter' });
     await expectClosed(trigger);

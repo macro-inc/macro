@@ -79,7 +79,7 @@ export function MobileModelSelector() {
         size="sm"
         disabled={state.disabled}
         aria-label={t('agentControls.modelSelector')}
-        class="min-w-0 max-w-full gap-1.5 rounded-full px-2 text-ink-muted font-normal"
+        class="min-w-0 max-w-full"
         onPointerDown={(event: PointerEvent) => event.preventDefault()}
         onMouseDown={(event: MouseEvent) => event.preventDefault()}
       >
@@ -142,7 +142,7 @@ export function MobileModelSelector() {
                       ? t('agentControls.suggested')
                       : t('agentControls.allModels')}
                   </MobileDrawer.Label>
-                  <MobileDrawer.Section class="bg-transparent p-0">
+                  <MobileDrawer.Section>
                     <For each={models()}>
                       {(option) => (
                         <MobileDrawer.Item
@@ -193,7 +193,7 @@ export function MobileModelSelector() {
                   {(group) => (
                     <div>
                       <MobileDrawer.Label>{group.label}</MobileDrawer.Label>
-                      <MobileDrawer.Section class="bg-transparent p-0">
+                      <MobileDrawer.Section>
                         <For each={group.agents}>
                           {(agent) => (
                             <MobileDrawer.Item
@@ -240,7 +240,7 @@ export function MobileModelSelector() {
               </Show>
             </Show>
             <Show when={page() === 'effort'}>
-              <MobileDrawer.Section class="bg-transparent p-0">
+              <MobileDrawer.Section>
                 <For each={state.effort?.options}>
                   {(choice) => (
                     <MobileDrawer.Item
@@ -270,7 +270,7 @@ export function MobileModelSelector() {
               </MobileDrawer.Section>
             </Show>
             <Show when={page() === 'speed'}>
-              <MobileDrawer.Section class="bg-transparent p-0">
+              <MobileDrawer.Section>
                 <For each={speeds()}>
                   {(choice) => (
                     <MobileDrawer.Item

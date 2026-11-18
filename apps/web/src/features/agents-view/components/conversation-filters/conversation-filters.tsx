@@ -178,8 +178,10 @@ export function ConversationFiltersControl(props: ConversationFiltersProps) {
               </Dropdown.CheckboxItem>
             </Dropdown.Group>
             <Dropdown.Group>
-              <Dropdown.Item class="text-failure-ink" onSelect={clear}>
-                {t('viewMenus.clearFilters')}
+              <Dropdown.Item onSelect={clear}>
+                <Dropdown.ItemLabel class="text-failure-ink">
+                  {t('viewMenus.clearFilters')}
+                </Dropdown.ItemLabel>
               </Dropdown.Item>
             </Dropdown.Group>
           </>

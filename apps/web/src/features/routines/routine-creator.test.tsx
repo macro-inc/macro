@@ -312,17 +312,20 @@ async function selectTarget(
 ): Promise<void> {
   openPicker();
   if (target === 'agent') {
-    press(screen.getByRole('menuitem', { name: /^Researcher/ }), 'Enter');
+    press(screen.getByRole('menuitemradio', { name: /^Researcher/ }), 'Enter');
   } else {
     let menu: HTMLElement | undefined;
     if (target === 'override') {
-      press(screen.getByRole('menuitem', { name: /^Researcher/ }), 'Enter');
+      press(
+        screen.getByRole('menuitemradio', { name: /^Researcher/ }),
+        'Enter'
+      );
       const row = screen.getByRole('menuitem', { name: /^Model / });
       row.focus();
       fireEvent.keyDown(row, { key: 'ArrowRight' });
       menu = await screen.findByRole('menu', { name: /^Model / });
     }
-    const item = (menu ? within(menu) : screen).getByRole('menuitem', {
+    const item = (menu ? within(menu) : screen).getByRole('menuitemradio', {
       name: 'Custom model',
     });
     item.focus();

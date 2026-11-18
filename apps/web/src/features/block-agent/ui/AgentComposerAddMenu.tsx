@@ -177,7 +177,7 @@ export function AgentComposerAddMenu(props: {
         disabled={props.disabled}
         onOpenDrawer={() => setDrawerOpen(true)}
         placement="bottom-start"
-        contentClass="w-[min(42rem,calc(100vw-2rem))] max-h-[min(32rem,var(--kb-popper-content-available-height))] overflow-y-auto rounded-2xl"
+        contentClass="w-[min(42rem,calc(100vw-2rem))] max-h-[min(32rem,var(--kb-popper-content-available-height))] overflow-y-auto"
       />
       <ComposerAddDrawer
         groups={groups()}

@@ -14,7 +14,14 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { Key } from '@solid-primitives/keyed';
-import { children, createMemo, type JSX, Show } from 'solid-js';
+import {
+  type Component,
+  type ComponentProps,
+  children,
+  createMemo,
+  type JSX,
+  Show,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   createSoupEntityActions,
@@ -24,6 +31,9 @@ import {
 interface SoupEntityActionsMenuProps {
   entities: EntityData[];
   list: EntityActionListState;
+  item?: Component<ComponentProps<typeof MenuItem>>;
+  copyItem?: Component<ComponentProps<typeof CopyMenuItem>>;
+  separator?: Component;
   viewContext: EntityActionViewContext;
   /**
    * Closes the host menu when an embedded picker (`menuItem`) is done with
@@ -47,6 +57,9 @@ interface SoupEntityActionsMenuProps {
 }
 
 export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
+  const Item = props.item ?? MenuItem;
+  const CopyItem = props.copyItem ?? CopyMenuItem;
+  const Separator = props.separator ?? MenuSeparator;
   const panel = useSplitPanelOrThrow();
   const { buildActionGroups } = createSoupEntityActions({
     markDoneDelegate: () => props.markDoneDelegate?.(),
@@ -83,7 +96,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         {(group, groupIndex) => (
           <>
             <Show when={groupIndex() > 0}>
-              <MenuSeparator />
+              <Separator />
             </Show>
             <Key each={group().items} by="id">
               {(action) => {
@@ -97,7 +110,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
                           <Show
                             when={action().copy}
                             fallback={
-                              <MenuItem
+                              <Item
                                 text={action().label}
                                 icon={action().icon}
                                 hotkeyToken={action().hotkeyToken}
@@ -117,7 +130,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
                               />
                             }
                           >
-                            <CopyMenuItem
+                            <CopyItem
                               text={action().label}
                               icon={action().icon}
                               hotkeyToken={action().hotkeyToken}
@@ -149,7 +162,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
       </Key>
       <Show when={hasExtraItems()}>
         <Show when={groups().length > 0}>
-          <MenuSeparator />
+          <Separator />
         </Show>
         {extraItems()}
       </Show>
