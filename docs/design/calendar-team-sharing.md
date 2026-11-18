@@ -257,7 +257,10 @@ those hidden fields.
 
 The server gate is `CALENDAR_TEAM_SHARING_ENABLED`, default `false`. It must be
 configured consistently for document storage, calendar service, and every AI/MCP
-host exposing the availability tool. The web gate is
+host exposing the availability tool. While it is off, team reads fail closed:
+document storage answers 404 with code `team_sharing_disabled`, so a caller such
+as an agent's program can say the feature is off instead of reporting a missing
+route. The web gate is
 `enable-calendar-team-sharing` (local override
 `VITE_ENABLE_CALENDAR_TEAM_SHARING`). A client gate is not an authorization
 boundary. Keep the existing calendar sync gate enabled for accounts participating

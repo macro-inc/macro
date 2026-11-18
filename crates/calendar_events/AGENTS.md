@@ -385,6 +385,10 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   search scope and email invitation matching (`pg/invitations.rs`), where an
   Outlook inbox's invitation card resolves to that inbox's own copy and answers
   as it.
+- Team reads fail closed while `CALENDAR_TEAM_SHARING_ENABLED` is off: the
+  team router answers 404 with code `team_sharing_disabled`
+  (`TeamCalendarErrorCode`), never an empty result. Every team router error
+  carries a typed `code` and a fixed `message`, with no internal details.
 - Preserve the conservative OOO refresh hint on write outcomes and sync reports;
   its contract is in [team sharing](../../docs/design/calendar-team-sharing.md).
   Retirements carry it per event (`RetiredCalendarEvent::team_ooo_changed`): only
