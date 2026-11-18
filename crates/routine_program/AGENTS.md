@@ -61,6 +61,10 @@ no I/O.
 ## Recipes
 
 - Add a limit: `limits` in `src/validate.rs` → its `ProgramError`.
+- Add, rename or remove a catalog routine: place it in each routines answer
+  key of the suggestions bench (`crates/suggestion_generation/bench/personas/*/routines-truth.json`:
+  a need's, a decoy's, `fine` or `misfit`); its `routines` section refuses to
+  run until every key places every routine.
 - Change what `main` receives: `STEP_CONTEXT` and `code_steps.md` →
   `run_context` in `scheduled_action`'s `program_runner.rs`. The version
   changes with it, so every routine's code is checked again before its next

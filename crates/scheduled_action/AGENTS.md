@@ -137,7 +137,8 @@ each run.
   (the draft's shape, one run of the routine, a blind judge); `compare`
   says win, loss or noise against a baseline (see its README). Run it
   before and after a change to the instructions, the wait or anything else
-  on the drafting path.
+  on the drafting path. Routine *suggestions* have their own bench,
+  `crates/suggestion_generation/bench/`, which reuses `bench/stack.ts`.
 - `src/domain/drafts/jobs.rs` + `src/inbound/draft_job_router.rs`:
   background drafts, the same drafter without the waiting request. `POST
   /scheduled-actions/draft-jobs` validates the request and waits only for

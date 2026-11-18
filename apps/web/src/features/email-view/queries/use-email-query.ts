@@ -36,7 +36,10 @@ import { match } from 'ts-pattern';
 import { canSearchEmailTab, isExcludedEmailFolder } from '../constants';
 import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
 import type { EmailTab, EmailViewState } from '../types';
-import { advanceEmptyAliasPages } from './advance-empty-alias-pages';
+import {
+  advanceEmptyPages,
+  EMPTY_PAGES_LOAD_MORE_LABEL,
+} from './advance-empty-pages';
 import {
   buildEmailQuery,
   type EmailQueryContext,
@@ -574,10 +577,15 @@ export function useEmailDataSource(
 
   const usesServiceSearch = search.usesServiceSearch;
   const [refreshing, setRefreshing] = createSignal(false);
-  // A page of hits can leave no rows: membership, the tab (Archived keeps only
-  // done threads) or a client-side facet drops them. Page on until a row shows.
-  const aliasAdvance = advanceEmptyAliasPages({
-    scope,
+  // A page of hits can leave no rows: membership or a client-side facet drops
+  // them, or the service's state checks (Archived's done) ran out before
+  // keeping one. Page on, a bounded run per load, until a row shows.
+  // Favorites search sends the favorite ids, so a new set is a new search.
+  const searchScope = createMemo(() =>
+    showsFavorites() ? JSON.stringify([scope(), favoriteThreadIds()]) : scope()
+  );
+  const emptyPages = advanceEmptyPages({
+    scope: searchScope,
     enabled: () => sourceEnabled() && usesServiceSearch(),
     ready: () =>
       filtersReady() &&
@@ -589,7 +597,7 @@ export function useEmailDataSource(
       !search.error() &&
       !aliasSearchError() &&
       !retainedQueries().some((query) => query.error()),
-    hasItems: () => entities().length > 0,
+    rows: () => entities().map((email) => email.id),
     hasNextPage: search.hasNextPage,
     loadMore: search.fetchNextPage,
   });
@@ -608,7 +616,7 @@ export function useEmailDataSource(
       return (
         search.isFetchingNextPage() ||
         aliasSearchPending() ||
-        aliasAdvance.isFetching()
+        emptyPages.isFetching()
       );
     return query.isFetchingNextPage;
   };
@@ -625,6 +633,9 @@ export function useEmailDataSource(
         createSoupLoadMoreRow({
           scopeId: `email:${state.tab}`,
           isLoading: isLoadingMore(),
+          ...(emptyPages.stoppedShort()
+            ? { label: EMPTY_PAGES_LOAD_MORE_LABEL }
+            : {}),
         })
       );
     }
@@ -643,7 +654,7 @@ export function useEmailDataSource(
     if (entities().length > 0) return false;
     if (usesServiceSearch())
       return (
-        search.isLoading() || aliasSearchPending() || aliasAdvance.isFetching()
+        search.isLoading() || aliasSearchPending() || emptyPages.isFetching()
       );
     // Not `search.isLoading()`: it keeps the previous query's hits for a
     // moment, which would read as "no results" before the spinner.
@@ -744,7 +755,7 @@ export function useEmailDataSource(
       if (search.isSettling()) return true;
       return (
         refreshing() ||
-        aliasAdvance.isFetching() ||
+        emptyPages.isFetching() ||
         (usesServiceSearch() ? search.isFetching() : query.isFetching)
       );
     },
@@ -758,7 +769,7 @@ export function useEmailDataSource(
           : undefined) ??
         (usesServiceSearch() ? search.error() : query.error) ??
         aliasSearchError() ??
-        aliasAdvance.error() ??
+        emptyPages.error() ??
         retainedQueries()
           .map((lookup) => lookup.error())
           .find((error) => error instanceof Error) ??
@@ -780,8 +791,7 @@ export function useEmailDataSource(
       }
       if (showsScheduled() || showsFocus()) return;
       if (usesServiceSearch()) {
-        aliasAdvance.resetError();
-        await search.fetchNextPage();
+        await emptyPages.loadMore();
         return;
       }
       if (search.isSearching()) return;
@@ -802,7 +812,7 @@ export function useEmailDataSource(
       }
       const requestScope = scope();
       setRefreshing(true);
-      aliasAdvance.resetError();
+      emptyPages.resetError();
       try {
         if (showsFavorites() && search.isSearching()) await favorites.refetch();
         await (usesServiceSearch() ? search.refetch() : query.refresh());

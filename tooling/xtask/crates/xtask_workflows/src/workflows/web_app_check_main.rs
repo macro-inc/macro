@@ -414,16 +414,15 @@ fn gated_web_job(name: &str) -> Job {
 /// blobs, which git then fetches on demand. Fetching full history with every
 /// blob took Typecheck and Biome Check about 40 s.
 fn checkout(name: &str, full_history: bool) -> Step<Use> {
-    Step::new(name)
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        .when(full_history, |step| {
-            step.add_with(("fetch-depth", 0))
-                .add_with(("filter", "blob:none"))
-        })
+    steps::abort_stalled_fetch(Step::new(name).uses(
+        "actions",
+        "checkout",
+        "df4cb1c069e1874edd31b4311f1884172cec0e10",
+    )) // v6
+    .when(full_history, |step| {
+        step.add_with(("fetch-depth", 0))
+            .add_with(("filter", "blob:none"))
+    })
 }
 
 /// The filter reads the PR's files from the API and [`detect_schema_changes`]

@@ -968,6 +968,18 @@ export const thread = {
       note: 'the same toasts are raised from the header and title menu of an open thread (was STL-613)',
     },
     {
+      id: 'STL-991',
+      surface: 'SL-28',
+      fn: ['F-071'],
+      state: 'result: the thread leaves the inbox at the provider',
+      trigger:
+        'Mark done after a reload that cut off the mark read of a thread just opened',
+      source: [
+        'src/lib/graphql-cache/exchange/mutation-queue-runner.ts',
+        'src/lib/graphql-cache/exchange/mutation-queue-owner.ts',
+      ],
+    },
+    {
       id: 'STL-076',
       surface: 'SL-28',
       fn: ['F-069'],
