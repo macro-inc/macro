@@ -268,7 +268,7 @@ fn a_code_run_with_no_steps_says_only_how_far_it_got() {
     );
     assert_eq!(
         row(ToolStatus::Running, true),
-        ("Finished a step".to_owned(), ActivityStatus::Interrupted)
+        ("Step interrupted".to_owned(), ActivityStatus::Interrupted)
     );
     assert_eq!(
         row(ToolStatus::Failed, true),
@@ -277,7 +277,7 @@ fn a_code_run_with_no_steps_says_only_how_far_it_got() {
 }
 
 #[test]
-fn a_program_that_failed_reads_as_a_failed_step_though_its_call_completed() {
+fn a_program_that_failed_or_was_cancelled_says_so_though_its_call_completed() {
     let code = |detail: ToolDetail| MessagePart::ToolUse {
         id: ToolUseId("code-5".into()),
         name: ToolName::Mcp {
@@ -309,6 +309,14 @@ fn a_program_that_failed_reads_as_a_failed_step_though_its_call_completed() {
             error: None,
         }),
         failed
+    );
+    assert_eq!(
+        row(ToolDetail::Macro {
+            input: serde_json::json!({}),
+            output: Some(serde_json::json!({"status": "cancelled", "activity": []})),
+            error: None,
+        }),
+        ("Step interrupted".to_owned(), ActivityStatus::Interrupted)
     );
 }
 

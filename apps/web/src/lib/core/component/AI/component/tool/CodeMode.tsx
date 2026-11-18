@@ -24,7 +24,7 @@ export const readCodeDocsHandler = createToolRenderer({
 /**
  * Nothing names what a code run does, so it says only how far it got. A
  * failed or stopped call has no receipt but has still ended; a program that
- * threw or timed out returns a receipt that says so.
+ * threw, timed out or was cancelled returns a receipt that says so.
  */
 export function codeRunLabel(receipt: unknown, ending: ToolEnding | undefined) {
   const status =
@@ -37,7 +37,9 @@ export function codeRunLabel(receipt: unknown, ending: ToolEnding | undefined) {
     status === 'timed_out'
   )
     return 'A step failed';
-  if (receipt !== undefined || ending) return 'Finished a step';
+  if (ending?.kind === 'stopped' || status === 'cancelled')
+    return 'Step interrupted';
+  if (receipt !== undefined) return 'Finished a step';
   return 'Working on it';
 }
 

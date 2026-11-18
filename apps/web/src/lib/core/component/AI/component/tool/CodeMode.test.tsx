@@ -52,9 +52,9 @@ it('reads a workspace run whose program failed as a failed step', () => {
   expect(screen.getByText('A step failed')).toBeTruthy();
 });
 
-it('reads a stopped workspace run as a finished step', () => {
+it('reads a stopped workspace run as an interrupted step', () => {
   renderRun({ ending: { kind: 'stopped' } });
-  expect(screen.getByText('Finished a step')).toBeTruthy();
+  expect(screen.getByText('Step interrupted')).toBeTruthy();
 });
 
 it('settles a failed workspace run that has no response', () => {
@@ -67,5 +67,8 @@ it('reads a code run that ended in a call error as a failed step', () => {
   expect(codeRunLabel(undefined, { kind: 'failed' })).toBe('A step failed');
   expect(codeRunLabel({ status: 'succeeded' }, undefined)).toBe(
     'Finished a step'
+  );
+  expect(codeRunLabel({ status: 'cancelled' }, undefined)).toBe(
+    'Step interrupted'
   );
 });

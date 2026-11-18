@@ -10,14 +10,16 @@ use super::{ActivityRow, ActivityStatus, ToolDetail, ToolName, ToolStatus};
 
 /// The row of a code execution with no workspace steps to show, while it runs.
 const WORKING: &str = "Working on it";
-/// The same row once the execution ended without failing.
+/// The same row once the execution succeeded.
 const FINISHED: &str = "Finished a step";
 /// The same row once the execution failed.
 const FAILED: &str = "A step failed";
+/// The same row once the execution was cancelled, or its turn ended first.
+const INTERRUPTED: &str = "Step interrupted";
 
 /// Labels of a code-execution row that names no workspace step. They say
 /// nothing about the work, and the live status line is told so.
-pub const UNNAMED_STEP_LABELS: [&str; 3] = [WORKING, FINISHED, FAILED];
+pub const UNNAMED_STEP_LABELS: [&str; 4] = [WORKING, FINISHED, FAILED, INTERRUPTED];
 
 /// The agent looking up its own tools: code-mode discovery and deferred-tool
 /// search. Like a thought, it belongs to no segment and makes no row.
@@ -115,15 +117,10 @@ fn operations(receipt: &serde_json::Value) -> Option<Vec<Operation>> {
     serde_json::from_value(receipt.get("activity")?.clone()).ok()
 }
 
-/// A program that threw or ran out of time still returns its receipt, so
-/// the call completes; only the receipt says the program failed.
-fn program_failed(receipt: Option<&serde_json::Value>) -> bool {
-    matches!(
-        receipt
-            .and_then(|receipt| receipt.get("status"))
-            .and_then(serde_json::Value::as_str),
-        Some("failed" | "timed_out")
-    )
+/// A program that threw, ran out of time or was cancelled still returns its
+/// receipt, so the call completes; only the receipt says how the program ended.
+fn program_status(receipt: Option<&serde_json::Value>) -> Option<&str> {
+    receipt?.get("status")?.as_str()
 }
 
 /// A code execution with no workspace steps to show yet, or none at all.
@@ -135,12 +132,15 @@ fn workspace_row(
     closed: bool,
 ) -> ActivityRow {
     let (label, status) = match status {
-        ToolStatus::Completed if program_failed(receipt) => (FAILED, ActivityStatus::Failed),
         ToolStatus::Pending | ToolStatus::Running if closed => {
-            (FINISHED, ActivityStatus::Interrupted)
+            (INTERRUPTED, ActivityStatus::Interrupted)
         }
         ToolStatus::Pending | ToolStatus::Running => (WORKING, ActivityStatus::Running),
-        ToolStatus::Completed => (FINISHED, ActivityStatus::Completed),
+        ToolStatus::Completed => match program_status(receipt) {
+            Some("failed" | "timed_out") => (FAILED, ActivityStatus::Failed),
+            Some("cancelled") => (INTERRUPTED, ActivityStatus::Interrupted),
+            _ => (FINISHED, ActivityStatus::Completed),
+        },
         ToolStatus::Failed => (FAILED, ActivityStatus::Failed),
     };
     ActivityRow {

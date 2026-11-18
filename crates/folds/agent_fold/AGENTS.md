@@ -24,7 +24,7 @@ to the browser via `inbound/wasm`.
 - `src/domain/model/segment/code_execution.rs`: how code-mode calls read in
   conversations, independent of harness: internal code receipts expand into
   SDK activity rows, a run without them says only how far it got (its receipt's
-  status marks a failed program), and the
+  status marks a failed or cancelled program), and the
   agent's tool lookups (`DescribeCodeTools`, `ReadCodeDocs`, `SearchTools`,
   `LoadTools`) belong to no segment. People never see code wording.
 - `src/domain/model.rs`: the renderable vocabulary (`FoldedMessage`,
