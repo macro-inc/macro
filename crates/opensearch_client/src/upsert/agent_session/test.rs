@@ -13,6 +13,7 @@ fn args() -> ReconcileAgentSessionArgs {
         originating_message_id: None,
         created_at_millis: EpochMillis::new(10).unwrap(),
         updated_at_millis: EpochMillis::new(20).unwrap(),
+        version: 1_000,
         messages: vec![AgentSessionMessageDocument {
             turn: 3,
             author: AgentSessionMessageAuthor::Agent,
@@ -272,6 +273,16 @@ async fn a_session_without_a_record_writes_every_child_then_records_them() {
     for request in [requests[1], requests[2]] {
         assert!(request.line.contains("require_alias=true"), "{request:?}");
     }
+    // Every write is fenced by the reconcile's version.
+    assert!(
+        requests[2].line.contains("version=1000")
+            && requests[2].line.contains("version_type=external_gte"),
+        "{requests:?}"
+    );
+    let bulk_action: serde_json::Value =
+        serde_json::from_str(requests[1].body.lines().next().unwrap()).unwrap();
+    assert_eq!(bulk_action["index"]["version"], 1000);
+    assert_eq!(bulk_action["index"]["version_type"], "external_gte");
     for request in requests {
         assert!(!request.line.contains("refresh"), "{request:?}");
     }
@@ -358,11 +369,11 @@ async fn a_changed_message_is_rewritten_and_a_removed_one_deleted_by_id() {
         .collect();
     assert_eq!(
         bulk[0],
-        json!({"index": {"_id": "session-1:3:agent", "routing": "session-1"}})
+        json!({"index": {"_id": "session-1:3:agent", "routing": "session-1", "version": 1000, "version_type": "external_gte"}})
     );
     assert_eq!(
         bulk[2],
-        json!({"delete": {"_id": "session-1:2:user", "routing": "session-1"}})
+        json!({"delete": {"_id": "session-1:2:user", "routing": "session-1", "version": 1000, "version_type": "external_gte"}})
     );
     let parent: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
     assert_eq!(parent, stored_parent_source(&args()));
@@ -402,35 +413,38 @@ async fn deleting_a_session_removes_recorded_children_by_id_first() {
     stored["pending_messages"] = json!(["session-1:5:agent"]);
 
     let (requests, result) = serve(
-        vec![found(stored), ok(BULK_OK), ok(PRUNE_OK)],
-        |client| async move { client.delete_agent_session("session-1", None).await },
+        vec![found(stored), ok(BULK_OK), ok(PRUNE_OK), ok(BULK_OK)],
+        |client| async move { client.delete_agent_session("session-1", None, 1_000).await },
     )
     .await;
 
     result.unwrap();
-    let bulk: Vec<serde_json::Value> = requests[1]
-        .body
-        .lines()
-        .map(|line| serde_json::from_str(line).unwrap())
-        .collect();
-    let deleted: Vec<&str> = bulk
-        .iter()
-        .map(|action| action["delete"]["_id"].as_str().unwrap())
-        .collect();
+    let deleted_ids = |body: &str| -> Vec<String> {
+        body.lines()
+            .map(|line| {
+                let action: serde_json::Value = serde_json::from_str(line).unwrap();
+                assert_eq!(action["delete"]["version"], 1000, "{action}");
+                assert_eq!(action["delete"]["version_type"], "external_gte", "{action}");
+                action["delete"]["_id"].as_str().unwrap().to_owned()
+            })
+            .collect()
+    };
     assert_eq!(
-        deleted,
-        [
-            "session-1:3:agent",
-            "session-1:4:user",
-            "session-1:5:agent",
-            "session-1"
-        ]
+        deleted_ids(&requests[1].body),
+        ["session-1:3:agent", "session-1:4:user", "session-1:5:agent"]
     );
     let sweep: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
     assert_eq!(
         sweep["query"]["bool"]["must_not"][0]["ids"]["values"],
-        json!(deleted)
+        json!([
+            "session-1:3:agent",
+            "session-1:4:user",
+            "session-1:5:agent",
+            "session-1"
+        ])
     );
+    // The parent and its record go last.
+    assert_eq!(deleted_ids(&requests[3].body), ["session-1"]);
     assert!(
         requests[2].line.contains("conflicts=proceed"),
         "{requests:?}"
@@ -438,6 +452,24 @@ async fn deleting_a_session_removes_recorded_children_by_id_first() {
     for request in &requests {
         assert!(!request.line.contains("refresh"), "{request:?}");
     }
+}
+
+#[tokio::test]
+async fn a_failed_child_delete_keeps_the_parent_for_the_retry() {
+    let mut stored = stored_parent_source(&args());
+    stored["indexed_messages"] = json!({ "session-1:3:agent": "0000000000000000" });
+
+    let (requests, result) = serve(
+        vec![
+            found(stored),
+            ok(r#"{"errors":true,"items":[{"delete":{"status":503}}]}"#),
+        ],
+        |client| async move { client.delete_agent_session("session-1", None, 1_000).await },
+    )
+    .await;
+
+    assert!(result.is_err());
+    assert_eq!(requests.len(), 2, "the parent is not deleted: {requests:?}");
 }
 
 #[tokio::test]
@@ -503,7 +535,7 @@ async fn a_pending_child_the_snapshot_no_longer_has_is_deleted_by_id() {
     assert_eq!(result.unwrap().messages_deleted, 1);
     assert_eq!(
         requests[2].body.trim(),
-        r#"{"delete":{"_id":"session-1:5:agent","routing":"session-1"}}"#
+        r#"{"delete":{"_id":"session-1:5:agent","routing":"session-1","version":1000,"version_type":"external_gte"}}"#
     );
     let recorded: serde_json::Value = serde_json::from_str(&requests[3].body).unwrap();
     assert_eq!(recorded, stored_parent_source(&args()));
@@ -669,10 +701,25 @@ async fn empty_index_accepts_both_authors_and_converges_on_each_snapshot() {
         refresh().await?;
         assert_eq!(contents().await?, ["newhistory"]);
 
+        // A delayed request from an earlier reconcile applies after a later
+        // one: the index refuses it, so the newer child and parent stay.
+        let mut earlier = projection.clone();
+        earlier.version = projection.version - 1;
+        earlier.messages[0].content = "stalehistory".into();
+        let delayed = plan(&earlier, None, &[])?;
+        let refused = write_children(&client.inner, &index, "session-1", &delayed, false, earlier.version).await;
+        assert!(refused.is_err(), "an older child write must not apply");
+        let refused = write_parent(&client.inner, &index, &earlier, to_parent_value(parent_document(&earlier, &delayed.record, &[]))?, false).await;
+        assert!(refused.is_err(), "an older parent write must not apply");
+        refresh().await?;
+        assert_eq!(contents().await?, ["newhistory"]);
+        let writes = client.reconcile_agent_session(&projection, Some(&index)).await?;
+        assert_eq!(writes.messages_written, 0, "the record still matches what the index holds");
+
         // A child written just before the session is deleted goes too, unrefreshed.
         projection.messages.push(user_message(4, "lastprompt"));
         client.reconcile_agent_session(&projection, Some(&index)).await?;
-        client.delete_agent_session(&projection.agent_session_id, Some(&index)).await?;
+        client.delete_agent_session(&projection.agent_session_id, Some(&index), projection.version).await?;
         refresh().await?;
         let hits: serde_json::Value = client.inner.search(SearchParts::Index(&[&index]))
             .body(json!({"query": {"match_all": {}}})).send().await?.error_for_status_code()?.json().await?;

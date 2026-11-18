@@ -1,5 +1,5 @@
 use super::*;
-use agent_session::domain::search::AgentSessionSearchMetadata;
+use agent_session::domain::search::{AgentSessionSearchMetadata, indexing::GrantedLease};
 use std::sync::{
     Mutex,
     atomic::{AtomicBool, Ordering},
@@ -23,9 +23,12 @@ impl Drop for Lease {
 
 impl SearchSnapshotService for Source {
     type Lease = Lease;
-    async fn lock(&self, _: AgentSessionId) -> Result<Lease, Report> {
+    async fn lock(&self, _: AgentSessionId) -> Result<GrantedLease<Lease>, Report> {
         assert!(!self.0.locked.swap(true, Ordering::SeqCst));
-        Ok(Lease(self.0.clone()))
+        Ok(GrantedLease {
+            lease: Lease(self.0.clone()),
+            granted_at: chrono::Utc::now(),
+        })
     }
     async fn snapshot(&self, id: AgentSessionId) -> Result<Option<SearchSnapshot>, Report> {
         assert!(self.0.locked.load(Ordering::SeqCst));
@@ -61,6 +64,7 @@ impl AgentSessionSearchIndex for Index {
         &self,
         snapshot: SearchSnapshot,
         _: Option<&str>,
+        _: ProjectionVersion,
     ) -> Result<ProjectionWrites, Report> {
         assert!(self.0.locked.load(Ordering::SeqCst));
         self.0
@@ -70,7 +74,12 @@ impl AgentSessionSearchIndex for Index {
             .push(Some(snapshot.metadata.id));
         Ok(ProjectionWrites::default())
     }
-    async fn delete(&self, _: AgentSessionId, _: Option<&str>) -> Result<(), Report> {
+    async fn delete(
+        &self,
+        _: AgentSessionId,
+        _: Option<&str>,
+        _: ProjectionVersion,
+    ) -> Result<(), Report> {
         assert!(self.0.locked.load(Ordering::SeqCst));
         self.0.writes.lock().unwrap().push(None);
         Ok(())

@@ -197,6 +197,7 @@ fn session(id: &str) -> ReconcileAgentSessionArgs {
         originating_message_id: None,
         created_at_millis: EpochMillis::new(10).unwrap(),
         updated_at_millis: EpochMillis::new(20).unwrap(),
+        version: 1,
         messages: vec![AgentSessionMessageDocument {
             turn: 1,
             author: AgentSessionMessageAuthor::Agent,

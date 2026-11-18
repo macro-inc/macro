@@ -64,6 +64,10 @@ pub struct ReconcileAgentSessionArgs {
     pub created_at_millis: EpochMillis,
     /// Latest persisted session metadata time.
     pub updated_at_millis: EpochMillis,
+    /// Carried by every write as an `external_gte` version, so the index
+    /// refuses a delayed write from an earlier reconcile; it must grow with
+    /// each reconcile of the session.
+    pub version: u64,
     /// Every currently folded message, oldest first.
     pub messages: Vec<AgentSessionMessageDocument>,
 }
@@ -184,6 +188,14 @@ fn content_hash(document: &str) -> String {
         .collect()
 }
 
+/// The OpenSearch form of a write version, which is a signed long.
+pub(crate) fn external_version(version: u64, operation: OpensearchOperation) -> Result<i64> {
+    i64::try_from(version).map_err(|error| OpensearchClientError::SerializationFailed {
+        details: error.to_string(),
+        operation,
+    })
+}
+
 fn serialization_error(
     operation: OpensearchOperation,
     error: serde_json::Error,
@@ -265,12 +277,18 @@ async fn write_children(
     routing: &str,
     plan: &ReconcilePlan,
     require_alias: bool,
+    version: u64,
 ) -> Result<()> {
     let mut body = Vec::with_capacity(plan.write.len() * 2 + plan.delete.len());
     for (id, document) in &plan.write {
         body.push(
             serde_json::to_string(&serde_json::json!({
-                "index": { "_id": id, "routing": routing }
+                "index": {
+                    "_id": id,
+                    "routing": routing,
+                    "version": version,
+                    "version_type": "external_gte",
+                }
             }))
             .map_err(|error| {
                 serialization_error(OpensearchOperation::ReconcileAgentSessionBulk, error)
@@ -281,7 +299,12 @@ async fn write_children(
     for id in &plan.delete {
         body.push(
             serde_json::to_string(&serde_json::json!({
-                "delete": { "_id": id, "routing": routing }
+                "delete": {
+                    "_id": id,
+                    "routing": routing,
+                    "version": version,
+                    "version_type": "external_gte",
+                }
             }))
             .map_err(|error| {
                 serialization_error(OpensearchOperation::ReconcileAgentSessionBulk, error)
@@ -382,6 +405,7 @@ async fn write_parent(
     parent: serde_json::Value,
     require_alias: bool,
 ) -> Result<()> {
+    let operation = OpensearchOperation::ReconcileAgentSessionParent;
     let response = client
         .index(opensearch::IndexParts::IndexId(
             index,
@@ -389,6 +413,8 @@ async fn write_parent(
         ))
         .routing(&args.agent_session_id)
         .require_alias(require_alias)
+        .version(external_version(args.version, operation)?)
+        .version_type(opensearch::params::VersionType::ExternalGte)
         .body(parent)
         .send()
         .await
@@ -407,13 +433,14 @@ async fn write_parent(
 ///
 /// Nothing waits for a refresh: no caller reads the index back, and every
 /// write and delete names its document by id, which needs no refresh to apply.
+/// Every write and delete carries `args.version` as an `external_gte`
+/// version, so a delayed request from an earlier reconcile cannot overwrite
+/// what a later one wrote: the index refuses it.
 /// While children change the parent names them pending, and it records them
 /// only after they were written, so after a failed request the next reconcile
-/// rewrites or deletes exactly what might differ. That holds for requests that
-/// finish before this function returns; none of these writes is conditional,
-/// so a request that times out here and applies later can still roll a child
-/// back. The sweep comes last so a failed sweep never leaves the parent's name
-/// or recency stale.
+/// rewrites or deletes exactly what might differ, and the version covers a
+/// request that times out here and applies later. The sweep comes last so a
+/// failed sweep never leaves the parent's name or recency stale.
 pub(crate) async fn reconcile_agent_session(
     client: &opensearch::OpenSearch,
     args: &ReconcileAgentSessionArgs,
@@ -446,7 +473,7 @@ pub(crate) async fn reconcile_agent_session(
             require_alias,
         )
         .await?;
-        write_children(client, index, routing, &plan, require_alias).await?;
+        write_children(client, index, routing, &plan, require_alias, args.version).await?;
     }
 
     let parent = to_parent_value(parent_document(args, &plan.record, &[]))?;

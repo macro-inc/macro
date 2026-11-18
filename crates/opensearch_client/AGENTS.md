@@ -70,7 +70,9 @@ projects.
   sees. The parent's `indexed_messages` record (child id to content hash) and
   `pending_messages` (children being changed, not yet confirmed) are read with a
   real-time GET, so they are current without a refresh. Never trust a record
-  without first naming the children you change as pending.
+  without first naming the children you change as pending. Every agent-session
+  write and delete by id carries `ReconcileAgentSessionArgs::version` as an
+  `external_gte` version; a 409 means a later reconcile already wrote.
 - The request-level `_source` filter does not reach `has_child` inner hits:
   each one returns the child's whole document unless its `InnerHits` names
   `source_fields`. Every join query names the fields its hit's `_source`

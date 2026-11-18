@@ -139,17 +139,20 @@ impl OpensearchClient {
     }
 
     /// Delete the parent and every folded-message child for an agent session.
+    /// `version` orders the deletes after every write of earlier reconciles.
     #[tracing::instrument(skip(self), err)]
     pub async fn delete_agent_session(
         &self,
         agent_session_id: &str,
         index_override: Option<&str>,
+        version: u64,
     ) -> Result<()> {
         resend_on_lost_connection(|| {
             delete::agent_session::delete_agent_session(
                 &self.inner,
                 agent_session_id,
                 index_override,
+                version,
             )
         })
         .await

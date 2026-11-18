@@ -11,7 +11,9 @@ use opensearch_client::{
 use rootcause::Report;
 use std::sync::Arc;
 
-use crate::domain::agent_session_index::{AgentSessionSearchIndex, ProjectionWrites};
+use crate::domain::agent_session_index::{
+    AgentSessionSearchIndex, ProjectionVersion, ProjectionWrites,
+};
 
 pub struct OpenSearchAgentSessionIndex(pub Arc<OpensearchClient>);
 
@@ -20,6 +22,7 @@ impl AgentSessionSearchIndex for OpenSearchAgentSessionIndex {
         &self,
         snapshot: SearchSnapshot,
         index_override: Option<&str>,
+        version: ProjectionVersion,
     ) -> Result<ProjectionWrites, Report> {
         let metadata = snapshot.metadata;
         let args = ReconcileAgentSessionArgs {
@@ -35,6 +38,7 @@ impl AgentSessionSearchIndex for OpenSearchAgentSessionIndex {
             updated_at_millis: opensearch_client::date_format::EpochMillis::new(
                 metadata.updated_at.timestamp_millis(),
             )?,
+            version: version.get(),
             messages: snapshot
                 .messages
                 .into_iter()
@@ -64,10 +68,15 @@ impl AgentSessionSearchIndex for OpenSearchAgentSessionIndex {
         })
     }
 
-    async fn delete(&self, id: AgentSessionId, index_override: Option<&str>) -> Result<(), Report> {
+    async fn delete(
+        &self,
+        id: AgentSessionId,
+        index_override: Option<&str>,
+        version: ProjectionVersion,
+    ) -> Result<(), Report> {
         Ok(self
             .0
-            .delete_agent_session(&id.to_string(), index_override)
+            .delete_agent_session(&id.to_string(), index_override, version.get())
             .await?)
     }
 }

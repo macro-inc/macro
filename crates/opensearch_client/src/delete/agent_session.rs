@@ -5,25 +5,31 @@ use crate::{
     Result,
     agent_session::{response_error, stored_parent},
     error::{OpensearchClientError, OpensearchOperation},
+    upsert::agent_session::external_version,
 };
 
 /// Remove a session parent and all of its message children.
 ///
-/// The parent and the children its record names or holds pending go by id, which applies
-/// before any refresh. Delete-by-query then removes the rest, such as children
-/// written before parents kept records. It skips the ids just deleted, which
-/// it may still see, proceeds past conflicts with children an earlier
-/// reconcile deleted, and forces no refresh.
+/// The children the parent's record names or holds pending go first, by id,
+/// which applies before any refresh. Delete-by-query then removes the rest,
+/// such as children written before parents kept records; it skips the ids
+/// just deleted, which it may still see, proceeds past conflicts with
+/// children an earlier reconcile deleted, and forces no refresh. The parent
+/// goes last, so a retry after any failure still finds the survivors through
+/// its record. Every delete by id carries `version`, so a delayed delete from
+/// an earlier reconcile cannot remove what a later one wrote.
 pub(crate) async fn delete_agent_session(
     client: &opensearch::OpenSearch,
     agent_session_id: &str,
     index_override: Option<&str>,
+    version: u64,
 ) -> Result<()> {
     let index = index_override.unwrap_or(SearchIndex::AgentSessions.as_ref());
     let operation = OpensearchOperation::DeleteAgentSession;
+    let version = external_version(version, operation)?;
 
     let stored = stored_parent(client, index, agent_session_id).await?;
-    let mut deleted: Vec<String> = stored
+    let mut children: Vec<String> = stored
         .as_ref()
         .and_then(|parent| parent.indexed_messages())
         .map(|record| record.into_keys().collect())
@@ -33,16 +39,63 @@ pub(crate) async fn delete_agent_session(
         .map(|parent| parent.pending_messages())
         .unwrap_or_default()
     {
-        if !deleted.contains(&id) {
-            deleted.push(id);
+        if !children.contains(&id) {
+            children.push(id);
         }
     }
-    deleted.push(agent_session_id.to_owned());
 
-    let body: Vec<String> = deleted
+    if !children.is_empty() {
+        delete_by_id(client, index, agent_session_id, &children, version).await?;
+    }
+
+    let mut kept: Vec<&str> = children.iter().map(String::as_str).collect();
+    kept.push(agent_session_id);
+    let routing = [agent_session_id];
+    let response = client
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
+        .routing(&routing)
+        .conflicts(opensearch::params::Conflicts::Proceed)
+        .body(serde_json::json!({
+            "query": { "bool": {
+                "filter": [{ "term": { "agent_session_id": agent_session_id } }],
+                "must_not": [{ "ids": { "values": kept } }]
+            } }
+        }))
+        .send()
+        .await
+        .map_err(|error| OpensearchClientError::request_failed(operation, &error))?;
+    crate::agent_session::check_delete_response(response, operation).await?;
+
+    delete_by_id(
+        client,
+        index,
+        agent_session_id,
+        &[agent_session_id.to_owned()],
+        version,
+    )
+    .await
+}
+
+/// Delete documents of one session by id, failing unless every delete
+/// applied or found nothing to delete.
+async fn delete_by_id(
+    client: &opensearch::OpenSearch,
+    index: &str,
+    agent_session_id: &str,
+    ids: &[String],
+    version: i64,
+) -> Result<()> {
+    let operation = OpensearchOperation::DeleteAgentSession;
+    let body: Vec<String> = ids
         .iter()
         .map(|id| {
-            serde_json::json!({ "delete": { "_id": id, "routing": agent_session_id } }).to_string()
+            serde_json::json!({ "delete": {
+                "_id": id,
+                "routing": agent_session_id,
+                "version": version,
+                "version_type": "external_gte",
+            } })
+            .to_string()
         })
         .collect();
     let response = client
@@ -64,21 +117,5 @@ pub(crate) async fn delete_agent_session(
             operation,
         });
     }
-
-    let routing = [agent_session_id];
-    let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
-        .routing(&routing)
-        .conflicts(opensearch::params::Conflicts::Proceed)
-        .body(serde_json::json!({
-            "query": { "bool": {
-                "filter": [{ "term": { "agent_session_id": agent_session_id } }],
-                "must_not": [{ "ids": { "values": deleted } }]
-            } }
-        }))
-        .send()
-        .await
-        .map_err(|error| OpensearchClientError::request_failed(operation, &error))?;
-
-    crate::agent_session::check_delete_response(response, operation).await
+    Ok(())
 }
