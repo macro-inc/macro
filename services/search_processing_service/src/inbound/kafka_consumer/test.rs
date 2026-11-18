@@ -2854,7 +2854,7 @@ fn received_record_span_names_its_event() {
         capture.rearm();
         let event = received_agent_session_event(AGENT_SESSION_ID, 4).event;
         id = Some(event_id(&event));
-        let (span, received) = receive_record(&record, Ok::<_, EventBrokerError>(event));
+        let (span, received) = receive_record(&record, || Ok::<_, EventBrokerError>(event));
         let received = received.expect("decoded record");
         assert_eq!(received.event_type, "agent_session.renamed");
         assert_eq!(received.produced_at_ms, Some(1_000));
@@ -2888,7 +2888,7 @@ async fn record_span_covers_processing_and_fails_with_a_dropped_event() {
     for _ in 0..2 {
         capture.rearm();
         let event = received_thread_backfilled_event(EMAIL_THREAD_ID, 7).event;
-        let (span, received) = receive_record(&record, Ok::<_, EventBrokerError>(event));
+        let (span, received) = receive_record(&record, || Ok::<_, EventBrokerError>(event));
         let received = received.expect("decoded record");
         // The poll loop is inside the record span only while it hands off.
         async {}.instrument(span.clone()).await;

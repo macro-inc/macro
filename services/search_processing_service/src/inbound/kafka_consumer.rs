@@ -373,14 +373,16 @@ fn attach_event_coordinates<E>(
     })
 }
 
-/// Opens a record's `kafka.process` span and attaches it, with the record's
-/// coordinates, to the decoded event. The span is returned on its own too, so
-/// a record that failed to decode can still be marked failed.
+/// Opens a record's `kafka.process` span, decodes the record inside it, and
+/// attaches the span, with the record's coordinates, to the decoded event.
+/// The span is returned on its own too, so a record that failed to decode can
+/// still be marked failed.
 fn receive_record<M: rdkafka::Message, E>(
     message: &M,
-    decoded: Result<DeclaredMacroEvent, E>,
+    decode: impl FnOnce() -> Result<DeclaredMacroEvent, E>,
 ) -> (tracing::Span, Result<ReceivedEvent, E>) {
     let span = consumer_span(message, SearchProcessingConsumerGroup::GROUP_NAME);
+    let decoded = span.in_scope(decode);
     let received =
         attach_event_coordinates(decoded, message.partition(), message.offset(), span.clone()).map(
             |received| ReceivedEvent {
@@ -646,7 +648,7 @@ async fn poll_events(
                     }
                 };
                 let kafka_message = message.inner();
-                let (span, decoded) = receive_record(kafka_message, message.decode_payload());
+                let (span, decoded) = receive_record(kafka_message, || message.decode_payload());
 
                 match workers.handoff(decoded).instrument(span.clone()).await {
                     HandoffOutcome::HandedOff | HandoffOutcome::Coalesced => {}
