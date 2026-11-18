@@ -134,6 +134,33 @@ describe('createInputCommands', () => {
     });
   });
 
+  it('restores the draft as typed, blank lines included, when send fails', async () => {
+    const typed = '- one\n\n \n';
+    let value = typed;
+    const commands = createInputCommands({
+      view: () => ({ mode: 'channel', hasPendingAttachments: false }),
+      snapshot: () => ({ value, mentions: [], attachments: [] }),
+      setIsSending: vi.fn(),
+      setShowFormatRibbon: vi.fn(),
+      reset: () => {
+        value = '';
+      },
+      restoreSnapshot: (next) => {
+        value = next.value;
+      },
+      removeTrackedAttachment: vi.fn(),
+      callbacks: {
+        onSend: async (snapshot) => {
+          expect(snapshot.value).toBe('- one');
+          throw new Error('offline');
+        },
+      },
+    });
+
+    await expect(commands.send()).rejects.toThrow('offline');
+    expect(value).toBe(typed);
+  });
+
   it('resets before invoking onClose', () => {
     const events: string[] = [];
     const snapshot: InputSnapshot = {
