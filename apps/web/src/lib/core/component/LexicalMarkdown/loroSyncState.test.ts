@@ -115,6 +115,16 @@ async function openStored(body: SerializedEditorState) {
 
   return {
     editor,
+    /**
+     * Registers a transform, as a plugin mounting after load does: Lexical then
+     * marks every text node dirty, without changing it, in an update it commits
+     * after the current task.
+     */
+    async markTextDirty() {
+      cleanups.push(editor.registerNodeTransform(TextNode, () => {}));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(changed.size).toBeGreaterThan(0);
+    },
     /** Writes the editor's state and returns the Loro ops it produced. */
     async write(options: { compareAll?: boolean } = {}) {
       const from = manager.doc.oplogVersion();
@@ -150,13 +160,25 @@ describe('loroSyncState derived fields', () => {
   it('writes nothing for an API body the editor only marked dirty', async () => {
     const doc = await openStored(apiBody(['First', 'Second', 'Third']));
 
-    // Registering a transform on a loaded editor marks every node of its type
-    // dirty without changing it, as plugins mounting after load do.
-    cleanups.push(doc.editor.registerNodeTransform(TextNode, () => {}));
+    await doc.markTextDirty();
 
     expect(await doc.write()).toEqual([]);
     expect(await doc.write({ compareAll: true })).toEqual([]);
     expect(doc.searchTexts()).toEqual([undefined, undefined, undefined]);
+    expect(doc.version()).toBeUndefined();
+  });
+
+  it('corrects a stored searchText that no longer matches its block', async () => {
+    // Concurrent edits to one block merge its text but keep one searchText.
+    const body = apiBody(['Merged text', 'Other']);
+    const merged = body.root.children[0] as StoredBlock;
+    merged.$ = { ...merged.$, searchText: 'Merged' };
+    const doc = await openStored(body);
+
+    await doc.markTextDirty();
+
+    expect(searchTextWrites(await doc.write())).toEqual(['Merged text']);
+    expect(doc.searchTexts()).toEqual(['Merged text', undefined]);
     expect(doc.version()).toBeUndefined();
   });
 

@@ -927,7 +927,9 @@ export function recordChangedBlocks(
 // only with a real change: searchText with a change to its block, the stamp
 // with any change to the document. Otherwise the stored value stays, including
 // none: documents created through the API store neither, and writing one would
-// count as an edit by whoever had the document open.
+// count as an edit by whoever had the document open. A stored searchText that no
+// longer matches its block is corrected when the block is next compared:
+// concurrent edits to one block merge its text but keep one peer's searchText.
 function addDerivedFields(
   state: EditorState,
   serialized: SerializedEditorState,
@@ -975,13 +977,12 @@ function addDerivedFields(
     if (!withSearchText) return;
     const { searchText: _derived, ...rest } = meta;
     const text = texts.get(id);
-    if (blockChanged && text !== undefined) {
-      block.$ = { ...rest, searchText: text };
-      return;
-    }
     const storedText = prior?.$?.searchText;
-    block.$ =
-      storedText === undefined ? rest : { ...rest, searchText: storedText };
+    const searchText =
+      text !== undefined && (blockChanged || storedText !== undefined)
+        ? text
+        : storedText;
+    block.$ = searchText === undefined ? rest : { ...rest, searchText };
   });
 
   if (!stored || changed || !sameRootExceptVersion(stored, serialized)) return;

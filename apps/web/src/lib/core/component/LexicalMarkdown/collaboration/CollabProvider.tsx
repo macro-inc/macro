@@ -416,7 +416,11 @@ export function CollabProvider(props: CollabProviderProps) {
           discrete: true,
           tag: CODE_HIGHLIGHT_IDS_TAG,
           onUpdate: async () => {
-            await writeEditorState(props.editor.getEditorState());
+            // The update listener has recorded this update's blocks already.
+            await writeEditorState(
+              props.editor.getEditorState(),
+              new Set(changedBlocks)
+            );
             $afterSyncCursorUpdate(loroManager);
           },
         }
@@ -468,9 +472,11 @@ export function CollabProvider(props: CollabProviderProps) {
       }
 
       // Clean the state to remove any state properties that should not be synced
-      const changed = changedBlocks;
-      changedBlocks = new Set();
-      await writeEditorState(state, changed);
+      if (!readOnly()) {
+        const changed = changedBlocks;
+        changedBlocks = new Set();
+        await writeEditorState(state, changed);
+      }
     }
 
     $afterSyncCursorUpdate(loroManager);
