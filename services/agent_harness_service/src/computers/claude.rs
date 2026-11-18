@@ -517,7 +517,11 @@ impl ComputerRouteError {
             ErrorKind::InvalidCode => Self::InvalidCode,
             ErrorKind::MalformedCode => Self::MalformedCode,
             ErrorKind::NoPendingSignIn | ErrorKind::Cancelled => Self::SignInExpired,
-            ErrorKind::Timeout => Self::Timeout,
+            // harnessd's own wait on the CLI ran out, and it ended the sign-in
+            // before answering: only a new one can follow. This service
+            // giving up on harnessd (HarnessdError::Timeout) is the timeout
+            // that may leave the computer still signing in.
+            ErrorKind::Timeout => Self::SignInExpired,
             ErrorKind::Failed => {
                 Self::Failed("Claude could not sign in on the computer".to_owned())
             }

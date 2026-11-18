@@ -50,10 +50,11 @@ It owns each agent's sign-in on the computer (today Claude, through
   stand-in for the account, which the token does not carry. Never log the
   token, the pasted code or the fingerprint input; Debug impls redact them.
 - Any CLI answer to a code (success, rejection, "Invalid code", timeout)
-  ends that sign-in, so every failure after typing answers `invalid_code`
-  (a new sign-in), never `malformed_code`, which is only the shape check
-  before typing. A retried complete after success answers `signed_in` from
-  the file.
+  ends that sign-in. The CLI's refusals ("OAuth error", "Invalid code")
+  answer `invalid_code`, never `malformed_code`, which is only the shape
+  check before typing; a CLI that never answers is `timeout`, one that exits
+  `failed`, and a cancel `cancelled`. A retried complete after success
+  answers `signed_in` from the file.
 - harnessd ships in the computer's guest image: a change reaches computers
   only with a new image.
 - A start within 10 minutes of a waiting one returns its URL; an older one

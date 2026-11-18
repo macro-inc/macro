@@ -53,9 +53,10 @@ export function claudeSignInRecovery(
   return (
     match(failure)
       .returnType<ClaudeSignInRecovery>()
-      // A timeout here is the control plane giving up while the computer may
+      // A timeout here is the service giving up on the computer, which may
       // still be storing the credential: sending the code again either signs
-      // in or finds the sign-in over, which then asks for a new link.
+      // in or finds the sign-in over. harnessd's own timeout ends the
+      // sign-in and arrives as expired instead.
       .with('malformed_code', 'busy', 'unreachable', 'timeout', () => 'repaste')
       .with('expired', 'invalid_code', 'failed', () => 'new_link')
       .exhaustive()
