@@ -861,6 +861,16 @@
               }
             }
           },
+          "403": {
+            "description": "A program asked to run the call; only the user approves it",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Tool call not found",
             "content": {

@@ -3177,6 +3177,10 @@ export type CallToolErrors = {
      */
     400: string;
     /**
+     * A program asked to run the call; only the user approves it
+     */
+    403: string;
+    /**
      * Tool call not found
      */
     404: string;
