@@ -18,14 +18,14 @@
       "id": "r3",
       "what": "Days of demos, discovery calls and internal forecast reviews.",
       "evidence": ["Invitation: Q4 forecast review — Tessa", "Invitation: Meridian Parcel <> Corvana discovery", "Invitation: Corvana demo for Pinecrest ops team"],
-      "catalog": ["brief"],
+      "catalog": ["brief", "meeting_brief"],
       "surfaces": ["calendar", "tasks"]
     },
     {
       "id": "r4",
       "what": "Convoq emails a recap after each prospect call (demo, discovery, pricing, negotiation), with the next steps she promised.",
       "evidence": ["Call recap: Corvana <> Harborline Freight — negotiation call", "Call recap: Corvana <> Valewood Fulfillment — demo", "Call recap: Corvana <> Meridian Parcel — discovery", "Call recap: Corvana <> Northstar Drayage — pricing walkthrough"],
-      "catalog": [],
+      "catalog": ["promises"],
       "drafted": "When a call recap email arrives, make a task for each next step Tessa agreed to, with the account and any date.",
       "surfaces": ["email", "tasks"]
     },
@@ -62,12 +62,15 @@
     {
       "id": "x3",
       "what": "A digest of LinkedIn notices, #deals chat digests or industry newsletters",
-      "why": "Automated notices she skims; a recap of them is noise."
+      "why": "Automated notices she skims; a recap of them is noise.",
+      "catalog": ["newsletters"]
     },
     {
       "id": "x4",
       "what": "Anything that emails prospects, sends follow-ups or updates the CRM for others on her behalf",
       "why": "Routines may not send or act as her."
     }
-  ]
+  ],
+  "fine": ["triage", "stuck", "email_tags", "document_tags", "call_tasks", "mentions", "weekly_wrap", "recurring_task", "reply_drafts", "archive_noise", "cold_outreach", "email_tasks", "needs_reply", "end_of_day", "delegated", "reconnect", "one_on_one_prep", "week_ahead", "focus_time", "call_followups", "call_recap", "approvals", "channel_digest", "customer_followups", "questionnaire"],
+  "misfit": ["updates", "task_routing", "date_changes", "channel_answers", "blockers", "agent_digest", "team_progress", "project_hygiene", "project_update", "prd_tasks", "decision_log", "meeting_agenda"]
 }

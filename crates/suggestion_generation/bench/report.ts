@@ -23,7 +23,7 @@ export function lines(runs: RunFile[]): string[] {
       .map(([k, v]) => `${k} ${v.toFixed(2)}`)
       .join(', ');
     out.push('', `${run.section} (${run.label}): wrong per generation: ${wrong || 'none'}; generations not ready: ${s.failedGenerations}; bench errors: ${s.benchErrors}`);
-    for (const attempt of run.attempts.filter((a) => a.benchError)) out.push(`- ${attempt.persona} #${attempt.rep}: ${attempt.benchError}`);
+    for (const attempt of run.attempts.filter((a) => a.benchError)) out.push(`- ${attempt.persona}${(attempt.seat ?? 1) > 1 ? `/s${attempt.seat}` : ''} #${attempt.rep}: ${attempt.benchError}`);
   }
   return out;
 }

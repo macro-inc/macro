@@ -7,14 +7,14 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { type Stack, call, exclusive, login, sdk, searchIndexer, stack } from '../../scheduled_action/bench/stack';
-import { catalogDrift } from './catalog';
+import { keyGaps } from './catalog';
 import { makeHeldout, spend, spent } from './heldout';
-import { judgeCost, judgeFeed, judgeRoutines, seedGrader } from './judge';
+import { asGrader, judgeCost, judgeFeed, judgeRoutines, seedGraders } from './judge';
 import { seedId } from '../../scheduled_action/bench/setup';
-import { type Persona, type Variant, ownerEmail, personas, scenarioName } from './personas';
+import { type Persona, type Variant, ownerEmail, personas, scenarioName, seatOf, slotName } from './personas';
 import { lines as reportLines } from './report';
 import { CACHE, type Trigger, generate, prepare } from './run';
-import { type Attempt, type RunFile, type Section, failedScore, noiseMargin, scoreFeed, scoreRoutines, summary, verdict } from './score';
+import { type Attempt, type Margins, type RunFile, type Section, PARTS, failedScore, noiseMargins, scoreFeed, scoreRoutines, summary, verdict } from './score';
 import { startStub, stopStub, stubDir, writeFlags } from './stub';
 
 type SectionSpec = {
@@ -25,6 +25,9 @@ type SectionSpec = {
   flags: Record<string, boolean>;
   /** Whether its sessions search the workspace, so seeded items need indexing. */
   search: boolean;
+  /** The default size: copies of each persona run side by side, and rounds of them. */
+  seats: number;
+  reps: number;
 };
 
 /**
@@ -41,6 +44,8 @@ export const SECTIONS: Record<Section, SectionSpec> = {
     trigger: 'onboarding',
     flags: { ...BASE_FLAGS, 'enable-routine-suggestions': true },
     search: false,
+    seats: 3,
+    reps: 3,
   },
   feed: {
     about: 'The Suggestions feed: a "fresh suggestions" generation with only suggestions on, over a workspace in use for weeks.',
@@ -48,6 +53,8 @@ export const SECTIONS: Record<Section, SectionSpec> = {
     trigger: 'manual',
     flags: { ...BASE_FLAGS, 'enable-suggestions': true },
     search: true,
+    seats: 3,
+    reps: 3,
   },
 };
 
@@ -56,19 +63,23 @@ export const SECTIONS: Record<Section, SectionSpec> = {
  * default size (3 personas × 3 reps): a smaller difference is noise. Measured
  * with `noise` (README, Baseline); a run of another size needs its own.
  */
-export const MARGINS: Record<Section, number> = { routines: 37, feed: 17 };
+export const MARGINS: Record<Section, Margins> = {
+  routines: { score: 37, found: 1, bad: 2 },
+  feed: { score: 17, found: 1, bad: 1 },
+};
 
 const RUNS = join(CACHE, 'runs');
 
 const OPTIONS = {
   instance: { type: 'string', default: 'sugbench' },
   tempo: { type: 'string', default: process.env.TEMPO_URL ?? 'http://localhost:3200' },
-  reps: { type: 'string', default: '3' },
+  reps: { type: 'string' },
+  seats: { type: 'string' },
   set: { type: 'string', default: 'tune' },
   personas: { type: 'string' },
   label: { type: 'string', default: 'local' },
   out: { type: 'string' },
-  concurrency: { type: 'string', default: '3' },
+  concurrency: { type: 'string' },
   margin: { type: 'string' },
 } as const;
 
@@ -123,39 +134,41 @@ async function indexAll(at: Stack, people: Persona[], variant: Variant) {
   }
 }
 
-/** One judgement at a time: they all call as the grader, so each one's cost is read from its own window. */
-let judging = Promise.resolve();
-
-function judgeAndScore(at: Stack, section: Section, persona: Persona, attempt: Attempt): Promise<void> {
-  const turn = judging.then(() => judgeAlone(at, section, persona, attempt));
-  judging = turn.catch(() => {});
-  return turn;
-}
-
-async function judgeAlone(at: Stack, section: Section, persona: Persona, attempt: Attempt) {
-  const started = new Date();
-  try {
-    if (section === 'routines') {
-      attempt.routineMarks = await judgeRoutines(at, persona, attempt.generation);
-      attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!);
-    } else {
-      attempt.feedMarks = await judgeFeed(at, persona, attempt.generation);
-      attempt.score = scoreFeed(attempt.generation, attempt.feedMarks, persona.feedTruth!);
+/** Judge and score one attempt as a grader no other judgement is using, so its cost is read from the grader's spend meanwhile. */
+const judgeAndScore = (at: Stack, section: Section, persona: Persona, attempt: Attempt) =>
+  asGrader(async (grader) => {
+    const started = new Date();
+    try {
+      if (section === 'routines') {
+        attempt.routineMarks = await judgeRoutines(at, grader, persona, attempt.generation);
+        attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!);
+      } else {
+        attempt.feedMarks = await judgeFeed(at, grader, persona, attempt.generation);
+        attempt.score = scoreFeed(attempt.generation, attempt.feedMarks, persona.feedTruth!);
+      }
+    } catch (error) {
+      attempt.benchError = `judge: ${String(error).slice(0, 300)}`;
     }
-  } catch (error) {
-    attempt.benchError = `judge: ${String(error).slice(0, 300)}`;
-  }
-  // Usage rows land as each call settles: give the last one a moment.
-  await Bun.sleep(3000);
-  attempt.judgeUsd = await judgeCost(at, new Date(started.getTime() - 1000), new Date()).catch(() => 0);
+    // Usage rows land as each call settles: give the last one a moment.
+    await Bun.sleep(3000);
+    attempt.judgeUsd = await judgeCost(at, grader, new Date(started.getTime() - 1000), new Date()).catch(() => 0);
+  });
+
+/** Run `work` for each item, at most `limit` at once. */
+async function eachAtMost<T>(items: T[], limit: number, work: (item: T) => Promise<void>) {
+  const queue = [...items];
+  await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, async () => {
+    for (let item = queue.shift(); item !== undefined; item = queue.shift()) await work(item);
+  }));
 }
+
+/** Seeds at once: each is a seed CLI process, and the first of a person signs them up. */
+const SEEDING = 3;
 
 /** Run `section` for every chosen persona, `reps` times, and write the run file as it goes. */
 async function runSection(section: Section, values: Record<string, string | undefined>): Promise<string> {
   const spec = SECTIONS[section];
   const at = stack(values.instance!, values.tempo!);
-  const drift = catalogDrift();
-  if (drift.length) throw new Error(drift.join('\n'));
   const set = values.set!;
   let people = personas(set);
   if (values.personas) {
@@ -165,8 +178,15 @@ async function runSection(section: Section, values: Record<string, string | unde
   const truthKey = section === 'routines' ? 'routinesTruth' : 'feedTruth';
   people = people.filter((persona) => persona[truthKey]);
   if (!people.length) throw new Error(`no persona in set ${set} has a ${section} answer key`);
-  const reps = Number(values.reps);
-  const concurrency = Math.max(1, Number(values.concurrency));
+  if (section === 'routines') {
+    const gaps = people.flatMap((persona) => keyGaps(persona.routinesTruth!).map((gap) => `${persona.name}'s routines answer key ${gap}`));
+    if (gaps.length) throw new Error(gaps.join('\n'));
+  }
+  const reps = Number(values.reps ?? spec.reps);
+  const seats = Number(values.seats ?? spec.seats);
+  // Every copy of every persona is a person of its own: they run side by side.
+  const slots = people.flatMap((persona) => Array.from({ length: seats }, (_, i) => seatOf(persona, i + 1)));
+  const concurrency = Math.max(1, Number(values.concurrency ?? slots.length));
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const dir = join(RUNS, `${values.label}-${section}-${set}-${stamp}`);
   mkdirSync(dir, { recursive: true });
@@ -179,6 +199,8 @@ async function runSection(section: Section, values: Record<string, string | unde
     startedAt: new Date().toISOString(),
     instance: at.instance,
     concurrency,
+    seats,
+    reps,
     flags: spec.flags,
     attempts: [],
   };
@@ -186,34 +208,35 @@ async function runSection(section: Section, values: Record<string, string | unde
   await exclusive(at.instance, `suggestions bench ${section}`, async () => {
     startStub(at.instance);
     await setFlags(at.instance, spec.flags);
-    await seedGrader(at.instance);
+    await seedGraders(at.instance);
+    const base = (slot: Persona, rep: number) => join(dir, `${slotName(slot).replace('/', '-')}-${rep}`);
+    // Judging needs only what a generation wrote, so it runs on while the next round seeds.
+    const judged: Promise<void>[] = [];
     for (let rep = 1; rep <= reps; rep++) {
       const now = Date.now();
-      for (const persona of people) await prepare(at, persona, spec.variant, now, join(dir, `${persona.name}-${rep}`));
+      await eachAtMost(slots, SEEDING, (slot) => prepare(at, slot, spec.variant, now, base(slot, rep)));
       // A held-out set is read once its people are seeded and generations start.
       if (rep === 1 && set !== 'tune') spend(set, section, values.label!);
-      if (spec.search) await indexAll(at, people, spec.variant);
-      for (let i = 0; i < people.length; i += concurrency) {
-        const batch = people.slice(i, i + concurrency);
-        await Promise.all(
-          batch.map(async (persona) => {
-            const base = join(dir, `${persona.name}-${rep}`);
-            const generation = await generate(at, persona, spec.variant, spec.trigger, now, base);
-            const attempt: Attempt = { section, label: run.label, persona: persona.name, heldout: persona.heldout, rep, generation, judgeUsd: 0 };
-            const truth = section === 'routines' ? persona.routinesTruth!.needs : persona.feedTruth!.planted;
-            if (generation.buildFailed) attempt.score = failedScore(truth.length);
-            else if (generation.error) attempt.benchError = `generation: ${generation.error}`;
-            else await judgeAndScore(at, section, persona, attempt);
-            run.attempts.push(attempt);
-            save();
-            const s = attempt.score;
-            console.log(
-              `${section} ${persona.name} #${rep}: ${generation.buildFailed ? `build failed (scored 0): ${generation.error}` : attempt.benchError ?? `score ${s!.score.toFixed(0)} (found ${s!.found}/${s!.needs}, bad ${s!.bad}, ${s!.suggestions} suggested), ${generation.status}, ${((generation.wallMs ?? 0) / 1000).toFixed(0)}s, $${generation.cost.usd.toFixed(3)}`}`,
-            );
-          }),
-        );
-      }
+      if (spec.search) await indexAll(at, slots, spec.variant);
+      await eachAtMost(slots, concurrency, async (slot) => {
+        const generation = await generate(at, slot, spec.variant, spec.trigger, now, base(slot, rep));
+        const attempt: Attempt = { section, label: run.label, persona: slot.name, seat: slot.seat, heldout: slot.heldout, rep, generation, judgeUsd: 0 };
+        const truth = section === 'routines' ? slot.routinesTruth!.needs : slot.feedTruth!.planted;
+        const done = () => {
+          run.attempts.push(attempt);
+          save();
+          const s = attempt.score;
+          console.log(
+            `${section} ${slotName(slot)} #${rep}: ${generation.buildFailed ? `build failed (scored 0): ${generation.error}` : attempt.benchError ?? `score ${s!.score.toFixed(0)} (found ${s!.found}/${s!.needs}, bad ${s!.bad}, ${s!.suggestions} suggested), ${generation.status}, ${((generation.wallMs ?? 0) / 1000).toFixed(0)}s, ${generation.cost.usd.toFixed(3)}`}`,
+          );
+        };
+        if (generation.buildFailed) attempt.score = failedScore(truth.length);
+        else if (generation.error) attempt.benchError = `generation: ${generation.error}`;
+        else return void judged.push(judgeAndScore(at, section, slot, attempt).then(done));
+        done();
+      });
     }
+    await Promise.all(judged);
   });
   save();
   console.log(`\n${reportLines([run]).join('\n')}\n\nwrote ${out}`);
@@ -249,13 +272,28 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
   const people = new Map(personas(run.set).map((persona) => [persona.name, persona]));
   // The judge's cost is read from the grader's usage, so nothing else may judge meanwhile.
   await exclusive(at.instance, 'suggestions bench rejudge', async () => {
-    await seedGrader(at.instance);
-    for (const attempt of run.attempts) {
-      if (attempt.generation.error) continue; // a build failure keeps its 0
-      attempt.benchError = undefined;
-      await judgeAndScore(at, run.section, people.get(attempt.persona)!, attempt);
-    }
+    await seedGraders(at.instance);
+    await Promise.all(
+      run.attempts.map(async (attempt) => {
+        if (attempt.generation.error) return; // a build failure keeps its 0
+        attempt.benchError = undefined;
+        await judgeAndScore(at, run.section, seatOf(people.get(attempt.persona)!, attempt.seat ?? 1), attempt);
+      }),
+    );
   });
+  writeFileSync(path, `${JSON.stringify(run, null, 1)}\n`);
+  console.log(reportLines([run]).join('\n'));
+}
+
+/** Score a run again from the marks it has, with the answer keys as they are now: for a changed key or scoring, at no cost. */
+function rescore(path: string) {
+  const run = readRun(path);
+  const people = new Map(personas(run.set).map((persona) => [persona.name, persona]));
+  for (const attempt of run.attempts) {
+    const persona = people.get(attempt.persona)!;
+    if (attempt.routineMarks) attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!);
+    else if (attempt.feedMarks) attempt.score = scoreFeed(attempt.generation, attempt.feedMarks, persona.feedTruth!);
+  }
   writeFileSync(path, `${JSON.stringify(run, null, 1)}\n`);
   console.log(reportLines([run]).join('\n'));
 }
@@ -282,23 +320,34 @@ async function main() {
     case 'compare': {
       const [a, b] = rest.map(readSide);
       if (a.section !== b.section) throw new Error('compare two runs of the same section');
-      const margin = values.margin ? Number(values.margin) : MARGINS[a.section];
-      const v = verdict(a.attempts, b.attempts, margin);
-      console.log(`${a.section}: ${a.label} → ${b.label}\n\n**${v.verdict.toUpperCase()}**: ${v.why}.`);
-      console.log(`- score: ${v.delta >= 0 ? '+' : ''}${v.delta.toFixed(1)} (95% ${v.deltaInterval[0].toFixed(1)} to ${v.deltaInterval[1].toFixed(1)}) over ${v.pairs} pairs; margin ${v.margin}`);
-      for (const [name, [x, y]] of Object.entries(v.parts)) console.log(`- ${name}: ${x.toFixed(2)} → ${y.toFixed(2)}`);
-      console.log(`- cost per generation: $${v.usd[0].toFixed(3)} → $${v.usd[1].toFixed(3)} (difference 95% ${v.usdInterval[0].toFixed(3)} to ${v.usdInterval[1].toFixed(3)})`);
-      console.log(`- time: B/A median ×${v.wallRatio.toFixed(2)} (95% ${v.wallInterval[0].toFixed(2)}–${v.wallInterval[1].toFixed(2)})`);
+      const margins = { ...MARGINS[a.section], ...(values.margin ? { score: Number(values.margin) } : {}) };
+      const v = verdict(a.attempts, b.attempts, margins);
+      const s = v.parts.score;
+      console.log(`${a.section}: ${a.label} → ${b.label}, ${s.attempts[0]} and ${s.attempts[1]} attempts over ${s.people} personas\n\n**${v.verdict.toUpperCase()}**: ${v.why}.`);
+      for (const part of Object.keys(PARTS) as (keyof typeof PARTS)[]) {
+        const c = v.parts[part];
+        const digits = part === 'score' ? 1 : 2;
+        console.log(`- ${part}: ${c.a.toFixed(digits)} → ${c.b.toFixed(digits)}, ${c.delta >= 0 ? '+' : ''}${c.delta.toFixed(digits)} (95% ${c.interval[0].toFixed(digits)} to ${c.interval[1].toFixed(digits)}), margin ${c.margin}: ${c.verdict}`);
+      }
+      console.log(`- cost per generation: ${v.usd[0].toFixed(3)} → ${v.usd[1].toFixed(3)} (difference 95% ${v.usdInterval[0].toFixed(3)} to ${v.usdInterval[1].toFixed(3)})`);
+      console.log(`- time: B/A median ×${v.wallRatio.toFixed(2)}`);
       break;
     }
     case 'noise': {
       const [a, b] = rest.map(readSide);
-      const n = noiseMargin(a.attempts, b.attempts);
-      console.log(`${a.section}: ${n.pairs} pairs of the same build moved ${n.delta.toFixed(1)} (95% ${n.interval[0].toFixed(1)} to ${n.interval[1].toFixed(1)}): margin ${n.margin.toFixed(1)}`);
+      const n = noiseMargins(a.attempts, b.attempts);
+      console.log(`${a.section}: ${n.score.attempts.join(' and ')} attempts of the same build over ${n.score.people} personas`);
+      for (const [part, c] of Object.entries(n)) {
+        const digits = part === 'score' ? 1 : 2;
+        console.log(`- ${part}: moved ${c.delta.toFixed(digits)} (95% ${c.interval[0].toFixed(digits)} to ${c.interval[1].toFixed(digits)}, standard error ${c.se.toFixed(digits)}): margin ${c.margin.toFixed(digits)}`);
+      }
       break;
     }
     case 'rejudge':
       for (const path of rest) await rejudge(path, values);
+      break;
+    case 'rescore':
+      for (const path of rest) rescore(path);
       break;
     case 'stub':
       if (rest[0] === 'stop') stopStub(values.instance!);
@@ -321,11 +370,13 @@ async function main() {
   noise <a> <b>        the margin two runs of the same build set
                        (a side may be several run.json joined by commas)
   rejudge <run.json…>  judge and score again without generating
+  rescore <run.json…>  score again from the marks it has (a changed key), free
   stub [stop]          start or stop the stand-in
   heldout make <name> [count] | heldout list
 
-options: --instance sugbench --reps 3 --set tune|<held-out set> --personas a,b
-         --label local --concurrency 3 --out <file> --margin <points>`);
+options: --instance sugbench --set tune|<held-out set> --personas a,b --label local
+         --seats <copies of each persona> --reps <rounds> (default: the section's size)
+         --concurrency <generations at once> (default: all) --out <file> --margin <points>`);
   }
 }
 

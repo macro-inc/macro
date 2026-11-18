@@ -15,7 +15,7 @@ with one number and its parts underneath.
 | `stub.ts` | The stand-in for PostHog and the provider mailbox. |
 | `run.ts` | One generation: seed, start, watch, read back, cost. |
 | `judge.ts` | The model judges and their rubrics. |
-| `catalog.ts` | The routine catalog as the judge reads it, checked against `routine_program`'s. |
+| `catalog.ts` | The routine catalog, read from `routine_program`'s `catalog.rs`, and the check that each answer key places every routine. |
 | `score.ts` | Scores, summaries and the win, loss or noise verdict. |
 | `report.ts` | The summary table. |
 | `heldout.ts` | Writing held-out personas and the ledger of their use. |
@@ -37,7 +37,7 @@ routine can't start when mail arrives; every other flag is off.
 
 | Section | Generation | Persona copy | Answer key |
 | --- | --- | --- | --- |
-| `routines` | onboarding (`POST /suggestions/generate`), `enable-routine-suggestions` only: the routines sessions of the onboarding layout, in parallel, 240 s cap, one retry when a session suggests nothing | `signup`: the person a minute after signing up, their mailbox and nothing else | 5 or 6 needs a routine would meet (which catalog keys meet each, or what a drafted routine must do) and 4 or 5 decoys |
+| `routines` | onboarding (`POST /suggestions/generate`), `enable-routine-suggestions` only: the routines sessions of the onboarding layout, in parallel, 240 s cap, one retry when a session suggests nothing | `signup`: the person a minute after signing up, their mailbox and nothing else | 5 or 6 needs a routine would meet (which catalog keys meet each, or what a drafted routine must do), 4 or 5 decoys, and every other catalog routine placed as `fine` or `misfit` |
 | `feed` | fresh suggestions (`POST /suggestions/regenerate`), `enable-suggestions` only: the suggestions session with nightly timeouts | `full`: weeks of use, with documents, tasks, channels, calls and mail | 9 planted opportunities that connect sources, and 3 stale decoys |
 
 The nightly run is the manual one with another brief line, a paid-plan check
@@ -50,13 +50,22 @@ and the 2–5 am window, so `feed` stands for both. The weekly routines review
 Each attempt scores **100 × (found − bad) / needs**:
 
 - *found*: needs (routines) or planted opportunities (feed) that at least one
-  suggestion meets. A catalog routine meets a need through the keys the need
-  lists, decided by the bench; a drafted routine or a card is the judge's call.
-  A broken, unsafe or misfit routine meets nothing.
+  suggestion meets. A broken, unsafe or misfit routine meets nothing.
 - *bad*: suggestions with anything wrong. Routines: a decoy, misfit, broken,
   a bad knob, the wrong sidebar first, a duplicate, unsafe, or a reason that
   invents a fact. Feed: a decoy, stale, a duplicate, unsafe, or invented.
 - A fine suggestion the key didn't plant counts nothing.
+
+A catalog pick is scored from the answer key and the catalog alone, so the
+same pick scores the same every time: the key places each of the catalog's
+routines once, as meeting needs, as a decoy, `fine` or `misfit`; a pick is
+in the wrong sidebar when its first one isn't among the routine's surfaces,
+and a duplicate when an earlier pick has its key. Only what the session
+wrote for it is the judge's: a reason that invents a fact, and the knobs it
+set (bad or breaking it). A drafted routine and a card are the judge's call
+throughout. Judged twice, the baseline's generations of 2026-11-18 differed in
+routines' *bad* by 0.82 a generation (root mean square), mostly misfit and
+sidebar calls on catalog picks; scored by key, by 0.41.
 
 So finding everything with nothing wrong is 100, suggesting nothing is 0, and
 noise drives it below 0. A generation the build fails (a server error
@@ -89,12 +98,21 @@ Then, inside `nix develop` (it has `bun` and `docker`):
 
 ```sh
 B=crates/suggestion_generation/bench
-bun $B/bench.ts run routines --label main           # one section: 3 personas × 3 reps
-bun $B/bench.ts run feed --label main --reps 1      # a quick look
+bun $B/bench.ts run routines --label main           # one section at its default size
+bun $B/bench.ts run feed --label main --seats 1 --reps 1   # a quick look: one attempt a persona
 bun $B/bench.ts all --label main                    # every section
 bun $B/bench.ts compare <main run.json> <mine run.json>
 bun $B/bench.ts report <run.json>...
+bun $B/bench.ts rescore <run.json>...               # after changing an answer key: free, no model calls
 ```
+
+A section's default size is 3 personas × 3 seats × 3 reps: 27 attempts. A
+seat is a copy of a persona under a domain of its own (`founder`,
+`founder/s2`, `founder/s3`), a person of its own, so all nine copies
+generate at once and a rep takes about as long as one attempt. Seats sign
+up on their first run (one signup each for `routines`, five for `feed`'s
+teams), against the webhook's 50 an hour. Judging runs alongside, as three
+grader accounts, while the next rep seeds.
 
 Each run writes `~/.cache/suggestions-bench/runs/<label>-<section>-<set>-<time>/run.json`,
 with each attempt's suggestions, the judge's marks, the score and the
@@ -109,11 +127,15 @@ inside the section's margin (`MARGINS` in `bench.ts`) is noise.
 
 ### Noise
 
-Two runs of main against main, paired by persona and rep, move a section's
-score by up to its margin at the default size (3 personas × 3 reps). `compare`
-calls a change a win or a loss only past that margin and when the 95%
-bootstrap interval of the paired difference leaves zero. Measure it again
-after changing the personas, the judge or the size:
+`compare` takes, for each persona both runs have, B's mean less A's, and
+averages over personas; its 95% interval is that ± t standard errors, from
+how much each persona's attempts spread on each side. It calls a change a
+win or a loss only when the score moved past the section's margin
+(`MARGINS` in `bench.ts`: how far two runs of main land apart at the
+default size) and the interval leaves zero. *found* and *bad* get the same
+test against margins of their own, and show a change in one before the
+score can. Measure the margins again after changing the personas, the
+judge or the default size:
 
 ```sh
 bun $B/bench.ts run routines --label main-a && bun $B/bench.ts run routines --label main-b
@@ -121,11 +143,8 @@ bun $B/bench.ts noise <main-a run.json> <main-b run.json>
 ```
 
 A side of `compare`, `noise` or `report` may be several runs of one section
-joined by commas (`a1.json,a2.json`): their reps follow on and pair up rep for
-rep. More pairs narrow the interval, which must leave zero; the margin stays
-the one measured at the default size, so a change still has to move the score
-by more than it (routines 37, feed 17). Measure the margin again at the size
-you compare at for a smaller one.
+joined by commas (`a1.json,a2.json`), read as one. The margins hold at the
+default size: a smaller run (fewer seats or reps) is only a look.
 
 ### Held-out personas
 
@@ -145,7 +164,8 @@ says which people are missing; run the same command again to write just
 those.
 
 Held-out sets live outside the repository and are reported only in
-aggregate. Don't open their files while tuning. Each run is recorded in the
+aggregate. A set written before keys placed every catalog routine (`h2`
+and earlier) can't be read by the `routines` section: write a new one. Don't open their files while tuning. Each run is recorded in the
 set's ledger; after a baseline and one candidate a set is spent and the bench
 says so: make a new one.
 
@@ -222,7 +242,11 @@ cost nothing beyond the model calls.
   in `.example` and street addresses and phone numbers are written so the
   privacy scan doesn't read them as real ones (`Calder St #220`, `415 555 01 42`).
   `routines-truth.json` needs come from steady streams in the mail; list the
-  catalog keys that meet a need on their own.
+  catalog keys that meet a need on their own, the ones that are a decoy, and
+  every other catalog routine in `fine` or `misfit`.
+- A catalog routine added, renamed or removed in `catalog.rs` stops the
+  `routines` section until every answer key places it again (the run says
+  which); `rescore` then scores earlier runs with the new keys.
 - A section is an entry in `SECTIONS` (`bench.ts`): its trigger, flags,
   persona copy and judge. The weekly routines review would be manual with
   both flags on and routines due, a persona copy with last week's routine

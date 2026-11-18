@@ -100,14 +100,16 @@ export async function seed(instance: string, persona: Persona, variant: Variant,
   const path = join(dir, `${scenarioName(persona, variant)}.json`);
   const spec = scenario(persona, variant, now) as { users: Record<string, { email: string }> };
   writeFileSync(path, `${JSON.stringify(spec, null, 1)}\n`);
-  const result = Bun.spawnSync(['just', 'seed-scenario', '--instance', instance, 'apply', '--file', path], {
+  // Not spawnSync: other personas' generations are being watched meanwhile.
+  const child = Bun.spawn(['just', 'seed-scenario', '--instance', instance, 'apply', '--file', path], {
     cwd: REPO,
     stdout: 'pipe',
     stderr: 'pipe',
   });
-  const output = result.stdout.toString() + result.stderr.toString();
+  const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+  const output = stdout + stderr;
   writeFileSync(log, output, { flag: 'a' });
-  if (result.exitCode !== 0) throw new Error(`seed-scenario apply ${scenarioName(persona, variant)} exited with ${result.exitCode}; see ${log}`);
+  if (exitCode !== 0) throw new Error(`seed-scenario apply ${scenarioName(persona, variant)} exited with ${exitCode}; see ${log}`);
   // The seed CLI goes on without a login when the signup webhook refuses one
   // (it allows 50 signups an hour from one address); say so here, not as a
   // failed login later. Only the owner logs in; a refused colleague is a

@@ -54,10 +54,22 @@ export type RoutineNeed = {
 };
 /** A routine that looks plausible for this person but that they wouldn't keep. */
 export type RoutineDecoy = { id: string; what: string; why: string; catalog?: string[] };
-export type RoutinesTruth = { needs: RoutineNeed[]; decoys: RoutineDecoy[] };
+/**
+ * Every catalog routine sorts into one place in the key: the needs that list
+ * it, a decoy that lists it, `fine` (it suits the person but meets no need:
+ * it counts nothing) or `misfit` (it does nothing for how they work). The
+ * bench scores catalog picks from this alone, so they score the same every
+ * time; a drafted routine is the judge's call.
+ */
+export type RoutinesTruth = { needs: RoutineNeed[]; decoys: RoutineDecoy[]; fine: string[]; misfit: string[] };
 
 export type Persona = {
   name: string;
+  /**
+   * Which copy of the person: copies 2 and up live under a domain of their
+   * own (`-s2`), so several attempts at one person run side by side.
+   */
+  seat: number;
   heldout: boolean;
   dir: string;
   workspace: Record<string, unknown> & { scenario: string; description: string; users: Record<string, { email: string }> };
@@ -75,6 +87,7 @@ function load(dir: string, name: string, heldout: boolean): Persona {
   if (!workspace || !inbox) throw new Error(`${dir} lacks workspace.json or inbox.json`);
   return {
     name,
+    seat: 1,
     heldout,
     dir,
     workspace,
@@ -119,18 +132,27 @@ export type Variant = 'full' | 'signup';
 
 const domainOf = (email: string) => email.split('@')[1];
 
-/** The persona as `variant`: its own scenario name, and the signup copy's addresses moved to their own domain. */
+/** Copy `seat` of `persona`. */
+export const seatOf = (persona: Persona, seat: number): Persona => ({ ...persona, seat });
+
+const seatTag = (persona: Persona) => ((persona.seat ?? 1) > 1 ? `-s${persona.seat}` : '');
+
+/** The persona as `variant`: its own scenario name, and the signup copy's and later seats' addresses moved to a domain of their own. */
 function variantOf(persona: Persona, variant: Variant): Persona {
-  if (variant === 'full') return persona;
+  const tag = `${seatTag(persona)}${variant === 'signup' ? '-signup' : ''}`;
+  if (!tag) return persona;
   const domain = domainOf(persona.inbox.owner.email);
-  const signupDomain = domain.replace(/\.example$/, '-signup.example');
-  const rename = <T>(value: T): T => JSON.parse(JSON.stringify(value).replaceAll(`@${domain}`, `@${signupDomain}`));
+  const moved = domain.replace(/\.example$/, `${tag}.example`);
+  const rename = <T>(value: T): T => JSON.parse(JSON.stringify(value).replaceAll(`@${domain}`, `@${moved}`));
   return { ...persona, inbox: rename(persona.inbox), workspace: rename(persona.workspace) };
 }
 
 /** The scenario name the seed CLI marks a variant's rows with. */
 export const scenarioName = (persona: Persona, variant: Variant) =>
-  `sugbench-${persona.heldout ? 'h-' : ''}${persona.name}${variant === 'signup' ? '-signup' : ''}`;
+  `sugbench-${persona.heldout ? 'h-' : ''}${persona.name}${seatTag(persona)}${variant === 'signup' ? '-signup' : ''}`;
+
+/** The persona and its copy, for logs: `founder`, `founder/s2`. */
+export const slotName = (persona: Persona) => `${persona.name}${(persona.seat ?? 1) > 1 ? `/s${persona.seat}` : ''}`;
 
 /** The owner's address in `variant`. */
 export const ownerEmail = (persona: Persona, variant: Variant) => variantOf(persona, variant).inbox.owner.email;

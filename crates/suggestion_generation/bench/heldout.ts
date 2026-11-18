@@ -182,7 +182,26 @@ const FEED_TRUTH = obj({
 const ROUTINES_TRUTH = obj({
   needs: { type: 'array', items: obj({ id: str, what: str, evidence: strs, catalog: strs, drafted: str, surfaces: strs }) },
   decoys: { type: 'array', items: obj({ id: str, what: str, why: str, catalog: strs }) },
+  misfit: strs,
 });
+
+type WrittenRoutinesTruth = { needs: { catalog: string[]; drafted?: string }[]; decoys: { catalog?: string[] }[]; misfit: string[]; fine?: string[] };
+
+/**
+ * Give every catalog routine exactly one place, as the bench requires
+ * (catalog.ts `keyGaps`): a key the catalog lacks is dropped, a need's key
+ * is no decoy or misfit, a decoy's no misfit, and the rest are fine.
+ */
+export function placeAll(truth: WrittenRoutinesTruth): WrittenRoutinesTruth {
+  const known = (keys: string[] = []) => [...new Set(keys.filter((key) => CATALOG[key]))];
+  const needs = truth.needs.map((need) => ({ ...need, catalog: known(need.catalog) }));
+  const met = new Set(needs.flatMap((need) => need.catalog));
+  const decoys = truth.decoys.map((decoy) => ({ ...decoy, catalog: known(decoy.catalog).filter((key) => !met.has(key)) }));
+  const lured = new Set(decoys.flatMap((decoy) => decoy.catalog));
+  const misfit = known(truth.misfit).filter((key) => !met.has(key) && !lured.has(key));
+  const fine = Object.keys(CATALOG).filter((key) => !met.has(key) && !lured.has(key) && !misfit.includes(key));
+  return { needs, decoys, misfit, fine };
+}
 
 const anchor = new Date(ANCHOR).toISOString();
 
@@ -366,16 +385,17 @@ ${plan.decoys.map((o) => `- ${o}`).join('\n')}
     );
     writeFileSync(join(dir, 'feed-truth.json'), `${JSON.stringify(feedTruth, null, 1)}\n`);
     const catalog = Object.entries(CATALOG).map(([key, e]) => `${key}: ${e.does} (${e.surfaces.join(', ')})`).join('\n');
-    const routinesTruth = await write<{ needs: Record<string, unknown>[]; decoys: Record<string, unknown>[] }>(
+    const routinesTruth = await write<WrittenRoutinesTruth>(
       at,
-      `Write the answer key for judging automations ("routines") suggested to ${owner.name} a minute after signup, from their mail alone. Needs (ids r1, …, 4 to 6): routines they would still have on a month later because a steady stream of their mail shows the work: what, evidence (subjects), the catalog keys that meet it on their own (empty when only a drafted routine can), what a drafted routine that meets it does (empty when the catalog covers it), and the sidebars (email, calendar, tasks, files, crm, chat, calls, reviews, agents). Make one need "mail sorting" met by inbox or email_tags when they file mail under labels. Decoys (ids x1, …, 3 to 5): routines that look plausible from their mail but that they would switch off, with why, and the catalog keys that are that decoy (empty when none). Include one decoy that would send or act as them.
+      `Write the answer key for judging automations ("routines") suggested to ${owner.name} a minute after signup, from their mail alone. Needs (ids r1, …, 4 to 6): routines they would still have on a month later because a steady stream of their mail shows the work: what, evidence (subjects), the catalog keys that meet it on their own (empty when only a drafted routine can), what a drafted routine that meets it does (empty when the catalog covers it), and the sidebars (email, calendar, tasks, files, crm, chat, calls, reviews, agents). Make one need "mail sorting" met by inbox or email_tags when they file mail under labels. Decoys (ids x1, …, 3 to 5): routines that look plausible from their mail but that they would switch off, with why, and the catalog keys that are that decoy (empty when none). Include one decoy that would send or act as them. Misfit: every other catalog key that would do nothing for how this person works (a deal pipeline for someone with no deals, call recaps for someone whose work never happens on calls); a part of the app they haven't used yet is not a misfit for that reason alone. Every catalog key you leave out of needs, decoys and misfit counts as fine for them.
 Catalog:
 ${catalog}
 <mail>${digest}</mail>`,
       ROUTINES_TRUTH,
     );
-    routinesTruth.needs = routinesTruth.needs.map((need) => (need.drafted ? need : { ...need, drafted: undefined }));
-    writeFileSync(join(dir, 'routines-truth.json'), `${JSON.stringify(routinesTruth, null, 1)}\n`);
+    const placed = placeAll(routinesTruth);
+    placed.needs = placed.needs.map((need) => (need.drafted ? need : { ...need, drafted: undefined }));
+    writeFileSync(join(dir, 'routines-truth.json'), `${JSON.stringify(placed, null, 1)}\n`);
     renameSync(dir, join(root, sketch.slug));
     console.log(`wrote held-out persona ${sketch.slug} in ${join(root, sketch.slug)}`);
   }

@@ -5,6 +5,7 @@
 // finds everything and adds nothing wrong scores 100, one that suggests
 // nothing scores 0, and noise drives it below 0.
 
+import { CATALOG } from './catalog';
 import type { CardMark, FeedMarks, RoutineMark } from './judge';
 import type { FeedTruth, RoutinesTruth } from './personas';
 import type { Generation } from './run';
@@ -33,6 +34,8 @@ export type Attempt = {
   section: Section;
   label: string;
   persona: string;
+  /** Which copy of the persona ran it (personas.ts `seat`); 1 in runs from before seats. */
+  seat?: number;
   heldout: boolean;
   rep: number;
   generation: Generation;
@@ -52,6 +55,9 @@ export type RunFile = {
   startedAt: string;
   instance: string;
   concurrency: number;
+  /** Copies of each persona and rounds of them; absent in runs from before seats (1 and 3). */
+  seats?: number;
+  reps?: number;
   flags: Record<string, boolean>;
   attempts: Attempt[];
 };
@@ -62,36 +68,50 @@ const count = (wrong: Record<string, number>, key: string, holds: boolean) => {
 
 const mean = (values: number[]) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : null);
 
+/**
+ * What is wrong with a catalog pick, from the answer key and the catalog
+ * alone, so the same pick scores the same every time. Only what the session
+ * wrote for it is the judge's: its reason (invented) and the knobs it set.
+ */
+function catalogFlags(generation: Generation, i: number, mark: RoutineMark, truth: RoutinesTruth, key: string): Record<string, boolean> {
+  const row = generation.routines[i];
+  const knobs = Object.keys(row.knob_values ?? {}).length > 0;
+  return {
+    decoy: truth.decoys.some((decoy) => decoy.catalog?.includes(key)),
+    misfit: truth.misfit.includes(key),
+    broken: knobs && mark.broken,
+    bad_knob: knobs && mark.bad_knob,
+    wrong_surface: !CATALOG[key]?.surfaces.includes(row.surfaces[0]),
+    duplicate: generation.routines.slice(0, i).some((earlier) => earlier.catalog_key === key),
+    unsafe: false,
+    invented: mark.invented,
+  };
+}
+
 export function scoreRoutines(generation: Generation, marks: RoutineMark[], truth: RoutinesTruth): Score {
   const needIds = new Set(truth.needs.map((need) => need.id));
-  const freeDecoys = new Set(truth.decoys.filter((decoy) => !decoy.catalog?.length).map((decoy) => decoy.id));
   const found = new Set<string>();
   const wrong: Record<string, number> = {};
   let bad = 0;
   generation.routines.forEach((row, i) => {
     const mark = marks[i];
-    // A catalog routine meets a need or falls for a decoy by its key alone,
-    // whatever the judge says; a drafted one is the judge's call.
+    // A catalog routine is scored by its key (catalogFlags); a drafted one is the judge's call.
     const key = row.catalog_key;
     const meets = key
       ? truth.needs.filter((need) => need.catalog.includes(key)).map((need) => need.id)
       : mark.meets.filter((id) => needIds.has(id));
-    const decoys = key
-      ? [
-          ...truth.decoys.filter((decoy) => decoy.catalog?.includes(key)).map((decoy) => decoy.id),
-          ...mark.decoys.filter((id) => freeDecoys.has(id)),
-        ]
-      : mark.decoys.filter((id) => truth.decoys.some((decoy) => decoy.id === id));
-    const flags: Record<string, boolean> = {
-      decoy: decoys.length > 0,
-      misfit: mark.misfit,
-      broken: mark.broken,
-      bad_knob: mark.bad_knob,
-      wrong_surface: mark.wrong_surface,
-      duplicate: mark.duplicate,
-      unsafe: mark.unsafe,
-      invented: mark.invented,
-    };
+    const flags: Record<string, boolean> = key
+      ? catalogFlags(generation, i, mark, truth, key)
+      : {
+          decoy: mark.decoys.some((id) => truth.decoys.some((decoy) => decoy.id === id)),
+          misfit: mark.misfit,
+          broken: mark.broken,
+          bad_knob: mark.bad_knob,
+          wrong_surface: mark.wrong_surface,
+          duplicate: mark.duplicate,
+          unsafe: mark.unsafe,
+          invented: mark.invented,
+        };
     for (const [name, holds] of Object.entries(flags)) count(wrong, name, holds);
     if (Object.values(flags).some(Boolean)) bad++;
     // One that can't work or doesn't fit meets nothing.
@@ -220,85 +240,116 @@ export function interval<T>(sample: T[], statistic: (drawn: T[]) => number): [nu
   return [quantile(values, 0.025), quantile(values, 0.975)];
 }
 
-type Pair = { a: Attempt & { score: Score }; b: Attempt & { score: Score } };
+type Done = Attempt & { score: Score };
 
-/** Attempts of the same persona and rep, one from each run. */
-export function pairs(a: Attempt[], b: Attempt[]): Pair[] {
-  const key = (attempt: Attempt) => `${attempt.persona}#${attempt.rep}`;
-  const bs = new Map(scored(b).map((attempt) => [key(attempt), attempt]));
-  return scored(a).flatMap((attempt) => {
-    const other = bs.get(key(attempt));
-    return other ? [{ a: attempt, b: other }] : [];
-  });
+/** The parts a comparison reports, and which way is better. */
+export const PARTS = { score: 1, found: 1, bad: -1 } as const;
+export type Part = keyof typeof PARTS;
+
+function byPersona(attempts: Attempt[]) {
+  const groups = new Map<string, Done[]>();
+  for (const attempt of scored(attempts)) groups.set(attempt.persona, [...(groups.get(attempt.persona) ?? []), attempt]);
+  return groups;
 }
+
+/** Student's t at 97.5% for `df` degrees of freedom (Cornish–Fisher; within 0.01 from 5 up). */
+function t975(df: number) {
+  const z = 1.959964;
+  return z + (z ** 3 + z) / (4 * df) + (5 * z ** 5 + 16 * z ** 3 + 3 * z) / (96 * df ** 2);
+}
+
+/**
+ * B against A on `get`: for each persona both ran, B's mean less A's, then
+ * the mean over personas, so sides of any size compare and a persona that
+ * runs more often doesn't outweigh the others. The 95% interval is the
+ * difference ± t × its standard error, from each persona's spread on each
+ * side (a persona with one attempt on a side takes the spread of the rest).
+ */
+export function contrast(a: Attempt[], b: Attempt[], get: (attempt: Done) => number) {
+  const as = byPersona(a);
+  const bs = byPersona(b);
+  const people = [...as.keys()].filter((name) => bs.has(name)).sort();
+  if (!people.length) throw new Error('the two runs share no scored persona');
+  const groups = people.flatMap((name) => [as.get(name)!.map(get), bs.get(name)!.map(get)]);
+  const squares = (values: number[]) => values.reduce((sum, v) => sum + (v - avg(values)) ** 2, 0);
+  const df = groups.reduce((n, values) => n + values.length - 1, 0);
+  const pooled = df > 0 ? groups.reduce((sum, values) => sum + squares(values), 0) / df : NaN;
+  const spread = (values: number[]) => (values.length > 1 ? squares(values) / (values.length - 1) : pooled);
+  const se = Math.sqrt(groups.reduce((sum, values) => sum + spread(values) / values.length, 0)) / people.length;
+  const delta = avg(people.map((_, i) => avg(groups[2 * i + 1]) - avg(groups[2 * i])));
+  const half = t975(Math.max(1, df)) * se;
+  return {
+    people: people.length,
+    attempts: [people.reduce((n, name) => n + as.get(name)!.length, 0), people.reduce((n, name) => n + bs.get(name)!.length, 0)] as [number, number],
+    a: avg(people.map((_, i) => avg(groups[2 * i]))),
+    b: avg(people.map((_, i) => avg(groups[2 * i + 1]))),
+    delta,
+    interval: [delta - half, delta + half] as [number, number],
+    /** The standard error of `delta`. */
+    se,
+  };
+}
+
+export type Margins = Record<Part, number>;
+
+export type PartVerdict = ReturnType<typeof contrast> & { margin: number; verdict: 'better' | 'worse' | 'noise' };
 
 export type Verdict = {
   verdict: 'win' | 'loss' | 'noise';
   why: string;
-  pairs: number;
-  delta: number;
-  deltaInterval: [number, number];
-  margin: number;
-  parts: Record<string, [number, number]>;
+  parts: Record<Part, PartVerdict>;
   usd: [number, number];
   usdInterval: [number, number];
   wallRatio: number;
-  wallInterval: [number, number];
+};
+
+const get: Record<Part, (attempt: Done) => number> = {
+  score: (attempt) => attempt.score.score,
+  found: (attempt) => attempt.score.found,
+  bad: (attempt) => attempt.score.bad,
 };
 
 /**
- * B against A on score: a win or loss only when the mean paired difference
- * is past `margin` (what main against main moves at this size) and its 95%
- * interval leaves zero. Cost and time are reported beside it, not folded in.
+ * B against A: a win or a loss only when the score moved past its margin
+ * (what main against main moves it by at the default size) and its 95%
+ * interval leaves zero. Found and bad get a verdict of their own, against
+ * margins of their own, which show a change in one before the score can.
+ * Cost and time are reported beside it, not folded in.
  */
-export function verdict(a: Attempt[], b: Attempt[], margin: number): Verdict {
-  const sample = pairs(a, b);
-  if (sample.length < 3) throw new Error(`only ${sample.length} paired attempts; run both sides with the same personas and reps`);
-  const delta = (drawn: Pair[]) => avg(drawn.map((pair) => pair.b.score.score - pair.a.score.score));
-  const d = delta(sample);
-  const deltaInterval = interval(sample, delta);
-  let result: Verdict['verdict'] = 'noise';
-  let why = `score moved ${d >= 0 ? '+' : ''}${d.toFixed(1)}, within the ${margin.toFixed(1)} noise margin or an interval that spans 0`;
-  if (d > margin && deltaInterval[0] > 0) {
-    result = 'win';
-    why = `score rose ${d.toFixed(1)}, past the ${margin.toFixed(1)} margin`;
-  } else if (d < -margin && deltaInterval[1] < 0) {
-    result = 'loss';
-    why = `score fell ${(-d).toFixed(1)}, past the ${margin.toFixed(1)} margin`;
-  }
-  const part = (get: (s: Score) => number): [number, number] => [avg(sample.map((p) => get(p.a.score))), avg(sample.map((p) => get(p.b.score)))];
-  const usdDelta = (drawn: Pair[]) => avg(drawn.map((p) => p.b.generation.cost.usd - p.a.generation.cost.usd));
-  const timed = sample.filter((p) => p.a.generation.wallMs && p.b.generation.wallMs);
-  const ratio = (drawn: Pair[]) => Math.exp(quantile(drawn.map((p) => Math.log(p.b.generation.wallMs! / p.a.generation.wallMs!)), 0.5));
-  return {
-    verdict: result,
-    why,
-    pairs: sample.length,
-    delta: d,
-    deltaInterval,
-    margin,
-    parts: {
-      found: part((s) => s.found),
-      bad: part((s) => s.bad),
-      invented: part((s) => s.invented),
-      suggestions: part((s) => s.suggestions),
-      quality: [avg(sample.flatMap((p) => (p.a.score.quality === null ? [] : [p.a.score.quality]))), avg(sample.flatMap((p) => (p.b.score.quality === null ? [] : [p.b.score.quality])))],
-    },
-    usd: [avg(sample.map((p) => p.a.generation.cost.usd)), avg(sample.map((p) => p.b.generation.cost.usd))],
-    usdInterval: interval(sample, usdDelta),
-    wallRatio: timed.length ? ratio(timed) : NaN,
-    wallInterval: timed.length > 1 ? interval(timed, ratio) : [NaN, NaN],
-  };
+export function verdict(a: Attempt[], b: Attempt[], margins: Margins): Verdict {
+  const parts = Object.fromEntries(
+    (Object.keys(PARTS) as Part[]).map((part) => {
+      const c = contrast(a, b, get[part]);
+      const margin = margins[part];
+      const better = PARTS[part] * c.delta > margin && (PARTS[part] > 0 ? c.interval[0] > 0 : c.interval[1] < 0);
+      const worse = PARTS[part] * c.delta < -margin && (PARTS[part] > 0 ? c.interval[1] < 0 : c.interval[0] > 0);
+      return [part, { ...c, margin, verdict: better ? 'better' : worse ? 'worse' : 'noise' }];
+    }),
+  ) as Record<Part, PartVerdict>;
+  const s = parts.score;
+  if (s.attempts[0] < 3 || s.attempts[1] < 3) throw new Error(`only ${s.attempts.join(' and ')} scored attempts; run both sides with the same personas`);
+  const signed = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}`;
+  const result: Verdict['verdict'] = s.verdict === 'better' ? 'win' : s.verdict === 'worse' ? 'loss' : 'noise';
+  const why =
+    result === 'noise'
+      ? `score moved ${signed(s.delta)}, within the ${s.margin.toFixed(1)} noise margin or an interval that spans 0`
+      : `score moved ${signed(s.delta)}, past the ${s.margin.toFixed(1)} margin`;
+  const usd = contrast(a, b, (attempt) => attempt.generation.cost.usd);
+  const timed = (attempts: Attempt[]) => attempts.filter((attempt) => attempt.generation.wallMs);
+  const median = (attempts: Attempt[]) => quantile(scored(timed(attempts)).map((attempt) => attempt.generation.wallMs!), 0.5);
+  return { verdict: result, why, parts, usd: [usd.a, usd.b], usdInterval: usd.interval, wallRatio: median(b) / median(a) };
 }
 
 /**
- * The noise margin from two runs of the same build: the larger end of the
- * 95% interval of their paired score difference, i.e. how far apart two
- * identical builds land at this many attempts.
+ * The noise margins from two runs of the same build: for each part, the
+ * larger end of the 95% interval of their difference, i.e. how far apart
+ * two identical builds land at this size.
  */
-export function noiseMargin(a: Attempt[], b: Attempt[]) {
-  const sample = pairs(a, b);
-  const delta = (drawn: Pair[]) => avg(drawn.map((pair) => pair.b.score.score - pair.a.score.score));
-  const [lo, hi] = interval(sample, delta);
-  return { pairs: sample.length, delta: delta(sample), interval: [lo, hi] as [number, number], margin: Math.max(Math.abs(lo), Math.abs(hi)) };
+export function noiseMargins(a: Attempt[], b: Attempt[]) {
+  return Object.fromEntries(
+    (Object.keys(PARTS) as Part[]).map((part) => {
+      const c = contrast(a, b, get[part]);
+      return [part, { ...c, margin: Math.max(Math.abs(c.interval[0]), Math.abs(c.interval[1])) }];
+    }),
+  ) as Record<Part, ReturnType<typeof contrast> & { margin: number }>;
 }

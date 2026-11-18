@@ -15,34 +15,63 @@ import type { CardRow, Generation, RoutineRow } from './run';
 import { CACHE, seed } from './run';
 
 export const JUDGE_MODEL = 'anthropic/claude-opus-5-5';
-const GRADER = 'grader@suggestions-bench.example';
+/**
+ * The accounts the judges call as. Each judges one attempt at a time, so a
+ * judgement's cost is the account's spend while it ran; several let
+ * judgements run side by side.
+ */
+export const GRADERS = ['grader@suggestions-bench.example', 'grader-2@suggestions-bench.example', 'grader-3@suggestions-bench.example'];
 
-/** Seed the grader the judges call as, once per stack. */
-export async function seedGrader(instance: string) {
-  const persona = {
-    name: 'grader',
-    heldout: false,
-    dir: '',
-    workspace: {
-      scenario: 'sugbench-grader',
-      description: 'The account the bench grades suggestions as.',
-      users: { grader: { email: GRADER, first_name: 'Bench', last_name: 'Grader', roles: ['team_subscriber', 'sub_opus'] } },
-    },
-    inbox: { owner: { name: 'Bench Grader', email: GRADER }, persona: '', timezone: 'UTC', messages: [] },
-  } as unknown as Persona;
-  await seed(instance, persona, 'full', Date.now(), `${CACHE}/${instance}/grader.seed.log`);
+/** Seed the graders the judges call as, once per stack. */
+export async function seedGraders(instance: string) {
+  for (const [i, email] of GRADERS.entries()) {
+    const persona = {
+      name: `grader${i ? i + 1 : ''}`,
+      seat: 1,
+      heldout: false,
+      dir: '',
+      workspace: {
+        scenario: `sugbench-grader${i ? i + 1 : ''}`,
+        description: 'An account the bench grades suggestions as.',
+        users: { grader: { email, first_name: 'Bench', last_name: `Grader ${i + 1}`, roles: ['team_subscriber', 'sub_opus'] } },
+      },
+      inbox: { owner: { name: `Bench Grader ${i + 1}`, email }, persona: '', timezone: 'UTC', messages: [] },
+    } as unknown as Persona;
+    await seed(instance, persona, 'full', Date.now(), `${CACHE}/${instance}/grader${i ? i + 1 : ''}.seed.log`);
+  }
+}
+
+const free = [...GRADERS];
+const waiting: ((grader: string) => void)[] = [];
+
+/** Run `judge` as the first grader free, so no two judgements share one. */
+export async function asGrader<T>(judge: (grader: string) => Promise<T>): Promise<T> {
+  const grader = free.shift() ?? (await new Promise<string>((resolve) => waiting.push(resolve)));
+  try {
+    return await judge(grader);
+  } finally {
+    const next = waiting.shift();
+    if (next) next(grader);
+    else free.push(grader);
+  }
 }
 
 // Local tokens last an hour and a run lasts longer: sign in again on a 401.
-let graderToken: Promise<string> | undefined;
 // A failed sign-in is not kept: the next call tries again.
-const grader = (at: Stack) =>
-  (graderToken ??= login(at, GRADER).catch((error) => {
-    graderToken = undefined;
-    throw error;
-  }));
+const tokens = new Map<string, Promise<string>>();
+function token(at: Stack, grader: string) {
+  let held = tokens.get(grader);
+  if (!held) {
+    held = login(at, grader).catch((error) => {
+      tokens.delete(grader);
+      throw error;
+    });
+    tokens.set(grader, held);
+  }
+  return held;
+}
 
-async function complete<T>(at: Stack, prompt: string, instructions: string, schema: object): Promise<T> {
+async function complete<T>(at: Stack, grader: string, prompt: string, instructions: string, schema: object): Promise<T> {
   let last: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -50,7 +79,7 @@ async function complete<T>(at: Stack, prompt: string, instructions: string, sche
         `${at.harness}/cognition/structured-completion`,
         {
           method: 'POST',
-          token: await grader(at),
+          token: await token(at, grader),
           body: JSON.stringify({
             prompt,
             model: JUDGE_MODEL,
@@ -64,20 +93,20 @@ async function complete<T>(at: Stack, prompt: string, instructions: string, sche
       last = response.outcome.reason ?? response.outcome.status;
     } catch (error) {
       last = error;
-      if (/\b401\b/.test(String(error))) graderToken = undefined;
+      if (/\b401\b/.test(String(error))) tokens.delete(grader);
     }
     await Bun.sleep(3000);
   }
   throw new Error(`judge failed: ${String(last).slice(0, 300)}`);
 }
 
-/** The grader's spend between two moments: what judging cost. */
-export async function judgeCost(at: Stack, from: Date, to: Date): Promise<number> {
+/** A grader's spend between two moments: what its judging cost. */
+export async function judgeCost(at: Stack, grader: string, from: Date, to: Date): Promise<number> {
   const db = new SQL(at.postgres);
   try {
     const [row] = await db.unsafe(
       `SELECT coalesce(sum(total), 0)::float8 AS usd FROM ai_usage WHERE user_id = $1 AND created_at BETWEEN $2 AND $3`,
-      [`macro|${GRADER}`, from, to],
+      [`macro|${grader}`, from, to],
     );
     return row.usd;
   } finally {
@@ -183,7 +212,7 @@ export function describeRoutine(row: RoutineRow): string {
   return `drafted routine: ${routine.length > 4000 ? `${routine.slice(0, 4000)}…` : routine}\n${surfaces}\nreason shown: ${row.reason}`;
 }
 
-export async function judgeRoutines(at: Stack, persona: Persona, generation: Generation): Promise<RoutineMark[]> {
+export async function judgeRoutines(at: Stack, grader: string, persona: Persona, generation: Generation): Promise<RoutineMark[]> {
   if (!generation.routines.length) return [];
   const truth = truthAt(persona.routinesTruth as RoutinesTruth, generation.now);
   // Every key: `suggest` only decides which ones fill a sidebar unasked; a session may pick any.
@@ -212,7 +241,7 @@ ${suggestions}
 Mark every suggestion, S1 to S${generation.routines.length}, in order.`;
   // A suggestion the judge left unmarked, or marked twice, can't be scored: ask again, then give up.
   for (let attempt = 0; ; attempt++) {
-    const result = await complete<{ marks: RoutineMark[] }>(at, prompt, ROUTINES_RUBRIC, ROUTINES_SCHEMA);
+    const result = await complete<{ marks: RoutineMark[] }>(at, grader, prompt, ROUTINES_RUBRIC, ROUTINES_SCHEMA);
     const marks = generation.routines.map((_, i) => result.marks.filter((mark) => mark.suggestion.replace(/^S/, '') === String(i + 1)));
     const missing = marks.flatMap((found, i) => (found.length === 1 ? [] : [`S${i + 1}`]));
     if (!missing.length) return marks.map(([mark]) => mark);
@@ -325,7 +354,7 @@ export function describeCard(card: CardRow, names = new Map<string, string>()): 
   return lines.join('\n');
 }
 
-export async function judgeFeed(at: Stack, persona: Persona, generation: Generation): Promise<FeedMarks> {
+export async function judgeFeed(at: Stack, grader: string, persona: Persona, generation: Generation): Promise<FeedMarks> {
   const cards = generation.cards.filter((card) => card.state === 'proposed');
   if (!cards.length) return { cards: [], feed_rating: 1 };
   const truth = truthAt(persona.feedTruth as FeedTruth, generation.now);
@@ -346,7 +375,7 @@ ${cards.map((card, i) => `C${i + 1}. ${describeCard(card, names)}`).join('\n\n')
 Mark every card, C1 to C${cards.length}, in order.`;
   // A card the judge left unmarked, or marked twice, can't be scored: ask again, then give up.
   for (let attempt = 0; ; attempt++) {
-    const result = await complete<FeedMarks>(at, prompt, FEED_RUBRIC, FEED_SCHEMA);
+    const result = await complete<FeedMarks>(at, grader, prompt, FEED_RUBRIC, FEED_SCHEMA);
     const marks = cards.map((_, i) => result.cards.filter((mark) => mark.card.replace(/^C/, '') === String(i + 1)));
     const missing = marks.flatMap((found, i) => (found.length === 1 ? [] : [`C${i + 1}`]));
     if (!missing.length) return { feed_rating: result.feed_rating, cards: marks.map(([mark]) => mark) };

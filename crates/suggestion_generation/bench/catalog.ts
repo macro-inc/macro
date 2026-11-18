@@ -1,37 +1,76 @@
 // The routine catalog as the judge reads it: what each ready-made routine
-// does. The source is crates/routine_program/src/catalog.rs; `catalogDrift`
-// says when the two disagree, so a renamed or new routine fails the bench
-// instead of being judged blind.
+// does. Read from crates/routine_program/src/catalog.rs itself, so the bench
+// always judges against the catalog of the checkout it runs from; a routine
+// whose fields can't be read stops the bench instead of being judged blind.
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-type Entry = { title: string; description: string; does: string; surfaces: string[]; suggest: boolean };
-
-export const CATALOG: Record<string, Entry> = {
-  inbox: { title: 'Sort my inbox', description: 'AI labels new email by topic', does: "When an email arrives, labels it with the one of the person's existing labels that fits it.", surfaces: ['email'], suggest: true },
-  triage: { title: 'Triage new tasks', description: 'AI sets each new task’s priority', does: 'When a task is created, sets its priority from what it says.', surfaces: ['tasks'], suggest: true },
-  brief: { title: 'Morning brief', description: 'Weekdays at 9, sum up my day', does: 'Weekdays at 9am, sums up the day: meetings, tasks due and anything waiting on the person.', surfaces: ['calendar', 'tasks'], suggest: true },
-  updates: { title: 'Share updates', description: 'Post finished tasks to a channel', does: 'When a task is completed, posts its name in a channel.', surfaces: ['chat', 'tasks'], suggest: false },
-  stuck: { title: 'Chase stuck tasks', description: 'Fridays, list what’s stalled', does: 'Fridays at 3pm, lists tasks in progress or in review for over a week, with a next step each.', surfaces: ['tasks'], suggest: true },
-  email_tags: { title: 'Tag new email', description: 'AI tags new email Reply, Followup, Action or FYI', does: 'When an email arrives, tags it Reply, Followup, Action or FYI (tag names are knobs).', surfaces: ['email'], suggest: true },
-  document_tags: { title: 'Tag new documents', description: 'AI tags new documents by topic', does: "When the person creates a document, tags it with the one of their personal tags that fits.", surfaces: ['files'], suggest: true },
-  call_tasks: { title: 'Tasks from my calls', description: 'After a call, make tasks for what I agreed to do', does: "When a call in the app the person joined ends, makes a task for each thing they agreed to do.", surfaces: ['calls', 'tasks'], suggest: true },
-  pipeline: { title: 'Weekly pipeline review', description: 'Mondays, list deals that need a next step', does: 'Mondays at 9am, lists CRM deals and companies with no contact in two weeks, with a next step each.', surfaces: ['crm'], suggest: true },
-  mentions: { title: 'Catch up on mentions', description: 'Weekdays at 5, sum up where I was mentioned', does: "Weekdays at 5pm, sums up the day's channel messages that mention the person.", surfaces: ['chat'], suggest: true },
-  pull_requests: { title: 'Sum up new pull requests', description: 'AI sums up each pull request opened in a repository', does: 'When a GitHub pull request is opened in a connected repository, sums up what it changes.', surfaces: ['reviews'], suggest: true },
-  agent_digest: { title: 'Weekly agent digest', description: 'Fridays, sum up what my agents did', does: "Fridays at 4pm, sums up the week's agent sessions.", surfaces: ['agents'], suggest: true },
-  invoices: { title: 'Task for invoices due soon', description: 'AI makes a task to pay each invoice due soon', does: 'When an email is an invoice or bill due within a week (knobs: the question, the days, the priority), makes a task to pay it.', surfaces: ['email', 'tasks'], suggest: true },
+type Entry = {
+  title: string;
+  description: string;
+  /** What someone asks for, with when it runs: the catalog's `request`. */
+  does: string;
+  surfaces: string[];
+  /** Offered unpicked to fill a sidebar; otherwise only a session may pick it. */
+  suggest: boolean;
 };
 
 const SOURCE = resolve(import.meta.dir, '../../routine_program/src/catalog.rs');
 
-/** Keys catalog.rs has that this table lacks, and the reverse; empty when they agree. */
-export function catalogDrift(): string[] {
-  const source = readFileSync(SOURCE, 'utf8');
-  const keys = [...source.matchAll(/^\s+key: "([a-z_]+)",$/gm)].map((match) => match[1]);
+/** A Rust string literal's text. */
+const unescape = (text: string) =>
+  text.replace(/\\u\{([0-9a-fA-F]+)\}/g, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16))).replace(/\\(["\\'])/g, '$1');
+
+function field(block: string, name: string, key: string): string {
+  const match = block.match(new RegExp(`\\n\\s+${name}: "((?:[^"\\\\]|\\\\.)*)",\\n`));
+  if (!match) throw new Error(`catalog.rs: can't read ${name} of "${key}"`);
+  return unescape(match[1]);
+}
+
+function read(): Record<string, Entry> {
+  const blocks = readFileSync(SOURCE, 'utf8').split(/\n\s+CatalogRoutine \{/).slice(1);
+  const entries = blocks.map((block): [string, Entry] => {
+    const key = block.match(/\n\s+key: "([a-z_]+)",\n/)?.[1];
+    const surfaces = block.match(/\n\s+surfaces: &\[([^\]]*)\],\n/)?.[1];
+    const suggest = block.match(/\n\s+suggest: (true|false),\n/)?.[1];
+    if (!key || surfaces === undefined || !suggest) throw new Error(`catalog.rs: can't read a routine's key, surfaces or suggest near "${block.slice(0, 80)}"`);
+    return [
+      key,
+      {
+        title: field(block, 'title', key),
+        description: field(block, 'description', key),
+        does: field(block, 'request', key),
+        surfaces: [...surfaces.matchAll(/Surface::(\w+)/g)].map(([, name]) => name.toLowerCase()),
+        suggest: suggest === 'true',
+      },
+    ];
+  });
+  if (entries.length < 10) throw new Error(`catalog.rs: read only ${entries.length} routines`);
+  return Object.fromEntries(entries);
+}
+
+export const CATALOG: Record<string, Entry> = read();
+
+type Sorted = { needs: { catalog: string[] }[]; decoys: { catalog?: string[] | null }[]; fine?: string[]; misfit?: string[] };
+
+/**
+ * What keeps a routines answer key from scoring every catalog pick: a key
+ * the catalog lacks (renamed or removed), a routine it doesn't place, or one
+ * it places twice (as a need's and a decoy, or fine and a misfit). Empty when
+ * each catalog routine has exactly one place.
+ */
+export function keyGaps(truth: Sorted): string[] {
+  if (!truth.fine || !truth.misfit) return ['has no fine and misfit lists: it predates scoring catalog picks by key; place every catalog routine (or write a new held-out set)'];
+  const places = new Map<string, Set<string>>();
+  const put = (key: string, place: string) => places.set(key, (places.get(key) ?? new Set()).add(place));
+  for (const need of truth.needs) for (const key of need.catalog) put(key, 'a need');
+  for (const decoy of truth.decoys) for (const key of decoy.catalog ?? []) put(key, 'a decoy');
+  for (const key of truth.fine) put(key, 'fine');
+  for (const key of truth.misfit) put(key, 'misfit');
   return [
-    ...keys.filter((key) => !CATALOG[key]).map((key) => `catalog.rs has "${key}"; add it to bench/catalog.ts`),
-    ...Object.keys(CATALOG).filter((key) => !keys.includes(key)).map((key) => `bench/catalog.ts has "${key}", which catalog.rs no longer has`),
+    ...[...places.keys()].filter((key) => !CATALOG[key]).map((key) => `names "${key}", which catalog.rs lacks`),
+    ...Object.keys(CATALOG).filter((key) => !places.has(key)).map((key) => `doesn't place "${key}" (a need's, a decoy's, fine or misfit)`),
+    ...[...places].filter(([, where]) => where.size > 1).map(([key, where]) => `places "${key}" as ${[...where].join(' and ')}`),
   ];
 }

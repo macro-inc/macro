@@ -18,7 +18,7 @@
       "id": "r3",
       "what": "Customer job and quote requests arrive every few days from homeowners and property managers (leaks, water heaters, drain calls, quotes); each needs a reply or a visit booked.",
       "evidence": ["Garbage disposal jammed + kitchen faucet drip", "Tankless water heater quote", "Toilet running nonstop, can someone come Monday?", "Estimate for repiping 1950s house", "No hot water since this morning"],
-      "catalog": [],
+      "catalog": ["email_tasks", "needs_reply", "reply_drafts"],
       "drafted": "When a new email is a customer asking for a visit, repair or quote, make a task naming the customer, address and problem (or tag it to reply).",
       "surfaces": ["email", "tasks"]
     },
@@ -34,7 +34,7 @@
       "id": "r5",
       "what": "City permit mail moves each job forward: application received or incomplete, permit issued, inspection scheduled, inspection passed. A missed 'incomplete' or inspection date holds up a job.",
       "evidence": ["Permit application incomplete — PB-26-03544", "Permit issued — PB-26-03544", "Inspection scheduled — PB-26-03317", "Inspection result: PASSED — PB-26-03317"],
-      "catalog": [],
+      "catalog": ["email_tasks"],
       "drafted": "When an email from the city permits office arrives, make or update a task for that permit number with what it needs next (fix the application, be on site for the inspection).",
       "surfaces": ["email", "tasks"]
     },
@@ -52,7 +52,7 @@
       "id": "x1",
       "what": "Morning brief of the day's meetings and tasks",
       "why": "Dispatchly already emails him the day's job schedule every morning, and nothing in his mail shows meetings or tasks in a calendar Macro sees.",
-      "catalog": ["brief"]
+      "catalog": ["brief", "meeting_brief"]
     },
     {
       "id": "x2",
@@ -68,12 +68,15 @@
     {
       "id": "x4",
       "what": "A digest of the daily Dispatchly schedules, sales summaries or promotions",
-      "why": "Automated notices he skims; a recap of them is noise he would switch off."
+      "why": "Automated notices he skims; a recap of them is noise he would switch off.",
+      "catalog": ["newsletters"]
     },
     {
       "id": "x5",
       "what": "Anything that replies to customers, sends quotes or books jobs on his behalf",
       "why": "Routines may not send or act as him."
     }
-  ]
+  ],
+  "fine": ["triage", "stuck", "email_tags", "document_tags", "mentions", "weekly_wrap", "recurring_task", "archive_noise", "cold_outreach", "end_of_day", "delegated", "promises", "reconnect", "customer_followups"],
+  "misfit": ["updates", "task_routing", "date_changes", "channel_answers", "blockers", "agent_digest", "pull_requests", "team_progress", "project_hygiene", "project_update", "prd_tasks", "decision_log", "meeting_agenda", "one_on_one_prep", "week_ahead", "focus_time", "call_tasks", "call_followups", "call_recap", "approvals", "channel_digest", "questionnaire"]
 }

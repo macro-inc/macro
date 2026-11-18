@@ -11,14 +11,14 @@
       "id": "r2",
       "what": "A day full of external meetings (board meeting, customer renewal sign-off, investor diligence sessions) on top of decisions waiting on her.",
       "evidence": ["Invitation: Lumenfold Board Meeting (Q4)", "Invitation: Kessler & Moore x Lumenfold renewal sign-off", "Invitation: Lumenfold diligence — product deep dive"],
-      "catalog": ["brief"],
+      "catalog": ["brief", "meeting_brief"],
       "surfaces": ["calendar", "tasks"]
     },
     {
       "id": "r3",
       "what": "Callwise emails a recap after each customer and investor call, several a week, with commitments she made that get lost.",
       "evidence": ["Call recap: Lumenfold <> Ortega Foods — CFO check-in", "Call recap: Lumenfold <> Brightwater Logistics — RCA review", "Call recap: Lumenfold <> Northmoor Capital — product deep dive", "Call recap: Lumenfold <> Tidepool Health — Q4 check-in"],
-      "catalog": [],
+      "catalog": ["promises"],
       "drafted": "When a call recap email arrives, make a task for each thing Priya agreed to do, linked to the recap.",
       "surfaces": ["email", "tasks"]
     },
@@ -26,7 +26,7 @@
       "id": "r4",
       "what": "Customer escalations reach her by email (failed reconciliation runs, users who can't see files, churn risk, security questionnaires with deadlines) and need an owner fast.",
       "evidence": ["Reconciliation run failed again this morning", "Users can't see the October vendor file", "Ortega churn risk — need 15 min", "Security questionnaire due Nov 6 + HIPAA question"],
-      "catalog": [],
+      "catalog": ["email_tasks"],
       "drafted": "When a customer email reports a failure, an outage or a deadline, make a high-priority task naming the customer and what they need.",
       "surfaces": ["email", "tasks"]
     },
@@ -34,7 +34,7 @@
       "id": "r5",
       "what": "Hiring mail asks her for decisions and scorecards (Hireloop 'decision needed', scorecard reminders, recruiter candidate lists) during an active search.",
       "evidence": ["Maya Okonkwo — all interviews complete, decision needed", "Scorecard reminder: submit feedback for Maya Okonkwo", "Senior backend candidates for Lumenfold — 3 profiles"],
-      "catalog": [],
+      "catalog": ["email_tasks"],
       "drafted": "When a recruiting email asks her for a decision, a scorecard or a review of candidates, make a task with the candidate and the deadline.",
       "surfaces": ["email", "tasks"]
     }
@@ -55,12 +55,15 @@
     {
       "id": "x3",
       "what": "A digest of newsletters, Huddle unread-message nags or Trackline cycle digests",
-      "why": "Automated notices she skims; a recap of them is noise."
+      "why": "Automated notices she skims; a recap of them is noise.",
+      "catalog": ["newsletters"]
     },
     {
       "id": "x4",
       "what": "Anything that replies to investors or customers, accepts invites or shares the data room on her behalf",
       "why": "Routines may not send, share or act as her."
     }
-  ]
+  ],
+  "fine": ["triage", "stuck", "email_tags", "document_tags", "call_tasks", "pipeline", "mentions", "agent_digest", "project_hygiene", "weekly_wrap", "project_update", "prd_tasks", "recurring_task", "team_progress", "reply_drafts", "archive_noise", "cold_outreach", "needs_reply", "end_of_day", "delegated", "reconnect", "one_on_one_prep", "meeting_agenda", "week_ahead", "focus_time", "call_followups", "call_recap", "decision_log", "approvals", "channel_digest", "customer_followups", "questionnaire"],
+  "misfit": ["updates", "task_routing", "date_changes", "channel_answers", "blockers"]
 }
