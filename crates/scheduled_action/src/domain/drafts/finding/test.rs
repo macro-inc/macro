@@ -456,6 +456,24 @@ fn the_instructions_say_what_this_kind_of_draft_may_write() {
     }
 }
 
+#[test]
+fn a_draft_that_may_write_code_schedules_later_work_per_item_as_sub_routines() {
+    let prompts = FindingPrompts::new(&Areas::default());
+    let model = "anthropic/claude-sonnet-5-5";
+
+    assert!(
+        prompts
+            .instructions(true, true, model)
+            .contains(LATER.trim())
+    );
+    // Without code, scheduling is the Ask AI step's to do with its tools.
+    assert!(
+        !prompts
+            .instructions(false, true, model)
+            .contains(LATER.trim())
+    );
+}
+
 #[tokio::test(start_paused = true)]
 async fn without_code_the_prompt_carries_no_area_reference() {
     let model = Arc::new(Model::finding(named(&[])));

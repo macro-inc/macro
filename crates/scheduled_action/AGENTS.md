@@ -81,8 +81,16 @@ each run.
   code and conditions, so the agent puts them in its cached prompt prefix
   (`PrepareRoutineSession::instructions`). A code step never messages or
   emails the routine's owner (Macro refuses a message to oneself): telling
-  the owner something is an Ask AI step's job. The prompt carries only the
-  request, the owner and time, the found and left items, and the reference
+  the owner something is an Ask AI step's job. Work done once, later, per
+  item a run finds or an event brings (a reminder before each task is due,
+  a follow-up days after), is a code step creating one keyed `once`
+  sub-routine per item, at a time on the owner's clock, whose own Ask AI
+  step does the telling (`finding/later.md`, only where code may be
+  written); work that repeats until something happens is a routine on that
+  schedule looking for what is still open, since a `cron` sub-routine
+  counts toward the cap until deleted, even switched off. The drafter
+  neither creates nor checks those sub-routines. The prompt carries only
+  the request, the owner and time, the found and left items, and the reference
   of the areas named, or of the commonest ones when the SDK has none of
   them, then of up to three areas that find the names not looked up (a
   person in `users`, a database in `databases`: `kind_area`), each name's
