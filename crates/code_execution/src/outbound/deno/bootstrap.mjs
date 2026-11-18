@@ -193,10 +193,11 @@ try {
       return {...call, origin: host.origin, pattern: new RegExp(`^${base.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&")}${route}$`)};
     })
     : null;
-  const admitted = (operation, input, init) => {
+  // Checks the request exactly as it will be sent.
+  const admitted = (operation, request) => {
     if (!operation) return false;
-    const url = new URL(input instanceof Request ? input.url : String(input));
-    const method = String(init?.method ?? "GET").toUpperCase();
+    const url = new URL(request.url);
+    const method = request.method.toUpperCase();
     return allowed.some(call =>
       call.service === operation.service && call.operationId === operation.operationId &&
       call.method === method && call.origin === url.origin && call.pattern.test(url.pathname));
@@ -259,11 +260,17 @@ try {
     const operation = init?.macroSdkOperation;
     // The gate's backstop: a request outside what the program was checked
     // to call is never sent, nor one that doesn't say what it calls.
-    if (allowed && !admitted(operation, input, init)) {
-      const service = String(operation?.service ?? "unknown");
-      const operationId = String(operation?.operationId ?? "unknown");
-      if (operation) observe({id: ++nextOcamlRequest, service, operation: String(operation.operation), status: "refused"});
-      throw new Error(`${service}.${operationId} is outside what this program was checked to call; it was not sent.`);
+    if (allowed) {
+      // One Request, checked and sent: nothing about it can change between.
+      const request = new Request(input, init);
+      input = request;
+      init = {macroSdkOperation: operation};
+      if (!admitted(operation, request)) {
+        const service = String(operation?.service ?? "unknown");
+        const operationId = String(operation?.operationId ?? "unknown");
+        if (operation) observe({id: ++nextOcamlRequest, service, operation: String(operation.operation), status: "refused"});
+        throw new Error(`${service}.${operationId} is outside what this program was checked to call; it was not sent.`);
+      }
     }
     if (language !== "ocaml" || !operation) return sendRequest(input, init);
     const event = {id: ++nextOcamlRequest, service: String(operation.service), operation: String(operation.operation)};

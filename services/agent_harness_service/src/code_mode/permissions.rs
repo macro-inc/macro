@@ -160,11 +160,16 @@ impl PermissionGate {
             return Ok(());
         }
         let session = identity.session;
-        let prompter = self.prompter(session).await?.ok_or_else(|| {
-            CodeModeError::Invalid(
-                "There is no active turn authorizing this program; nothing was done.".into(),
-            )
-        })?;
+        let Some(prompter) = self.prompter(session).await? else {
+            return Err(not_run(
+                format!(
+                    "This OCaml program did not run: it needs a person's approval for: {}, \
+                     and no turn is running to ask in.",
+                    labels(&checked.ask)
+                ),
+                Some(declined(DeclinedStatus::Expired, &checked.ask)),
+            ));
+        };
         let hold = PermissionHold {
             session,
             approver: actor.clone(),
@@ -186,7 +191,10 @@ impl PermissionGate {
         // A stopped turn drops the hold, which cancels it.
         let status = tokio::select! {
             biased;
-            () = cancel.cancelled() => return Err(CodeModeError::Forbidden),
+            () = cancel.cancelled() => return Err(not_run(
+                "The program was stopped while it waited for approval; it did not run.".into(),
+                Some(declined(DeclinedStatus::Cancelled, &checked.ask)),
+            )),
             status = self.holds.hold_permissions(hold) => status,
         }
         .map_err(|error| {

@@ -1096,3 +1096,41 @@ fn only_a_permission_hold_names_its_approver() {
         "macro|owner@macro.com"
     );
 }
+
+#[tokio::test]
+async fn always_allowing_a_hold_that_already_ended_remembers_nothing() {
+    let (service, store, announcer) = service();
+    let session = AgentSessionId::new();
+    let (waiting, id) = waiting_on_permissions(
+        &service,
+        &store,
+        &announcer,
+        permission_hold(session, &["email.send_message"]),
+    )
+    .await;
+    service
+        .answer(session, id, ApprovalAnswer::Cancel, &owner(), true)
+        .await
+        .unwrap();
+    waiting.await.unwrap().unwrap();
+    assert!(matches!(
+        service
+            .answer(
+                session,
+                id,
+                ApprovalAnswer::ApproveAndRemember,
+                &owner(),
+                true
+            )
+            .await,
+        Err(ToolApprovalError::NotPending)
+    ));
+    let (later, _) = waiting_on_permissions(
+        &service,
+        &store,
+        &announcer,
+        permission_hold(session, &["email.send_message"]),
+    )
+    .await;
+    later.abort();
+}

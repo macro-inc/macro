@@ -672,6 +672,7 @@ describe('AgentSession', () => {
             status: 'approved',
             resolvedBy: 'macro|owner@example.com',
             remembered: false,
+            approver: null,
           },
           {
             kind: 'tool_approval',
@@ -684,6 +685,7 @@ describe('AgentSession', () => {
             status: 'pending',
             resolvedBy: null,
             remembered: false,
+            approver: null,
           },
         ],
         stop: null,

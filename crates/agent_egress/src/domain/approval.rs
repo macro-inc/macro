@@ -612,18 +612,26 @@ where
     /// standing approval per operation it asked for, for its approver, then
     /// every other permission hold in the session whose operations are now
     /// all standing.
+    #[tracing::instrument(
+        name = "agent_permissions.remember",
+        skip_all,
+        fields(approval_id = %approval.id, operations = tracing::field::Empty),
+        err(Debug)
+    )]
     async fn approve_permissions_for_good(
         &self,
         approval: &ToolApproval,
         by: &MacroUserIdStr<'static>,
     ) -> Result<ToolApproval, ToolApprovalError> {
-        for standing in StandingApproval::covering_permissions(approval, by) {
-            self.store.remember(&standing).await?;
-        }
+        tracing::Span::current().record("operations", approval.permission_operations().len());
+        // Settled first: a hold that ended meanwhile remembers nothing.
         let approved = self
             .settle(approval.id, ToolApprovalStatus::Approved, Some(by), true)
             .await?
             .ok_or(ToolApprovalError::NotPending)?;
+        for standing in StandingApproval::covering_permissions(approval, by) {
+            self.store.remember(&standing).await?;
+        }
         for id in self.store.pending_for_session(approval.session).await? {
             let Some(other) = self.store.get(id).await? else {
                 continue;
@@ -987,11 +995,14 @@ where
         };
         span.record("approval_id", tracing::field::display(approval.id));
         self.inner.store.insert(&approval).await?;
-        // A standing approval given between the check and the insert.
-        if self
+        // A standing approval given between the check and the insert
+        // approves it quietly; one that settled it first is read below,
+        // and nobody is asked about either.
+        let settled_quietly = self
             .inner
             .all_standing(hold.session, &hold.approver, &hold.operations)
-            .await?
+            .await?;
+        if settled_quietly
             && self
                 .inner
                 .store
@@ -1003,10 +1014,12 @@ where
             span.record("remembered", true);
             return Ok(ToolApprovalStatus::Approved);
         }
-        self.inner
-            .announcer
-            .requested(&approval, &hold.approver)
-            .await;
+        if !settled_quietly {
+            self.inner
+                .announcer
+                .requested(&approval, &hold.approver)
+                .await;
+        }
         let guard = CancelOnDrop {
             inner: Some(Arc::clone(&self.inner)),
             id: approval.id,

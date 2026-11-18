@@ -549,3 +549,63 @@ async fn a_turn_that_ended_during_the_hold_does_not_run() {
         "The original turn ended; the program did not run."
     );
 }
+
+#[tokio::test]
+async fn a_stopped_turn_or_no_turn_records_the_program_as_not_approved() {
+    let parts = gate(
+        two_calls(),
+        &[("email.send_message", PermissionState::Ask)],
+        ToolApprovalStatus::Approved,
+        true,
+    );
+    let identity = identity();
+    let checked = parts
+        .gate
+        .check(&identity, "src", ProgramLanguage::Ocaml)
+        .await
+        .unwrap()
+        .unwrap();
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+    let refused = not_run(
+        parts
+            .gate
+            .hold(&checked, &identity, &identity.owner, "src", &cancel)
+            .await,
+    );
+    assert!(matches!(
+        refused.permission,
+        Some(ExecutionPermission::Declined {
+            status: DeclinedStatus::Cancelled,
+            ..
+        })
+    ));
+
+    let mut parts = gate(
+        two_calls(),
+        &[("email.send_message", PermissionState::Ask)],
+        ToolApprovalStatus::Approved,
+        true,
+    );
+    parts.gate.prompters = Arc::new(Prompters(Mutex::new(Vec::new())));
+    let refused = not_run(
+        parts
+            .gate
+            .hold(
+                &checked,
+                &identity,
+                &identity.owner,
+                "src",
+                &CancellationToken::new(),
+            )
+            .await,
+    );
+    assert!(matches!(
+        refused.permission,
+        Some(ExecutionPermission::Declined {
+            status: DeclinedStatus::Expired,
+            ..
+        })
+    ));
+    assert!(parts.holds.held.lock().unwrap().is_empty());
+}
