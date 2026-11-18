@@ -654,6 +654,11 @@ impl SessionCreations for NoSessionCreations {
 pub trait DraftApps: Send + Sync + 'static {
     /// `owner`'s connected apps, by slug and display name.
     async fn connected(&self, owner: &MacroUserIdStr<'static>) -> Result<Vec<AgentMcpServer>>;
+
+    /// The ones of `apps` a routine can require once they are connected, in
+    /// order. Not an app Macro reaches through its own MCP server: connecting
+    /// one never makes it an app a routine can require.
+    async fn requirable(&self, apps: Vec<AgentMcpServer>) -> Result<Vec<AgentMcpServer>>;
 }
 
 /// The agent session a code-mode request came from, by the invocation its

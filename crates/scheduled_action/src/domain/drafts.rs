@@ -677,14 +677,36 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             "routine.draft.created_unused",
             created.iter().filter(|item| !item.used).count(),
         );
-        Ok(Some(match (check, ending) {
+        let draft = match (check, ending) {
             (Some(check), _) => drafted(request, program, check, created, connected.as_deref()),
             (None, Ending::TimedOut) => failed_with(TIMED_OUT, created),
             (None, Ending::Interrupted) => failed_with(INTERRUPTED, created),
             (None, Ending::Finished | Ending::Checked | Ending::Failed | Ending::Cancelled) => {
                 failed_with(request.failed(), created)
             }
-        }))
+        };
+        Ok(Some(self.requirable_apps(draft).await))
+    }
+
+    /// `draft` naming only the missing apps a routine can require once
+    /// connected: a Connect for any other would leave it unsaveable. Kept
+    /// as named when that can't be read.
+    async fn requirable_apps(&self, mut draft: Draft) -> Draft {
+        let Draft::Routine(routine) = &mut draft else {
+            return draft;
+        };
+        if let Some(apps) = &self.apps
+            && !routine.missing_apps.is_empty()
+        {
+            match apps.requirable(routine.missing_apps.clone()).await {
+                Ok(requirable) => routine.missing_apps = requirable,
+                Err(error) => {
+                    tracing::warn!(error = ?error, "could not tell which apps a routine can require");
+                }
+            }
+        }
+        tracing::Span::current().record("routine.draft.missing_apps", routine.missing_apps.len());
+        draft
     }
 
     /// Open the hidden session, prompt it once and wait for a check that
@@ -1362,7 +1384,6 @@ fn drafted(
             span.record("routine.draft.steps", steps.len());
             let (apps, missing_apps) = draft_apps(&steps, &check, connected);
             span.record("routine.draft.apps", apps.len());
-            span.record("routine.draft.missing_apps", missing_apps.len());
             Draft::Routine(DraftedRoutine {
                 name: check.routine.name.trim().to_owned(),
                 trigger: Some(check.routine.trigger.clone()),

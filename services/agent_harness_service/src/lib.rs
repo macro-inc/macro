@@ -545,15 +545,17 @@ pub async fn run() -> anyhow::Result<()> {
     .context("failed to build Pipedream client")?;
     // Grants held by Macro Connect are reached through its MCP gateway; a
     // user on Connect alone gets no Pipedream grant.
-    let mut connectors = ConnectorBackends::new(
-        Arc::new(pipedream),
-        ai_tools::connect_adapter(config.connect_customer_key.value())?,
-    );
-    if let Some(rollout) = ai_tools::macro_connect_rollout(
+    let connect = ai_tools::connect_adapter(config.connect_customer_key.value())?;
+    let connect_rollout = ai_tools::macro_connect_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
         config.environment,
-    )? {
+    )?;
+    // Who is on Connect alone, as the backends below decide it: routines
+    // count only the grants these backends use.
+    let connect_only = connect.as_ref().and(connect_rollout.clone());
+    let mut connectors = ConnectorBackends::new(Arc::new(pipedream), connect);
+    if let Some(rollout) = connect_rollout {
         connectors = connectors.with_rollout(rollout);
     }
 
@@ -795,6 +797,7 @@ pub async fn run() -> anyhow::Result<()> {
             config.document_storage_service_auth_key.clone(),
             macro_service_urls::DocumentStorageServiceUrl::new()?.to_string(),
         ),
+        connect_only.clone(),
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();
@@ -1912,7 +1915,10 @@ pub async fn run() -> anyhow::Result<()> {
             session_repo.clone(),
             PgHarnessRepo::new(pool.clone()),
         ),
-        PgConnectionRepo::new(pool.clone()),
+        routine_sessions::PipedreamConnectedApps::new(
+            PgConnectionRepo::new(pool.clone()),
+            connect_only.clone(),
+        ),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let coding_agents = coding_agents::router(
@@ -1936,7 +1942,10 @@ pub async fn run() -> anyhow::Result<()> {
             ),
             draining_sessions.clone(),
             (*harness).clone(),
-            routine_sessions::PipedreamConnectedApps(PgConnectionRepo::new(pool.clone())),
+            routine_sessions::PipedreamConnectedApps::new(
+                PgConnectionRepo::new(pool.clone()),
+                connect_only.clone(),
+            ),
         ),
         session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
