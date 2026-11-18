@@ -136,17 +136,17 @@ impl EmailPreviewRepository for CompaniesRepositoryImpl {
         )
         .to_vec();
         let existing = read_preview(&mut tx, team, user).await?;
-        if let Some(existing) = &existing {
-            if existing.request_hash.as_ref() == Some(&request_hash) {
-                let mut view = existing.view()?;
-                if existing.observed_fingerprint.as_ref() != Some(&observed.fingerprint) {
-                    view.status = EmailPolicyPreviewStatus::Stale;
-                }
-                tx.commit()
-                    .await
-                    .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-                return Ok(view);
+        if let Some(existing) = &existing
+            && existing.request_hash.as_ref() == Some(&request_hash)
+        {
+            let mut view = existing.view()?;
+            if existing.observed_fingerprint.as_ref() != Some(&observed.fingerprint) {
+                view.status = EmailPolicyPreviewStatus::Stale;
             }
+            tx.commit()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            return Ok(view);
         }
         if existing.as_ref().map(|row| row.preview_id) != input.if_preview_id {
             return Err(CrmError::EmailPolicyConflict);
