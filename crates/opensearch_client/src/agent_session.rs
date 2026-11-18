@@ -63,7 +63,7 @@ pub(crate) async fn stored_parent(
         .json()
         .await
         .map_err(|error| OpensearchClientError::deserialization_failed(operation, &error))?;
-    if index_missing(&body) {
+    if reports_error(&body) {
         return Err(OpensearchClientError::Unknown {
             details: body.to_string(),
             operation,
@@ -74,13 +74,17 @@ pub(crate) async fn stored_parent(
         .map(|source| StoredParent(source.take())))
 }
 
-fn index_missing(body: &serde_json::Value) -> bool {
-    body["error"]["type"].as_str() == Some("index_not_found_exception")
+/// A missing document reads `found: false`; a 404 that carries an error, such
+/// as `index_not_found_exception`, is about the index itself.
+fn reports_error(body: &serde_json::Value) -> bool {
+    body.get("error").is_some()
 }
 
-/// Most children one sweep can find, OpenSearch's default result window. A
-/// session holds far fewer; any beyond it go on a later sweep.
-const SWEEP_LIMIT: u32 = 10_000;
+/// Most leftover children one sweep finds. Leftovers are rare and few, and the
+/// search runs on every reconcile, so its page stays small. A reconcile leaves
+/// any beyond it to its next sweep; a session delete fails instead, so its
+/// retry finds the rest before the parent goes.
+pub(crate) const SWEEP_LIMIT: usize = 1_000;
 
 /// Ids of a session's children other than `keep`, as of the last refresh.
 #[tracing::instrument(skip_all)]

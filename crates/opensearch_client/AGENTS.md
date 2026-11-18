@@ -72,9 +72,10 @@ projects.
   so they are current without a refresh. Never trust a record
   without first naming the children you change as pending. Every agent-session
   write and delete carries `ReconcileAgentSessionArgs::version` as an
-  `external_gte` version. A 409 means the document holds a later version, not
-  that the later reconcile finished: the request fails, and its retry runs under
-  a new lease. A delete creates a missing index even with `require_alias`, so
+  `external_gte` version (a session delete carries its own lease's). A 409
+  means the document holds a later version, not that the later reconcile
+  finished: the request fails; a live event's retry runs under a new lease,
+  and a backfill stops and is rerun. A delete creates a missing index even with `require_alias`, so
   the reconcile and the session delete first read the parent, which fails on a
   missing index or alias.
 - The request-level `_source` filter does not reach `has_child` inner hits:

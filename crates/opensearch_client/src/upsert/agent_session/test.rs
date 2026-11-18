@@ -436,6 +436,71 @@ async fn an_unrecorded_child_is_swept_by_id_under_the_version() {
 }
 
 #[tokio::test]
+async fn a_sweep_delete_refused_for_a_newer_child_fails_the_reconcile() {
+    let (_, result) = serve_reconcile(
+        vec![
+            found(stored_parent_source(&args())),
+            ok(r#"{"hits":{"hits":[{"_id":"session-1:9:agent"}]}}"#),
+            ok(r#"{"errors":true,"items":[{"delete":{"_id":"session-1:9:agent","status":409}}]}"#),
+        ],
+        args(),
+        None,
+    )
+    .await;
+
+    let Err(OpensearchClientError::Unknown { operation, .. }) = result else {
+        panic!("a refused sweep delete must fail the reconcile, got {result:?}");
+    };
+    assert_eq!(operation, OpensearchOperation::ReconcileAgentSessionPrune);
+}
+
+#[tokio::test]
+async fn deleting_a_session_sweeps_leftovers_under_its_version_before_the_parent() {
+    let (requests, result) = serve(
+        vec![
+            found(stored_parent_source(&args())),
+            ok(BULK_OK),
+            ok(r#"{"hits":{"hits":[{"_id":"session-1:1:user"}]}}"#),
+            ok(BULK_OK),
+            ok(BULK_OK),
+        ],
+        |client| async move { client.delete_agent_session("session-1", None, 1_000).await },
+    )
+    .await;
+
+    result.unwrap();
+    assert!(
+        requests[2]
+            .line
+            .starts_with("POST /agent_sessions/_search?")
+    );
+    assert!(
+        requests[2].line.contains("routing=session-1"),
+        "{requests:?}"
+    );
+    assert_eq!(
+        requests[3].body.trim(),
+        r#"{"delete":{"_id":"session-1:1:user","routing":"session-1","version":1000,"version_type":"external_gte"}}"#
+    );
+    assert!(requests[4].body.contains(r#""_id":"session-1""#));
+}
+
+#[tokio::test]
+async fn deleting_a_session_without_its_index_sends_no_delete() {
+    let (requests, result) = serve(
+        vec![(
+            "404 Not Found",
+            r#"{"error":{"type":"index_not_found_exception"},"status":404}"#.to_owned(),
+        )],
+        |client| async move { client.delete_agent_session("session-1", None, 1_000).await },
+    )
+    .await;
+
+    assert!(result.is_err());
+    assert_eq!(requests.len(), 1, "{requests:?}");
+}
+
+#[tokio::test]
 async fn a_missing_alias_stops_a_reconcile_before_any_write() {
     let (requests, result) = serve_reconcile(
         vec![(
@@ -775,6 +840,10 @@ async fn empty_index_accepts_both_authors_and_converges_on_each_snapshot() {
         assert!(refused.is_err(), "an older child write must not apply");
         let refused = write_parent(&client.inner, &index, &earlier, to_parent_value(parent_document(&earlier, &delayed.record, &[]))?, false).await;
         assert!(refused.is_err(), "an older parent write must not apply");
+        let operation = OpensearchOperation::ReconcileAgentSessionPrune;
+        let children: Vec<String> = delayed.record.keys().cloned().collect();
+        let refused = delete_by_id(&client.inner, &index, "session-1", &children, external_version(earlier.version, operation)?, operation).await;
+        assert!(refused.is_err(), "an older sweep delete must not apply");
         refresh().await?;
         assert_eq!(contents().await?, ["newhistory"]);
         let writes = client.reconcile_agent_session(&projection, Some(&index)).await?;

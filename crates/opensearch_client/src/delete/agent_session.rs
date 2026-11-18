@@ -2,8 +2,8 @@ use models_opensearch::SearchIndex;
 
 use crate::{
     Result,
-    agent_session::{delete_by_id, stored_parent, unrecorded_children},
-    error::OpensearchOperation,
+    agent_session::{SWEEP_LIMIT, delete_by_id, stored_parent, unrecorded_children},
+    error::{OpensearchClientError, OpensearchOperation},
     upsert::agent_session::external_version,
 };
 
@@ -12,8 +12,8 @@ use crate::{
 /// The children the parent's record names or holds pending go first, by id,
 /// which applies before any refresh. A search then finds the rest, such as
 /// children written before parents kept records, and deletes them by id too.
-/// The parent goes last, so a retry after any failure still finds the
-/// survivors through its record. Every delete carries `version`, so a delayed
+/// The parent goes last, and stays when the search may have more to find, so a
+/// retry after any failure still finds the survivors. Every delete carries `version`, so a delayed
 /// delete from an earlier reconcile cannot remove what a later one wrote.
 pub(crate) async fn delete_agent_session(
     client: &opensearch::OpenSearch,
@@ -65,6 +65,12 @@ pub(crate) async fn delete_agent_session(
             operation,
         )
         .await?;
+    }
+    if leftovers.len() >= SWEEP_LIMIT {
+        return Err(OpensearchClientError::Unknown {
+            details: format!("swept {SWEEP_LIMIT} children; the retry deletes the rest"),
+            operation,
+        });
     }
 
     delete_by_id(

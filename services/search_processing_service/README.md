@@ -54,7 +54,8 @@ Every write and delete carries an `external_gte` version: the time Postgres
 granted the reconcile's session lease, in microseconds. One clock serves every
 worker and a session's leases never overlap, so a request that times out and
 applies after a later reconcile is refused instead of rolling a child back; the
-refused reconcile fails, and its retry takes a new lease. (A delete's tombstone
+refused reconcile fails; a live event's retry takes a new lease, and a backfill
+stops and is rerun. (A delete's tombstone
 keeps its version for the index's `gc_deletes`, 60 s by default. A delayed
 write of a deleted child arriving later than that is left to the sweep, and a
 delayed parent write of a deleted session can recreate its parent; search never
@@ -74,10 +75,11 @@ maps `indexed_messages` with `enabled: false`, so its child-id keys never become
 fields. The real-time parent read needs the `agent_sessions` alias to point at
 exactly one index. A backfill to the alias trusts the record and rewrites only
 what it says changed; to rebuild every child, backfill into a fresh index with
-`index_override` and move the alias. Live deletes during that backfill reach
-only the index behind the alias, so after the move, backfill the ids of the
-sessions deleted since it started; until then their documents sit in the new
-index, hidden from results as above.
+`index_override` and move the alias. Live updates and deletes during that
+backfill reach only the index behind the alias, so after the move, backfill the
+ids of the sessions changed or deleted since it started. Until then a changed
+session shows its older projection, and a deleted one's documents sit in the
+new index, hidden from results as above.
 
 Provision and verify the `agent_sessions` index and alias manually before
 deploying this consumer; deployment does not create indices. Normal parent and
