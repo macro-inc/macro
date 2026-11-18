@@ -1,6 +1,10 @@
 import Sparkle from '@icon/system/regular/sparkle.svg';
 import { BaseTool } from './BaseTool';
-import { createToolRenderer, useToolError } from './ToolRenderer';
+import {
+  createToolRenderer,
+  type ToolEnding,
+  useToolError,
+} from './ToolRenderer';
 
 // People never see that the agent works in code: its lookups render nothing,
 // and an execution says only how far it got, without its program or result.
@@ -17,28 +21,35 @@ export const readCodeDocsHandler = createToolRenderer({
   render: () => null,
 });
 
+/**
+ * Nothing names what a code run does, so it says only how far it got. A
+ * failed or stopped call has no receipt but has still ended; a program that
+ * threw or timed out returns a receipt that says so.
+ */
+export function codeRunLabel(receipt: unknown, ending: ToolEnding | undefined) {
+  const status =
+    typeof receipt === 'object' && receipt !== null && 'status' in receipt
+      ? receipt.status
+      : undefined;
+  if (
+    ending?.kind === 'failed' ||
+    status === 'failed' ||
+    status === 'timed_out'
+  )
+    return 'A step failed';
+  if (receipt !== undefined || ending) return 'Finished a step';
+  return 'Working on it';
+}
+
 /** Fallback for hosts without session records; agent sessions use CodeExecutionPart. */
 export const executeCodeHandler = createToolRenderer({
   name: 'ExecuteCode',
   render: (ctx) => {
-    // Nothing names what the run does, so the row says only how far it got.
-    // A failed or stopped call has no response but has still ended; a
-    // program that threw or timed out returns a receipt that says so.
-    const label = () => {
-      const error = useToolError();
-      const status = ctx.response?.data.status;
-      if (
-        error?.kind === 'failed' ||
-        status === 'failed' ||
-        status === 'timed_out'
-      )
-        return 'A step failed';
-      if (ctx.response !== undefined || error) return 'Finished a step';
-      return 'Working on it';
-    };
     return (
       <BaseTool icon={Sparkle} renderContext={ctx.renderContext} type="call">
-        <span class="flex-1">{label()}</span>
+        <span class="flex-1">
+          {codeRunLabel(ctx.response?.data, useToolError())}
+        </span>
       </BaseTool>
     );
   },

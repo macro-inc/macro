@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { Component, JSX, ParentProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { afterEach, expect, it, vi } from 'vitest';
-import { executeCodeHandler } from './CodeMode';
+import { codeRunLabel, executeCodeHandler } from './CodeMode';
 import { type ToolEnding, ToolErrorContext } from './ToolRenderer';
 
 vi.mock('@ui', () => ({
@@ -61,4 +61,11 @@ it('settles a failed workspace run that has no response', () => {
   renderRun({ ending: { kind: 'failed', reason: 'The program threw' } });
   expect(screen.getByText('A step failed')).toBeTruthy();
   expect(screen.queryByText('Working on it')).toBeNull();
+});
+
+it('reads a code run that ended in a call error as a failed step', () => {
+  expect(codeRunLabel(undefined, { kind: 'failed' })).toBe('A step failed');
+  expect(codeRunLabel({ status: 'succeeded' }, undefined)).toBe(
+    'Finished a step'
+  );
 });
