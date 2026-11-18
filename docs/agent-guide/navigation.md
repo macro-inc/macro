@@ -760,14 +760,22 @@ lists, Routines' Discover tab), or the search found no rows, `ArrowDown` and
 search loads counts as having no rows until they arrive. `Enter` on one of Email's recent
 searches still moves to the list, which lands on the first row once that
 search's rows arrive.
-Home's and Chat's sidebar search fields follow the same rules, landing on the
-first matching row of the sidebar list; emptying the field from the list
+Home's, Chat's and Agents' sidebar search fields follow the same rules, landing
+on the first matching row of the sidebar list; emptying the field from the list
 collapses it back to the Search icon. An `Escape` pressed in the preview or
-conversation beside the sidebar leaves the search alone. Home's field stays
-open while its query filters the list, including after the sidebar remounts
-(a window narrowed and widened again), and its Search icon then closes the
-field and clears the query, as the field's X does in a list header. Agents' sidebar field does not yet: its
-conversation list has no keyboard navigation.
+conversation beside the sidebar leaves the search alone. Home's and Agents'
+fields stay open while their query filters the list, including after the
+sidebar remounts (a window narrowed and widened again), and the Search icon
+then closes the field and clears the query, as the field's X does in a list
+header.
+The Agents conversation list moves with `j`/`k` and the arrows through the rows
+of its open sections (Open PRs, the conversation groups, Archived), with `Home`
+and `End` for the ends; the row under the keyboard takes the hover fill.
+`Enter` opens it as a click does and `Shift+Enter` opens it in a new split.
+These keys belong to the sidebar only while focus is in it: pressed in the
+conversation beside it, they stay with the conversation. As in every list view,
+`Shift+Up`/`Shift+Down` belong to the list in that split, so moving to a split
+above or below takes `Shift+K`/`Shift+J` there.
 Mobile creation controls, search controls, and placement are unchanged.
 When multiple desktop splits are open, a **Close** (X) button appears in the
 sidebar title bar and closes that split, including
