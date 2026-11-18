@@ -1499,3 +1499,96 @@ async fn test_insert_message_reports_applied_on_create(pool: Pool<Postgres>) -> 
 
     Ok(())
 }
+
+/// The addresses `document_email_participants` lists for `document`.
+async fn document_participants(
+    pool: &Pool<Postgres>,
+    document: &str,
+) -> anyhow::Result<std::collections::BTreeSet<String>> {
+    Ok(sqlx::query_scalar!(
+        "SELECT address FROM document_email_participants WHERE document_id = $1",
+        document,
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .collect())
+}
+
+/// Saving a draft again from another sender updates `from_contact_id` on
+/// conflict, which records the new sender for a document linked to one of
+/// the draft's attachments.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn saving_a_draft_from_a_new_sender_records_it_for_linked_documents(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let thread_db_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let message_db_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
+    let alice = Uuid::parse_str("c0000001-0000-0000-0000-000000000001")?;
+    let bob = UpsertedRecipient {
+        contact_id: Uuid::parse_str("c0000002-0000-0000-0000-000000000002")?,
+        name: None,
+        recipient_type: RecipientType::To,
+    };
+    let carol = Uuid::parse_str("c0000003-0000-0000-0000-000000000003")?;
+    let input = resolved_input(message_db_id, thread_db_id);
+    let save = |from_contact_id| UpsertedContacts {
+        from_contact_id: Some(from_contact_id),
+        recipients: vec![bob.clone()],
+    };
+    repo.insert_message(&input, &save(alice), link_id, None, true)
+        .await?;
+
+    let attachment = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_attachments (id, message_id, provider_attachment_id) VALUES ($1, $2, 'attachment')",
+        attachment,
+        message_db_id,
+    )
+    .execute(&pool)
+    .await?;
+    let document = Uuid::now_v7().to_string();
+    let mut tx = pool.begin().await?;
+    // No owner behind the foreign key.
+    sqlx::query!("SET LOCAL session_replication_role = 'replica'")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!(
+        r#"INSERT INTO "Document" (id, name, owner) VALUES ($1, 'attached.pdf', 'macro|nobody@example.com')"#,
+        document,
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!("SET LOCAL session_replication_role = 'origin'")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!(
+        "INSERT INTO document_email (document_id, email_attachment_id) VALUES ($1, $2)",
+        document,
+        attachment,
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    assert_eq!(
+        document_participants(&pool, &document).await?,
+        ["alice@example.com", "bob@example.com"]
+            .map(String::from)
+            .into()
+    );
+
+    repo.insert_message(&input, &save(carol), link_id, None, true)
+        .await?;
+    assert_eq!(
+        document_participants(&pool, &document).await?,
+        ["alice@example.com", "bob@example.com", "carol@example.com"]
+            .map(String::from)
+            .into()
+    );
+    Ok(())
+}

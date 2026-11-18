@@ -6944,14 +6944,22 @@ async fn test_optimized_notification_filter_matches_unoptimized_equivalent(
     Ok(())
 }
 
-const DOC_A: &str = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+pub(in crate::outbound::pg_soup_repo::expanded) const DOC_A: &str =
+    "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const DOC_B: &str = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 const DOC_D: &str = "dddddddd-dddd-dddd-dddd-dddddddddddd";
 
 /// The fixture's attachments hang off messages that do not exist. Give doc A's
-/// attachment a message from the user to vendor@acme.com and doc B's a message
-/// from other@globex.com, and point doc D's Companies property at `company`.
-async fn seed_crm_document_associations(db: &PgPool, company: Uuid) -> anyhow::Result<()> {
+/// attachment a message from the user to vendor@acme.test and doc B's a message
+/// from other@globex.test, and point doc D's Companies property at `company`.
+/// The mailbox goes in as a replica, without its link and thread; the
+/// recipient and the attachment move go in as sync writes them, so
+/// `document_email_participants` records them through its triggers and keeps
+/// doc B the acme.test row its attachment no longer proves.
+pub(in crate::outbound::pg_soup_repo::expanded) async fn seed_crm_document_associations(
+    db: &PgPool,
+    company: Uuid,
+) -> anyhow::Result<()> {
     let mut tx = db.begin().await?;
     sqlx::raw_sql("SET LOCAL session_replication_role = 'replica'")
         .execute(&mut *tx)
@@ -6960,8 +6968,8 @@ async fn seed_crm_document_associations(db: &PgPool, company: Uuid) -> anyhow::R
     let (me, vendor, other) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
     for (id, address) in [
         (me, "user-1@test.com"),
-        (vendor, "Vendor@Acme.com"),
-        (other, "other@globex.com"),
+        (vendor, "Vendor@Acme.test"),
+        (other, "other@globex.test"),
     ] {
         sqlx::query!(
             "INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, $3)",
@@ -6985,6 +6993,9 @@ async fn seed_crm_document_associations(db: &PgPool, company: Uuid) -> anyhow::R
         .execute(&mut *tx)
         .await?;
     }
+    sqlx::raw_sql("SET LOCAL session_replication_role = 'origin'")
+        .execute(&mut *tx)
+        .await?;
     sqlx::query!(
         "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type) VALUES ($1, $2, 'TO')",
         to_acme,
@@ -7066,11 +7077,11 @@ async fn crm_document_literals_match_attachments_and_associations(
 
     // Recipients count as participants, and domains match case-insensitively.
     assert_eq!(
-        matching_document_ids(&db, participant(Email::Domain("ACME.com".to_string()))).await,
+        matching_document_ids(&db, participant(Email::Domain("ACME.test".to_string()))).await,
         ids(&[DOC_A])
     );
     // So do senders, by exact address.
-    let globex = EmailStr::parse_from_str("other@globex.com")?.into_owned();
+    let globex = EmailStr::parse_from_str("other@globex.test")?.into_owned();
     assert_eq!(
         matching_document_ids(&db, participant(Email::Complete(globex))).await,
         ids(&[DOC_B])
@@ -7084,7 +7095,7 @@ async fn crm_document_literals_match_attachments_and_associations(
         matching_document_ids(
             &db,
             Expr::or(
-                participant(Email::Domain("acme.com".to_string())),
+                participant(Email::Domain("acme.test".to_string())),
                 associated.clone()
             )
         )
@@ -7094,7 +7105,7 @@ async fn crm_document_literals_match_attachments_and_associations(
     // Negation keeps every other document.
     let not_acme = matching_document_ids(
         &db,
-        Expr::is_not(participant(Email::Domain("acme.com".to_string()))),
+        Expr::is_not(participant(Email::Domain("acme.test".to_string()))),
     )
     .await;
     assert!(!not_acme.contains(DOC_A));

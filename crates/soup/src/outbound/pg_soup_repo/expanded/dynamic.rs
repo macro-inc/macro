@@ -5,11 +5,13 @@
 mod test;
 
 mod database_row;
+mod document_candidates;
 mod document_ids;
 mod initiative;
 mod property_filter;
 
 use database_row::{build_database_row_filter, database_row_opted_in, database_row_top_clause};
+use document_candidates::{CandidateArm, DocumentCandidates};
 pub(in crate::outbound::pg_soup_repo) use document_ids::DocumentIdArrays;
 use initiative::initiative_top_clause;
 pub(in crate::outbound::pg_soup_repo) use initiative::{
@@ -295,12 +297,14 @@ static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
                     AND ep_status.property_definition_id = $7
 "#;
 
+/// `source` is the arm's `FROM` clause, which names the documents `d`.
 fn document_top_clause(
     sort_method: SimpleSortMethod,
     needs_sub_type_join: bool,
     property_sort: bool,
     name_sort: bool,
     task_only: bool,
+    source: &str,
 ) -> String {
     let sub_type_join = if needs_sub_type_join || (property_sort && !task_only) {
         r#"                LEFT JOIN document_sub_type dt ON dt.document_id = d.id
@@ -322,12 +326,15 @@ fn document_top_clause(
                     'document'::text as item_type,
                     d.id,
                     {}::timestamptz as sort_ts{property_column}{name_column}
-                FROM "Document" d
+                {source}
 {}"#,
         top_sort_expr("d", sort_method),
         sub_type_join
     )
 }
+
+/// The document arm's `FROM` clause when it starts from the caller's access.
+const ALL_DOCUMENTS: &str = r#"FROM "Document" d"#;
 
 fn chat_top_clause(sort_method: SimpleSortMethod, property_sort: bool, name_sort: bool) -> String {
     let user_history_join = if top_needs_user_history(sort_method) {
@@ -1974,6 +1981,10 @@ const MAX_NAMED_CANDIDATES: usize = 4_000;
 /// At most how many documents the filter admits when it admits only
 /// documents it names by id (a resolved CRM association, or ids passed in),
 /// or `None` when it can admit any document.
+/// A filter bounded here has no `DocumentCandidates`: its `superset` exists
+/// and names no participant, since an id names none, an `Or` bounded here
+/// unites two bounded sides, and an `And` keeps the side with fewer
+/// participants (test `candidates_never_meet_access_after_filters`).
 fn named_document_bound(ast: Option<&Expr<DocumentLiteral>>) -> Option<usize> {
     ast.and_then(|expr| {
         expr.collapse_frames(
@@ -2043,6 +2054,16 @@ impl DocumentArmAccess {
         }
     }
 
+    /// The access conjunct the arm's `WHERE` opens with, or `None` when the
+    /// arm probes access after its filters instead.
+    fn conjunct(self, source_ids: usize) -> Option<String> {
+        match self {
+            Self::Joined => Some(bound_access_semi_join("d.id", "document", source_ids)),
+            Self::Counted(grants) => Some(counted_document_access_semi_join(source_ids, grants)),
+            Self::AfterFilters => None,
+        }
+    }
+
     /// Opens the arm, before its top clause.
     fn open(self) -> &'static str {
         match self {
@@ -2103,23 +2124,21 @@ fn document_top_where_clause(
     access: DocumentArmAccess,
     source_ids: usize,
 ) -> String {
+    document_where_clause(sort_method, access.conjunct(source_ids).as_deref())
+}
+
+/// The document arm's `WHERE`, opening with its `access` conjunct when it
+/// checks access there.
+fn document_where_clause(sort_method: SimpleSortMethod, access: Option<&str>) -> String {
     let user_history_join = if top_needs_user_history(sort_method) {
         r#"                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
 "#
     } else {
         ""
     };
-    let access_clause = match access {
-        DocumentArmAccess::Joined => format!(
-            "\n                AND {}",
-            bound_access_semi_join("d.id", "document", source_ids)
-        ),
-        DocumentArmAccess::Counted(grants) => format!(
-            "\n                AND {}",
-            counted_document_access_semi_join(source_ids, grants)
-        ),
-        DocumentArmAccess::AfterFilters => String::new(),
-    };
+    let access_clause = access
+        .map(|access| format!("\n                AND {access}"))
+        .unwrap_or_default();
     format!(
         r#"{user_history_join}                WHERE d."deletedAt" IS NULL{access_clause}
 "#
@@ -2144,12 +2163,16 @@ fn project_top_where_clause(source_ids: usize) -> String {
     )
 }
 
+/// `document_candidates`, when given, start the document arm from the
+/// documents the document filter names instead of the caller's access (see
+/// [`CandidateArm`]); their arrays bind through `document_ids`.
 fn build_query<'a>(
     filter_ast: &'a EntityFilterAst,
     exclude_frecency: bool,
     sort: DynamicSort,
     document_grants: DocumentGrants,
     document_ids: &mut DocumentIdArrays,
+    document_candidates: Option<CandidateArm>,
 ) -> QueryBuilder<'a, Postgres> {
     let sort_method = sort.timestamp_method();
     let source_ids = source_ids_slot(sort, false);
@@ -2252,7 +2275,27 @@ fn build_query<'a>(
         push_union_separator(&mut builder, &mut needs_separator);
         // Subtype is needed only for task-property filters or property-sort namespaces.
         let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
-        let access = DocumentArmAccess::new(document_filter, document_grants);
+        // A candidate arm checks access in the conjunct its `WHERE` opens with
+        // (`CandidateArm::render`), outside the `AfterFilters` fence and with
+        // planned property probes, as a joined arm does. `EachCandidate`
+        // still reads its candidates, and each candidate's grants, behind
+        // `OFFSET 0` fences of its own. It never meets `AfterFilters`, which
+        // needs every document the filter admits named by id, while
+        // candidates need a participant in the bound they keep.
+        let (access, source, access_conjunct) = match document_candidates {
+            Some(arm) => {
+                let (source, conjunct) = arm.render(document_ids, source_ids);
+                (DocumentArmAccess::Joined, source, Some(conjunct))
+            }
+            None => {
+                let access = DocumentArmAccess::new(document_filter, document_grants);
+                (
+                    access,
+                    ALL_DOCUMENTS.to_owned(),
+                    access.conjunct(source_ids),
+                )
+            }
+        };
         builder.push(access.open());
         builder.push(document_top_clause(
             sort_method,
@@ -2260,6 +2303,7 @@ fn build_query<'a>(
             property_sort,
             name_sort,
             document_filter_is_task_only(document_filter),
+            &source,
         ));
         if optimized_notification_predicate.is_some() && document_notification.is_some() {
             builder.push(build_notification_join("d", "document"));
@@ -2267,7 +2311,10 @@ fn build_query<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method, access, source_ids));
+        builder.push(document_where_clause(
+            sort_method,
+            access_conjunct.as_deref(),
+        ));
         builder.push(build_document_filter(document_filter, Some(document_ids)));
         builder.push(build_probed_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2803,10 +2850,75 @@ async fn begin_dynamic_query(db: &PgPool) -> Result<Transaction<'static, Postgre
     Ok(transaction)
 }
 
+/// Most candidates a document arm reads one by one
+/// ([`CandidateArm::EachCandidate`]); past it, reading the caller's access
+/// once is cheaper. From a cold cache each candidate costs about 2 ms, while
+/// 16,000 grants read in a few hundred. Counted as candidate ids plus
+/// participant rows, an upper bound on the documents they name.
+const EACH_CANDIDATE_LIMIT: i64 = 1_000;
+
+/// Where the document arm starts, when its filter has [`DocumentCandidates`]:
+/// from each candidate when there are at most [`EACH_CANDIDATE_LIMIT`],
+/// otherwise from the candidates the caller can access. The count reads at
+/// most that many participant rows from the domain index, and none when the
+/// ids alone pass the limit.
+#[tracing::instrument(name = "soup.document_candidates", err, skip_all, fields(candidates = tracing::field::Empty))]
+async fn document_candidate_arm(
+    connection: &mut PgConnection,
+    document_filter: Option<&Expr<DocumentLiteral>>,
+) -> Result<Option<CandidateArm>, sqlx::Error> {
+    let Some(candidates) =
+        document_filter.and_then(|expr| DocumentCandidates::of(&push_not_inward(expr, false)))
+    else {
+        return Ok(None);
+    };
+    let ids = i64::try_from(candidates.ids.len()).unwrap_or(i64::MAX);
+    let participants = if ids > EACH_CANDIDATE_LIMIT {
+        0
+    } else {
+        sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) AS "count!" FROM (
+                SELECT 1 FROM document_email_participants p
+                WHERE split_part(p.address, '@', 2) = ANY($1::text[])
+                UNION ALL
+                SELECT 1 FROM unnest($2::text[]) a(address)
+                JOIN document_email_participants p
+                    ON split_part(p.address, '@', 2) = split_part(a.address, '@', 2)
+                    AND p.address = a.address
+                LIMIT $3
+            ) bounded
+            "#,
+            &candidates.domains,
+            &candidates.addresses,
+            EACH_CANDIDATE_LIMIT - ids + 1,
+        )
+        .fetch_one(connection)
+        .await?
+    };
+    let total = ids.saturating_add(participants);
+    tracing::Span::current().record("candidates", total);
+    Ok(Some(if total <= EACH_CANDIDATE_LIMIT {
+        CandidateArm::EachCandidate(candidates)
+    } else {
+        CandidateArm::WithinAccess(candidates)
+    }))
+}
+
 #[tracing::instrument(err, skip_all, fields(limit = i64::from(args.limit), exclude_frecency = args.exclude_frecency))]
 async fn expanded_dynamic_cursor_soup_hydrated(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
+    expanded_dynamic_cursor_soup_hydrated_with(db, args, |arm| arm).await
+}
+
+/// [`expanded_dynamic_cursor_soup_hydrated`], with the document arm the
+/// candidates chose passed through `pick_arm`, which tests use to force one.
+async fn expanded_dynamic_cursor_soup_hydrated_with(
+    db: &PgPool,
+    args: ExpandedDynamicCursorArgs<'_>,
+    pick_arm: impl FnOnce(Option<CandidateArm>) -> Option<CandidateArm>,
 ) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let ExpandedDynamicCursorArgs {
         user_id,
@@ -2833,8 +2945,17 @@ async fn expanded_dynamic_cursor_soup_hydrated(
 
     let mut transaction = begin_dynamic_query(db).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
-    let document_grants =
-        DocumentGrants::count(&mut transaction, cursor.filter(), &source_ids).await?;
+    let document_candidates = pick_arm(
+        document_candidate_arm(&mut transaction, cursor.filter().document_filter.as_deref())
+            .await?,
+    );
+    // A candidate arm gates access its own way (`CandidateArm::render`), so
+    // the caller's grants are counted only for the access-driven arm.
+    let document_grants = if document_candidates.is_some() {
+        DocumentGrants::Estimated
+    } else {
+        DocumentGrants::count(&mut transaction, cursor.filter(), &source_ids).await?
+    };
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), false));
     let mut builder = build_query(
@@ -2843,6 +2964,7 @@ async fn expanded_dynamic_cursor_soup_hydrated(
         *cursor.sort_method(),
         document_grants,
         &mut document_ids,
+        document_candidates,
     );
     let mut query = builder
         .build()

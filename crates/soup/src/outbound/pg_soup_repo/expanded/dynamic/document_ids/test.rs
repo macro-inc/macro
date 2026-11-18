@@ -200,6 +200,7 @@ fn arrays_follow_each_querys_fixed_binds() {
                 sort,
                 DocumentGrants::Estimated,
                 &mut flat_ids,
+                None,
             )
             .sql()
             .to_owned();

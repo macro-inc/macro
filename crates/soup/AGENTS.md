@@ -171,6 +171,29 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   collected once rather than semi-joined per row; cost follows the ids passed
   in. A gate `EXISTS` also needs `PER_CANDIDATE`, or Postgres hashes it back
   into the caller's whole accessible set.
+- A document filter that names email-attachment participants (a CRM
+  record's Files tab) narrows its document arm to the documents it names
+  (`dynamic/document_candidates.rs`): its ids plus the
+  `document_email_participants` rows under its domains and addresses. Up to
+  `EACH_CANDIDATE_LIMIT` candidates are read behind an `OFFSET 0` fence and
+  each checks its own grants; above it, the arm keeps the caller's access and
+  Postgres joins the two sets. Either way the whole filter runs on every
+  document left. Such an arm never checks access after its filters
+  (`AfterFilters` needs every document named by id), so it keeps the planned
+  property probes, and never counts the caller's grants
+  (`DocumentGrants::count`): its gate is its own. Without the candidates it walked the attachment chain for
+  every document the caller can open. The projection is a superset kept by
+  triggers on every write that can complete a chain, each taking row locks
+  that make a racing link and participant write wait for each other; never
+  read it without the filter's chain recheck, and add a locking trigger when
+  a new write can link a document to a message or a message to a contact.
+  Every such writer locks a message before its attachments (a link locks its
+  attachment's message before its foreign key check, in
+  `document_email_participants_lock_linked_message`); a new writer that
+  takes an attachment first and then waits for its message can deadlock with
+  one that holds the message and deletes or moves the attachment. It has no
+  foreign key to `"Document"`: an `AFTER DELETE` statement trigger deletes a
+  deleted document's rows.
 - The initiative listing starts from the caller's access instead
   (`INITIATIVE_LISTING_ACCESS`): one `(source_id, entity_type, entity_id)`
   index descent per source returns only that source's initiative grants, and
