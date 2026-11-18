@@ -1,0 +1,23 @@
+packages/code-mode-sdk/scripts/generate.ts
+  s_505b42fd3d1c70::t_50615d76cd25bd 130,150-151
+crates/agent_code_mode/src/inbound/toolset/user/execute_code.md
+  s_505b42fd3d1c70::t_50615d76cd25bd 1
+crates/agent_code_mode/src/inbound/toolset/session/execute_code.md
+  s_505b42fd3d1c70::t_50615d76cd25bd 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e7aae95ade855352027c79914b5f0230e87d7a58",
+  "prompts": {},
+  "sessions": {
+    "s_505b42fd3d1c70": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ebbcea0-f38a-4f06-85a1-8650ecdf0c8d",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
