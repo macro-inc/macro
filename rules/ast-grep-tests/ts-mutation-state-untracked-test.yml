@@ -1,0 +1,11 @@
+id: ts-mutation-state-untracked
+valid:
+  - |
+    import { useMutationState } from '@queries/mutation-state';
+  - |
+    import { useMutation, useQuery } from '@tanstack/solid-query';
+invalid:
+  - |
+    import { useMutationState } from '@tanstack/solid-query';
+  - |
+    import { useIsMutating, useQuery } from '@tanstack/solid-query';

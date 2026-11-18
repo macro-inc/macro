@@ -1,0 +1,17 @@
+id: ts-mutation-state-untracked
+language: ts
+severity: error
+message: Import useMutationState and useIsMutating from '@queries/mutation-state'. The library's mutation-cache listeners read their memos inside whatever computation notifies them, which then keeps an unmounted view alive.
+files:
+  - apps/web/src/**
+rule:
+  kind: import_specifier
+  has:
+    field: name
+    regex: ^(useMutationState|useIsMutating)$
+  inside:
+    kind: import_statement
+    stopBy: end
+    has:
+      field: source
+      regex: ^['"]@tanstack/solid-query['"]$

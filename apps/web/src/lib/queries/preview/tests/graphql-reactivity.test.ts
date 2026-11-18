@@ -23,8 +23,8 @@ vi.mock('@app/lib/graphql-cache', () => ({
 }));
 vi.mock('@tanstack/solid-query', () => ({
   useQuery: () => ({ isPending: false, isSuccess: false }),
-  useMutationState: () => () => [],
 }));
+vi.mock('../../mutation-state', () => ({ useMutationState: () => () => [] }));
 vi.mock('@queries/client', () => ({ queryClient: {} }));
 vi.mock('../dataloader', () => ({ previewDataLoader: {} }));
 vi.mock('../fetchers', () => ({

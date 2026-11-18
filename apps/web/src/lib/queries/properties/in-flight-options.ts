@@ -10,7 +10,7 @@ import type { Property, PropertyDefinitionDomain } from '@property/types';
 // side-effecting imports along with it.
 import { isInstantiatedProperty } from '@property/utils/typeGuards';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { useMutationState } from '@tanstack/solid-query';
+import { useMutationState } from '../mutation-state';
 
 /** One tag-picker selection, as submitted to the option-update mutation. */
 export type BulkUpdateEntityPropertyOptionsParams = {

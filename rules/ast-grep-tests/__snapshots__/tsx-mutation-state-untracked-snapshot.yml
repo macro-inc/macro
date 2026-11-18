@@ -1,0 +1,40 @@
+id: tsx-mutation-state-untracked
+snapshots:
+  ? |
+    import { useIsMutating, useQuery } from '@tanstack/solid-query';
+  : labels:
+    - source: useIsMutating
+      style: primary
+      start: 9
+      end: 22
+    - source: '''@tanstack/solid-query'''
+      style: secondary
+      start: 40
+      end: 63
+    - source: import { useIsMutating, useQuery } from '@tanstack/solid-query';
+      style: secondary
+      start: 0
+      end: 64
+    - source: useIsMutating
+      style: secondary
+      start: 9
+      end: 22
+  ? |
+    import { useMutationState } from '@tanstack/solid-query';
+  : labels:
+    - source: useMutationState
+      style: primary
+      start: 9
+      end: 25
+    - source: '''@tanstack/solid-query'''
+      style: secondary
+      start: 33
+      end: 56
+    - source: import { useMutationState } from '@tanstack/solid-query';
+      style: secondary
+      start: 0
+      end: 57
+    - source: useMutationState
+      style: secondary
+      start: 9
+      end: 25

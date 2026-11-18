@@ -1,11 +1,11 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
+import { useIsMutating } from '@queries/mutation-state';
 import { agentReviewClient } from '@service-agent-harness/reviews';
 import {
   type Query,
   type QueryClient,
   queryOptions,
-  useIsMutating,
   useMutation,
   useQuery,
   useQueryClient,
