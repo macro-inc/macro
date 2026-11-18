@@ -57,6 +57,7 @@ impl SchedulingAdministrationClient {
             StatusCode::NOT_FOUND => Error::NotFound,
             StatusCode::CONFLICT => Error::Conflict,
             StatusCode::TOO_MANY_REQUESTS => Error::RateLimited,
+            StatusCode::UNPROCESSABLE_ENTITY => Error::CalendarRejected,
             StatusCode::BAD_REQUEST => Error::Invalid(
                 body.map(|b| b.message)
                     .unwrap_or_else(|| "Invalid scheduling request".into()),

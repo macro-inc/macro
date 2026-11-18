@@ -81,7 +81,10 @@ an event the host can no longer see) abandons the operation at once; any other f
 hourly until the meeting's start time has passed, then abandoned. An abandoned booking stays
 `failed` with its reservations and is never retried again. Cancelling it releases
 them once the calendar accepts the cancellation; a calendar that refuses that too keeps them, as
-lost access always has. An abandoned move stays at the requested time with both intervals held. Keyed deletion works even after local calendar projection
+lost access always has. A move the calendar refuses on its first attempt returns the booking to its
+original time and status and releases the new interval; one refused after an earlier attempt that
+left no recorded outcome, or that keeps failing until its new start, stays failed at the requested
+time with both intervals held. Keyed deletion works even after local calendar projection
 retirement. Completion-persistence failures still return the durable private receipt. Rescheduling reserves the old and new intervals until the provider
 accepts the update, then releases the old interval. Calendar projections without a
 source time zone for all-day events conservatively block all possible UTC offsets.
