@@ -159,8 +159,9 @@ local stack, without Microsoft accounts.
 - New mail: `POST /_emulator/mailboxes/{email}/messages` (`deliver`). A change
   made in Outlook: `PATCH`/`DELETE …/messages/{id}`. Provider failure:
   `POST /_emulator/faults` (`inject_fault`) with a `route` such as
-  `messages.get` and an `error` such as `rate_limit`, and a `folder`
-  (`inbox`) to fail only that folder's listing and delta; faults apply in
+  `messages.get` and an `error` such as `rate_limit`. A `folder` (`inbox`)
+  with route `messages.list` or `messages.delta` fails only that folder's
+  listing or delta (a single-message read names no folder); faults apply in
   the order injected, so one with no `error` and `times: 1` first lets one
   request through. Time:
   `POST /_emulator/clock/advance`. What it received: `GET /_emulator/requests`;

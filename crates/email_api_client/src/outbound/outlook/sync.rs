@@ -78,7 +78,9 @@ impl FolderChangeReader for OutlookApiClientRepository {
     ) -> Result<ReceivedMessages, EmailApiError> {
         let mut url = self.endpoint(&["me", "mailFolders", folder.as_str(), "messages"])?;
         // Graph refuses an `$orderby` whose property does not lead the
-        // `$filter`; here they are the same one.
+        // `$filter`; here they are the same one. The bound is cut to the
+        // second, as Graph dates mail: a fractional one would drop mail
+        // dated the second `since` falls in.
         let filter = format!(
             "receivedDateTime ge {}",
             since.to_rfc3339_opts(SecondsFormat::Secs, true)

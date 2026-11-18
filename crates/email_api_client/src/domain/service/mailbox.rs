@@ -275,8 +275,8 @@ impl<R: FolderChangeReader + ScopedMailboxRepository, T: MailboxTokenSource, L: 
         }
     }
 
-    /// List a folder's messages received at or after `since`, newest
-    /// first, at most `limit` of them.
+    /// List a folder's messages received in or after the second of
+    /// `since`, newest first, at most `limit` of them.
     pub async fn received_since(
         &self,
         mailbox: MailboxAccess,

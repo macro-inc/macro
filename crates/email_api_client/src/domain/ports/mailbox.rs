@@ -115,8 +115,8 @@ pub trait FolderChangeReader: Send + Sync + 'static {
         folder: &ProviderId,
         position: Option<&StreamToken>,
     ) -> impl Future<Output = Result<MailboxChangePage, EmailApiError>> + Send;
-    /// List the folder's messages received at or after `since`, newest
-    /// first, at most `limit` of them. A delta round lists only what the
+    /// List the folder's messages received in or after the second of
+    /// `since`, newest first, at most `limit` of them. A delta round lists only what the
     /// folder held when it started, so this is how a folder still in a long
     /// round finds its new mail.
     fn received_since(
