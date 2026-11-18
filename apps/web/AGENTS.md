@@ -127,7 +127,7 @@ Keep native row timestamps and forwarding through both editor configuration and
 constructs a per-picker source from live query/open/self/domain inputs; use
 `useContactRecipientSource` or `useCombinedRecipientSource` for personal suggestions
 and keep `options` for explicit scoped extras. The selector reads each option's text, address and
-key once per list (`recipient-search.ts`), never per keystroke: groups can number in the thousands. Closing releases the page and reopening
+key when its sources change (`recipient-search.ts`), not on every ranking pass: groups can number in the thousands. Closing releases the page and reopening
 starts at the first page. Selected chips remain caller-owned; PageDown loads the
 next page from the keyboard. Main email To/Cc/Bcc inputs receive the factory through
 `EmailComposeContext.createRecipientSource`; scoped hosts opt out explicitly with
