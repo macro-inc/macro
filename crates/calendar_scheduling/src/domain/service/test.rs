@@ -1030,6 +1030,26 @@ async fn a_refused_create_leaves_the_booking_failed_and_never_retries() {
     assert!(cancelled.abandoned_at.is_none());
 }
 
+/// A refusal whose completion write fails returns the processing receipt
+/// storage still holds, without the unsaved abandonment.
+#[tokio::test]
+async fn an_unsaved_abandonment_stays_off_the_receipt() {
+    let store = Arc::new(Memory::default());
+    let calendars = Arc::new(Calendar {
+        reject_creates: AtomicBool::new(true),
+        ..Default::default()
+    });
+    let service = TestService::new(store.clone(), calendars.clone(), Members);
+    let p = service.save("admin", None, profile(None)).await.unwrap();
+    store.fail_completion.store(true, Ordering::SeqCst);
+    let receipt = service
+        .book(p.id, p.event_types[0].id, request())
+        .await
+        .unwrap();
+    assert_eq!(receipt.booking.status, BookingStatus::Processing);
+    assert!(receipt.booking.abandoned_at.is_none());
+}
+
 /// A create whose earlier attempt may have landed can only be cancelled
 /// through the calendar. A calendar that refuses the cancellation too keeps
 /// the reservations, as lost access always has; once it accepts, the

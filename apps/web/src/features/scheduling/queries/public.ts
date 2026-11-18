@@ -1,13 +1,18 @@
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { schedulingClient } from '@service-email/scheduling';
-import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import {
   BookingRejectedError,
   RescheduleRefusedError,
 } from '../core/booking-error';
-import type { BookingReceipt, BookingRequest } from '../core/types';
+import type { Booking, BookingReceipt, BookingRequest } from '../core/types';
 import { schedulingKeys } from './keys';
 
 function validateReceipt(receipt: BookingReceipt): BookingReceipt {
@@ -147,6 +152,13 @@ export function createBookingReceiptSource(
   token: Accessor<string>
 ) {
   const receipt = useQuery(() => receiptQueryOptions(id(), token()));
+  const client = useQueryClient();
+  // Show the changed booking even if the refresh that follows fails.
+  const keep = (booking: Booking) =>
+    client.setQueryData(
+      receiptQueryOptions(id(), token()).queryKey,
+      (current) => (current ? { ...current, booking } : current)
+    );
   const cancel = useMutation(() => ({
     mutationFn: () =>
       throwOnErr(() => schedulingClient.cancelPublic(id(), token())),
@@ -176,11 +188,13 @@ export function createBookingReceiptSource(
     receipt,
     cancel: async () => {
       const { booking } = await cancel.mutateAsync();
+      keep(booking);
       await receipt.refetch();
       return booking;
     },
     reschedule: async (startsAt: string) => {
-      await reschedule.mutateAsync(startsAt);
+      const moved = await reschedule.mutateAsync(startsAt);
+      keep(moved.booking);
       await receipt.refetch();
     },
     replacementSlots: (date: string, timeZone: string) =>

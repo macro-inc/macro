@@ -403,8 +403,16 @@ async fn older_abandoned_bookings_read_back_with_their_abandon_time(pool: PgPool
         .await
         .unwrap();
     let retried = repo.claim_recovery().await.unwrap().unwrap();
+    let past = Utc::now() - Duration::hours(1);
+    let mut late = booking(p.id, past);
+    late.booking.status = BookingStatus::Processing;
+    late.operation = Some(CalendarOperation::new(CalendarOperationKind::Create));
+    let late = repo
+        .reserve(late, None, past, past + Duration::days(1))
+        .await
+        .unwrap();
     let mut ids = Vec::new();
-    for mut record in [first, retried] {
+    for mut record in [first, retried, late] {
         // The shape an older release wrote: only the operation knows.
         record.booking.status = BookingStatus::Failed;
         record.booking.abandoned_at = None;
@@ -422,6 +430,13 @@ async fn older_abandoned_bookings_read_back_with_their_abandon_time(pool: PgPool
     let operation = retried.operation.as_ref().unwrap();
     assert_eq!(retried.booking.abandoned_at, operation.abandoned_at);
     assert!(!operation.unsent, "a retried create may have landed");
+    let late = repo.booking(ids[2]).await.unwrap().unwrap();
+    let operation = late.operation.as_ref().unwrap();
+    assert_eq!(late.booking.abandoned_at, operation.abandoned_at);
+    assert!(
+        !operation.unsent,
+        "abandoned after its start, so not necessarily refused"
+    );
 }
 
 #[sqlx::test(migrations = false)]
