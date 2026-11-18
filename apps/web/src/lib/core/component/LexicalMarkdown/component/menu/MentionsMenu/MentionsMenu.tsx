@@ -449,10 +449,16 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const retryPeople = () =>
     fireAndForget(userMention.retryPeople(), 'mentions-menu');
   // People keeps its place while its first answer loads, so the sections
-  // listed below it don't move when people land. A menu of people alone has
-  // nothing to push down and says it is searching instead.
+  // listed below it don't move when people land. A menu whose other sections
+  // can't list anything for the query (Booking Links answer only an empty
+  // one) has nothing to push down and says it is searching instead.
   const listsOtherSources = () =>
-    !props.sources || props.sources.some((source) => source !== 'users');
+    !props.sources ||
+    props.sources.some(
+      (source) =>
+        source !== 'users' &&
+        (source !== 'bookingLinks' || searchTerm().trim() === '')
+    );
   const peopleHolding = () =>
     userMention.holdsRows() || (waitingForPeople() && listsOtherSources());
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
@@ -532,7 +538,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }
 
     // Booking links arrive from the network after the menu opens; listed below
-    // People, as on phones, they never push down the row Macro leads with.
+    // People they never push down the row Macro leads with. Phones pin People
+    // rows above the rest of their one ranked list instead.
     const buckets: BucketConfig[] = [
       {
         id: 'users',

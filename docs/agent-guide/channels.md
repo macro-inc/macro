@@ -603,8 +603,9 @@ navigation must still load more results. Check both mobile and desktop.
 In a task, project, or document Discussion the `@` menu's people come from the
 contact directory. Until they arrive, People shows Macro (when it matches) and
 loading rows where the people and other agents will go, and a phone lists
-nothing below Macro yet. Booking Links are listed below People, so a late
-answer never moves the row under the highlight.
+nothing below Macro yet. On desktop, Booking Links are a section below People,
+so their late answer never pushes People's rows down; phones pin People rows
+above the rest of their single list.
 On a fresh load and on reopening, at desktop and phone width, no agent may show
 in a row a person then takes, and the menu must not change height as they land.
 When the people read fails (a busy cache times it out), the menu reads it again

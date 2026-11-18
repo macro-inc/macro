@@ -1847,8 +1847,8 @@ don't boost bots in a menu's search score. Until the contact directory answers f
 first time after it opens, a directory-backed @ menu lists only the rows that lead every
 person (Macro) and keeps its People preview's rows as loading rows (`holdsRows`; in a menu
 with other sections also when no agent matches, `peopleHolding`), holding the highlighted
-row meanwhile; phones list nothing below them yet. Booking Links, which arrive from the
-network, are listed below People. The hold ends at `UNANSWERED_SEARCH_LIMIT_MS`, when
+row meanwhile; phones list nothing below them yet. On desktop, Booking Links, which arrive
+from the network, are a section below People; phones pin People rows above the rest. The hold ends at `UNANSWERED_SEARCH_LIMIT_MS`, when
 Cmd+K stops saying "Searching…". The menu reads a failed people window again once by
 itself, holding the rows meanwhile, and offers Retry only when that read fails too
 (`peopleFailed`).

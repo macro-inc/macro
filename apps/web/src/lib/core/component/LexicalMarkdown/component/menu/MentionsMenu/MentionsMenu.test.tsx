@@ -1136,6 +1136,28 @@ it('offers Retry when the people read fails again, and waits for the retried rea
   expect(order).toEqual([...order].sort((left, right) => left - right));
 });
 
+it('says it is searching while People loads when the other sections cannot answer the query', async () => {
+  vi.useFakeTimers();
+  mockNoEmails();
+  mocks.peopleLoading = () => true;
+  const menu = createMenuOperations();
+  menu.setSearchTerm('jacob');
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      sources={['users', 'bookingLinks']}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  // Booking Links answer only an empty query, so there is nothing below
+  // People to keep in place.
+  expect(screen.queryByRole('status', { name: 'Loading people' })).toBeNull();
+  await vi.advanceTimersByTimeAsync(500);
+  expect(screen.getByText('Searching…')).toBeTruthy();
+});
+
 it('picks the highlighted mention on Enter at once, even while typing continues', async () => {
   vi.useFakeTimers();
   mockNoEmails();
