@@ -80,7 +80,10 @@ for (const provider of PROVIDERS) {
 
     // When this fails, the toolbar's Not spam leaves the selected thread in
     // Spam or Junk, or takes it out without bringing it back to the inbox.
-    test("the toolbar's Not spam brings the selected thread back to the inbox", async ({ page, mailbox }) => {
+    test("the toolbar's Not spam brings the selected thread back to the inbox", async ({
+      page,
+      mailbox,
+    }) => {
       await deliverThreads(mailbox, ['Agenda']);
       await deliverToSpam(mailbox, {
         from: 'Hal <hal@example.com>',

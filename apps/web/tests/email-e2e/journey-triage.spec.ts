@@ -184,7 +184,10 @@ for (const provider of PROVIDERS) {
     // When this fails, Not spam leaves the message in Spam or Junk, or takes
     // it out without bringing it back to the inbox, at the provider or in
     // Macro.
-    test("not spam brings a message from spam back to the inbox", async ({ page, mailbox }) => {
+    test('not spam brings a message from spam back to the inbox', async ({
+      page,
+      mailbox,
+    }) => {
       await mailbox.deliver({
         from: 'Grace <grace@example.com>',
         subject: 'Agenda',
