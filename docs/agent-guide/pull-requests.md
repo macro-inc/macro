@@ -17,7 +17,8 @@ the web, the system browser in the desktop app. Reviews still opens it here.
 
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
-side panel below the top bar. An open PR has a split button in the top bar
+side panel below the top bar. The Checks summary names failed and running checks
+before passes (`1 failed 2 running 26 passed`), and failed checks list first. An open PR has a split button in the top bar
 beside **Changes** (`[data-pull-request-primary-action]` names its main action).
 For a draft the main action is **Ready for review**; otherwise it is **Merge**,
 disabled (with a tooltip) until every check has finished with a success, skipped,
