@@ -3,12 +3,13 @@ import { Button, cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { RescheduleForm } from '../components/reschedule-form';
 import { bookingAbandoned } from '../core/booking-list';
-import type { BookingReceipt } from '../core/types';
+import type { Booking, BookingReceipt } from '../core/types';
 
 export function BookingReceiptView(props: {
   receipt?: BookingReceipt;
   unavailable: boolean;
-  cancel: () => Promise<void>;
+  /** Resolves to the booking the cancellation returned. */
+  cancel: () => Promise<Booking>;
   loadSlots: (
     date: string,
     timeZone: string
@@ -26,10 +27,10 @@ export function BookingReceiptView(props: {
     setError('');
     setBusy(true);
     try {
-      await props.cancel();
+      const booking = await props.cancel();
       setRescheduling(false);
       setConfirm(false);
-      if (props.receipt && bookingAbandoned(props.receipt.booking))
+      if (bookingAbandoned(booking))
         setError(
           'The cancellation didn’t reach your host’s calendar. Please try again later.'
         );
@@ -120,7 +121,7 @@ export function BookingReceiptView(props: {
                   : r().booking.status === 'confirmed'
                     ? 'A calendar invitation has been sent to your email.'
                     : bookingAbandoned(r().booking)
-                      ? 'This booking isn’t confirmed. Cancel it to free the time, then book again.'
+                      ? 'This booking isn’t confirmed. Cancel it to free the time.'
                       : r().booking.status === 'failed'
                         ? 'Your time is reserved. We’re retrying the calendar update automatically; keep this page to check its status and avoid making another booking.'
                         : ''}

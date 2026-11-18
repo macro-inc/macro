@@ -37,6 +37,7 @@ function renderReceipt(afterCancel: BookingReceipt) {
   const [current, setCurrent] = createSignal(receipt());
   const cancel = vi.fn(async () => {
     setCurrent(afterCancel);
+    return afterCancel.booking;
   });
   render(() => (
     <BookingReceiptView

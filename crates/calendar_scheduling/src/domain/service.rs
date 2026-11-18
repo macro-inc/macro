@@ -864,6 +864,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             })
         {
             record.booking.status = BookingStatus::Cancelled;
+            record.booking.abandoned_at = None;
             let cancelled = self.repository.update_booking(record, expected).await?;
             tracing::info!(booking_id = %cancelled.booking.id, "scheduling booking cancelled; its calendar never received it");
             return Ok(cancelled.booking);

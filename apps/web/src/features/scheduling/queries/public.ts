@@ -68,7 +68,8 @@ function receiptQueryOptions(id: string, token: string) {
     gcTime: 0,
     refetchInterval: (q) =>
       q.state.data?.booking.status === 'processing' ||
-      q.state.data?.booking.status === 'failed'
+      (q.state.data?.booking.status === 'failed' &&
+        !q.state.data.booking.abandonedAt)
         ? 5000
         : false,
   });
@@ -156,8 +157,9 @@ export function createBookingReceiptSource(
   return {
     receipt,
     cancel: async () => {
-      await cancel.mutateAsync();
+      const { booking } = await cancel.mutateAsync();
       await receipt.refetch();
+      return booking;
     },
     reschedule: async (startsAt: string) => {
       await reschedule.mutateAsync(startsAt);
