@@ -127,6 +127,14 @@ export interface MutationQueueTelemetry {
     operationName?: string;
   }): MutationEnqueueTelemetry;
   attempt(mutation: ClaimedMutation): MutationAttemptTelemetry;
+  /**
+   * Releases a claim whose page has gone, so its head runs now instead of
+   * when the lease runs out. `release` says whether the claim was still held.
+   */
+  releaseLease(
+    lease: { transactionId: string; expiresAtMs: number },
+    release: () => Promise<boolean>
+  ): Promise<void>;
   skipped(reason: MutationQueueSkipReason): void;
   storageReset(): void;
 }
@@ -146,6 +154,9 @@ export const NOOP_MUTATION_QUEUE_TELEMETRY: MutationQueueTelemetry = {
   loaded: () => undefined,
   enqueue: () => NOOP_ENQUEUE,
   attempt: () => NOOP_MUTATION_ATTEMPT_TELEMETRY,
+  releaseLease: async (_lease, release) => {
+    await release();
+  },
   skipped: () => undefined,
   storageReset: () => undefined,
 };
@@ -708,6 +719,21 @@ export function createMutationQueueTelemetry({
       };
     },
     attempt,
+    async releaseLease({ transactionId, expiresAtMs }, release) {
+      await Telemetry.span(
+        'graphql.mutation_queue.lease_release',
+        async (span) => {
+          span.setAttr('mutation_queue.transaction_id', transactionId);
+          span.setAttr(
+            'mutation_queue.lease_remaining_ms',
+            Math.max(0, expiresAtMs - now())
+          );
+          const released = await release();
+          span.setAttr('mutation_queue.lease_released', released);
+          count(released ? 'lease.released' : 'lease.moved');
+        }
+      );
+    },
     skipped(reason) {
       count(`skip.${reason}`);
       if (firstOccurrence(`skip|${reason}`))

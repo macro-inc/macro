@@ -29,6 +29,12 @@
  * Head changes go through `transition`, which checks the token, and each
  * awaited step rechecks `isCurrent` before it acts. Releasing live callers as
  * queued and scheduling the pump are idempotent wakeups and are not fenced.
+ *
+ * A page that reloads or closes mid-attempt leaves its lease on the head. When
+ * the pump finds the head held, it waits for the holder's page to go
+ * (`MutationQueueOwner.departed`) and releases that lease with the holder's
+ * own owner and generation, so the head runs again without waiting out
+ * `QUEUE_LEASE_MS`. The engine refuses the release once the claim has moved on.
  */
 
 import { anyAbortSignal } from '@core/util/abort-signal';
@@ -48,8 +54,11 @@ import type {
   ClaimedMutation,
   EnqueueOptimisticMutationResult,
   MutationClaim,
+  MutationInspection,
+  MutationLease,
   QueryRevalidationWire,
 } from '../protocol';
+import type { MutationQueueOwner } from './mutation-queue-owner';
 import {
   failureDetails,
   type MutationAttemptDetails,
@@ -106,10 +115,12 @@ async function boundedMutationLifecycle<T>(work: () => Promise<T>): Promise<T> {
 /** Storage generation captured when work starts; a reset retires it. */
 export type StorageEpoch = { storageGeneration: number };
 
+/** A storage epoch and the lease owner a claim made in it uses. */
+export type ClaimEpoch = StorageEpoch & { leaseOwner: string };
+
 /** Fences one claimed attempt in this runner and in the durable queue. */
-type AttemptToken = StorageEpoch & {
+type AttemptToken = ClaimEpoch & {
   transactionId: string;
-  leaseOwner: string;
   leaseGeneration: string;
 };
 
@@ -294,8 +305,8 @@ export type MutationQueueRunnerDeps = {
     | 'onCacheError'
     | 'mutationQueueTelemetry'
   >;
-  /** Lease owner for this exchange's claims. */
-  owner: string;
+  /** Lease owner for this exchange's claims, and other owners' liveness. */
+  owner: MutationQueueOwner;
   /** Sends an operation down the exchange's network stream. */
   forward: (op: Operation) => void;
   /** Delivers a result through the exchange's normal write path. */
@@ -328,15 +339,18 @@ export type MutationQueueRunnerDeps = {
 
 /** The exchange's view of the queue runner. */
 export type MutationQueueRunner = {
-  /** Captures the storage epoch an enqueue starts in. */
-  epoch: () => StorageEpoch;
+  /**
+   * Captures the storage epoch an enqueue starts in, and the lease owner its
+   * initial claim must use.
+   */
+  epoch: () => ClaimEpoch;
   /** False once a storage reset has retired `epoch`. */
   isCurrent: (epoch: StorageEpoch) => boolean;
   /** Holds a durably enqueued caller until the strict queue routes it. */
   admit: (
     op: Operation,
     enqueue: EnqueueOptimisticMutationResult,
-    epoch: StorageEpoch
+    epoch: ClaimEpoch
   ) => Promise<OperationResult | undefined>;
   /** Settles a queue attempt's network result. */
   settle: (
@@ -378,6 +392,8 @@ export function createMutationQueueRunner(
   let drainRequested = false;
   let deferredUntil: number | undefined;
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
+  // Lease owners whose page this runner is waiting to see go.
+  const watchedOwners = new Set<string>();
 
   function isNewClaim(claim: ClaimedMutation): boolean {
     if (!latestClaim) return true;
@@ -442,12 +458,12 @@ export function createMutationQueueRunner(
    */
   async function routeClaimedMutation(
     claimed: ClaimedMutation,
-    epoch: StorageEpoch
+    epoch: ClaimEpoch
   ): Promise<void> {
     const attempt: QueueAttemptContext = {
       mutation: claimed,
       transactionId: claimed.transactionId,
-      leaseOwner: owner,
+      leaseOwner: epoch.leaseOwner,
       leaseGeneration: claimed.leaseGeneration,
       attemptCount: claimed.attemptCount,
       serverFailureCount: claimed.serverFailureCount ?? 0,
@@ -742,14 +758,20 @@ export function createMutationQueueRunner(
       if (deferredUntil !== undefined && deferredUntil <= now) {
         deferredUntil = undefined;
       }
-      const epoch: StorageEpoch = { storageGeneration };
+      const epoch: ClaimEpoch = {
+        storageGeneration,
+        leaseOwner: owner.claimOwner(),
+      };
       const claimed = await host.claimNextMutation(
-        owner,
+        epoch.leaseOwner,
         now,
         now + QUEUE_LEASE_MS
       );
       if (!claimed) {
         resolveLiveOperationsAsQueued();
+        // Not this runner's backoff: another runner may hold the head.
+        if (deferredUntil === undefined)
+          fireAndForget(watchHeadLease(), 'graphql-cache-mutation-queue');
         // Short retries keep their deadline; uncertain five-minute lease
         // backoffs must not prevent regular polling after a wakeup.
         scheduleDrain(
@@ -773,6 +795,70 @@ export function createMutationQueueRunner(
     } finally {
       drainRunning = false;
       if (drainRequested) scheduleDrain();
+    }
+  }
+
+  /**
+   * A page that reloads or closes mid-attempt leaves its claim on the head
+   * until the lease runs out, and every later mutation waits behind it. Waits
+   * for the page holding the head's lease to go, then releases the claim so
+   * the head runs now. An owner whose liveness is unknown keeps its lease.
+   */
+  async function watchHeadLease(): Promise<void> {
+    let queued: MutationInspection[] | undefined;
+    try {
+      queued = await host.inspectMutations?.();
+    } catch {
+      // The next drain that finds the head held looks again.
+      return;
+    }
+    const first = queued?.[0];
+    const lease = first?.lease;
+    if (
+      !first ||
+      !lease ||
+      lease.expiresAtMs <= Date.now() ||
+      watchedOwners.has(lease.owner)
+    )
+      return;
+    const departure = owner.departed(lease.owner);
+    if (!departure) return;
+    watchedOwners.add(lease.owner);
+    try {
+      await departure;
+      await telemetry.releaseLease(
+        { transactionId: first.transactionId, expiresAtMs: lease.expiresAtMs },
+        async () => {
+          const released = await releaseLease(first.transactionId, lease);
+          // A claim that moved on has a live holder; the next poll looks again.
+          if (released) wakeDrain();
+          return released;
+        }
+      );
+    } catch {
+      // Liveness is unknown after all; the lease runs out as before.
+    } finally {
+      watchedOwners.delete(lease.owner);
+    }
+  }
+
+  /** Releases `lease` if it still holds the head; false once it moved on. */
+  async function releaseLease(
+    transactionId: string,
+    lease: MutationLease
+  ): Promise<boolean> {
+    try {
+      await host.deferOptimisticWrite(
+        transactionId,
+        { owner: lease.owner, generation: lease.generation },
+        Date.now(),
+        'Lease owner left'
+      );
+      return true;
+    } catch {
+      // Settled, claimed again after expiry, or released by another page:
+      // the engine accepts only the claim's own owner and generation.
+      return false;
     }
   }
 
@@ -813,7 +899,7 @@ export function createMutationQueueRunner(
   async function admit(
     op: Operation,
     enqueue: EnqueueOptimisticMutationResult,
-    epoch: StorageEpoch
+    epoch: ClaimEpoch
   ): Promise<OperationResult | undefined> {
     notifyOptimisticMutationEnqueued(op);
     // Enqueue IDs are monotonic and immutable. A delayed acknowledgement must
@@ -1126,7 +1212,7 @@ export function createMutationQueueRunner(
   }
 
   return {
-    epoch: () => ({ storageGeneration }),
+    epoch: () => ({ storageGeneration, leaseOwner: owner.claimOwner() }),
     isCurrent,
     admit,
     settle,

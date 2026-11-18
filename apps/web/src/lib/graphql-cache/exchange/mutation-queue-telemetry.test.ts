@@ -334,6 +334,44 @@ describe('createMutationQueueTelemetry', () => {
     });
   });
 
+  it('records a released lease with its remaining time and whether it held', async () => {
+    const queue = create();
+    await queue.releaseLease(
+      { transactionId: '7', expiresAtMs: 301_000 },
+      async () => true
+    );
+    await queue.releaseLease(
+      { transactionId: '8', expiresAtMs: 500 },
+      async () => false
+    );
+    expect(
+      telemetry.spans.map(({ name, attributes, ended }) => ({
+        name,
+        attributes,
+        ended,
+      }))
+    ).toEqual([
+      {
+        name: 'graphql.mutation_queue.lease_release',
+        attributes: {
+          'mutation_queue.transaction_id': '7',
+          'mutation_queue.lease_remaining_ms': 300_000,
+          'mutation_queue.lease_released': true,
+        },
+        ended: true,
+      },
+      {
+        name: 'graphql.mutation_queue.lease_release',
+        attributes: {
+          'mutation_queue.transaction_id': '8',
+          'mutation_queue.lease_remaining_ms': 0,
+          'mutation_queue.lease_released': false,
+        },
+        ended: true,
+      },
+    ]);
+  });
+
   it('counts a deferred admission without opening a span', () => {
     create().attempt(claimed()).finish('deferred');
     expect(telemetry.spans).toHaveLength(0);

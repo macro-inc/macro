@@ -135,7 +135,16 @@ entire cache in browser memory. With 10s of thousands of cached objects
     `attempt_count` still counts every claim for backoff and coalescing safety.
     Settlement removes the pending mutation and counter; there is no retained DLQ.
     Each queued network attempt has a one-minute timeout, comfortably inside its
-    five-minute lease.
+    five-minute lease. A page that reloads or closes mid-attempt never settles
+    its claim, so each page holds a Web Lock named after its lease owner
+    (`mutation-queue-owner.ts`) for as long as it lives. A runner that finds
+    the head leased by another page's live owner waits for that lock, which the
+    browser grants only once the page has gone, and releases the claim by
+    deferring it with the holder's owner and generation; the engine refuses a
+    release once the claim has moved on. Queue inspections therefore carry the
+    head's lease. Claims made without Web Locks, before the lock is granted, or
+    by older bundles keep their full lease, as do claims on a native app built
+    before inspections carried the lease.
 
 ### Open questions
 

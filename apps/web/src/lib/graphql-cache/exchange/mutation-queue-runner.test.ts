@@ -16,8 +16,10 @@ import {
   type CommitOptimisticWriteResult,
   type EnqueueOptimisticMutationResult,
   INITIAL_CACHE_REVISION,
+  type MutationInspection,
   parseCacheRevision,
 } from '../protocol';
+import type { MutationQueueOwner } from './mutation-queue-owner';
 import {
   createMutationQueueRunner,
   type MutationQueueRunner,
@@ -27,6 +29,7 @@ import {
 } from './mutation-queue-runner';
 import {
   type MutationAttemptTelemetry,
+  type MutationQueueTelemetry,
   NOOP_MUTATION_QUEUE_TELEMETRY,
 } from './mutation-queue-telemetry';
 
@@ -75,7 +78,15 @@ function enqueue(
       : { kind: 'not-runnable' },
   };
 }
-function fixture(options: MutationQueueRunnerDeps['options'] = {}) {
+/** An owner that cannot judge whether another page has gone. */
+const PLAIN_OWNER: MutationQueueOwner = {
+  claimOwner: () => 'owner',
+  departed: () => undefined,
+};
+function fixture(
+  options: MutationQueueRunnerDeps['options'] = {},
+  owner: MutationQueueOwner = PLAIN_OWNER
+) {
   const forwarded: Operation[] = [];
   const commit = vi.fn<CacheHost['commitOptimisticWrite']>(
     async () =>
@@ -120,7 +131,7 @@ function fixture(options: MutationQueueRunnerDeps['options'] = {}) {
       ],
     }),
     options,
-    owner: 'owner',
+    owner,
     forward: (op) => forwarded.push(op),
     writeThrough: (result) =>
       runner.settle(result, queueAttemptOf(result.operation)!),
@@ -358,4 +369,130 @@ it('reports retry exhaustion apart from a permanent rollback', async () => {
       { failure: 'server', errorCode: 'INTERNAL', httpStatus: undefined },
     ],
   ]);
+});
+
+const GONE = 'exchange-live:gone';
+
+/** The queue head as an inspection reports it, claimed by `leaseOwner`. */
+function headLeasedBy(
+  leaseOwner: string,
+  expiresAtMs = Date.now() + 300_000
+): MutationInspection {
+  return {
+    transactionId: '1',
+    uuid: 'same-attempt',
+    superseded: false,
+    query: stringifyDocument(operation().query),
+    operationName: 'SaveEmailDraft',
+    variables: {},
+    clientMetadata: null,
+    optimisticData: savedDraft,
+    lease: { owner: leaseOwner, generation: '4', expiresAtMs },
+  };
+}
+
+/** A live owner; `departure` says when another live owner's page goes. */
+function liveOwner(departure: () => Promise<void>) {
+  return {
+    claimOwner: () => 'exchange-live:here',
+    departed: vi.fn((leaseOwner: string) =>
+      leaseOwner.startsWith('exchange-live:') ? departure() : undefined
+    ),
+  } satisfies MutationQueueOwner;
+}
+
+function claimOf(result: EnqueueOptimisticMutationResult): ClaimedMutation {
+  if (result.initialClaim.kind !== 'claimed') throw new Error('Missing claim');
+  return result.initialClaim.mutation;
+}
+
+it('releases the claim a departed page left on the head, then sends the head', async () => {
+  const { runner, forwarded, host } = fixture(
+    {},
+    liveOwner(async () => {})
+  );
+  host.inspectMutations = vi.fn(async () => [headLeasedBy(GONE)]);
+  const claim = vi
+    .spyOn(host, 'claimNextMutation')
+    .mockResolvedValueOnce(undefined)
+    .mockResolvedValueOnce(claimOf(enqueue(operation(), '5')));
+  const startedAt = Date.now();
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(host.deferOptimisticWrite).toHaveBeenCalledWith(
+    '1',
+    { owner: GONE, generation: '4' },
+    startedAt,
+    'Lease owner left'
+  );
+  expect(claim).toHaveBeenCalledTimes(2);
+  const [leaseOwner, nowMs, leaseExpiresAtMs] = claim.mock.lastCall!;
+  expect(leaseOwner).toBe('exchange-live:here');
+  expect(leaseExpiresAtMs).toBe(nowMs + 300_000);
+  expect(forwarded).toHaveLength(1);
+  expect(queueAttemptOf(forwarded[0])?.leaseOwner).toBe('exchange-live:here');
+});
+
+it('keeps a claim while the page that holds it is open, watching it once', async () => {
+  const owner = liveOwner(() => new Promise<void>(() => {}));
+  const { runner, forwarded, host } = fixture({}, owner);
+  host.inspectMutations = vi.fn(async () => [headLeasedBy(GONE)]);
+  runner.start();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(host.inspectMutations).toHaveBeenCalledTimes(3);
+  expect(owner.departed).toHaveBeenCalledOnce();
+  expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
+  expect(forwarded).toEqual([]);
+});
+
+it.each([
+  ['a claim made without a lock', headLeasedBy('exchange:old')],
+  ['an expired claim', headLeasedBy(GONE, Date.now() - 1)],
+  [
+    'a native engine that reports no lease',
+    { ...headLeasedBy(GONE), lease: undefined },
+  ],
+])('leaves %s to its lease', async (_case, head) => {
+  const { runner, host } = fixture(
+    {},
+    liveOwner(async () => {})
+  );
+  host.inspectMutations = vi.fn(async () => [head]);
+  runner.start();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(host.inspectMutations).toHaveBeenCalledOnce();
+  expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
+});
+
+it('reports a release whose claim had already moved on, and looks again at the next poll', async () => {
+  const releases: unknown[] = [];
+  const telemetry: MutationQueueTelemetry = {
+    ...NOOP_MUTATION_QUEUE_TELEMETRY,
+    releaseLease: async (_lease, release) => {
+      releases.push(await release());
+    },
+  };
+  const { runner, host } = fixture(
+    { mutationQueueTelemetry: telemetry },
+    liveOwner(async () => {})
+  );
+  let leased = true;
+  host.inspectMutations = vi.fn(async () => [
+    leased ? headLeasedBy(GONE) : { ...headLeasedBy(GONE), lease: undefined },
+  ]);
+  vi.mocked(host.deferOptimisticWrite)
+    .mockRejectedValueOnce(new Error('stale mutation claim'))
+    .mockImplementationOnce(async () => {
+      leased = false;
+      return { kind: 'deferred' };
+    });
+  const claim = vi.spyOn(host, 'claimNextMutation');
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(releases).toEqual([false]);
+  expect(claim).toHaveBeenCalledOnce();
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(releases).toEqual([false, true]);
+  // The release woke the queue at once.
+  expect(claim).toHaveBeenCalledTimes(3);
 });
