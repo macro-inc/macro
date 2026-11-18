@@ -77,8 +77,10 @@ This section is for Cloud environment setup, not ordinary feature work.
 - Service binaries are built/cached as `.#local-stack-binaries`, realized with
   `nix build .#local-stack-binaries`. The
   [`push_local_stack_binaries.yml`](../../.github/workflows/push_local_stack_binaries.yml)
-  workflow builds main hourly and pushes them to the private S3 Nix cache, so
-  the cache trails main by up to an hour plus the build; it is separate from
-  the deploy pipeline. Run it from the Actions tab to refresh the cache sooner.
+  workflow runs hourly and pushes them to the private S3 Nix cache. It builds
+  the newest main commit whose `Deploy on Push` run built its service binaries,
+  so it reuses those and compiles only the local-only ones; the cache trails
+  that commit by up to an hour plus the build. It is separate from the deploy
+  pipeline. Run it from the Actions tab to refresh the cache sooner.
 - Set `NIX_CACHE_AWS_ACCESS_KEY_ID` and `NIX_CACHE_AWS_SECRET_ACCESS_KEY` as Cursor
   environment secrets with read-only access to that cache bucket.

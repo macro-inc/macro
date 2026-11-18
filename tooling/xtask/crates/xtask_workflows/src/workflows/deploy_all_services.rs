@@ -171,7 +171,12 @@ fn warm_job(
         .add_step(steps::checkout_v4())
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix_with_cache())
-        .add_step(steps::nix_build(build_step_name, &quoted_targets, done_msg))
+        .add_step(steps::nix_build(
+            build_step_name,
+            "1",
+            &quoted_targets,
+            done_msg,
+        ))
         .add_step(steps::push_nix_cache(targets))
         .add_step(steps::teardown_nix())
 }
