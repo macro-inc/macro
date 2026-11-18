@@ -38,7 +38,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   replays what was published while the stream did not cover an agent; a
   session requested the instant a computer is ready is not lost. The opens ask
   `resume=true`; the service repeats a few seconds before the cursor, and
-  `src/daemon/position.rs` drops repeats by event id.
+  `src/daemon/position.rs` drops repeats by event id, and events minted
+  before their agent was bound here (before the last agents read that did not
+  list it), which belonged to another runtime.
 - Pass `macrod service --ignore-stdin-eof` under system service managers;
   embedded services keep the default shutdown when their parent's stdin closes.
 - `src/self_knowledge.rs`: the `<macrod-runtime>` section the bridge

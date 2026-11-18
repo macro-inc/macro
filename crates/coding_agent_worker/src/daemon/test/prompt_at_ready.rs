@@ -46,6 +46,9 @@ struct ControlPlane {
     live: broadcast::Sender<(Uuid, String)>,
     /// Bodies of the session creates macrod sends.
     creates: mpsc::UnboundedSender<String>,
+    /// Streams are served only once this is true, so a test can publish
+    /// before any stream that covers the agent exists.
+    streams_open: tokio::sync::watch::Sender<bool>,
 }
 
 impl ControlPlane {
@@ -163,6 +166,10 @@ async fn serve_storage(listener: TcpListener, plane: Arc<ControlPlane>) {
                     .headers
                     .get("last-event-id")
                     .map(|cursor| Uuid::parse_str(cursor).expect("a cursor is an event id"));
+                let mut open = plane.streams_open.subscribe();
+                if open.wait_for(|open| *open).await.is_err() {
+                    return;
+                }
                 let (replay, mut live) = plane.resume(cursor);
                 let _ = socket
                     .write_all(
@@ -240,8 +247,11 @@ async fn serve_gateway(listener: TcpListener, plane: Arc<ControlPlane>, ready: A
 
 /// A daemon whose computer has just reported Ready: its agent is bound and
 /// it has been told so. Returns the control plane and the session creates
-/// the daemon sends.
-async fn computer_ready() -> (Daemon, Arc<ControlPlane>, mpsc::UnboundedReceiver<String>) {
+/// the daemon sends. With `hold_streams`, no stream is served until the test
+/// opens them.
+async fn computer_ready(
+    hold_streams: bool,
+) -> (Daemon, Arc<ControlPlane>, mpsc::UnboundedReceiver<String>) {
     let gateway = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let storage = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mut config: Config = toml::from_str(include_str!("../../../config.example.toml")).unwrap();
@@ -264,6 +274,7 @@ async fn computer_ready() -> (Daemon, Arc<ControlPlane>, mpsc::UnboundedReceiver
         published: Mutex::new(Vec::new()),
         live: broadcast::channel(16).0,
         creates,
+        streams_open: tokio::sync::watch::Sender::new(!hold_streams),
     });
     let ready = Arc::new(Notify::new());
     tokio::spawn(serve_storage(storage, Arc::clone(&plane)));
@@ -300,9 +311,12 @@ fn session_request(session: AgentSessionId) -> macro_event_broker::Event<AgentTr
 
 #[tokio::test]
 async fn a_session_requested_the_instant_the_computer_is_ready_reaches_macrod() {
-    let (daemon, plane, mut created) = computer_ready().await;
+    let (daemon, plane, mut created) = computer_ready(true).await;
     let session = AgentSessionId::new_from_uuid(Uuid::now_v7());
+    // Published before any stream that covers the agent is served, so only a
+    // stream that replays it can deliver it.
     plane.publish(&session_request(session));
+    plane.streams_open.send_replace(true);
 
     // Well inside the 10 s bound-agent poll: the requester is watching.
     let body = tokio::time::timeout(Duration::from_secs(5), created.recv())
@@ -321,7 +335,7 @@ async fn a_session_requested_the_instant_the_computer_is_ready_reaches_macrod() 
 /// still handled once.
 #[tokio::test]
 async fn an_event_delivered_twice_is_handled_once() {
-    let (daemon, plane, mut created) = computer_ready().await;
+    let (daemon, plane, mut created) = computer_ready(false).await;
     let request = session_request(AgentSessionId::new_from_uuid(Uuid::now_v7()));
     plane.publish(&request);
     tokio::time::timeout(Duration::from_secs(5), created.recv())

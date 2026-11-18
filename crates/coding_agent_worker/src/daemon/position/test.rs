@@ -64,7 +64,92 @@ fn the_cursor_starts_when_the_daemon_did_and_follows_deliveries() {
     let now = SystemTime::now();
     let mut position = StreamPosition::new(now);
     assert_eq!(position.cursor(), cursor_at(now));
+    assert_eq!(position.resume_cursor(), cursor_at(now));
 
     position.delivered("01a1ebf5-48e2-7571-ac38-1ff8c64b2cc3");
     assert_eq!(position.cursor(), "01a1ebf5-48e2-7571-ac38-1ff8c64b2cc3");
+}
+
+/// An agent re-bound here from another runtime: events for it minted before
+/// it was bound here were that runtime's to handle, and a reconnect that
+/// replays them must not run them again.
+#[test]
+fn events_from_before_an_agent_was_bound_here_are_skipped() {
+    let started = SystemTime::now();
+    let mut position = StreamPosition::new(started);
+    let other = BotId::TEST_B;
+    position.agents_read(&[other.to_string()], started);
+    let first_read = started + Duration::from_secs(10);
+    position.agents_read(&[other.to_string()], first_read);
+    let second_read = first_read + Duration::from_secs(10);
+
+    // The agent shows up at the second read, so it was bound after the first
+    // read began.
+    position.agents_read(&[other.to_string(), BotId::TEST_A.to_string()], second_read);
+
+    let before = first_read - Duration::from_secs(1);
+    let after = first_read + Duration::from_secs(1);
+    assert!(!position.admits(&request(BotId::TEST_A, before)));
+    assert!(position.admits(&request(BotId::TEST_A, after)));
+    // An agent bound since the daemon started keeps every event from then.
+    assert!(position.admits(&request(other, before)));
+}
+
+/// The bench case: the agent is bound between two reads, and the request
+/// for it follows the binding. It is kept however late the read that shows
+/// the agent comes.
+#[test]
+fn a_request_made_after_the_agent_was_bound_is_kept() {
+    let started = SystemTime::now();
+    let mut position = StreamPosition::new(started);
+    position.agents_read(&[], started);
+    let requested = started + Duration::from_millis(50);
+    position.agents_read(
+        &[BotId::TEST_A.to_string()],
+        started + Duration::from_secs(10),
+    );
+
+    assert!(position.admits(&request(BotId::TEST_A, requested)));
+}
+
+/// Unbinding forgets the agent, so binding it again starts over.
+#[test]
+fn an_agent_bound_again_counts_from_its_new_binding() {
+    let started = SystemTime::now();
+    let mut position = StreamPosition::new(started);
+    position.agents_read(&[BotId::TEST_A.to_string()], started);
+    let unbound = started + Duration::from_secs(10);
+    position.agents_read(&[], unbound);
+    let rebound = unbound + Duration::from_secs(10);
+    position.agents_read(&[BotId::TEST_A.to_string()], rebound);
+
+    assert!(!position.admits(&request(BotId::TEST_A, unbound - Duration::from_secs(1))));
+    assert!(position.admits(&request(BotId::TEST_A, unbound + Duration::from_secs(1))));
+}
+
+/// A request for an agent bound since the last stream opened was filtered
+/// out of that stream, however long before its last event it came. The next
+/// stream starts back at the binding, and the events already handled come
+/// again only to be dropped.
+#[test]
+fn a_newly_bound_agent_rewinds_the_next_stream_to_its_binding() {
+    let started = SystemTime::now();
+    let mut position = StreamPosition::new(started);
+    position.agents_read(&[BotId::TEST_B.to_string()], started);
+    assert_eq!(position.resume_cursor(), cursor_at(started));
+
+    let first_read = started + Duration::from_secs(10);
+    position.agents_read(&[BotId::TEST_B.to_string()], first_read);
+    let handled = request(BotId::TEST_B, first_read + Duration::from_secs(30));
+    assert!(position.admits(&handled));
+    position.delivered(&handled.event_id.to_string());
+    position.agents_read(
+        &[BotId::TEST_B.to_string(), BotId::TEST_A.to_string()],
+        first_read + Duration::from_secs(40),
+    );
+
+    assert_eq!(position.resume_cursor(), cursor_at(first_read));
+    assert!(!position.admits(&handled));
+    // Once open, later streams resume after the last event again.
+    assert_eq!(position.resume_cursor(), handled.event_id.to_string());
 }
