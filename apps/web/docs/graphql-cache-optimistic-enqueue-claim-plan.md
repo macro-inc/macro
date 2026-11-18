@@ -381,7 +381,7 @@ Run from the repository root in the project development environment:
 ```bash
 cargo fmt --check
 cargo test -p cache-core -p cache-turso -p cache-wasm
-just build-wasm cache-wasm
+just apps/web/build-wasm cache-wasm
 bun type-check
 ```
 
