@@ -23,8 +23,10 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
   action, and a short label a person understands ("Send email"). `send` is
   anything that reaches other people (messages, email, invites, sharing,
   calendar changes guests see), even when it also creates or updates;
-  `destroy` deletes; a POST that only reads is `read`. Labels are unique
-  within a group.
+  `destroy` deletes; a POST that only reads is `read`, but nothing that
+  saves a file, may write (a query that can run any statement) or reaches
+  an outside app is. Changing who can see or edit something is `send` in
+  `sharing`. Labels are unique within a group.
 - Remove an operation the SDK dropped: delete its line.
 - New group: add it to `groups` (stable `id`, never renamed: settings are
   stored under it) and move operations into it.
@@ -38,6 +40,15 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
   unclassified operation or one that no longer exists (CI: `OCaml SDK Check`).
 
 ## Gotchas
+
+- The key is the spec's operationId (`create_task_handler`), as the OCaml
+  analyzer reports it. Code mode's `fetch` and the TypeScript SDK name
+  operations by method (`createTaskHandler`, `Macro_sdk_fetch.sdk_method`);
+  cognition declares `get_state_handler` twice, one entry here and
+  `getStateHandler` / `getStateHandler2` there.
+- Some operations do whatever their input says: running a routine or an
+  agent session, a connected app tool. Their action says what they are, not
+  everything the work they start may do.
 
 - Group ids and actions are stored in people's settings: renaming one loses
   them.

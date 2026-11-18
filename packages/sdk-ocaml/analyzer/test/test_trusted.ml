@@ -2,11 +2,30 @@
    without analyzing it: a program that names them is analyzed as if their
    code called no operation. That holds while neither source names the
    generated SDK (Macro_sdk, whose service modules hold the operations) nor
-   builds a request record by hand, so the transport only ever sends the
-   request its caller passed. This checks both, on the parse trees of the
-   sources the bundle builds. *)
+   builds or rewrites a request or its prepared wire form, so the transport
+   only ever sends the request its caller passed, to the URL that request
+   names. This checks both, on the parse trees of every source in the two
+   libraries. *)
 
-let sources = [ "fetch/macro_sdk_fetch.ml"; "code_mode/code_mode.ml" ]
+let directories = [ "fetch"; "code_mode" ]
+
+(* Fields of Request.t and Request.wire: a record that sets any of them
+   builds or rewrites what is sent. *)
+let request_fields =
+  [
+    "service";
+    "operation";
+    "meth";
+    "path";
+    "query";
+    "decode_reply";
+    "decode_error";
+    "wire_meth";
+    "uri";
+    "wire_headers";
+    "wire_body";
+  ]
+
 let failures = ref 0
 
 let fail file (location : Location.t) message =
@@ -35,9 +54,10 @@ let check file =
     (match e.pexp_desc with
     | Pexp_ident lid | Pexp_construct (lid, _) -> longident lid
     | Pexp_record (fields, _)
-      when List.exists (fun (label, _) -> field_name label = "operation") fields
-      ->
-        fail file e.pexp_loc "builds a request record"
+      when List.exists
+             (fun (label, _) -> List.mem (field_name label) request_fields)
+             fields ->
+        fail file e.pexp_loc "builds or rewrites a request record"
     | _ -> ());
     Ast_iterator.default_iterator.expr iterator e
   in
@@ -51,7 +71,16 @@ let check file =
 
 let () =
   let root = Sys.getenv "DUNE_SOURCEROOT" in
-  List.iter (fun file -> check (Filename.concat root file)) sources;
+  let sources =
+    List.concat_map
+      (fun directory ->
+        Sys.readdir (Filename.concat root directory)
+        |> Array.to_list
+        |> List.filter (fun file -> Filename.check_suffix file ".ml")
+        |> List.map (Filename.concat (Filename.concat root directory)))
+      directories
+  in
+  List.iter check sources;
   Printf.printf "%d trusted sources checked, %d failures\n"
     (List.length sources) !failures;
   if !failures > 0 then exit 1
