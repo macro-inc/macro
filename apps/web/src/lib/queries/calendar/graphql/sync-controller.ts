@@ -49,7 +49,9 @@ export const fetchCalendarChanges: FetchCalendarChanges = async (since) =>
   (await fetchCached(CalendarChangesDocument, { input: { since } })).user
     .calendarChanges;
 
-export const refetchCalendarList = () => fetchCached(CalendarsDocument, {});
+export const refetchCalendarList = (
+  options?: Parameters<typeof fetchCached>[2]
+) => fetchCached(CalendarsDocument, {}, options);
 
 /**
  * Keeps cached calendar data current. Every poke, reconnect, or other

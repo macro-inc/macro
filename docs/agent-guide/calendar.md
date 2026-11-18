@@ -1493,6 +1493,8 @@ no writable calendar sees `Syncing your calendar…` where the add action will a
 The event composer hides its empty picker and shows the same notice in place of Create event.
 The viewer can edit the draft while the sync runs. Once a writable calendar arrives,
 the picker and Create event return in the same composer with the draft intact.
+When first sync finishes, the app refreshes the cached calendar list directly so
+the new calendar is available even if the cache could not apply the delta.
 When the calendar check confirms the viewer does not hold it, the card says
 `Not on your calendar.` and, behind the `enable-calendar-add-shared-event` flag, offers
 `Add to calendar`, which imports the same snapshot as the channel-share card
